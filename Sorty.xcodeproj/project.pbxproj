@@ -223,6 +223,8 @@
 		CC220002000000000000A00E /* RenameRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00E /* RenameRuleEngine.swift */; };
 		CC220002000000000000A00F /* StorageLocationPathResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00F /* StorageLocationPathResolver.swift */; };
 		CC220002000000000000A010 /* SortyGradientProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A010 /* SortyGradientProgressBar.swift */; };
+		DD220002000000000000A002 /* SettingPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD110001000000000000A002 /* SettingPreviews.swift */; };
+		DD220002000000000000A001 /* NoTickSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD110001000000000000A001 /* NoTickSlider.swift */; };
 		CC220002000000000000A012 /* DuplicateHandlingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A012 /* DuplicateHandlingPicker.swift */; };
 		CC220002000000000000A013 /* LiquidGlassDuplicateButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */; };
 		CC220002000000000000A014 /* LiquidGlassLearningsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */; };
@@ -558,6 +560,8 @@
 		CC110001000000000000A00E /* RenameRuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameRuleEngine.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00F /* StorageLocationPathResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPathResolver.swift; sourceTree = "<group>"; };
 		CC110001000000000000A010 /* SortyGradientProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyGradientProgressBar.swift; sourceTree = "<group>"; };
+		DD110001000000000000A002 /* SettingPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingPreviews.swift; sourceTree = "<group>"; };
+		DD110001000000000000A001 /* NoTickSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoTickSlider.swift; sourceTree = "<group>"; };
 		CC110001000000000000A012 /* DuplicateHandlingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateHandlingPicker.swift; sourceTree = "<group>"; };
 		CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassDuplicateButton.swift; sourceTree = "<group>"; };
 		CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassLearningsButton.swift; sourceTree = "<group>"; };
@@ -875,6 +879,8 @@
 				AABBCC110001000000000072 /* GlassyBackButton.swift */,
 				AABBCC110001000000000082 /* OrganizingMascotView.swift */,
 				CC110001000000000000A010 /* SortyGradientProgressBar.swift */,
+				DD110001000000000000A001 /* NoTickSlider.swift */,
+				DD110001000000000000A002 /* SettingPreviews.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";

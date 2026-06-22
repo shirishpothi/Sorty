@@ -245,7 +245,7 @@ public struct SortyWorkflowCard<Content: View>: View {
                 title: "Instructions",
                 icon: "text.bubble"
             ) {
-                Text("Add custom instructions for the AI")
+                Text("Add custom instructions for Sorty")
                     .font(.body)
                     .foregroundColor(.secondary)
             }

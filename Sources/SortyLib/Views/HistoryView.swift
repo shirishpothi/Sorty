@@ -538,9 +538,8 @@ struct HistoryHeader: View {
             if showsControls {
                 HStack(spacing: 12) {
                     filterPicker
+                        .frame(maxWidth: .infinity)
                         .frame(height: controlsHeight)
-
-                    Spacer(minLength: 0)
 
                     clearHistoryButton
                 }
@@ -597,15 +596,15 @@ struct HistoryHeader: View {
     }
 
     private var filterPicker: some View {
-        Picker("Filter history sessions", selection: $selectedFilter) {
-            ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Text(filter.rawValue)
-                    .tag(filter)
-            }
+        LiquidGlassSegmentedControl(
+            selection: $selectedFilter,
+            options: HistoryView.HistoryFilter.allCases,
+            minSegmentHeight: controlsHeight
+        ) { filter, _ in
+            Text(filter.rawValue)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
         .frame(height: controlsHeight)
+        .accessibilityLabel("Filter history sessions")
         .accessibilityIdentifier("HistoryFilterPicker")
     }
 
@@ -723,7 +722,6 @@ struct HistorySummaryCard: View {
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Success rate: \(successRateLabel)")
-
             }
         }
         .padding(16)
@@ -1479,20 +1477,11 @@ struct HistoryEmptyStateView: View {
 
             // Hero section
             VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
-                        .frame(width: 100, height: 100)
-
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 44))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.gradient)
-                        .emptyStateIconHeartbeat()
-                }
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
-                .accessibilityHidden(true)
+                EmptyStateHeroIcon(systemName: "clock.arrow.circlepath")
+                    .opacity(hasAppeared ? 1 : 0)
+                    .scaleEffect(hasAppeared ? 1 : 0.8)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
                     Text("No History Yet")
@@ -1790,7 +1779,7 @@ struct HistoryDetailSheet: View {
                                                     title: "Files",
                                                     value: GenerationStats.formatCount(scanned),
                                                     unit: "files",
-                                                    description: "Items reviewed by AI"
+                                                    description: "Items reviewed by Sorty"
                                                 )
                                             }
 

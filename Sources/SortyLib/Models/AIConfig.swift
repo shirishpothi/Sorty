@@ -934,11 +934,49 @@ public struct RenameNamingOptions: Codable, Sendable, Equatable {
     }
 
     public var exampleFilename: String {
-        FilenameNormalizer.normalize(
-            "2026-03-19 Signed Service Agreement.pdf",
-            originalFilename: "scan_2026_03_19.pdf",
-            options: self
-        ) ?? "2026-03-19 Signed Service Agreement.pdf"
+        let candidates: [(source: String, original: String)] = [
+            ("Invoice.pdf", "scan.pdf"),
+            ("Receipt 2026.pdf", "scan.pdf"),
+            ("2026-03-19 Invoice.pdf", "scan_001.pdf"),
+            ("2026-03-19 Acme Invoice.pdf", "scan_002.pdf"),
+            ("2026-03-19 Service Agreement.pdf", "scan_003.pdf"),
+            ("2026-03-19 Signed Service Agreement.pdf", "scan_004.pdf"),
+            ("2026-03-19 Acme Signed Service Agreement.pdf", "scan_005.pdf"),
+            ("2026-03-19 Acme Corporation Service Agreement.pdf", "scan_006.pdf"),
+            ("2026-03-19 Acme Corporation Signed Service Agreement.pdf", "scan_007.pdf"),
+            ("2026-03-19 Acme Corporation Signed Master Service Agreement.pdf", "scan_008.pdf"),
+            ("2026-03-19 Acme Corporation Signed Master Service Agreement Final.pdf", "scan_009.pdf"),
+            ("2026-03-19 Acme Corporation Signed Master Service Agreement Final Executed.pdf", "scan_010.pdf"),
+            ("2026-03-19 Acme Corporation Signed Master Service Agreement Final Executed Version.pdf", "scan_011.pdf"),
+            ("2026-03-19 Acme Corporation Signed Master Service Agreement Final Executed Version Counterparty Approved.pdf", "scan_012.pdf"),
+            ("2026-03-19 Acme Corporation Legal Department Signed Master Service Agreement Final Executed Version Counterparty Approved.pdf", "scan_013.pdf"),
+            ("2026-03-19 Acme Corporation Legal Department Signed Master Service Agreement Final Executed Version Counterparty Approved Archival Copy.pdf", "scan_014.pdf"),
+            ("2026-03-19 Acme Corporation Legal Department Confidential Signed Master Service Agreement Final Executed Version Counterparty Approved Archival Copy.pdf", "scan_015.pdf"),
+            ("2026-03-19 Acme Corporation Legal Department Confidential Signed Master Service Agreement Final Executed Version Counterparty Approved Archival Copy Authorized Signatories.pdf", "scan_016.pdf")
+        ]
+
+        let unboundedOptions = RenameNamingOptions(
+            separator: separator,
+            caseStyle: caseStyle,
+            maxFilenameLength: 999,
+            outputLanguage: outputLanguage,
+            datePolicy: datePolicy
+        )
+
+        let formatted: [String] = candidates.compactMap { candidate in
+            FilenameNormalizer.normalize(
+                candidate.source,
+                originalFilename: candidate.original,
+                options: unboundedOptions
+            ) ?? candidate.source
+        }
+
+        let fitting = formatted.filter { $0.count <= maxFilenameLength }
+        if let longest = fitting.max(by: { $0.count < $1.count }) {
+            return longest
+        }
+
+        return formatted.min(by: { $0.count < $1.count }) ?? "Invoice.pdf"
     }
 }
 

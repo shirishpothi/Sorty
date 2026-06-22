@@ -181,7 +181,7 @@ struct QuickOrganizeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Quick Organize")
                     .font(.headline)
-                Text("AI-powered file organization")
+                Text("Sorty-powered file organization")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -367,7 +367,7 @@ struct QuickOrganizeView: View {
             Button("Cancel") {
                 controller.hidePanel()
             }
-            .buttonStyle(.sortyBordered(intent: .destructive))
+            .buttonStyle(.sortyBordered)
             .keyboardShortcut(.escape)
             
             Button(action: startOrganization) {

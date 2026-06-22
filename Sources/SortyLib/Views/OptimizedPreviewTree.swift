@@ -1236,7 +1236,7 @@ struct FlatFileRowView: View {
                     Image(systemName: "wand.and.stars")
                         .font(.caption)
                         .foregroundColor(.purple)
-                        .help(mapping.renameReason ?? "AI suggested rename")
+                        .help(mapping.renameReason ?? "Sorty suggested rename")
 
                     RenameActionGlassCluster(
                         isRegenerating: isRegeneratingName,
@@ -1497,7 +1497,7 @@ struct FlatFileRowView: View {
 
     private func renameHelpText(_ mapping: FileRenameMapping) -> String {
         let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return reason.isEmpty ? "AI suggested rename" : reason
+        return reason.isEmpty ? "Sorty suggested rename" : reason
     }
 }
 

@@ -61,7 +61,7 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.previewReady,
                         title: "Preview Ready",
-                        description: "When AI has finished generating the organization plan",
+                        description: "When Sorty has finished generating the organization plan",
                         previewAction: { playPreviewSound("Ping") }
                     )
                     

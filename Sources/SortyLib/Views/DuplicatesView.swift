@@ -112,7 +112,6 @@ struct DuplicatesView: View {
                 .opacity(contentOpacity)
             }
         }
-        .frame(minWidth: 1040, minHeight: 700)
         .emptyStateWorkflowGradient(isVisible: isShowingEmptyContent)
         .navigationTitle("Duplicate Files")
         .alert("Move Duplicate Files to Trash?", isPresented: $showDeleteConfirmation) {
@@ -237,7 +236,7 @@ struct DuplicatesView: View {
             title: "No Duplicates Found",
             description: "All files in this folder are unique. Your workspace is healthy!",
             icon: "checkmark.circle.fill",
-            iconColor: .green,
+            heroTint: .green,
             actionTitle: "Scan Another Folder",
             action: selectDirectory
         )
@@ -1560,6 +1559,7 @@ struct DuplicatesEmptyStateView: View {
     let description: String
     let icon: String
     var iconColor: Color = .secondary
+    var heroTint: Color?
     let actionTitle: String
     var actionAccessibilityIdentifier: String?
     var animatesIcon = false
@@ -1574,11 +1574,7 @@ struct DuplicatesEmptyStateView: View {
                 if animatesIcon {
                     ScanningPulseIcon(systemName: icon, color: iconColor)
                 } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 48))
-                        .foregroundStyle(iconColor)
-                        .opacity(0.7)
-                        .emptyStateIconHeartbeat()
+                    EmptyStateHeroIcon(systemName: icon, tint: heroTint)
                 }
             }
             .opacity(hasAppeared ? 1 : 0)

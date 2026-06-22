@@ -109,6 +109,7 @@ struct ModelSelectionPopover: View {
     @State private var customModelText: String = ""
     @State private var showCustomInput: Bool = false
     @State private var showFreeOnly: Bool = false
+    @State private var showCodexOnly: Bool = false
 
     init(
         isPresented: Binding<Bool>,
@@ -154,6 +155,11 @@ struct ModelSelectionPopover: View {
             models = models.filter { freeIds.contains($0) }
         }
 
+        // Filter Codex (subscription) models for OpenAI if toggled
+        if showCodexOnly && selectedProvider == .openAI {
+            models = models.filter { isCodexModel($0) }
+        }
+
         if !searchText.isEmpty {
             models = models.filter { $0.localizedCaseInsensitiveContains(searchText) }
         }
@@ -164,6 +170,11 @@ struct ModelSelectionPopover: View {
     private func isModelFree(_ modelId: String) -> Bool {
         let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
         return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
+    }
+
+    /// Returns whether a model ID belongs to OpenAI's Codex (subscription) line
+    private func isCodexModel(_ modelId: String) -> Bool {
+        modelId.localizedCaseInsensitiveContains("codex")
     }
 
     /// Returns whether a model supports vision (for badge display)
@@ -353,6 +364,20 @@ struct ModelSelectionPopover: View {
                     .help("Show only free models")
                 }
 
+                if selectedProvider == .openAI {
+                    HStack(spacing: 4) {
+                        Text("Codex")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Toggle("", isOn: $showCodexOnly)
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                            .labelsHidden()
+                    }
+                    .fixedSize()
+                    .help("Show only Codex (ChatGPT subscription) models")
+                }
+
                 Button {
                     Task {
                         await modelCatalog.refresh(provider: selectedProvider, force: true)
@@ -448,6 +473,17 @@ struct ModelSelectionPopover: View {
                         .padding(.vertical, 2)
                         .background(
                             Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.green.opacity(0.15))
+                        )
+                }
+
+                if selectedProvider == .openAI && isCodexModel(model) {
+                    Text("Codex")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(selectedModel == model ? .white : .purple)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.purple.opacity(0.15))
                         )
                 }
 
@@ -595,7 +631,6 @@ struct ModelSelectionPopover: View {
                 isPresented = false
             }
             .keyboardShortcut(.escape, modifiers: [])
-            .buttonStyle(.sortyBordered(intent: .destructive))
             
             Button(selectionActionTitle) {
                 onSelect(selectedProvider, selectedModel)

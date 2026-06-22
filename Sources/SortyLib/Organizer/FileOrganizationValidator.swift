@@ -277,7 +277,7 @@ enum ValidationError: LocalizedError {
         case .pathConflict(let path):
             return "Path conflict: \(path)"
         case .pathExists(let path):
-            return "Cannot create folder: A file already exists at '\(path)'. The AI suggested a folder name that conflicts with an existing file."
+            return "Cannot create folder: A file already exists at '\(path)'. Sorty suggested a folder name that conflicts with an existing file."
         case .fileNotFound(let path):
             return "File not found: \(path)"
         case .largeOperation(let count):
@@ -285,7 +285,7 @@ enum ValidationError: LocalizedError {
         case .tooManyFolders(let count, let max):
             return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
         case .invalidStorageLocation(let path):
-            return "Invalid storage location: \(path). The AI suggested a path that is not in your approved storage locations list."
+            return "Invalid storage location: \(path). Sorty suggested a path that is not in your approved storage locations list."
         case .folderTooDeep(let folder):
             return "Folder structure is too deep at '\(folder)'. Maximum depth is 3 levels."
         case .sourceInStorageLocation(let file, let location):

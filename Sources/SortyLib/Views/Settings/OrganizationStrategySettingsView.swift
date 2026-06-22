@@ -49,7 +49,6 @@ struct OrganizationStrategySettingsView: View {
                                 .padding(.leading, 32)
                         }
                     }
-
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -66,7 +65,7 @@ struct OrganizationStrategySettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
-                        description: "Send images to the AI for content-aware organization",
+                        description: "Send images to Sorty for content-aware organization",
                         focusTarget: .strategyVision
                     )
                     .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
@@ -127,10 +126,9 @@ struct OrganizationStrategySettingsView: View {
                         .pickerStyle(.menu)
                         .labelsHidden()
 
-                        Text("Controls how AI names files. Spaces are allowed and often preferred.")
+                        Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
                     }
 
                     Divider()
@@ -173,7 +171,7 @@ struct OrganizationStrategySettingsView: View {
                         HStack {
                             Text("Max Length")
                                 .font(.subheadline)
-                            Slider(
+                            NoTickSlider(
                                 value: Binding(
                                     get: { Double(viewModel.config.renameNamingOptions.maxFilenameLength) },
                                     set: { viewModel.config.renameNamingOptions.maxFilenameLength = Int($0) }
@@ -184,6 +182,8 @@ struct OrganizationStrategySettingsView: View {
                             Text("\(viewModel.config.renameNamingOptions.maxFilenameLength)")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
+                                .contentTransition(.numericText(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength)))
+                                .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.renameNamingOptions.maxFilenameLength)
                                 .frame(width: 32, alignment: .trailing)
                         }
 
@@ -196,6 +196,8 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                                .contentTransition(.numericText(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength)))
+                                .animation(.spring(response: 0.3, dampingFraction: 0.78), value: viewModel.config.renameNamingOptions.maxFilenameLength)
                         }
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,7 +316,7 @@ struct OrganizationStrategySettingsView: View {
                                         showNamingInput = false
                                         namingPreferenceInput = ""
                                     }
-                                    .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                                 }
 
                                 if let error = namingGenerator.error {
@@ -336,7 +338,7 @@ struct OrganizationStrategySettingsView: View {
 
                         Text(viewModel.config.namingStyle == .custom
                              ? "These instructions define how files are named when using Custom style."
-                             : "Extra rules for the AI (e.g., 'Use camelCase for subjects')")
+                             : "Extra rules for Sorty (e.g., 'Use camelCase for subjects')")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -444,7 +446,7 @@ private struct EditPresetSheet: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
 
                 Button("Save") {
                     var updated = preset

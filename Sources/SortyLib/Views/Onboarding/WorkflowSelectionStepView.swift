@@ -28,6 +28,8 @@ public struct WorkflowSelectionStepView: View {
         HStack(alignment: .center, spacing: 28) {
             // Left side - explanation
             VStack(alignment: .leading, spacing: 24) {
+                Spacer()
+
                 VStack(alignment: .leading, spacing: 16) {
                     Image(systemName: "person.crop.circle.badge.checkmark")
                         .font(.system(size: 48))
@@ -36,7 +38,7 @@ public struct WorkflowSelectionStepView: View {
                     Text("Choose Your Workflow")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                     
-                    Text("Select a persona that matches how you work. This helps the AI understand your organization preferences.")
+                    Text("Select a persona that matches how you work. This helps Sorty understand your organization preferences.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -56,12 +58,15 @@ public struct WorkflowSelectionStepView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
+                Spacer()
             }
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity, alignment: .center)
             .padding(.leading, 72)
             .padding(.trailing, 24)
-            .padding(.bottom, 34)
+            // Match the shared step skeleton: center inside the region above
+            // the bottom navigation rail.
+            .padding(.bottom, 88)
             
             // Right side - persona selection
             VStack(spacing: 8) {
@@ -140,7 +145,7 @@ public struct WorkflowSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
             .padding(.trailing, 72)
-            .padding(.bottom, 54)
+            .padding(.bottom, 88)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -194,7 +199,7 @@ public struct WorkflowSelectionStepView: View {
                         Text("Creating Your Persona")
                             .font(.title3.bold())
                         
-                        Text("AI is analyzing your workflow description...")
+                        Text("Sorty is analyzing your workflow description...")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -669,7 +674,7 @@ struct OnboardingCustomPersonaCard: View {
             }
 
             HStack(spacing: 10) {
-                Label("AI-generated persona", systemImage: "sparkles")
+                Label("Sorty-generated persona", systemImage: "sparkles")
                 Label(isSelected ? "Default workflow" : "Ready to select", systemImage: isSelected ? "checkmark.circle.fill" : "arrow.up.right.circle")
             }
             .font(.caption)

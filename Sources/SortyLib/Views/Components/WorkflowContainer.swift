@@ -199,27 +199,152 @@ extension View {
         modifier(EmptyStateWorkflowGradientModifier(isVisible: isVisible))
     }
 
-    func emptyStateIconHeartbeat() -> some View {
-        modifier(EmptyStateIconHeartbeatModifier())
+    func animatedEmptyStateIcon() -> some View {
+        modifier(AnimatedEmptyStateIconModifier())
     }
 }
 
-private struct EmptyStateIconHeartbeatModifier: ViewModifier {
+/// Standardized empty-state hero icon used across the History, Duplicates,
+/// Watched Folders, and Exclusion Rules empty states.
+///
+/// Renders an accent-tinted circular backdrop behind an SF Symbol. By default
+/// the symbol uses the accent gradient with the shared one-shot sweep animation
+/// (matching the History empty state). Pass a `tint` to render a static colored
+/// icon instead (e.g. a green success state).
+struct EmptyStateHeroIcon: View {
+    let systemName: String
+    var tint: Color?
+    var iconSize: CGFloat
+    var circleSize: CGFloat
+
+    init(
+        systemName: String,
+        tint: Color? = nil,
+        iconSize: CGFloat = 44,
+        circleSize: CGFloat = 100
+    ) {
+        self.systemName = systemName
+        self.tint = tint
+        self.iconSize = iconSize
+        self.circleSize = circleSize
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill((tint ?? SortyDesignSystem.Colors.resolvedAccent).opacity(0.1))
+                .frame(width: circleSize, height: circleSize)
+
+            if let tint {
+                Image(systemName: systemName)
+                    .font(.system(size: iconSize))
+                    .foregroundStyle(tint.gradient)
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: iconSize))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.gradient)
+                    .animatedEmptyStateIcon()
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct AnimatedEmptyStateIconModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepProgress: CGFloat = 0
 
     func body(content: Content) -> some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
-        ) { timeline in
-            let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let primaryBeat = max(0, sin(elapsed * 3.2))
-            let secondaryBeat = max(0, sin((elapsed * 3.2) - 0.72)) * 0.45
-            let heartbeat = reduceMotion ? 0 : min(1, primaryBeat + secondaryBeat)
+        content
+            .modifier(
+                EmptyStateIconSweep(
+                    progress: reduceMotion ? 0.5 : sweepProgress,
+                    reduceMotion: reduceMotion
+                )
+            )
+            .onAppear {
+                guard !reduceMotion else { return }
+                sweepProgress = 0
+                withAnimation(.easeInOut(duration: 1.25)) {
+                    sweepProgress = 1
+                }
+            }
+    }
+}
 
+/// Drives a single, non-repeating highlight sweep across the empty-state icon.
+/// `progress` animates once from 0 to 1 on appear; intermediate frames are
+/// produced via `animatableData`, then it settles into a calm resting state.
+private struct EmptyStateIconSweep: ViewModifier, Animatable {
+    var progress: CGFloat
+    let reduceMotion: Bool
+
+    nonisolated var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let sweep = min(max(progress, 0), 1)
+        // Glow peaks mid-sweep and fades to nothing at the start and end so the
+        // animation resolves into a static icon instead of flickering off.
+        // Squaring the sine gives a Hann-style envelope with zero slope at both
+        // ends, so the highlight eases in and out smoothly rather than snapping.
+        let envelope = sin(sweep * .pi)
+        let glow = reduceMotion ? 0 : envelope * envelope
+        let overlayOpacity = reduceMotion ? 0.55 : Double(glow)
+
+        return
             content
-                .scaleEffect(1 + heartbeat * 0.035)
-                .opacity(reduceMotion ? 1 : 0.88 + heartbeat * 0.12)
-        }
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.72),
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.78),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(
+                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.25),
+                            location: 0
+                        ),
+                        .init(
+                            color: SortyDesignSystem.Colors.resolvedAccent,
+                            location: max(0, sweep - 0.16)
+                        ),
+                        .init(color: .white, location: sweep),
+                        .init(
+                            color: SortyDesignSystem.Colors.resolvedAccent,
+                            location: min(1, sweep + 0.16)
+                        ),
+                        .init(
+                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.25),
+                            location: 1
+                        ),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .mask { content }
+                .opacity(overlayOpacity)
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(
+                        reduceMotion ? 0.3 : 0.48 + glow * 0.32
+                    ),
+                    radius: reduceMotion ? 5 : 6 + glow * 7
+                )
+            }
+            .shadow(
+                color: SortyDesignSystem.Colors.resolvedAccent.opacity(
+                    reduceMotion ? 0.24 : 0.22 + glow * 0.3
+                ),
+                radius: reduceMotion ? 5 : 5 + glow * 6
+            )
     }
 }
 

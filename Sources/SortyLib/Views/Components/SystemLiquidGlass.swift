@@ -18,6 +18,11 @@ extension View {
     func systemLiquidGlassPopover(cornerRadius: CGFloat) -> some View {
         if #available(macOS 26.0, *) {
             self
+                .background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.clear)
+                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                }
                 .presentationBackground(.clear)
                 .presentationCornerRadius(cornerRadius)
         } else {

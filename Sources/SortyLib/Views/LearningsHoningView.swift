@@ -80,7 +80,7 @@ struct LearningsHoningView: View {
                     .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Answer 5 quick scenarios to help the AI understand exactly how you think about file organization.")
+                Text("Answer 5 quick scenarios to help Sorty understand exactly how you think about file organization.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -100,7 +100,7 @@ struct LearningsHoningView: View {
             
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.sortyBordered(intent: .destructive))
+                    .buttonStyle(.onboardingPillSecondary)
                 
                 Button {
                     Task {

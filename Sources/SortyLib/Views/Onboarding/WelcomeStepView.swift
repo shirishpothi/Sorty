@@ -255,7 +255,7 @@ public struct WelcomeStepView: View {
                             .offset(y: hasAppeared ? 0 : 20)
                             .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.9), value: hasAppeared)
 
-                        Text("AI-powered file organization for your Mac")
+                        Text("Sorty-powered file organization for your Mac")
                             .font(.title3)
                             .foregroundStyle(.secondary)
                             .opacity(hasAppeared ? 1 : 0)
@@ -272,7 +272,7 @@ public struct WelcomeStepView: View {
                         icon: "wand.and.stars",
                         iconColor: .purple,
                         title: "Smart Organization",
-                        description: "AI analyzes your files and creates a logical folder structure"
+                        description: "Sorty analyzes your files and creates a logical folder structure"
                     )
                     .opacity(featuresAppeared ? 1 : 0)
                     .offset(x: featuresAppeared ? 0 : -30)
@@ -282,7 +282,7 @@ public struct WelcomeStepView: View {
                         icon: "lock.shield.fill",
                         iconColor: .green,
                         title: "Privacy Focused",
-                        description: "File names and metadata are sent to AI for organization - file contents stay on your Mac unless Deep Scan is enabled"
+                        description: "File names and metadata are sent to Sorty for organization - file contents stay on your Mac unless Deep Scan is enabled"
                     )
                     .opacity(featuresAppeared ? 1 : 0)
                     .offset(x: featuresAppeared ? 0 : -30)

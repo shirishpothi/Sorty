@@ -15,7 +15,7 @@ struct WatchedFoldersView: View {
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var contentOpacity: Double = 0
     @State private var isDropTargeted = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if watchedFoldersManager.folders.isEmpty {
@@ -44,7 +44,10 @@ struct WatchedFoldersView: View {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                ForEach(Array(watchedFoldersManager.folders.enumerated()), id: \.element.id) { index, folder in
+                                ForEach(
+                                    Array(watchedFoldersManager.folders.enumerated()),
+                                    id: \.element.id
+                                ) { index, folder in
                                     WatchedFolderCard(folder: folder)
                                         .id(folder.id)
                                         .animatedAppearance(delay: Double(index) * 0.05)
@@ -123,13 +126,14 @@ struct WatchedFoldersView: View {
             watchedFoldersManager.addFolder(folder)
         }
     }
-    
+
     private func handleFolderDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
             if let data = item as? Data,
-               let url = URL(dataRepresentation: data, relativeTo: nil),
-               url.hasDirectoryPath {
+                let url = URL(dataRepresentation: data, relativeTo: nil),
+                url.hasDirectoryPath
+            {
                 Task { @MainActor in
                     HapticFeedbackManager.shared.success()
                     let bookmarkData = try? url.bookmarkData(
@@ -149,7 +153,7 @@ struct WatchedFoldersView: View {
         }
         return true
     }
-    
+
     private var headerView: some View {
         HStack {
             HStack(spacing: 12) {
@@ -160,19 +164,20 @@ struct WatchedFoldersView: View {
                         appState.openSettingsWindow(section: .rules)
                     }
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
-                Text("Watched Folders")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                HStack(spacing: 8) {
-                    let activeCount = watchedFoldersManager.folders.filter { $0.isEnabled }.count
-                    
-                    Text("\(activeCount) active")
-                        .foregroundStyle(activeCount > 0 ? .green : .secondary)
-                }
-                .font(.caption)
+                    Text("Watched Folders")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+
+                    HStack(spacing: 8) {
+                        let activeCount = watchedFoldersManager.folders.filter { $0.isEnabled }
+                            .count
+
+                        Text("\(activeCount) active")
+                            .foregroundStyle(activeCount > 0 ? .green : .secondary)
+                    }
+                    .font(.caption)
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -214,27 +219,27 @@ struct EmptyWatchedFoldersView: View {
     let onAddFolder: () -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
-    
+
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
-                .emptyStateIconHeartbeat()
+            EmptyStateHeroIcon(systemName: "folder.badge.plus")
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Watched Folders")
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("Add folders like Downloads or Desktop to automatically organize new files as they arrive")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
+                Text(
+                    "Add folders like Downloads or Desktop to automatically organize new files as they arrive"
+                )
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
@@ -268,7 +273,7 @@ struct FolderSuggestionPill: View {
     let icon: String
     let action: () -> Void
     @State private var isHovered = false
-    
+
     var body: some View {
         Button {
             HapticFeedbackManager.shared.tap()
@@ -309,20 +314,17 @@ struct WatchedFolderCard: View {
     @State private var isHovered = false
     @State private var highlightPulse = false
 
-    
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
-        return currentDir.path == folder.path && 
-               organizer.state != .idle && 
-               organizer.state != .completed && 
-               !isErrorState
+        return currentDir.path == folder.path && organizer.state != .idle
+            && organizer.state != .completed && !isErrorState
     }
-    
+
     private var isErrorState: Bool {
         if case .error = organizer.state { return true }
         return false
     }
-    
+
     private var isHighlighted: Bool {
         appState.highlightedWatchedFolderID == folder.id
     }
@@ -331,7 +333,7 @@ struct WatchedFolderCard: View {
     private var isAIConfigured: Bool {
         organizer.aiClient != nil
     }
-    
+
     private var statusColor: Color {
         if !folder.exists { return .red }
         if folder.accessStatus == .lost { return .orange }
@@ -339,7 +341,7 @@ struct WatchedFolderCard: View {
         if isOrganizing { return .blue }
         return .green
     }
-    
+
     private var statusIcon: String {
         if !folder.exists { return "exclamationmark.triangle.fill" }
         if folder.accessStatus == .lost { return "lock.slash.fill" }
@@ -375,8 +377,10 @@ struct WatchedFolderCard: View {
 
     private var folderIconView: some View {
         ZStack(alignment: .bottomTrailing) {
-            FolderThumbnailView(url: URL(fileURLWithPath: folder.path), size: CGSize(width: 40, height: 40))
-                .opacity(folder.isEnabled ? 1.0 : 0.6)
+            FolderThumbnailView(
+                url: URL(fileURLWithPath: folder.path), size: CGSize(width: 40, height: 40)
+            )
+            .opacity(folder.isEnabled ? 1.0 : 0.6)
 
             Image(systemName: statusIcon)
                 .font(.system(size: 14))
@@ -594,7 +598,8 @@ struct WatchedFolderCard: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
-            .accessibilityHint("When enabled, Sorty organizes new files into this folder's preferred structure.")
+            .accessibilityHint(
+                "When enabled, Sorty organizes new files into this folder's preferred structure.")
     }
 
     private var controlsView: some View {
@@ -680,13 +685,13 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
-    
+
     @State private var customPrompt: String
     @State private var useCustomModel: Bool
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
     @State private var showModelPicker = false
-    
+
     init(folder: WatchedFolder) {
         self.folder = folder
         _customPrompt = State(initialValue: folder.customPrompt ?? "")
@@ -704,7 +709,7 @@ struct WatchedFolderConfigView: View {
                         url: URL(fileURLWithPath: folder.path),
                         size: CGSize(width: 32, height: 32)
                     )
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.name)
                             .font(.headline)
@@ -714,9 +719,9 @@ struct WatchedFolderConfigView: View {
                             .lineLimit(1)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Button("Done") {
                     HapticFeedbackManager.shared.success()
                     save()
@@ -725,15 +730,20 @@ struct WatchedFolderConfigView: View {
             }
             .padding()
             .background(.ultraThinMaterial)
-            
+
             Divider()
-            
+
             ScrollView {
                 VStack(spacing: 16) {
                     // Actions Section
                     ConfigSection(title: "Actions", icon: "play", color: .blue) {
                         Button {
-                            appState.calibrateAction?(folder)
+                            HapticFeedbackManager.shared.tap()
+                            let updatedFolder = currentFolderConfiguration
+                            withAnimation {
+                                watchedFoldersManager.updateFolder(updatedFolder)
+                            }
+                            appState.calibrateAction?(updatedFolder)
                             dismiss()
                         } label: {
                             HStack {
@@ -742,10 +752,12 @@ struct WatchedFolderConfigView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Run Full Organization")
                                         .foregroundStyle(.primary)
-                                    Text("Set up the folder structure you prefer. New files will then be placed into that structure without rearranging the whole folder.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(
+                                        "Set up the folder structure you prefer. New files will then be placed into that structure without rearranging the whole folder."
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -755,9 +767,10 @@ struct WatchedFolderConfigView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    
+
                     // Custom Instructions Section
-                    ConfigSection(title: "Custom Instructions", icon: "text.bubble", color: .purple) {
+                    ConfigSection(title: "Custom Instructions", icon: "text.bubble", color: .purple)
+                    {
                         VStack(alignment: .leading, spacing: 8) {
                             TextEditor(text: $customPrompt)
                                 .font(.system(.body, design: .default))
@@ -770,13 +783,13 @@ struct WatchedFolderConfigView: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                                 )
-                            
+
                             Text("e.g., \"Group by project name\" or \"Keep invoices separate\"")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    
+
                     // AI Model Section
                     ConfigSection(title: "AI Model", icon: "cpu", color: .purple) {
                         VStack(spacing: 12) {
@@ -804,11 +817,13 @@ struct WatchedFolderConfigView: View {
                                     )
                                     .modelSelectorTriggerBounds()
                                 }
-                            
+
                                 HStack(spacing: 8) {
                                     Image(systemName: "info.circle")
-                                    Text("Tip: Use cheaper models like gpt-4o-mini, claude-3-haiku, or local Ollama for cost-effective background automation.")
-                                        .font(.caption)
+                                    Text(
+                                        "Tip: Use cheaper models like gpt-4o-mini, claude-3-haiku, or local Ollama for cost-effective background automation."
+                                    )
+                                    .font(.caption)
                                 }
                                 .foregroundStyle(.secondary)
                                 .padding(10)
@@ -818,7 +833,7 @@ struct WatchedFolderConfigView: View {
                         }
                         .animation(.easeInOut(duration: 0.2), value: useCustomModel)
                     }
-                    
+
                     // Folder Info
                     if let lastTriggered = folder.lastTriggered {
                         ConfigSection(title: "Statistics", icon: "chart.bar", color: .gray) {
@@ -839,7 +854,8 @@ struct WatchedFolderConfigView: View {
                 .padding(20)
             }
         }
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 650, idealHeight: 700)
+        .frame(minWidth: 520, idealWidth: 560)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             primeModelSelectionFromGlobalDefaultsIfNeeded()
@@ -863,8 +879,10 @@ struct WatchedFolderConfigView: View {
     }
 
     private var globalAutomationSelection: (provider: AIProvider, model: String) {
-        let provider = settingsViewModel.config.automationProvider ?? settingsViewModel.config.provider
-        let configuredModel = settingsViewModel.config.automationProvider == nil
+        let provider =
+            settingsViewModel.config.automationProvider ?? settingsViewModel.config.provider
+        let configuredModel =
+            settingsViewModel.config.automationProvider == nil
             ? settingsViewModel.config.model
             : (settingsViewModel.config.automationModel ?? "")
         let model = configuredModel.isEmpty ? provider.defaultModel : configuredModel
@@ -880,11 +898,13 @@ struct WatchedFolderConfigView: View {
         selectedProvider = defaults.provider
         selectedModel = defaults.model
     }
-    
-    private func save() {
+
+    private var currentFolderConfiguration: WatchedFolder {
         var updated = folder
-        updated.customPrompt = customPrompt.isEmpty ? nil : customPrompt
-        
+        updated.customPrompt =
+            customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil : customPrompt
+
         if useCustomModel {
             updated.providerOverride = selectedProvider
             updated.modelOverride = selectedModel
@@ -892,9 +912,13 @@ struct WatchedFolderConfigView: View {
             updated.providerOverride = nil
             updated.modelOverride = nil
         }
-        
+
+        return updated
+    }
+
+    private func save() {
         withAnimation {
-            watchedFoldersManager.updateFolder(updated)
+            watchedFoldersManager.updateFolder(currentFolderConfiguration)
         }
         dismiss()
     }
@@ -907,7 +931,7 @@ struct ConfigSection<Content: View>: View {
     let icon: String
     let color: Color
     @ViewBuilder let content: Content
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -918,7 +942,7 @@ struct ConfigSection<Content: View>: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.secondary)
             }
-            
+
             content
         }
         .padding(16)

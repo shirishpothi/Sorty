@@ -176,17 +176,27 @@ struct PersonaPickerView: View {
                 TextEditor(text: $localPrompt)
                     .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
-                    .frame(height: promptEditorHeight)
+                    .scrollContentBackground(.hidden)
                     .padding(4)
+                    .background(alignment: .topLeading) {
+                        Text(localPrompt.isEmpty ? " " : localPrompt + " ")
+                            .font(.system(.body, design: .monospaced))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .foregroundColor(.clear)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: 70, maxHeight: 320)
                     .background(Color(nsColor: .textBackgroundColor))
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
                     .accessibilityLabel("\(custom.name) system prompt")
 
-                Text("Edit the custom persona system prompt Sorty sends to the AI.")
+                Text("Edit the custom persona system prompt Sorty uses for organization.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -214,18 +224,30 @@ struct PersonaPickerView: View {
                 TextEditor(text: $localPrompt)
                     .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
-                    .frame(height: promptEditorHeight)
+                    .scrollContentBackground(.hidden)
                     .padding(4)
+                    .background(alignment: .topLeading) {
+                        Text(localPrompt.isEmpty ? " " : localPrompt + " ")
+                            .font(.system(.body, design: .monospaced))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .foregroundColor(.clear)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: 70, maxHeight: 320)
                     .background(Color(nsColor: .textBackgroundColor))
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
 
-                Text("Optional. Leave empty to use \(personaManager.selectedPersona.displayName)'s built-in behavior.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(
+                    "Optional. Leave empty to use \(personaManager.selectedPersona.displayName)'s built-in behavior."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
         }
     }
@@ -280,14 +302,6 @@ struct PersonaPickerView: View {
     private var selectedCustomPersona: CustomPersona? {
         guard let customId = personaManager.selectedCustomPersonaId else { return nil }
         return customStore.customPersonas.first(where: { $0.id == customId })
-    }
-
-    private var promptEditorHeight: CGFloat {
-        let explicitLines = localPrompt.components(separatedBy: .newlines).count
-        let wrappedLines = max(1, localPrompt.count / 80 + 1)
-        let estimatedLines = max(explicitLines, wrappedLines)
-        let height = CGFloat(estimatedLines * 22 + 28)
-        return min(max(height, 58), 220)
     }
 
     private var personaGridColumns: [GridItem] {
@@ -374,7 +388,9 @@ struct PersonaButton: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear)
+                .fill(
+                    isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
@@ -400,6 +416,7 @@ struct PersonaButton: View {
 struct CompactPersonaPicker: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
+    @State private var isHovering = false
 
     var body: some View {
         Menu {
@@ -435,20 +452,51 @@ struct CompactPersonaPicker: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 9) {
                 Image(systemName: currentIcon)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .frame(width: 18)
+                    .accessibilityHidden(true)
+
                 Text(currentName)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(8)
+            .padding(.vertical, 7)
+            .systemLiquidGlassBackground(cornerRadius: 12)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(isHovering ? 0.36 : 0.18),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(
+                color: SortyDesignSystem.Colors.resolvedAccent.opacity(isHovering ? 0.16 : 0.05),
+                radius: isHovering ? 9 : 4,
+                y: isHovering ? 4 : 2
+            )
+            .scaleEffect(isHovering ? 1.015 : 1)
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
         }
         .menuStyle(.borderlessButton)
+        .onHover { hovering in
+            guard hovering != isHovering else { return }
+            isHovering = hovering
+            if hovering {
+                HapticFeedbackManager.shared.light()
+            }
+        }
+        .accessibilityLabel("Workflow")
+        .accessibilityValue(currentName)
     }
 
     private var currentIcon: String {

@@ -56,31 +56,26 @@ struct FinderIntegrationSettingsView: View {
                     VStack(spacing: 8) {
                         compactStatusRow(
                             label: "Organize with Sorty",
-                            value: isOrganizeActionInstalled ? "Ready" : "Repair available",
                             isHealthy: isOrganizeActionInstalled
                         )
 
                         compactStatusRow(
                             label: "Watch with Sorty",
-                            value: isWatchActionInstalled ? "Ready" : "Repair available",
                             isHealthy: isWatchActionInstalled
                         )
 
                         compactStatusRow(
                             label: "Exclude with Sorty",
-                            value: isExcludeActionInstalled ? "Ready" : "Repair available",
                             isHealthy: isExcludeActionInstalled
                         )
 
                         compactStatusRow(
                             label: "Finder extension",
-                            value: finderSyncActive ? "Active" : "Needs activation",
                             isHealthy: finderSyncActive
                         )
 
                         compactStatusRow(
                             label: "Automation permission",
-                            value: automationStatusSummary,
                             isHealthy: automationManager.automationStatus.isGranted
                         )
                     }
@@ -203,7 +198,7 @@ struct FinderIntegrationSettingsView: View {
     }
 
     @ViewBuilder
-    private func compactStatusRow(label: String, value: String, isHealthy: Bool) -> some View {
+    private func compactStatusRow(label: String, isHealthy: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(isHealthy ? .green : .orange)
@@ -212,11 +207,9 @@ struct FinderIntegrationSettingsView: View {
             Text(label)
                 .font(.caption.weight(.medium))
             Spacer()
-            Text(value)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(isHealthy ? .green : .orange)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityValue(isHealthy ? "ready" : "needs attention")
     }
 
     private func refreshFinderContext() {

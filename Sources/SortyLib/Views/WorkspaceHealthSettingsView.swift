@@ -27,6 +27,7 @@ struct WorkspaceHealthSettingsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     thresholdsSection
                     sensitivitySection
+                    WorkspaceHealthThresholdPreview(config: config)
                     enabledChecksSection
                     ignoredPathsSection
                 }
@@ -76,7 +77,7 @@ struct WorkspaceHealthSettingsView: View {
                 HapticFeedbackManager.shared.tap()
                 dismiss()
             }
-            .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
 
             Spacer()
 
@@ -289,9 +290,11 @@ struct WorkspaceHealthSettingsView: View {
                 Text(valueText)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .contentTransition(.numericText(value: value.wrappedValue))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value.wrappedValue)
             }
 
-            Slider(value: value, in: range, step: step)
+            NoTickSlider(value: value, in: range, step: step)
                 .tint(.mint)
 
             HStack {

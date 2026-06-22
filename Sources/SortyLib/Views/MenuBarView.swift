@@ -422,10 +422,10 @@ private struct MenuBarButton: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background(
-                Rectangle()
+                RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.5)
@@ -524,10 +524,10 @@ private struct WatchedFolderMenuItem: View {
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
             .background(
-                Rectangle()
+                RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: 6))
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {

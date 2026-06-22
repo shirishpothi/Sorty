@@ -159,7 +159,7 @@ public struct DemoStepView: View {
                 Text("See Sorty in Action")
                     .font(.title2.bold())
                 
-                Text("Watch a live demo showing how Sorty transforms a messy folder into an organized structure using AI.")
+                Text("Watch a live demo showing how Sorty transforms a messy folder into an organized structure.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -342,7 +342,7 @@ public struct DemoStepView: View {
                 
                 ProcessingStepRow(
                     icon: "brain.head.profile",
-                    text: "AI analyzing patterns...",
+                    text: "Sorty analyzing patterns...",
                     isComplete: demoState == .complete,
                     isActive: demoState == .organizing
                 )
@@ -410,7 +410,7 @@ public struct DemoStepView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
                         .foregroundStyle(.purple)
-                    Text("AI-Powered Organization")
+                    Text("Sorty-Powered Organization")
                         .font(.subheadline.bold())
                 }
                 
@@ -451,7 +451,7 @@ public struct DemoStepView: View {
         case .intro:
             return "Watch Sorty analyze your files and create an intelligent organization structure in real-time."
         case .simulatedDemo:
-            return "Watch as AI scans, categorizes, and organizes files into a clean folder structure."
+            return "Watch as Sorty scans, categorizes, and organizes files into a clean folder structure."
         case .selectDirectory, .analyzing, .organizing:
             return "Sorty is working on your files. Watch the magic happen!"
         case .complete:
@@ -512,7 +512,7 @@ public struct DemoStepView: View {
     private var statusDescription: String {
         switch organizer.state {
         case .scanning: return "Examining file names, types, and patterns..."
-        case .organizing: return "AI is designing the perfect folder structure..."
+        case .organizing: return "Sorty is designing the perfect folder structure..."
         case .applying: return "Moving files to their new homes..."
         case .ready: return "Your organization plan is ready!"
         default: return "Working on your files..."

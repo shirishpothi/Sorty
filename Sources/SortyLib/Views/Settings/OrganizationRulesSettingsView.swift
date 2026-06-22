@@ -34,10 +34,11 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.maxTopLevelFolders)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(value: Double(viewModel.config.maxTopLevelFolders)))
+                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.maxTopLevelFolders)
                     }
                     
-                    Slider(
+                    NoTickSlider(
                         value: Binding(
                             get: { Double(viewModel.config.maxTopLevelFolders) },
                             set: { viewModel.config.maxTopLevelFolders = Int($0) }
@@ -58,8 +59,8 @@ struct OrganizationRulesSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
-                    Text("Limits how many main folders the AI creates. Subfolders are not limited.")
+
+                    Text("Limits how many main folders Sorty creates. Subfolders are not limited.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
@@ -73,7 +74,7 @@ struct OrganizationRulesSettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableFileTagging,
                         title: "Enable File Tagging",
-                        description: "Allow AI to suggest and apply Finder tags to files"
+                        description: "Allow Sorty to suggest and apply Finder tags to files"
                     )
                 }
             }
@@ -89,10 +90,11 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(value: viewModel.config.temperature))
+                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
                     }
 
-                    Slider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
+                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()
                         }

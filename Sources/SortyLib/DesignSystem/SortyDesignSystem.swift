@@ -210,7 +210,7 @@ public enum SortyDesignSystem {
         // Window sizes
         public static let windowMinWidth: CGFloat = 1000
         public static let windowMinHeight: CGFloat = 700
-        public static let windowOnboardingWidth: CGFloat = 1000
+        public static let windowOnboardingWidth: CGFloat = 1100
         public static let windowOnboardingHeight: CGFloat = 720
     }
     

@@ -330,7 +330,7 @@ public struct VisionAnalysisSummary: Equatable, Sendable {
     }
 
     public var summaryText: String {
-        var text = "Analyzed \(analyzedCount) of \(totalImageCount) images with AI Vision"
+        var text = "Analyzed \(analyzedCount) of \(totalImageCount) images with Sorty Vision"
         if skippedCount > 0 {
             text += " (\(skippedCount) skipped)"
         }

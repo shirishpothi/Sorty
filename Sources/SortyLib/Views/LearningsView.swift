@@ -109,13 +109,7 @@ struct LearningsView: View {
         WorkflowContainer(currentStep: .configure) {
             Spacer()
 
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 60))
-                .foregroundStyle(.purple)
-                .padding(32)
-                .background(Color.purple.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 24))
-                .accessibilityHidden(true)
+            EmptyStateHeroIcon(systemName: "brain.head.profile")
 
             VStack(spacing: 8) {
                 Text("The Learnings")
@@ -132,10 +126,10 @@ struct LearningsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 featureRow(
                     icon: "eye.fill", title: "Watches",
-                    description: "Observes when you modify directories after AI organization")
+                    description: "Observes when you modify directories after Sorty organization")
                 featureRow(
                     icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts",
-                    description: "Understands when AI suggestions weren't right")
+                    description: "Understands when Sorty suggestions weren't right")
                 featureRow(
                     icon: "text.bubble.fill", title: "Remembers Instructions",
                     description: "Captures your additional guidance and preferences")
@@ -507,7 +501,6 @@ struct LearningsView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 16)
-        .systemLiquidGlassBackground(cornerRadius: 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings header")
     }
@@ -996,7 +989,6 @@ struct LearningsView: View {
                 .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .accessibilityIgnoresInvertColors()
-                .emptyStateIconHeartbeat()
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
                 .animation(
@@ -1065,7 +1057,6 @@ struct LearningsView: View {
                         .frame(width: 72, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .accessibilityIgnoresInvertColors()
-                        .emptyStateIconHeartbeat()
                         .accessibilityHidden(true)
                     Text("No activity yet")
                         .font(.subheadline.bold())

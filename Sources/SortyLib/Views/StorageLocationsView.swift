@@ -476,7 +476,7 @@ struct StorageLocationConfigView: View {
                     }
                     
                     // Description Section
-                    ConfigSection(title: "Description for AI", icon: "text.bubble", color: .purple) {
+                    ConfigSection(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
                         VStack(alignment: .leading, spacing: 8) {
                             TextEditor(text: $description)
                                 .font(.system(.body, design: .default))
@@ -490,7 +490,7 @@ struct StorageLocationConfigView: View {
                                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                                 )
                             
-                            Text("Describe what types of files belong here. The AI uses this to decide which files to move to this location.")
+                            Text("Describe what types of files belong here. Sorty uses this to decide which files to move to this location.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             
@@ -519,7 +519,7 @@ struct StorageLocationConfigView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Enabled")
                                     .font(.subheadline)
-                                Text("When enabled, AI can suggest moving files to this location")
+                                Text("When enabled, Sorty can suggest moving files to this location")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -532,7 +532,7 @@ struct StorageLocationConfigView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             InfoRow(icon: "arrow.right.circle", text: "Files can be moved TO this location")
                             InfoRow(icon: "xmark.circle", text: "Files already here will NOT be reorganized")
-                            InfoRow(icon: "brain", text: "AI uses the description to match appropriate files")
+                            InfoRow(icon: "brain", text: "Sorty uses the description to match appropriate files")
                         }
                     }
                 }

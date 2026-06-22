@@ -398,7 +398,7 @@ struct PreviewInstructionsRow: View {
             }
             .accessibilityIdentifier("CompactInstructionsTextField")
             .accessibilityLabel("Guiding instructions")
-            .accessibilityHint("Enter instructions to guide AI regeneration")
+            .accessibilityHint("Enter instructions to guide Sorty regeneration")
             
             if !instructions.isEmpty {
                 Button {

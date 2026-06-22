@@ -52,7 +52,6 @@ struct PersonaEditorView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.escape)
-                .buttonStyle(.sortyBordered(intent: .destructive))
                 
                 Button(editingPersona == nil ? "Create" : "Save") {
                     savePersona()
@@ -98,7 +97,7 @@ struct PersonaEditorView: View {
                     // Prompt Modifier
                     GroupBox("Organization Instructions") {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Define how the AI should organize files with this persona:")
+                            Text("Define how Sorty should organize files with this persona:")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
@@ -116,7 +115,7 @@ struct PersonaEditorView: View {
                                 .buttonStyle(.sortyBordered)
                                 
                                 Button(action: { showingGenerator = true }) {
-                                    Label("Generate with AI", systemImage: "sparkles")
+                                    Label("Generate with Sorty", systemImage: "sparkles")
                                 }
                                 .buttonStyle(.sortyBordered)
                                 .disabled(generator.isGenerating)
@@ -187,7 +186,6 @@ struct PersonaEditorView: View {
                     Button("Cancel") {
                         showingGenerator = false
                     }
-                    .buttonStyle(.sortyBordered(intent: .destructive))
                     
                     if generator.isGenerating {
                         SortyGradientCircularLoader(size: 12, lineWidth: 2.2)

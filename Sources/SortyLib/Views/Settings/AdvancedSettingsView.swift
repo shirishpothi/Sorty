@@ -78,9 +78,9 @@ struct AdvancedSettingsView: View {
                         defaultMax: 600,
                         step: 10
                     )
-                    
+
                     Divider()
-                    
+
                     TimeoutSliderRow(
                         title: "Resource Timeout",
                         description: "Maximum total request duration",
@@ -142,7 +142,8 @@ private struct TimeoutSliderRow: View {
     let sliderMin: Double
     let defaultMax: Double
     let step: Double
-    
+    var personaPreview: AnyView? = nil
+
     @State private var editingMax = false
     @State private var maxText = ""
     @State private var customMax: Double?
@@ -162,10 +163,12 @@ private struct TimeoutSliderRow: View {
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
+                    .contentTransition(.numericText(value: value))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value)
             }
             
             HStack(spacing: 8) {
-                Slider(value: $value, in: sliderMin...effectiveMax, step: step)
+                NoTickSlider(value: $value, in: sliderMin...effectiveMax, step: step)
                 
                 if editingMax {
                     TextField("Max", text: $maxText)
@@ -207,6 +210,10 @@ private struct TimeoutSliderRow: View {
             Text(description)
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+            if let personaPreview {
+                personaPreview
+            }
         }
     }
     

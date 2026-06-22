@@ -323,7 +323,7 @@ struct ExclusionRulesView: View {
     private var naturalLanguageExceptionsCard: some View {
         SettingsCard(title: "Natural Language Exceptions", icon: "text.bubble", color: .purple) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Describe files the AI should never touch, in plain English.")
+                Text("Describe files Sorty should never touch, in plain English.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -349,7 +349,7 @@ struct ExclusionRulesView: View {
                         newNLException.trimmingCharacters(in: .whitespaces).isEmpty
                             || isImprovingException
                     )
-                    .help("Refine with AI")
+                    .help("Refine with Sorty")
 
                     Button("Add") {
                         addException()
@@ -477,10 +477,7 @@ struct EmptyExclusionRulesView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "eye.slash.circle")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
-                .emptyStateIconHeartbeat()
+            EmptyStateHeroIcon(systemName: "eye.slash.circle")
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(
@@ -826,7 +823,6 @@ struct AddExclusionRuleView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
-                .buttonStyle(.sortyBordered(intent: .destructive))
 
                 Spacer()
 

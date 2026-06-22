@@ -92,7 +92,7 @@ struct HelpSettingsView: View {
                         Label(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details", systemImage: copiedIssueDetails ? "checkmark" : "doc.on.doc")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.sortyProminent(intent: .info))
+                    .buttonStyle(.sortyProminent(intent: .secondary))
                     .accessibilityIdentifier("CopyIssueDetailsButton")
                     .onHover { hovering in
                         if hovering {
@@ -455,24 +455,6 @@ private struct DeeplinkEntryRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(copied ? color.opacity(0.13) : Color.clear)
-                .blur(radius: copied && !reduceMotion ? 8 : 0)
-        )
-        .overlay(alignment: .trailing) {
-            if copied {
-                Label("Copied", systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .shadow(color: color.opacity(0.22), radius: 12, y: 4)
-                    .padding(.trailing, 44)
-                    .transition(reduceMotion ? .opacity : .scale(scale: 0.88).combined(with: .opacity))
-            }
-        }
         .contentShape(Rectangle())
     }
 
@@ -488,6 +470,8 @@ private struct DeeplinkEntryRow: View {
                     Circle()
                         .fill(copied ? .green.opacity(0.14) : color.opacity(0.08))
                 )
+                .contentTransition(.symbolEffect(.replace))
+                .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: copied)
         }
         .buttonStyle(.plain)
         .help("Copy \(entry.title) deeplink")
@@ -500,15 +484,11 @@ private struct DeeplinkEntryRow: View {
         NSPasteboard.general.setString(value, forType: .string)
         HapticFeedbackManager.shared.tap()
 
-        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.74)) {
-            copied = true
-        }
+        copied = true
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_250_000_000)
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                copied = false
-            }
+            copied = false
         }
     }
 }

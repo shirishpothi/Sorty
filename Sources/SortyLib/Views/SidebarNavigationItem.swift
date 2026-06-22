@@ -24,7 +24,7 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 systemImage: "folder.badge.gearshape",
                 accessibilityIdentifier: "OrganizeSidebarItem",
                 accessibilityHint: "Open the main organization workflow",
-                helpText: "Organize files with AI suggestions"
+                helpText: "Organize files with Sorty suggestions"
             )
         ]
 

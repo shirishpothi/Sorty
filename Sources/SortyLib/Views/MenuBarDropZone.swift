@@ -478,7 +478,6 @@ struct LiquidGlassPopover: View {
                             controller.dismiss()
                         }
                         .keyboardShortcut(.cancelAction)
-                        .buttonStyle(.sortyBordered(intent: .destructive))
 
                         Spacer()
 

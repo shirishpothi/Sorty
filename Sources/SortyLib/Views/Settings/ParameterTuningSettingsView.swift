@@ -21,14 +21,15 @@ struct ParameterTuningSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(value: viewModel.config.temperature))
+                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
                     }
                     
-                    Slider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
+                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()
                         }
-                    
+
                     HStack {
                         Text("Focused")
                             .font(.caption)

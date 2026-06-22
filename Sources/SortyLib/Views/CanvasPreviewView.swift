@@ -489,7 +489,6 @@ struct CanvasToolbar: View {
 
             Button("Cancel", action: onCancel)
                 .keyboardShortcut(.cancelAction)
-                .buttonStyle(.sortyBordered(intent: .destructive))
 
             Button("Apply Changes", action: onApply)
                 .buttonStyle(.sortyProminent(intent: .success))

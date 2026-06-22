@@ -910,7 +910,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     priority: rootFiles.count >= 50 ? .critical : .high,
                     action: .organizeRoot,
                     affectedFiles: affected,
-                    detailedReason: "Too many files in the root folder makes it hard to find things. AI can help organize them.",
+                    detailedReason: "Too many files in the root folder makes it hard to find things. Sorty can help organize them.",
                     confidence: 100
                 ))
             }

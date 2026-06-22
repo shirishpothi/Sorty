@@ -162,8 +162,14 @@ public struct CompletionStepView: View {
             CompletionContrastBackdrop()
                 .allowsHitTesting(false)
 
-            CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
-                .allowsHitTesting(false)
+            // Removed (not just faded) on exit: its repeat-forever color drift
+            // would otherwise keep animating through the hand-off to the main
+            // window and steal frames from the cross-fade.
+            if !exitTriggered {
+                CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
 
             if showParticles {
                 ZStack {
@@ -181,23 +187,29 @@ public struct CompletionStepView: View {
 
             VStack(spacing: 24) {
                 ZStack {
-                    CompletionGlowRing(isActive: showGlowRing)
+                    // The pulsing ring and ripple circles run repeat-forever
+                    // animations; drop them from the hierarchy on exit so they
+                    // stop costing frames during the hand-off.
+                    if !exitTriggered {
+                        CompletionGlowRing(isActive: showGlowRing)
+                            .transition(.opacity)
 
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .stroke(
-                                CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04),
-                                lineWidth: 2
-                            )
-                            .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
-                            .scaleEffect(hasAppeared ? 1.2 : 0.8)
-                            .opacity(hasAppeared ? 0 : 1)
-                            .animation(
-                                .easeOut(duration: 1.5)
-                                    .repeatForever(autoreverses: false)
-                                    .delay(Double(index) * 0.3),
-                                value: hasAppeared
-                            )
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .stroke(
+                                    CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04),
+                                    lineWidth: 2
+                                )
+                                .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
+                                .scaleEffect(hasAppeared ? 1.2 : 0.8)
+                                .opacity(hasAppeared ? 0 : 1)
+                                .animation(
+                                    .easeOut(duration: 1.5)
+                                        .repeatForever(autoreverses: false)
+                                        .delay(Double(index) * 0.3),
+                                    value: hasAppeared
+                                )
+                        }
                     }
 
                     Circle()
@@ -239,34 +251,21 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 30 : 0)
 
-                // Use Grid (not LazyVGrid) so columns are sized to fit the
-                // widest cell. This guarantees the four tips render as a
-                // tidy 2×2 block with icons that align vertically across
-                // rows, and the whole block sits perfectly centered in the
-                // parent without depending on a fragile fixed width.
-                Grid(alignment: .leading, horizontalSpacing: 36, verticalSpacing: 14) {
+                // Fixed equal-width cells keep the 2×2 block symmetric: with
+                // content-sized columns the two column widths differed, which
+                // made the centered block read as misaligned. Tips rise in
+                // with a short, uniform stagger instead of sliding sideways —
+                // the horizontal slide made the leading edges look ragged
+                // while the cascade played.
+                Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
                     GridRow {
-                        QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
-                            .opacity(tipsAppeared ? 1 : 0)
-                            .offset(x: tipsAppeared ? 0 : -30)
-                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.6), value: tipsAppeared)
-
-                        QuickTipRow(icon: "keyboard", text: "Press \u{2318}O")
-                            .opacity(tipsAppeared ? 1 : 0)
-                            .offset(x: tipsAppeared ? 0 : -30)
-                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.8), value: tipsAppeared)
+                        quickTip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.55)
+                        quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
                     }
 
                     GridRow {
-                        QuickTipRow(icon: "arrow.uturn.backward", text: "Undo changes")
-                            .opacity(tipsAppeared ? 1 : 0)
-                            .offset(x: tipsAppeared ? 0 : -30)
-                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.0), value: tipsAppeared)
-
-                        QuickTipRow(icon: "gearshape", text: "Tune settings")
-                            .opacity(tipsAppeared ? 1 : 0)
-                            .offset(x: tipsAppeared ? 0 : -30)
-                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
+                        quickTip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.75)
+                        quickTip(icon: "gearshape", text: "Tune settings", delay: 0.85)
                     }
                 }
                 .opacity(contentDismissed ? 0 : 1)
@@ -286,8 +285,9 @@ public struct CompletionStepView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(readinessState == .checking)
                 .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
-                .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 20)
-                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.4), value: tipsAppeared)
+                .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
+                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.05), value: tipsAppeared)
+                .padding(.top, 6)
                 .accessibilityIdentifier("OnboardingCompleteButton")
 
                 if case .failed(let message) = readinessState {
@@ -310,6 +310,16 @@ public struct CompletionStepView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Completion Step")
+    }
+
+    /// One cell of the 2×2 tips grid. The fixed width keeps both columns
+    /// identical so the centered block stays symmetric.
+    private func quickTip(icon: String, text: String, delay: Double) -> some View {
+        QuickTipRow(icon: icon, text: text)
+            .frame(width: 190, alignment: .leading)
+            .opacity(tipsAppeared ? 1 : 0)
+            .offset(y: tipsAppeared ? 0 : 12)
+            .animation(.spring(response: 0.6, dampingFraction: 0.85).delay(delay), value: tipsAppeared)
     }
 
     // MARK: - Reveal Sequence
@@ -523,10 +533,13 @@ public struct CompletionStepView: View {
         HapticFeedbackManager.shared.success()
         fadeOutAndStopAudio(duration: 0.32)
 
-        // Fade out all content smoothly and hand off immediately so the main
-        // organize page can start rendering on the same run loop turn. The
-        // previous 0.18s `asyncAfter` was perceived as a hang after pressing
-        // "Start Using Sorty".
+        // Fade out all content, then hand off on the *next* run loop turn.
+        // Calling onFinish() synchronously stacked the entire main-window
+        // build (NavigationSplitView + sidebar + organize page) onto the same
+        // frame that starts this fade, which dropped frames and made the
+        // animation look choppy. One tick (~16 ms) lets the fade's first
+        // frame commit before the heavy view construction happens, without
+        // reintroducing the perceptible 0.18 s hang this used to have.
         withAnimation(.easeOut(duration: 0.18)) {
             contentDismissed = true
             backgroundRevealed = false
@@ -535,7 +548,9 @@ public struct CompletionStepView: View {
             revealOpacity = 0
         }
 
-        onFinish()
+        DispatchQueue.main.async {
+            onFinish()
+        }
     }
 }
 

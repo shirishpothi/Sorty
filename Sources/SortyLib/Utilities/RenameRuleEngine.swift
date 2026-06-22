@@ -23,9 +23,9 @@ public enum RenameRuleApplicationMode: String, Codable, CaseIterable, Sendable {
     public var description: String {
         switch self {
         case .beforeAI:
-            return "Rule-based rename candidates are applied first, then AI suggestions can improve them."
+            return "Rule-based rename candidates are applied first, then Sorty suggestions can improve them."
         case .rulesOnly:
-            return "Only custom rules rename files. AI suggestions are ignored."
+            return "Only custom rules rename files. Sorty suggestions are ignored."
         }
     }
 }

@@ -76,7 +76,7 @@ struct PreviewListView: View {
                 iconColor: .orange,
                 mascotImageName: "UnorganizedSortyMascot",
                 title: "All Files Unorganized",
-                message: "\(count) files couldn't be automatically organized. Try providing specific instructions to help the AI categorize them better.",
+                message: "\(count) files couldn't be automatically organized. Try providing specific instructions to help Sorty categorize them better.",
                 actions: [
                     EmptyAction(
                         title: "Add Instructions",

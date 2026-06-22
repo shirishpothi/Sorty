@@ -29,40 +29,42 @@ public struct ProviderSelectionStepView: View {
     @State private var isHoveringTestConnectionButton = false
     @State private var codexTerminalResetTask: Task<Void, Never>?
     @State private var codexVerifyResetTask: Task<Void, Never>?
-    
+
     enum ConnectionTestStatus {
         case idle
         case testing
         case success
         case failed
     }
-    
+
     let providers = AIProvider.userSelectableProviders
     private let providerGridColumns = Array(
         repeating: GridItem(.flexible(), spacing: 8),
         count: 3
     )
-    
+
     public init() {}
-    
+
     public var body: some View {
         HStack(spacing: 34) {
             VStack(alignment: .leading, spacing: 22) {
+                Spacer()
+
                 VStack(alignment: .leading, spacing: 14) {
                     ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
                         .padding(12)
                         .systemLiquidGlassBackground(cornerRadius: 18)
-                    
+
                     Text("Choose your AI")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                    
+
                     Text("Sorty sends file names and metadata to the provider you pick. File contents stay on your Mac unless you enable Deep Scan.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    
+
                     VStack(alignment: .leading, spacing: 12) {
-                        PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to AI")
+                        PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to Sorty")
                         PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
                         PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
                         PrivacyFeatureRow(icon: "server.rack", text: "Local and on-device options available")
@@ -73,90 +75,83 @@ public struct ProviderSelectionStepView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.leading, 72)
+
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Provider")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                    Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                }
+                .frame(maxWidth: 640)
+
+                LazyVGrid(columns: providerGridColumns, spacing: 8) {
+                    ForEach(providers, id: \.self) { provider in
+                        OnboardingProviderRow(
+                            provider: provider,
+                            isSelected: settingsViewModel.config.provider == provider
+                        ) {
+                            selectProvider(provider)
+                        }
+                    }
+                }
+                .frame(maxWidth: 640)
+
+                if settingsViewModel.config.provider != .appleFoundationModel {
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 10) {
+                            Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
+                                .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
+                                .font(.system(size: 16, weight: .semibold))
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Configure \(settingsViewModel.config.provider.displayName)")
+                                    .font(.subheadline.weight(.semibold))
+
+                                Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                        }
+
+                        Group {
+                            if settingsViewModel.config.provider == .githubCopilot {
+                                onboardingCopilotConfig
+                            } else {
+                                providerConfigSection
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .systemLiquidGlassBackground(cornerRadius: 14)
+                    .frame(maxWidth: 430)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
+                }
+
+                connectionStatusView
+                    .frame(maxWidth: 430)
+                    .padding(.top, 4)
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
-            .padding(.leading, 72)
-            .padding(.bottom, 34)
-            
-            GeometryReader { proxy in
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Provider")
-                            .font(.title3.weight(.semibold))
-                        Spacer()
-                        Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
-                    }
-                    .frame(maxWidth: 640)
-                        
-                    LazyVGrid(columns: providerGridColumns, spacing: 8) {
-                        ForEach(providers, id: \.self) { provider in
-                            OnboardingProviderRow(
-                                provider: provider,
-                                isSelected: settingsViewModel.config.provider == provider
-                            ) {
-                                selectProvider(provider)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: 640)
-                        
-                    if settingsViewModel.config.provider != .appleFoundationModel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(spacing: 10) {
-                                Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                    .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
-                                    .font(.system(size: 16, weight: .semibold))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Configure \(settingsViewModel.config.provider.displayName)")
-                                        .font(.subheadline.weight(.semibold))
-
-                                    Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                            }
-
-                            Group {
-                                if settingsViewModel.config.provider == .githubCopilot {
-                                    onboardingCopilotConfig
-                                } else {
-                                    providerConfigSection
-                                }
-                            }
-                        }
-                        .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 14)
-                        .frame(maxWidth: 430)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                        .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
-                    }
-                        
-                    providerReadinessView
-                        .frame(maxWidth: 430)
-
-                    connectionStatusView
-                        .frame(maxWidth: 430)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: proxy.size.height, alignment: .center)
-                .padding(.top, 10)
-                .padding(.bottom, 70)
-                .padding(.trailing, 72)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(x: hasAppeared ? 0 : 20)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-            }
-            .frame(maxWidth: .infinity)
+            .padding(.trailing, 72)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(x: hasAppeared ? 0 : 20)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
         .onAppear {
             withAnimation { hasAppeared = true }
@@ -194,7 +189,7 @@ public struct ProviderSelectionStepView: View {
             settingsViewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
         }
     }
-    
+
     @ViewBuilder
     private var onboardingCopilotConfig: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -204,7 +199,7 @@ public struct ProviderSelectionStepView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
                         .foregroundColor(.green)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Signed in as")
                             .font(.caption)
@@ -235,9 +230,9 @@ public struct ProviderSelectionStepView: View {
                                 HapticFeedbackManager.shared.light()
                             }
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Sign Out") {
                         copilotAuth.signOut()
                         connectionStatus = .idle
@@ -249,13 +244,13 @@ public struct ProviderSelectionStepView: View {
                 .padding(12)
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(8)
-                
+
                 // Model selector
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Model")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     if isLoadingModels {
                         HStack(spacing: 8) {
                             BouncingSpinner(size: 12, color: .secondary)
@@ -278,14 +273,14 @@ public struct ProviderSelectionStepView: View {
                         fetchCopilotModels()
                     }
                 }
-                
+
             } else if let code = copilotAuth.deviceCodeResponse {
                 // Device code flow
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("1. Open verification page")
                             .font(.caption).bold()
-                        
+
                         Link(destination: URL(string: code.verificationUri)!) {
                             HStack {
                                 Text(code.verificationUri)
@@ -296,11 +291,11 @@ public struct ProviderSelectionStepView: View {
                         .trackHoveredURL(URL(string: code.verificationUri)!)
                         .buttonStyle(.link)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("2. Enter code")
                             .font(.caption).bold()
-                        
+
                         HStack {
                             Text(code.userCode)
                                 .font(.system(.title3, design: .monospaced))
@@ -308,7 +303,7 @@ public struct ProviderSelectionStepView: View {
                                 .padding(8)
                                 .background(Color.secondary.opacity(0.1))
                                 .cornerRadius(6)
-                            
+
                             Button {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(code.userCode, forType: .string)
@@ -325,7 +320,7 @@ public struct ProviderSelectionStepView: View {
                             .help("Copy code")
                         }
                     }
-                    
+
                     HStack(spacing: 8) {
                         BouncingSpinner(size: 8, color: .secondary)
                         Text("Waiting for authorization...")
@@ -336,14 +331,14 @@ public struct ProviderSelectionStepView: View {
                 .padding(12)
                 .background(Color.secondary.opacity(0.05))
                 .cornerRadius(8)
-                
+
             } else {
                 // Sign in prompt
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Access frontier AI models via your GitHub Copilot subscription.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    
+
                     Button {
                         Task {
                             do {
@@ -362,7 +357,7 @@ public struct ProviderSelectionStepView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.onboardingPill)
-                    
+
                     if let error = copilotAuth.authError {
                         Text(error)
                             .foregroundColor(.red)
@@ -382,18 +377,18 @@ public struct ProviderSelectionStepView: View {
                     Text("API URL")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     TextField("https://api.example.com", text: Binding(
                         get: { settingsViewModel.config.apiURL ?? settingsViewModel.config.provider.defaultAPIURL ?? "" },
-                        set: { 
+                        set: {
                             settingsViewModel.config.apiURL = $0.isEmpty ? nil : $0
                             scheduleConnectionTest()
                         }
                     ))
                     .textFieldStyle(.roundedBorder)
-                    
-                    Text(settingsViewModel.config.provider == .ollama ? 
-                         "Default: http://localhost:11434" : 
+
+                    Text(settingsViewModel.config.provider == .ollama ?
+                         "Default: http://localhost:11434" :
                          "Enter the base URL of your OpenAI-compatible API")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -427,7 +422,7 @@ public struct ProviderSelectionStepView: View {
                     Text("Model")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     ModelSelectorRow(
                         provider: settingsViewModel.config.provider,
                         model: settingsViewModel.config.model
@@ -653,7 +648,7 @@ public struct ProviderSelectionStepView: View {
         .background(Color.black.opacity(0.05))
         .cornerRadius(4)
     }
-    
+
     @ViewBuilder
     private var connectionStatusView: some View {
         VStack(spacing: 12) {
@@ -682,7 +677,7 @@ public struct ProviderSelectionStepView: View {
                     }
                     .disabled(!canTestConnection)
                     .opacity(canTestConnection ? 1.0 : 0.5)
-                    
+
                 case .testing:
                     HStack(spacing: 8) {
                         BouncingSpinner(size: 14, color: .accentColor)
@@ -690,7 +685,7 @@ public struct ProviderSelectionStepView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                 case .success:
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
@@ -699,7 +694,7 @@ public struct ProviderSelectionStepView: View {
                             .font(.subheadline)
                             .foregroundStyle(.green)
                     }
-                    
+
                 case .failed:
                     VStack(alignment: .center, spacing: 8) {
                         HStack(spacing: 8) {
@@ -708,14 +703,14 @@ public struct ProviderSelectionStepView: View {
                             Text("Connection failed")
                                 .font(.subheadline)
                                 .foregroundStyle(.orange)
-                            
+
                             Button("Retry") {
                                 testConnection()
                             }
                             .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                         }
-                        
+
                         if let error = connectionError {
                             Text(error)
                             .font(.caption)
@@ -723,7 +718,7 @@ public struct ProviderSelectionStepView: View {
                             .lineLimit(2)
                             .multilineTextAlignment(.center)
                         }
-                        
+
                         Text("You can continue anyway and fix this later in Settings.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -776,7 +771,7 @@ public struct ProviderSelectionStepView: View {
         )
         .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
     }
-    
+
     private var canTestConnection: Bool {
         let provider = settingsViewModel.config.provider
         if provider == .appleFoundationModel {
@@ -803,7 +798,7 @@ public struct ProviderSelectionStepView: View {
             )
         )
     }
-    
+
     private func selectProvider(_ provider: AIProvider) {
         HapticFeedbackManager.shared.selection()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -844,11 +839,11 @@ public struct ProviderSelectionStepView: View {
         scheduleConnectionTest()
         openAIAuth.checkAuthenticationStatus()
     }
-    
+
     private func scheduleConnectionTest() {
         testDebounceTask?.cancel()
         connectionStatus = .idle
-        
+
         testDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
             if !Task.isCancelled && canTestConnection {
@@ -858,11 +853,11 @@ public struct ProviderSelectionStepView: View {
             }
         }
     }
-    
+
     private func testConnection() {
         connectionStatus = .testing
         connectionError = nil
-        
+
         Task {
             do {
                 try await settingsViewModel.testConnection()
@@ -1008,10 +1003,10 @@ public struct ProviderSelectionStepView: View {
             }
         }
     }
-    
+
     private func fetchCopilotModels() {
         guard settingsViewModel.config.provider == .githubCopilot, copilotAuth.isAuthenticated else { return }
-        
+
         isLoadingModels = true
         Task {
             do {
@@ -1041,18 +1036,18 @@ struct PrivacyFeatureRow: View {
     let icon: String
     let text: String
     var badge: String? = nil
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14))
                 .foregroundStyle(.green)
                 .frame(width: 20)
-            
+
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
-            
+
             if let badge = badge {
                 Text(badge.uppercased())
                     .font(.system(size: 9, weight: .bold, design: .rounded))

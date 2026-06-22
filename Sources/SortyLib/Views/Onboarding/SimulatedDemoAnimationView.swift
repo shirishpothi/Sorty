@@ -314,7 +314,7 @@ struct SimulatedDemoAnimationView: View {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.caption)
-                Text("AI generates multiple options for you to choose")
+                Text("Sorty generates multiple options for you to choose")
                     .font(.caption)
             }
             .foregroundStyle(.secondary)

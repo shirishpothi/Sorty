@@ -73,7 +73,7 @@ struct VisionRecommendationBanner: View {
                         .fontWeight(.medium)
                     
                     if state.recommendedAction == .enableVision {
-                        Text("Enable AI Vision for content-aware organization")
+                        Text("Enable Sorty Vision for content-aware organization")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else if state.recommendedAction == .switchModel {

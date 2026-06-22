@@ -88,8 +88,8 @@ public struct OnboardingView: View {
                             ScrollView(.vertical) {
                                 stepContent
                                     .frame(
-                                        minHeight: max(480, geometry.size.height - 238),
-                                        maxWidth: .infinity
+                                        maxWidth: .infinity,
+                                        minHeight: max(480, geometry.size.height - 238)
                                     )
                             }
                             .scrollIndicators(.hidden)
@@ -141,17 +141,14 @@ public struct OnboardingView: View {
             }
         }
         .background(
-            OnboardingWindowTitleConfigurator {
-                hasConfiguredWindowChrome = true
+            ZStack {
+                OnboardingWindowTitleConfigurator {
+                    hasConfiguredWindowChrome = true
+                }
+                OnboardingScreenEdgeGlowPresenter()
             }
             .frame(width: 0, height: 0)
         )
-        .overlay(alignment: .topLeading) {
-            OnboardingScreenEdgeGlowPresenter(progress: gradientProgress)
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
@@ -212,7 +209,7 @@ public struct OnboardingView: View {
                         }
                         .frame(minWidth: 80)
                     }
-                    .buttonStyle(.sortyBordered(intent: .primary))
+                    .buttonStyle(.bordered)
                     .keyboardShortcut(.leftArrow, modifiers: [])
                     .accessibilityIdentifier("OnboardingBackButton")
                     .opacity(backHidden ? 0 : 1)
@@ -1024,78 +1021,54 @@ private struct OnboardingOrbitFileChip: View {
 }
 
 private struct OnboardingScreenEdgeGlow: View {
-    let progress: Double
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         SwiftUI.TimelineView(
             .animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)
         ) { context in
-            let elapsed = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            let pulse = reduceMotion ? 0.35 : (1 - cos(elapsed * 1.15)) / 2
-            let progressStrength = 0.58 + min(max(progress, 0), 1) * 0.42
-            let strength = progressStrength * (0.56 + pulse * 0.22)
+            let phase = context.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: 5.6) / 5.6
+            let pulse = reduceMotion ? 0.35 : (1 - cos(phase * 2 * .pi)) / 2
+            let strength = 0.38 + pulse * 0.34
 
             ZStack {
-                perimeterBand(
-                    rotation: reduceMotion ? 18 : elapsed * 10.5 + sin(elapsed * 0.37) * 18,
-                    strength: strength,
-                    lineWidth: 3.0 + progress * 1.8
-                )
-                perimeterBand(
-                    rotation: reduceMotion ? 196 : -elapsed * 7.2 + cos(elapsed * 0.29) * 25,
-                    strength: strength * 0.72,
-                    lineWidth: 5.0 + progress * 2.4
-                )
-                .blur(radius: 7 + progress * 5)
+                edgeGradient(startPoint: .top, endPoint: .bottom, strength: strength)
+                edgeGradient(startPoint: .bottom, endPoint: .top, strength: strength)
+                edgeGradient(startPoint: .leading, endPoint: .trailing, strength: strength)
+                edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
             }
             .compositingGroup()
-            .shadow(
-                color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.72),
-                radius: 14 + progress * 10 + pulse * 4
-            )
-            .shadow(
-                color: Color.purple.opacity(strength * 0.34),
-                radius: 28 + progress * 12
-            )
-            .padding(2)
+            .blur(radius: 18 + pulse * 8)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    private func perimeterBand(
-        rotation: Double,
-        strength: Double,
-        lineWidth: CGFloat
+    private func edgeGradient(
+        startPoint: UnitPoint,
+        endPoint: UnitPoint,
+        strength: Double
     ) -> some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .strokeBorder(
-                AngularGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.22), location: 0.08),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength), location: 0.17),
-                        .init(color: Color.purple.opacity(strength * 0.78), location: 0.26),
-                        .init(color: .clear, location: 0.38),
-                        .init(color: .clear, location: 0.53),
-                        .init(color: Color.blue.opacity(strength * 0.58), location: 0.62),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.88), location: 0.72),
-                        .init(color: .clear, location: 0.84),
-                        .init(color: .clear, location: 1.00)
-                    ],
-                    center: .center,
-                    angle: .degrees(rotation)
+        LinearGradient(
+            stops: [
+                .init(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength),
+                    location: 0
                 ),
-                lineWidth: lineWidth
-            )
+                .init(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.34),
+                    location: 0.035
+                ),
+                .init(color: .clear, location: 0.13)
+            ],
+            startPoint: startPoint,
+            endPoint: endPoint
+        )
     }
 }
 
 private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
-    let progress: Double
-
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -1103,18 +1076,13 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = ScreenTrackingView()
         view.onWindowChanged = { window in
-            context.coordinator.attach(to: window, progress: progress)
-        }
-        DispatchQueue.main.async {
-            context.coordinator.attach(to: view.window, progress: progress)
+            context.coordinator.attach(to: window)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            context.coordinator.attach(to: nsView.window, progress: progress)
-        }
+        context.coordinator.attach(to: nsView.window)
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -1125,15 +1093,11 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     final class Coordinator {
         private weak var hostWindow: NSWindow?
         private var glowPanel: NSPanel?
-        private var glowHost: NSHostingView<OnboardingScreenEdgeGlow>?
         private var observers: [NSObjectProtocol] = []
 
-        func attach(to window: NSWindow?, progress: Double) {
-            glowHost?.rootView = OnboardingScreenEdgeGlow(progress: progress)
-
+        func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
                 updatePanelFrame()
-                showPanel()
                 return
             }
 
@@ -1146,7 +1110,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
 
             if glowPanel == nil {
-                glowPanel = makeGlowPanel(progress: progress)
+                glowPanel = makeGlowPanel()
             }
 
             let center = NotificationCenter.default
@@ -1168,7 +1132,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             ]
 
             updatePanelFrame()
-            showPanel()
+            glowPanel?.orderFrontRegardless()
         }
 
         func dismiss() {
@@ -1177,7 +1141,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             hostWindow = nil
         }
 
-        private func makeGlowPanel(progress: Double) -> NSPanel {
+        private func makeGlowPanel() -> NSPanel {
             let panel = NSPanel(
                 contentRect: .zero,
                 styleMask: [.borderless, .nonactivatingPanel],
@@ -1197,9 +1161,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 .ignoresCycle,
                 .stationary
             ]
-            let host = NSHostingView(rootView: OnboardingScreenEdgeGlow(progress: progress))
-            glowHost = host
-            panel.contentView = host
+            panel.contentView = NSHostingView(rootView: OnboardingScreenEdgeGlow())
             return panel
         }
 
@@ -1208,16 +1170,10 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             glowPanel?.setFrame(screen.frame, display: true)
         }
 
-        private func showPanel() {
-            guard let glowPanel, let hostWindow, hostWindow.isVisible else { return }
-            glowPanel.orderFrontRegardless()
-        }
-
         private func dismissPanel() {
             glowPanel?.orderOut(nil)
             glowPanel?.close()
             glowPanel = nil
-            glowHost = nil
         }
 
         private func removeObservers() {

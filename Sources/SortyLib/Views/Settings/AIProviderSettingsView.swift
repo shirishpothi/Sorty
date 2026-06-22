@@ -47,7 +47,7 @@ struct AIProviderSettingsView: View {
                             provider: provider,
                             isSelected: viewModel.config.provider == provider,
                             action: {
-                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.8)) {
                                     viewModel.config.provider = provider
                                     if let defaultURL = provider.defaultAPIURL {
                                         viewModel.config.apiURL = defaultURL
@@ -504,16 +504,21 @@ struct AIProviderSettingsView: View {
         SettingsCard(title: "Connection", icon: "network", color: .blue) {
             VStack(alignment: .leading, spacing: 12) {
                 if viewModel.config.provider != .appleFoundationModel {
-                    Toggle(isOn: $viewModel.config.requiresAPIKey) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Requires API Key")
-                                .font(.subheadline)
-                            Text("Disable for local endpoints without auth")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    HStack {
+                        Spacer()
+                        Toggle(isOn: $viewModel.config.requiresAPIKey) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Requires API Key")
+                                    .font(.subheadline)
+                                Text("Disable for local endpoints without auth")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        .toggleStyle(.switch)
+                        .fixedSize()
+                        Spacer()
                     }
-                    .toggleStyle(.switch)
 
                     Divider()
                 }

@@ -120,7 +120,6 @@ struct PersonaGeneratorView: View {
             
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.sortyBordered(intent: .destructive))
                 
                 Button {
                     startHoning()
