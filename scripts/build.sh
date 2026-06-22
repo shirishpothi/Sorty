@@ -296,6 +296,40 @@ run_build_with_compact_status() {
     return 1
 }
 
+print_build_start_summary() {
+    print_header "${PROJECT_NAME} Build" 50
+    print_summary "Build" \
+        "Version" "${VERSION} (${BUILD_NUM})" \
+        "Config" "${BUILD_CONFIG:-release}/${BUILD_METHOD}" \
+        "Signing" "${SIGNING_IDENTITY}" \
+        "Output" "${APP_PATH}"
+}
+
+print_build_complete_summary() {
+    echo ""
+    print_divider "═" 50
+    echo ""
+
+    echo -e "${BLUE}--- Build Complete ---${NC}"
+    printf "  %-15s : %s\n" "Version" "${VERSION} (build ${BUILD_NUM})"
+    printf "  %-15s : %s\n" "Config" "${BUILD_CONFIG:-release}/${BUILD_METHOD}"
+    printf "  %-15s : %s\n" "Signing" "${SIGNING_IDENTITY}"
+    printf "  %-15s : %s\n" "Output" "${APP_PATH}"
+    printf "  %-15s : %s\n" "Size" "${APP_SIZE}"
+    printf "    %-13s : %s\n" "MacOS" "${MACOS_SIZE}"
+    printf "    %-13s : %s\n" "Frameworks" "${FRAMEWORKS_SIZE}"
+    printf "    %-13s : %s\n" "Resources" "${RESOURCES_SIZE}"
+    printf "    %-13s : %s\n" "PlugIns" "${PLUGINS_SIZE}"
+    printf "  %-15s : %s\n" "Duration" "${TOTAL_DURATION}"
+    printf "    %-13s : %s\n" "Compile" "${BUILD_DURATION}"
+    printf "    %-13s : %s\n" "Assemble" "${ASSEMBLE_DURATION}"
+    printf "    %-13s : %s\n" "Sign" "${SIGN_DURATION}"
+    if [ "$SKIP_TESTS" != "true" ]; then
+        printf "    %-13s : %s\n" "Tests" "${TEST_DURATION}"
+    fi
+    echo ""
+}
+
 run_quiet() {
     if is_truthy "${SORTY_VERBOSE}"; then
         "$@"
@@ -791,6 +825,8 @@ if is_truthy "${SORTY_VERBOSE}"; then
         "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
         "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
         "Output" "${BUILD_DIR}"
+else
+    print_build_start_summary
 fi
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
@@ -1249,23 +1285,4 @@ RESOURCES_SIZE=$(get_path_size "${APP_PATH}/Contents/Resources")
 PLUGINS_SIZE=$(get_path_size "${APP_PATH}/Contents/PlugIns")
 TOTAL_DURATION=$(get_total_duration)
 
-echo ""
-print_divider "═" 50
-echo ""
-
-echo -e "${BLUE}--- Build Complete ---${NC}"
-printf "  %-15s : %s\n" "App" "${APP_PATH}"
-printf "  %-15s : %s\n" "Version" "${VERSION} (build ${BUILD_NUM})"
-printf "  %-15s : %s\n" "Size" "${APP_SIZE}"
-printf "    %-13s : %s\n" "MacOS" "${MACOS_SIZE}"
-printf "    %-13s : %s\n" "Frameworks" "${FRAMEWORKS_SIZE}"
-printf "    %-13s : %s\n" "Resources" "${RESOURCES_SIZE}"
-printf "    %-13s : %s\n" "PlugIns" "${PLUGINS_SIZE}"
-printf "  %-15s : %s\n" "Duration" "${TOTAL_DURATION}"
-printf "    %-13s : %s\n" "Compile" "${BUILD_DURATION}"
-printf "    %-13s : %s\n" "Assemble" "${ASSEMBLE_DURATION}"
-printf "    %-13s : %s\n" "Sign" "${SIGN_DURATION}"
-if [ "$SKIP_TESTS" != "true" ]; then
-    printf "    %-13s : %s\n" "Tests" "${TEST_DURATION}"
-fi
-echo ""
+print_build_complete_summary
