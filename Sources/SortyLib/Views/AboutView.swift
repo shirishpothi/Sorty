@@ -244,15 +244,19 @@ private final class AboutIconCarousel: ObservableObject {
     private(set) var burstStart = Date()
 
     private let images: [NSImage]
+    private let runningVariant: AboutAppIconVariant?
     private var manualTaps = 0
     private var cycleTask: Task<Void, Never>?
     private var burstTask: Task<Void, Never>?
+    private var lastManualTapDate: Date?
 
     private let autoCycleInterval: Duration = .seconds(3)
     private let burstHoldInterval: Duration = .milliseconds(1700)
+    private let manualPauseInterval: TimeInterval = 1.8
 
     init() {
-        images = AboutAppIconVariant.cycleImages()
+        runningVariant = AboutAppIconVariant.current
+        images = AboutAppIconVariant.cycleImages(current: runningVariant)
     }
 
     var currentImage: NSImage {
@@ -272,7 +276,7 @@ private final class AboutIconCarousel: ObservableObject {
                 guard let self else { return }
                 try? await Task.sleep(for: self.autoCycleInterval)
                 if Task.isCancelled { return }
-                guard !self.isHovering, !self.isBursting else { continue }
+                guard !self.isHovering, !self.isBursting, !self.isManualPauseActive else { continue }
                 self.advance()
             }
         }
@@ -291,6 +295,7 @@ private final class AboutIconCarousel: ObservableObject {
         HapticFeedbackManager.shared.light()
 
         manualTaps += 1
+        lastManualTapDate = Date()
         if manualTaps >= tapsToBurst {
             triggerBurst()
         } else {
@@ -323,6 +328,11 @@ private final class AboutIconCarousel: ObservableObject {
         manualTaps = 0
         isBursting = false
     }
+
+    private var isManualPauseActive: Bool {
+        guard let lastManualTapDate else { return false }
+        return Date().timeIntervalSince(lastManualTapDate) < manualPauseInterval
+    }
 }
 
 private enum AboutAppIconVariant: String, CaseIterable {
@@ -333,24 +343,64 @@ private enum AboutAppIconVariant: String, CaseIterable {
 
     /// Build channel recorded by scripts/build.sh in Info.plist (SortyBuildVariant).
     /// Nil for plain Xcode/SPM runs that don't go through the packaging script.
-    private static var currentBuildKey: String? {
-        (Bundle.main.infoDictionary?["SortyBuildVariant"] as? String)?.lowercased()
+    static var current: AboutAppIconVariant? {
+        let candidates = [
+            Bundle.main.infoDictionary?["SortyBuildVariant"] as? String,
+            Bundle.main.infoDictionary?["APP_ICON_VARIANT"] as? String,
+            ProcessInfo.processInfo.environment["APP_ICON_VARIANT"],
+            ProcessInfo.processInfo.environment["SORTY_BUILD_VARIANT"]
+        ]
+
+        for candidate in candidates {
+            if let variant = variant(from: candidate) {
+                return variant
+            }
+        }
+
+        if let iconFile = Bundle.main.infoDictionary?["CFBundleIconFile"] as? String,
+           let variant = variant(from: iconFile) {
+            return variant
+        }
+
+        return nil
     }
 
     /// Slot 0 is always the running app icon; the remaining slots are the other
     /// variants, excluding the one this build already ships so nothing duplicates.
-    static func cycleImages() -> [NSImage] {
+    static func cycleImages(current: AboutAppIconVariant?) -> [NSImage] {
         let appIcon: NSImage = NSApplication.shared.applicationIconImage
-        let currentKey = currentBuildKey
 
         let others = allCases.filter { variant in
-            guard let currentKey else { return true }
-            return variant.rawValue.lowercased() != currentKey
+            guard let current else { return true }
+            return variant != current
         }
 
         var images: [NSImage] = [appIcon]
         images.append(contentsOf: others.compactMap { loadImage(for: $0) })
         return images
+    }
+
+    private static func variant(from rawValue: String?) -> AboutAppIconVariant? {
+        guard let rawValue else { return nil }
+        let normalized = rawValue
+            .replacingOccurrences(of: "AppIcon-", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: ".icns", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: ".png", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        switch normalized {
+        case "debug", "dev", "local":
+            return .debug
+        case "release", "prod", "production":
+            return .release
+        case "ci", "blacksmith":
+            return .ci
+        case "nightly", "preview":
+            return .nightly
+        default:
+            return nil
+        }
     }
 
     private static func loadImage(for variant: AboutAppIconVariant) -> NSImage? {

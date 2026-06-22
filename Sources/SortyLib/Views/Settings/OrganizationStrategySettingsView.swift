@@ -48,6 +48,11 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.orange)
                                 .padding(.leading, 32)
                         }
+
+                        FastModeTogglePreview(
+                            isFastModeOn: isFastModeOn,
+                            namingOptions: viewModel.config.renameNamingOptions
+                        )
                     }
                 }
             }
@@ -80,6 +85,14 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+
+                    VisionTogglePreview(
+                        isEnabled: viewModel.config.enableVision,
+                        supportsVision: ModelCatalog.shared.supportsVision(
+                            modelId: viewModel.config.model,
+                            provider: viewModel.config.provider
+                        )
+                    )
                 }
             }
             .animatedAppearance(delay: 0.1)
@@ -204,6 +217,17 @@ struct OrganizationStrategySettingsView: View {
                         .background(Color(NSColor.controlBackgroundColor))
                         .cornerRadius(6)
                     }
+
+                    NamingPresetPreview(
+                        presetId: viewModel.config.selectedNamingPresetId,
+                        namingStyle: viewModel.config.namingStyle,
+                        namingOptions: viewModel.config.renameNamingOptions
+                    )
+
+                    DatePolicyPreview(
+                        datePolicy: viewModel.config.renameNamingOptions.datePolicy,
+                        language: viewModel.config.renameNamingOptions.outputLanguage
+                    )
 
                     // Preview of selected preset instructions
                     if let selectedId = viewModel.config.selectedNamingPresetId,

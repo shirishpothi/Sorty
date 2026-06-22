@@ -534,13 +534,9 @@ public struct CompletionStepView: View {
         fadeOutAndStopAudio(duration: 0.32)
 
         // Fade out all content, then hand off on the *next* run loop turn.
-        // Calling onFinish() synchronously stacked the entire main-window
-        // build (NavigationSplitView + sidebar + organize page) onto the same
-        // frame that starts this fade, which dropped frames and made the
-        // animation look choppy. One tick (~16 ms) lets the fade's first
-        // frame commit before the heavy view construction happens, without
-        // reintroducing the perceptible 0.18 s hang this used to have.
-        withAnimation(.easeOut(duration: 0.18)) {
+        // Keep the fade very short so the button feels immediate while still
+        // giving SwiftUI one committed frame before the main window builds.
+        withAnimation(.easeOut(duration: 0.12)) {
             contentDismissed = true
             backgroundRevealed = false
             showParticles = false

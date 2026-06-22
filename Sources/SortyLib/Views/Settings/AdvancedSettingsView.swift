@@ -55,6 +55,8 @@ struct AdvancedSettingsView: View {
                     )
                     .accessibilityIdentifier("PrivacyModeToggle")
 
+                    PrivacyTogglePreview(isEnabled: privacyModeEnabled)
+
                     Divider()
 
                     SettingsToggle(
@@ -64,6 +66,8 @@ struct AdvancedSettingsView: View {
                         focusTarget: .advancedInternetPrivacy
                     )
                     .accessibilityIdentifier("InternetPrivacyModeToggle")
+
+                    InternetPrivacyPreview(isEnabled: internetPrivacyModeEnabled)
                 }
             }
             .animatedAppearance(delay: 0.04)
@@ -76,7 +80,10 @@ struct AdvancedSettingsView: View {
                         value: $viewModel.config.requestTimeout,
                         sliderMin: 30,
                         defaultMax: 600,
-                        step: 10
+                        step: 10,
+                        personaPreview: AnyView(
+                            TimeoutPersonaPreview(value: viewModel.config.requestTimeout, isRequest: true)
+                        )
                     )
 
                     Divider()
@@ -87,7 +94,10 @@ struct AdvancedSettingsView: View {
                         value: $viewModel.config.resourceTimeout,
                         sliderMin: 60,
                         defaultMax: 1800,
-                        step: 60
+                        step: 60,
+                        personaPreview: AnyView(
+                            TimeoutPersonaPreview(value: viewModel.config.resourceTimeout, isRequest: false)
+                        )
                     )
                 }
             }
