@@ -221,6 +221,74 @@ run_with_log() {
     return 1
 }
 
+format_compact_build_status() {
+    local line="$1"
+
+    case "${line}" in
+        *"Compiling "*".swift"*)
+            printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Compiling \1/'
+            ;;
+        *"CompileSwift "*".swift"*)
+            printf '%s' "${line}" | sed -E 's/^.*\/([^\/ ]+\.swift).*$/Compiling \1/'
+            ;;
+        *"CompileSwiftSources "*)
+            printf '%s' "Compiling Swift sources"
+            ;;
+        *"Linking "*)
+            printf '%s' "${line}" | sed -E 's/^.*Linking ([^ ]+).*$/Linking \1/'
+            ;;
+        *"Ld "*)
+            printf '%s' "Linking app"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+run_build_with_compact_status() {
+    local log_name="$1"
+    shift
+
+    if is_truthy "${SORTY_VERBOSE}" || [ ! -t 1 ]; then
+        run_with_log "${log_name}" "$@"
+        return $?
+    fi
+
+    mkdir -p "${BUILD_LOG_DIR}"
+    local log_file="${BUILD_LOG_DIR}/${log_name}.log"
+    local status_marker="${BUILD_LOG_DIR}/${log_name}.status"
+    : > "${log_file}"
+    rm -f "${status_marker}"
+
+    set +e
+    "$@" 2>&1 | while IFS= read -r line; do
+        local status_line=""
+        printf '%s\n' "${line}" >> "${log_file}"
+        status_line=$(format_compact_build_status "${line}") || continue
+        if [ -n "${status_line}" ]; then
+            printf '\r\033[K%s' "${status_line}"
+            : > "${status_marker}"
+        fi
+    done
+    local status=${PIPESTATUS[0]}
+    set -e
+
+    if [ -f "${status_marker}" ]; then
+        printf '\r\033[K\n'
+        rm -f "${status_marker}"
+    fi
+
+    if [ "${status}" -eq 0 ]; then
+        return 0
+    fi
+
+    log_failure "${log_name} failed"
+    log_item "Last ${BUILD_TAIL_LINES} log lines (${log_file}):"
+    tail -n "${BUILD_TAIL_LINES}" "${log_file}" || true
+    return 1
+}
+
 run_quiet() {
     if is_truthy "${SORTY_VERBOSE}"; then
         "$@"
@@ -293,7 +361,7 @@ run_with_swiftpm_db_recovery() {
     local log_name="$1"
     shift
 
-    if run_with_log "${log_name}" "$@"; then
+    if run_build_with_compact_status "${log_name}" "$@"; then
         return 0
     fi
 
@@ -301,7 +369,7 @@ run_with_swiftpm_db_recovery() {
         if swiftpm_binary_artifact_error_detected "${log_name}"; then
             log_warning "SwiftPM binary artifact cache is incomplete; retrying once after package reset."
             reset_swiftpm_package_cache
-            run_with_log "${log_name}_retry" "$@"
+            run_build_with_compact_status "${log_name}_retry" "$@"
             return
         fi
 
@@ -310,7 +378,7 @@ run_with_swiftpm_db_recovery() {
 
     log_warning "SwiftPM build database hit a transient SQLite error; retrying once with a fresh database."
     reset_swiftpm_build_database
-    run_with_log "${log_name}_retry" "$@"
+    run_build_with_compact_status "${log_name}_retry" "$@"
 }
 
 # MARK: - Resource Copying Helpers
@@ -793,7 +861,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     
     # Build with xcodebuild using the Xcode project
     # -destination ensures we build for macOS with proper SDK
-    if ! run_with_log "xcodebuild_compile" xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
+    if ! run_build_with_compact_status "xcodebuild_compile" xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
         -scheme "${SCHEME}" \
         -configuration "${XCODE_CONFIG}" \
         -destination "generic/platform=macOS" \
