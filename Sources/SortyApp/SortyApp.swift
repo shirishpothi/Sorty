@@ -37,6 +37,10 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if canImport(SortyLib)
+            if UserDefaults.standard.bool(forKey: SortyUninstaller.requestDefaultsKey) {
+                return .terminateNow
+            }
+
             guard shouldWarnBeforeQuitForActiveAutomation,
                 let warningContext = quitWarningContext
             else {
@@ -243,6 +247,13 @@ struct SortyApp: App {
             "confirmQuitWhileOrganizing": true,
             "finderIntegrationEnabled": true,
         ])
+
+        if SortyUninstaller.consumeDefaultsRequestAndRunIfNeeded() != nil {
+            DispatchQueue.main.async {
+                SortyAppDelegate.forceQuit = true
+                NSApp.terminate(nil)
+            }
+        }
 
         configureUITestStateIfNeeded()
     }

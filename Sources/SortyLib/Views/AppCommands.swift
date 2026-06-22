@@ -273,8 +273,8 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
 
-            Button("Check for Updates...", systemImage: "arrow.triangle.2.circlepath") {
-                appState?.checkForUpdatesInteractive()
+            Button("Uninstall Sorty...", systemImage: "trash") {
+                appState?.requestUninstallConfirmation()
             }
             .disabled(appState == nil)
 
@@ -1286,6 +1286,59 @@ public class AppState: ObservableObject {
             reason: "Authenticate to delete all Sorty usage data."
         ) { [weak self] in
             self?.showDeleteUsageDataConfirmation = true
+        }
+    }
+
+    public func requestUninstallConfirmation() {
+        authenticateForSensitiveAction(
+            reason: "Authenticate to prepare Sorty for uninstall."
+        ) { [weak self] in
+            self?.presentUninstallConfirmation()
+        }
+    }
+
+    private func presentUninstallConfirmation() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Prepare Sorty for uninstall?"
+        alert.informativeText = """
+        Sorty will relaunch once to remove its saved settings, history, caches, logs, Keychain credentials, login/background items, and Finder extension state.
+
+        Your files and folders will not be touched. After Sorty quits, move Sorty.app to the Trash to finish uninstalling.
+        """
+        alert.addButton(withTitle: "Prepare Uninstall")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        scheduleUninstallerAndRelaunch()
+    }
+
+    private func scheduleUninstallerAndRelaunch() {
+        userDefaults.set(true, forKey: SortyUninstaller.requestDefaultsKey)
+        userDefaults.synchronize()
+
+        let bundleURL = Bundle.main.bundleURL
+        let quotedBundlePath = bundleURL.path.replacingOccurrences(of: "'", with: "'\\''")
+        let relaunchScript = """
+        sleep 0.2
+        /usr/bin/open -n '\(quotedBundlePath)'
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", relaunchScript]
+
+        do {
+            try process.run()
+            NotificationCenter.default.post(name: .forceQuitSorty, object: nil)
+            NSApp.terminate(nil)
+        } catch {
+            userDefaults.set(false, forKey: SortyUninstaller.requestDefaultsKey)
+            HapticFeedbackManager.shared.error()
+            presentHistoryAlert(
+                title: "Uninstall Could Not Start",
+                message: "Sorty could not relaunch itself for cleanup. Please try again."
+            )
         }
     }
     

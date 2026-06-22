@@ -17,6 +17,7 @@ Welcome to the official Sorty documentation. Sorty is an AI-powered file organiz
 - [App Deeplinks](#app-deeplinks)
 - [CLI Tool](#cli-tool)
 - [Privacy & Security](#privacy--security)
+- [Uninstalling Sorty](#uninstalling-sorty)
 - [FAQ](#faq)
 
 ---
@@ -282,6 +283,18 @@ learnings-cli --clear
 - **Apple Intelligence**: Processed on-device (M-series chip required)
 - **OpenAI/Compatible**: Cloud-based, metadata sent to API
 - **Ollama**: Local processing, nothing leaves your machine
+
+---
+
+## Uninstalling Sorty
+
+Before deleting the app, choose **Help -> Uninstall Sorty...** and confirm. Sorty will relaunch once to remove its saved settings, history, app support data, caches, logs, Keychain credentials, login/background item registrations, and Finder extension state, then quit. Your files and folders are not touched. After it quits, move `Sorty.app` to Trash.
+
+If macOS still shows stale Finder extension state, restart Finder:
+
+```bash
+killall Finder
+```
 
 ---
 
