@@ -19,13 +19,25 @@ struct NoTickSlider: View {
     }
 
     var body: some View {
-        Group {
-            if let step {
-                Slider(value: $value, in: range, step: step)
-            } else {
-                Slider(value: $value, in: range)
-            }
-        }
+        Slider(value: steppedValue, in: range)
         .labelsHidden()
+    }
+
+    private var steppedValue: Binding<Double> {
+        Binding(
+            get: { value },
+            set: { newValue in
+                value = snappedValue(for: newValue)
+            }
+        )
+    }
+
+    private func snappedValue(for newValue: Double) -> Double {
+        guard let step, step > 0 else {
+            return newValue
+        }
+
+        let snapped = (newValue / step).rounded() * step
+        return min(max(snapped, range.lowerBound), range.upperBound)
     }
 }
