@@ -9,6 +9,8 @@ import SwiftUI
 import AppKit
 
 struct NoTickSlider: NSViewRepresentable {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double?
@@ -34,6 +36,7 @@ struct NoTickSlider: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSSlider, context: Context) {
+        context.coordinator.reduceMotion = reduceMotion
         if nsView.minValue != range.lowerBound || nsView.maxValue != range.upperBound {
             nsView.minValue = range.lowerBound
             nsView.maxValue = range.upperBound
@@ -47,6 +50,7 @@ struct NoTickSlider: NSViewRepresentable {
     final class Coordinator: NSObject {
         @Binding var value: Double
         var step: Double?
+        var reduceMotion = false
         weak var slider: NSSlider?
 
         init(value: Binding<Double>, step: Double?) {
@@ -65,9 +69,9 @@ struct NoTickSlider: NSViewRepresentable {
             } else {
                 snapped = raw
             }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                value = snapped
-            }
+            var transaction = Transaction()
+            transaction.animation = reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78)
+            $value.transaction(transaction).wrappedValue = snapped
         }
     }
 }

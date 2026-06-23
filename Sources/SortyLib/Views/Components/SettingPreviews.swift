@@ -82,7 +82,6 @@ struct SettingPreviewRow: View {
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .contentTransition(.numericText())
         }
     }
 }
@@ -267,7 +266,7 @@ struct TemperaturePreview: View {
                     Text(String(format: "%.2f", temperature))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: temperature))
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -767,7 +766,7 @@ struct WorkspaceHealthThresholdPreview: View {
                 Text("\(count) of \(samples.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(active ? .mint : .secondary)
-                    .contentTransition(.numericText())
+                    .contentTransition(.numericText(value: Double(count)))
             }
             if active, !examples.isEmpty {
                 Text(examples.joined(separator: ", "))
@@ -833,7 +832,7 @@ struct TimeoutPersonaPreview: View {
                     Text("\(Int(value))s")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: value))
                 }
 
                 Text(matchedPersona.description)
@@ -908,18 +907,18 @@ struct DuplicateThresholdPreview: View {
                     Text("\(filteredBySize.count) of \(samples.count) files")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: Double(filteredBySize.count)))
                 }
 
                 HStack {
                     Text("Semantic match ≥ \(Int((semanticThreshold * 100).rounded()))%")
                         .font(.caption.weight(.medium))
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: semanticThreshold))
                     Spacer()
                     Text("\(matchingBySemantic.count) matches")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(matchingBySemantic.isEmpty ? Color.secondary : Color.purple)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(value: Double(matchingBySemantic.count)))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -940,7 +939,7 @@ struct DuplicateThresholdPreview: View {
                             Text("\(Int((sample.match * 100).rounded()))%")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(matchOK ? .purple : .secondary)
-                                .contentTransition(.numericText())
+                                .contentTransition(.numericText(value: sample.match))
                             Text(formatSize(sample.size))
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
