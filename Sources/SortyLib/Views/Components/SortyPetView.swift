@@ -36,6 +36,25 @@ public struct SortyPetManifest: Decodable, Equatable, Sendable {
     public let displayName: String
     public let version: Int
     public let states: [SortyPetAnimationState]
+    public let atlas: SortyPetAtlas?
+}
+
+public struct SortyPetAtlas: Decodable, Equatable, Sendable {
+    public let imageName: String
+    public let cellWidth: Int
+    public let cellHeight: Int
+    public let framesPerState: Int
+    public let framesPerSecond: Double
+    public let states: [String: SortyPetAtlasState]
+
+    public func state(_ animationState: SortyPetAnimationState) -> SortyPetAtlasState? {
+        states[animationState.rawValue]
+    }
+}
+
+public struct SortyPetAtlasState: Decodable, Equatable, Sendable {
+    public let row: Int
+    public let frames: Int
 }
 
 @MainActor
@@ -46,7 +65,8 @@ public enum SortyPetAssetProvider {
         id: "sorty",
         displayName: "Sorty",
         version: 1,
-        states: SortyPetAnimationState.allCases
+        states: SortyPetAnimationState.allCases,
+        atlas: nil
     )
 
     public static var bundledManifest: SortyPetManifest {
@@ -69,10 +89,88 @@ public enum SortyPetAssetProvider {
         bundledManifest.states.contains(state)
     }
 
+    public static func atlasState(for state: SortyPetAnimationState) -> SortyPetAtlasState? {
+        guard let atlas = bundledManifest.atlas else {
+            return nil
+        }
+        return atlas.state(state)
+    }
+
+    public static func atlasFrame(for state: SortyPetAnimationState, frameIndex: Int) -> NSImage? {
+        guard let atlas = bundledManifest.atlas,
+              let atlasState = atlas.state(state),
+              atlasState.frames > 0,
+              atlas.cellWidth > 0,
+              atlas.cellHeight > 0,
+              let spritesheet = spritesheet(named: atlas.imageName)
+        else {
+            return nil
+        }
+
+        let normalizedIndex = frameIndex % atlasState.frames
+        let cacheKey = "atlas-\(atlas.imageName)-\(state.rawValue)-\(normalizedIndex)" as NSString
+        if let cached = frameCache.object(forKey: cacheKey) {
+            return cached
+        }
+
+        guard let cgImage = spritesheet.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let scaleX = CGFloat(cgImage.width) / max(spritesheet.size.width, 1)
+        let scaleY = CGFloat(cgImage.height) / max(spritesheet.size.height, 1)
+        let rect = CGRect(
+            x: CGFloat(normalizedIndex * atlas.cellWidth) * scaleX,
+            y: CGFloat(atlasState.row * atlas.cellHeight) * scaleY,
+            width: CGFloat(atlas.cellWidth) * scaleX,
+            height: CGFloat(atlas.cellHeight) * scaleY
+        ).integral
+
+        guard let cropped = cgImage.cropping(to: rect) else {
+            return nil
+        }
+
+        let image = NSImage(cgImage: cropped, size: NSSize(width: atlas.cellWidth, height: atlas.cellHeight))
+        frameCache.setObject(image, forKey: cacheKey, cost: atlas.cellWidth * atlas.cellHeight * 4)
+        return image
+    }
+
     public static func staticImage(for state: SortyPetAnimationState) -> NSImage? {
         SortyResources.image(named: state.staticAssetName)
             ?? SortyResources.image(named: "SortyMascot")
             ?? SortyResources.image(named: "SortyMascotTemplate")
+    }
+
+    private static let frameCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 96
+        return cache
+    }()
+
+    private static let spritesheetCache = NSCache<NSString, NSImage>()
+
+    private static func spritesheet(named imageName: String) -> NSImage? {
+        let cacheKey = imageName as NSString
+        if let cached = spritesheetCache.object(forKey: cacheKey) {
+            return cached
+        }
+
+        let resourceName = (imageName as NSString).deletingPathExtension
+        let resourceExtension = (imageName as NSString).pathExtension
+        guard !resourceName.isEmpty,
+              !resourceExtension.isEmpty,
+              let url = SortyResources.bundle.url(
+                  forResource: resourceName,
+                  withExtension: resourceExtension,
+                  subdirectory: "Pets/Sorty"
+              ),
+              let image = NSImage(contentsOf: url)
+        else {
+            return nil
+        }
+
+        spritesheetCache.setObject(image, forKey: cacheKey)
+        return image
     }
 }
 
@@ -102,6 +200,7 @@ public struct SortyPetView: View {
             if animatedMascotEnabled,
                !reduceMotion,
                SortyPetAssetProvider.hasAnimation(for: state),
+               SortyPetAssetProvider.atlasState(for: state) != nil,
                let image = resolvedImage {
                 animatedPet(image: image)
             } else {
@@ -142,29 +241,38 @@ public struct SortyPetView: View {
     private func animatedPet(image: NSImage) -> some View {
         SwiftUI.TimelineView(.animation(minimumInterval: frameInterval)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
+            let atlasFrame = SortyPetAssetProvider.atlasFrame(
+                for: state,
+                frameIndex: atlasFrameIndex(at: time)
+            )
 
             ZStack {
-                if showsAura {
+                if atlasFrame == nil, showsAura {
                     aura(time: time)
                 }
 
-                Image(nsImage: image)
+                Image(nsImage: atlasFrame ?? image)
                     .renderingMode(.original)
                     .resizable()
                     .interpolation(.high)
                     .antialiased(true)
                     .scaledToFit()
                     .frame(width: imageSize, height: imageSize)
-                    .scaleEffect(scale(at: time))
-                    .offset(offset(at: time))
-                    .rotationEffect(.degrees(rotation(at: time)))
+                    .scaleEffect(atlasFrame == nil ? scale(at: time) : 1)
+                    .offset(atlasFrame == nil ? offset(at: time) : .zero)
+                    .rotationEffect(.degrees(atlasFrame == nil ? rotation(at: time) : 0))
 
-                if showsProgressDots {
+                if atlasFrame == nil, showsProgressDots {
                     progressDots(time: time)
                 }
             }
             .frame(width: size, height: size)
         }
+    }
+
+    private func atlasFrameIndex(at time: TimeInterval) -> Int {
+        let framesPerSecond = SortyPetAssetProvider.bundledManifest.atlas?.framesPerSecond ?? 8
+        return Int((time * framesPerSecond).rounded(.down))
     }
 
     private var imageSize: CGFloat {
