@@ -6,11 +6,8 @@
 //
 
 import SwiftUI
-import AppKit
 
-struct NoTickSlider: NSViewRepresentable {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
+struct NoTickSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double?
@@ -21,57 +18,14 @@ struct NoTickSlider: NSViewRepresentable {
         self.step = step
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(value: $value, step: step)
-    }
-
-    func makeNSView(context: Context) -> NSSlider {
-        let slider = NSSlider(value: value, minValue: range.lowerBound, maxValue: range.upperBound, target: context.coordinator, action: #selector(Coordinator.changed(_:)))
-        slider.isContinuous = true
-        slider.numberOfTickMarks = 0
-        slider.allowsTickMarkValuesOnly = false
-        slider.trackFillColor = nil
-        context.coordinator.slider = slider
-        return slider
-    }
-
-    func updateNSView(_ nsView: NSSlider, context: Context) {
-        context.coordinator.reduceMotion = reduceMotion
-        if nsView.minValue != range.lowerBound || nsView.maxValue != range.upperBound {
-            nsView.minValue = range.lowerBound
-            nsView.maxValue = range.upperBound
-        }
-        if abs(nsView.doubleValue - value) > 0.0001 {
-            nsView.doubleValue = value
-        }
-        context.coordinator.step = step
-    }
-
-    final class Coordinator: NSObject {
-        @Binding var value: Double
-        var step: Double?
-        var reduceMotion = false
-        weak var slider: NSSlider?
-
-        init(value: Binding<Double>, step: Double?) {
-            self._value = value
-            self.step = step
-        }
-
-        @objc func changed(_ sender: NSSlider) {
-            let raw = sender.doubleValue
-            let snapped: Double
-            if let step, step > 0 {
-                snapped = (raw / step).rounded() * step
-                if abs(snapped - raw) > 0.0001, snapped >= sender.minValue, snapped <= sender.maxValue {
-                    sender.doubleValue = snapped
-                }
+    var body: some View {
+        Group {
+            if let step {
+                Slider(value: $value, in: range, step: step)
             } else {
-                snapped = raw
+                Slider(value: $value, in: range)
             }
-            var transaction = Transaction()
-            transaction.animation = reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78)
-            $value.transaction(transaction).wrappedValue = snapped
         }
+        .labelsHidden()
     }
 }
