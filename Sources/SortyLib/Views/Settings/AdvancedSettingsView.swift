@@ -157,6 +157,7 @@ private struct TimeoutSliderRow: View {
     @State private var editingMax = false
     @State private var maxText = ""
     @State private var customMax: Double?
+    @State private var sliderEditing = false
     @FocusState private var maxFieldFocused: Bool
     
     private var effectiveMax: Double {
@@ -173,12 +174,11 @@ private struct TimeoutSliderRow: View {
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
-                    .contentTransition(.numericText(value: value))
-                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value)
+                    .numericRoll(value: value, isEditing: sliderEditing)
             }
-            
+
             HStack(spacing: 8) {
-                NoTickSlider(value: $value, in: sliderMin...effectiveMax, step: step)
+                NoTickSlider(value: $value, in: sliderMin...effectiveMax, step: step) { sliderEditing = $0 }
                 
                 if editingMax {
                     TextField("Max", text: $maxText)

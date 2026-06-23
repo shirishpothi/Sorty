@@ -10,6 +10,8 @@ import SwiftUI
 struct OrganizationRulesSettingsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
+    @State private var maxFoldersEditing = false
+    @State private var temperatureEditing = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -34,10 +36,9 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.maxTopLevelFolders)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: Double(viewModel.config.maxTopLevelFolders)))
-                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.maxTopLevelFolders)
+                            .numericRoll(value: Double(viewModel.config.maxTopLevelFolders), isEditing: maxFoldersEditing)
                     }
-                    
+
                     NoTickSlider(
                         value: Binding(
                             get: { Double(viewModel.config.maxTopLevelFolders) },
@@ -45,7 +46,7 @@ struct OrganizationRulesSettingsView: View {
                         ),
                         in: 3...20,
                         step: 1
-                    )
+                    ) { maxFoldersEditing = $0 }
                     .onChange(of: viewModel.config.maxTopLevelFolders) { _, _ in
                         HapticFeedbackManager.shared.selection()
                     }
@@ -92,11 +93,10 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: viewModel.config.temperature))
-                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
+                            .numericRoll(value: viewModel.config.temperature, isEditing: temperatureEditing)
                     }
 
-                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
+                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1) { temperatureEditing = $0 }
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()
                         }

@@ -19,6 +19,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var pendingPresetInstructions: String = ""
     @State private var editingPreset: NamingPreset? = nil
     @State private var showEditSheet: Bool = false
+    @State private var maxLengthEditing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -191,12 +192,11 @@ struct OrganizationStrategySettingsView: View {
                                 ),
                                 in: 20...180,
                                 step: 5
-                            )
+                            ) { maxLengthEditing = $0 }
                             Text("\(viewModel.config.renameNamingOptions.maxFilenameLength)")
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
-                                .contentTransition(.numericText(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength)))
-                                .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.renameNamingOptions.maxFilenameLength)
+                                .numericRoll(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength), isEditing: maxLengthEditing)
                                 .frame(width: 32, alignment: .trailing)
                         }
 
@@ -209,8 +209,7 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                                .contentTransition(.numericText(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength)))
-                                .animation(.spring(response: 0.3, dampingFraction: 0.78), value: viewModel.config.renameNamingOptions.maxFilenameLength)
+                                .numericRoll(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength), isEditing: maxLengthEditing, duration: 0.3)
                         }
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)

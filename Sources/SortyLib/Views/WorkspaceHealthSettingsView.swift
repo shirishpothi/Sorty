@@ -96,7 +96,7 @@ struct WorkspaceHealthSettingsView: View {
     private var thresholdsSection: some View {
         SettingsCard(title: "Thresholds", icon: "slider.horizontal.3", color: .mint) {
             VStack(alignment: .leading, spacing: 14) {
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Large File Threshold",
                     valueText: ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file),
                     value: Binding(
@@ -109,7 +109,7 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "1 GB"
                 )
 
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Old File Threshold",
                     valueText: "\(Int(config.oldFileThreshold / 86400)) days",
                     value: Binding(
@@ -122,7 +122,7 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "2y"
                 )
 
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Download Clutter Threshold",
                     valueText: "\(Int(config.downloadClutterThreshold / 86400)) days",
                     value: Binding(
@@ -141,7 +141,7 @@ struct WorkspaceHealthSettingsView: View {
     private var sensitivitySection: some View {
         SettingsCard(title: "Detection Sensitivity", icon: "scope", color: .teal) {
             VStack(alignment: .leading, spacing: 14) {
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Min Screenshots",
                     valueText: "\(config.minScreenshotCount)",
                     value: Binding(
@@ -154,7 +154,7 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Min Download Files",
                     valueText: "\(config.minDownloadCount)",
                     value: Binding(
@@ -167,7 +167,7 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Min Unorganized Files",
                     valueText: "\(config.minUnorganizedCount)",
                     value: Binding(
@@ -180,7 +180,7 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                thresholdSliderRow(
+                ThresholdSliderRow(
                     title: "Min Old Files",
                     valueText: "\(config.minOldFileCount)",
                     value: Binding(
@@ -271,39 +271,42 @@ struct WorkspaceHealthSettingsView: View {
         }
     }
 
-    private func thresholdSliderRow(
-        title: String,
-        valueText: String,
-        value: Binding<Double>,
-        range: ClosedRange<Double>,
-        step: Double,
-        minLabel: String,
-        maxLabel: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
+    private struct ThresholdSliderRow: View {
+        let title: String
+        let valueText: String
+        @Binding var value: Double
+        let range: ClosedRange<Double>
+        let step: Double
+        let minLabel: String
+        let maxLabel: String
 
-                Spacer()
+        @State private var isEditing = false
 
-                Text(valueText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText(value: value.wrappedValue))
-                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value.wrappedValue)
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+
+                    Spacer()
+
+                    Text(valueText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .numericRoll(value: value, isEditing: isEditing)
+                }
+
+                NoTickSlider(value: $value, in: range, step: step) { isEditing = $0 }
+                    .tint(.mint)
+
+                HStack {
+                    Text(minLabel)
+                    Spacer()
+                    Text(maxLabel)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             }
-
-            NoTickSlider(value: value, in: range, step: step)
-                .tint(.mint)
-
-            HStack {
-                Text(minLabel)
-                Spacer()
-                Text(maxLabel)
-            }
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
         }
     }
 
