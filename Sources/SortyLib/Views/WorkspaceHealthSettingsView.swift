@@ -96,9 +96,9 @@ struct WorkspaceHealthSettingsView: View {
     private var thresholdsSection: some View {
         SettingsCard(title: "Thresholds", icon: "slider.horizontal.3", color: .mint) {
             VStack(alignment: .leading, spacing: 14) {
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Large File Threshold",
-                    format: { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) },
+                    valueText: ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file),
                     value: Binding(
                         get: { Double(config.largeFileSizeThreshold) },
                         set: { config.largeFileSizeThreshold = Int64($0) }
@@ -109,9 +109,9 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "1 GB"
                 )
 
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Old File Threshold",
-                    format: { "\(Int($0)) days" },
+                    valueText: "\(Int(config.oldFileThreshold / 86400)) days",
                     value: Binding(
                         get: { config.oldFileThreshold / 86400 },
                         set: { config.oldFileThreshold = $0 * 86400 }
@@ -122,9 +122,9 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "2y"
                 )
 
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Download Clutter Threshold",
-                    format: { "\(Int($0)) days" },
+                    valueText: "\(Int(config.downloadClutterThreshold / 86400)) days",
                     value: Binding(
                         get: { config.downloadClutterThreshold / 86400 },
                         set: { config.downloadClutterThreshold = $0 * 86400 }
@@ -141,9 +141,9 @@ struct WorkspaceHealthSettingsView: View {
     private var sensitivitySection: some View {
         SettingsCard(title: "Detection Sensitivity", icon: "scope", color: .teal) {
             VStack(alignment: .leading, spacing: 14) {
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Min Screenshots",
-                    format: { "\(Int($0))" },
+                    valueText: "\(config.minScreenshotCount)",
                     value: Binding(
                         get: { Double(config.minScreenshotCount) },
                         set: { config.minScreenshotCount = Int($0) }
@@ -154,9 +154,9 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Min Download Files",
-                    format: { "\(Int($0))" },
+                    valueText: "\(config.minDownloadCount)",
                     value: Binding(
                         get: { Double(config.minDownloadCount) },
                         set: { config.minDownloadCount = Int($0) }
@@ -167,9 +167,9 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Min Unorganized Files",
-                    format: { "\(Int($0))" },
+                    valueText: "\(config.minUnorganizedCount)",
                     value: Binding(
                         get: { Double(config.minUnorganizedCount) },
                         set: { config.minUnorganizedCount = Int($0) }
@@ -180,9 +180,9 @@ struct WorkspaceHealthSettingsView: View {
                     maxLabel: "50"
                 )
 
-                ThresholdSliderRow(
+                thresholdSliderRow(
                     title: "Min Old Files",
-                    format: { "\(Int($0))" },
+                    valueText: "\(config.minOldFileCount)",
                     value: Binding(
                         get: { Double(config.minOldFileCount) },
                         set: { config.minOldFileCount = Int($0) }
@@ -271,39 +271,39 @@ struct WorkspaceHealthSettingsView: View {
         }
     }
 
-    private struct ThresholdSliderRow: View {
-        let title: String
-        let format: (Double) -> String
-        @Binding var value: Double
-        let range: ClosedRange<Double>
-        let step: Double
-        let minLabel: String
-        let maxLabel: String
+    private func thresholdSliderRow(
+        title: String,
+        valueText: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        minLabel: String,
+        maxLabel: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
 
-        var body: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
+                Spacer()
 
-                    Spacer()
-
-                    RollingNumberText(value: value, format: format)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
-                NoTickSlider(value: $value, in: range, step: step)
-                    .tint(.mint)
-
-                HStack {
-                    Text(minLabel)
-                    Spacer()
-                    Text(maxLabel)
-                }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                Text(valueText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText(value: value.wrappedValue))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value.wrappedValue)
             }
+
+            NoTickSlider(value: value, in: range, step: step)
+                .tint(.mint)
+
+            HStack {
+                Text(minLabel)
+                Spacer()
+                Text(maxLabel)
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
         }
     }
 

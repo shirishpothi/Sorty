@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ParameterTuningSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-
+    
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
@@ -18,11 +18,13 @@ struct ParameterTuningSettingsView: View {
                         Text("Temperature")
                             .font(.subheadline)
                         Spacer()
-                        RollingNumberText(value: viewModel.config.temperature) { String(format: "%.2f", $0) }
+                        Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
+                            .contentTransition(.numericText(value: viewModel.config.temperature))
+                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
                     }
-
+                    
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()

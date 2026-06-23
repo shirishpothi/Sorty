@@ -81,9 +81,6 @@ public struct ConflictResolutionSheet: View {
                 Text("Conflict \(resolvedCount + 1) of \(totalConflicts)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: Double(resolvedCount + 1)))
-                    .animation(.snappy(duration: 0.4), value: resolvedCount)
             }
 
             Spacer()

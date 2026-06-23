@@ -170,11 +170,13 @@ private struct TimeoutSliderRow: View {
                 Text(title)
                     .font(.subheadline)
                 Spacer()
-                RollingNumberText(value: value) { "\(Int($0))s" }
+                Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
+                    .contentTransition(.numericText(value: value))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value)
             }
-
+            
             HStack(spacing: 8) {
                 NoTickSlider(value: $value, in: sliderMin...effectiveMax, step: step)
                 
