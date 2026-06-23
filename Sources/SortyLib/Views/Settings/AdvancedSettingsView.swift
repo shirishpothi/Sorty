@@ -12,6 +12,7 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
+    @AppStorage(SortyPetAssetProvider.animatedMascotEnabledKey) private var animatedMascotEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     
     var body: some View {
@@ -44,6 +45,16 @@ struct AdvancedSettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.03)
+
+            SettingsCard(title: "Mascot", icon: "sparkles", color: .pink) {
+                SettingsToggle(
+                    isOn: $animatedMascotEnabled,
+                    title: "Use Animated Sorty Mascot",
+                    description: "Show Sorty as an animated mascot in ready, analyzing, duplicate scan, completion, and empty states"
+                )
+                .accessibilityIdentifier("AnimatedSortyMascotToggle")
+            }
+            .animatedAppearance(delay: 0.035)
 
             SettingsCard(title: "Privacy", icon: "lock.shield", color: .green) {
                 VStack(spacing: 12) {

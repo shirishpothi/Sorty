@@ -1,0 +1,18 @@
+{
+  "id": "sorty",
+  "displayName": "Sorty",
+  "version": 1,
+  "states": [
+    "idle",
+    "ready",
+    "organizing",
+    "renaming",
+    "scanning",
+    "duplicates",
+    "reviewing",
+    "applying",
+    "completed",
+    "failed",
+    "waiting"
+  ]
+}

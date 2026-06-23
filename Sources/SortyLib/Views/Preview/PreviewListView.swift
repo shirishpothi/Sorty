@@ -166,18 +166,13 @@ struct EmptyPreviewState: View {
     @ViewBuilder
     private var emptyStateArtwork: some View {
         if let mascotImageName {
-            if let mascotImage = SortyResources.image(named: mascotImageName) {
-                Image(nsImage: mascotImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .scaledToFit()
-                    .frame(width: 180, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .accessibilityHidden(true)
-            } else {
-                fallbackArtwork
-            }
+            SortyPetView(
+                state: .waiting,
+                size: 180,
+                accessibilityLabel: "Sorty needs better instructions",
+                fallbackAssetName: mascotImageName
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         } else {
             fallbackArtwork
         }

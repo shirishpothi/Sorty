@@ -1643,20 +1643,29 @@ private struct AIReasoningStatus: View {
     @ViewBuilder
     private var stageIcon: some View {
         if case .scanning = state {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.blue)
-                .symbolEffect(.pulse.byLayer, options: .repeating)
+            SortyPetView(
+                state: isRenameOnly ? .renaming : .scanning,
+                size: 56,
+                accessibilityLabel: isRenameOnly ? "Sorty is preparing names" : "Sorty is scanning files"
+            )
         } else if case .organizing = state {
             if isEstablishingConnection {
                 Image(systemName: "network")
                     .foregroundStyle(.orange)
                     .symbolEffect(.variableColor.iterative, options: .repeating)
             } else {
-                ZStack {
-                    PingRingView()
-                    OrganizingMascotView()
-                }
+                SortyPetView(
+                    state: isRenameOnly ? .renaming : .organizing,
+                    size: 72,
+                    accessibilityLabel: isRenameOnly ? "Sorty is renaming files" : "Sorty is organizing files"
+                )
             }
+        } else if case .applying = state {
+            SortyPetView(
+                state: .applying,
+                size: 72,
+                accessibilityLabel: "Sorty is applying changes"
+            )
         }
     }
 }
@@ -1692,15 +1701,12 @@ private struct InsightHistorySection: View {
             } label: {
                 HStack(spacing: 8) {
                     if isStreaming {
-                        if let nsImage = SortyResources.image(named: "SortyMascot") {
-                            AppKitImageView(image: nsImage, size: CGSize(width: 18, height: 18))
-                                .frame(width: 18, height: 18)
-                        } else {
-                            Image(systemName: "sparkles")
-                                .font(.callout)
-                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                                .symbolEffect(.pulse.byLayer, options: .repeating)
-                        }
+                        SortyPetView(
+                            state: .reviewing,
+                            size: 18,
+                            accessibilityLabel: "Sorty is reviewing insights",
+                            fallbackAssetName: "SortyMascot"
+                        )
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.callout)

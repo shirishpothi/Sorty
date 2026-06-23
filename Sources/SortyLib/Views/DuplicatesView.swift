@@ -1572,9 +1572,17 @@ struct DuplicatesEmptyStateView: View {
         VStack(spacing: 20) {
             Group {
                 if animatesIcon {
-                    ScanningPulseIcon(systemName: icon, color: iconColor)
+                    SortyPetView(
+                        state: .duplicates,
+                        size: 104,
+                        accessibilityLabel: "Sorty is scanning for duplicates"
+                    )
                 } else {
-                    EmptyStateHeroIcon(systemName: icon, tint: heroTint)
+                    SortyPetView(
+                        state: .ready,
+                        size: 104,
+                        accessibilityLabel: "Sorty is ready to scan for duplicates"
+                    )
                 }
             }
             .opacity(hasAppeared ? 1 : 0)

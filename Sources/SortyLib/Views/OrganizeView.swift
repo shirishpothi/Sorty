@@ -999,16 +999,13 @@ struct ReadyToOrganizeView: View {
     
     @ViewBuilder
     private var iconSection: some View {
-        if let readyIcon = SortyResources.image(named: "ReadyToOrganizeIcon") {
-            Image(nsImage: readyIcon)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 104, height: 104)
-                .clipShape(Circle())
-                .accessibilityHidden(true)
-        }
+        SortyPetView(
+            state: SortyPetAnimationState.organizationState(.idle, mode: mode),
+            size: 104,
+            accessibilityLabel: "Sorty is ready to \(mode.actionVerb.lowercased())",
+            fallbackAssetName: "ReadyToOrganizeIcon"
+        )
+        .clipShape(Circle())
     }
     
     @ViewBuilder
