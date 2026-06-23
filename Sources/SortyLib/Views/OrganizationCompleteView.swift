@@ -79,22 +79,22 @@ struct OrganizationCompleteView: View {
         }
     }
 
-    private var primaryStatValue: String {
+    private var primaryStatValue: Int {
         if undoState == .completed {
-            return "\(undoRestoredCount)"
+            return undoRestoredCount
         }
 
-        return "\(displayedFiles)"
+        return displayedFiles
     }
 
-    private var secondaryStatValue: String {
+    private var secondaryStatValue: Int {
         if undoState == .completed {
-            return "\(undoSkippedCount)"
+            return undoSkippedCount
         }
 
         switch mode {
-        case .renameOnly: return "\(max(totalFiles - renameCount, 0))"
-        case .organize, .organizeAndRename: return "\(displayedFolders)"
+        case .renameOnly: return max(totalFiles - renameCount, 0)
+        case .organize, .organizeAndRename: return displayedFolders
         }
     }
 
@@ -458,26 +458,25 @@ struct OrganizationCompleteView: View {
     
     @MainActor
     private func startCountUp() {
-        let steps = 20
-        let interval = 0.5 / Double(steps)
         let primaryTarget = mode == .renameOnly ? renameCount : totalFiles
         let secondaryTarget = mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
-        
+
         countUpTask?.cancel()
         countUpTask = Task {
-            for currentStep in 1...steps {
-                try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled else { return }
-                
-                let progress = Double(currentStep) / Double(steps)
-                let easedProgress = 1 - pow(1 - progress, 3)
-                
-                await MainActor.run {
-                    displayedFiles = Int(round(Double(primaryTarget) * easedProgress))
-                    displayedFolders = Int(round(Double(secondaryTarget) * easedProgress))
+            // Drive the digit-roll via numericText(value:) interpolation by animating
+            // from 0 to the final targets in a single eased transition. The content
+            // transition on SummaryStatItem renders the count-up through every
+            // intermediate integer, matching Apple's numeric text animation.
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.8)) {
+                    displayedFiles = primaryTarget
+                    displayedFolders = secondaryTarget
                 }
             }
-            
+
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled else { return }
+
             await MainActor.run {
                 countUpTask = nil
                 displayedFiles = primaryTarget
@@ -690,21 +689,23 @@ private struct ConfettiParticlesView: View {
 }
 
 private struct SummaryStatItem: View {
-    let value: String
+    let value: Int
     let label: String
     let icon: String
     let color: Color
-    
+
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(color)
-            
+
             VStack(spacing: 2) {
-                Text(value)
+                Text("\(value)")
                     .font(.title2.bold())
                     .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(value)))
+                    .animation(.snappy(duration: 0.6), value: value)
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
