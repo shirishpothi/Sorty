@@ -34,9 +34,7 @@ struct OrganizationCompleteView: View {
     @State private var undoSkippedCount = 0
     @State private var lastUndoneEntry: OrganizationHistoryEntry?
     
-    @State private var displayedFiles = 0
-    @State private var displayedFolders = 0
-    @State private var countUpTask: Task<Void, Never>?
+    @State private var shouldShowFinalCounts = false
 
     private enum UndoPresentationState: Equatable {
         case idle
@@ -84,7 +82,7 @@ struct OrganizationCompleteView: View {
             return "\(undoRestoredCount)"
         }
 
-        return "\(displayedFiles)"
+        return "\(shouldShowFinalCounts ? primaryStatTarget : 0)"
     }
 
     private var secondaryStatValue: String {
@@ -92,10 +90,7 @@ struct OrganizationCompleteView: View {
             return "\(undoSkippedCount)"
         }
 
-        switch mode {
-        case .renameOnly: return "\(max(totalFiles - renameCount, 0))"
-        case .organize, .organizeAndRename: return "\(displayedFolders)"
-        }
+        return "\(shouldShowFinalCounts ? secondaryStatTarget : 0)"
     }
 
     private var secondaryStatLabel: String {
@@ -107,6 +102,14 @@ struct OrganizationCompleteView: View {
         case .renameOnly: return max(totalFiles - renameCount, 0) == 1 ? "File Unchanged" : "Files Unchanged"
         case .organize, .organizeAndRename: return totalFolders == 1 ? "Folder Created" : "Folders Created"
         }
+    }
+
+    private var primaryStatTarget: Int {
+        mode == .renameOnly ? renameCount : totalFiles
+    }
+
+    private var secondaryStatTarget: Int {
+        mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
     }
     
     var body: some View {
@@ -376,7 +379,10 @@ struct OrganizationCompleteView: View {
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                startCountUp()
+                withAnimation(.spring(response: 0.58, dampingFraction: 0.86)) {
+                    shouldShowFinalCounts = true
+                }
+                HapticFeedbackManager.shared.alignment()
             }
             
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
@@ -388,8 +394,6 @@ struct OrganizationCompleteView: View {
             }
         }
         .onDisappear {
-            countUpTask?.cancel()
-            countUpTask = nil
             organizer.pinsCompletionView = false
         }
     }
@@ -453,37 +457,6 @@ struct OrganizationCompleteView: View {
             return "Reapplying the organization plan..."
         case .failed:
             return "Sorty could not complete that action. Please review history for details."
-        }
-    }
-    
-    @MainActor
-    private func startCountUp() {
-        let steps = 20
-        let interval = 0.5 / Double(steps)
-        let primaryTarget = mode == .renameOnly ? renameCount : totalFiles
-        let secondaryTarget = mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
-        
-        countUpTask?.cancel()
-        countUpTask = Task {
-            for currentStep in 1...steps {
-                try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled else { return }
-                
-                let progress = Double(currentStep) / Double(steps)
-                let easedProgress = 1 - pow(1 - progress, 3)
-                
-                await MainActor.run {
-                    displayedFiles = Int(round(Double(primaryTarget) * easedProgress))
-                    displayedFolders = Int(round(Double(secondaryTarget) * easedProgress))
-                }
-            }
-            
-            await MainActor.run {
-                countUpTask = nil
-                displayedFiles = primaryTarget
-                displayedFolders = secondaryTarget
-                HapticFeedbackManager.shared.alignment()
-            }
         }
     }
     
@@ -705,6 +678,7 @@ private struct SummaryStatItem: View {
                 Text(value)
                     .font(.title2.bold())
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
