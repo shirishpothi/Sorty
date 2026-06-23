@@ -39,8 +39,6 @@ struct ParameterTuningSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-
-                    TemperaturePreview(temperature: viewModel.config.temperature)
                 }
             }
             .animatedAppearance(delay: 0.05)

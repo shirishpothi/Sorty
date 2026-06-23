@@ -65,7 +65,6 @@ struct OrganizationRulesSettingsView: View {
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
 
-                    MaxFoldersPreview(maxFolders: viewModel.config.maxTopLevelFolders)
                 }
             }
             .settingsFocusable(.rulesOrganizationLimits)
@@ -111,8 +110,6 @@ struct OrganizationRulesSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-
-                    TemperaturePreview(temperature: viewModel.config.temperature)
                 }
             }
             .animatedAppearance(delay: 0.2)
