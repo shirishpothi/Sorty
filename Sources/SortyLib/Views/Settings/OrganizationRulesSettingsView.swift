@@ -34,7 +34,7 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.maxTopLevelFolders)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: Double(viewModel.config.maxTopLevelFolders)))
+                            .contentTransition(.numericText())
                             .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.maxTopLevelFolders)
                     }
                     
@@ -92,7 +92,7 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: viewModel.config.temperature))
+                            .contentTransition(.numericText())
                             .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
                     }
 

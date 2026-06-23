@@ -173,7 +173,7 @@ private struct TimeoutSliderRow: View {
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
-                    .contentTransition(.numericText(value: value))
+                    .contentTransition(.numericText())
                     .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value)
             }
             
@@ -200,6 +200,7 @@ private struct TimeoutSliderRow: View {
                         Text("\(Int(effectiveMax))s")
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
+                            .contentTransition(.numericText())
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))

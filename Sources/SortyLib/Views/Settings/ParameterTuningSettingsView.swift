@@ -21,7 +21,7 @@ struct ParameterTuningSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: viewModel.config.temperature))
+                            .contentTransition(.numericText())
                             .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
                     }
                     

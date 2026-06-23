@@ -65,7 +65,9 @@ struct NoTickSlider: NSViewRepresentable {
             } else {
                 snapped = raw
             }
-            value = snapped
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                value = snapped
+            }
         }
     }
 }
