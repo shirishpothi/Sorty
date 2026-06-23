@@ -12,44 +12,28 @@ struct NoTickSlider: NSViewRepresentable {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double?
-    var onEditingChanged: ((Bool) -> Void)?
 
-    init(
-        value: Binding<Double>,
-        in range: ClosedRange<Double>,
-        step: Double? = nil,
-        onEditingChanged: ((Bool) -> Void)? = nil
-    ) {
+    init(value: Binding<Double>, in range: ClosedRange<Double>, step: Double? = nil) {
         self._value = value
         self.range = range
         self.step = step
-        self.onEditingChanged = onEditingChanged
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(value: $value, step: step)
     }
 
-    func makeNSView(context: Context) -> EditingTrackingSlider {
-        let slider = EditingTrackingSlider(
-            value: value,
-            minValue: range.lowerBound,
-            maxValue: range.upperBound,
-            target: context.coordinator,
-            action: #selector(Coordinator.changed(_:))
-        )
+    func makeNSView(context: Context) -> NSSlider {
+        let slider = NSSlider(value: value, minValue: range.lowerBound, maxValue: range.upperBound, target: context.coordinator, action: #selector(Coordinator.changed(_:)))
         slider.isContinuous = true
         slider.numberOfTickMarks = 0
         slider.allowsTickMarkValuesOnly = false
         slider.trackFillColor = nil
-        slider.editingChanged = { isEditing in
-            onEditingChanged?(isEditing)
-        }
         context.coordinator.slider = slider
         return slider
     }
 
-    func updateNSView(_ nsView: EditingTrackingSlider, context: Context) {
+    func updateNSView(_ nsView: NSSlider, context: Context) {
         if nsView.minValue != range.lowerBound || nsView.maxValue != range.upperBound {
             nsView.minValue = range.lowerBound
             nsView.maxValue = range.upperBound
@@ -86,48 +70,29 @@ struct NoTickSlider: NSViewRepresentable {
     }
 }
 
-/// NSSlider subclass that reports edit-begin / edit-end. `mouseDown(with:)`
-/// blocks until tracking completes (mouse up), so we bracket `super` with the
-/// editing callbacks to drive animation gating in SwiftUI.
-final class EditingTrackingSlider: NSSlider {
-    var editingChanged: ((Bool) -> Void)?
-
-    override func mouseDown(with event: NSEvent) {
-        editingChanged?(true)
-        super.mouseDown(with: event)
-        editingChanged?(false)
-    }
-}
-
-// MARK: - Numeric roll animation (slider-aware)
+// MARK: - Numeric roll animation
 
 private struct NumericRollModifier: ViewModifier {
     let value: Double
-    let isEditing: Bool
     let duration: Double
 
     func body(content: Content) -> some View {
-        // While the slider is being dragged, update instantly so the number
-        // tracks the thumb with zero lag. The digit-roll plays only on discrete
-        // changes (release, keyboard nudge, reset-to-default, programmatic).
-        if isEditing {
-            content
-        } else {
-            content
-                .contentTransition(.numericText(value: value))
-                .animation(.spring(response: duration, dampingFraction: 0.78), value: value)
-        }
+        // Plain .numericText() (no `value:`) performs an odometer-style digit
+        // roll on each change rather than interpolating the numeric value.
+        // Interpolating via numericText(value:) on a continuously slider-driven
+        // value re-targets the tween on every tick and ends up showing nothing,
+        // so the non-interpolating form is what actually animates here.
+        content
+            .contentTransition(.numericText())
+            .animation(.easeOut(duration: duration), value: value)
     }
 }
 
 extension View {
-    /// Apple-style numeric digit-roll animation, gated on slider editing state.
-    ///
-    /// Pass the same numeric `value` shown in the label and the slider's
-    /// `isEditing` flag. While dragging, the label updates with no animation
-    /// (direct manipulation feel); on discrete changes it rolls through the
-    /// intermediate digits.
-    func numericRoll(value: Double, isEditing: Bool, duration: Double = 0.28) -> some View {
-        modifier(NumericRollModifier(value: value, isEditing: isEditing, duration: duration))
+    /// Apple-style odometer digit-roll for a numeric label. Pass the same
+    /// numeric `value` shown in the label so SwiftUI re-evaluates and rolls
+    /// the changed digits whenever it changes.
+    func numericRoll(value: Double, duration: Double = 0.2) -> some View {
+        modifier(NumericRollModifier(value: value, duration: duration))
     }
 }

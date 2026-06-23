@@ -10,8 +10,6 @@ import SwiftUI
 struct OrganizationRulesSettingsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
-    @State private var maxFoldersEditing = false
-    @State private var temperatureEditing = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -36,7 +34,7 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.maxTopLevelFolders)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: Double(viewModel.config.maxTopLevelFolders), isEditing: maxFoldersEditing)
+                            .numericRoll(value: Double(viewModel.config.maxTopLevelFolders))
                     }
 
                     NoTickSlider(
@@ -46,7 +44,7 @@ struct OrganizationRulesSettingsView: View {
                         ),
                         in: 3...20,
                         step: 1
-                    ) { maxFoldersEditing = $0 }
+                    )
                     .onChange(of: viewModel.config.maxTopLevelFolders) { _, _ in
                         HapticFeedbackManager.shared.selection()
                     }
@@ -93,10 +91,10 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: viewModel.config.temperature, isEditing: temperatureEditing)
+                            .numericRoll(value: viewModel.config.temperature)
                     }
 
-                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1) { temperatureEditing = $0 }
+                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()
                         }

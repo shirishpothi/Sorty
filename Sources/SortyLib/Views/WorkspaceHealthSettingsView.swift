@@ -280,8 +280,6 @@ struct WorkspaceHealthSettingsView: View {
         let minLabel: String
         let maxLabel: String
 
-        @State private var isEditing = false
-
         var body: some View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
@@ -293,10 +291,10 @@ struct WorkspaceHealthSettingsView: View {
                     Text(valueText)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .numericRoll(value: value, isEditing: isEditing)
+                        .numericRoll(value: value)
                 }
 
-                NoTickSlider(value: $value, in: range, step: step) { isEditing = $0 }
+                NoTickSlider(value: $value, in: range, step: step)
                     .tint(.mint)
 
                 HStack {

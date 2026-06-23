@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ParameterTuningSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-    @State private var temperatureEditing = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -22,10 +21,10 @@ struct ParameterTuningSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: viewModel.config.temperature, isEditing: temperatureEditing)
+                            .numericRoll(value: viewModel.config.temperature)
                     }
 
-                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1) { temperatureEditing = $0 }
+                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                         .onChange(of: viewModel.config.temperature) { _, _ in
                             HapticFeedbackManager.shared.selection()
                         }
