@@ -192,10 +192,9 @@ struct OrganizationStrategySettingsView: View {
                                 in: 20...180,
                                 step: 5
                             )
-                            Text("\(viewModel.config.renameNamingOptions.maxFilenameLength)")
+                            RollingNumberText(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength))
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.secondary)
-                                .numericRoll(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength))
                                 .frame(width: 32, alignment: .trailing)
                         }
 
@@ -208,7 +207,6 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                                .numericRoll(value: Double(viewModel.config.renameNamingOptions.maxFilenameLength), duration: 0.3)
                         }
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)

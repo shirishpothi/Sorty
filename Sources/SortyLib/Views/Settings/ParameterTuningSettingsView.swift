@@ -18,10 +18,9 @@ struct ParameterTuningSettingsView: View {
                         Text("Temperature")
                             .font(.subheadline)
                         Spacer()
-                        Text("\(viewModel.config.temperature, specifier: "%.2f")")
+                        RollingNumberText(value: viewModel.config.temperature) { String(format: "%.2f", $0) }
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: viewModel.config.temperature)
                     }
 
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)

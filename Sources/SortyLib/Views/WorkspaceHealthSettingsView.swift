@@ -98,7 +98,7 @@ struct WorkspaceHealthSettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ThresholdSliderRow(
                     title: "Large File Threshold",
-                    valueText: ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file),
+                    format: { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) },
                     value: Binding(
                         get: { Double(config.largeFileSizeThreshold) },
                         set: { config.largeFileSizeThreshold = Int64($0) }
@@ -111,7 +111,7 @@ struct WorkspaceHealthSettingsView: View {
 
                 ThresholdSliderRow(
                     title: "Old File Threshold",
-                    valueText: "\(Int(config.oldFileThreshold / 86400)) days",
+                    format: { "\(Int($0)) days" },
                     value: Binding(
                         get: { config.oldFileThreshold / 86400 },
                         set: { config.oldFileThreshold = $0 * 86400 }
@@ -124,7 +124,7 @@ struct WorkspaceHealthSettingsView: View {
 
                 ThresholdSliderRow(
                     title: "Download Clutter Threshold",
-                    valueText: "\(Int(config.downloadClutterThreshold / 86400)) days",
+                    format: { "\(Int($0)) days" },
                     value: Binding(
                         get: { config.downloadClutterThreshold / 86400 },
                         set: { config.downloadClutterThreshold = $0 * 86400 }
@@ -143,7 +143,7 @@ struct WorkspaceHealthSettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ThresholdSliderRow(
                     title: "Min Screenshots",
-                    valueText: "\(config.minScreenshotCount)",
+                    format: { "\(Int($0))" },
                     value: Binding(
                         get: { Double(config.minScreenshotCount) },
                         set: { config.minScreenshotCount = Int($0) }
@@ -156,7 +156,7 @@ struct WorkspaceHealthSettingsView: View {
 
                 ThresholdSliderRow(
                     title: "Min Download Files",
-                    valueText: "\(config.minDownloadCount)",
+                    format: { "\(Int($0))" },
                     value: Binding(
                         get: { Double(config.minDownloadCount) },
                         set: { config.minDownloadCount = Int($0) }
@@ -169,7 +169,7 @@ struct WorkspaceHealthSettingsView: View {
 
                 ThresholdSliderRow(
                     title: "Min Unorganized Files",
-                    valueText: "\(config.minUnorganizedCount)",
+                    format: { "\(Int($0))" },
                     value: Binding(
                         get: { Double(config.minUnorganizedCount) },
                         set: { config.minUnorganizedCount = Int($0) }
@@ -182,7 +182,7 @@ struct WorkspaceHealthSettingsView: View {
 
                 ThresholdSliderRow(
                     title: "Min Old Files",
-                    valueText: "\(config.minOldFileCount)",
+                    format: { "\(Int($0))" },
                     value: Binding(
                         get: { Double(config.minOldFileCount) },
                         set: { config.minOldFileCount = Int($0) }
@@ -273,7 +273,7 @@ struct WorkspaceHealthSettingsView: View {
 
     private struct ThresholdSliderRow: View {
         let title: String
-        let valueText: String
+        let format: (Double) -> String
         @Binding var value: Double
         let range: ClosedRange<Double>
         let step: Double
@@ -288,10 +288,9 @@ struct WorkspaceHealthSettingsView: View {
 
                     Spacer()
 
-                    Text(valueText)
+                    RollingNumberText(value: value, format: format)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .numericRoll(value: value)
                 }
 
                 NoTickSlider(value: $value, in: range, step: step)

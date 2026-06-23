@@ -31,10 +31,9 @@ struct OrganizationRulesSettingsView: View {
                         Text("Max Top-Level Folders")
                             .font(.subheadline)
                         Spacer()
-                        Text("\(viewModel.config.maxTopLevelFolders)")
+                        RollingNumberText(value: Double(viewModel.config.maxTopLevelFolders))
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: Double(viewModel.config.maxTopLevelFolders))
                     }
 
                     NoTickSlider(
@@ -88,10 +87,9 @@ struct OrganizationRulesSettingsView: View {
                         Text("Temperature")
                             .font(.subheadline)
                         Spacer()
-                        Text("\(viewModel.config.temperature, specifier: "%.2f")")
+                        RollingNumberText(value: viewModel.config.temperature) { String(format: "%.2f", $0) }
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericRoll(value: viewModel.config.temperature)
                     }
 
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)

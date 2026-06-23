@@ -70,29 +70,55 @@ struct NoTickSlider: NSViewRepresentable {
     }
 }
 
-// MARK: - Numeric roll animation
+// MARK: - Rolling number text (macOS-compatible count-up)
 
-private struct NumericRollModifier: ViewModifier {
+/// A `Text` that rolls through intermediate values when `value` changes,
+/// reproducing Apple's numeric count-up animation on macOS.
+///
+/// `contentTransition(.numericText())` does not render its odometer effect on
+/// AppKit-backed SwiftUI, so this view instead drives a real value tween via
+/// an `Animatable` `ViewModifier`: SwiftUI interpolates `animatableData` from
+/// the previous value to the new one across animation frames and re-renders
+/// the `Text` for each intermediate number.
+struct RollingNumberText: View {
     let value: Double
+    let format: (Double) -> String
     let duration: Double
+    @State private var displayed: Double
 
-    func body(content: Content) -> some View {
-        // Plain .numericText() (no `value:`) performs an odometer-style digit
-        // roll on each change rather than interpolating the numeric value.
-        // Interpolating via numericText(value:) on a continuously slider-driven
-        // value re-targets the tween on every tick and ends up showing nothing,
-        // so the non-interpolating form is what actually animates here.
-        content
-            .contentTransition(.numericText())
-            .animation(.easeOut(duration: duration), value: value)
+    init(
+        value: Double,
+        format: @escaping (Double) -> String = { "\(Int($0))" },
+        duration: Double = 0.25
+    ) {
+        self.value = value
+        self.format = format
+        self.duration = duration
+        _displayed = State(initialValue: value)
+    }
+
+    var body: some View {
+        // Hidden base text reserves the layout width of the final value; the
+        // modifier overlays the tweened text so only the rolling digits show.
+        Text(format(value))
+            .hidden()
+            .modifier(RollingNumberModifier(animatableData: displayed, format: format))
+            .onChange(of: value) { _, newValue in
+                withAnimation(.easeOut(duration: duration)) {
+                    displayed = newValue
+                }
+            }
     }
 }
 
-extension View {
-    /// Apple-style odometer digit-roll for a numeric label. Pass the same
-    /// numeric `value` shown in the label so SwiftUI re-evaluates and rolls
-    /// the changed digits whenever it changes.
-    func numericRoll(value: Double, duration: Double = 0.2) -> some View {
-        modifier(NumericRollModifier(value: value, duration: duration))
+private struct RollingNumberModifier: ViewModifier, Animatable {
+    var animatableData: Double
+    let format: (Double) -> String
+
+    func body(content: Content) -> some View {
+        content.overlay(
+            Text(format(animatableData))
+                .monospacedDigit()
+        )
     }
 }

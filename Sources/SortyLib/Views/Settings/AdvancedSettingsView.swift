@@ -170,10 +170,9 @@ private struct TimeoutSliderRow: View {
                 Text(title)
                     .font(.subheadline)
                 Spacer()
-                Text("\(Int(value))s")
+                RollingNumberText(value: value) { "\(Int($0))s" }
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
-                    .numericRoll(value: value)
             }
 
             HStack(spacing: 8) {
