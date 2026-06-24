@@ -182,6 +182,7 @@ public struct SortyPetView: View {
 
     @AppStorage(SortyPetAssetProvider.animatedMascotEnabledKey) private var animatedMascotEnabled = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animationPhase = Double.random(in: 0..<12)
 
     public init(
         state: SortyPetAnimationState,
@@ -271,8 +272,23 @@ public struct SortyPetView: View {
     }
 
     private func atlasFrameIndex(at time: TimeInterval) -> Int {
-        let framesPerSecond = SortyPetAssetProvider.bundledManifest.atlas?.framesPerSecond ?? 8
-        return Int((time * framesPerSecond).rounded(.down))
+        let frames = SortyPetAssetProvider.atlasState(for: state)?.frames ?? 1
+        guard frames > 1 else {
+            return 0
+        }
+
+        let timeOffset = time + animationPhase + state.phaseOffset
+        let rawFrame = Int((timeOffset * state.framesPerSecond).rounded(.down))
+        return state.usesPingPongPlayback ? pingPongFrame(rawFrame, frameCount: frames) : rawFrame
+    }
+
+    private func pingPongFrame(_ rawFrame: Int, frameCount: Int) -> Int {
+        let cycleLength = max((frameCount * 2) - 2, 1)
+        let cycleIndex = rawFrame % cycleLength
+        if cycleIndex < frameCount {
+            return cycleIndex
+        }
+        return cycleLength - cycleIndex
     }
 
     private var imageSize: CGFloat {
@@ -407,6 +423,57 @@ public struct SortyPetView: View {
 }
 
 private extension SortyPetAnimationState {
+    var framesPerSecond: Double {
+        switch self {
+        case .idle, .waiting:
+            return 4.5
+        case .ready, .reviewing:
+            return 5.5
+        case .completed:
+            return 6.5
+        case .failed:
+            return 5.0
+        case .organizing, .renaming, .scanning, .duplicates, .applying:
+            return 7.0
+        }
+    }
+
+    var phaseOffset: Double {
+        switch self {
+        case .idle:
+            return 0
+        case .ready:
+            return 0.7
+        case .organizing:
+            return 1.3
+        case .renaming:
+            return 1.9
+        case .scanning:
+            return 2.6
+        case .duplicates:
+            return 3.1
+        case .reviewing:
+            return 3.8
+        case .applying:
+            return 4.4
+        case .completed:
+            return 5.2
+        case .failed:
+            return 6.1
+        case .waiting:
+            return 6.8
+        }
+    }
+
+    var usesPingPongPlayback: Bool {
+        switch self {
+        case .organizing, .renaming, .scanning, .duplicates, .applying:
+            return false
+        case .idle, .ready, .reviewing, .completed, .failed, .waiting:
+            return true
+        }
+    }
+
     var rhythm: Double {
         switch self {
         case .idle, .ready:
