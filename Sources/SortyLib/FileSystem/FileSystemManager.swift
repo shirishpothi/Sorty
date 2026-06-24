@@ -111,7 +111,7 @@ public actor FileSystemManager {
         folderName: String,
         parentURL: URL,
         requestSecurityScope: Bool = true
-    ) -> URL {
+    ) throws -> URL {
         if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: folderName) {
             if requestSecurityScope {
                 _ = startAccessing(absoluteURL)
@@ -125,16 +125,28 @@ public actor FileSystemManager {
         // If exact path exists as a directory, use it
         var isDir: ObjCBool = false
         if fileManager.fileExists(atPath: directURL.path, isDirectory: &isDir) && isDir.boolValue {
+            try validateRelativeDestination(directURL, staysInside: parentURL)
             return directURL
         }
 
         // Fuzzy match: find existing directory with similar name (ignoring spaces/case)
         if let matchURL = findSimilarDirectory(named: sanitizedName, in: parentURL) {
             DebugLogger.log("Fuzzy matched folder '\(sanitizedName)' → existing '\(matchURL.lastPathComponent)'")
+            try validateRelativeDestination(matchURL, staysInside: parentURL)
             return matchURL
         }
 
+        try validateRelativeDestination(directURL, staysInside: parentURL)
         return directURL
+    }
+
+    private func validateRelativeDestination(_ destinationURL: URL, staysInside parentURL: URL) throws {
+        let parentPath = parentURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let destinationPath = destinationURL.resolvingSymlinksInPath().standardizedFileURL.path
+
+        guard destinationPath == parentPath || destinationPath.hasPrefix(parentPath + "/") else {
+            throw FileSystemError.destinationEscapesBaseDirectory(destinationURL.path)
+        }
     }
 
     private func findSimilarDirectory(named name: String, in parentURL: URL) -> URL? {
@@ -343,7 +355,7 @@ public actor FileSystemManager {
     private func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         // Check exclusions
         if let manager = exclusionManager {
@@ -464,7 +476,7 @@ public actor FileSystemManager {
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         // Process files with potential renaming
         for file in suggestion.files {
@@ -565,11 +577,13 @@ public actor FileSystemManager {
     private func detectConflictsInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) -> [FileConflict] {
         var conflicts: [FileConflict] = []
 
-        let folderURL = resolveDestinationFolderURL(
+        guard let folderURL = try? resolveDestinationFolderURL(
             folderName: suggestion.folderName,
             parentURL: parentURL,
             requestSecurityScope: false
-        )
+        ) else {
+            return conflicts
+        }
 
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }
@@ -757,7 +771,7 @@ public actor FileSystemManager {
     private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
             operations.append(folderOp)
@@ -959,7 +973,7 @@ public actor FileSystemManager {
         
         try Task.checkCancellation()
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
         
         if let manager = exclusionManager {
             let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
@@ -1031,7 +1045,7 @@ public actor FileSystemManager {
         var operations: [FileOperation] = []
         var processedCount = 0
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         for file in suggestion.files {
             try Task.checkCancellation()
@@ -1153,7 +1167,7 @@ public actor FileSystemManager {
         
         try Task.checkCancellation()
         
-        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
+        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
 
         if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
             operations.append(folderOp)
@@ -1191,11 +1205,16 @@ public actor FileSystemManager {
     
     private func collectFolderPaths(_ suggestion: FolderSuggestion, parentURL: URL) -> Set<String> {
         var paths = Set<String>()
-        let folderURL = resolveDestinationFolderURL(
-            folderName: suggestion.folderName,
-            parentURL: parentURL,
-            requestSecurityScope: false
-        )
+        let folderURL: URL
+        do {
+            folderURL = try resolveDestinationFolderURL(
+                folderName: suggestion.folderName,
+                parentURL: parentURL,
+                requestSecurityScope: false
+            )
+        } catch {
+            return paths
+        }
         paths.insert(folderURL.path)
         for subfolder in suggestion.subfolders {
             let subPaths = collectFolderPaths(subfolder, parentURL: folderURL)
@@ -1691,11 +1710,17 @@ public actor FileSystemManager {
     private func preValidateSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async -> [String] {
         var issues: [String] = []
         
-        let folderURL = resolveDestinationFolderURL(
-            folderName: suggestion.folderName,
-            parentURL: parentURL,
-            requestSecurityScope: false
-        )
+        let folderURL: URL
+        do {
+            folderURL = try resolveDestinationFolderURL(
+                folderName: suggestion.folderName,
+                parentURL: parentURL,
+                requestSecurityScope: false
+            )
+        } catch {
+            issues.append(error.localizedDescription)
+            return issues
+        }
         
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }
@@ -1866,6 +1891,7 @@ enum FileSystemError: LocalizedError {
     case partialApplyFailure(operations: [FileSystemManager.FileOperation], underlyingDescription: String)
     case preValidationFailed([String])
     case crossVolumeCopyVerificationFailed(String)
+    case destinationEscapesBaseDirectory(String)
 
     var errorDescription: String? {
         switch self {
@@ -1891,6 +1917,8 @@ enum FileSystemError: LocalizedError {
             return "Pre-validation failed: \(issues.joined(separator: ", "))"
         case .crossVolumeCopyVerificationFailed(let path):
             return "Cross-volume copy verification failed for: \(path)"
+        case .destinationEscapesBaseDirectory(let path):
+            return "Destination folder resolves outside the selected directory: \(path)"
         }
     }
 }

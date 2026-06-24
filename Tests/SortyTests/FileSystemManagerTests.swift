@@ -69,6 +69,39 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testMoveFilesRejectsSymlinkedDestinationOutsideBaseDirectory() async throws {
+        let outsideDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outsideDirectory) }
+
+        let sourceFile = tempDirectory.appendingPathComponent("secret.txt")
+        try "Sensitive".write(to: sourceFile, atomically: true, encoding: .utf8)
+
+        let symlink = tempDirectory.appendingPathComponent("Escapes")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: outsideDirectory)
+
+        let fileItem = FileItem(path: sourceFile.path, name: "secret", extension: "txt", size: 9, isDirectory: false)
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Escapes", description: "", files: [fileItem], subfolders: [], reasoning: "")
+            ],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        do {
+            _ = try await fileSystemManager.moveFiles(plan, at: tempDirectory)
+            XCTFail("Expected symlinked relative destination to be rejected")
+        } catch FileSystemError.destinationEscapesBaseDirectory(let path) {
+            XCTAssertEqual(path, symlink.path)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outsideDirectory.appendingPathComponent("secret.txt").path))
+    }
+
+    @MainActor
     func testDeleteFileDirectDeleteDoesNotCreateHiddenDuplicatesFolder() async throws {
         let file = tempDirectory.appendingPathComponent("delete-me.txt")
         try "data".write(to: file, atomically: true, encoding: .utf8)
@@ -102,6 +135,37 @@ class FileSystemManagerTests: XCTestCase {
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
+    }
+
+    @MainActor
+    func testRelativeSymlinkDestinationCannotEscapeBaseDirectory() async throws {
+        let outsideDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outsideDirectory) }
+
+        let link = tempDirectory.appendingPathComponent("Linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideDirectory)
+
+        let sourceFile = tempDirectory.appendingPathComponent("secret.txt")
+        try "secret".write(to: sourceFile, atomically: true, encoding: .utf8)
+
+        let fileItem = FileItem(path: sourceFile.path, name: "secret", extension: "txt", size: 6, isDirectory: false)
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Linked/Export", files: [fileItem])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+            XCTFail("Expected symlinked relative destination to be rejected")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("outside the selected directory"))
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outsideDirectory.appendingPathComponent("Export/secret.txt").path))
     }
 
     @MainActor

@@ -109,30 +109,49 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(capture.value, targetSessionID.uuidString)
     }
 
-    func testWatchedAddMarksFolderAsLostWhenBookmarkMissing() {
+    func testWatchedAddDeeplinkDoesNotPersistMissingFolder() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 
         handle(.watched(action: "add", path: missingPath))
 
         XCTAssertEqual(session.appState.currentView, .watchedFolders)
-        XCTAssertEqual(watchedFoldersManager.folders.count, 1)
-        let addedFolder = watchedFoldersManager.folders[0]
-        XCTAssertEqual(addedFolder.path, URL(fileURLWithPath: missingPath).standardizedFileURL.path)
-        XCTAssertEqual(addedFolder.accessStatus, .lost)
-        XCTAssertNil(addedFolder.bookmarkData)
+        XCTAssertTrue(watchedFoldersManager.folders.isEmpty)
+        XCTAssertNil(session.appState.highlightedWatchedFolderID)
     }
 
-    func testWatchedAddDoesNotDuplicateStandardizedPath() throws {
+    func testWatchedAddDeeplinkDoesNotPersistNewFolder() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sorty-watch-duplicate-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("sorty-watch-deeplink-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
         handle(.watched(action: "add", path: directory.path))
+
+        XCTAssertEqual(session.appState.currentView, .watchedFolders)
+        XCTAssertTrue(watchedFoldersManager.folders.isEmpty)
+        XCTAssertNil(session.appState.highlightedWatchedFolderID)
+    }
+
+    func testWatchedAddDeeplinkHighlightsExistingStandardizedPath() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-watch-duplicate-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let existingFolder = WatchedFolder(path: directory.standardizedFileURL.path)
+        watchedFoldersManager.addFolder(existingFolder)
+
         handle(.watched(action: "add", path: directory.appendingPathComponent(".").path))
 
         XCTAssertEqual(watchedFoldersManager.folders.count, 1)
         XCTAssertEqual(watchedFoldersManager.folders.first?.path, directory.standardizedFileURL.path)
+        XCTAssertEqual(session.appState.highlightedWatchedFolderID, existingFolder.id)
+    }
+
+    func testLearningsClearDeeplinkRequiresDeletionConfirmation() {
+        handle(.learnings(action: .clear, project: nil))
+
+        XCTAssertEqual(session.appState.currentView, .learnings)
+        XCTAssertTrue(session.appState.showDeleteUsageDataConfirmation)
     }
 
     func testSettingsSectionSelectionIsAppliedAfterYield() async {

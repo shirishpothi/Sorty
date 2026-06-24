@@ -108,9 +108,7 @@ public final class WindowSession: ObservableObject {
                 appState.importLearningsProfile()
             case .clear:
                 appState.currentView = .learnings
-                Task { @MainActor in
-                    await learningsManager.clearAllData()
-                }
+                appState.requestDeleteUsageDataConfirmation()
             case .none:
                 appState.currentView = .learnings
             }
@@ -173,22 +171,15 @@ public final class WindowSession: ObservableObject {
             appState.currentView = .watchedFolders
             if action == "add", let path {
                 let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-                let highlightedID: UUID
-
                 if let existingFolder = watchedFoldersManager.folders.first(where: { $0.path == normalizedPath }) {
-                    highlightedID = existingFolder.id
-                } else {
-                    let folder = watchedFolderFromDeeplinkPath(path)
-                    watchedFoldersManager.addFolder(folder)
-                    highlightedID = folder.id
-                }
-
-                appState.highlightedWatchedFolderID = highlightedID
-                // Clear highlight after animation
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
-                    if appState.highlightedWatchedFolderID == highlightedID {
-                        appState.highlightedWatchedFolderID = nil
+                    let highlightedID = existingFolder.id
+                    appState.highlightedWatchedFolderID = highlightedID
+                    // Clear highlight after animation
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        if appState.highlightedWatchedFolderID == highlightedID {
+                            appState.highlightedWatchedFolderID = nil
+                        }
                     }
                 }
             }
@@ -228,36 +219,6 @@ public final class WindowSession: ObservableObject {
                 try? storageLocationsManager.addLocation(url: url)
             }
         }
-    }
-
-    private func watchedFolderFromDeeplinkPath(_ path: String) -> WatchedFolder {
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        var watchedFolder = WatchedFolder(path: url.path)
-
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            watchedFolder.accessStatus = .lost
-            return watchedFolder
-        }
-
-        let didStart = url.startAccessingSecurityScopedResource()
-        defer {
-            if didStart {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        if let bookmarkData = try? url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        ) {
-            watchedFolder.bookmarkData = bookmarkData
-            watchedFolder.accessStatus = .valid
-        } else {
-            watchedFolder.accessStatus = .lost
-        }
-
-        return watchedFolder
     }
 
     private func applySettingsDestination(section: String?) {

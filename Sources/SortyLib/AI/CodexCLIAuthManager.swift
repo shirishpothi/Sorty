@@ -341,13 +341,11 @@ public final class CodexCLIAuthManager: ObservableObject {
                 userInfo: [NSLocalizedDescriptionKey: "Codex CLI executable was not found"]
             )
         }
-        let escapedCodexExecutablePath = codexExecutablePath.replacingOccurrences(of: "\"", with: "\\\"")
-
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-codex-login.command")
         let script = """
         #!/bin/zsh
-        "\(escapedCodexExecutablePath)" login
+        \(Self.shellQuoted(codexExecutablePath)) login
         """
 
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -397,6 +395,10 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     private func resolveCodexExecutablePath() -> String? {
         Self.resolveCodexExecutablePath()
+    }
+
+    nonisolated static func shellQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 
     private nonisolated static func strippedANSIEscapeSequences(from string: String) -> String {

@@ -2,6 +2,12 @@ import XCTest
 @testable import SortyLib
 
 final class SubscriptionAuthConfigurationTests: XCTestCase {
+    func testCodexLoginScriptQuotesExecutablePathForShell() {
+        let quoted = CodexCLIAuthManager.shellQuoted("/tmp/codex '$HOME'; touch /tmp/pwn")
+
+        XCTAssertEqual(quoted, "'/tmp/codex '\\''$HOME'\\''; touch /tmp/pwn'")
+    }
+
     func testProviderAuthMethodDisplayNames() {
         XCTAssertEqual(ProviderAuthMethod.apiKey.displayName, "API Key")
         XCTAssertEqual(ProviderAuthMethod.accountSignIn.displayName, "Codex CLI (Subscription)")
