@@ -31,24 +31,38 @@ public enum SortyPetAnimationState: String, CaseIterable, Codable, Sendable {
     }
 }
 
+public enum SortyPetAtlasAnimation: String, CaseIterable, Codable, Sendable {
+    case idle
+    case runningRight = "running-right"
+    case runningLeft = "running-left"
+    case waving
+    case jumping
+    case failed
+    case waiting
+    case running
+    case review
+}
+
 public struct SortyPetManifest: Decodable, Equatable, Sendable {
     public let id: String
     public let displayName: String
-    public let version: Int
-    public let states: [SortyPetAnimationState]
+    public let description: String?
+    public let version: Int?
+    public let states: [String]
+    public let spritesheetPath: String?
     public let atlas: SortyPetAtlas?
 }
 
 public struct SortyPetAtlas: Decodable, Equatable, Sendable {
-    public let imageName: String
+    public let imageName: String?
     public let cellWidth: Int
     public let cellHeight: Int
     public let framesPerState: Int
     public let framesPerSecond: Double
     public let states: [String: SortyPetAtlasState]
 
-    public func state(_ animationState: SortyPetAnimationState) -> SortyPetAtlasState? {
-        states[animationState.rawValue]
+    public func state(_ animation: SortyPetAtlasAnimation) -> SortyPetAtlasState? {
+        states[animation.rawValue]
     }
 }
 
@@ -64,8 +78,10 @@ public enum SortyPetAssetProvider {
     private static let fallbackManifest = SortyPetManifest(
         id: "sorty",
         displayName: "Sorty",
-        version: 1,
-        states: SortyPetAnimationState.allCases,
+        description: "A focused Sorty companion for folder organization workflows.",
+        version: nil,
+        states: SortyPetAtlasAnimation.allCases.map(\.rawValue),
+        spritesheetPath: nil,
         atlas: nil
     )
 
@@ -86,29 +102,30 @@ public enum SortyPetAssetProvider {
     }
 
     public static func hasAnimation(for state: SortyPetAnimationState) -> Bool {
-        bundledManifest.states.contains(state)
+        atlasState(for: state) != nil
     }
 
     public static func atlasState(for state: SortyPetAnimationState) -> SortyPetAtlasState? {
         guard let atlas = bundledManifest.atlas else {
             return nil
         }
-        return atlas.state(state)
+        return atlas.state(state.atlasAnimation)
     }
 
     public static func atlasFrame(for state: SortyPetAnimationState, frameIndex: Int) -> NSImage? {
         guard let atlas = bundledManifest.atlas,
-              let atlasState = atlas.state(state),
+              let atlasState = atlas.state(state.atlasAnimation),
               atlasState.frames > 0,
               atlas.cellWidth > 0,
               atlas.cellHeight > 0,
-              let spritesheet = spritesheet(named: atlas.imageName)
+              let spritesheetName = bundledManifest.resolvedSpritesheetName,
+              let spritesheet = spritesheet(named: spritesheetName)
         else {
             return nil
         }
 
         let normalizedIndex = frameIndex % atlasState.frames
-        let cacheKey = "atlas-\(atlas.imageName)-\(state.rawValue)-\(normalizedIndex)" as NSString
+        let cacheKey = "atlas-\(spritesheetName)-\(state.rawValue)-\(normalizedIndex)" as NSString
         if let cached = frameCache.object(forKey: cacheKey) {
             return cached
         }
@@ -171,6 +188,15 @@ public enum SortyPetAssetProvider {
 
         spritesheetCache.setObject(image, forKey: cacheKey)
         return image
+    }
+}
+
+private extension SortyPetManifest {
+    var resolvedSpritesheetName: String? {
+        if let spritesheetPath, !spritesheetPath.isEmpty {
+            return spritesheetPath
+        }
+        return atlas?.imageName
     }
 }
 
@@ -246,26 +272,13 @@ public struct SortyPetView: View {
                 frameIndex: atlasFrameIndex(at: time)
             )
 
-            ZStack {
-                if atlasFrame == nil, showsAura {
-                    aura(time: time)
-                }
-
-                Image(nsImage: atlasFrame ?? image)
-                    .renderingMode(.original)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .scaledToFit()
-                    .frame(width: imageSize, height: imageSize)
-                    .scaleEffect(atlasFrame == nil ? scale(at: time) : 1)
-                    .offset(atlasFrame == nil ? offset(at: time) : .zero)
-                    .rotationEffect(.degrees(atlasFrame == nil ? rotation(at: time) : 0))
-
-                if atlasFrame == nil, showsProgressDots {
-                    progressDots(time: time)
-                }
-            }
+            Image(nsImage: atlasFrame ?? image)
+                .renderingMode(.original)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .scaledToFit()
+                .frame(width: imageSize, height: imageSize)
             .frame(width: size, height: size)
         }
     }
@@ -285,159 +298,27 @@ public struct SortyPetView: View {
     }
 
     private var frameInterval: TimeInterval {
-        switch state {
-        case .idle, .ready, .completed:
-            return 1.0 / 18.0
-        default:
-            return 1.0 / 30.0
-        }
-    }
-
-    private var showsAura: Bool {
-        switch state {
-        case .organizing, .renaming, .scanning, .duplicates, .applying, .completed:
-            return true
-        case .idle, .ready, .reviewing, .failed, .waiting:
-            return false
-        }
-    }
-
-    private var showsProgressDots: Bool {
-        switch state {
-        case .organizing, .renaming, .scanning, .duplicates, .applying:
-            return size >= 44
-        case .idle, .ready, .reviewing, .completed, .failed, .waiting:
-            return false
-        }
-    }
-
-    private func scale(at time: TimeInterval) -> CGFloat {
-        let pulse = sin(time * state.rhythm)
-        switch state {
-        case .idle:
-            return 1 + CGFloat(pulse) * 0.018
-        case .ready:
-            return 1 + CGFloat(pulse) * 0.024
-        case .organizing, .renaming:
-            return 1 + CGFloat(pulse) * 0.04
-        case .scanning, .duplicates, .reviewing:
-            return 1 + CGFloat(pulse) * 0.028
-        case .applying:
-            return 1 + CGFloat(pulse) * 0.034
-        case .completed:
-            return 1 + CGFloat(abs(pulse)) * 0.045
-        case .failed:
-            return 0.99 + CGFloat(pulse) * 0.012
-        case .waiting:
-            return 1 + CGFloat(pulse) * 0.02
-        }
-    }
-
-    private func offset(at time: TimeInterval) -> CGSize {
-        switch state {
-        case .organizing:
-            return CGSize(width: sin(time * 4.1) * 2.2, height: cos(time * 5.2) * 1.7)
-        case .renaming:
-            return CGSize(width: sin(time * 5.4) * 3.0, height: cos(time * 2.4) * 1.0)
-        case .scanning, .duplicates:
-            return CGSize(width: sin(time * 2.2) * 1.5, height: cos(time * 3.0) * 1.5)
-        case .applying:
-            return CGSize(width: sin(time * 4.8) * 3.2, height: 0)
-        case .completed:
-            return CGSize(width: 0, height: -abs(sin(time * 4.0)) * 4.0)
-        case .failed:
-            return CGSize(width: sin(time * 8.0) * 0.8, height: 0)
-        case .waiting:
-            return CGSize(width: 0, height: sin(time * 2.0) * 1.8)
-        case .idle, .ready, .reviewing:
-            return CGSize(width: 0, height: sin(time * 1.8) * 1.2)
-        }
-    }
-
-    private func rotation(at time: TimeInterval) -> Double {
-        switch state {
-        case .renaming:
-            return sin(time * 4.4) * 4
-        case .organizing, .applying:
-            return sin(time * 3.4) * 3
-        case .scanning, .duplicates, .reviewing:
-            return sin(time * 1.9) * 2.6
-        case .completed:
-            return sin(time * 4.0) * 5
-        case .failed:
-            return sin(time * 5.6) * 1.8
-        case .idle, .ready, .waiting:
-            return sin(time * 1.6) * 1.4
-        }
-    }
-
-    private func aura(time: TimeInterval) -> some View {
-        let pulse = (sin(time * state.rhythm) + 1) / 2
-        let color = state.accentColor
-
-        return Circle()
-            .fill(
-                RadialGradient(
-                    colors: [
-                        color.opacity(0.12 + pulse * 0.12),
-                        color.opacity(0.05),
-                        .clear
-                    ],
-                    center: .center,
-                    startRadius: size * 0.18,
-                    endRadius: size * 0.48
-                )
-            )
-            .frame(width: size, height: size)
-    }
-
-    private func progressDots(time: TimeInterval) -> some View {
-        HStack(spacing: max(3, size * 0.035)) {
-            ForEach(0..<3, id: \.self) { index in
-                let phase = time * 4 + Double(index) * 0.7
-                Circle()
-                    .fill(state.accentColor.opacity(0.45 + ((sin(phase) + 1) / 2) * 0.45))
-                    .frame(width: max(3, size * 0.045), height: max(3, size * 0.045))
-                    .offset(y: -abs(sin(phase)) * max(2, size * 0.04))
-            }
-        }
-        .offset(y: size * 0.34)
-        .accessibilityHidden(true)
+        1.0 / 30.0
     }
 }
 
 private extension SortyPetAnimationState {
-    var rhythm: Double {
+    var atlasAnimation: SortyPetAtlasAnimation {
         switch self {
-        case .idle, .ready:
-            return 2.0
-        case .organizing, .renaming, .applying:
-            return 4.2
-        case .scanning, .duplicates, .reviewing:
-            return 3.0
+        case .idle:
+            return .idle
+        case .ready:
+            return .waving
+        case .organizing, .renaming, .scanning, .duplicates, .applying:
+            return .running
         case .completed:
-            return 4.8
+            return .jumping
         case .failed:
-            return 2.6
+            return .failed
         case .waiting:
-            return 2.2
-        }
-    }
-
-    var accentColor: Color {
-        switch self {
-        case .completed:
-            return SortyDesignSystem.Colors.success
-        case .failed:
-            return SortyDesignSystem.Colors.error
-        case .duplicates:
-            return .purple
-        case .scanning, .reviewing:
-            return SortyDesignSystem.Colors.info
-        case .waiting:
-            return SortyDesignSystem.Colors.warning
-        case .idle, .ready, .organizing, .renaming, .applying:
-            return SortyDesignSystem.Colors.resolvedAccent
+            return .waiting
+        case .reviewing:
+            return .review
         }
     }
 }
