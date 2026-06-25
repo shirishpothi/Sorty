@@ -248,12 +248,11 @@ struct SettingsView: View {
     private func searchResultsContent(minHeight: CGFloat) -> some View {
         if searchResults.isEmpty {
             VStack(spacing: 16) {
-                SortyPetView(
-                    state: .failed,
-                    size: 220,
-                    accessibilityLabel: "Sorty found no matching settings",
-                    fallbackAssetName: "SadSortyMascot"
-                )
+                Image(systemName: "magnifyingglass.circle")
+                    .font(.system(size: 96, weight: .regular))
+                    .foregroundStyle(Color.accentColor.opacity(0.85))
+                    .frame(width: 220, height: 160)
+                    .accessibilityLabel("No matching settings")
 
                 VStack(spacing: 5) {
                     Text("Sorty came up empty")

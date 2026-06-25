@@ -1625,7 +1625,6 @@ private struct AIReasoningStatus: View {
                 }
             }
         }
-        .padding(.leading, -10)  // Move the whole group slightly left to compensate for mascot's orbit padding
         .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Current \(isRenameOnly ? "rename" : "organization") stage: \(organizationStage)")
@@ -1643,29 +1642,27 @@ private struct AIReasoningStatus: View {
     @ViewBuilder
     private var stageIcon: some View {
         if case .scanning = state {
-            SortyPetView(
-                state: isRenameOnly ? .renaming : .scanning,
-                size: 56,
-                accessibilityLabel: isRenameOnly ? "Sorty is preparing names" : "Sorty is scanning files"
-            )
+            Image(systemName: isRenameOnly ? "text.cursor" : "folder.badge.gearshape")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .accessibilityLabel(isRenameOnly ? "Preparing names" : "Scanning files")
         } else if case .organizing = state {
             if isEstablishingConnection {
                 Image(systemName: "network")
                     .foregroundStyle(.orange)
                     .symbolEffect(.variableColor.iterative, options: .repeating)
             } else {
-                SortyPetView(
-                    state: isRenameOnly ? .renaming : .organizing,
-                    size: 72,
-                    accessibilityLabel: isRenameOnly ? "Sorty is renaming files" : "Sorty is organizing files"
-                )
+                Image(systemName: isRenameOnly ? "textformat" : "sparkles")
+                    .font(.system(size: 48, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                    .accessibilityLabel(isRenameOnly ? "Renaming files" : "Organizing files")
             }
         } else if case .applying = state {
-            SortyPetView(
-                state: .applying,
-                size: 72,
-                accessibilityLabel: "Sorty is applying changes"
-            )
+            Image(systemName: "checkmark.seal")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(.green)
+                .accessibilityLabel("Applying changes")
         }
     }
 }
@@ -1701,12 +1698,9 @@ private struct InsightHistorySection: View {
             } label: {
                 HStack(spacing: 8) {
                     if isStreaming {
-                        SortyPetView(
-                            state: .reviewing,
-                            size: 18,
-                            accessibilityLabel: "Sorty is reviewing insights",
-                            fallbackAssetName: "SortyMascot"
-                        )
+                        Image(systemName: "sparkles")
+                            .font(.callout)
+                            .foregroundStyle(Color.accentColor)
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.callout)

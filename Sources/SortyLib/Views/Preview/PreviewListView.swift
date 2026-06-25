@@ -74,7 +74,6 @@ struct PreviewListView: View {
             EmptyPreviewState(
                 icon: "questionmark.folder",
                 iconColor: .orange,
-                mascotImageName: "UnorganizedSortyMascot",
                 title: "All Files Unorganized",
                 message: "\(count) files couldn't be automatically organized. Try providing specific instructions to help Sorty categorize them better.",
                 actions: [
@@ -104,7 +103,6 @@ struct PreviewListView: View {
 struct EmptyPreviewState: View {
     let icon: String
     let iconColor: Color
-    var mascotImageName: String? = nil
     let title: String
     let message: String
     var actions: [EmptyAction] = []
@@ -165,17 +163,7 @@ struct EmptyPreviewState: View {
 
     @ViewBuilder
     private var emptyStateArtwork: some View {
-        if let mascotImageName {
-            SortyPetView(
-                state: .waiting,
-                size: 180,
-                accessibilityLabel: "Sorty needs better instructions",
-                fallbackAssetName: mascotImageName
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        } else {
-            fallbackArtwork
-        }
+        fallbackArtwork
     }
 
     private var fallbackArtwork: some View {
