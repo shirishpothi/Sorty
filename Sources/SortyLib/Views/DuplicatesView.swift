@@ -85,6 +85,7 @@ struct DuplicatesView: View {
                                 description:
                                     "Identical files in \(effectiveDirectory?.lastPathComponent ?? "this folder") will be identified.",
                                 icon: "waveform.path.ecg",
+                                iconColor: SortyDesignSystem.Colors.resolvedAccent,
                                 actionTitle: "Start Scan",
                                 animatesIcon: true,
                                 isDefaultAction: true,
@@ -1572,18 +1573,9 @@ struct DuplicatesEmptyStateView: View {
         VStack(spacing: 20) {
             Group {
                 if animatesIcon {
-                    Image(systemName: icon)
-                        .font(.system(size: 52, weight: .semibold))
-                        .foregroundStyle(heroTint ?? iconColor)
-                        .symbolEffect(.pulse)
-                        .frame(width: 104, height: 104)
-                        .accessibilityLabel("Scanning for duplicates")
+                    ScanningPulseIcon(systemName: icon, color: iconColor)
                 } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 52, weight: .semibold))
-                        .foregroundStyle(heroTint ?? iconColor)
-                        .frame(width: 104, height: 104)
-                        .accessibilityLabel("Ready to scan for duplicates")
+                    EmptyStateHeroIcon(systemName: icon, tint: heroTint)
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
