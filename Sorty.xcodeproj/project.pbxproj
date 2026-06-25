@@ -232,6 +232,7 @@
 		CC220002000000000000A016 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A016 /* Assets.xcassets */; };
 		CC220002000000000000A017 /* InternetAccessPolicy.plist in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A017 /* InternetAccessPolicy.plist */; };
 		CC220002000000000000A018 /* AppIcons in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A018 /* AppIcons */; };
+		CC220002000000000000A020 /* Pets in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A020 /* Pets */; };
 		EC166F2A25CE1F1430F1FBD9 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = 488B75F6213B19AC5840050B /* SortyLib */; };
 		3D9D39047A3FAF904B00EBB4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FA4B34027E72C1ED9821975F /* Sparkle */; };
 		F61A46EE2DF2D37736E4CC95 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = 2281A6367D915CEFD05D59CF /* SortyLib */; };
@@ -570,6 +571,7 @@
 		CC110001000000000000A016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		CC110001000000000000A017 /* InternetAccessPolicy.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = InternetAccessPolicy.plist; sourceTree = "<group>"; };
 		CC110001000000000000A018 /* AppIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources/SortyLib/Resources/AppIcons; sourceTree = SOURCE_ROOT; };
+		CC110001000000000000A020 /* Pets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources/SortyLib/Resources/Pets; sourceTree = SOURCE_ROOT; };
 
 		94E640E9F5531D468E67A0EC /* AIInsightExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInsightExtractorTests.swift; sourceTree = "<group>"; };
 		B41C3F34679E0B27BE6BD9DD /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
@@ -936,6 +938,7 @@
 				99999999AAAA000000000001 /* AppIcon.icns */,
 				CC110001000000000000A016 /* Assets.xcassets */,
 				CC110001000000000000A018 /* AppIcons */,
+				CC110001000000000000A020 /* Pets */,
 				CC110001000000000000A017 /* InternetAccessPolicy.plist */,
 			);
 			path = Resources;
@@ -1265,6 +1268,7 @@
 				99999999AAAA000000000002 /* AppIcon.icns in Resources */,
 				CC220002000000000000A018 /* AppIcons in Resources */,
 				CC220002000000000000A016 /* Assets.xcassets in Resources */,
+				CC220002000000000000A020 /* Pets in Resources */,
 				CC220002000000000000A017 /* InternetAccessPolicy.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

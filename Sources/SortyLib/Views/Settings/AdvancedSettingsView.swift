@@ -11,6 +11,7 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage(SortyPetAssetProvider.animatedMascotEnabledKey) private var animatedMascotEnabled = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     
@@ -45,6 +46,16 @@ struct AdvancedSettingsView: View {
             }
             .animatedAppearance(delay: 0.03)
 
+            SettingsCard(title: "Mascot", icon: "sparkles", color: .cyan) {
+                SettingsToggle(
+                    isOn: $animatedMascotEnabled,
+                    title: "Animated Sorty Mascot",
+                    description: "Show Sorty's built-in animated companion in workflow surfaces"
+                )
+                .accessibilityIdentifier("AnimatedMascotToggle")
+            }
+            .animatedAppearance(delay: 0.04)
+
             SettingsCard(title: "Privacy", icon: "lock.shield", color: .green) {
                 VStack(spacing: 12) {
                     SettingsToggle(
@@ -66,7 +77,7 @@ struct AdvancedSettingsView: View {
                     .accessibilityIdentifier("InternetPrivacyModeToggle")
                 }
             }
-            .animatedAppearance(delay: 0.04)
+            .animatedAppearance(delay: 0.07)
             
             SettingsCard(title: "Timeouts", icon: "clock", color: .orange) {
                 VStack(spacing: 16) {
@@ -92,7 +103,7 @@ struct AdvancedSettingsView: View {
                 }
             }
             .settingsFocusable(.advancedTimeouts)
-            .animatedAppearance(delay: 0.1)
+            .animatedAppearance(delay: 0.12)
             
             SettingsCard(title: "Developer", icon: "hammer", color: .gray) {
                 VStack(spacing: 12) {
@@ -128,7 +139,7 @@ struct AdvancedSettingsView: View {
                 }
             }
             .settingsFocusable(.advancedDeveloper)
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.17)
         }
     }
 }
