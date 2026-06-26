@@ -9,17 +9,11 @@ struct SidebarNavigationItem: Identifiable, Hashable {
     let view: AppState.AppView
     let title: String
     let systemImage: String
-    let iconAssetName: String
-    let selectedIconAssetName: String
     let accessibilityIdentifier: String
     let accessibilityHint: String
     let helpText: String
 
     var id: AppState.AppView { view }
-
-    func iconAssetName(isSelected: Bool) -> String {
-        isSelected ? selectedIconAssetName : iconAssetName
-    }
 
     @MainActor
     static var mainItems: [SidebarNavigationItem] {
@@ -28,8 +22,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .organize,
                 title: "Organize",
                 systemImage: "folder.badge.gearshape",
-                iconAssetName: "SidebarOrganizeIcon",
-                selectedIconAssetName: "SidebarOrganizeSelectedIcon",
                 accessibilityIdentifier: "OrganizeSidebarItem",
                 accessibilityHint: "Open the main organization workflow",
                 helpText: "Organize files with Sorty suggestions"
@@ -41,8 +33,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .watchedFolders,
                 title: "Watched Folders",
                 systemImage: "eye",
-                iconAssetName: "SidebarWatchedFoldersIcon",
-                selectedIconAssetName: "SidebarWatchedFoldersSelectedIcon",
                 accessibilityIdentifier: "WatchedFoldersSidebarItem",
                 accessibilityHint: "Configure folders monitored for automation",
                 helpText: "Manage watched folders and triggers"
@@ -51,8 +41,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .duplicates,
                 title: "Duplicates",
                 systemImage: "doc.on.doc",
-                iconAssetName: "SidebarDuplicatesIcon",
-                selectedIconAssetName: "SidebarDuplicatesSelectedIcon",
                 accessibilityIdentifier: "DuplicatesSidebarItem",
                 accessibilityHint: "Find and review duplicate files",
                 helpText: "Detect and manage duplicate files"
@@ -61,8 +49,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .history,
                 title: "History",
                 systemImage: "clock",
-                iconAssetName: "SidebarHistoryIcon",
-                selectedIconAssetName: "SidebarHistorySelectedIcon",
                 accessibilityIdentifier: "HistorySidebarItem",
                 accessibilityHint: "Review past organization sessions",
                 helpText: "View organization history and outcomes"
@@ -71,8 +57,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .learnings,
                 title: "Learnings",
                 systemImage: "brain",
-                iconAssetName: "SidebarLearningsIcon",
-                selectedIconAssetName: "SidebarLearningsSelectedIcon",
                 accessibilityIdentifier: "LearningsSidebarItem",
                 accessibilityHint: "Review and manage learned preferences",
                 helpText: "See what Sorty has learned from your edits"
@@ -81,8 +65,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .exclusions,
                 title: "Exclusions",
                 systemImage: "eye.slash",
-                iconAssetName: "SidebarExclusionsIcon",
-                selectedIconAssetName: "SidebarExclusionsSelectedIcon",
                 accessibilityIdentifier: "ExclusionsSidebarItem",
                 accessibilityHint: "Define files and folders Sorty should skip",
                 helpText: "Manage exclusion rules"
@@ -91,8 +73,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 view: .settings,
                 title: "Settings",
                 systemImage: "gear",
-                iconAssetName: "SidebarSettingsIcon",
-                selectedIconAssetName: "SidebarSettingsSelectedIcon",
                 accessibilityIdentifier: "SettingsSidebarItem",
                 accessibilityHint: "Configure Sorty behavior and AI providers",
                 helpText: "Adjust provider, strategy, automation, and system settings"
@@ -105,8 +85,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                     view: .workspaceHealth,
                     title: "Workspace Health",
                     systemImage: "heart.text.square",
-                    iconAssetName: "SidebarWorkspaceHealthIcon",
-                    selectedIconAssetName: "SidebarWorkspaceHealthSelectedIcon",
                     accessibilityIdentifier: "WorkspaceHealthSidebarItem",
                     accessibilityHint: "Inspect workspace quality and cleanup opportunities",
                     helpText: "Check workspace health insights"

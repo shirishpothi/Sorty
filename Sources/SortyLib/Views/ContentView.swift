@@ -203,20 +203,8 @@ public struct ContentView: View {
     @ViewBuilder
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
         let shortcutLabel = item.view == .settings ? "," : "\(commandNumber)"
-        let isSelected = appState.currentView == item.view
 
-        HStack(spacing: 9) {
-            Image(item.iconAssetName(isSelected: isSelected))
-                .resizable()
-                .renderingMode(.original)
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: 18, height: 18)
-                .scaleEffect(isSelected ? 1.04 : 1)
-                .accessibilityHidden(true)
-
-            Text(item.title)
-        }
+        Label(item.title, systemImage: item.systemImage)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, showCommandNumbers ? 38 : 0)
@@ -239,7 +227,6 @@ public struct ContentView: View {
                 .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
                 value: showCommandNumbers
             )
-            .animation(.spring(response: 0.2, dampingFraction: 0.82), value: isSelected)
     }
 
     private func installCommandKeyMonitorIfNeeded() {
