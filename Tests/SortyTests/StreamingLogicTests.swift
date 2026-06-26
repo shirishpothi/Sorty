@@ -118,7 +118,7 @@ final class StreamingLogicTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(organizer.isStreaming)
-        XCTAssertEqual(organizer.organizationStage, "Sorty is analyzing your files...")
+        XCTAssertEqual(organizer.organizationStage, "Sorty is organizing your files...")
         XCTAssertEqual(organizer.streamingContent, "retry stream")
         XCTAssertLessThan(organizer.progress, 0.5)
     }
@@ -247,7 +247,25 @@ final class StreamingLogicTests: XCTestCase {
         organizer.didReceiveChunk("first chunk of streaming data")
         try? await Task.sleep(nanoseconds: 100_000_000)
         
-        XCTAssertEqual(organizer.organizationStage, "Sorty is analyzing your files...")
+        XCTAssertEqual(organizer.organizationStage, "Sorty is organizing your files...")
+    }
+
+    func testOrganizationStageUsesRenameOnlyWorkflowOnFirstChunk() async throws {
+        try await organizer.configure(with: AIConfig(mode: .renameOnly))
+
+        organizer.didReceiveChunk("first chunk of streaming data")
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(organizer.organizationStage, "Sorty is preparing rename suggestions...")
+    }
+
+    func testOrganizationStageUsesOrganizeAndRenameWorkflowOnFirstChunk() async throws {
+        try await organizer.configure(with: AIConfig(mode: .organizeAndRename))
+
+        organizer.didReceiveChunk("first chunk of streaming data")
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(organizer.organizationStage, "Sorty is organizing and renaming your files...")
     }
 
     func testReadyCueCapturedAsGeneralInsight() async {

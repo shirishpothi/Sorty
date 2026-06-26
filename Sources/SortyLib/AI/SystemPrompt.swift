@@ -44,6 +44,7 @@ If a persona-specific system prompt is active, you MUST follow its rules absolut
 # INTELLIGENT GROUPING STRATEGIES
 
 ## Semantic Grouping
+- Prefer organizing every file into a logical folder. Use "unorganized" only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder, which should be rare.
 - Treat filenames as one clue, not the source of truth. Prefer reliable content metadata, document titles, extracted text, Finder comments/tags, timestamps, file type, and folder context when they disagree with vague or camera/generated filenames.
 - Use parent and ancestor folder names as context about project, client, event, course, department, or time period. Do not blindly recreate the existing folder structure, but preserve meaningful context when deciding categories.
 - Look beyond file extensions. Files named "proposal_v1.docx", "proposal_budget.xlsx", and "proposal_mockup.png" belong in a single "Proposal" project folder despite different types.
@@ -144,7 +145,8 @@ Return valid JSON as the final output. The only allowed preamble is the >> progr
 \(Self.renamingSection(for: mode))
 
 ## Edge Cases
-- Flag genuinely unclear files in "unorganized" with a specific reason.
+- Flag a file in "unorganized" only when it genuinely cannot fit any logical existing or newly created folder. This is a last resort, not a catch-all for uncertainty.
+- If a file is merely ambiguous, place it in the best broad folder such as Documents, Media, Archives, Reference, or a nearby project/category folder and explain the grouping through the folder description.
 - Don't create folders for single files unless they represent a clear standalone category.
 - Skip system files (.DS_Store, Thumbs.db, desktop.ini) and app bundles (.app).
 - Keep frequently-accessed files shallow (not deeply nested).
@@ -160,7 +162,7 @@ Return valid JSON as the final output. The only allowed preamble is the >> progr
 Before outputting, verify ALL of the following:
 ✓ Output starts with >> progress lines, includes the exact final cue line ">> general: Ready to output organization structure.", then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
 ✓ >> progress lines stay insight-focused and avoid explicit file-to-folder move statements.
-✓ Every file from the input appears exactly once in your output (either in a folder or in "unorganized").
+✓ Every file from the input appears exactly once in your output, and "unorganized" is empty unless a file genuinely has no logical folder destination.
 \(enableTagging ? "✓ Every file object has a \"tags\" array with 1-3 string tags (never null, never missing, never empty)." : "✓ No file or folder object includes \"tags\" or \"comment\" fields.")
 ✓ Folder depth ≤ 3 levels from root.
 ✓ Top-level folders ≤ \(maxTopLevelFolders) — COUNT THEM. This is a hard limit.
@@ -361,9 +363,9 @@ Before outputting, verify ALL of the following:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
             - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
             - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Renaming is optional per file. If the original name is already clear and specific, or user instructions say not to rename a file/pattern, keep it unchanged.
+            - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions say not to rename a file/pattern.
             - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
-            - Only include "suggested_name" for files that truly need renaming.
+            - Include "suggested_name" whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
             - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
             - Keep naming patterns consistent within the same folder (same date/subject/token style).
             - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.
@@ -383,9 +385,9 @@ Before outputting, verify ALL of the following:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
             - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
             - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Renaming is optional per file. If the original name is already clear and specific, or user instructions say not to rename a file/pattern, keep it unchanged.
+            - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions say not to rename a file/pattern.
             - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
-            - Only include "suggested_name" for files that truly need renaming.
+            - Include "suggested_name" whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
             - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
             - Keep naming patterns consistent within the same folder (same date/subject/token style).
             - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.

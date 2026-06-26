@@ -109,6 +109,13 @@ struct PromptBuilder {
             - Do not add artificial delays or non-JSON file-move narration; the app animates the real streamed JSON tokens.
 
             """
+
+            prompt += """
+            ## ORGANIZATION COMPLETENESS
+            Prefer placing every file into a logical folder. Use `unorganized` only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder.
+            If a file is merely ambiguous, choose the best broad folder such as Documents, Media, Archives, Reference, or a nearby project/category folder instead of leaving it unorganized.
+
+            """
         }
         
         if let instructions = customInstructions, !instructions.isEmpty {
@@ -152,9 +159,9 @@ struct PromptBuilder {
             - Spaces are valid macOS filename characters. Use spaces when the separator preference asks for them; do not force underscores or hyphens unless configured.
             - When renaming multiple files in the same folder, keep one consistent naming pattern.
             - Return a `rename_confidence` score between 0.0 and 1.0 for each rename.
-            - Renaming is optional per file. If the existing name is already clear and specific, or user instructions exclude a file/pattern from renaming, keep it unchanged.
+            - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions exclude a file/pattern from renaming.
             - When keeping a file unchanged, omit `suggested_name` and include a short `rename_reason` explaining why it stayed the same.
-            - Only include `suggested_name` for files that truly need a better name.
+            - Include `suggested_name` whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
             - `rename_reason` must be concrete and evidence-based (cite content cues, date, project, or ambiguity being resolved). Avoid vague reasons like "more descriptive".
             - Do not invent dates, clients, invoice numbers, people, or projects. If evidence is weak, keep the original name and use low confidence.
             """
@@ -415,6 +422,7 @@ struct PromptBuilder {
         {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
         Legacy format is also accepted:
         {"folders":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")\(filePayload),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        Prefer assigning every file to a folder. Use unorganized only as a rare last resort when no logical destination exists.
         """
     }
 
@@ -426,7 +434,7 @@ struct PromptBuilder {
         if mode == .renameOnly || mode == .organizeAndRename {
             base += " Rename only when there is a material clarity improvement; keep already-good names unchanged."
         }
-        base += " Use file_ids from the user list. Include every file exactly once unless unorganized."
+        base += " Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
@@ -525,11 +533,13 @@ struct PromptBuilder {
         - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
+        - Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists.
+        - If a file is ambiguous, place it in the best broad folder instead of leaving it unorganized.
         - Prefer using file_ids in compact responses when IDs are provided.
         - Group by type: Documents, Media, Code, Archives
         - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
-        \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
-        \(mode == .renameOnly || mode == .organizeAndRename ? "- Rename is optional per file; keep already-clear names unchanged." : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- Prefer better filenames; keep originals only when they are already clear, stable/protected, or user-excluded." : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- Generic camera, screenshot, scan, download, or default app names should usually receive suggested_name when evidence supports it." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         

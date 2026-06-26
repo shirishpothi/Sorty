@@ -734,13 +734,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         progressLineCount = 0
     }
 
+    private var analysisStageDescription: String {
+        switch aiConfig?.mode {
+        case .renameOnly:
+            return "Sorty is preparing rename suggestions..."
+        case .organizeAndRename:
+            return "Sorty is organizing and renaming your files..."
+        case .organize, nil:
+            return "Sorty is organizing your files..."
+        }
+    }
+
     @MainActor
     private func restartPlanGenerationForRetry() {
         clearStreamingDisplayState()
         withBatchUpdates {
             isStreaming = false
             progress = 0.30
-            organizationStage = "Sorty is analyzing your files..."
+            organizationStage = analysisStageDescription
         }
         startTimeoutTimer()
     }
@@ -762,7 +773,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 // Batch all initial state updates together
                 self.withBatchUpdates {
                     self.isStreaming = true
-                    self.organizationStage = "Sorty is analyzing your files..."
+                    self.organizationStage = self.analysisStageDescription
                     self.progress = 0.30
                     if self.liveInsightsEnabled {
                         self.syncDisplayContentImmediately()

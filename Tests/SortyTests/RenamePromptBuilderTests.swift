@@ -81,4 +81,27 @@ final class RenamePromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Service Agreement between Acme Co"))
         XCTAssertTrue(prompt.contains("Pages: 8"))
     }
+
+    func testRenameModesPreferRenameSuggestionsWhenEvidenceSupportsThem() {
+        let file = FileItem(path: "/tmp/IMG_0042.jpg", name: "IMG_0042", extension: "jpg", size: 1024, isDirectory: false)
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            mode: .organizeAndRename,
+            enableSmartRename: true
+        )
+
+        XCTAssertTrue(prompt.contains("Prefer renaming files in this workflow"))
+        XCTAssertTrue(prompt.contains("generic camera, screenshot, scan, download, or default app names"))
+    }
+
+    func testOrganizeModesPreferFolderAssignmentsOverUnorganized() {
+        let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(files: [file], mode: .organize)
+
+        XCTAssertTrue(prompt.contains("Prefer placing every file into a logical folder"))
+        XCTAssertTrue(prompt.contains("Use `unorganized` only as a last resort"))
+        XCTAssertTrue(prompt.contains("If a file is merely ambiguous, choose the best broad folder"))
+    }
 }
