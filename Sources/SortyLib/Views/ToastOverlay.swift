@@ -146,7 +146,7 @@ struct CometLoader<S: Shape>: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        SwiftUI.TimelineView(.animation) { timeline in
             Canvas { context, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: lineWidth, dy: lineWidth)
                 let path = shape.path(in: rect)

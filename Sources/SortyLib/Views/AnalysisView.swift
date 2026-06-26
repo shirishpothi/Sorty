@@ -947,9 +947,7 @@ private struct RenameGenerationSequenceView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                Image(systemName: "pencil.and.scribble")
-                    .foregroundStyle(.purple)
-                    .symbolEffect(.drawOn, options: .repeating)
+                renameIcon
                 Text("Renaming files")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -1006,6 +1004,18 @@ private struct RenameGenerationSequenceView: View {
         .onChange(of: files) { _, _ in
             refreshFileLookup()
             refreshStreamEvents()
+        }
+    }
+
+    @ViewBuilder
+    private var renameIcon: some View {
+        if #available(macOS 26.0, *) {
+            Image(systemName: "pencil.and.scribble")
+                .foregroundStyle(.purple)
+                .symbolEffect(.drawOn, options: .repeating)
+        } else {
+            Image(systemName: "pencil.and.scribble")
+                .foregroundStyle(.purple)
         }
     }
 
