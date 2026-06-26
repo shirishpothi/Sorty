@@ -528,6 +528,7 @@ private struct OnboardingIntroView: View {
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
     @State private var filesAppeared = false
+    @State private var fileIcons: [String: NSImage] = [:]
     @State private var collapseProgress: CGFloat = 0
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
@@ -557,7 +558,10 @@ private struct OnboardingIntroView: View {
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
-                        OnboardingOrbitFileChip(file: file)
+                        OnboardingOrbitFileChip(
+                            file: file,
+                            icon: fileIcons[file.ext] ?? OnboardingFileIconProvider.placeholder
+                        )
                             .modifier(
                                 OrbitChipPlacement(
                                     collapseProgress: collapseProgress,
@@ -670,6 +674,7 @@ private struct OnboardingIntroView: View {
             chromeRevealed = true
             textOpacity = 1
             textOffset = 0
+            fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
             audio.startBackgroundMelody()
             return
@@ -714,6 +719,7 @@ private struct OnboardingIntroView: View {
             // Phase 3 — file chips drift in once everything has settled.
             try? await Task.sleep(for: .milliseconds(650))
             guard generation == revealGeneration else { return }
+            fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
         }
     }
@@ -972,6 +978,19 @@ private struct OnboardingOrbitFile: Identifiable {
 @MainActor
 private enum OnboardingFileIconProvider {
     private static var cache: [String: NSImage] = [:]
+    private static let placeholderImage = NSWorkspace.shared.icon(forFileType: "")
+
+    static var placeholder: NSImage {
+        placeholderImage
+    }
+
+    static func icons(for files: [OnboardingOrbitFile]) -> [String: NSImage] {
+        Dictionary(
+            uniqueKeysWithValues: Set(files.map(\.ext)).map { ext in
+                (ext, icon(for: ext))
+            }
+        )
+    }
 
     static func icon(for ext: String) -> NSImage {
         if let cached = cache[ext] {
@@ -990,10 +1009,11 @@ private enum OnboardingFileIconProvider {
 
 private struct OnboardingOrbitFileChip: View {
     let file: OnboardingOrbitFile
+    let icon: NSImage
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(nsImage: OnboardingFileIconProvider.icon(for: file.ext))
+            Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 46, height: 46)
