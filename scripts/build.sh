@@ -316,14 +316,7 @@ print_build_complete_summary() {
     printf "  %-15s : %s\n" "Signing" "${SIGNING_IDENTITY}"
     printf "  %-15s : %s\n" "Output" "${APP_PATH}"
     printf "  %-15s : %s\n" "Size" "${APP_SIZE}"
-    printf "    %-13s : %s\n" "MacOS" "${MACOS_SIZE}"
-    printf "    %-13s : %s\n" "Frameworks" "${FRAMEWORKS_SIZE}"
-    printf "    %-13s : %s\n" "Resources" "${RESOURCES_SIZE}"
-    printf "    %-13s : %s\n" "PlugIns" "${PLUGINS_SIZE}"
     printf "  %-15s : %s\n" "Duration" "${TOTAL_DURATION}"
-    printf "    %-13s : %s\n" "Compile" "${BUILD_DURATION}"
-    printf "    %-13s : %s\n" "Assemble" "${ASSEMBLE_DURATION}"
-    printf "    %-13s : %s\n" "Sign" "${SIGN_DURATION}"
     if [ "$SKIP_TESTS" != "true" ]; then
         printf "    %-13s : %s\n" "Tests" "${TEST_DURATION}"
     fi
@@ -1285,10 +1278,6 @@ fi
 terminate_running_sorty_if_safe
 
 APP_SIZE=$(get_file_size "${APP_PATH}")
-MACOS_SIZE=$(get_path_size "${APP_PATH}/Contents/MacOS")
-FRAMEWORKS_SIZE=$(get_path_size "${APP_PATH}/Contents/Frameworks")
-RESOURCES_SIZE=$(get_path_size "${APP_PATH}/Contents/Resources")
-PLUGINS_SIZE=$(get_path_size "${APP_PATH}/Contents/PlugIns")
 TOTAL_DURATION=$(get_total_duration)
 
 print_build_complete_summary

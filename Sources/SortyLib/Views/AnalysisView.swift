@@ -373,8 +373,16 @@ struct AnalysisView: View {
             stage: organizer.organizationStage,
             elapsedSeconds: Int(organizer.elapsedTime),
             isEstablishingConnection: isEstablishingConnection,
-            state: organizer.state
+            state: organizer.state,
+            matchesInsightsWidth: showsLiveInsightsIsland
         )
+    }
+
+    /// True when the live insights island (`aiInsightsView`) is visible beneath
+    /// the progress banner, so the banner can expand to meet its width.
+    private var showsLiveInsightsIsland: Bool {
+        guard !isRenameOnlyFlow, !hasOrganizeStreamEvents else { return false }
+        return organizer.isStreaming
     }
 
     private var stageIndicator: some View {
@@ -1413,6 +1421,16 @@ private struct StreamingProgressBeam: View {
     let elapsedSeconds: Int
     let isEstablishingConnection: Bool
     let state: OrganizationState
+    /// When true, the card expands to align with the live insights island below it.
+    var matchesInsightsWidth: Bool = false
+
+    /// Compact width used when the banner stands alone (removes empty space).
+    private static let collapsedWidth: CGFloat = 440
+    /// Width of the live insights island the banner expands to meet.
+    private static let expandedWidth: CGFloat = 550
+    private var targetWidth: CGFloat {
+        matchesInsightsWidth ? Self.expandedWidth : Self.collapsedWidth
+    }
 
     private var clampedProgress: Double { max(0, min(1, progress)) }
     private var percent: Int { Int((clampedProgress * 100).rounded()) }
@@ -1432,7 +1450,8 @@ private struct StreamingProgressBeam: View {
         VStack(spacing: 0) {
             progressCard
         }
-        .frame(maxWidth: 560)
+        .frame(width: targetWidth)
+        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: matchesInsightsWidth)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Organization progress")
         .accessibilityValue("\(percent) percent, stage \(displayedStage)")
@@ -1462,7 +1481,7 @@ private struct StreamingProgressBeam: View {
             .padding(.horizontal, 22)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 460, idealWidth: 520, maxWidth: 560, minHeight: 92)
+        .frame(maxWidth: .infinity, minHeight: 92)
         .background {
             beamSurface
         }

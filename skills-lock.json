@@ -61,6 +61,12 @@
       "skillPath": "SKILL.md",
       "computedHash": "2692dc771633b2915c1b75000009c1a9198af3e3f994ae46d175b48e008edc57"
     },
+    "swiftui-microinteractions": {
+      "source": "iAmVishal16/swiftui-microinteractions",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "c5656afbe8e1396f3f0dec8751c9f8df574d36a9bc1018f58857ad87dda5a9d1"
+    },
     "swiftui-liquid-glass": {
       "source": "Dimillian/Skills",
       "sourceType": "github",
