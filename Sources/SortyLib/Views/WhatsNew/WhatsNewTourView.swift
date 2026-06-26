@@ -146,10 +146,10 @@ public struct WhatsNewTourView: View {
 
     private var designSystemImages: [String] {
         [
+            "whats-new-design-system-5.png",
             "whats-new-design-system-2.png",
             "whats-new-design-system-3.png",
             "whats-new-design-system-4.png",
-            "whats-new-design-system-5.png",
             "whats-new-design-system-1.png",
         ]
     }
