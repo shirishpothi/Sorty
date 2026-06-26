@@ -1432,7 +1432,7 @@ private struct StreamingProgressBeam: View {
         VStack(spacing: 0) {
             progressCard
         }
-        .frame(maxWidth: 460)
+        .frame(maxWidth: 560)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Organization progress")
         .accessibilityValue("\(percent) percent, stage \(displayedStage)")
@@ -1445,8 +1445,8 @@ private struct StreamingProgressBeam: View {
         ZStack {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(displayedStage)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.86)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                     .contentTransition(.opacity)
                     .animation(.easeInOut(duration: 0.22), value: displayedStage)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1462,7 +1462,7 @@ private struct StreamingProgressBeam: View {
             .padding(.horizontal, 22)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 370, idealWidth: 430, maxWidth: 460, minHeight: 92)
+        .frame(minWidth: 460, idealWidth: 520, maxWidth: 560, minHeight: 92)
         .background {
             beamSurface
         }
