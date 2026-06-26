@@ -1422,6 +1422,9 @@ private struct StreamingProgressBeam: View {
         if trimmed.isEmpty {
             return isEstablishingConnection ? "Establishing connection..." : "Working..."
         }
+        if case .applying = state {
+            return Self.applyingDisplayStage(from: trimmed)
+        }
         return trimmed
     }
 
@@ -1442,22 +1445,24 @@ private struct StreamingProgressBeam: View {
         ZStack {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(displayedStage)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.22), value: displayedStage)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text("\(percent)%")
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.3), value: percent)
-                    .frame(width: 48, alignment: .leading)
+                    .frame(width: 54, alignment: .trailing)
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 22)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 370, height: 90)
+        .frame(minWidth: 370, idealWidth: 430, maxWidth: 460, minHeight: 92)
         .background {
             beamSurface
         }
@@ -1492,6 +1497,21 @@ private struct StreamingProgressBeam: View {
             return "\(minutes)m \(seconds)s"
         }
         return "\(seconds)s"
+    }
+
+    private static func applyingDisplayStage(from stage: String) -> String {
+        let lowercased = stage.lowercased()
+        if lowercased.hasPrefix("renaming ") || lowercased.hasPrefix("organizing ") {
+            return stage
+        }
+        if lowercased.hasPrefix("moving ") {
+            let filename = String(stage.dropFirst("Moving ".count))
+            return "Organizing \(filename)"
+        }
+        if lowercased.hasPrefix("applying changes") {
+            return "Organizing files..."
+        }
+        return stage
     }
 }
 

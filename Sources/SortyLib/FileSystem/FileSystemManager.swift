@@ -1070,6 +1070,12 @@ public actor FileSystemManager {
             let renameMetadata = resolvedName.metadata
 
             var destinationURL = folderURL.appendingPathComponent(finalFilename)
+            let progressMessage = progressMessage(
+                sourceURL: sourceURL,
+                destinationURL: destinationURL,
+                finalFilename: finalFilename,
+                renameMetadata: renameMetadata
+            )
             
             if sourceURL.standardizedFileURL.path != destinationURL.standardizedFileURL.path {
                 if !dryRun {
@@ -1148,7 +1154,7 @@ public actor FileSystemManager {
                 }
             }
             
-            onProgress("Moving \(finalFilename)...")
+            onProgress(progressMessage)
             processedCount += 1
         }
 
@@ -1160,7 +1166,25 @@ public actor FileSystemManager {
         
         return OperationResult(operations: operations, processedCount: processedCount)
     }
-    
+
+    private func progressMessage(
+        sourceURL: URL,
+        destinationURL: URL,
+        finalFilename: String,
+        renameMetadata: FileOperation.OperationMetadata?
+    ) -> String {
+        guard renameMetadata != nil else {
+            return "Organizing \(finalFilename)..."
+        }
+
+        let sourceParent = sourceURL.deletingLastPathComponent().standardizedFileURL.path
+        let destinationParent = destinationURL.deletingLastPathComponent().standardizedFileURL.path
+        if sourceParent == destinationParent {
+            return "Renaming \(finalFilename)..."
+        }
+        return "Organizing and renaming \(finalFilename)..."
+    }
+
     private func tagFilesWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
