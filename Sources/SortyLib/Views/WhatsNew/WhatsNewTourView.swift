@@ -137,11 +137,6 @@ public struct WhatsNewTourView: View {
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
             WhatsNewPage(
-                imageName: "whats-new-finder-integration.png",
-                title: "Finder Integration is core",
-                description: "Organize from Finder's right-click menu, add watched folders quickly, and repair the extension from Settings."
-            ),
-            WhatsNewPage(
                 imageName: "whats-new-nightly.png",
                 title: "Choose future builds",
                 description: "Keep stable updates by default, or turn on nightlies if you want newer, less-polished builds after this release."
@@ -151,11 +146,11 @@ public struct WhatsNewTourView: View {
 
     private var designSystemImages: [String] {
         [
-            "whats-new-design-system-1.png",
             "whats-new-design-system-2.png",
             "whats-new-design-system-3.png",
             "whats-new-design-system-4.png",
             "whats-new-design-system-5.png",
+            "whats-new-design-system-1.png",
         ]
     }
 
@@ -234,6 +229,7 @@ public struct WhatsNewTourView: View {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             missingImagePlaceholder(name)
         }
