@@ -1,7 +1,23 @@
 {
   "images": [
     {
-      "filename": "SidebarExclusionsIcon.svg",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "light"
+        }
+      ],
+      "filename": "SidebarExclusionsIconLight.svg",
+      "idiom": "universal"
+    },
+    {
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ],
+      "filename": "SidebarExclusionsIconDark.svg",
       "idiom": "universal"
     }
   ],

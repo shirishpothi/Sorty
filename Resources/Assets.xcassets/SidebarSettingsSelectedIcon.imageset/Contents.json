@@ -1,7 +1,23 @@
 {
   "images": [
     {
-      "filename": "SidebarSettingsSelectedIcon.svg",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "light"
+        }
+      ],
+      "filename": "SidebarSettingsSelectedIconLight.svg",
+      "idiom": "universal"
+    },
+    {
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ],
+      "filename": "SidebarSettingsSelectedIconDark.svg",
       "idiom": "universal"
     }
   ],

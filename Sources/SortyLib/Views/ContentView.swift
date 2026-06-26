@@ -211,8 +211,8 @@ public struct ContentView: View {
                 .renderingMode(.original)
                 .interpolation(.high)
                 .scaledToFit()
-                .frame(width: 20, height: 20)
-                .scaleEffect(isSelected ? 1.06 : 1)
+                .frame(width: 18, height: 18)
+                .scaleEffect(isSelected ? 1.04 : 1)
                 .accessibilityHidden(true)
 
             Text(item.title)
