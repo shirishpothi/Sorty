@@ -949,6 +949,7 @@ private struct RenameGenerationSequenceView: View {
             HStack(spacing: 8) {
                 Image(systemName: "pencil.and.scribble")
                     .foregroundStyle(.purple)
+                    .symbolEffect(.drawOn, options: .repeating)
                 Text("Renaming files")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -1716,7 +1717,7 @@ private struct InsightHistorySection: View {
                         Image(systemName: "waveform")
                             .font(.caption)
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                            .symbolEffect(.breathe, options: .repeating)
                     }
 
                     Spacer()

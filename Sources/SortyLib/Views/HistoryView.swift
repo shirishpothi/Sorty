@@ -791,6 +791,8 @@ struct HistorySessionCard: View {
     @State private var feedbackGiven: LearningsManager.SessionOutcome?
     @State private var showFeedbackConfirmation = false
     @State private var actionState: HistoryActionState = .idle
+    @State private var swipeOffset: CGFloat = 0
+    @State private var hasCrossedSwipeThreshold = false
 
     private enum HistoryActionState: Equatable {
         case idle
@@ -855,6 +857,14 @@ struct HistorySessionCard: View {
         case .partiallyUndone: return "exclamationmark.triangle.fill"
         case .duplicatesCleanup: return "trash.circle.fill"
         }
+    }
+
+    private var canSwipeToRevert: Bool {
+        entry.success &&
+            !entry.isUndone &&
+            entry.status != .duplicatesCleanup &&
+            !isProcessing &&
+            !actionState.isBusy
     }
 
     var body: some View {
@@ -1081,6 +1091,8 @@ struct HistorySessionCard: View {
                 .background(Color.black.opacity(0.02))
             }
         }
+        .background(swipeActionBackground)
+        .offset(x: swipeOffset)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
@@ -1091,16 +1103,73 @@ struct HistorySessionCard: View {
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: actionState)
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: swipeOffset)
         .onChange(of: isProcessing) { _, newValue in
             guard !newValue else { return }
             resetActionState()
+            resetSwipe()
         }
         .onChange(of: entry.isUndone) { _, _ in
             resetActionState()
+            resetSwipe()
         }
         .onHover { hovering in
             isHovered = hovering
         }
+        .simultaneousGesture(swipeToRevertGesture)
+    }
+
+    @ViewBuilder
+    private var swipeActionBackground: some View {
+        if canSwipeToRevert || swipeOffset < 0 {
+            HStack {
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .symbolEffect(.bounce, value: hasCrossedSwipeThreshold)
+
+                    Text("Revert")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .frame(maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.orange.gradient)
+                )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private var swipeToRevertGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .onChanged { value in
+                guard canSwipeToRevert, abs(value.translation.width) > abs(value.translation.height) else { return }
+                let proposedOffset = min(0, value.translation.width)
+                swipeOffset = max(proposedOffset, -132)
+
+                let crossed = abs(swipeOffset) >= 96
+                if crossed && !hasCrossedSwipeThreshold {
+                    HapticFeedbackManager.shared.selection()
+                }
+                hasCrossedSwipeThreshold = crossed
+            }
+            .onEnded { _ in
+                guard canSwipeToRevert else {
+                    resetSwipe()
+                    return
+                }
+
+                if abs(swipeOffset) >= 96 {
+                    HapticFeedbackManager.shared.tap()
+                    beginUndo()
+                }
+                resetSwipe()
+            }
     }
 
     private func beginUndo() {
@@ -1125,6 +1194,13 @@ struct HistorySessionCard: View {
         guard actionState != .idle else { return }
         withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
             actionState = .idle
+        }
+    }
+
+    private func resetSwipe() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+            swipeOffset = 0
+            hasCrossedSwipeThreshold = false
         }
     }
 }
@@ -2575,8 +2651,8 @@ struct OperationRowView: View {
             Spacer()
 
             if isUndoing {
-                ProgressView()
-                    .controlSize(.small)
+                CometLoader(size: 16, lineWidth: 2, color: .secondary)
+                    .frame(width: 16, height: 16)
             } else if !isUndone && !isEntryUndone {
                 Button {
                     onUndo()
@@ -2994,8 +3070,7 @@ struct LoadMoreButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
+                    CometLoader(size: 16, lineWidth: 2)
                         .frame(width: 16, height: 16)
                 } else {
                     Image(systemName: "chevron.down.circle.fill")
