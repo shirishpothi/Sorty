@@ -4,6 +4,7 @@ import SwiftUI
 public struct WhatsNewTourView: View {
     @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
+    private let imageTransitionAnimation = Animation.easeInOut(duration: 0.72)
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
 
@@ -41,7 +42,7 @@ public struct WhatsNewTourView: View {
             Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
         ) { _ in
             guard page.imageNames.count > 1 else { return }
-            withAnimation(.easeInOut(duration: 0.45)) {
+            withAnimation(imageTransitionAnimation) {
                 workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
             }
         }
@@ -196,7 +197,12 @@ public struct WhatsNewTourView: View {
                 bundledImage(imageName)
                     .frame(width: 640, height: 400)
                     .id(imageName)
-                    .transition(.opacity.combined(with: .scale(scale: 1.015)))
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 1.006)),
+                            removal: .opacity.combined(with: .scale(scale: 0.994))
+                        )
+                    )
             } else {
                 finderIntegrationPreview
                     .frame(width: 640, height: 400)
@@ -216,7 +222,7 @@ public struct WhatsNewTourView: View {
             topControls
         }
         .frame(width: 640, height: 400)
-        .animation(.easeOut(duration: 0.2), value: workflowImageIndex)
+        .animation(imageTransitionAnimation, value: workflowImageIndex)
     }
 
     private func imageIndex(for page: WhatsNewPage) -> Int {
