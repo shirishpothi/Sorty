@@ -9,7 +9,6 @@ import UniformTypeIdentifiers
 struct OrganizingMascotView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(SortyPetAssetProvider.animatedMascotEnabledKey) private var animatedMascotEnabled = true
     @State private var isAnimating = false
     @State private var orbitingURLs: [URL] = []
     @State private var cachedOrbitingURLs: [URL] = []
@@ -61,32 +60,6 @@ struct OrganizingMascotView: View {
     
     private var frameInterval: TimeInterval {
         isOrganizing ? 1.0 / 6.0 : 1.0 / 10.0
-    }
-
-    private var shouldUseAnimatedPet: Bool {
-        animatedMascotEnabled &&
-            !reduceMotion &&
-            SortyPetAssetProvider.shared.manifest != nil &&
-            SortyPetAssetProvider.shared.spriteSheet != nil
-    }
-
-    private var petState: SortyPetAnimationState {
-        switch organizer.state {
-        case .idle:
-            return organizer.scannedFiles.isEmpty ? .idle : .ready
-        case .scanning:
-            return .scanning
-        case .organizing:
-            return organizer.organizationStage.localizedCaseInsensitiveContains("rename") ? .renaming : .organizing
-        case .ready:
-            return .reviewing
-        case .applying:
-            return .applying
-        case .completed:
-            return .completed
-        case .error:
-            return .failed
-        }
     }
 
     var body: some View {
@@ -312,13 +285,11 @@ struct OrganizingMascotView: View {
             
             mascotImage
             
-            if !shouldUseAnimatedPet {
-                metallicSheen(time: time)
-
-                eyeOverlay
-
-                ledIndicators(time: time)
-            }
+            metallicSheen(time: time)
+            
+            eyeOverlay
+            
+            ledIndicators(time: time)
         }
         .scaleEffect(breathScale * excitementScale * (isHovered ? 1.1 : 1.0))
         .offset(
@@ -378,12 +349,7 @@ struct OrganizingMascotView: View {
     
     @ViewBuilder
     private var mascotImage: some View {
-        if shouldUseAnimatedPet {
-            SortyPetView(
-                state: petState,
-                size: CGSize(width: 34, height: 36)
-            )
-        } else if let nsImage = SortyResources.image(named: "SortyMascot") {
+        if let nsImage = SortyResources.image(named: "SortyMascot") {
             Image(nsImage: nsImage)
                 .renderingMode(.original)
                 .resizable()
