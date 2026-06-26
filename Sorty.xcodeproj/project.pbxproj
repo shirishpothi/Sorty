@@ -127,7 +127,6 @@
 		AABBCC220002000000000026 /* FolderThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000026 /* FolderThumbnailView.swift */; };
 		AABBCC2200020000000000A0 /* AppKitImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC1100010000000000A0 /* AppKitImageView.swift */; };
 		AABBCC220002000000000027 /* VisionRecommendationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000027 /* VisionRecommendationBanner.swift */; };
-		AABBCC220002000000000029 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000029 /* ToastOverlay.swift */; };
 		AABBCC22000200000000002A /* FinderIntegrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002A /* FinderIntegrationView.swift */; };
 		AABBCC22000200000000002B /* OptimizedPreviewTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002B /* OptimizedPreviewTree.swift */; };
 		AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002C /* OrganizationCompleteView.swift */; };
@@ -481,7 +480,6 @@
 		AABBCC110001000000000026 /* FolderThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderThumbnailView.swift; sourceTree = "<group>"; };
 		AABBCC1100010000000000A0 /* AppKitImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitImageView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000027 /* VisionRecommendationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionRecommendationBanner.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000029 /* ToastOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastOverlay.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002A /* FinderIntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderIntegrationView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002B /* OptimizedPreviewTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizedPreviewTree.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002C /* OrganizationCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationCompleteView.swift; sourceTree = "<group>"; };
@@ -855,7 +853,6 @@
 				AABBCC110001000000000020 /* ModelSelector.swift */,
 				AABBCC110001000000000021 /* HUDNotificationOverlay.swift */,
 				AABBCC110001000000000022 /* StorageLocationsView.swift */,
-				AABBCC110001000000000029 /* ToastOverlay.swift */,
 				AABBCC11000100000000002A /* FinderIntegrationView.swift */,
 				AABBCC11000100000000002B /* OptimizedPreviewTree.swift */,
 				AABBCC11000100000000002C /* OrganizationCompleteView.swift */,

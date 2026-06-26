@@ -195,12 +195,12 @@ extension Animation {
 
     /// Subtle bounce for interactive elements
     public static var subtleBounce: Animation {
-        .easeOut(duration: 0.15)
+        .spring(response: 0.24, dampingFraction: 0.78)
     }
 
     /// Quick snap animation for selections
     public static var quickSnap: Animation {
-        .easeOut(duration: 0.12)
+        .spring(response: 0.18, dampingFraction: 0.86)
     }
 
     /// Loading pulse animation

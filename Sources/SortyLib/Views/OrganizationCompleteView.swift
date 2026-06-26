@@ -20,6 +20,7 @@ struct OrganizationCompleteView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var iconAppeared = false
     @State private var ringExpanded = false
@@ -354,42 +355,44 @@ struct OrganizationCompleteView: View {
         .onAppear {
             HapticFeedbackManager.shared.success()
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
                 iconAppeared = true
             }
             
-            withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6).delay(0.3)) {
                 ringExpanded = true
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                showParticles = true
+                if !reduceMotion {
+                    showParticles = true
+                }
             }
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
                 titleAppeared = true
             }
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.35)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.35)) {
                 timeSavedAppeared = true
             }
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) {
                 summaryAppeared = true
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                withAnimation(.spring(response: 0.58, dampingFraction: 0.86)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.58, dampingFraction: 0.86)) {
                     shouldShowFinalCounts = true
                 }
                 HapticFeedbackManager.shared.alignment()
             }
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
                 buttonsAppeared = true
             }
             
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.8)) {
                 historyLinkAppeared = true
             }
         }
@@ -613,6 +616,8 @@ struct OrganizationCompleteView: View {
 }
 
 private struct ConfettiParticlesView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     struct Particle: Identifiable {
         let id = UUID()
         let angle: Double
@@ -653,6 +658,7 @@ private struct ConfettiParticlesView: View {
             }
         }
         .onAppear {
+            guard !reduceMotion else { return }
             for particle in particles {
                 withAnimation(.easeOut(duration: Double.random(in: 0.5...0.9)).delay(particle.delay)) {
                     burstedParticles.insert(particle.id)

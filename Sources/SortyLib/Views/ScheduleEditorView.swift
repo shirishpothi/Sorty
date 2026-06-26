@@ -12,6 +12,7 @@ struct ScheduleEditorView: View {
     let existingSchedule: ScheduleEntry?
     @EnvironmentObject var scheduler: FolderScheduler
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var frequency: ScheduleFrequency
     @State private var dayOfWeek: Int
@@ -69,6 +70,7 @@ struct ScheduleEditorView: View {
                     Image(systemName: "calendar.badge.clock")
                         .font(.title2)
                         .foregroundStyle(.blue)
+                        .symbolEffect(.breathe, options: .speed(0.7), isActive: !reduceMotion)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(existingSchedule == nil ? "New Schedule" : "Edit Schedule")
@@ -167,6 +169,7 @@ struct ScheduleEditorView: View {
                         HStack {
                             Image(systemName: "calendar.badge.clock")
                                 .foregroundStyle(.teal)
+                                .contentTransition(.symbolEffect(.replace))
                             Text(previewNextRun, style: .date)
                                 .font(.subheadline)
                             Text("at")

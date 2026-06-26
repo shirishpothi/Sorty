@@ -33,6 +33,7 @@ struct LearningsView: View {
     @EnvironmentObject var manager: LearningsManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var exclusionRules: ExclusionRulesManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showingHoningSheet = false
     @State private var showingDeleteConfirmation = false
@@ -270,7 +271,7 @@ struct LearningsView: View {
                     let didClear = await manager.clearAllData()
                     if didClear {
                         HapticFeedbackManager.shared.success()
-                        withAnimation(.spring()) {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72)) {
                             appState.hasCompletedOnboarding = false
                         }
                     } else {
@@ -509,7 +510,7 @@ struct LearningsView: View {
         HapticFeedbackManager.shared.tap()
         manager.sessionLearningPaused = false
         if advancedExpanded {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.82)) {
                 advancedExpanded = false
             }
         }
@@ -550,7 +551,7 @@ struct LearningsView: View {
         ) {
             HapticFeedbackManager.shared.light()
             let isPausing = !manager.sessionLearningPaused
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                 manager.sessionLearningPaused.toggle()
             }
             if isPausing {
@@ -1761,6 +1762,7 @@ struct ModelDirectoryRow: View {
         HStack(spacing: 12) {
             Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
                 .font(.body.bold())
+                .contentTransition(.symbolEffect(.replace))
                 .foregroundColor(
                     directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange
                 )

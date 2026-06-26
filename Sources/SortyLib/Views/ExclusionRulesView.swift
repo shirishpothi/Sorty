@@ -13,6 +13,7 @@ struct ExclusionRulesView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingAddRule = false
     @State private var showingLearningExclusionImporter = false
     @State private var searchText = ""
@@ -172,7 +173,7 @@ struct ExclusionRulesView: View {
         }
         .opacity(contentOpacity)
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
         }
@@ -379,7 +380,7 @@ struct ExclusionRulesView: View {
                             Spacer()
 
                             Button {
-                                withAnimation {
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
                                     rulesManager.removeNaturalLanguageException(at: item.index)
                                 }
                             } label: {
@@ -437,7 +438,7 @@ struct ExclusionRulesView: View {
     private func addException() {
         let trimmed = newNLException.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        withAnimation {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
             rulesManager.addNaturalLanguageException(trimmed)
         }
         newNLException = ""

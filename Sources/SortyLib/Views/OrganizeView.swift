@@ -687,6 +687,7 @@ struct ReadyToOrganizeView: View {
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
     @State private var referenceRefreshTask: Task<Void, Never>?
+    @State private var startCTACompression: CGFloat = 0
 
     init(onStart: @escaping () -> Void, startsVisible: Bool = false) {
         self.onStart = onStart
@@ -748,8 +749,7 @@ struct ReadyToOrganizeView: View {
 
             // Start button - full width
             Button {
-                HapticFeedbackManager.shared.tap()
-                onStart()
+                runStartCTAAnimation()
             } label: {
                 HStack(spacing: 8) {
                     if isConnecting {
@@ -768,6 +768,11 @@ struct ReadyToOrganizeView: View {
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
+            .scaleEffect(
+                x: 1 + startCTACompression * 0.025,
+                y: 1 - startCTACompression * 0.045,
+                anchor: .center
+            )
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.smooth(duration: 0.45).delay(0.22), value: hasAppeared)
@@ -862,6 +867,26 @@ struct ReadyToOrganizeView: View {
         .onDisappear {
             referenceRefreshTask?.cancel()
             referenceRefreshTask = nil
+        }
+    }
+
+    private func runStartCTAAnimation() {
+        HapticFeedbackManager.shared.tap()
+        guard !reduceMotion else {
+            onStart()
+            return
+        }
+
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.56)) {
+            startCTACompression = 1
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(70))
+            onStart()
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.62)) {
+                startCTACompression = 0
+            }
         }
     }
 

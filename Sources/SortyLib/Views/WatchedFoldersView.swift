@@ -445,6 +445,7 @@ struct WatchedFolderCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
                         .font(.caption2)
+                        .contentTransition(.symbolEffect(.replace))
                     Text(lastTriggered, style: .relative)
                         .font(.caption2)
                 }
@@ -459,6 +460,7 @@ struct WatchedFolderCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "cpu")
                         .font(.caption2)
+                        .contentTransition(.symbolEffect(.replace))
                     Text(modelOverride)
                         .font(.caption2)
                         .lineLimit(1)
@@ -472,6 +474,7 @@ struct WatchedFolderCard: View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption2)
+                .contentTransition(.symbolEffect(.replace))
             Text("Folder not found")
                 .font(.caption2)
         }

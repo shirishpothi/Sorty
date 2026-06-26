@@ -10,10 +10,9 @@ import SwiftUI
 public struct WorkspaceHealthView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var healthManager: WorkspaceHealthManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var showSettings = false
-    @State private var toastMessage: String?
-    @State private var showToast = false
     @State private var autoRefreshTask: Task<Void, Never>?
     @State private var initialRefreshTask: Task<Void, Never>?
     @State private var refreshTask: Task<Void, Never>?
@@ -55,25 +54,6 @@ public struct WorkspaceHealthView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            
-            if showToast, let message = toastMessage {
-                ToastOverlay(
-                    message: message,
-                    actionLabel: "Undo",
-                    action: {
-                        Task {
-                            try? await healthManager.undoLastAction()
-                            await refreshAnalysis()
-                            showToast = false
-                        }
-                    },
-                    onDismiss: {
-                        showToast = false
-                    }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(100)
-            }
         }
         .emptyStateWorkflowGradient(isVisible: selectedDirectory == nil)
         .opacity(contentOpacity)
@@ -81,7 +61,7 @@ public struct WorkspaceHealthView: View {
             WorkspaceHealthSettingsView(healthManager: healthManager)
         }
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
             if selectedDirectory == nil, let dir = appState.selectedDirectory {
@@ -715,8 +695,7 @@ public struct WorkspaceHealthView: View {
                                     try? await healthManager.performAction(action, for: opportunity)
                                     await refreshAnalysis()
                                     await MainActor.run {
-                                        toastMessage = "Action completed"
-                                        showToast = true
+                                        showActionCompletedHUD()
                                     }
                                 }
                             } else {
@@ -778,8 +757,7 @@ public struct WorkspaceHealthView: View {
                                                         try? await healthManager.performAction(action, for: opportunity)
                                                         await refreshAnalysis()
                                                         await MainActor.run {
-                                                            toastMessage = "Action completed"
-                                                            showToast = true
+                                                            showActionCompletedHUD()
                                                         }
                                                     }
                                                 } else {
@@ -813,9 +791,7 @@ public struct WorkspaceHealthView: View {
                             try? await healthManager.performAction(action, for: opportunity, selectedFiles: selectedFiles)
                             await refreshAnalysis()
                             
-                            // Show toast
-                            toastMessage = "Action completed"
-                            showToast = true
+                            showActionCompletedHUD()
                         }
                         appState.workspaceHealthSelectedOpportunity = nil
                     }
@@ -825,6 +801,24 @@ public struct WorkspaceHealthView: View {
                 }
             )
         }
+    }
+
+    private func showActionCompletedHUD() {
+        NotificationManager.shared.showHUDInfo(
+            title: "Action completed",
+            message: "Workspace health cleanup finished.",
+            icon: "checkmark.circle.fill",
+            iconColor: .green,
+            actions: [
+                HUDNotificationAction(title: "Undo", systemImage: "arrow.uturn.backward") {
+                    Task {
+                        try? await healthManager.undoLastAction()
+                        await refreshAnalysis()
+                        NotificationManager.shared.dismissHUD()
+                    }
+                }
+            ]
+        )
     }
     
     // MARK: - Insights Section
