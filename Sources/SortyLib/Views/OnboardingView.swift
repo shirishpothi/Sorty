@@ -854,66 +854,68 @@ private struct EnergyScanIconFrame: View {
 
     var body: some View {
         ZStack {
-            icon
+            ZStack {
+                icon
 
-            icon
-                .colorMultiply(.white)
-                .overlay {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: max(scanCenter - 0.28, 0)),
-                            .init(color: Color(red: 0.94, green: 0.10, blue: 1.00).opacity(0.92), location: max(scanCenter - 0.12, 0)),
-                            .init(color: Color(red: 1.00, green: 0.12, blue: 0.36), location: min(max(scanCenter, 0), 1)),
-                            .init(color: Color(red: 1.00, green: 0.38, blue: 0.12).opacity(0.88), location: min(scanCenter + 0.16, 1)),
-                            .init(color: .clear, location: min(scanCenter + 0.34, 1))
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                icon
+                    .colorMultiply(.white)
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: max(scanCenter - 0.28, 0)),
+                                .init(color: Color(red: 0.94, green: 0.10, blue: 1.00).opacity(0.92), location: max(scanCenter - 0.12, 0)),
+                                .init(color: Color(red: 1.00, green: 0.12, blue: 0.36), location: min(max(scanCenter, 0), 1)),
+                                .init(color: Color(red: 1.00, green: 0.38, blue: 0.12).opacity(0.88), location: min(scanCenter + 0.16, 1)),
+                                .init(color: .clear, location: min(scanCenter + 0.34, 1))
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .blendMode(.plusLighter)
+                    }
+                    .mask(icon)
+                    .opacity(scanStrength)
+                    .blur(radius: 1.6)
+
+                icon
+                    .scaleEffect(
+                        x: 1 + scanStrength * 0.11,
+                        y: 1 - scanStrength * 0.10,
+                        anchor: UnitPoint(x: 0.5, y: min(max(scanCenter, 0), 1))
                     )
-                    .blendMode(.plusLighter)
-                }
-                .mask(icon)
-                .opacity(scanStrength)
-                .blur(radius: 1.6)
+                    .offset(y: scanStrength * (scanCenter - 0.5) * 14)
+                    .blur(radius: 5 + scanStrength * 4)
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: max(scanCenter - 0.22, 0)),
+                                .init(color: .white, location: max(scanCenter - 0.08, 0)),
+                                .init(color: .white, location: min(scanCenter + 0.16, 1)),
+                                .init(color: .clear, location: min(scanCenter + 0.34, 1))
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .opacity(scanStrength * 0.72)
 
-            icon
-                .scaleEffect(
-                    x: 1 + scanStrength * 0.11,
-                    y: 1 - scanStrength * 0.10,
-                    anchor: UnitPoint(x: 0.5, y: min(max(scanCenter, 0), 1))
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        Color(red: 0.98, green: 0.08, blue: 0.98),
+                        Color(red: 1.00, green: 0.10, blue: 0.30),
+                        Color(red: 1.00, green: 0.36, blue: 0.10),
+                        .clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
-                .offset(y: scanStrength * (scanCenter - 0.5) * 14)
-                .blur(radius: 5 + scanStrength * 4)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: max(scanCenter - 0.22, 0)),
-                            .init(color: .white, location: max(scanCenter - 0.08, 0)),
-                            .init(color: .white, location: min(scanCenter + 0.16, 1)),
-                            .init(color: .clear, location: min(scanCenter + 0.34, 1))
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .opacity(scanStrength * 0.72)
-
-            LinearGradient(
-                colors: [
-                    .clear,
-                    Color(red: 0.98, green: 0.08, blue: 0.98),
-                    Color(red: 1.00, green: 0.10, blue: 0.30),
-                    Color(red: 1.00, green: 0.36, blue: 0.10),
-                    .clear
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(height: max(8, size * 0.055))
-            .blur(radius: size * 0.035)
-            .offset(y: (scanCenter - 0.5) * size)
-            .mask(iconShape)
-            .opacity(scanStrength)
+                .frame(height: max(8, size * 0.055))
+                .blur(radius: size * 0.035)
+                .offset(y: (scanCenter - 0.5) * size)
+                .opacity(scanStrength)
+            }
+            .clipShape(iconShape)
 
             iconShape
                 .strokeBorder(
