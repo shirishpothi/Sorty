@@ -286,15 +286,13 @@
   animation: highlight-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
 
-/* Section scroll snapping — partial scrolls ease toward the next section */
+/* Section scroll metadata; custom wheel handling owns the eased motion curve. */
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   html {
-    scroll-snap-type: y proximity;
     scroll-padding-top: 6rem;
   }
   .snap-section {
     scroll-snap-align: start;
-    scroll-snap-stop: normal;
   }
 }
 
