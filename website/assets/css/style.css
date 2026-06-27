@@ -558,8 +558,15 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
 .shead .lead { margin-inline: auto; }
 
 /* ---------- Footer ---------- */
-.footer { border-top: 1px solid var(--hairline); padding-block: 48px 40px; margin-top: 24px; }
-.footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; margin-bottom: 36px; }
+.footer {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--hairline);
+  padding-block: 48px 0;
+  margin-top: 24px;
+}
+.footer .wrap { position: relative; z-index: 2; }
+.footer-grid { position: relative; z-index: 2; display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; margin-bottom: 36px; }
 @media (max-width: 760px) { .footer-grid { grid-template-columns: 1fr 1fr; gap: 26px; } }
 @media (max-width: 480px) { .footer-grid { grid-template-columns: 1fr; } }
 .footer-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; font-weight: 600; }
@@ -570,11 +577,40 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
 .footer a { color: var(--text-2); font-size: 0.875rem; transition: color 0.2s; }
 .footer a:hover { color: var(--text); }
 .footer-bottom {
+  position: relative;
+  z-index: 2;
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
   padding-top: 24px; border-top: 1px solid var(--hairline); color: var(--text-3); font-size: 0.8rem;
 }
 .footer-bottom a { color: var(--text-3); }
 .footer-bottom a:hover { color: var(--text-2); }
+.footer-wordmark {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  margin: clamp(22px, 5vw, 52px) 0 -0.19em;
+  padding-inline: 0.03em;
+  background: linear-gradient(0deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.11) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(7rem, 28vw, 28rem);
+  font-weight: 700;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+@media (max-width: 760px) {
+  .footer { padding-top: 44px; }
+  .footer-wordmark {
+    margin-top: 32px;
+    font-size: clamp(6.8rem, 32vw, 14rem);
+  }
+}
 
 /* ---------- Legal pages ---------- */
 .legal { padding-top: calc(var(--nav-h) + 90px); padding-bottom: 80px; }
