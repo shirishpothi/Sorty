@@ -4,6 +4,7 @@ This folder contains a local mirror of the publicly served client-side website s
 
 - `getdroppy.app/index.html.orig` is the original HTML response saved before local link conversion.
 - `getdroppy.app/index.html` is the same page with links rewritten by `wget` for local browsing.
+- `getdroppy.app/supplied-source.html` is the HTML source supplied from `/Users/shirishpothi/Downloads/output-2026-06-27T04-56-17-765Z.txt`.
 - `getdroppy.app/assets/`, `framerusercontent.com/`, and `fonts.gstatic.com/` contain the public assets downloaded from the page.
 - `cdn.jsdelivr.net/` and `cdn.affonso.io/` contain third-party scripts referenced by the page.
 - `getdroppy.app/recover-license.html` and `getdroppy.app/changelog.json` were downloaded from public routes referenced by inline page scripts.
