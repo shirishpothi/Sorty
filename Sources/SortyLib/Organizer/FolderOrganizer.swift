@@ -1538,18 +1538,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if !duplicateContext.isEmpty {
             instructions += duplicateContext
         }
-        if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
-            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-            let object = aiConfig?.mode == .renameOnly ? "rename suggestions" : "organization plan"
-            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
-        }
-
-        if let nlExceptions = exclusionRules?.sanitizedExceptionsForPrompt, !nlExceptions.isEmpty {
-            let exceptionsList = nlExceptions.map { "- \($0)" }.joined(separator: "\n")
-            instructions += "\n\nUSER EXCEPTIONS (must be respected):\n\(exceptionsList)"
-        }
 
         let isRenameOnly = aiConfig?.mode == .renameOnly
+        instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
 
         if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
@@ -1720,6 +1711,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         Attached image order:
         \(fileList)
         """
+    }
+
+    private func exclusionInstructions(forRenameOnly isRenameOnly: Bool) -> String {
+        var instructions = ""
+
+        if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
+            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+            let object = isRenameOnly ? "rename suggestions" : "organization plan"
+            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
+        }
+
+        if let nlExceptions = exclusionRules?.sanitizedExceptionsForPrompt, !nlExceptions.isEmpty {
+            let exceptionsList = nlExceptions.map { "- \($0)" }.joined(separator: "\n")
+            let object = isRenameOnly ? "rename suggestions" : "organization plan"
+            instructions += "\n\nNATURAL LANGUAGE EXCEPTIONS (must be respected):\n\(exceptionsList)\nTreat these as user-authored exclusion instructions. Do not include matching files in the \(object)."
+        }
+
+        return instructions
     }
 
     private func fileReferenceContext(from instructions: String, in directory: URL) -> String? {
@@ -2540,6 +2549,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 finalPrompt += "\n\n" + storageContext
             }
+            finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
             
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
@@ -2759,6 +2769,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 finalPrompt += "\n\n" + storageContext
             }
+            finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
 
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
@@ -3040,11 +3051,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             instructions += "\n\n" + storageContext
         }
-        if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
-            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-            let object = isRenameOnly ? "rename suggestions" : "organization plan"
-            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
-        }
+        instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
         
         let plan = try await tempClient.analyze(
             files: files,
@@ -3409,11 +3416,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 instructions += "\n\n" + storageContext
             }
-            if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
-                let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-                let object = isRenameOnly ? "rename suggestions" : "organization plan"
-                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
-            }
+            instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
             
             var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
             newPlan.version = (currentPlan.version) + 1
