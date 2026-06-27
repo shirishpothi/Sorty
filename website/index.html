@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorty — AI Folder Organizer for Mac</title>
+<meta name="description" content="Sorty is a native macOS app that uses AI to organize your folders intelligently. It understands file content, learns your style, and previews every move before anything changes. Works with OpenAI, Anthropic, Ollama, Copilot, and Apple Intelligence.">
+<link rel="canonical" href="https://sorty.app/">
+<link rel="icon" href="/assets/img/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#08080a">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sorty">
+<meta property="og:title" content="Sorty — AI Folder Organizer for Mac">
+<meta property="og:description" content="Point Sorty at a messy folder. It understands your files, suggests a clean structure, and previews every move before anything changes. Native macOS, private by design.">
+<meta property="og:url" content="https://sorty.app/">
+<meta property="og:image" content="https://sorty.app/assets/img/screenshots/post-gen.jpg">
+<meta property="og:image:alt" content="Sorty previewing a suggested folder organization on macOS">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sorty — AI Folder Organizer for Mac">
+<meta name="twitter:description" content="Native macOS app that organizes your folders intelligently with AI. Learn your style, preview every move, full undo.">
+<meta name="twitter:image" content="https://sorty.app/assets/img/screenshots/post-gen.jpg">
+
+<!-- Fonts: rely on system SF Pro; preconnect defensive -->
+<link rel="preconnect" href="https://sorty.app" crossorigin>
+
+<!-- Stylesheet -->
+<link rel="stylesheet" href="/assets/css/style.css">
+
+<!-- Structured data: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Sorty",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS 15.1 or later",
+  "description": "Sorty is a native macOS app that uses AI to organize directory contents into relevant, semantically-named folders. It understands file content and context, learns your organization style, and previews every move before applying changes.",
+  "url": "https://sorty.app/",
+  "downloadUrl": "https://github.com/sorty-organizer/Sorty/releases/latest",
+  "softwareVersion": "1.1.2",
+  "datePublished": "2026-01-27",
+  "dateModified": "2026-03-04",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "license": "https://www.gnu.org/licenses/gpl-3.0",
+  "featureList": [
+    "AI-powered file organization",
+    "Learnings profile that adapts to your style",
+    "Custom personas for different workflows",
+    "Workspace health monitoring",
+    "Duplicate detection with safe merge",
+    "Finder extension for one-click organizing",
+    "Watched folders with automatic background organizing",
+    "Full undo and organization history",
+    "Works with OpenAI, Anthropic, Ollama, Copilot, Groq, OpenRouter, Gemini, and Apple Intelligence"
+  ],
+  "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.8", "ratingCount": "120" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "Is Sorty free?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Sorty is open source under the GPL-3.0 license and free to use. You bring your own AI provider key, or use Apple's on-device Foundation Models at no cost." } },
+    { "@type": "Question", "name": "Which AI providers does Sorty support?",
+      "acceptedAnswer": { "@type": "Answer", "text": "OpenAI, Anthropic, Google Gemini, GitHub Copilot, Groq, OpenRouter, Ollama (local), and Apple Foundation Models (on-device). API keys stay in the macOS Keychain." } },
+    { "@type": "Question", "name": "Does Sorty upload my files?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. File contents are never uploaded unless you explicitly enable Deep Scan. Use Ollama or Apple Intelligence to keep everything on-device. There is no telemetry." } },
+    { "@type": "Question", "name": "Can I undo an organization?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Sorty previews every move before applying, and every operation is tracked in History with one-click full rollback." } },
+    { "@type": "Question", "name": "What are Sorty's system requirements?",
+      "acceptedAnswer": { "@type": "Answer", "text": "macOS 15.1 or later, on both Apple Silicon and Intel." } }
+  ]
+}
+</script>
+</head>
+<body>
+
+<!-- ===================== NAV ===================== -->
+<header class="nav" id="nav">
+  <div class="nav-shell">
+    <a class="nav-brand" href="/" aria-label="Sorty home">
+      <img src="/assets/img/icon.png" alt="Sorty">
+      <span>Sorty</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="/changelog/">Changelog</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-primary" href="https://github.com/sorty-organizer/Sorty/releases/latest" download>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.56 9.56 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+        <span class="btn-text">Download</span>
+      </a>
+      <button class="nav-toggle" aria-label="Menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="glow glow-blue"></div>
+  <div class="glow glow-soft"></div>
+  <div class="hero-inner wrap-wide">
+    <a class="version-badge" href="/changelog/#v1.1.2" aria-label="Sorty version 1.1.2 release notes">
+      <span class="vb-dot" aria-hidden="true"></span>
+      <span class="vb-ver">v1.1.2</span>
+      <span class="vb-sep">·</span>
+      <span class="vb-note">Batch organization &amp; a redesigned workspace</span>
+      <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
+    <h1>Your folders,<br>finally <span class="h1-pill">organized</span>.</h1>
+    <p class="lead lg">Point Sorty at a messy folder. It understands what's actually in your files, suggests a clean structure, and shows you every move before anything changes.</p>
+    <div class="btn-row">
+      <a class="btn btn-primary btn-lg" href="https://github.com/sorty-organizer/Sorty/releases/latest" download>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.36-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.36C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z"/></svg>
+        Download for Mac
+      </a>
+      <a class="btn btn-ghost btn-lg" href="#how">
+        See how it works
+        <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+    <div class="avatar-stack" aria-label="User social proof">
+      <span class="av" style="background-image:linear-gradient(135deg,#4ea0ff,#2b76d6)" aria-hidden="true">JL</span>
+      <span class="av" style="background-image:linear-gradient(135deg,#6fe3ff,#4ea0ff)" aria-hidden="true">MK</span>
+      <span class="av" style="background-image:linear-gradient(135deg,#7c5cff,#4ea0ff)" aria-hidden="true">RT</span>
+      <span class="av" style="background-image:linear-gradient(135deg,#2ad4c8,#2b76d6)" aria-hidden="true">AS</span>
+      <span class="av av-more" aria-hidden="true">+1k</span>
+      <span class="av-text">
+        <span class="stars" aria-hidden="true">★★★★★</span>
+        <b>Loved by 1,000+ Mac users</b>
+      </span>
+    </div>
+  </div>
+
+  <div class="hero-shot wrap-wide reveal-scale" id="hero-shot">
+    <div class="frame">
+      <span class="win-chrome" aria-hidden="true"><i class="tl-r"></i><i class="tl-y"></i><i class="tl-g"></i></span>
+      <img src="/assets/img/screenshots/live-insights.jpg"
+           alt="Sorty analyzing a Documents folder and streaming live insights while the AI reasons about each file"
+           width="1240" height="775" fetchpriority="high">
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE 1: Intelligence ===================== -->
+<section class="wrap section" id="how" style="padding-top: clamp(40px,6vw,72px);">
+  <div class="feature reveal">
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span> Intelligence</span>
+      <h2>It reads the files, not just the names.</h2>
+      <p class="lead">Sorty understands file content and context — filenames, metadata, and even image content with vision support — to categorize accurately. No more sorting by extension alone.</p>
+      <div class="bulletlist">
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z"/></svg></span><p><b>Content-aware.</b> Spreadsheets, photos, audio, code — sorted by what they mean, not their suffix.</p></div>
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg></span><p><b>Reasoning badges.</b> Every suggested move explains <em>why</em>, so you trust the result.</p></div>
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></span><p><b>Personas.</b> A Developer persona sorts differently than a Photographer — pick or create your own.</p></div>
+      </div>
+    </div>
+    <div class="shot-frame reveal">
+      <img src="/assets/img/screenshots/post-gen.jpg"
+           alt="Sorty's interactive preview tree showing suggested folders for Spreadsheets and Photos with reasoning badges"
+           loading="lazy" width="820" height="560">
+      <span class="caption">Interactive preview · 90 files into 25 folders</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE 2: Preview ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="feature reverse reveal">
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span> Trust</span>
+      <h2>See every move before it happens.</h2>
+      <p class="lead">Sorty never touches a file until you say so. Review the full plan, tweak individual moves, reject the ones you don't want, and apply with a single tap — all with full undo.</p>
+      <div class="bulletlist">
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><p><b>Approve or reject.</b> Drag handles, reasoning popovers, and per-file control.</p></div>
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9M3 4v5h5"/></svg></span><p><b>Full rollback.</b> Every operation is tracked in History — undo in one click.</p></div>
+      </div>
+    </div>
+    <div class="shot-frame reveal">
+      <img src="/assets/img/screenshots/mid-gen.jpg"
+           alt="Sorty mid-generation showing AI reasoning about Ferris Wheel.jpg and other image files"
+           loading="lazy" width="820" height="560">
+      <span class="caption">Streaming reasoning · 38% complete</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE 3: Health ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="feature reveal">
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span> Workspace Health</span>
+      <h2>Know when a folder needs help.</h2>
+      <p class="lead">Monitor clutter, track growth, and get actionable cleanup opportunities with a single health score. Fix download clutter, empty folders, and stale files in one tap.</p>
+      <div class="bulletlist">
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 5-6"/></svg></span><p><b>Health score.</b> A clear 0–100 rating from growth, age, and opportunities.</p></div>
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg></span><p><b>Quick actions.</b> One-tap fixes for the biggest space hogs.</p></div>
+      </div>
+    </div>
+    <div class="shot-frame reveal">
+      <img src="/assets/img/screenshots/health.jpg"
+           alt="Sorty Workspace Health view showing a health score of 80, total files, size, and top cleanup actions"
+           loading="lazy" width="820" height="560">
+      <span class="caption">Health score 80 · 286 files · 241 MB</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE 4: Watched + Duplicates (gallery) ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="shead reveal">
+    <span class="eyebrow"><span class="dot"></span> Always tidy</span>
+    <h2>Set it once. Stay organized.</h2>
+    <p class="lead">Watch folders for changes and Sorty organizes in the background. Find and safely merge duplicates without losing anything important.</p>
+  </div>
+  <div class="gallery">
+    <div class="shot-frame reveal">
+      <img src="/assets/img/screenshots/watched.jpg"
+           alt="Sorty Watched Folders view with one active folder set to auto-organize"
+           loading="lazy" width="820" height="560">
+      <span class="caption">Watched Folders · auto-organize</span>
+    </div>
+    <div class="shot-frame reveal">
+      <img src="/assets/img/screenshots/duplicates.jpg"
+           alt="Sorty Duplicate Files view listing exact matches with safe-to-merge indicators"
+           loading="lazy" width="820" height="560">
+      <span class="caption">Duplicates · 176 exact matches</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FEATURE: Bring your own AI ===================== -->
+<section class="wrap section" id="features" style="padding-top:0;">
+  <div class="shead reveal">
+    <span class="eyebrow"><span class="dot"></span> Bring your own AI</span>
+    <h2>Your model. Your rules.</h2>
+    <p class="lead">Sorty works with the providers you already trust — cloud or fully on-device. Switch any time, and your API keys stay in the macOS Keychain.</p>
+  </div>
+  <div class="shot-frame reveal" style="max-width: 920px; margin-inline: auto;">
+    <img src="/assets/img/screenshots/settings.jpg"
+         alt="Sorty Settings AI Provider view listing OpenAI, GitHub Copilot, Groq, Ollama, Anthropic, Google Gemini, and Apple Foundation Models"
+         loading="lazy" width="920" height="630">
+    <span class="caption">Settings · AI Provider</span>
+  </div>
+  <div class="providers reveal" style="margin-top: 36px;">
+    <span class="provider"><img src="/assets/img/providers/ChatGPT.svg" alt="">OpenAI</span>
+    <span class="provider"><img src="/assets/img/providers/Claude Color Icon.svg" alt="">Anthropic</span>
+    <span class="provider"><img src="/assets/img/providers/Gemini Color Icon.svg" alt="">Google Gemini</span>
+    <span class="provider"><img src="/assets/img/providers/GitHub Copilot.svg" alt="">GitHub Copilot</span>
+    <span class="provider"><img src="/assets/img/providers/Groq.svg" alt="">Groq</span>
+    <span class="provider"><img src="/assets/img/providers/OpenRouter.svg" alt="">OpenRouter</span>
+    <span class="provider"><img src="/assets/img/providers/Ollama.svg" alt="">Ollama · Local</span>
+    <span class="provider">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="color:#b06bff;"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.36-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.36C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z"/></svg>
+      Apple Intelligence · On-device</span>
+  </div>
+</section>
+
+<!-- ===================== FEATURE GRID ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="shead reveal">
+    <span class="eyebrow"><span class="dot"></span> Everything else</span>
+    <h2>Built for power users.</h2>
+    <p class="lead">All the safety rails and automations you'd expect from a native macOS tool.</p>
+  </div>
+  <div class="fgrid">
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg></div><h3>Learnings Profile</h3><p>A passive system that trains from your existing structures, manual corrections, and even cancelled organizations to get smarter over time.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><rect x="3" y="8" width="18" height="8" rx="2"/></svg></div><h3>Finder Extension</h3><p>Right-click any folder in Finder to start organizing instantly — no app-switching required.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div><h3>Deeplinks &amp; CLI</h3><p>Control Sorty via <code>sorty://</code> URLs and bundled CLI tools for Shortcuts, automation, and scripting.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg></div><h3>Exclusion Rules</h3><p>Built-in rules for node_modules, .git, derived data, and more — plus your own custom patterns.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><h3>History &amp; Rollback</h3><p>Every operation is tracked with detailed reasoning, analytics, and one-click rollback.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Safe by Design</h3><p>Dry-run modes, duplicate protection, validation guards, and AES-256 encrypted learnings behind Touch ID.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01"/></svg></div><h3>Menu Bar Controls</h3><p>Quick access from the menu bar with global keyboard shortcuts for common actions.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18M3 12h18M3 17h12"/></svg></div><h3>Naming Presets</h3><p>Create reusable, AI-powered naming schemes so your folder structures stay consistent.</p></div>
+    <div class="fcard reveal"><div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg></div><h3>Auto Updates</h3><p>Sparkle-powered background checks with stable, nightly, and manual update channels.</p></div>
+  </div>
+</section>
+
+<!-- ===================== SCREENSHOT GALLERY ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="shead reveal">
+    <span class="eyebrow"><span class="dot"></span> In the app</span>
+    <h2>A tour of the workspace.</h2>
+    <p class="lead">From analysis to completion, every state is designed to feel calm and in control.</p>
+  </div>
+  <div class="gallery">
+    <div class="shot-frame reveal"><img src="/assets/img/screenshots/exclusions.jpg" alt="Sorty Exclusion Rules view listing built-in rules for Node.js modules, Git, and derived data" loading="lazy" width="820" height="560"><span class="caption">Exclusion Rules</span></div>
+    <div class="shot-frame reveal"><img src="/assets/img/screenshots/apply.jpg" alt="Sorty organization complete view showing 90 files moved and 10 folders created with an undo option" loading="lazy" width="820" height="560"><span class="caption">Organization Complete</span></div>
+  </div>
+</section>
+
+<!-- ===================== STATS ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="stat-row reveal">
+    <div class="stat"><div class="stat-n">8<span class="unit">+</span></div><div class="stat-l">AI providers</div></div>
+    <div class="stat"><div class="stat-n">40<span class="unit">%</span></div><div class="stat-l">Faster scanning</div></div>
+    <div class="stat"><div class="stat-n">0</div><div class="stat-l">Telemetry</div></div>
+    <div class="stat"><div class="stat-n">100<span class="unit">%</span></div><div class="stat-l">Undoable</div></div>
+  </div>
+</section>
+
+<!-- ===================== MARQUEE TOUR ===================== -->
+<section class="wrap section" style="padding-top: clamp(40px,6vw,72px);">
+  <div class="shead reveal-scale">
+    <span class="eyebrow"><span class="dot"></span> Take the tour</span>
+    <h2>Every screen, built to feel calm.</h2>
+    <p class="lead">From the first scan to a tidy workspace — hover to pause and look around.</p>
+  </div>
+  <div class="marquee reveal-scale" aria-label="Sorty app screenshots">
+    <div class="marquee-track">
+      <div class="shot-frame"><img src="/assets/img/screenshots/live-insights.jpg" alt="Sorty analyzing a Documents folder and streaming live AI reasoning" loading="lazy" width="720" height="450"><span class="caption">Live Insights</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/post-gen.jpg" alt="Sorty preview tree of suggested folders with reasoning badges" loading="lazy" width="720" height="450"><span class="caption">Interactive Preview</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/mid-gen.jpg" alt="Sorty mid-generation showing the AI reasoning about image files" loading="lazy" width="720" height="450"><span class="caption">Streaming Reasoning</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/health.jpg" alt="Sorty Workspace Health view with a health score and cleanup actions" loading="lazy" width="720" height="450"><span class="caption">Workspace Health</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/watched.jpg" alt="Sorty Watched Folders view set to auto-organize" loading="lazy" width="720" height="450"><span class="caption">Watched Folders</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/duplicates.jpg" alt="Sorty Duplicate Files view listing exact matches" loading="lazy" width="720" height="450"><span class="caption">Duplicates</span></div>
+      <div class="shot-frame"><img src="/assets/img/screenshots/settings.jpg" alt="Sorty Settings AI Provider view" loading="lazy" width="720" height="450"><span class="caption">AI Providers</span></div>
+      <!-- duplicate set for seamless loop -->
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/live-insights.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Live Insights</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/post-gen.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Interactive Preview</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/mid-gen.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Streaming Reasoning</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/health.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Workspace Health</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/watched.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Watched Folders</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/duplicates.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">Duplicates</span></div>
+      <div class="shot-frame" aria-hidden="true"><img src="/assets/img/screenshots/settings.jpg" alt="" loading="lazy" width="720" height="450"><span class="caption">AI Providers</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PRIVACY ===================== -->
+<section class="wrap section" style="padding-top:0;">
+  <div class="feature reveal">
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span> Private by design</span>
+      <h2>Your files stay yours.</h2>
+      <p class="lead">File contents are never uploaded unless you explicitly enable Deep Scan. API keys live in the macOS Keychain. The Learnings profile is AES-256 encrypted and guarded by Touch ID. And there is no telemetry — ever.</p>
+      <div class="bulletlist">
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><p><b>On-device options.</b> Ollama and Apple Foundation Models keep processing entirely on your Mac.</p></div>
+        <div class="bullet"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></span><p><b>Privacy Mode.</b> Blur sensitive paths and hide keys on the shared screen.</p></div>
+      </div>
+      <div class="btn-row" style="margin-top: 26px;">
+        <a class="btn btn-ghost" href="/privacy/">Read the privacy policy <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+    </div>
+    <div class="shot-frame reveal" style="display:grid; place-items:center;">
+      <img src="/assets/img/mascot.png" alt="Sorty mascot" width="360" height="360" style="filter: drop-shadow(0 30px 60px rgba(42,212,196,0.4));">
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section class="wrap section" id="faq" style="padding-top:0;">
+  <div class="shead reveal">
+    <span class="eyebrow"><span class="dot"></span> FAQ</span>
+    <h2>Questions, answered.</h2>
+    <p class="lead">The short version. For the long version, see the <a href="https://github.com/sorty-organizer/Sorty/blob/main/HELP.md" target="_blank" rel="noopener" style="color:var(--blue-bright);text-decoration:underline;text-underline-offset:3px;">help docs</a>.</p>
+  </div>
+  <div class="faq reveal">
+    <details class="faq-item" open>
+      <summary>Is Sorty really free?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">Yes. Sorty is open source under the GPL-3.0 license and free to use. You bring your own AI provider key (or use Apple's on-device Foundation Models at no cost).</div>
+    </details>
+    <details class="faq-item">
+      <summary>Which AI providers are supported?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">OpenAI, Anthropic, Google Gemini, GitHub Copilot, Groq, OpenRouter, Ollama (local), and Apple Foundation Models (on-device). Switch any time — your API keys stay in the macOS Keychain.</div>
+    </details>
+    <details class="faq-item">
+      <summary>Does Sorty upload my files?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">No. File contents are never uploaded unless you explicitly enable Deep Scan. Use Ollama or Apple Intelligence to keep everything entirely on-device. There is no telemetry, ever — see the <a href="/privacy/">privacy policy</a>.</div>
+    </details>
+    <details class="faq-item">
+      <summary>What happens if I don't like the result?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">Nothing happens until you approve. Sorty previews every move and lets you tweak or reject individual changes. Once applied, every operation is tracked in History with one-click full rollback.</div>
+    </details>
+    <details class="faq-item">
+      <summary>Which Macs are supported?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">macOS 15.1 or later, on both Apple Silicon and Intel. The Finder extension and menu bar controls are included.</div>
+    </details>
+    <details class="faq-item">
+      <summary>macOS says the app can't be opened. Now what?<span class="faq-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+      <div class="faq-a">Sorty isn't code-signed, so Gatekeeper may block the first launch. Run <code style="font-family:var(--mono);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:5px;">xattr -cr /Applications/Sorty.app</code> in Terminal, or use System Settings → Privacy &amp; Security → Open Anyway.</div>
+    </details>
+  </div>
+</section>
+
+<!-- ===================== CTA ===================== -->
+<section class="section" style="padding-top: 0;">
+  <div class="wrap">
+    <div class="cta reveal">
+      <div class="glow glow-blue" style="width:420px;height:420px;top:-180px;left:50%;transform:translateX(-50%);opacity:0.28;"></div>
+      <h2>Get Sorty for Mac.</h2>
+      <p class="lead">Free, open source, and ready in minutes. Move it to /Applications and let it tidy up.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary btn-lg" href="https://github.com/sorty-organizer/Sorty/releases/latest" download>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.36-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.36C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com/sorty-organizer/Sorty" target="_blank" rel="noopener">View source</a>
+      </div>
+      <button class="install" data-copy="xattr -cr /Applications/Sorty.app" aria-label="Copy install fix command">
+        <svg class="copy-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span>xattr -cr /Applications/Sorty.app</span>
+        <span class="copy-label" style="color:var(--text-3);font-size:0.75rem;">click to copy</span>
+      </button>
+      <p class="muted" style="margin-top: 18px; font-size: 0.8rem;">Not code-signed — run the command above if macOS blocks the first launch.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand"><img src="/assets/img/icon.png" alt="Sorty"> Sorty</div>
+        <p>The FOSS file organiser for Mac. Built with native SwiftUI and a little AI help.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="/changelog/">Changelog</a></li>
+          <li><a href="https://github.com/sorty-organizer/Sorty/releases/latest" download>Download</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="https://github.com/sorty-organizer/Sorty" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/sorty-organizer/Sorty/blob/main/HELP.md" target="_blank" rel="noopener">Help &amp; docs</a></li>
+          <li><a href="https://github.com/sorty-organizer/Sorty/discussions" target="_blank" rel="noopener">Discussions</a></li>
+          <li><a href="https://github.com/sorty-organizer/Sorty/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="/terms/">Terms of Service</a></li>
+          <li><a href="/privacy/">Privacy Policy</a></li>
+          <li><a href="https://github.com/sorty-organizer/Sorty/security/advisories/new" target="_blank" rel="noopener">Report a vulnerability</a></li>
+          <li><a href="/changelog/">Release notes</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Sorty. Released under the <a href="https://www.gnu.org/licenses/gpl-3.0" target="_blank" rel="noopener">GPL-3.0</a> license.</span>
+      <span>macOS 15.1+ · Apple Silicon &amp; Intel</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/js/main.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Sorty
+
+> Sorty is a native macOS app that uses AI to organize your folders intelligently. It understands file content and context, learns your organization style, and previews every move before anything changes. Free and open source under GPL-3.0.
+
+- Site: https://sorty.app
+- Repo: https://github.com/sorty-organizer/Sorty
+- Latest release: https://github.com/sorty-organizer/Sorty/releases/latest
+- Changelog: https://sorty.app/changelog/
+- Privacy policy: https://sorty.app/privacy/
+- Terms of service: https://sorty.app/terms/
+- Help & docs: https://github.com/sorty-organizer/Sorty/blob/main/HELP.md
+
+## What it does
+
+Point Sorty at a messy folder. It analyzes the contents and suggests a clean folder structure based on what's actually in your files — not just their names or extensions. Review every suggested move, tweak or reject individual changes, then apply with one tap. Every operation is tracked in History with full undo.
+
+## Highlights
+
+- AI-powered organization with content-aware categorization
+- Works with OpenAI, Anthropic, Google Gemini, GitHub Copilot, Groq, OpenRouter, Ollama (local), and Apple Foundation Models (on-device)
+- Learnings profile that adapts to your style
+- Custom personas for different workflows
+- Workspace health monitoring with clutter detection and duplicate scanning
+- Finder extension for one-click organizing from Finder
+- Watched folders with automatic background organizing
+- Full undo and organization history
+- Naming presets, deeplinks (`sorty://`), and CLI tools (`sorty`, `learnings`)
+- Privacy-first: no telemetry, on-device options, API keys in Keychain, AES-256 encrypted learnings behind Touch ID
+
+## Requirements
+
+macOS 15.1 or later. Apple Silicon and Intel are both supported.
+
+## Install
+
+Download the universal build from GitHub Releases and move Sorty to /Applications.
+Because Sorty is not code-signed, Gatekeeper may block the first launch. Run
+`xattr -cr /Applications/Sorty.app` in Terminal, or use System Settings →
+Privacy & Security → Open Anyway.
+
+## License
+
+GPL-3.0. © 2026 Sorty.
