@@ -2,7 +2,7 @@ import { Apple, Check } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 
-const GITHUB_URL = 'https://github.com/sorty-app/sorty'
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 const INCLUDED = [
   'Every feature, forever — no paid tiers',

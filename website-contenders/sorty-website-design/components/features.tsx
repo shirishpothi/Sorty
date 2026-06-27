@@ -44,17 +44,39 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-settings.png',
-    title: 'Choose your AI provider',
-    body: 'Connect a cloud provider or run everything locally — your call.',
-    alt: 'Sorty AI providers settings screen with toggles for OpenAI, Anthropic, Ollama, and Mistral.',
+    src: '/sorty-apply.png',
+    title: 'Preview every move',
+    body: 'Review the apply step before Sorty touches a file.',
+    alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-history.png',
-    title: 'Undo anything, anytime',
-    body: 'A complete timeline of every change, each one reversible.',
-    alt: 'Sorty history screen showing a timeline of organization actions, each with an undo button.',
+    src: '/sorty-settings.png',
+    title: 'Choose your AI provider',
+    body: 'Connect a cloud provider or run everything locally with Ollama.',
+    alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
+  {
+    src: '/sorty-health.png',
+    title: 'Keep workspaces healthy',
+    body: 'See clutter, stale folders, and automation status in one place.',
+    alt: 'Sorty workspace health screen showing folder health insights.',
+  },
+  {
+    src: '/sorty-duplicates.png',
+    title: 'Review duplicates clearly',
+    body: 'Compare duplicate candidates before choosing what stays.',
+    alt: 'Sorty duplicates screen showing duplicate file review controls.',
+  },
+]
+
+const PROVIDERS = [
+  { src: '/provider-chatgpt.png', name: 'OpenAI' },
+  { src: '/provider-claude.png', name: 'Claude' },
+  { src: '/provider-gemini.png', name: 'Gemini' },
+  { src: '/provider-github-copilot.png', name: 'GitHub Copilot' },
+  { src: '/provider-groq.png', name: 'Groq' },
+  { src: '/provider-ollama.png', name: 'Ollama' },
+  { src: '/provider-openrouter.png', name: 'OpenRouter' },
 ]
 
 export function Features() {
@@ -92,6 +114,26 @@ export function Features() {
           ))}
         </div>
 
+        <Reveal className="mt-8">
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-3xl border border-border bg-card/35 p-4 backdrop-blur-md">
+            {PROVIDERS.map((provider) => (
+              <span
+                key={provider.name}
+                className="flex items-center gap-2 rounded-full border border-border bg-background/45 px-3 py-2 text-xs text-muted-foreground"
+              >
+                <Image
+                  src={provider.src}
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="size-6"
+                />
+                {provider.name}
+              </span>
+            ))}
+          </div>
+        </Reveal>
+
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           {SHOTS.map((shot, i) => (
             <Reveal
@@ -105,7 +147,7 @@ export function Features() {
               </div>
               <div className="p-3">
                 <Image
-                  src={shot.src || '/placeholder.svg'}
+                  src={shot.src}
                   alt={shot.alt}
                   width={1200}
                   height={800}

@@ -2,7 +2,7 @@ import { Mail } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 
-const GITHUB_URL = 'https://github.com/sorty-app/sorty'
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 const COLUMNS = [
   {

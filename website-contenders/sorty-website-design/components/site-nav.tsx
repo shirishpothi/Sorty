@@ -14,7 +14,7 @@ const LINKS = [
   { label: 'FAQ', href: '#faq' },
 ]
 
-const GITHUB_URL = 'https://github.com/sorty-app/sorty'
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false)

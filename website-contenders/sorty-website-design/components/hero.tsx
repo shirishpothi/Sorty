@@ -3,7 +3,7 @@ import { Apple, ArrowRight } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 
-const GITHUB_URL = 'https://github.com/sorty-app/sorty'
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 export function Hero() {
   return (
@@ -89,6 +89,15 @@ export function Hero() {
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
         <div className="relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3">
+          <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">
+            <Image
+              src="/sorty-mascot-head.png"
+              alt=""
+              width={96}
+              height={96}
+              className="size-full"
+            />
+          </div>
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
