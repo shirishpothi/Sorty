@@ -47,11 +47,50 @@ struct LearningsView: View {
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
     @State private var contentOpacity: Double = 0
     @State private var emptyLearningsHasAppeared = false
+    @State private var pendingControlAction: PendingControlAction?
 
     private enum StatusPopoverAction {
         case pauseResume
         case withdrawConsent
         case deleteData
+    }
+
+    private enum PendingControlAction: Equatable {
+        case pauseResume
+        case withdrawConsent
+        case deleteData
+
+        var title: String {
+            switch self {
+            case .pauseResume: return "Updating Learning"
+            case .withdrawConsent: return "Withdrawing Consent"
+            case .deleteData: return "Deleting Learnings Data"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .pauseResume: return "Applying your learning collection setting..."
+            case .withdrawConsent: return "Stopping future learning and saving the consent change..."
+            case .deleteData: return "Removing your learnings profile, consent, model overrides, and local learning settings..."
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .pauseResume: return "pause.circle.fill"
+            case .withdrawConsent: return "hand.raised.fill"
+            case .deleteData: return "trash.circle.fill"
+            }
+        }
+
+        var iconColor: Color {
+            switch self {
+            case .pauseResume: return .orange
+            case .withdrawConsent: return .orange
+            case .deleteData: return .red
+            }
+        }
     }
 
     private enum ActiveFileImporter: Int, Identifiable {
@@ -264,39 +303,36 @@ struct LearningsView: View {
             }
         )
         .alert("Delete All Learning Data?", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                cancelPendingControlAction()
+            }
             Button("Delete", role: .destructive) {
-                HapticFeedbackManager.shared.error()
-                Task {
-                    let didClear = await manager.clearAllData()
-                    if didClear {
-                        HapticFeedbackManager.shared.success()
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72)) {
-                            appState.hasCompletedOnboarding = false
-                        }
-                    } else {
-                        HapticFeedbackManager.shared.error()
-                    }
-                }
+                deleteAllLearningData()
             }
         } message: {
-            Text(
-                "This will permanently delete all your learning data and preferences. This cannot be undone."
-            )
+            if pendingControlAction == .deleteData {
+                Text("Deleting learning data...")
+            } else {
+                Text(
+                    "This will permanently delete all your learning data and preferences. This cannot be undone."
+                )
+            }
         }
         .alert("Withdraw Consent?", isPresented: $showingWithdrawConfirmation) {
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                cancelPendingControlAction()
+            }
             Button("Withdraw", role: .destructive) {
-                HapticFeedbackManager.shared.light()
-                Task {
-                    await manager.withdrawConsent()
-                    HapticFeedbackManager.shared.success()
-                }
+                withdrawConsent()
             }
         } message: {
-            Text(
-                "Learning will stop but your existing data will be preserved. You can re-enable learning later."
-            )
+            if pendingControlAction == .withdrawConsent {
+                Text("Withdrawing consent...")
+            } else {
+                Text(
+                    "Learning will stop but your existing data will be preserved. You can re-enable learning later."
+                )
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
@@ -387,15 +423,21 @@ struct LearningsView: View {
                     Button {
                         toggleSessionLearningPaused()
                     } label: {
-                        Label(
-                            manager.sessionLearningPaused ? "Resume" : "Pause",
-                            systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
-                        )
-                        .font(.caption.bold())
+                        if pendingControlAction == .pauseResume {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label(
+                                manager.sessionLearningPaused ? "Resume" : "Pause",
+                                systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
+                            )
+                            .font(.caption.bold())
+                        }
                     }
                     .buttonStyle(
                         .tintedPill(manager.sessionLearningPaused ? .green : .red, size: .small)
                     )
+                    .disabled(pendingControlAction != nil)
                     .onHover { hovering in
                         if hovering {
                             HapticFeedbackManager.shared.selection()
@@ -550,7 +592,8 @@ struct LearningsView: View {
 
     private func setSessionLearningPaused(_ isPaused: Bool) {
         requestSensitiveAction(
-            reason: "Authenticate to change learning collection for this session."
+            reason: "Authenticate to change learning collection for this session.",
+            pendingAction: .pauseResume
         ) {
             HapticFeedbackManager.shared.light()
             let isPausing = isPaused && !manager.sessionLearningPaused
@@ -562,21 +605,109 @@ struct LearningsView: View {
             } else {
                 HapticFeedbackManager.shared.success()
             }
+            finishPendingControlAction(
+                title: isPaused ? "Learning Paused" : "Learning Resumed",
+                message: isPaused
+                    ? "Sorty will stop collecting learning signals for this session."
+                    : "Sorty is collecting learning signals again.",
+                icon: isPaused ? "pause.circle.fill" : "play.circle.fill",
+                iconColor: isPaused ? .orange : .green
+            )
         }
     }
 
     private func confirmWithdrawConsent() {
+        guard pendingControlAction == nil else { return }
         HapticFeedbackManager.shared.light()
+        showPendingControlAction(.withdrawConsent)
         showingWithdrawConfirmation = true
     }
 
     private func confirmDeleteAllLearningData() {
         requestSensitiveAction(
-            reason: "Authenticate to delete all learning data."
+            reason: "Authenticate to delete all learning data.",
+            pendingAction: .deleteData
         ) {
             HapticFeedbackManager.shared.error()
             showingDeleteConfirmation = true
         }
+    }
+
+    private func withdrawConsent() {
+        showPendingControlAction(.withdrawConsent)
+        HapticFeedbackManager.shared.light()
+        Task { @MainActor in
+            await manager.withdrawConsent()
+            HapticFeedbackManager.shared.success()
+            finishPendingControlAction(
+                title: "Consent Withdrawn",
+                message: "Learning is off. Your existing learnings data is still saved.",
+                icon: "hand.raised.fill",
+                iconColor: .green
+            )
+        }
+    }
+
+    private func deleteAllLearningData() {
+        showPendingControlAction(.deleteData)
+        HapticFeedbackManager.shared.error()
+        Task { @MainActor in
+            let didClear = await manager.clearAllData()
+            if didClear {
+                HapticFeedbackManager.shared.success()
+                withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72)) {
+                    appState.hasCompletedOnboarding = false
+                }
+                finishPendingControlAction(
+                    title: "Learnings Data Deleted",
+                    message: "Your learnings profile, consent, and learning settings were removed.",
+                    icon: "checkmark.circle.fill",
+                    iconColor: .green
+                )
+            } else {
+                HapticFeedbackManager.shared.error()
+                finishPendingControlAction(
+                    title: "Delete Failed",
+                    message: manager.error ?? "Sorty could not delete all learnings data.",
+                    icon: "exclamationmark.triangle.fill",
+                    iconColor: .red
+                )
+            }
+        }
+    }
+
+    private func showPendingControlAction(_ action: PendingControlAction) {
+        pendingControlAction = action
+        NotificationManager.shared.showHUDInfo(
+            title: action.title,
+            message: action.message,
+            icon: action.icon,
+            iconColor: action.iconColor,
+            identifier: "learnings-control-action",
+            isPersistent: true
+        )
+    }
+
+    private func cancelPendingControlAction() {
+        guard pendingControlAction != nil else { return }
+        pendingControlAction = nil
+        NotificationManager.shared.dismissHUD(identifier: "learnings-control-action")
+    }
+
+    private func finishPendingControlAction(
+        title: String,
+        message: String,
+        icon: String,
+        iconColor: Color
+    ) {
+        pendingControlAction = nil
+        NotificationManager.shared.showHUDInfo(
+            title: title,
+            message: message,
+            icon: icon,
+            iconColor: iconColor,
+            identifier: "learnings-control-action"
+        )
     }
 
     private var statusBadge: some View {
@@ -616,13 +747,19 @@ struct LearningsView: View {
                     showingStatusPopover = false
                     toggleSessionLearningPaused()
                 } label: {
-                    Label(
-                        manager.sessionLearningPaused ? "Resume Learning" : "Pause Learning",
-                        systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
-                    )
-                    .font(.subheadline)
+                    if pendingControlAction == .pauseResume {
+                        Label("Updating Learning", systemImage: "hourglass")
+                            .font(.subheadline)
+                    } else {
+                        Label(
+                            manager.sessionLearningPaused ? "Resume Learning" : "Pause Learning",
+                            systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
+                        )
+                        .font(.subheadline)
+                    }
                 }
                 .buttonStyle(.plain)
+                .disabled(pendingControlAction != nil)
                 .frame(width: 204, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)
@@ -650,10 +787,14 @@ struct LearningsView: View {
                     showingStatusPopover = false
                     confirmWithdrawConsent()
                 } label: {
-                    Label("Withdraw Consent", systemImage: "hand.raised")
+                    Label(
+                        pendingControlAction == .withdrawConsent ? "Withdrawing Consent" : "Withdraw Consent",
+                        systemImage: pendingControlAction == .withdrawConsent ? "hourglass" : "hand.raised"
+                    )
                         .font(.subheadline)
                 }
                 .buttonStyle(.plain)
+                .disabled(pendingControlAction != nil)
                 .frame(width: 204, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)
@@ -681,10 +822,14 @@ struct LearningsView: View {
                     showingStatusPopover = false
                     confirmDeleteAllLearningData()
                 } label: {
-                    Label("Delete All Data", systemImage: "trash")
+                    Label(
+                        pendingControlAction == .deleteData ? "Deleting Data" : "Delete All Data",
+                        systemImage: pendingControlAction == .deleteData ? "hourglass" : "trash"
+                    )
                         .font(.subheadline)
                 }
                 .buttonStyle(.plain)
+                .disabled(pendingControlAction != nil)
                 .frame(width: 204, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)
@@ -1403,8 +1548,14 @@ struct LearningsView: View {
 
     private func requestSensitiveAction(
         reason: String,
+        pendingAction: PendingControlAction? = nil,
         onSuccess: @escaping @MainActor () -> Void
     ) {
+        if let pendingAction {
+            guard self.pendingControlAction == nil else { return }
+            showPendingControlAction(pendingAction)
+        }
+
         if !FeatureFlags.sensitiveActionAuthenticationEnabled {
             onSuccess()
             return
@@ -1415,6 +1566,14 @@ struct LearningsView: View {
                 reason: reason)
             guard didAuthenticate else {
                 HapticFeedbackManager.shared.error()
+                if pendingAction != nil {
+                    finishPendingControlAction(
+                        title: "Authentication Cancelled",
+                        message: "No changes were made.",
+                        icon: "xmark.circle.fill",
+                        iconColor: .orange
+                    )
+                }
                 return
             }
             onSuccess()
