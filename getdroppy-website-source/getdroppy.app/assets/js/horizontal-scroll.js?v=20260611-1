@@ -1,0 +1,447 @@
+(() => {
+    'use strict';
+
+    const SECTION_IDS = ['hero', 'features', 'gallery', 'icons', 'pricing', 'cta'];
+    const MOBILE_MQ = '(max-width: 809px)';
+
+    let scrollTriggerInstance = null;
+    let spacerEl = null;
+    let sectionCount = 0;
+    let initialized = false;
+    let lenisInstance = null;
+    let sectionRevealTriggers = [];
+    let dotsEl = null;
+    let dotsList = [];
+
+    function isMobile() {
+        return window.matchMedia(MOBILE_MQ).matches;
+    }
+
+    function getMain() {
+        return document.querySelector('main.framer-t41vbz') || document.querySelector('main[data-framer-name="Main"]');
+    }
+
+    function getSections(main) {
+        return SECTION_IDS.map(function(id) {
+            return main.querySelector(':scope > section#' + id);
+        }).filter(function(el) {
+            return el && getComputedStyle(el).display !== 'none';
+        });
+    }
+
+    function initLenis() {
+        if (lenisInstance) return lenisInstance;
+        if (typeof Lenis === 'undefined') return null;
+
+        lenisInstance = new Lenis({
+            lerp: 0.085,
+            smoothWheel: true,
+            wheelMultiplier: 1.0,
+            touchMultiplier: 1.6,
+            syncTouch: true,
+            infinite: false,
+            orientation: 'vertical',
+            gestureOrientation: 'vertical'
+        });
+
+        if (window.gsap && window.ScrollTrigger) {
+            lenisInstance.on('scroll', window.ScrollTrigger.update);
+            window.gsap.ticker.add(function(time) {
+                lenisInstance.raf(time * 1000);
+            });
+            window.gsap.ticker.lagSmoothing(0);
+        } else {
+            function raf(time) {
+                lenisInstance.raf(time);
+                requestAnimationFrame(raf);
+            }
+            requestAnimationFrame(raf);
+        }
+
+        return lenisInstance;
+    }
+
+    function destroyLenis() {
+        if (lenisInstance) {
+            try { lenisInstance.destroy(); } catch (_) {}
+            lenisInstance = null;
+        }
+    }
+
+    function kill() {
+        if (scrollTriggerInstance) {
+            scrollTriggerInstance.kill();
+            scrollTriggerInstance = null;
+        }
+        sectionRevealTriggers.forEach(function(t) { try { t.kill(); } catch (_) {} });
+        sectionRevealTriggers = [];
+        if (spacerEl && spacerEl.parentNode) {
+            spacerEl.parentNode.removeChild(spacerEl);
+            spacerEl = null;
+        }
+        if (dotsEl && dotsEl.parentNode) {
+            dotsEl.parentNode.removeChild(dotsEl);
+        }
+        dotsEl = null;
+        dotsList = [];
+        var main = getMain();
+        if (main) {
+            main.style.removeProperty('position');
+            main.style.removeProperty('top');
+            main.style.removeProperty('left');
+            main.style.removeProperty('transform');
+            main.style.removeProperty('will-change');
+        }
+        initialized = false;
+        sectionCount = 0;
+        document.documentElement.classList.remove('droppy-horizontal-scroll');
+        destroyLenis();
+    }
+
+    function setupSectionReveal(sections, ScrollTrigger, gsap) {
+        sections.forEach(function(section, index) {
+            section.classList.add('droppy-h-section');
+            section.dataset.droppyHSectionIndex = String(index);
+
+            if (section.id === 'hero') return;
+
+            var revealTargets = section.querySelectorAll('.droppy-h-reveal');
+            if (!revealTargets.length) {
+                revealTargets = section.querySelectorAll('h2, h3, p, .droppy-feat, .droppy-power-card, .droppy-ext-intro, .droppy-carousel, .droppy-power-marquee, [data-framer-component-type="RichTextContainer"]');
+            }
+
+            if (!revealTargets.length) return;
+
+            gsap.set(revealTargets, { opacity: 0, y: 24 });
+        });
+    }
+
+    function bindSectionRevealOnScroll(sections, ScrollTrigger, gsap) {
+        var revealedSections = new Set();
+        var lastProgress = -1;
+
+        function update(progress) {
+            if (progress === lastProgress) return;
+            lastProgress = progress;
+            var continuous = progress * (sections.length - 1);
+            sections.forEach(function(section, index) {
+                if (section.id === 'hero') return;
+                var enterDistance = Math.abs(continuous - index);
+                if (enterDistance < 0.55 && !revealedSections.has(index)) {
+                    revealedSections.add(index);
+                    var revealTargets = section.querySelectorAll('h2, h3, p, .droppy-feat, .droppy-power-card, .droppy-ext-intro, .droppy-carousel, .droppy-power-marquee, [data-framer-component-type="RichTextContainer"]');
+                    gsap.to(revealTargets, {
+                        opacity: 1,
+                        y: 0,
+                        duration: 0.9,
+                        stagger: 0.04,
+                        ease: 'power3.out',
+                        overwrite: 'auto'
+                    });
+                }
+            });
+        }
+
+        return update;
+    }
+
+    function initHorizontalScroll() {
+        if (isMobile()) {
+            kill();
+            return;
+        }
+
+        if (!window.gsap || !window.ScrollTrigger) return;
+
+        var gsap = window.gsap;
+        var ScrollTrigger = window.ScrollTrigger;
+        gsap.registerPlugin(ScrollTrigger);
+
+        if (initialized) return;
+
+        var main = getMain();
+        if (!main) return;
+
+        var sections = getSections(main);
+        if (sections.length < 2) return;
+
+        sectionCount = sections.length;
+
+        document.documentElement.classList.add('droppy-horizontal-scroll');
+
+        var footers = main.querySelectorAll(':scope > footer');
+        footers.forEach(function(f) { f.style.display = 'none'; });
+        var spacerDivs = main.querySelectorAll(':scope > div.framer-ng3b95');
+        spacerDivs.forEach(function(d) { d.style.display = 'none'; });
+
+        function getDwellPx() { return Math.round(window.innerHeight * 0.85); }
+        var dwellPx = getDwellPx();
+        var sectionDistance = window.innerWidth * (sectionCount - 1);
+        var totalScrollDistance = dwellPx + sectionDistance;
+
+        if (!spacerEl) {
+            spacerEl = document.createElement('div');
+            spacerEl.id = 'droppy-h-spacer';
+            spacerEl.style.cssText = 'width:1px;position:relative;pointer-events:none;z-index:-1;';
+        }
+        spacerEl.style.height = (window.innerHeight + totalScrollDistance) + 'px';
+        document.body.insertBefore(spacerEl, document.body.firstChild);
+
+        main.style.position = 'fixed';
+        main.style.top = '0';
+        main.style.left = '0';
+        main.style.willChange = 'transform';
+
+        setupSectionReveal(sections, ScrollTrigger, gsap);
+        var revealUpdater = bindSectionRevealOnScroll(sections, ScrollTrigger, gsap);
+
+        function computeSnapFractions(){
+            var pts = [0];
+            for (var i = 1; i < sectionCount; i++) {
+                pts.push((dwellPx + (i / (sectionCount - 1)) * sectionDistance) / totalScrollDistance);
+            }
+            return pts;
+        }
+
+        scrollTriggerInstance = ScrollTrigger.create({
+            trigger: spacerEl,
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 0.3,
+            snap: {
+                snapTo: computeSnapFractions(),
+                duration: { min: 0.18, max: 0.48 },
+                delay: 0.1,
+                ease: 'power3.out',
+                directional: false
+            },
+            id: 'droppy-horizontal-main',
+            invalidateOnRefresh: true,
+            onUpdate: function(self) {
+                var progress = self.progress;
+                var dwellEnd = dwellPx / totalScrollDistance;
+                var hProgress, dwellProgress;
+                if (progress <= dwellEnd) {
+                    hProgress = 0;
+                    dwellProgress = dwellEnd > 0 ? (progress / dwellEnd) : 0;
+                } else {
+                    hProgress = (progress - dwellEnd) / Math.max(0.0001, 1 - dwellEnd);
+                    dwellProgress = 1;
+                }
+                var x = -hProgress * sectionDistance;
+                main.style.transform = 'translate3d(' + x + 'px, 0, 0)';
+                revealUpdater(hProgress);
+                updateActiveDot(hProgress);
+                updateHeroMorph(dwellProgress, hProgress);
+            },
+            onRefresh: function() {
+                dwellPx = getDwellPx();
+                sectionDistance = window.innerWidth * (sectionCount - 1);
+                totalScrollDistance = dwellPx + sectionDistance;
+                spacerEl.style.height = (window.innerHeight + totalScrollDistance) + 'px';
+                if (scrollTriggerInstance && scrollTriggerInstance.vars && scrollTriggerInstance.vars.snap) {
+                    scrollTriggerInstance.vars.snap.snapTo = computeSnapFractions();
+                }
+            }
+        });
+
+        scrollTriggerInstance._droppyDwellPx = dwellPx;
+        scrollTriggerInstance._droppyTotalDist = totalScrollDistance;
+        scrollTriggerInstance._droppySectionDist = sectionDistance;
+
+        ScrollTrigger.getAll().forEach(function(st) {
+            var id = st.vars.id || '';
+            if (id.indexOf('droppy-horizontal') === 0 || id.indexOf('droppy-hsection') === 0) return;
+            st.kill();
+        });
+
+        var animated = main.querySelectorAll('.droppy-feat, .droppy-power-card, .droppy-ext-intro, .droppy-carousel, .droppy-power-marquee, .droppy-how-video-wrap, h2, h3, [data-framer-component-type="RichTextContainer"], img, video');
+        gsap.set(animated, {
+            x: 0,
+            scale: 1,
+            rotate: 0,
+            filter: 'none',
+            clearProps: 'filter,clipPath'
+        });
+
+        initLenis();
+        buildSectionDots(sections);
+
+        initialized = true;
+        ScrollTrigger.refresh();
+
+        if (revealUpdater) revealUpdater(0);
+        updateHeroMorph(0, 0);
+    }
+
+    function buildSectionDots(sections) {
+        if (dotsEl && dotsEl.parentNode) dotsEl.parentNode.removeChild(dotsEl);
+        dotsList = [];
+
+        dotsEl = document.createElement('div');
+        dotsEl.className = 'droppy-h-dots';
+        dotsEl.setAttribute('aria-label', 'Section navigation');
+
+        sections.forEach(function(section, index) {
+            var dot = document.createElement('button');
+            dot.type = 'button';
+            dot.className = 'droppy-h-dot';
+            dot.setAttribute('aria-label', section.id);
+            dot.dataset.droppySectionIndex = String(index);
+            dot.addEventListener('click', function() {
+                scrollToSection(section.id);
+            });
+            dotsEl.appendChild(dot);
+            dotsList.push(dot);
+        });
+
+        document.body.appendChild(dotsEl);
+    }
+
+    function updateActiveDot(progress) {
+        if (!dotsList.length) return;
+        var activeIndex = Math.round(progress * (dotsList.length - 1));
+        dotsList.forEach(function(d, i) {
+            var isActive = i === activeIndex;
+            if ((d.classList.contains('is-active')) !== isActive) {
+                d.classList.toggle('is-active', isActive);
+            }
+        });
+    }
+
+    function updateHeroMorph(dwellProgress, hProgress) {
+        var hero = document.getElementById('hero');
+        if (!hero) return;
+        var morph = (typeof dwellProgress === 'number') ? Math.max(0, Math.min(1, dwellProgress)) : 0;
+        hero.style.setProperty('--droppy-hero-morph', morph.toFixed(3));
+
+        var fade = (morph <= 0.5) ? (1 - morph * 2) : ((morph - 0.5) * 2);
+        hero.style.setProperty('--droppy-hero-fade', fade.toFixed(3));
+
+        var h1Text = hero.querySelector('.framer-mk7lz9 .framer-1rmrzte .framer-text');
+        var subText = hero.querySelector('.framer-mk7lz9 .framer-1yylnnf .framer-text');
+        if (h1Text && !h1Text.dataset.droppyOriginal) {
+            h1Text.dataset.droppyOriginal = h1Text.textContent;
+        }
+        if (subText && !subText.dataset.droppyOriginal) {
+            subText.dataset.droppyOriginal = subText.textContent;
+        }
+        var morphed = morph >= 0.5;
+        var shelfArrowSvg = '<svg class="droppy-hero-shelf-arrow" viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 12H4"/><path d="M11 19l-7-7 7-7"/></svg>';
+        var titleTarget = morphed ? (shelfArrowSvg + '<span class="droppy-hero-shelf-label">The Shelf</span>') : null;
+        var bodyTarget = morphed ? 'Media player, lyrics, widgets, a file tray, calendar. Droppy does it all.' : (subText && subText.dataset.droppyOriginal);
+        if (h1Text) {
+            if (morphed) {
+                if (h1Text.dataset.droppyState !== 'morphed') {
+                    h1Text.innerHTML = titleTarget;
+                    h1Text.dataset.droppyState = 'morphed';
+                }
+            } else {
+                if (h1Text.dataset.droppyState === 'morphed') {
+                    h1Text.textContent = h1Text.dataset.droppyOriginal;
+                    h1Text.dataset.droppyState = 'original';
+                }
+            }
+        }
+        if (subText && bodyTarget && subText.textContent !== bodyTarget) subText.textContent = bodyTarget;
+    }
+
+    function scrollToSection(sectionId) {
+        if (!scrollTriggerInstance || isMobile()) return false;
+
+        var main = getMain();
+        if (!main) return false;
+
+        var sections = getSections(main);
+        var index = -1;
+        for (var i = 0; i < sections.length; i++) {
+            if (sections[i].id === sectionId) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) return false;
+
+        var dwellPx = scrollTriggerInstance._droppyDwellPx || 0;
+        var totalDist = scrollTriggerInstance._droppyTotalDist || (scrollTriggerInstance.end - scrollTriggerInstance.start);
+        var sectionDist = scrollTriggerInstance._droppySectionDist || (window.innerWidth * (sectionCount - 1));
+        var progress = (index === 0) ? 0 : ((dwellPx + (index / (sectionCount - 1)) * sectionDist) / totalDist);
+        var targetScroll = scrollTriggerInstance.start + progress * (scrollTriggerInstance.end - scrollTriggerInstance.start);
+
+        if (lenisInstance) {
+            lenisInstance.scrollTo(targetScroll, { duration: 1.2, easing: function(t){ return 1 - Math.pow(1 - t, 3); } });
+        } else {
+            window.gsap.to(window, {
+                scrollTo: { y: targetScroll, autoKill: false },
+                duration: 1.0,
+                ease: 'power2.inOut'
+            });
+        }
+
+        return true;
+    }
+
+    function patchAnchorLinks() {
+        document.querySelectorAll('a[href^="#"], a[href*="./#"]').forEach(function(a) {
+            if (a.dataset.droppyHorizontalPatched === '1') return;
+            a.dataset.droppyHorizontalPatched = '1';
+
+            a.addEventListener('click', function(ev) {
+                if (isMobile()) return;
+
+                var href = a.getAttribute('href') || '';
+                var hashIndex = href.indexOf('#');
+                if (hashIndex < 0) return;
+                var targetId = href.slice(hashIndex + 1);
+                if (!targetId) return;
+
+                if (scrollToSection(targetId)) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                }
+            }, true);
+        });
+    }
+
+    function resolveActiveSectionHorizontal() {
+        if (!scrollTriggerInstance || isMobile()) return null;
+        var progress = scrollTriggerInstance.progress;
+        var main = getMain();
+        if (!main) return null;
+        var sections = getSections(main);
+        var index = Math.round(progress * (sections.length - 1));
+        index = Math.max(0, Math.min(index, sections.length - 1));
+        return sections[index] ? sections[index].id : null;
+    }
+
+    // Crossing the 810px boundary without a reload (iPad rotation, window
+    // resize) must tear down or boot the horizontal mode, otherwise phones
+    // inherit the fixed/translated desktop layout.
+    var viewportModeTimer = 0;
+    function handleViewportModeChange() {
+        window.clearTimeout(viewportModeTimer);
+        viewportModeTimer = window.setTimeout(function() {
+            if (isMobile()) {
+                if (initialized) {
+                    kill();
+                    if (typeof window.initializeDroppyGsap === 'function') window.initializeDroppyGsap();
+                }
+            } else if (!initialized) {
+                initHorizontalScroll();
+                patchAnchorLinks();
+            }
+        }, 180);
+    }
+    window.addEventListener('resize', handleViewportModeChange);
+    window.addEventListener('orientationchange', handleViewportModeChange);
+
+    window._droppyHorizontalScroll = {
+        init: initHorizontalScroll,
+        kill: kill,
+        scrollToSection: scrollToSection,
+        resolveActiveSection: resolveActiveSectionHorizontal,
+        patchAnchorLinks: patchAnchorLinks,
+        isMobile: isMobile,
+        getLenis: function() { return lenisInstance; }
+    };
+})();
