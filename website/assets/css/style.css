@@ -115,6 +115,18 @@ ul { list-style: none; }
 .wrap { width: 100%; max-width: var(--maxw); margin-inline: auto; padding-inline: 24px; }
 .wrap-wide { width: 100%; max-width: var(--maxw-wide); margin-inline: auto; padding-inline: 24px; }
 .section { padding-block: clamp(40px, 7vw, 88px); position: relative; }
+.section-after-hero {
+  padding-top: clamp(12px, 3vw, 36px);
+}
+.section-after-hero .feature {
+  padding-top: clamp(16px, 3vw, 40px);
+}
+.section-stats {
+  padding-block: clamp(24px, 4vw, 48px) clamp(12px, 2vw, 24px);
+}
+.section-after-stats .feature {
+  padding-top: clamp(16px, 3vw, 40px);
+}
 
 /* Section eyebrow — glass capsule */
 .eyebrow {
@@ -279,7 +291,48 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
   -webkit-backdrop-filter: blur(20px) saturate(140%); backdrop-filter: blur(20px) saturate(140%);
 }
 .hero .badge .ic { color: var(--blue-bright); }
-.hero .btn-row { justify-content: center; margin-bottom: 26px; }
+.hero .btn-row {
+  justify-content: center;
+  gap: clamp(16px, 2vw, 24px);
+  margin-bottom: 32px;
+}
+.hero .btn-lg {
+  min-height: clamp(58px, 6vw, 78px);
+  padding-inline: clamp(30px, 4vw, 50px);
+  border-radius: 999px;
+  font-size: clamp(1.16rem, 2vw, 1.78rem);
+  font-weight: 620;
+  letter-spacing: -0.025em;
+  gap: clamp(11px, 1.4vw, 17px);
+}
+.hero .btn-lg svg {
+  width: clamp(23px, 2.2vw, 30px);
+  height: clamp(23px, 2.2vw, 30px);
+  flex: 0 0 auto;
+}
+.hero .hero-download {
+  min-width: clamp(226px, 24vw, 336px);
+  background: linear-gradient(180deg, #7cc2ff 0%, #58a9f8 100%);
+  box-shadow:
+    0 22px 52px -24px rgba(92, 175, 255, 0.75),
+    inset 0 1px 0 rgba(255,255,255,0.24),
+    inset 0 -1px 0 rgba(0,0,0,0.1);
+}
+.hero .hero-download:hover {
+  background: linear-gradient(180deg, #8cccff 0%, #61b2ff 100%);
+}
+.hero .hero-source {
+  min-width: clamp(216px, 23vw, 324px);
+  color: #111827;
+  background: #fff;
+  box-shadow:
+    0 24px 58px -26px rgba(255,255,255,0.5),
+    0 18px 40px -30px rgba(0,0,0,0.65),
+    inset 0 1px 0 rgba(255,255,255,0.92);
+}
+.hero .hero-source svg {
+  color: #111827;
+}
 .trust {
   display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
   font-size: 0.875rem; color: var(--text-3);
@@ -404,15 +457,17 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
 .hero-ready {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  margin-top: 6px;
-  padding: 7px 14px 7px 8px;
+  gap: 13px;
+  margin-top: 2px;
+  padding: 10px 20px 10px 10px;
   border-radius: var(--r-pill);
-  color: rgba(255,255,255,0.72);
-  background: rgba(255,255,255,0.055);
-  border: 1px solid rgba(255,255,255,0.11);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-  font-size: 0.86rem;
+  color: rgba(255,255,255,0.74);
+  background: rgba(255,255,255,0.052);
+  border: 1px solid rgba(255,255,255,0.13);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    0 0 0 4px rgba(255,255,255,0.018);
+  font-size: clamp(1rem, 1.5vw, 1.4rem);
   font-weight: 600;
   line-height: 1;
   -webkit-backdrop-filter: blur(18px) saturate(140%);
@@ -425,8 +480,8 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
   border-color: rgba(255,255,255,0.2);
 }
 .hero-ready img {
-  width: 24px;
-  height: 24px;
+  width: clamp(30px, 3vw, 42px);
+  height: clamp(30px, 3vw, 42px);
   border-radius: 50%;
   object-fit: cover;
 }
