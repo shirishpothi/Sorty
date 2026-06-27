@@ -306,7 +306,7 @@ struct LearningsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            showingWithdrawConfirmation = true
+            pauseSessionLearning()
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) {
             notification in
@@ -453,12 +453,7 @@ struct LearningsView: View {
                         Divider()
 
                         Button(role: .destructive) {
-                            requestSensitiveAction(
-                                reason: "Authenticate to delete all learning data."
-                            ) {
-                                HapticFeedbackManager.shared.error()
-                                showingDeleteConfirmation = true
-                            }
+                            confirmDeleteAllLearningData()
                         } label: {
                             Label("Delete All Data…", systemImage: "trash")
                         }
@@ -546,13 +541,21 @@ struct LearningsView: View {
     }
 
     private func toggleSessionLearningPaused() {
+        setSessionLearningPaused(!manager.sessionLearningPaused)
+    }
+
+    private func pauseSessionLearning() {
+        setSessionLearningPaused(true)
+    }
+
+    private func setSessionLearningPaused(_ isPaused: Bool) {
         requestSensitiveAction(
             reason: "Authenticate to change learning collection for this session."
         ) {
             HapticFeedbackManager.shared.light()
-            let isPausing = !manager.sessionLearningPaused
+            let isPausing = isPaused && !manager.sessionLearningPaused
             withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
-                manager.sessionLearningPaused.toggle()
+                manager.sessionLearningPaused = isPaused
             }
             if isPausing {
                 HapticFeedbackManager.shared.selection()
@@ -561,6 +564,21 @@ struct LearningsView: View {
             }
         }
     }
+
+    private func confirmWithdrawConsent() {
+        HapticFeedbackManager.shared.light()
+        showingWithdrawConfirmation = true
+    }
+
+    private func confirmDeleteAllLearningData() {
+        requestSensitiveAction(
+            reason: "Authenticate to delete all learning data."
+        ) {
+            HapticFeedbackManager.shared.error()
+            showingDeleteConfirmation = true
+        }
+    }
+
     private var statusBadge: some View {
         Button {
             HapticFeedbackManager.shared.light()
@@ -630,8 +648,7 @@ struct LearningsView: View {
 
                 Button {
                     showingStatusPopover = false
-                    HapticFeedbackManager.shared.light()
-                    showingWithdrawConfirmation = true
+                    confirmWithdrawConsent()
                 } label: {
                     Label("Withdraw Consent", systemImage: "hand.raised")
                         .font(.subheadline)
@@ -662,12 +679,7 @@ struct LearningsView: View {
 
                 Button(role: .destructive) {
                     showingStatusPopover = false
-                    requestSensitiveAction(
-                        reason: "Authenticate to delete all learning data."
-                    ) {
-                        HapticFeedbackManager.shared.error()
-                        showingDeleteConfirmation = true
-                    }
+                    confirmDeleteAllLearningData()
                 } label: {
                     Label("Delete All Data", systemImage: "trash")
                         .font(.subheadline)
@@ -1093,7 +1105,7 @@ struct LearningsView: View {
                     subtitle: "Temporarily stop collecting signals",
                     isOn: Binding(
                         get: { manager.sessionLearningPaused },
-                        set: { manager.sessionLearningPaused = $0 }
+                        set: { setSessionLearningPaused($0) }
                     )
                 )
 
@@ -1197,8 +1209,7 @@ struct LearningsView: View {
 
             HStack(spacing: 12) {
                 Button(action: {
-                    HapticFeedbackManager.shared.tap()
-                    showingWithdrawConfirmation = true
+                    confirmWithdrawConsent()
                 }) {
                     Label("Withdraw Consent", systemImage: "hand.raised")
                         .font(.caption.bold())
@@ -1217,12 +1228,7 @@ struct LearningsView: View {
                 Button(
                     role: .destructive,
                     action: {
-                        requestSensitiveAction(
-                            reason: "Authenticate to delete all learning data."
-                        ) {
-                            HapticFeedbackManager.shared.error()
-                            showingDeleteConfirmation = true
-                        }
+                        confirmDeleteAllLearningData()
                     }
                 ) {
                     Label("Delete All Data", systemImage: "trash")
