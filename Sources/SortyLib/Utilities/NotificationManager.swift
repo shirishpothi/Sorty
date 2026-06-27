@@ -417,6 +417,7 @@ public class NotificationManager: ObservableObject {
     
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
     private var dismissTask: Task<Void, Never>?
+    private var queueTask: Task<Void, Never>?
     private var permissionCached: Bool = false
     private let nativeNotificationDelegate = NativeNotificationDelegate()
     private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
@@ -763,6 +764,26 @@ public class NotificationManager: ObservableObject {
         processQueue()
     }
 
+    /// Advance to the next queued HUD notification immediately.
+    public func showNextHUDNotification() {
+        guard !hudNotificationQueue.isEmpty else { return }
+
+        dismissTask?.cancel()
+        queueTask?.cancel()
+        currentHUDNotification = nil
+        processQueue(delayNanoseconds: 80_000_000)
+    }
+
+    /// Clear the current HUD and any queued HUD notifications.
+    public func dismissAllHUDNotifications() {
+        dismissTask?.cancel()
+        queueTask?.cancel()
+        hudNotificationQueue.removeAll()
+        withAnimation(.easeOut(duration: 0.2)) {
+            currentHUDNotification = nil
+        }
+    }
+
     public func dismissHUD(identifier: String) {
         hudNotificationQueue.removeAll { $0.identifier == identifier }
         guard currentHUDNotification?.identifier == identifier else { return }
@@ -1040,12 +1061,14 @@ public class NotificationManager: ObservableObject {
         }
     }
     
-    private func processQueue() {
+    private func processQueue(delayNanoseconds: UInt64 = 300_000_000) {
         guard !hudNotificationQueue.isEmpty else { return }
+        queueTask?.cancel()
         
         // Small delay before showing next notification
-        Task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
+        queueTask = Task {
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
+            guard !Task.isCancelled else { return }
             if let next = hudNotificationQueue.first {
                 hudNotificationQueue.removeFirst()
                 presentHUD(next)

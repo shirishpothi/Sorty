@@ -22,7 +22,16 @@ public struct HUDNotificationOverlay: View {
             
             HStack {
                 if let notification = notificationManager.currentHUDNotification {
-                    HUDNotificationCard(notification: notification) {
+                    HUDNotificationCard(
+                        notification: notification,
+                        queuedCount: notificationManager.hudNotificationQueue.count,
+                        onShowNext: {
+                            notificationManager.showNextHUDNotification()
+                        },
+                        onDismissAll: {
+                            notificationManager.dismissAllHUDNotifications()
+                        }
+                    ) {
                         notificationManager.dismissHUD()
                     }
                     .transition(.asymmetric(
@@ -49,6 +58,9 @@ public struct HUDNotificationOverlay: View {
 /// Individual HUD notification card with liquid glass styling
 struct HUDNotificationCard: View {
     let notification: HUDNotification
+    let queuedCount: Int
+    let onShowNext: () -> Void
+    let onDismissAll: () -> Void
     let onDismiss: () -> Void
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,6 +74,10 @@ struct HUDNotificationCard: View {
 
     private var inlineAction: HUDNotificationAction? {
         notification.actions.count == 1 ? notification.actions.first : nil
+    }
+
+    private var queuedSummary: String {
+        queuedCount == 1 ? "1 more" : "\(queuedCount) more"
     }
     
     var body: some View {
@@ -129,6 +145,44 @@ struct HUDNotificationCard: View {
                         }
                     }
                 }
+
+                if queuedCount > 0 {
+                    Divider()
+                        .opacity(0.5)
+
+                    HStack(spacing: 8) {
+                        Label(queuedSummary, systemImage: "rectangle.stack")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        Button {
+                            onShowNext()
+                        } label: {
+                            Label("Next", systemImage: "arrow.right")
+                                .labelStyle(.iconOnly)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 28, height: 28)
+                        .systemLiquidGlassBackground(cornerRadius: 8)
+                        .accessibilityLabel("Show next HUD notification")
+
+                        Button {
+                            onDismissAll()
+                        } label: {
+                            Label("Clear all", systemImage: "xmark.circle")
+                                .labelStyle(.iconOnly)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 28, height: 28)
+                        .systemLiquidGlassBackground(cornerRadius: 8)
+                        .accessibilityLabel("Clear all HUD notifications")
+                    }
+                }
             }
             .padding(.trailing, 12)
             .padding(.vertical, 10)
@@ -187,6 +241,9 @@ struct HUDNotificationCard: View {
     }
 
     private var accessibilityHint: String {
+        if queuedCount > 0 {
+            return "\(queuedSummary) queued. Use the notification controls to show next or clear all."
+        }
         if notification.defaultAction != nil {
             return "Tap to open"
         }
