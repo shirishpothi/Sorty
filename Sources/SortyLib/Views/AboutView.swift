@@ -5,6 +5,7 @@
 //  About dialog with liquid glass styling
 //
 
+import AppKit
 import SwiftUI
 
 struct AboutView: View {
@@ -368,7 +369,7 @@ private enum AboutAppIconVariant: String, CaseIterable {
     /// Slot 0 is always the running app icon; the remaining slots are the other
     /// variants, excluding the one this build already ships so nothing duplicates.
     static func cycleImages(current: AboutAppIconVariant?) -> [NSImage] {
-        let appIcon: NSImage = NSApplication.shared.applicationIconImage
+        let appIcon = AboutIconImageNormalizer.normalized(NSApplication.shared.applicationIconImage)
 
         let others = allCases.filter { variant in
             guard let current else { return true }
@@ -376,7 +377,7 @@ private enum AboutAppIconVariant: String, CaseIterable {
         }
 
         var images: [NSImage] = [appIcon]
-        images.append(contentsOf: others.compactMap { loadImage(for: $0) })
+        images.append(contentsOf: others.compactMap { loadImage(for: $0).map(AboutIconImageNormalizer.normalized) })
         return images
     }
 
@@ -433,6 +434,67 @@ private enum AboutAppIconVariant: String, CaseIterable {
 
         var seen = Set<String>()
         return urls.filter { seen.insert($0.path).inserted }
+    }
+}
+
+private enum AboutIconImageNormalizer {
+    static func normalized(_ image: NSImage) -> NSImage {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let visibleBounds = visibleBounds(in: cgImage),
+              let croppedImage = cgImage.cropping(to: visibleBounds) else {
+            return image
+        }
+
+        let canvasSize = NSSize(width: 512, height: 512)
+        let output = NSImage(size: canvasSize)
+        output.lockFocus()
+        NSColor.clear.setFill()
+        NSRect(origin: .zero, size: canvasSize).fill()
+
+        let croppedSize = CGSize(width: CGFloat(croppedImage.width), height: CGFloat(croppedImage.height))
+        let scale = min(canvasSize.width / croppedSize.width, canvasSize.height / croppedSize.height)
+        let drawSize = NSSize(width: croppedSize.width * scale, height: croppedSize.height * scale)
+        let drawRect = NSRect(
+            x: (canvasSize.width - drawSize.width) / 2,
+            y: (canvasSize.height - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
+
+        NSImage(cgImage: croppedImage, size: croppedSize).draw(in: drawRect)
+        output.unlockFocus()
+        output.size = canvasSize
+        return output
+    }
+
+    private static func visibleBounds(in image: CGImage) -> CGRect? {
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        let width = bitmap.pixelsWide
+        let height = bitmap.pixelsHigh
+        var minX = width
+        var minY = height
+        var maxX = -1
+        var maxY = -1
+
+        for y in 0..<height {
+            for x in 0..<width where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.01 {
+                minX = min(minX, x)
+                minY = min(minY, y)
+                maxX = max(maxX, x)
+                maxY = max(maxY, y)
+            }
+        }
+
+        guard maxX >= minX, maxY >= minY else {
+            return nil
+        }
+
+        return CGRect(
+            x: CGFloat(minX),
+            y: CGFloat(minY),
+            width: CGFloat(maxX - minX + 1),
+            height: CGFloat(maxY - minY + 1)
+        )
     }
 }
 
