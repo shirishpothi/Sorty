@@ -114,7 +114,7 @@ ul { list-style: none; }
 /* ---------- Layout ---------- */
 .wrap { width: 100%; max-width: var(--maxw); margin-inline: auto; padding-inline: 24px; }
 .wrap-wide { width: 100%; max-width: var(--maxw-wide); margin-inline: auto; padding-inline: 24px; }
-.section { padding-block: clamp(72px, 11vw, 140px); position: relative; }
+.section { padding-block: clamp(40px, 7vw, 88px); position: relative; }
 
 /* Section eyebrow — glass capsule */
 .eyebrow {
@@ -278,7 +278,7 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
 /* ---------- Feature rows ---------- */
 .feature {
   position: relative; display: grid; gap: clamp(36px, 6vw, 76px);
-  align-items: center; padding-block: clamp(48px, 7vw, 96px);
+  align-items: center; padding-block: clamp(32px, 5vw, 64px);
 }
 .feature.reverse { direction: rtl; }
 .feature.reverse > * { direction: ltr; }
@@ -376,12 +376,12 @@ h3 { font-size: clamp(1.15rem, 1.8vw, 1.45rem); font-weight: 600; letter-spacing
 @media (max-width: 720px) { .gallery { grid-template-columns: 1fr; } }
 
 /* ---------- Section header ---------- */
-.shead { text-align: center; max-width: 700px; margin-inline: auto; margin-bottom: 52px; }
+.shead { text-align: center; max-width: 700px; margin-inline: auto; margin-bottom: clamp(28px, 4vw, 44px); }
 .shead .eyebrow { margin-inline: auto; }
 .shead .lead { margin-inline: auto; }
 
 /* ---------- Footer ---------- */
-.footer { border-top: 1px solid var(--hairline); padding-block: 56px 40px; margin-top: 40px; }
+.footer { border-top: 1px solid var(--hairline); padding-block: 48px 40px; margin-top: 24px; }
 .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 40px; margin-bottom: 36px; }
 @media (max-width: 760px) { .footer-grid { grid-template-columns: 1fr 1fr; gap: 26px; } }
 @media (max-width: 480px) { .footer-grid { grid-template-columns: 1fr; } }
