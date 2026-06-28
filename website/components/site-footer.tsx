@@ -36,19 +36,16 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="relative overflow-hidden border-t border-border px-4 pt-14">
-      {/* Sunset aurora rising from the floor (Dia-style gradient). Sits behind
-          all footer content; pointer-events-none so it never eats clicks. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55vh] opacity-90">
+    <footer className="relative isolate overflow-hidden border-t border-border px-4 pt-14">
+      {/* Sunset aurora rising from the floor (Dia-style gradient). Painted
+          behind all footer content via -z-10 inside the footer's own stacking
+          context (created by `isolate`), so the full rainbow reads undimmed and
+          fades to transparent pink at the top the way the real Dia footer does. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55vh] -z-10">
         <DiaGradient />
       </div>
-      {/* Subtle dark scrim so footer text stays legible over the glow. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-t from-background/70 via-background/25 to-transparent"
-      />
 
-      <div className="relative z-10 mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <SortyLogo />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
@@ -94,7 +91,7 @@ export function SiteFooter() {
         ))}
       </div>
 
-      <div className="relative z-10 mx-auto mt-12 flex max-w-5xl flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
+      <div className="mx-auto mt-12 flex max-w-5xl flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
         <p>© {new Date().getFullYear()} Sorty. Released under the GPL v3.</p>
         <p>Made for people with too many files.</p>
       </div>
@@ -102,7 +99,7 @@ export function SiteFooter() {
       {/* Oversized faded brand wordmark */}
       <div
         aria-hidden
-        className="pointer-events-none relative z-10 mt-8 select-none"
+        className="pointer-events-none relative mt-8 select-none"
       >
         <span className="block bg-gradient-to-b from-foreground/[0.07] to-foreground/0 bg-clip-text text-center text-[24vw] font-semibold leading-[0.8] tracking-tighter text-transparent">
           Sorty
