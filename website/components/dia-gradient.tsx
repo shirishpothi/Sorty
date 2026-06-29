@@ -4,9 +4,11 @@
 //
 // A row of N tall, heavily-blurred columns share one vertical rainbow gradient
 // and are arranged in a symmetric bell curve (short at the edges, tallest in the
-// middle). The whole field is anchored to the bottom and RISES UP on mount via a
-// scaleY(0) → 1 transform (transform-origin: bottom), so it unfurls from the
-// floor like an aurora. It's one inline <svg> — no canvas, no per-frame work.
+// middle). The whole field is anchored to the bottom and RISES UP FROM THE FLOOR
+// the first time it scrolls into view via a one-shot scaleY(0) → 1 + opacity 0 → 1
+// reveal (transform-origin: bottom), then stays put — it doesn't fade back out
+// when you scroll up, so the bloom is always present at the footer. It's one
+// inline <svg> — no canvas, no per-frame work.
 //
 // Usage:
 //   <div className="absolute inset-x-0 bottom-0 h-[55vh] pointer-events-none">
@@ -53,6 +55,7 @@ export function DiaGradient({
   valley = 0.55,
   stops = DIA_STOPS,
   riseMs = 1100,
+  strength = 1,
 }: {
   bars?: number
   blur?: number
@@ -60,22 +63,28 @@ export function DiaGradient({
   valley?: number
   stops?: Stop[]
   riseMs?: number
+  /** Peak opacity of the painted field (0..1). Applied to the <svg> so the
+   *  wrapper's 0→1 rise opacity still animates independently on top of it. */
+  strength?: number
 }) {
-  const prefersReduced =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const [shown, setShown] = useState(prefersReduced)
+  const [shown, setShown] = useState(false)
 
   useEffect(() => {
+    const prefersReduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
     if (prefersReduced) {
       setShown(true)
       return
     }
+    // Double-rAF so the browser paints the flat (scaleY 0) state first, then
+    // transitions up — otherwise the initial state is never painted and the
+    // rise animation is skipped.
     const id = requestAnimationFrame(() =>
       requestAnimationFrame(() => setShown(true)),
     )
     return () => cancelAnimationFrame(id)
-  }, [prefersReduced])
+  }, [])
 
   const heights = bellHeights(bars, peak, valley)
   const colW = VBW / bars
@@ -88,12 +97,13 @@ export function DiaGradient({
         width: '100%',
         transformOrigin: 'bottom',
         transform: shown ? 'scaleY(1)' : 'scaleY(0)',
-        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
-        willChange: 'transform',
+        opacity: shown ? 1 : 0,
+        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+        willChange: 'transform, opacity',
       }}
     >
       <svg
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: '100%', width: '100%', opacity: strength }}
         viewBox={`0 0 ${VBW} ${VBH}`}
         preserveAspectRatio="none"
         fill="none"
