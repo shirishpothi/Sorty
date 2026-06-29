@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import { Check } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
@@ -60,17 +59,15 @@ export function Pricing() {
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <a
-                href="#top"
+                href="/#download"
                 className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
               >
-                <Image
-                  src="/apple-icon.png"
-                  alt=""
-                  width={16}
-                  height={16}
-                  className="size-4"
+                <span
+                  className="text-[17px] leading-none"
                   aria-hidden="true"
-                />
+                >
+                  
+                </span>
                 Download for Mac
               </a>
               <a

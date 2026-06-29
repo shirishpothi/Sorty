@@ -9,10 +9,9 @@ const COLUMNS = [
   {
     title: 'Product',
     links: [
-      { label: 'How it works', href: '#how-it-works' },
-      { label: 'Features', href: '#features' },
-      { label: 'Privacy', href: '#privacy' },
-      { label: 'Pricing', href: '#pricing' },
+      { label: 'Features', href: '/#features' },
+      { label: 'Privacy', href: '/privacy-policy' },
+      { label: 'Pricing', href: '/#pricing' },
     ],
   },
   {
@@ -21,7 +20,7 @@ const COLUMNS = [
       { label: 'Changelog', href: `${GITHUB_URL}/releases` },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
-      { label: 'FAQ', href: '#faq' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {
@@ -99,9 +98,9 @@ export function SiteFooter() {
       {/* Oversized faded brand wordmark */}
       <div
         aria-hidden
-        className="pointer-events-none relative mt-8 select-none"
+        className="pointer-events-none relative mt-2 -mb-[15vw] select-none"
       >
-        <span className="block bg-gradient-to-b from-foreground/[0.07] to-foreground/0 bg-clip-text text-center text-[24vw] font-semibold leading-[0.8] tracking-tighter text-transparent">
+        <span className="block bg-gradient-to-b from-foreground/25 via-primary/20 to-primary/0 bg-clip-text text-center text-[32vw] font-semibold leading-[0.78] tracking-tight text-transparent [mask-image:linear-gradient(to_bottom,black_0%,black_48%,transparent_78%)]">
           Sorty
         </span>
       </div>

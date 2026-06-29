@@ -1,19 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 
 const LINKS = [
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Features', href: '#features' },
+  { label: 'Features', href: '/#features' },
   { label: 'Privacy', href: '/privacy-policy' },
   { label: 'Terms', href: '/terms' },
-  { label: 'Pricing', href: '#pricing' },
-  { label: 'FAQ', href: '#faq' },
+  { label: 'Pricing', href: '/#pricing' },
+  { label: 'FAQ', href: '/#faq' },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
@@ -66,17 +64,15 @@ export function SiteNav() {
             GitHub
           </a>
           <a
-            href="#download"
+            href="/#download"
             className="btn-download flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
           >
-            <Image
-              src="/apple-icon.png"
-              alt=""
-              width={16}
-              height={16}
-              className="size-4"
+            <span
+              className="text-[16px] leading-none"
               aria-hidden="true"
-            />
+            >
+              
+            </span>
             <span>Download</span>
           </a>
           <button

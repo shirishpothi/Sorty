@@ -115,18 +115,18 @@ export function Features() {
         </div>
 
         <Reveal className="mt-8">
-          <div className="flex flex-wrap items-center justify-center gap-3 rounded-3xl border border-border bg-card/35 p-4 backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2.5 rounded-3xl border border-border bg-card/35 px-4 py-4 backdrop-blur-md sm:gap-3 sm:px-5">
             {PROVIDERS.map((provider) => (
               <span
                 key={provider.name}
-                className="flex items-center gap-2 rounded-full border border-border bg-background/45 px-3 py-2 text-xs text-muted-foreground"
+                className="flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-background/70 px-3.5 py-2 text-xs font-medium text-foreground/85 shadow-sm shadow-black/20"
               >
                 <Image
                   src={provider.src}
                   alt=""
                   width={24}
                   height={24}
-                  className="size-6"
+                  className="size-6 object-contain"
                 />
                 {provider.name}
               </span>
