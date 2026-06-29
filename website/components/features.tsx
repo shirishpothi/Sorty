@@ -70,13 +70,46 @@ const SHOTS = [
 ]
 
 const PROVIDERS = [
-  { src: '/provider-chatgpt.png', name: 'OpenAI' },
-  { src: '/provider-claude.png', name: 'Claude' },
-  { src: '/provider-gemini.png', name: 'Gemini' },
-  { src: '/provider-github-copilot.png', name: 'GitHub Copilot' },
-  { src: '/provider-groq.png', name: 'Groq' },
-  { src: '/provider-ollama.png', name: 'Ollama' },
-  { src: '/provider-openrouter.png', name: 'OpenRouter' },
+  {
+    src: '/provider-chatgpt.png',
+    name: 'OpenAI',
+    accent: 'bg-emerald-400/12',
+    filter: 'brightness(0) saturate(100%) invert(70%) sepia(28%) saturate(751%) hue-rotate(111deg) brightness(88%) contrast(87%)',
+  },
+  {
+    src: '/provider-claude.png',
+    name: 'Claude',
+    accent: 'bg-orange-300/12',
+  },
+  {
+    src: '/provider-gemini.png',
+    name: 'Gemini',
+    accent: 'bg-blue-400/12',
+  },
+  {
+    src: '/provider-github-copilot.png',
+    name: 'GitHub Copilot',
+    accent: 'bg-violet-400/12',
+    filter: 'brightness(0) saturate(100%) invert(71%) sepia(22%) saturate(1266%) hue-rotate(207deg) brightness(91%) contrast(91%)',
+  },
+  {
+    src: '/provider-groq.png',
+    name: 'Groq',
+    accent: 'bg-amber-300/12',
+    filter: 'brightness(0) saturate(100%) invert(73%) sepia(62%) saturate(1148%) hue-rotate(338deg) brightness(99%) contrast(92%)',
+  },
+  {
+    src: '/provider-ollama.png',
+    name: 'Ollama',
+    accent: 'bg-cyan-300/12',
+    filter: 'brightness(0) saturate(100%) invert(82%) sepia(31%) saturate(552%) hue-rotate(139deg) brightness(93%) contrast(91%)',
+  },
+  {
+    src: '/provider-openrouter.png',
+    name: 'OpenRouter',
+    accent: 'bg-sky-400/12',
+    filter: 'brightness(0) saturate(100%) invert(66%) sepia(62%) saturate(1681%) hue-rotate(176deg) brightness(100%) contrast(94%)',
+  },
 ]
 
 export function Features() {
@@ -121,13 +154,16 @@ export function Features() {
                 key={provider.name}
                 className="flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-background/70 px-3.5 py-2 text-xs font-medium text-foreground/85 shadow-sm shadow-black/20"
               >
-                <Image
-                  src={provider.src}
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="size-6 object-contain"
-                />
+                <span className={`flex size-7 items-center justify-center rounded-full ${provider.accent}`}>
+                  <Image
+                    src={provider.src}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="size-5 object-contain drop-shadow-sm"
+                    style={provider.filter ? { filter: provider.filter } : undefined}
+                  />
+                </span>
                 {provider.name}
               </span>
             ))}

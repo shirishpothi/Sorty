@@ -98,9 +98,9 @@ export function SiteFooter() {
       {/* Oversized faded brand wordmark */}
       <div
         aria-hidden
-        className="pointer-events-none relative mt-2 -mb-[15vw] select-none"
+        className="pointer-events-none relative mt-0 -mb-[24vw] select-none"
       >
-        <span className="block bg-gradient-to-b from-foreground/25 via-primary/20 to-primary/0 bg-clip-text text-center text-[32vw] font-semibold leading-[0.78] tracking-tight text-transparent [mask-image:linear-gradient(to_bottom,black_0%,black_48%,transparent_78%)]">
+        <span className="block bg-gradient-to-b from-foreground/14 via-primary/12 to-primary/0 bg-clip-text text-center text-[30vw] font-semibold leading-[0.74] tracking-tight text-transparent [mask-image:linear-gradient(to_bottom,black_0%,black_34%,transparent_62%)]">
           Sorty
         </span>
       </div>

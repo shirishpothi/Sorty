@@ -15,6 +15,7 @@ const LINKS = [
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
 
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false)
@@ -64,7 +65,9 @@ export function SiteNav() {
             GitHub
           </a>
           <a
-            href="/#download"
+            href={DOWNLOAD_URL}
+            target="_blank"
+            rel="noreferrer"
             className="btn-download flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
           >
             <span

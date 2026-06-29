@@ -3,6 +3,7 @@ import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
 
 const INCLUDED = [
   'Every feature, forever — no paid tiers',
@@ -59,7 +60,9 @@ export function Pricing() {
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <a
-                href="/#download"
+                href={DOWNLOAD_URL}
+                target="_blank"
+                rel="noreferrer"
                 className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
               >
                 <span

@@ -4,6 +4,7 @@ import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
 
 export function Hero() {
   return (
@@ -61,7 +62,9 @@ export function Hero() {
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
               id="download"
-              href="#pricing"
+              href={DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
               className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
             >
               <span
