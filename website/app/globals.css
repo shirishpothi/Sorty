@@ -286,20 +286,6 @@
   animation: highlight-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
 
-/* Gentle native fallback; the controller owns wheel/touch/key section jumps. */
-@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-snap-type: y proximity;
-    scroll-padding-top: 6rem;
-  }
-  .snap-section {
-    scroll-snap-align: start;
-  }
-  html[data-section-scrolling='true'] {
-    scroll-snap-type: none;
-  }
-}
-
 /* Soft blurred dividers between sections */
 .section-seam {
   position: relative;

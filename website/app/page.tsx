@@ -7,12 +7,10 @@ import { Pricing } from '@/components/pricing'
 import { Faq } from '@/components/faq'
 import { SiteFooter } from '@/components/site-footer'
 import { StructuredData } from '@/components/structured-data'
-import { SectionScrollController } from '@/components/section-scroll-controller'
 
 export default function Page() {
   return (
     <main className="relative min-h-screen overflow-x-hidden">
-      <SectionScrollController />
       <StructuredData />
       <SiteNav />
       <Hero />
