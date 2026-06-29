@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Apple, Menu, X } from 'lucide-react'
+import Image from 'next/image'
+import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
@@ -9,7 +10,8 @@ import { GithubIcon } from '@/components/github-icon'
 const LINKS = [
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Features', href: '#features' },
-  { label: 'Privacy', href: '#privacy' },
+  { label: 'Privacy', href: '/privacy-policy' },
+  { label: 'Terms', href: '/terms' },
   { label: 'Pricing', href: '#pricing' },
   { label: 'FAQ', href: '#faq' },
 ]
@@ -67,7 +69,14 @@ export function SiteNav() {
             href="#download"
             className="btn-download flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
           >
-            <Apple className="size-4" />
+            <Image
+              src="/apple-icon.png"
+              alt=""
+              width={16}
+              height={16}
+              className="size-4"
+              aria-hidden="true"
+            />
             <span>Download</span>
           </a>
           <button

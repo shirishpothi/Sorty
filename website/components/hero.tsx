@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { Apple, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 
@@ -64,7 +64,14 @@ export function Hero() {
               href="#pricing"
               className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
             >
-              <Apple className="size-4" />
+              <Image
+                src="/apple-icon.png"
+                alt=""
+                width={16}
+                height={16}
+                className="size-4"
+                aria-hidden="true"
+              />
               Download for Mac
             </a>
             <a
