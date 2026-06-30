@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:sites": "next build && node scripts/package-sites.mjs",
     "start": "next start",
     "lint": "eslint ."
   },
