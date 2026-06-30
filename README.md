@@ -154,31 +154,158 @@ If you see an error indicating that access to a watched folder has been lost (e.
 ## Architecture
 
 ```mermaid
-flowchart TD
-    User["User"] --> SwiftUI["SwiftUI macOS App<br/>Sources/SortyApp"]
-    Finder["Finder Extension<br/>SortyFinderSync"] --> ExtensionCommunication["ExtensionCommunication"]
-    ExtensionCommunication --> SwiftUI
+flowchart LR
+    subgraph EntryPoints["Entry Points"]
+        User["User"]
+        Finder["Finder right-click<br/>SortyFinderSync"]
+        Shortcuts["Shortcuts and App Intents<br/>sorty:// deeplinks"]
+        WatchEvents["Watched folders<br/>FSEvents and schedules"]
+        MenuBar["Menu bar extra<br/>global shortcuts"]
+        Widgets["Widgets<br/>SortyWidgetSnapshotStore"]
+    end
 
-    SwiftUI --> Managers["Managers and ViewModels<br/>@MainActor ObservableObject"]
-    Managers --> FolderOrganizer["FolderOrganizer<br/>scan -> organize -> preview -> apply"]
+    subgraph AppShell["App Shell - Sources/SortyApp"]
+        SortyApp["SortyApp<br/>SwiftUI scenes"]
+        MainWindow["MainWindowRootView<br/>ContentView navigation"]
+        Coordinator["AppCoordinator<br/>background automation"]
+        ExtensionListener["ExtensionListener"]
+        DeeplinkHandler["DeeplinkHandler"]
+        WidgetSync["SortyWidgetSyncManager"]
+    end
 
-    FolderOrganizer --> PromptBuilder["PromptBuilder"]
-    PromptBuilder --> AIClientFactory["AIClientFactory"]
-    AIClientFactory --> AIProviders["AI Providers<br/>OpenAI-compatible APIs<br/>Apple Foundation Models<br/>Ollama"]
-    AIProviders --> OrganizationPlan["OrganizationPlan"]
+    subgraph StateAndSettings["Shared State and Managers"]
+        AppState["AppState"]
+        Settings["SettingsViewModel<br/>AIConfig"]
+        Personas["PersonaManager<br/>CustomPersonaStore"]
+        WatchedFolders["WatchedFoldersManager"]
+        Storage["StorageLocationsManager"]
+        Exclusions["ExclusionRulesManager"]
+        Notifications["NotificationManager<br/>HUD and native alerts"]
+        ModelCatalog["ModelCatalog"]
+        Auth["Keychain and auth managers<br/>ProviderAuthResolver"]
+    end
 
-    OrganizationPlan --> Preview["Interactive Preview"]
-    Preview --> Validation["Security and File Validation"]
-    Validation --> FileSystem["FileSystem Operations"]
-    FileSystem --> History["Organization History<br/>Rollback and Analytics"]
+    subgraph OrganizePipeline["Organization Pipeline - Sources/SortyLib"]
+        FolderOrganizer["FolderOrganizer<br/>idle -> scanning -> organizing -> ready -> applying -> completed"]
+        Scanner["DirectoryScanner"]
+        Content["ContentAnalyzer"]
+        Vision["VisionAnalyzer<br/>ImageVisionAnalyzer"]
+        PromptContext["PromptContextHelper<br/>directory and folder context"]
+        PromptBuilder["PromptBuilder<br/>system and user prompts"]
+        AIClientFactory["AIClientFactory"]
+        AIClient["AIClientProtocol"]
+        ResponseParser["ResponseParser"]
+        Plan["OrganizationPlan"]
+        Preview["PreviewManager<br/>PreviewView"]
+    end
 
-    Managers --> LearningsManager["LearningsManager"]
-    History --> LearningsManager
-    LearningsManager --> PromptBuilder
+    subgraph AIProviders["AI Providers"]
+        OpenAI["OpenAI-compatible<br/>OpenAI, Groq, OpenRouter, Gemini, Ollama"]
+        Anthropic["Anthropic"]
+        Copilot["GitHub Copilot"]
+        Codex["Codex subscription"]
+        AppleFM["Apple Foundation Models"]
+    end
 
-    Managers --> WorkspaceHealth["Workspace Health"]
-    Managers --> Notifications["HUD and Toast Notifications"]
-    Managers --> Deeplinks["DeeplinkHandler<br/>sorty://"]
+    subgraph ApplyAndSafety["Apply, Safety, and Recovery"]
+        Normalizer["StorageDestinationNormalizer"]
+        Validator["FileOrganizationValidator"]
+        Duplicates["DuplicateDetector<br/>SemanticDuplicateDetector"]
+        FileSystem["FileSystemManager<br/>create, move, tag, restore"]
+        History["OrganizationHistory<br/>analytics and rollback"]
+        Conflicts["Conflict resolution<br/>cleanup preview"]
+    end
+
+    subgraph Learning["Learnings System"]
+        LearningsManager["LearningsManager"]
+        ContinuousLearning["ContinuousLearningObserver"]
+        FSMonitor["LearningsFSMonitor"]
+        RuleEngines["RuleInducer<br/>LocalRuleInferenceEngine<br/>LLMRuleInducer"]
+        LearningsProfile["LearningsProfile<br/>rules, examples, corrections"]
+    end
+
+    subgraph Persistence["Persistence and System Integration"]
+        Defaults["UserDefaults and AppStorage"]
+        AppGroup["App group IPC<br/>group.com.sorty.app"]
+        Bookmarks["Security-scoped bookmarks"]
+        Keychain["Keychain"]
+        Sparkle["SparkleUpdateManager"]
+    end
+
+    subgraph FeatureSurfaces["Feature Surfaces"]
+        OrganizeView["Organize and preview"]
+        WatchedFoldersView["Watched folders"]
+        WorkspaceHealth["WorkspaceHealthView"]
+        DuplicatesView["DuplicatesView"]
+        LearningsView["LearningsView"]
+        SettingsView["Settings"]
+        HistoryView["History"]
+    end
+
+    User --> SortyApp
+    Finder --> ExtensionListener
+    ExtensionListener --> MainWindow
+    Shortcuts --> DeeplinkHandler
+    DeeplinkHandler --> MainWindow
+    WatchEvents --> Coordinator
+    MenuBar --> MainWindow
+    Widgets --> WidgetSync
+
+    SortyApp --> MainWindow
+    SortyApp --> Coordinator
+    MainWindow --> AppState
+    MainWindow --> FeatureSurfaces
+    FeatureSurfaces --> FolderOrganizer
+    FeatureSurfaces --> StateAndSettings
+
+    Coordinator --> WatchedFolders
+    Coordinator --> FolderOrganizer
+    Coordinator --> Notifications
+    WidgetSync --> AppGroup
+
+    FolderOrganizer --> Scanner
+    Scanner --> Content
+    Content --> Vision
+    FolderOrganizer --> PromptContext
+    FolderOrganizer --> PromptBuilder
+    PromptBuilder --> LearningsProfile
+    PromptBuilder --> AIClientFactory
+    AIClientFactory --> Settings
+    AIClientFactory --> Auth
+    AIClientFactory --> ModelCatalog
+    AIClientFactory --> AIClient
+    AIClient --> OpenAI
+    AIClient --> Anthropic
+    AIClient --> Copilot
+    AIClient --> Codex
+    AIClient --> AppleFM
+    AIClient --> ResponseParser
+    ResponseParser --> Plan
+    Plan --> Normalizer
+    Normalizer --> Validator
+    Validator --> Preview
+    Preview --> FileSystem
+    FileSystem --> Duplicates
+    FileSystem --> History
+    FileSystem --> Conflicts
+
+    History --> ContinuousLearning
+    Coordinator --> ContinuousLearning
+    FSMonitor --> ContinuousLearning
+    ContinuousLearning --> LearningsManager
+    LearningsManager --> RuleEngines
+    RuleEngines --> LearningsProfile
+    LearningsProfile --> PromptBuilder
+
+    Settings --> Defaults
+    Personas --> Defaults
+    WatchedFolders --> Defaults
+    Storage --> Defaults
+    Exclusions --> Defaults
+    WatchedFolders --> Bookmarks
+    Auth --> Keychain
+    ExtensionListener --> AppGroup
+    Sparkle --> SortyApp
 ```
 
 ## Contributing
