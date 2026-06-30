@@ -151,6 +151,36 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    User["User"] --> SwiftUI["SwiftUI macOS App<br/>Sources/SortyApp"]
+    Finder["Finder Extension<br/>SortyFinderSync"] --> ExtensionCommunication["ExtensionCommunication"]
+    ExtensionCommunication --> SwiftUI
+
+    SwiftUI --> Managers["Managers and ViewModels<br/>@MainActor ObservableObject"]
+    Managers --> FolderOrganizer["FolderOrganizer<br/>scan -> organize -> preview -> apply"]
+
+    FolderOrganizer --> PromptBuilder["PromptBuilder"]
+    PromptBuilder --> AIClientFactory["AIClientFactory"]
+    AIClientFactory --> AIProviders["AI Providers<br/>OpenAI-compatible APIs<br/>Apple Foundation Models<br/>Ollama"]
+    AIProviders --> OrganizationPlan["OrganizationPlan"]
+
+    OrganizationPlan --> Preview["Interactive Preview"]
+    Preview --> Validation["Security and File Validation"]
+    Validation --> FileSystem["FileSystem Operations"]
+    FileSystem --> History["Organization History<br/>Rollback and Analytics"]
+
+    Managers --> LearningsManager["LearningsManager"]
+    History --> LearningsManager
+    LearningsManager --> PromptBuilder
+
+    Managers --> WorkspaceHealth["Workspace Health"]
+    Managers --> Notifications["HUD and Toast Notifications"]
+    Managers --> Deeplinks["DeeplinkHandler<br/>sorty://"]
+```
+
 ## Contributing
 
 We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for:
