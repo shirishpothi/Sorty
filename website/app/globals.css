@@ -354,8 +354,8 @@
   filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  --hero-screenshot-tilt: 0deg;
-  --hero-screenshot-lift: 20px;
+  --hero-screenshot-tilt: 16deg;
+  --hero-screenshot-lift: 0px;
   transform-origin: 50% 10%;
   transform: perspective(900px)
     rotateX(var(--hero-screenshot-tilt))

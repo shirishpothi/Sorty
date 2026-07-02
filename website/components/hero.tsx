@@ -28,8 +28,8 @@ export function Hero() {
         1,
         Math.max(0, (viewport - rect.top) / (viewport * 0.85 + rect.height)),
       )
-      const tilt = progress * 16
-      const lift = 20 - progress * 20
+      const tilt = 16 - progress * 16
+      const lift = progress * 20
       card.style.setProperty('--hero-screenshot-tilt', `${tilt.toFixed(2)}deg`)
       card.style.setProperty('--hero-screenshot-lift', `${lift.toFixed(2)}px`)
     }
