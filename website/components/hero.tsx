@@ -2,6 +2,7 @@ import Image from 'next/image'
 import { ArrowRight } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
+import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
@@ -60,12 +61,10 @@ export function Hero() {
 
         <Reveal delay={240}>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
+            <DownloadButton
               id="download"
               href={DOWNLOAD_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
+              className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
             >
               <span
                 className="text-[17px] leading-none"
@@ -74,7 +73,7 @@ export function Hero() {
                 
               </span>
               Download for Mac
-            </a>
+            </DownloadButton>
             <a
               href={GITHUB_URL}
               target="_blank"

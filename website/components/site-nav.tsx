@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
+import { DownloadButton } from '@/components/download-button'
 
 const LINKS = [
   { label: 'Features', href: '/#features' },
@@ -64,11 +65,9 @@ export function SiteNav() {
             <GithubIcon className="size-4" />
             GitHub
           </a>
-          <a
+          <DownloadButton
             href={DOWNLOAD_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-download flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+            className="gap-1.5 px-4 py-2 text-sm font-medium"
           >
             <span
               className="text-[16px] leading-none"
@@ -77,7 +76,7 @@ export function SiteNav() {
               
             </span>
             <span>Download</span>
-          </a>
+          </DownloadButton>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
