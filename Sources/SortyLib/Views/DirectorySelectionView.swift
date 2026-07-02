@@ -174,13 +174,7 @@ struct DirectorySelectionView: View {
         return Group {
             if #available(macOS 26.0, *) {
                 dropZoneContent
-                    .background {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(
-                                isTargeted
-                                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
-                                    : Color.secondary.opacity(0.05))
-                    }
+                    .systemLiquidGlassBackground(cornerRadius: dropZoneCornerRadius)
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
