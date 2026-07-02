@@ -227,17 +227,20 @@
   animation: sorty-float 9s ease-in-out infinite;
 }
 
-/* Finder-style black download button */
+/* Apple-style bright blue download button */
 .btn-download {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  min-height: 46px;
-  background: #050505;
-  color: #fff;
+  background-image: linear-gradient(
+    180deg,
+    var(--brand-bright) 0%,
+    var(--brand) 100%
+  );
+  color: var(--primary-foreground);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 10%) inset,
-    0 16px 34px -18px oklch(0 0 0 / 90%);
+    0 1px 0 0 oklch(1 0 0 / 35%) inset,
+    0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
   transition:
     transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
@@ -247,44 +250,30 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: 0;
-  width: 74%;
-  height: 52%;
+  top: -20%;
+  width: 68%;
+  height: 62%;
   pointer-events: none;
   transform: translateX(-50%);
   border-radius: 9999px;
   background:
     radial-gradient(
       ellipse at top,
-      oklch(1 0 0 / 14%) 0%,
-      oklch(1 0 0 / 7%) 42%,
-      transparent 74%
+      oklch(1 0 0 / 70%) 0%,
+      oklch(0.9 0.06 245 / 36%) 36%,
+      transparent 72%
     );
   mix-blend-mode: screen;
 }
 .btn-download:hover {
   transform: scale(1.03);
-  filter: brightness(1.12);
+  filter: brightness(1.06);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 14%) inset,
-    0 20px 42px -18px oklch(0 0 0 / 95%);
+    0 1px 0 0 oklch(1 0 0 / 45%) inset,
+    0 16px 40px -8px oklch(0.62 0.19 256 / 75%);
 }
 .btn-download:active {
   transform: scale(0.97);
-}
-.download-label {
-  position: relative;
-  z-index: 1;
-  color: #fff;
-  font-size: clamp(1.25rem, 3.1vw, 2.25rem);
-  font-weight: 750;
-  letter-spacing: 0;
-  line-height: 1;
-}
-.btn-download:has(.download-label span:only-child) .download-label,
-.btn-download .download-label:has(span:only-child) {
-  font-size: 1rem;
-  font-weight: 700;
 }
 .finder-mark {
   position: relative;
@@ -337,6 +326,51 @@
   border-left: 0.12rem solid #1b1b1b;
   border-radius: 0 0 0 0.34rem;
   transform: rotate(-2deg);
+}
+.mac-heading-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12em;
+  margin-left: 0.02em;
+  padding: 0.09em 0.18em 0.1em 0.12em;
+  border-radius: 0.28em;
+  background: #050505;
+  color: #fff;
+  vertical-align: -0.06em;
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 12%) inset,
+    0 18px 36px -22px oklch(0 0 0 / 90%);
+}
+.mac-heading-badge .finder-mark {
+  width: 0.92em;
+  height: 0.92em;
+  border-radius: 0.22em;
+}
+.mac-heading-badge .finder-mark-face {
+  top: 0.25em;
+  width: 0.04em;
+  height: 0.14em;
+}
+.mac-heading-badge .finder-mark-face-left {
+  left: 0.29em;
+}
+.mac-heading-badge .finder-mark-face-right {
+  right: 0.29em;
+}
+.mac-heading-badge .finder-mark-smile {
+  left: 0.26em;
+  bottom: 0.25em;
+  width: 0.4em;
+  height: 0.18em;
+  border-bottom-width: 0.04em;
+  border-left-width: 0.04em;
+  border-radius: 0 0 0 0.12em;
+}
+.mac-heading-text {
+  color: #fff;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 0.94;
 }
 .download-beam {
   display: inline-flex;

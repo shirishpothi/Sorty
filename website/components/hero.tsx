@@ -47,7 +47,17 @@ export function Hero() {
             <span className="highlight-pill highlight-in inline-block rounded-2xl px-3 py-1">
               organization
             </span>{' '}
-            for your Mac
+            for your{' '}
+            <span className="mac-heading-badge highlight-in" aria-label="Mac">
+              <span className="finder-mark" aria-hidden="true">
+                <span className="finder-mark-half finder-mark-left" />
+                <span className="finder-mark-half finder-mark-right" />
+                <span className="finder-mark-face finder-mark-face-left" />
+                <span className="finder-mark-face finder-mark-face-right" />
+                <span className="finder-mark-smile" />
+              </span>
+              <span className="mac-heading-text" aria-hidden="true">Mac</span>
+            </span>
           </h1>
         </Reveal>
 
@@ -64,8 +74,14 @@ export function Hero() {
             <DownloadButton
               id="download"
               href={DOWNLOAD_URL}
-              className="w-full justify-center gap-3 px-5 py-2.5 sm:w-auto"
+              className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
             >
+              <span
+                className="text-[17px] leading-none"
+                aria-hidden="true"
+              >
+                
+              </span>
               Download for Mac
             </DownloadButton>
             <a
