@@ -22,36 +22,47 @@ export function Hero() {
     let frame = 0
     let currentTilt = 16
     let currentLift = 0
+    let currentScale = 0.985
     let targetTilt = 16
     let targetLift = 0
+    let targetScale = 0.985
 
     const readTarget = () => {
       const rect = card.getBoundingClientRect()
       const viewport = window.innerHeight || document.documentElement.clientHeight
       const progress = Math.min(
         1,
-        Math.max(0, (viewport - rect.top) / (viewport * 0.85 + rect.height)),
+        Math.max(0, (viewport * 0.82 - rect.top) / (viewport * 0.42)),
       )
       targetTilt = 16 - progress * 16
       targetLift = progress * 20
+      targetScale = 0.985 + progress * 0.015
     }
 
     const renderTilt = () => {
       const tiltDelta = targetTilt - currentTilt
       const liftDelta = targetLift - currentLift
+      const scaleDelta = targetScale - currentScale
 
-      currentTilt += tiltDelta * 0.16
-      currentLift += liftDelta * 0.16
+      currentTilt += tiltDelta * 0.24
+      currentLift += liftDelta * 0.24
+      currentScale += scaleDelta * 0.24
 
-      if (Math.abs(tiltDelta) < 0.01 && Math.abs(liftDelta) < 0.02) {
+      if (
+        Math.abs(tiltDelta) < 0.01 &&
+        Math.abs(liftDelta) < 0.02 &&
+        Math.abs(scaleDelta) < 0.0001
+      ) {
         currentTilt = targetTilt
         currentLift = targetLift
+        currentScale = targetScale
       }
 
       card.style.setProperty('--hero-screenshot-tilt', `${currentTilt.toFixed(2)}deg`)
       card.style.setProperty('--hero-screenshot-lift', `${currentLift.toFixed(2)}px`)
+      card.style.setProperty('--hero-screenshot-scale', currentScale.toFixed(4))
 
-      if (currentTilt !== targetTilt || currentLift !== targetLift) {
+      if (currentTilt !== targetTilt || currentLift !== targetLift || currentScale !== targetScale) {
         frame = window.requestAnimationFrame(renderTilt)
       } else {
         frame = 0
@@ -69,6 +80,7 @@ export function Hero() {
     readTarget()
     currentTilt = targetTilt
     currentLift = targetLift
+    currentScale = targetScale
     renderTilt()
     window.addEventListener('scroll', scheduleTilt, { passive: true })
     window.addEventListener('resize', scheduleTilt)

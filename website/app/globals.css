@@ -356,11 +356,12 @@
 .hero-screenshot-card {
   --hero-screenshot-tilt: 16deg;
   --hero-screenshot-lift: 0px;
+  --hero-screenshot-scale: 0.985;
   transform-origin: 50% 10%;
   transform: perspective(900px)
     rotateX(var(--hero-screenshot-tilt))
     translateY(var(--hero-screenshot-lift))
-    scale(0.985);
+    scale(var(--hero-screenshot-scale));
   transform-style: preserve-3d;
   will-change: transform;
 }
