@@ -346,21 +346,21 @@
 .hero-copy-sorty-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 0.25em;
-  vertical-align: -0.22em;
+  gap: 0.18em;
+  vertical-align: -0.08em;
   white-space: nowrap;
 }
 .hero-copy-sorty-icon {
   display: inline-block;
-  width: 1.35em;
-  height: 1.35em;
+  width: 1.05em;
+  height: 1.05em;
   flex: 0 0 auto;
-  border-radius: 0.32em;
-  transform: rotate(-7deg);
-  filter: drop-shadow(0 5px 10px oklch(0.62 0.19 256 / 36%));
+  border-radius: 0.24em;
+  transform: rotate(-5deg);
+  filter: drop-shadow(0 3px 6px oklch(0.62 0.19 256 / 24%));
 }
 .hero-screenshot-card {
-  transform-origin: 50% 10%;
+  transform-origin: 50% 0%;
 }
 @supports (animation-timeline: view()) {
   .hero-screenshot-card {
@@ -372,10 +372,10 @@
 }
 @keyframes hero-screenshot-scroll-rotate {
   from {
-    transform: perspective(1200px) rotateX(7deg) rotateZ(-2.5deg) scale(0.96);
+    transform: perspective(1200px) rotateX(12deg) translateY(24px) scale(0.96);
   }
   to {
-    transform: perspective(1200px) rotateX(0deg) rotateZ(0deg) scale(1);
+    transform: perspective(1200px) rotateX(0deg) translateY(0) scale(1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
