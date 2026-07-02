@@ -353,22 +353,6 @@
   opacity: 0.82;
   transition: opacity 0.3s ease;
 }
-.btn-support::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transform: translateX(-112%) skewX(-16deg);
-  border-radius: inherit;
-  background: linear-gradient(
-    100deg,
-    transparent 18%,
-    oklch(1 0 0 / 34%) 44%,
-    transparent 70%
-  );
-  mix-blend-mode: screen;
-  opacity: 0;
-}
 .btn-support > * {
   position: relative;
   z-index: 1;
@@ -389,9 +373,6 @@
 .btn-support:focus-visible::before {
   opacity: 1;
 }
-.btn-support:hover::after {
-  animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
 .btn-support:active {
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 28%) inset,
@@ -399,6 +380,22 @@
 }
 .btn-support:active::before {
   opacity: 0.62;
+}
+.support-heart-icon {
+  fill: transparent;
+  stroke: currentColor;
+  transform-origin: 50% 58%;
+  transition:
+    fill 0.18s ease,
+    color 0.18s ease,
+    filter 0.18s ease;
+}
+.btn-support:hover .support-heart-icon,
+.btn-support:focus-visible .support-heart-icon {
+  color: oklch(0.67 0.25 24);
+  fill: currentColor;
+  filter: drop-shadow(0 0 7px oklch(0.67 0.25 24 / 70%));
+  animation: support-heart-beat 0.82s ease-in-out infinite;
 }
 .download-intent-shell {
   --download-intent: 0;
@@ -560,6 +557,24 @@
     transform: translateX(112%) skewX(-16deg);
   }
 }
+@keyframes support-heart-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.22);
+  }
+  34% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+  66% {
+    transform: scale(1);
+  }
+}
 @keyframes download-modal-backdrop-in {
   0% {
     opacity: 0;
@@ -662,6 +677,10 @@
     transform: translateX(-50%);
   }
   .btn-download:hover::after {
+    animation: none;
+  }
+  .btn-support:hover .support-heart-icon,
+  .btn-support:focus-visible .support-heart-icon {
     animation: none;
   }
   .download-modal-backdrop,

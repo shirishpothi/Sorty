@@ -1,4 +1,4 @@
-import { Code2, Cpu, FolderOpen, HeartHandshake, Infinity, UsersRound } from 'lucide-react'
+import { Code2, Cpu, FolderOpen, Heart, Infinity, UsersRound } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -103,7 +103,7 @@ export function Pricing() {
                 rel="noreferrer"
                 className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
               >
-                <HeartHandshake className="size-4" />
+                <Heart className="support-heart-icon size-4" />
                 Donate
               </a>
             </div>

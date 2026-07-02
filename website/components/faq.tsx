@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { HeartHandshake, Plus } from 'lucide-react'
+import { Heart, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reveal } from '@/components/reveal'
 import { FAQS } from '@/components/faq-data'
@@ -71,7 +71,7 @@ export function Faq() {
             rel="noreferrer"
             className="btn-support inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
           >
-            <HeartHandshake className="size-4" />
+            <Heart className="support-heart-icon size-4" />
             Support the developer
           </a>
         </Reveal>

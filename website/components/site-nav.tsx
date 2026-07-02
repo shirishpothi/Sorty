@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { HeartHandshake, Menu, X } from 'lucide-react'
+import { Heart, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
@@ -72,7 +72,7 @@ export function SiteNav() {
             rel="noreferrer"
             className="btn-support hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium lg:flex"
           >
-            <HeartHandshake className="size-4" />
+            <Heart className="support-heart-icon size-4" />
             Donate
           </a>
           <DownloadButton
@@ -125,7 +125,7 @@ export function SiteNav() {
             rel="noreferrer"
             className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
           >
-            <HeartHandshake className="size-4" />
+            <Heart className="support-heart-icon size-4" />
             Donate to support Sorty
           </a>
         </div>

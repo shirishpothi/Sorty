@@ -1,4 +1,4 @@
-import { HeartHandshake, Mail } from 'lucide-react'
+import { Heart, Mail } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
@@ -76,7 +76,7 @@ export function SiteFooter() {
               className="btn-support flex size-9 items-center justify-center rounded-full"
               aria-label="Donate to support Sorty"
             >
-              <HeartHandshake className="size-4" />
+              <Heart className="support-heart-icon size-4" />
             </a>
           </div>
         </div>
