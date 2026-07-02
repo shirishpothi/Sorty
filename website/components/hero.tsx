@@ -190,9 +190,9 @@ export function Hero() {
           />
           <Image
             src="/sorty-app.png"
-            alt="The Sorty app showing an AI-generated organization plan for a Downloads folder, with files grouped into Images, Documents, Invoices and Archives."
-            width={1600}
-            height={1000}
+            alt="The Sorty app prompting the user to select a directory to organize."
+            width={1102}
+            height={754}
             className="w-full rounded-xl sm:rounded-2xl"
             priority
           />
