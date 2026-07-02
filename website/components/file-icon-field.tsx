@@ -10,6 +10,7 @@ type CollapseTarget = {
 type FileIconFieldProps = {
   collapseTarget: CollapseTarget | null
   collapsing: boolean
+  obstacleSelector?: string
 }
 
 type Particle = {
@@ -31,6 +32,14 @@ type Particle = {
 
 const COLORS = ['#60a5fa', '#93c5fd', '#f8fafc', '#38bdf8', '#a78bfa']
 const FILE_COUNT = 58
+const BOUNCE_PADDING = 12
+
+type Obstacle = {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
 
 function createParticle(): Particle {
   const angle = Math.random() * Math.PI * 2
@@ -75,6 +84,82 @@ function easeInOutCubic(value: number) {
   return value < 0.5
     ? 4 * value * value * value
     : 1 - Math.pow(-2 * value + 2, 3) / 2
+}
+
+function measureObstacles(selector?: string): Obstacle[] {
+  if (!selector) {
+    return []
+  }
+
+  return Array.from(document.querySelectorAll<HTMLElement>(selector)).map(
+    (element) => {
+      const bounds = element.getBoundingClientRect()
+
+      return {
+        left: bounds.left - BOUNCE_PADDING,
+        right: bounds.right + BOUNCE_PADDING,
+        top: bounds.top - BOUNCE_PADDING,
+        bottom: bounds.bottom + BOUNCE_PADDING,
+      }
+    },
+  )
+}
+
+function bounceOffObstacles(
+  particle: Particle,
+  obstacles: Obstacle[],
+  width: number,
+  height: number,
+) {
+  const x = particle.x * width
+  const y = particle.y * height
+  const radius = 14 * particle.size
+
+  for (const obstacle of obstacles) {
+    const closestX = clamp(x, obstacle.left, obstacle.right)
+    const closestY = clamp(y, obstacle.top, obstacle.bottom)
+    const dx = x - closestX
+    const dy = y - closestY
+    const distance = Math.hypot(dx, dy)
+
+    if (distance > radius) {
+      continue
+    }
+
+    let overlap = radius - distance + 1
+    let normalX = distance > 0 ? dx / distance : 0
+    let normalY = distance > 0 ? dy / distance : -1
+
+    if (distance === 0) {
+      const gaps = [
+        { nx: -1, ny: 0, value: Math.abs(x - obstacle.left) },
+        { nx: 1, ny: 0, value: Math.abs(obstacle.right - x) },
+        { nx: 0, ny: -1, value: Math.abs(y - obstacle.top) },
+        { nx: 0, ny: 1, value: Math.abs(obstacle.bottom - y) },
+      ].sort((a, b) => a.value - b.value)
+
+      normalX = gaps[0].nx
+      normalY = gaps[0].ny
+      overlap = gaps[0].value + radius + 1
+    }
+
+    particle.x += (normalX * overlap) / Math.max(width, 1)
+    particle.y += (normalY * overlap) / Math.max(height, 1)
+
+    const dot = particle.vx * normalX + particle.vy * normalY
+    if (dot < 0) {
+      particle.vx = (particle.vx - 2 * dot * normalX) * 1.18
+      particle.vy = (particle.vy - 2 * dot * normalY) * 1.18
+    } else {
+      particle.vx += normalX * 0.00018
+      particle.vy += normalY * 0.00018
+    }
+
+    particle.vx = clamp(particle.vx, -0.001, 0.001)
+    particle.vy = clamp(particle.vy, -0.001, 0.001)
+    particle.rotation += normalX * 0.12 + normalY * 0.08
+    return
+  }
 }
 
 function drawFileIcon(
@@ -165,12 +250,14 @@ function drawFileIcon(
 export function FileIconField({
   collapseTarget,
   collapsing,
+  obstacleSelector,
 }: FileIconFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
   const targetRef = useRef(collapseTarget)
   const collapsingRef = useRef(collapsing)
   const collapseStartedAtRef = useRef<number | null>(null)
+  const obstaclesRef = useRef<Obstacle[]>([])
 
   useEffect(() => {
     targetRef.current = collapseTarget
@@ -217,6 +304,7 @@ export function FileIconField({
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      obstaclesRef.current = measureObstacles(obstacleSelector)
     }
 
     const render = () => {
@@ -251,6 +339,12 @@ export function FileIconField({
             particle.vx + Math.sin(tick * 0.01 + particle.phase) * 0.0001
           particle.y +=
             particle.vy + Math.cos(tick * 0.012 + particle.phase) * 0.00008
+          bounceOffObstacles(
+            particle,
+            obstaclesRef.current,
+            width,
+            height,
+          )
         }
 
         if (!collapsingRef.current) {

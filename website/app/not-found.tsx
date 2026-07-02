@@ -39,24 +39,40 @@ export default function NotFound() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,oklch(0.62_0.19_256_/_0.22),transparent_32%),linear-gradient(180deg,oklch(0.16_0.004_260),oklch(0.08_0_0))]" />
-      <FileIconField collapseTarget={target} collapsing={collapsing} />
+      <FileIconField
+        collapseTarget={target}
+        collapsing={collapsing}
+        obstacleSelector="[data-file-bounce]"
+      />
 
       <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16 text-center">
-        <a href="/" className="absolute top-6 left-6">
+        <a href="/" className="absolute top-6 left-6" data-file-bounce>
           <SortyLogo />
         </a>
 
-        <div className="mb-8 flex size-16 items-center justify-center rounded-2xl border border-white/12 bg-white/8 shadow-2xl shadow-black/40 backdrop-blur-xl">
+        <div
+          className="mb-8 flex size-16 items-center justify-center rounded-2xl border border-white/12 bg-white/8 shadow-2xl shadow-black/40 backdrop-blur-xl"
+          data-file-bounce
+        >
           <FolderSearch className="size-8 text-sky-200" strokeWidth={1.7} />
         </div>
 
-        <p className="mb-3 font-mono text-sm font-medium tracking-[0.24em] text-sky-200/80 uppercase">
+        <p
+          className="mb-3 font-mono text-sm font-medium tracking-[0.24em] text-sky-200/80 uppercase"
+          data-file-bounce
+        >
           404
         </p>
-        <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
+        <h1
+          className="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl"
+          data-file-bounce
+        >
           This folder is empty
         </h1>
-        <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
+        <p
+          className="mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg"
+          data-file-bounce
+        >
           The page you were looking for moved, vanished, or never made it into
           the plan.
         </p>
@@ -66,6 +82,7 @@ export default function NotFound() {
           type="button"
           onClick={returnHome}
           disabled={collapsing}
+          data-file-bounce
           className={cn(
             'btn-download relative mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition-transform duration-200 hover:scale-[1.02] focus-visible:ring-3 focus-visible:ring-sky-300/45 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-95',
             collapsing && 'scale-105 shadow-sky-400/50',
