@@ -227,20 +227,17 @@
   animation: sorty-float 9s ease-in-out infinite;
 }
 
-/* Apple-style bright blue download button */
+/* Finder-style black download button */
 .btn-download {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  background-image: linear-gradient(
-    180deg,
-    var(--brand-bright) 0%,
-    var(--brand) 100%
-  );
-  color: var(--primary-foreground);
+  min-height: 46px;
+  background: #050505;
+  color: #fff;
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 35%) inset,
-    0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
+    0 1px 0 0 oklch(1 0 0 / 10%) inset,
+    0 16px 34px -18px oklch(0 0 0 / 90%);
   transition:
     transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
@@ -250,30 +247,96 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: -20%;
-  width: 68%;
-  height: 62%;
+  top: 0;
+  width: 74%;
+  height: 52%;
   pointer-events: none;
   transform: translateX(-50%);
   border-radius: 9999px;
   background:
     radial-gradient(
       ellipse at top,
-      oklch(1 0 0 / 70%) 0%,
-      oklch(0.9 0.06 245 / 36%) 36%,
-      transparent 72%
+      oklch(1 0 0 / 14%) 0%,
+      oklch(1 0 0 / 7%) 42%,
+      transparent 74%
     );
   mix-blend-mode: screen;
 }
 .btn-download:hover {
   transform: scale(1.03);
-  filter: brightness(1.06);
+  filter: brightness(1.12);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 45%) inset,
-    0 16px 40px -8px oklch(0.62 0.19 256 / 75%);
+    0 1px 0 0 oklch(1 0 0 / 14%) inset,
+    0 20px 42px -18px oklch(0 0 0 / 95%);
 }
 .btn-download:active {
   transform: scale(0.97);
+}
+.download-label {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  font-size: clamp(1.25rem, 3.1vw, 2.25rem);
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.btn-download:has(.download-label span:only-child) .download-label,
+.btn-download .download-label:has(span:only-child) {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.finder-mark {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 0.72rem;
+  transform: rotate(6deg);
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 40%) inset,
+    0 6px 12px -8px oklch(0 0 0 / 85%);
+}
+.finder-mark-half {
+  position: absolute;
+  inset-block: 0;
+  width: 52%;
+}
+.finder-mark-left {
+  left: 0;
+  background: linear-gradient(150deg, #1ac4ff 0%, #0b73ff 100%);
+}
+.finder-mark-right {
+  right: 0;
+  background: linear-gradient(160deg, #f7f7f7 0%, #d7dde4 100%);
+}
+.finder-mark-face {
+  position: absolute;
+  top: 0.78rem;
+  width: 0.14rem;
+  height: 0.42rem;
+  border-radius: 9999px;
+  background: #1b1b1b;
+}
+.finder-mark-face-left {
+  left: 0.88rem;
+}
+.finder-mark-face-right {
+  right: 0.88rem;
+}
+.finder-mark-smile {
+  position: absolute;
+  left: 0.78rem;
+  bottom: 0.75rem;
+  width: 1.24rem;
+  height: 0.56rem;
+  border-bottom: 0.12rem solid #1b1b1b;
+  border-left: 0.12rem solid #1b1b1b;
+  border-radius: 0 0 0 0.34rem;
+  transform: rotate(-2deg);
 }
 .download-beam {
   display: inline-flex;

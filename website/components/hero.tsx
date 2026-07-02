@@ -64,14 +64,8 @@ export function Hero() {
             <DownloadButton
               id="download"
               href={DOWNLOAD_URL}
-              className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
+              className="w-full justify-center gap-3 px-5 py-2.5 sm:w-auto"
             >
-              <span
-                className="text-[17px] leading-none"
-                aria-hidden="true"
-              >
-                
-              </span>
               Download for Mac
             </DownloadButton>
             <a

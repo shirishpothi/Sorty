@@ -62,14 +62,8 @@ export function Pricing() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <DownloadButton
                 href={DOWNLOAD_URL}
-                className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium"
+                className="w-full justify-center gap-3 px-5 py-2.5"
               >
-                <span
-                  className="text-[17px] leading-none"
-                  aria-hidden="true"
-                >
-                  
-                </span>
                 Download for Mac
               </DownloadButton>
               <a
