@@ -213,7 +213,7 @@ export function DownloadButton({
                   copyFailed && 'border-destructive/55',
                 )}
               >
-                <code className="min-w-0 break-all px-1 text-xs leading-relaxed text-foreground sm:overflow-x-auto sm:whitespace-nowrap">
+                <code className="min-w-0 break-all px-1 text-xs leading-relaxed text-foreground">
                   {XATTR_COMMAND}
                 </code>
                 <button
