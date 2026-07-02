@@ -1,7 +1,6 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useRef } from 'react'
 import { ArrowRight, Star } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
@@ -11,90 +10,6 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function Hero() {
-  const screenshotRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const card = screenshotRef.current
-    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return
-    }
-
-    let frame = 0
-    let currentTilt = 16
-    let currentLift = 0
-    let currentScale = 0.985
-    let targetTilt = 16
-    let targetLift = 0
-    let targetScale = 0.985
-
-    const readTarget = () => {
-      const rect = card.getBoundingClientRect()
-      const viewport = window.innerHeight || document.documentElement.clientHeight
-      const rawProgress = Math.min(
-        1,
-        Math.max(0, (viewport * 0.74 - rect.top) / (viewport * 0.28)),
-      )
-      const progress = rawProgress * rawProgress * (3 - 2 * rawProgress)
-      targetTilt = 16 - progress * 16
-      targetLift = progress * 20
-      targetScale = 0.985 + progress * 0.015
-    }
-
-    const renderTilt = () => {
-      const tiltDelta = targetTilt - currentTilt
-      const liftDelta = targetLift - currentLift
-      const scaleDelta = targetScale - currentScale
-
-      currentTilt += tiltDelta * 0.18
-      currentLift += liftDelta * 0.18
-      currentScale += scaleDelta * 0.18
-
-      if (
-        Math.abs(tiltDelta) < 0.01 &&
-        Math.abs(liftDelta) < 0.02 &&
-        Math.abs(scaleDelta) < 0.0001
-      ) {
-        currentTilt = targetTilt
-        currentLift = targetLift
-        currentScale = targetScale
-      }
-
-      card.style.setProperty('--hero-screenshot-tilt', `${currentTilt.toFixed(2)}deg`)
-      card.style.setProperty('--hero-screenshot-lift', `${currentLift.toFixed(2)}px`)
-      card.style.setProperty('--hero-screenshot-scale', currentScale.toFixed(4))
-
-      if (currentTilt !== targetTilt || currentLift !== targetLift || currentScale !== targetScale) {
-        frame = window.requestAnimationFrame(renderTilt)
-      } else {
-        frame = 0
-      }
-    }
-
-    const scheduleTilt = () => {
-      readTarget()
-      if (frame) {
-        return
-      }
-      frame = window.requestAnimationFrame(renderTilt)
-    }
-
-    readTarget()
-    currentTilt = targetTilt
-    currentLift = targetLift
-    currentScale = targetScale
-    renderTilt()
-    window.addEventListener('scroll', scheduleTilt, { passive: true })
-    window.addEventListener('resize', scheduleTilt)
-
-    return () => {
-      if (frame) {
-        window.cancelAnimationFrame(frame)
-      }
-      window.removeEventListener('scroll', scheduleTilt)
-      window.removeEventListener('resize', scheduleTilt)
-    }
-  }, [])
-
   return (
     <section
       id="top"
@@ -203,7 +118,6 @@ export function Hero() {
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
         <div
-          ref={screenshotRef}
           className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
         >
           <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">

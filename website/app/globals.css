@@ -354,21 +354,7 @@
   filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  --hero-screenshot-tilt: 16deg;
-  --hero-screenshot-lift: 0px;
-  --hero-screenshot-scale: 0.985;
-  transform-origin: 50% 10%;
-  transform: perspective(900px)
-    rotateX(var(--hero-screenshot-tilt))
-    translateY(var(--hero-screenshot-lift))
-    scale(var(--hero-screenshot-scale));
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-screenshot-card {
-    transform: none;
-  }
+  transform: translateZ(0);
 }
 .download-beam {
   display: inline-flex;
