@@ -2,12 +2,14 @@ import SwiftUI
 
 extension View {
     @ViewBuilder
-    func systemLiquidGlassBackground(cornerRadius: CGFloat) -> some View {
+    func systemLiquidGlassBackground(cornerRadius: CGFloat, clear: Bool = false) -> some View {
         if #available(macOS 26.0, *) {
             self.background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(.clear)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                    .glassEffect(
+                        clear ? .clear.interactive() : .regular.interactive(),
+                        in: .rect(cornerRadius: cornerRadius))
             }
         } else {
             self
