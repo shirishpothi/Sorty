@@ -237,7 +237,7 @@
     var(--brand-bright) 0%,
     var(--brand) 100%
   );
-  color: var(--primary-foreground);
+  color: oklch(0.99 0 0);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 35%) inset,
     0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
@@ -264,6 +264,10 @@
       transparent 72%
     );
   mix-blend-mode: screen;
+}
+.btn-download > * {
+  position: relative;
+  z-index: 1;
 }
 .btn-download:hover {
   transform: scale(1.03);
