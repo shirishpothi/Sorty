@@ -18,10 +18,15 @@ type Particle = {
   vx: number
   vy: number
   size: number
+  baseSize: number
   phase: number
   color: string
   kind: 'doc' | 'image' | 'folder'
   rotation: number
+  collapseStartX: number
+  collapseStartY: number
+  collapseDelay: number
+  collapseOrbit: number
 }
 
 const COLORS = ['#60a5fa', '#93c5fd', '#f8fafc', '#38bdf8', '#a78bfa']
@@ -30,12 +35,15 @@ const FILE_COUNT = 58
 function createParticle(): Particle {
   const angle = Math.random() * Math.PI * 2
 
+  const size = 0.72 + Math.random() * 0.75
+
   return {
     x: Math.random(),
     y: Math.random(),
     vx: Math.cos(angle) * (0.00008 + Math.random() * 0.00018),
     vy: Math.sin(angle) * (0.00006 + Math.random() * 0.00014),
-    size: 0.72 + Math.random() * 0.75,
+    size,
+    baseSize: size,
     phase: Math.random() * Math.PI * 2,
     color: COLORS[Math.floor(Math.random() * COLORS.length)],
     kind:
@@ -45,7 +53,28 @@ function createParticle(): Particle {
           ? 'image'
           : 'doc',
     rotation: (Math.random() - 0.5) * 0.28,
+    collapseStartX: 0,
+    collapseStartY: 0,
+    collapseDelay: Math.random() * 110,
+    collapseOrbit: 0.035 + Math.random() * 0.09,
   }
+}
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function easeOutBack(value: number) {
+  const c1 = 1.70158
+  const c3 = c1 + 1
+
+  return 1 + c3 * Math.pow(value - 1, 3) + c1 * Math.pow(value - 1, 2)
+}
+
+function easeInOutCubic(value: number) {
+  return value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2
 }
 
 function drawFileIcon(
@@ -141,12 +170,26 @@ export function FileIconField({
   const particlesRef = useRef<Particle[]>([])
   const targetRef = useRef(collapseTarget)
   const collapsingRef = useRef(collapsing)
+  const collapseStartedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     targetRef.current = collapseTarget
   }, [collapseTarget])
 
   useEffect(() => {
+    if (collapsing && !collapsingRef.current) {
+      collapseStartedAtRef.current = performance.now()
+      particlesRef.current = particlesRef.current.map((particle) => ({
+        ...particle,
+        collapseStartX: particle.x,
+        collapseStartY: particle.y,
+      }))
+    }
+
+    if (!collapsing) {
+      collapseStartedAtRef.current = null
+    }
+
     collapsingRef.current = collapsing
   }, [collapsing])
 
@@ -179,14 +222,30 @@ export function FileIconField({
     const render = () => {
       tick += 1
       ctx.clearRect(0, 0, width, height)
+      const now = performance.now()
 
       for (const particle of particlesRef.current) {
         if (collapsingRef.current && targetRef.current) {
           const targetX = targetRef.current.x / Math.max(width, 1)
           const targetY = targetRef.current.y / Math.max(height, 1)
-          particle.x += (targetX - particle.x) * 0.085
-          particle.y += (targetY - particle.y) * 0.085
-          particle.size *= 0.985
+          const elapsed = now - (collapseStartedAtRef.current ?? now)
+          const rawProgress = clamp((elapsed - particle.collapseDelay) / 430)
+          const pull = easeOutBack(rawProgress)
+          const fade = easeInOutCubic(rawProgress)
+          const orbitAngle = particle.phase + rawProgress * Math.PI * 5.4
+          const orbit = particle.collapseOrbit * Math.pow(1 - rawProgress, 1.4)
+          const distanceKick = Math.sin(rawProgress * Math.PI) * 0.022
+
+          particle.x =
+            particle.collapseStartX +
+            (targetX - particle.collapseStartX) * pull +
+            Math.cos(orbitAngle) * (orbit + distanceKick)
+          particle.y =
+            particle.collapseStartY +
+            (targetY - particle.collapseStartY) * pull +
+            Math.sin(orbitAngle) * (orbit + distanceKick)
+          particle.size = particle.baseSize * (1 - fade * 0.78)
+          particle.rotation += 0.16 + rawProgress * 0.08
         } else {
           particle.x +=
             particle.vx + Math.sin(tick * 0.01 + particle.phase) * 0.0001
@@ -194,10 +253,12 @@ export function FileIconField({
             particle.vy + Math.cos(tick * 0.012 + particle.phase) * 0.00008
         }
 
-        if (particle.x < -0.08) particle.x = 1.08
-        if (particle.x > 1.08) particle.x = -0.08
-        if (particle.y < -0.08) particle.y = 1.08
-        if (particle.y > 1.08) particle.y = -0.08
+        if (!collapsingRef.current) {
+          if (particle.x < -0.08) particle.x = 1.08
+          if (particle.x > 1.08) particle.x = -0.08
+          if (particle.y < -0.08) particle.y = 1.08
+          if (particle.y > 1.08) particle.y = -0.08
+        }
 
         drawFileIcon(ctx, particle, width, height, tick)
       }

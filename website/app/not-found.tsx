@@ -5,6 +5,7 @@ import { ArrowLeft, FolderSearch } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FileIconField } from '@/components/file-icon-field'
 import { SortyLogo } from '@/components/sorty-logo'
+import { cn } from '@/lib/utils'
 
 export default function NotFound() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export default function NotFound() {
         : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     )
     setCollapsing(true)
-    window.setTimeout(() => router.push('/'), 720)
+    window.setTimeout(() => router.push('/'), 560)
   }
 
   return (
@@ -65,10 +66,26 @@ export default function NotFound() {
           type="button"
           onClick={returnHome}
           disabled={collapsing}
-          className="btn-download mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition-transform hover:scale-[1.02] focus-visible:ring-3 focus-visible:ring-sky-300/45 focus-visible:outline-none disabled:pointer-events-none disabled:scale-100 disabled:opacity-95"
+          className={cn(
+            'btn-download relative mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition-transform duration-200 hover:scale-[1.02] focus-visible:ring-3 focus-visible:ring-sky-300/45 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-95',
+            collapsing && 'scale-105 shadow-sky-400/50',
+          )}
         >
-          <ArrowLeft className="size-4" />
-          Return to website
+          {collapsing && (
+            <>
+              <span className="absolute inset-[-10px] animate-ping rounded-full border border-sky-200/50" />
+              <span className="absolute inset-[-18px] rounded-full border border-sky-300/20" />
+            </>
+          )}
+          <ArrowLeft
+            className={cn(
+              'relative size-4 transition-transform duration-200',
+              collapsing && '-translate-x-1',
+            )}
+          />
+          <span className="relative">
+            {collapsing ? 'Returning...' : 'Return to website'}
+          </span>
         </button>
       </section>
     </main>
