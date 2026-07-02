@@ -301,7 +301,7 @@
   transform: translateY(-0.015em) rotate(6deg);
 }
 .mac-heading-text {
-  color: transparent;
+  color: oklch(0.97 0.003 250);
   font-weight: 750;
   letter-spacing: 0;
   line-height: 0.94;
