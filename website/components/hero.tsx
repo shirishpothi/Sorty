@@ -2,13 +2,19 @@
 
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
-import { ArrowRight, Star } from 'lucide-react'
+import { ArrowRight, Cpu, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
+
+const TRUST_ITEMS = [
+  { icon: Monitor, label: 'macOS 15+' },
+  { icon: Cpu, label: 'Apple Silicon & Intel' },
+  { icon: UserX, label: 'No account required' },
+]
 
 export function Hero() {
   const screenshotRef = useRef<HTMLDivElement>(null)
@@ -157,9 +163,17 @@ export function Hero() {
         </Reveal>
 
         <Reveal delay={320}>
-          <p className="mt-6 text-xs text-muted-foreground">
-            macOS 15+ · Apple Silicon &amp; Intel · No account required
-          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {TRUST_ITEMS.map(({ icon: Icon, label }) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/45 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-md"
+              >
+                <Icon className="size-3.5 text-primary" />
+                {label}
+              </span>
+            ))}
+          </div>
         </Reveal>
       </div>
 

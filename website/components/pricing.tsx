@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Code2, Cpu, FolderOpen, Infinity, UsersRound } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -7,11 +7,26 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 const INCLUDED = [
-  'Every feature, forever — no paid tiers',
-  'Unlimited folders and organization runs',
-  'Bring your own AI provider or run local',
-  'Full source code under the GPL v3',
-  'Community support on GitHub',
+  {
+    icon: Infinity,
+    text: 'Every feature, forever — no paid tiers',
+  },
+  {
+    icon: FolderOpen,
+    text: 'Unlimited folders and organization runs',
+  },
+  {
+    icon: Cpu,
+    text: 'Bring your own AI provider or run local',
+  },
+  {
+    icon: Code2,
+    text: 'Full source code under the GPL v3',
+  },
+  {
+    icon: UsersRound,
+    text: 'Community support on GitHub',
+  },
 ]
 
 export function Pricing() {
@@ -49,12 +64,12 @@ export function Pricing() {
             </div>
 
             <ul className="mt-8 space-y-3">
-              {INCLUDED.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-sm">
+              {INCLUDED.map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-start gap-3 text-sm">
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Check className="size-3.5" />
+                    <Icon className="size-3.5" />
                   </span>
-                  <span className="text-muted-foreground">{item}</span>
+                  <span className="text-muted-foreground">{text}</span>
                 </li>
               ))}
             </ul>
