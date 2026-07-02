@@ -183,15 +183,6 @@ export function Hero() {
           ref={screenshotRef}
           className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
         >
-          <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">
-            <Image
-              src="/sorty-mascot-head.png"
-              alt=""
-              width={96}
-              height={96}
-              className="size-full"
-            />
-          </div>
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
