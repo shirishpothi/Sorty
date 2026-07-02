@@ -51,7 +51,7 @@ export function Pricing() {
           <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-8 backdrop-blur-xl sm:p-10">
             <div
               aria-hidden
-              className="pointer-events-none absolute -top-28 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-primary/25 blur-3xl"
+              className="pointer-events-none absolute -top-24 left-1/2 h-44 w-[28rem] -translate-x-1/2 rounded-[999px] bg-primary/15 blur-3xl"
             />
             <div className="flex flex-col items-start gap-1">
               <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
