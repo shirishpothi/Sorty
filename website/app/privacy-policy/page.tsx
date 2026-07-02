@@ -34,6 +34,8 @@ export default function PrivacyPolicyPage() {
     <LegalPage
       title="Privacy Policy"
       updated="June 2026"
+      pdfHref="/legal/sorty-privacy-policy.pdf"
+      pdfLabel="Download Privacy PDF"
       toc={TOC}
       summary={
         <>

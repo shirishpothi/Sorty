@@ -34,6 +34,8 @@ export default function TermsPage() {
     <LegalPage
       title="Terms of Service"
       updated="June 2026"
+      pdfHref="/legal/sorty-terms-of-service.pdf"
+      pdfLabel="Download Terms PDF"
       toc={TOC}
       summary={
         <>
