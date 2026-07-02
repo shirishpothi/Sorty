@@ -137,6 +137,16 @@ struct PromptBuilder {
             
             """
         }
+
+        if mode == .organize {
+            prompt += """
+            ## ORGANIZE-ONLY WORKFLOW BOUNDARY
+            This run is organize-only. Keep every original filename unchanged even if user instructions,
+            persona guidance, learned preferences, naming rules, or provider defaults mention renaming.
+            Do not include `suggested_name`, `rename_reason`, or `rename_confidence` fields.
+
+            """
+        }
         
         // Add organization-only routing context if provided.
         if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
@@ -600,7 +610,7 @@ struct PromptBuilder {
         case .appleFoundationModel:
             // Append instructions
             var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
-            if mode == .renameOnly || enableSmartRename {
+            if mode == .renameOnly || mode == .organizeAndRename {
                 prompt += " (\(namingStyle.displayName))"
                 prompt += " \(renameNamingOptions.promptInstructions)"
                 if let customNaming = customNamingInstructions, !customNaming.isEmpty {
