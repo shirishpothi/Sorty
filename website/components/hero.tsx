@@ -64,10 +64,11 @@ export function Hero() {
       window.removeEventListener('resize', scheduleTilt)
     }
   }, [])
+
   return (
     <section
       id="top"
-      className="page-section relative overflow-hidden px-4 pt-36 pb-12 sm:pt-44"
+      className="page-section relative overflow-hidden px-4 pt-28 pb-10 sm:pt-36"
     >
       {/* layered ambient gradient backdrop */}
       <div
@@ -178,7 +179,7 @@ export function Hero() {
       </div>
 
       {/* App screenshot */}
-      <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
+      <Reveal delay={120} className="mx-auto mt-12 max-w-5xl">
         <div
           ref={screenshotRef}
           className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"

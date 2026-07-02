@@ -241,18 +241,12 @@
     var(--brand-bright) 0%,
     var(--brand) 100%
   );
-  background-size: 100% 140%;
-  background-position: 50% 0%;
   color: oklch(0.99 0 0);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 35%) inset,
     0 0 0 1px oklch(1 0 0 / 14%) inset,
     0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
-  will-change: box-shadow;
-  transition:
-    background-position 0.3s ease,
-    box-shadow 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 0.26s ease;
+  transition: box-shadow 0.3s ease;
 }
 .btn-download::before {
   content: "";
@@ -273,9 +267,7 @@
     );
   mix-blend-mode: screen;
   opacity: 0.82;
-  transition:
-    opacity 0.34s ease,
-    transform 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 0.3s ease;
 }
 .btn-download::after {
   content: "";
@@ -299,8 +291,6 @@
 }
 .btn-download:hover,
 .btn-download:focus-visible {
-  background-position: 50% 100%;
-  filter: saturate(1.08) brightness(1.04);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 50%) inset,
     0 0 0 1px oklch(1 0 0 / 24%) inset,
@@ -314,19 +304,44 @@
 .btn-download:hover::before,
 .btn-download:focus-visible::before {
   opacity: 1;
-  transform: translateX(-50%) translateY(1px) scale(1.05);
 }
 .btn-download:hover::after {
   animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .btn-download:active {
-  filter: saturate(1.02) brightness(0.97);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 28%) inset,
     0 8px 24px -10px oklch(0.62 0.19 256 / 55%);
 }
 .btn-download:active::before {
   opacity: 0.62;
+}
+.download-intent-shell {
+  --download-intent: 0;
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+}
+.download-intent-shell::before {
+  content: "";
+  position: absolute;
+  inset: -9px -12px;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      closest-side,
+      oklch(0.74 0.16 244 / 28%),
+      oklch(0.62 0.19 256 / 12%) 58%,
+      transparent 100%
+    );
+  filter: blur(8px);
+  opacity: var(--download-intent);
+  transition: opacity 0.18s ease;
+}
+.download-intent-shell:has(.btn-download:hover)::before,
+.download-intent-shell:has(.btn-download:focus-visible)::before {
+  opacity: 1;
 }
 .mac-heading-lockup {
   display: inline-flex;
@@ -364,6 +379,10 @@
   will-change: transform;
 }
 @media (prefers-reduced-motion: reduce) {
+  .download-intent-shell::before {
+    opacity: 0;
+    transition: none;
+  }
   .hero-screenshot-card {
     transform: none;
   }
@@ -372,15 +391,16 @@
   display: inline-flex;
   overflow: visible;
   border-radius: 9999px;
+  transform: translateZ(0);
   will-change: transform;
-  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.3s ease;
 }
 .download-beam:hover,
 .download-beam:has(.btn-download:focus-visible) {
-  transform: translateY(-1.5px) scale(1.02);
+  transform: translateY(-1px) translateZ(0);
 }
 .download-beam:active {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0) translateZ(0);
   transition-duration: 0.12s;
 }
 .download-beam > .btn-download {

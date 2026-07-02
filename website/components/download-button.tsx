@@ -30,6 +30,7 @@ export function DownloadButton({
   const [showNotice, setShowNotice] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>('idle')
   const [copyAnimationKey, setCopyAnimationKey] = useState(0)
+  const intentShellRef = useRef<HTMLSpanElement>(null)
   const copyFeedbackTimeout = useRef<number | null>(null)
   const modalPanelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -67,6 +68,60 @@ export function DownloadButton({
       if (copyFeedbackTimeout.current !== null) {
         window.clearTimeout(copyFeedbackTimeout.current)
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const shell = intentShellRef.current
+    if (!shell || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
+    let frame = 0
+    let pointerX = 0
+    let pointerY = 0
+
+    const updateIntent = () => {
+      frame = 0
+      const rect = shell.getBoundingClientRect()
+      const dx = Math.max(rect.left - pointerX, 0, pointerX - rect.right)
+      const dy = Math.max(rect.top - pointerY, 0, pointerY - rect.bottom)
+      const distance = Math.hypot(dx, dy)
+      const intent = Math.max(0, 1 - distance / 180) ** 2
+
+      shell.style.setProperty('--download-intent', intent.toFixed(3))
+    }
+
+    const scheduleIntent = (event: PointerEvent) => {
+      pointerX = event.clientX
+      pointerY = event.clientY
+
+      if (!frame) {
+        frame = window.requestAnimationFrame(updateIntent)
+      }
+    }
+
+    const resetIntent = () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+        frame = 0
+      }
+
+      shell.style.setProperty('--download-intent', '0')
+    }
+
+    window.addEventListener('pointermove', scheduleIntent, { passive: true })
+    window.addEventListener('pointerleave', resetIntent)
+    window.addEventListener('blur', resetIntent)
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+
+      window.removeEventListener('pointermove', scheduleIntent)
+      window.removeEventListener('pointerleave', resetIntent)
+      window.removeEventListener('blur', resetIntent)
     }
   }, [])
 
@@ -282,30 +337,35 @@ export function DownloadButton({
 
   return (
     <>
-      <BorderBeam
-        size="sm"
-        colorVariant="ocean"
-        theme="dark"
-        strength={0.92}
-        duration={2.4}
-        borderRadius={999}
-        className={cn('download-beam', widthClassName)}
+      <span
+        ref={intentShellRef}
+        className={cn('download-intent-shell', widthClassName)}
       >
-        <a
-          href={href}
-          onClick={(event) => {
-            onClick?.(event)
-
-            if (!event.defaultPrevented) {
-              showDownloadNotice()
-            }
-          }}
-          className={cn('btn-download flex items-center rounded-full', className)}
-          {...props}
+        <BorderBeam
+          size="sm"
+          colorVariant="ocean"
+          theme="dark"
+          strength={0.92}
+          duration={2.4}
+          borderRadius={999}
+          className={cn('download-beam', widthClassName)}
         >
-          {children}
-        </a>
-      </BorderBeam>
+          <a
+            href={href}
+            onClick={(event) => {
+              onClick?.(event)
+
+              if (!event.defaultPrevented) {
+                showDownloadNotice()
+              }
+            }}
+            className={cn('btn-download flex items-center rounded-full', className)}
+            {...props}
+          >
+            {children}
+          </a>
+        </BorderBeam>
+      </span>
 
       {notice}
     </>
