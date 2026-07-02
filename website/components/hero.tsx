@@ -20,28 +20,56 @@ export function Hero() {
     }
 
     let frame = 0
-    const updateTilt = () => {
-      frame = 0
+    let currentTilt = 16
+    let currentLift = 0
+    let targetTilt = 16
+    let targetLift = 0
+
+    const readTarget = () => {
       const rect = card.getBoundingClientRect()
       const viewport = window.innerHeight || document.documentElement.clientHeight
       const progress = Math.min(
         1,
         Math.max(0, (viewport - rect.top) / (viewport * 0.85 + rect.height)),
       )
-      const tilt = 16 - progress * 16
-      const lift = progress * 20
-      card.style.setProperty('--hero-screenshot-tilt', `${tilt.toFixed(2)}deg`)
-      card.style.setProperty('--hero-screenshot-lift', `${lift.toFixed(2)}px`)
+      targetTilt = 16 - progress * 16
+      targetLift = progress * 20
+    }
+
+    const renderTilt = () => {
+      const tiltDelta = targetTilt - currentTilt
+      const liftDelta = targetLift - currentLift
+
+      currentTilt += tiltDelta * 0.16
+      currentLift += liftDelta * 0.16
+
+      if (Math.abs(tiltDelta) < 0.01 && Math.abs(liftDelta) < 0.02) {
+        currentTilt = targetTilt
+        currentLift = targetLift
+      }
+
+      card.style.setProperty('--hero-screenshot-tilt', `${currentTilt.toFixed(2)}deg`)
+      card.style.setProperty('--hero-screenshot-lift', `${currentLift.toFixed(2)}px`)
+
+      if (currentTilt !== targetTilt || currentLift !== targetLift) {
+        frame = window.requestAnimationFrame(renderTilt)
+      } else {
+        frame = 0
+      }
     }
 
     const scheduleTilt = () => {
+      readTarget()
       if (frame) {
         return
       }
-      frame = window.requestAnimationFrame(updateTilt)
+      frame = window.requestAnimationFrame(renderTilt)
     }
 
-    updateTilt()
+    readTarget()
+    currentTilt = targetTilt
+    currentLift = targetLift
+    renderTilt()
     window.addEventListener('scroll', scheduleTilt, { passive: true })
     window.addEventListener('resize', scheduleTilt)
 
