@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Star } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -86,9 +86,12 @@ export function Hero() {
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:bg-secondary sm:w-auto"
+              className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
             >
-              <GithubIcon className="size-4" />
+              <span className="relative size-4" aria-hidden="true">
+                <GithubIcon className="absolute inset-0 size-4 transition-all duration-200 group-hover:scale-75 group-hover:opacity-0" />
+                <Star className="absolute inset-0 size-4 scale-75 fill-amber-300 text-amber-300 opacity-0 drop-shadow-[0_0_8px_rgba(252,211,77,0.75)] transition-all duration-200 group-hover:scale-110 group-hover:opacity-100" />
+              </span>
               Star on GitHub
             </a>
           </div>
