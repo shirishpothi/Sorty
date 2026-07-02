@@ -49,13 +49,14 @@ export function Hero() {
             </span>{' '}
             for your{' '}
             <span className="mac-heading-badge highlight-in" aria-label="Mac">
-              <span className="finder-mark" aria-hidden="true">
-                <span className="finder-mark-half finder-mark-left" />
-                <span className="finder-mark-half finder-mark-right" />
-                <span className="finder-mark-face finder-mark-face-left" />
-                <span className="finder-mark-face finder-mark-face-right" />
-                <span className="finder-mark-smile" />
-              </span>
+              <Image
+                src="/macos-finder.png"
+                alt=""
+                width={512}
+                height={512}
+                className="mac-heading-icon"
+                aria-hidden="true"
+              />
               <span className="mac-heading-text" aria-hidden="true">Mac</span>
             </span>
           </h1>

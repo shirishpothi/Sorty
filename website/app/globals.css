@@ -279,58 +279,6 @@
 .btn-download:active {
   transform: scale(0.97);
 }
-.finder-mark {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex: 0 0 auto;
-  overflow: hidden;
-  border-radius: 0.72rem;
-  transform: rotate(6deg);
-  box-shadow:
-    0 1px 0 oklch(1 0 0 / 40%) inset,
-    0 6px 12px -8px oklch(0 0 0 / 85%);
-}
-.finder-mark-half {
-  position: absolute;
-  inset-block: 0;
-  width: 52%;
-}
-.finder-mark-left {
-  left: 0;
-  background: linear-gradient(150deg, #1ac4ff 0%, #0b73ff 100%);
-}
-.finder-mark-right {
-  right: 0;
-  background: linear-gradient(160deg, #f7f7f7 0%, #d7dde4 100%);
-}
-.finder-mark-face {
-  position: absolute;
-  top: 0.78rem;
-  width: 0.14rem;
-  height: 0.42rem;
-  border-radius: 9999px;
-  background: #1b1b1b;
-}
-.finder-mark-face-left {
-  left: 0.88rem;
-}
-.finder-mark-face-right {
-  right: 0.88rem;
-}
-.finder-mark-smile {
-  position: absolute;
-  left: 0.78rem;
-  bottom: 0.75rem;
-  width: 1.24rem;
-  height: 0.56rem;
-  border-bottom: 0.12rem solid #1b1b1b;
-  border-left: 0.12rem solid #1b1b1b;
-  border-radius: 0 0 0 0.34rem;
-  transform: rotate(-2deg);
-}
 .mac-heading-badge {
   display: inline-flex;
   align-items: center;
@@ -345,30 +293,13 @@
     0 1px 0 0 oklch(1 0 0 / 12%) inset,
     0 18px 36px -22px oklch(0 0 0 / 90%);
 }
-.mac-heading-badge .finder-mark {
+.mac-heading-icon {
+  display: inline-block;
   width: 0.92em;
   height: 0.92em;
-  border-radius: 0.22em;
-}
-.mac-heading-badge .finder-mark-face {
-  top: 0.25em;
-  width: 0.04em;
-  height: 0.14em;
-}
-.mac-heading-badge .finder-mark-face-left {
-  left: 0.29em;
-}
-.mac-heading-badge .finder-mark-face-right {
-  right: 0.29em;
-}
-.mac-heading-badge .finder-mark-smile {
-  left: 0.26em;
-  bottom: 0.25em;
-  width: 0.4em;
-  height: 0.18em;
-  border-bottom-width: 0.04em;
-  border-left-width: 0.04em;
-  border-radius: 0 0 0 0.12em;
+  flex: 0 0 auto;
+  object-fit: contain;
+  transform: rotate(6deg);
 }
 .mac-heading-text {
   color: #fff;
