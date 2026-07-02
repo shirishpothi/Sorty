@@ -29,6 +29,7 @@ export function DownloadButton({
 }: DownloadButtonProps) {
   const [showNotice, setShowNotice] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>('idle')
+  const [copyAnimationKey, setCopyAnimationKey] = useState(0)
   const copyFeedbackTimeout = useRef<number | null>(null)
   const modalPanelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -72,19 +73,19 @@ export function DownloadButton({
   function showCopyFeedback(nextFeedback: CopyFeedback) {
     if (copyFeedbackTimeout.current !== null) {
       window.clearTimeout(copyFeedbackTimeout.current)
+      copyFeedbackTimeout.current = null
     }
 
-    setCopyFeedback('idle')
-    window.requestAnimationFrame(() => {
-      setCopyFeedback(nextFeedback)
-      copyFeedbackTimeout.current = window.setTimeout(
-        () => {
-          setCopyFeedback('idle')
-          copyFeedbackTimeout.current = null
-        },
-        nextFeedback === 'failed' ? 2400 : 1700,
-      )
-    })
+    setCopyAnimationKey((key) => key + 1)
+    setCopyFeedback(nextFeedback)
+
+    copyFeedbackTimeout.current = window.setTimeout(
+      () => {
+        setCopyFeedback('idle')
+        copyFeedbackTimeout.current = null
+      },
+      nextFeedback === 'failed' ? 2400 : 1700,
+    )
   }
 
   async function writeClipboardText(text: string) {
@@ -220,7 +221,7 @@ export function DownloadButton({
                   type="button"
                   onClick={() => void copyCommand()}
                   className={cn(
-                    'copy-command-button relative flex h-8 shrink-0 items-center justify-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-300 hover:scale-[1.03] active:scale-95',
+                    'copy-command-button relative flex h-8 min-w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-200 hover:scale-[1.02] active:scale-[0.97]',
                     copySucceeded &&
                       'is-copied gap-1.5 bg-brand text-white shadow-lg shadow-brand/30',
                     copyFailed && 'gap-1.5 bg-destructive text-white',
@@ -235,12 +236,18 @@ export function DownloadButton({
                 >
                   <span className="copy-command-shine" aria-hidden />
                   {copySucceeded ? (
-                    <span className="copy-command-label is-copied">
+                    <span
+                      key={`copied-${copyAnimationKey}`}
+                      className="copy-command-label is-copied"
+                    >
                       <Check className="copy-command-check size-3.5" />
                       Copied
                     </span>
                   ) : copyFailed ? (
-                    <span className="copy-command-label">
+                    <span
+                      key={`failed-${copyAnimationKey}`}
+                      className="copy-command-label"
+                    >
                       <X className="size-3.5" />
                       Retry
                     </span>
