@@ -39,8 +39,8 @@ export function SiteFooter() {
       {/* Blue aurora rising from the floor. It intentionally extends above the
           footer so the glow blends into the previous section instead of ending
           at a visible rectangular edge. */}
-      <div className="pointer-events-none absolute inset-x-[-10vw] -top-[26vh] bottom-[-8vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_24%,black_100%)]">
-        <DiaGradient blur={22} peak={0.9} valley={0.42} strength={0.88} />
+      <div className="pointer-events-none absolute inset-x-[-10vw] top-[6vh] bottom-[-16vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_34%,black_100%)]">
+        <DiaGradient blur={22} peak={0.86} valley={0.38} strength={0.78} />
       </div>
 
       <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
