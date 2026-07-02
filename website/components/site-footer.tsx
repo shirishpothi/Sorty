@@ -73,7 +73,7 @@ export function SiteFooter() {
               href={SPONSOR_URL}
               target="_blank"
               rel="noreferrer"
-              className="flex size-9 items-center justify-center rounded-full border border-rose-300/25 text-rose-100/80 transition-colors hover:bg-rose-300/10 hover:text-rose-100"
+              className="btn-support flex size-9 items-center justify-center rounded-full"
               aria-label="Donate to support Sorty"
             >
               <HeartHandshake className="size-4" />

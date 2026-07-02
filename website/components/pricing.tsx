@@ -101,7 +101,7 @@ export function Pricing() {
                 href={SPONSOR_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-300/25 bg-rose-300/10 px-6 py-3 text-sm font-medium text-rose-100 transition-colors hover:border-rose-300/50 hover:bg-rose-300/15"
+                className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
               >
                 <HeartHandshake className="size-4" />
                 Donate

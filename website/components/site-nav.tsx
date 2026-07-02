@@ -70,7 +70,7 @@ export function SiteNav() {
             href={SPONSOR_URL}
             target="_blank"
             rel="noreferrer"
-            className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-rose-100/80 transition-colors hover:text-rose-100 lg:flex"
+            className="btn-support hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium lg:flex"
           >
             <HeartHandshake className="size-4" />
             Donate
@@ -123,7 +123,7 @@ export function SiteNav() {
             href={SPONSOR_URL}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-rose-100/80 transition-colors hover:bg-rose-300/10 hover:text-rose-100"
+            className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
           >
             <HeartHandshake className="size-4" />
             Donate to support Sorty
