@@ -39,7 +39,7 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <a href="#top" className="shrink-0">
+        <a href="/#top" className="shrink-0">
           <SortyLogo />
         </a>
 
