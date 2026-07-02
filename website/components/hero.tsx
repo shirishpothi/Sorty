@@ -57,8 +57,8 @@ export function Hero() {
                 className="mac-heading-icon"
                 aria-hidden="true"
               />
-              <span className="mac-heading-text" aria-hidden="true">Mac</span>
-            </span>
+            </span>{' '}
+            Mac
           </h1>
         </Reveal>
 
