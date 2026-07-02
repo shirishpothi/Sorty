@@ -237,9 +237,12 @@
     var(--brand-bright) 0%,
     var(--brand) 100%
   );
+  background-size: 100% 140%;
+  background-position: 50% 0%;
   color: oklch(0.99 0 0);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 35%) inset,
+    0 0 0 1px oklch(1 0 0 / 14%) inset,
     0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
   will-change: transform, box-shadow;
   transition:
@@ -292,11 +295,14 @@
   z-index: 1;
 }
 .btn-download:hover {
-  transform: translateY(-2px) scale(1.025);
-  filter: saturate(1.08) brightness(1.03);
+  transform: translateY(-3px) scale(1.035);
+  background-position: 50% 100%;
+  filter: saturate(1.16) brightness(1.08);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 45%) inset,
-    0 16px 40px -11px oklch(0.62 0.19 256 / 78%);
+    0 1px 0 0 oklch(1 0 0 / 60%) inset,
+    0 0 0 1px oklch(1 0 0 / 30%) inset,
+    0 0 0 5px oklch(0.74 0.16 244 / 18%),
+    0 20px 46px -12px oklch(0.62 0.19 256 / 90%);
 }
 .btn-download:hover::before {
   opacity: 1;
@@ -324,8 +330,8 @@
 }
 .mac-heading-icon {
   display: inline-block;
-  width: 0.92em;
-  height: 0.92em;
+  width: 1.05em;
+  height: 1.05em;
   flex: 0 0 auto;
   object-fit: contain;
   transform: rotate(6deg);
