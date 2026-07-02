@@ -290,15 +290,15 @@
   align-items: center;
   gap: 0.12em;
   margin-left: 0.02em;
-  vertical-align: -0.015em;
+  vertical-align: -0.14em;
 }
 .mac-heading-icon {
   display: inline-block;
-  width: 0.86em;
-  height: 0.86em;
+  width: 0.92em;
+  height: 0.92em;
   flex: 0 0 auto;
   object-fit: contain;
-  transform: translateY(-0.015em) rotate(6deg);
+  transform: rotate(6deg);
 }
 .mac-heading-text {
   color: oklch(0.97 0.003 250);
