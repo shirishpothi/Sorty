@@ -35,13 +35,12 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="snap-footer relative isolate overflow-hidden border-t border-border px-4 pt-14">
-      {/* Sunset aurora rising from the floor (Dia-style gradient). Painted
-          behind all footer content via -z-10 inside the footer's own stacking
-          context (created by `isolate`), so the full rainbow reads undimmed and
-          fades to transparent pink at the top the way the real Dia footer does. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55vh] -z-10">
-        <DiaGradient />
+    <footer className="snap-footer relative isolate overflow-visible px-4 pt-14">
+      {/* Blue aurora rising from the floor. It intentionally extends above the
+          footer so the glow blends into the previous section instead of ending
+          at a visible rectangular edge. */}
+      <div className="pointer-events-none absolute inset-x-[-10vw] -top-[26vh] bottom-[-8vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_24%,black_100%)]">
+        <DiaGradient blur={22} peak={0.9} valley={0.42} strength={0.88} />
       </div>
 
       <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
@@ -98,9 +97,9 @@ export function SiteFooter() {
       {/* Oversized faded brand wordmark */}
       <div
         aria-hidden
-        className="pointer-events-none relative mt-4 -mb-[22vw] select-none"
+        className="pointer-events-none relative mt-4 -mb-[18vw] select-none"
       >
-        <span className="block bg-gradient-to-b from-white/16 via-white/8 to-white/0 bg-clip-text text-center text-[30vw] font-semibold leading-[0.74] tracking-tight text-transparent [mask-image:linear-gradient(to_bottom,black_0%,black_38%,transparent_66%)]">
+        <span className="block bg-gradient-to-b from-sky-100/20 via-sky-200/10 to-sky-300/0 bg-clip-text text-center text-[30vw] font-semibold leading-[0.78] tracking-tight text-transparent [mask-image:linear-gradient(to_bottom,black_0%,black_54%,transparent_88%)]">
           Sorty
         </span>
       </div>

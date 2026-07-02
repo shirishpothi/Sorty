@@ -19,17 +19,15 @@ import { useEffect, useState } from 'react'
 
 type Stop = { offset: number; color: string }
 
-// Dia's stops, bottom (0) → top (1): dark ember → blue → near-white → yellow →
-// red-orange → magenta → transparent pink.
+// Sorty's footer stops, bottom (0) → top (1): deep blue → cyan → ice → clear.
 const DIA_STOPS: Stop[] = [
-  { offset: 0, color: '#340B05' },
-  { offset: 0.1827, color: '#0358F7' },
-  { offset: 0.2837, color: '#5092C7' },
-  { offset: 0.4135, color: '#E1ECFE' },
-  { offset: 0.5866, color: '#FFD400' },
-  { offset: 0.6827, color: '#FA3D1D' },
-  { offset: 0.8029, color: '#FD02F5' },
-  { offset: 1, color: '#FFC0FD00' },
+  { offset: 0, color: '#03111F' },
+  { offset: 0.18, color: '#0647D8' },
+  { offset: 0.34, color: '#0A84FF' },
+  { offset: 0.52, color: '#4BB8FF' },
+  { offset: 0.68, color: '#D8F3FF' },
+  { offset: 0.84, color: '#7DD3FC80' },
+  { offset: 1, color: '#E0F2FE00' },
 ]
 
 const VBW = 1271
