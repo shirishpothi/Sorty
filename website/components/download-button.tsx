@@ -158,7 +158,7 @@ export function DownloadButton({
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
           tabIndex={-1}
-          className="download-modal-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[480px] overflow-y-auto rounded-[1.75rem] border border-white/15 bg-background/95 text-left shadow-2xl shadow-black/55 outline-none backdrop-blur-2xl sm:max-h-[calc(100dvh-3rem)]"
+          className="download-modal-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[480px] overflow-x-hidden overflow-y-auto rounded-[1.75rem] border border-white/15 bg-background/95 text-left shadow-2xl shadow-black/55 outline-none backdrop-blur-2xl sm:max-h-[calc(100dvh-3rem)]"
         >
           <div
             aria-hidden
