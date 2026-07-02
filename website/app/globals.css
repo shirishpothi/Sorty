@@ -168,12 +168,12 @@
   body {
     @apply bg-background text-foreground;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
   html {
     @apply font-sans;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
     scroll-behavior: smooth;
   }
 }
@@ -354,7 +354,19 @@
   filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  transform: translateZ(0);
+  --hero-screenshot-tilt: 16deg;
+  --hero-screenshot-scale: 0.985;
+  transform-origin: 50% 18%;
+  transform: perspective(900px)
+    rotateX(var(--hero-screenshot-tilt))
+    scale(var(--hero-screenshot-scale));
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-screenshot-card {
+    transform: none;
+  }
 }
 .download-beam {
   display: inline-flex;

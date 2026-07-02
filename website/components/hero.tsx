@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useEffect, useRef } from 'react'
 import { ArrowRight, Star } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
@@ -10,6 +11,53 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function Hero() {
+  const screenshotRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const card = screenshotRef.current
+    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
+    let frame = 0
+
+    const updateTilt = () => {
+      frame = 0
+      const rect = card.getBoundingClientRect()
+      const viewport = window.innerHeight || document.documentElement.clientHeight
+      const start = viewport * 0.78
+      const end = viewport * 0.28
+      const rawProgress = Math.min(
+        1,
+        Math.max(0, (start - rect.top) / (start - end)),
+      )
+      const progress = rawProgress * rawProgress * (3 - 2 * rawProgress)
+      const tilt = 16 - progress * 16
+      const scale = 0.985 + progress * 0.015
+
+      card.style.setProperty('--hero-screenshot-tilt', `${tilt.toFixed(2)}deg`)
+      card.style.setProperty('--hero-screenshot-scale', scale.toFixed(4))
+    }
+
+    const scheduleTilt = () => {
+      if (frame) {
+        return
+      }
+      frame = window.requestAnimationFrame(updateTilt)
+    }
+
+    updateTilt()
+    window.addEventListener('scroll', scheduleTilt, { passive: true })
+    window.addEventListener('resize', scheduleTilt)
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('scroll', scheduleTilt)
+      window.removeEventListener('resize', scheduleTilt)
+    }
+  }, [])
   return (
     <section
       id="top"
@@ -118,6 +166,7 @@ export function Hero() {
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
         <div
+          ref={screenshotRef}
           className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
         >
           <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">
