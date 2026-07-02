@@ -290,7 +290,7 @@
   align-items: center;
   gap: 0.12em;
   margin-left: 0.02em;
-  vertical-align: -0.14em;
+  vertical-align: -0.2em;
 }
 .mac-heading-icon {
   display: inline-block;
@@ -302,9 +302,9 @@
 }
 .mac-heading-text {
   color: oklch(0.97 0.003 250);
-  font-weight: 750;
+  font-weight: inherit;
   letter-spacing: 0;
-  line-height: 0.94;
+  line-height: inherit;
 }
 .download-beam {
   display: inline-flex;
