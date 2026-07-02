@@ -343,44 +343,29 @@
   object-fit: contain;
   transform: rotate(6deg);
 }
-.hero-copy-sorty-lockup {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.18em;
-  vertical-align: -0.08em;
-  white-space: nowrap;
-}
 .hero-copy-sorty-icon {
   display: inline-block;
-  width: 1.05em;
-  height: 1.05em;
-  flex: 0 0 auto;
-  border-radius: 0.24em;
-  transform: rotate(-5deg);
-  filter: drop-shadow(0 3px 6px oklch(0.62 0.19 256 / 24%));
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 0.08em;
+  border-radius: 0.22em;
+  vertical-align: -0.14em;
+  transform: rotate(-4deg);
+  filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  transform-origin: 50% 0%;
-}
-@supports (animation-timeline: view()) {
-  .hero-screenshot-card {
-    animation: hero-screenshot-scroll-rotate linear both;
-    animation-timeline: view();
-    animation-range: entry 0% cover 48%;
-    will-change: transform;
-  }
-}
-@keyframes hero-screenshot-scroll-rotate {
-  from {
-    transform: perspective(1200px) rotateX(12deg) translateY(24px) scale(0.96);
-  }
-  to {
-    transform: perspective(1200px) rotateX(0deg) translateY(0) scale(1);
-  }
+  --hero-screenshot-tilt: -10deg;
+  --hero-screenshot-lift: 16px;
+  transform-origin: 50% 10%;
+  transform: perspective(900px)
+    rotateX(var(--hero-screenshot-tilt))
+    translateY(var(--hero-screenshot-lift))
+    scale(0.985);
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-screenshot-card {
-    animation: none;
     transform: none;
   }
 }

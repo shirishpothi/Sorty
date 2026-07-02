@@ -1,4 +1,7 @@
+'use client'
+
 import Image from 'next/image'
+import { useEffect, useRef } from 'react'
 import { ArrowRight, Star } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
@@ -8,6 +11,49 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function Hero() {
+  const screenshotRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const card = screenshotRef.current
+    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
+    let frame = 0
+    const updateTilt = () => {
+      frame = 0
+      const rect = card.getBoundingClientRect()
+      const viewport = window.innerHeight || document.documentElement.clientHeight
+      const progress = Math.min(
+        1,
+        Math.max(0, (viewport - rect.top) / (viewport * 0.85 + rect.height)),
+      )
+      const tilt = -2 - progress * 16
+      const lift = 28 - progress * 28
+      card.style.setProperty('--hero-screenshot-tilt', `${tilt.toFixed(2)}deg`)
+      card.style.setProperty('--hero-screenshot-lift', `${lift.toFixed(2)}px`)
+    }
+
+    const scheduleTilt = () => {
+      if (frame) {
+        return
+      }
+      frame = window.requestAnimationFrame(updateTilt)
+    }
+
+    updateTilt()
+    window.addEventListener('scroll', scheduleTilt, { passive: true })
+    window.addEventListener('resize', scheduleTilt)
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('scroll', scheduleTilt)
+      window.removeEventListener('resize', scheduleTilt)
+    }
+  }, [])
+
   return (
     <section
       id="top"
@@ -65,20 +111,17 @@ export function Hero() {
         <Reveal delay={160}>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             Point{' '}
-            <span className="hero-copy-sorty-lockup">
-              <Image
-                src="/sorty-icon.png"
-                alt=""
-                width={28}
-                height={28}
-                className="hero-copy-sorty-icon"
-                aria-hidden="true"
-              />
-              Sorty
-            </span>{' '}
-            at any messy folder and let AI suggest a clean structure. Preview
-            every change, apply when ready, and undo anytime; your files
-            never leave your Mac unless you say so.
+            <Image
+              src="/sorty-icon.png"
+              alt=""
+              width={18}
+              height={18}
+              className="hero-copy-sorty-icon"
+              aria-hidden="true"
+            />{' '}
+            Sorty at any messy folder and let AI suggest a clean structure.
+            Preview every change, apply when ready, and undo anytime; your
+            files never leave your Mac unless you say so.
           </p>
         </Reveal>
 
@@ -118,7 +161,10 @@ export function Hero() {
 
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
-        <div className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3">
+        <div
+          ref={screenshotRef}
+          className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
+        >
           <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">
             <Image
               src="/sorty-mascot-head.png"
