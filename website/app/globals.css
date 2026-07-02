@@ -248,12 +248,11 @@
     0 1px 0 0 oklch(1 0 0 / 35%) inset,
     0 0 0 1px oklch(1 0 0 / 14%) inset,
     0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
-  will-change: transform, box-shadow;
+  will-change: box-shadow;
   transition:
-    transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1),
-    background-position 0.42s ease,
-    box-shadow 0.34s cubic-bezier(0.2, 0.8, 0.2, 1),
-    filter 0.34s ease;
+    background-position 0.3s ease,
+    box-shadow 0.26s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.26s ease;
 }
 .btn-download::before {
   content: "";
@@ -298,26 +297,30 @@
   position: relative;
   z-index: 1;
 }
-.btn-download:hover {
-  transform: translateY(-3px) scale(1.035);
+.btn-download:hover,
+.btn-download:focus-visible {
   background-position: 50% 100%;
-  filter: saturate(1.16) brightness(1.08);
+  filter: saturate(1.08) brightness(1.04);
   box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 60%) inset,
-    0 0 0 1px oklch(1 0 0 / 30%) inset,
-    0 0 0 5px oklch(0.74 0.16 244 / 18%),
-    0 20px 46px -12px oklch(0.62 0.19 256 / 90%);
+    0 1px 0 0 oklch(1 0 0 / 50%) inset,
+    0 0 0 1px oklch(1 0 0 / 24%) inset,
+    0 0 0 3px oklch(0.74 0.16 244 / 14%),
+    0 14px 36px -10px oklch(0.62 0.19 256 / 78%);
 }
-.btn-download:hover::before {
+.btn-download:focus-visible {
+  outline: 2px solid oklch(0.74 0.16 244 / 85%);
+  outline-offset: 3px;
+}
+.btn-download:hover::before,
+.btn-download:focus-visible::before {
   opacity: 1;
-  transform: translateX(-50%) translateY(2px) scale(1.08);
+  transform: translateX(-50%) translateY(1px) scale(1.05);
 }
 .btn-download:hover::after {
   animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .btn-download:active {
-  transform: translateY(0) scale(0.985);
-  filter: saturate(1.02) brightness(0.98);
+  filter: saturate(1.02) brightness(0.97);
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 28%) inset,
     0 8px 24px -10px oklch(0.62 0.19 256 / 55%);
@@ -344,6 +347,16 @@
   display: inline-flex;
   overflow: visible;
   border-radius: 9999px;
+  will-change: transform;
+  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.download-beam:hover,
+.download-beam:has(.btn-download:focus-visible) {
+  transform: translateY(-1.5px) scale(1.02);
+}
+.download-beam:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.12s;
 }
 .download-beam > .btn-download {
   width: 100%;
@@ -482,11 +495,15 @@
       box-shadow 0.2s ease,
       filter 0.2s ease;
   }
-  .btn-download:hover,
-  .btn-download:active {
+  .download-beam,
+  .download-beam:hover,
+  .download-beam:has(.btn-download:focus-visible),
+  .download-beam:active {
     transform: none;
+    transition: none;
   }
-  .btn-download:hover::before {
+  .btn-download:hover::before,
+  .btn-download:focus-visible::before {
     transform: translateX(-50%);
   }
   .btn-download:hover::after {
