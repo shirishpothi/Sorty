@@ -35,7 +35,7 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="relative isolate overflow-hidden border-t border-border px-4 pt-14">
+    <footer className="snap-footer relative isolate overflow-hidden border-t border-border px-4 pt-14">
       {/* Sunset aurora rising from the floor (Dia-style gradient). Painted
           behind all footer content via -z-10 inside the footer's own stacking
           context (created by `isolate`), so the full rainbow reads undimmed and
