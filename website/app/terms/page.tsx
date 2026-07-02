@@ -64,9 +64,16 @@ export default function TermsPage() {
 
       <LegalSection id="license" heading="2. License & Open Source">
         <p>
-          Sorty is free and open-source software licensed under the GNU General
-          Public License v3.0 (&quot;GPL-3.0&quot;). Under the GPL-3.0, you are
-          free to:
+          Sorty is free and open-source software licensed under the{' '}
+          <a
+            href="https://www.gnu.org/licenses/gpl-3.0.en.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GNU General Public License v3.0
+          </a>{' '}
+          (&quot;GPL-3.0&quot;). Under the GPL-3.0, you are free to:
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>Use the App for any purpose;</li>
@@ -140,16 +147,50 @@ export default function TermsPage() {
       <LegalSection id="ai-providers" heading="5. AI Providers">
         <p>
           Sorty integrates with third-party AI providers you select and
-          configure yourself, including OpenAI, Anthropic, Google Gemini, Groq,
-          OpenRouter, GitHub Copilot, Ollama, and Apple Foundation Models. When
-          you use a cloud provider, your use is also subject to that
-          provider&apos;s terms of service and acceptable-use policies. We are
-          not responsible for how third-party providers handle the data you send
-          them.
+          configure yourself, including{' '}
+          <a
+            href="https://openai.com/policies/terms-of-use"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            OpenAI
+          </a>
+          ,{' '}
+          <a
+            href="https://www.anthropic.com/legal/consumer-terms"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Anthropic
+          </a>
+          , Google Gemini, Groq, OpenRouter, GitHub Copilot, Ollama, and Apple
+          Foundation Models. When you use a cloud provider, your use is also
+          subject to that provider&apos;s terms of service and acceptable-use
+          policies. We are not responsible for how third-party providers handle
+          the data you send them.
         </p>
         <p>
-          For on-device processing, you may use Ollama or Apple Foundation
-          Models, which keep processing on your Mac.
+          For on-device processing, you may use{' '}
+          <a
+            href="https://ollama.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Ollama
+          </a>{' '}
+          or{' '}
+          <a
+            href="https://developer.apple.com/apple-intelligence/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Apple Foundation Models
+          </a>
+          , which keep processing on your Mac.
         </p>
       </LegalSection>
 
@@ -162,8 +203,17 @@ export default function TermsPage() {
           <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[0.8em] text-foreground">
             xattr -cr /Applications/Sorty.app
           </code>{' '}
-          or build from source if you prefer complete control. This is common
-          for open-source macOS applications without paid developer accounts.
+          or{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            build from source
+          </a>{' '}
+          if you prefer complete control. This is common for open-source macOS
+          applications without paid developer accounts.
         </p>
         <p>
           We do not guarantee that pre-built binaries will pass Apple&apos;s
@@ -208,10 +258,27 @@ export default function TermsPage() {
       <LegalSection id="third-party" heading="9. Third-Party Services">
         <p>
           The Service interacts with third-party components and services —
-          including the Sparkle update framework, your chosen AI providers, and
-          GitHub (for releases and update feeds). We are not responsible for the
-          availability, accuracy, or practices of these third parties. Your use
-          of them is subject to their respective terms and policies.
+          including the{' '}
+          <a
+            href="https://sparkle-project.org"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Sparkle update framework
+          </a>
+          , your chosen AI providers, and{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/releases"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GitHub releases
+          </a>
+          . We are not responsible for the availability, accuracy, or practices
+          of these third parties. Your use of them is subject to their
+          respective terms and policies.
         </p>
       </LegalSection>
 
@@ -227,9 +294,26 @@ export default function TermsPage() {
 
       <LegalSection id="contact" heading="11. Contact">
         <p>
-          For questions about these Terms, please open a GitHub Discussion. For
-          security-related matters, use GitHub&apos;s private vulnerability
-          reporting as described in SECURITY.md.
+          For questions about these Terms, please open a{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/discussions"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GitHub Discussion
+          </a>
+          . For security-related matters, use GitHub&apos;s private
+          vulnerability reporting as described in{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/blob/main/SECURITY.md"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            SECURITY.md
+          </a>
+          .
         </p>
         <p className="pt-2 text-xs text-muted-foreground/80">
           © 2026 Sorty. Released under the GPL-3.0 license.{' '}
