@@ -348,6 +348,9 @@
 .download-beam > .btn-download {
   width: 100%;
 }
+.download-notice {
+  animation: download-notice-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+}
 @keyframes download-button-sheen {
   0% {
     opacity: 0;
@@ -360,6 +363,16 @@
   100% {
     opacity: 0;
     transform: translateX(112%) skewX(-16deg);
+  }
+}
+@keyframes download-notice-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -376,6 +389,9 @@
     transform: translateX(-50%);
   }
   .btn-download:hover::after {
+    animation: none;
+  }
+  .download-notice {
     animation: none;
   }
 }
