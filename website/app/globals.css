@@ -174,6 +174,31 @@
   }
 }
 
+/* ── Section-to-section scrolling ──────────────────────────────
+   Native CSS scroll snap on the root scroller (opt-in per page via
+   [data-snap-scroll]) instead of JS wheel-hijacking, so section
+   changes ride the browser's own momentum physics and stay smooth
+   on trackpads, mouse wheels, touch, and keyboard alike. */
+html:has([data-snap-scroll]) {
+  scroll-snap-type: y mandatory;
+}
+
+.snap-section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Sections taller than the viewport scroll freely inside themselves
+   and snap at their edges (native snap behavior). The footer snaps
+   to the bottom edge so it stays reachable under mandatory snap. */
+.snap-footer {
+  scroll-snap-align: end;
+}
+
 /* Blur reveal on scroll */
 .reveal {
   opacity: 0;
