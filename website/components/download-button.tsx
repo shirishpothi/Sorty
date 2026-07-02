@@ -131,26 +131,37 @@ export function DownloadButton({
                 <Terminal className="size-3.5" />
                 Terminal
               </div>
-              <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-background/70 p-2 sm:flex-row sm:items-center">
+              <div
+                className={cn(
+                  'copy-command-row flex flex-col gap-2 rounded-xl border border-white/10 bg-background/70 p-2 transition-[border-color,box-shadow] duration-300 sm:flex-row sm:items-center',
+                  copied && 'is-copied border-brand/45 shadow-[0_0_0_1px_oklch(0.62_0.19_256_/_24%),0_0_26px_-12px_oklch(0.62_0.19_256_/_80%)]',
+                )}
+              >
                 <code className="min-w-0 flex-1 break-all px-1 text-xs leading-relaxed text-foreground sm:overflow-x-auto sm:whitespace-nowrap">
                   {XATTR_COMMAND}
                 </code>
                 <button
                   type="button"
                   onClick={() => void copyCommand()}
-                  className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-foreground px-2.5 text-xs font-medium text-background transition-transform hover:scale-[1.03] active:scale-95"
+                  className={cn(
+                    'copy-command-button relative flex h-8 shrink-0 items-center justify-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-300 hover:scale-[1.03] active:scale-95',
+                    copied
+                      ? 'is-copied gap-1.5 bg-brand text-white shadow-lg shadow-brand/30'
+                      : 'gap-1.5 bg-foreground text-background',
+                  )}
                   aria-label="Copy Terminal command"
                 >
+                  <span className="copy-command-shine" aria-hidden />
                   {copied ? (
-                    <>
-                      <Check className="size-3.5" />
+                    <span className="copy-command-label is-copied">
+                      <Check className="copy-command-check size-3.5" />
                       Copied
-                    </>
+                    </span>
                   ) : (
-                    <>
+                    <span className="copy-command-label">
                       <Copy className="size-3.5" />
                       Copy
-                    </>
+                    </span>
                   )}
                 </button>
               </div>
