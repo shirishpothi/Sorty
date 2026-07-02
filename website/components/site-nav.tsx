@@ -16,7 +16,7 @@ const LINKS = [
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false)

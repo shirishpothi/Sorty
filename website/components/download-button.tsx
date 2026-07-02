@@ -17,6 +17,7 @@ export function DownloadButton({
   href,
   children,
   className,
+  onClick,
   ...props
 }: DownloadButtonProps) {
   const widthClassName = className
@@ -36,8 +37,15 @@ export function DownloadButton({
     >
       <a
         href={href}
-        target="_blank"
-        rel="noreferrer"
+        onClick={(event) => {
+          onClick?.(event)
+
+          if (!event.defaultPrevented) {
+            window.alert(
+              'Your Sorty download should start soon.\n\nAfter moving Sorty.app to Applications, run:\n\nxattr -cr /Applications/Sorty.app',
+            )
+          }
+        }}
         className={cn('btn-download flex items-center rounded-full', className)}
         {...props}
       >

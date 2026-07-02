@@ -5,7 +5,7 @@ import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function Hero() {
   return (
