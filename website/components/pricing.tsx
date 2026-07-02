@@ -17,7 +17,7 @@ export function Pricing() {
   return (
     <section
       id="pricing"
-      className="section-seam snap-section px-4 py-20 sm:py-28"
+      className="section-seam page-section px-4 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-3xl">
         <Reveal className="text-center">

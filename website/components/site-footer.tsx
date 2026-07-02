@@ -35,7 +35,7 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="snap-footer relative isolate overflow-visible px-4 pt-14">
+    <footer className="relative isolate overflow-visible px-4 pt-14">
       {/* Blue aurora rising from the floor. It intentionally extends above the
           footer so the glow blends into the previous section instead of ending
           at a visible rectangular edge. */}

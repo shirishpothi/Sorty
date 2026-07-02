@@ -10,7 +10,7 @@ export function Hero() {
   return (
     <section
       id="top"
-      className="snap-section relative overflow-hidden px-4 pt-36 pb-12 sm:pt-44"
+      className="page-section relative overflow-hidden px-4 pt-36 pb-12 sm:pt-44"
     >
       {/* layered ambient gradient backdrop */}
       <div

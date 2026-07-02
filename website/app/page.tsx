@@ -9,11 +9,8 @@ import { SiteFooter } from '@/components/site-footer'
 import { StructuredData } from '@/components/structured-data'
 
 export default function Page() {
-  // overflow-x-clip (not -hidden): `hidden` would make <main> a scroll
-  // container and capture the sections' snap points away from the root
-  // scroller, silently breaking section snapping.
   return (
-    <main data-snap-scroll className="relative min-h-screen overflow-x-clip">
+    <main className="relative min-h-screen overflow-x-clip">
       <StructuredData />
       <SiteNav />
       <Hero />
