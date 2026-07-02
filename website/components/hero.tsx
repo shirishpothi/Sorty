@@ -48,7 +48,7 @@ export function Hero() {
               organization
             </span>{' '}
             for your{' '}
-            <span className="mac-heading-badge highlight-in" aria-label="Mac">
+            <span className="mac-heading-lockup highlight-in" aria-label="Mac">
               <Image
                 src="/macos-finder.png"
                 alt=""
