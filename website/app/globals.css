@@ -403,6 +403,32 @@
 }
 .download-notice {
   animation: download-notice-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    left 0.18s ease,
+    top 0.18s ease;
+}
+.download-notice[data-placement="top"] {
+  animation-name: download-notice-in-from-top;
+}
+.download-notice-arrow {
+  position: absolute;
+  left: var(--download-notice-arrow-left, 50%);
+  top: -5px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border-left: 1px solid oklch(1 0 0 / 15%);
+  border-top: 1px solid oklch(1 0 0 / 15%);
+  background: oklch(0.145 0 0 / 92%);
+  transform: translateX(-50%) rotate(45deg);
+  backdrop-filter: blur(14px);
+}
+.download-notice[data-placement="top"] .download-notice-arrow {
+  top: auto;
+  bottom: -5px;
+  border: 0;
+  border-bottom: 1px solid oklch(1 0 0 / 15%);
+  border-right: 1px solid oklch(1 0 0 / 15%);
 }
 .copy-command-row.is-copied {
   animation: copy-command-row-pulse 0.7s cubic-bezier(0.16, 1, 0.3, 1);
@@ -456,11 +482,21 @@
 @keyframes download-notice-in {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(18px) scale(0.96);
+    transform: translateY(10px) scale(0.98);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes download-notice-in-from-top {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 @keyframes copy-command-row-pulse {
