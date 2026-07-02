@@ -30,10 +30,11 @@ export function Hero() {
     const readTarget = () => {
       const rect = card.getBoundingClientRect()
       const viewport = window.innerHeight || document.documentElement.clientHeight
-      const progress = Math.min(
+      const rawProgress = Math.min(
         1,
-        Math.max(0, (viewport * 0.82 - rect.top) / (viewport * 0.42)),
+        Math.max(0, (viewport * 0.74 - rect.top) / (viewport * 0.28)),
       )
+      const progress = rawProgress * rawProgress * (3 - 2 * rawProgress)
       targetTilt = 16 - progress * 16
       targetLift = progress * 20
       targetScale = 0.985 + progress * 0.015
@@ -44,9 +45,9 @@ export function Hero() {
       const liftDelta = targetLift - currentLift
       const scaleDelta = targetScale - currentScale
 
-      currentTilt += tiltDelta * 0.24
-      currentLift += liftDelta * 0.24
-      currentScale += scaleDelta * 0.24
+      currentTilt += tiltDelta * 0.18
+      currentLift += liftDelta * 0.18
+      currentScale += scaleDelta * 0.18
 
       if (
         Math.abs(tiltDelta) < 0.01 &&
