@@ -316,6 +316,90 @@
 .btn-download:active::before {
   opacity: 0.62;
 }
+.btn-support {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background-image: linear-gradient(
+    180deg,
+    oklch(0.72 0.19 11) 0%,
+    oklch(0.61 0.23 17) 100%
+  );
+  color: oklch(0.99 0 0);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 35%) inset,
+    0 0 0 1px oklch(1 0 0 / 14%) inset,
+    0 10px 30px -8px oklch(0.61 0.23 17 / 60%);
+  transition: box-shadow 0.3s ease;
+}
+.btn-support::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -20%;
+  width: 68%;
+  height: 62%;
+  pointer-events: none;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      ellipse at top,
+      oklch(1 0 0 / 70%) 0%,
+      oklch(0.94 0.08 12 / 38%) 36%,
+      transparent 72%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.82;
+  transition: opacity 0.3s ease;
+}
+.btn-support::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(-112%) skewX(-16deg);
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    oklch(1 0 0 / 34%) 44%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+.btn-support > * {
+  position: relative;
+  z-index: 1;
+}
+.btn-support:hover,
+.btn-support:focus-visible {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 50%) inset,
+    0 0 0 1px oklch(1 0 0 / 24%) inset,
+    0 0 0 3px oklch(0.72 0.19 11 / 16%),
+    0 14px 36px -10px oklch(0.61 0.23 17 / 78%);
+}
+.btn-support:focus-visible {
+  outline: 2px solid oklch(0.78 0.16 12 / 85%);
+  outline-offset: 3px;
+}
+.btn-support:hover::before,
+.btn-support:focus-visible::before {
+  opacity: 1;
+}
+.btn-support:hover::after {
+  animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.btn-support:active {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 28%) inset,
+    0 8px 24px -10px oklch(0.61 0.23 17 / 55%);
+}
+.btn-support:active::before {
+  opacity: 0.62;
+}
 .download-intent-shell {
   --download-intent: 0;
   position: relative;

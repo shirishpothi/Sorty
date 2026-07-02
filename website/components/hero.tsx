@@ -165,7 +165,7 @@ export function Hero() {
               href={SPONSOR_URL}
               target="_blank"
               rel="noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-200/40 bg-rose-500 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-rose-500/25 transition-all duration-200 hover:bg-rose-400 hover:shadow-rose-400/35 sm:w-auto"
+              className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
             >
               <HeartHandshake className="size-4" />
               Support the dev
