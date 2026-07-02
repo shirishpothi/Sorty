@@ -77,10 +77,7 @@ export function Hero() {
               href={DOWNLOAD_URL}
               className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
             >
-              <span
-                className="text-[17px] leading-none"
-                aria-hidden="true"
-              >
+              <span className="download-apple-mark" aria-hidden="true">
                 
               </span>
               Download for Mac

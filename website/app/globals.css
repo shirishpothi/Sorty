@@ -361,6 +361,21 @@
 .download-beam > .btn-download {
   width: 100%;
 }
+.download-apple-mark {
+  display: inline-grid;
+  width: 1.0625rem;
+  height: 1.0625rem;
+  flex: 0 0 1.0625rem;
+  place-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 1.0625rem;
+  font-synthesis: none;
+  line-height: 1;
+  transform: translateY(-0.01em) translateZ(0);
+  backface-visibility: hidden;
+  contain: layout paint;
+  will-change: transform;
+}
 .download-notice {
   animation: download-notice-in 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
