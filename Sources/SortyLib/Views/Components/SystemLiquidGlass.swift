@@ -1,6 +1,41 @@
+import AppKit
 import SwiftUI
 
+/// Backdrop that samples and displays content *behind the window* (desktop,
+/// other apps), like Finder's sidebar. Liquid glass alone cannot do this:
+/// `glassEffect` only samples content inside the window, so pair this backdrop
+/// with a `.clear` glass effect layered above it.
+private struct BehindWindowBackdropView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.material = .underWindowBackground
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
 extension View {
+    /// Liquid glass that shows through to content behind the window.
+    /// Falls back to a plain behind-window material before macOS 26.
+    @ViewBuilder
+    func behindWindowLiquidGlassBackground(cornerRadius: CGFloat) -> some View {
+        if #available(macOS 26.0, *) {
+            self.background {
+                BehindWindowBackdropView()
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            self.background {
+                BehindWindowBackdropView()
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            }
+        }
+    }
+
     @ViewBuilder
     func systemLiquidGlassBackground(cornerRadius: CGFloat, clear: Bool = false) -> some View {
         if #available(macOS 26.0, *) {
