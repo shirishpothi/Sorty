@@ -301,7 +301,14 @@
   transform: rotate(6deg);
 }
 .mac-heading-text {
-  color: oklch(0.97 0.003 250);
+  background: linear-gradient(
+    180deg,
+    var(--foreground) 0%,
+    color-mix(in oklch, var(--foreground) 65%, transparent) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
   font-weight: inherit;
   letter-spacing: 0;
   line-height: inherit;
