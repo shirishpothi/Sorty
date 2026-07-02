@@ -2,12 +2,13 @@
 
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
-import { ArrowRight, Cpu, Monitor, Star, UserX } from 'lucide-react'
+import { ArrowRight, Cpu, HeartHandshake, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 const TRUST_ITEMS = [
@@ -159,6 +160,15 @@ export function Hero() {
                 <Star className="absolute inset-0 size-4 scale-75 fill-amber-300 text-amber-300 opacity-0 drop-shadow-[0_0_8px_rgba(252,211,77,0.75)] transition-all duration-200 group-hover:scale-110 group-hover:opacity-100" />
               </span>
               Star on GitHub
+            </a>
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-rose-300/25 bg-rose-300/10 px-6 py-3 text-sm font-medium text-rose-100 backdrop-blur-md transition-colors hover:border-rose-300/50 hover:bg-rose-300/15 sm:w-auto"
+            >
+              <HeartHandshake className="size-4" />
+              Support the dev
             </a>
           </div>
         </Reveal>

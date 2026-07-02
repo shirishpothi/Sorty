@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { HeartHandshake, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reveal } from '@/components/reveal'
 import { FAQS } from '@/components/faq-data'
+
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
@@ -61,6 +63,18 @@ export function Faq() {
             </Reveal>
           ))}
         </div>
+
+        <Reveal delay={160} className="mt-10 text-center">
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-300/25 bg-rose-300/10 px-6 py-3 text-sm font-medium text-rose-100 transition-colors hover:border-rose-300/50 hover:bg-rose-300/15"
+          >
+            <HeartHandshake className="size-4" />
+            Support the developer
+          </a>
+        </Reveal>
       </div>
     </section>
   )

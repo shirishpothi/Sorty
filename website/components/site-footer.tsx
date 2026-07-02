@@ -1,9 +1,10 @@
-import { Mail } from 'lucide-react'
+import { HeartHandshake, Mail } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
 const COLUMNS = [
   {
@@ -20,6 +21,7 @@ const COLUMNS = [
       { label: 'Changelog', href: `${GITHUB_URL}/releases` },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
+      { label: 'Support the dev', href: SPONSOR_URL },
       { label: 'FAQ', href: '/#faq' },
     ],
   },
@@ -66,6 +68,15 @@ export function SiteFooter() {
               aria-label="Email support"
             >
               <Mail className="size-4" />
+            </a>
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex size-9 items-center justify-center rounded-full border border-rose-300/25 text-rose-100/80 transition-colors hover:bg-rose-300/10 hover:text-rose-100"
+              aria-label="Donate to support Sorty"
+            >
+              <HeartHandshake className="size-4" />
             </a>
           </div>
         </div>

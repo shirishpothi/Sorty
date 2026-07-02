@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { HeartHandshake, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
@@ -16,6 +16,7 @@ const LINKS = [
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function SiteNav() {
@@ -65,6 +66,15 @@ export function SiteNav() {
             <GithubIcon className="size-4" />
             GitHub
           </a>
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-rose-100/80 transition-colors hover:text-rose-100 lg:flex"
+          >
+            <HeartHandshake className="size-4" />
+            Donate
+          </a>
           <DownloadButton
             href={DOWNLOAD_URL}
             className="gap-1.5 px-4 py-2 text-sm font-medium"
@@ -108,6 +118,15 @@ export function SiteNav() {
           >
             <GithubIcon className="size-4" />
             View source on GitHub
+          </a>
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-rose-100/80 transition-colors hover:bg-rose-300/10 hover:text-rose-100"
+          >
+            <HeartHandshake className="size-4" />
+            Donate to support Sorty
           </a>
         </div>
       )}
