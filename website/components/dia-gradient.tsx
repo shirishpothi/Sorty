@@ -15,18 +15,20 @@
 //     <DiaGradient />
 //   </div>
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Stop = { offset: number; color: string }
 
-// Sorty's footer stops, bottom (0) → top (1): deep blue → cyan → ice → clear.
+// Sorty's blue take on the Dia footer: same dark-to-bright-to-clear rhythm as
+// the reference, mapped into navy, electric blue, ice, and transparent cyan.
 const DIA_STOPS: Stop[] = [
-  { offset: 0, color: '#03111F' },
-  { offset: 0.18, color: '#0647D8' },
-  { offset: 0.34, color: '#0A84FF' },
-  { offset: 0.52, color: '#4BB8FF' },
-  { offset: 0.68, color: '#D8F3FF' },
-  { offset: 0.84, color: '#7DD3FC80' },
+  { offset: 0, color: '#020617' },
+  { offset: 0.1827, color: '#0358F7' },
+  { offset: 0.2837, color: '#38BDF8' },
+  { offset: 0.4135, color: '#E1F4FF' },
+  { offset: 0.5866, color: '#8BE8FF' },
+  { offset: 0.6827, color: '#2563EB' },
+  { offset: 0.8029, color: '#1D4ED8' },
   { offset: 1, color: '#E0F2FE00' },
 ]
 
@@ -54,6 +56,7 @@ export function DiaGradient({
   stops = DIA_STOPS,
   riseMs = 1100,
   strength = 1,
+  flattenOnScroll = true,
 }: {
   bars?: number
   blur?: number
@@ -64,8 +67,13 @@ export function DiaGradient({
   /** Peak opacity of the painted field (0..1). Applied to the <svg> so the
    *  wrapper's 0→1 rise opacity still animates independently on top of it. */
   strength?: number
+  flattenOnScroll?: boolean
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
+  const [riseSettled, setRiseSettled] = useState(false)
+  const [scrollScale, setScrollScale] = useState(1)
+  const [scrollOpacity, setScrollOpacity] = useState(1)
 
   useEffect(() => {
     const prefersReduced = window.matchMedia(
@@ -73,30 +81,87 @@ export function DiaGradient({
     ).matches
     if (prefersReduced) {
       setShown(true)
+      setRiseSettled(true)
       return
     }
     // Double-rAF so the browser paints the flat (scaleY 0) state first, then
     // transitions up — otherwise the initial state is never painted and the
     // rise animation is skipped.
+    let timeout: ReturnType<typeof setTimeout> | undefined
     const id = requestAnimationFrame(() =>
-      requestAnimationFrame(() => setShown(true)),
+      requestAnimationFrame(() => {
+        setShown(true)
+        timeout = setTimeout(() => setRiseSettled(true), riseMs)
+      }),
     )
-    return () => cancelAnimationFrame(id)
+    return () => {
+      cancelAnimationFrame(id)
+      if (timeout) clearTimeout(timeout)
+    }
   }, [])
+
+  useEffect(() => {
+    if (!flattenOnScroll) return
+
+    const prefersReduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    if (prefersReduced) {
+      setScrollScale(1)
+      setScrollOpacity(1)
+      return
+    }
+
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const el = wrapRef.current
+      if (!el) return
+
+      const rect = el.getBoundingClientRect()
+      const viewportHeight = window.innerHeight || 1
+      const awayDistance = viewportHeight * 0.52
+      const awayProgress = Math.max(
+        0,
+        Math.min(1, (rect.bottom - viewportHeight) / awayDistance),
+      )
+      const eased = 1 - Math.pow(1 - awayProgress, 1.45)
+      setScrollScale(1 - eased * 0.34)
+      setScrollOpacity(1 - eased * 0.22)
+    }
+
+    const requestUpdate = () => {
+      if (frame) return
+      frame = requestAnimationFrame(update)
+    }
+
+    update()
+    window.addEventListener('scroll', requestUpdate, { passive: true })
+    window.addEventListener('resize', requestUpdate)
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', requestUpdate)
+      window.removeEventListener('resize', requestUpdate)
+    }
+  }, [flattenOnScroll])
 
   const heights = bellHeights(bars, peak, valley)
   const colW = VBW / bars
+  const scaleY = shown ? scrollScale : 0
 
   return (
     <div
+      ref={wrapRef}
       aria-hidden
       style={{
         height: '100%',
         width: '100%',
         transformOrigin: 'bottom',
-        transform: shown ? 'scaleY(1)' : 'scaleY(0)',
-        opacity: shown ? 1 : 0,
-        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+        transform: `scaleY(${scaleY})`,
+        opacity: shown ? scrollOpacity : 0,
+        transition: riseSettled
+          ? 'transform 90ms linear, opacity 90ms linear'
+          : `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
         willChange: 'transform, opacity',
       }}
     >

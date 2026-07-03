@@ -1,23 +1,40 @@
-import { Check } from 'lucide-react'
+import { Code2, Cpu, FolderOpen, Heart, Infinity, UsersRound } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
+import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 const INCLUDED = [
-  'Every feature, forever — no paid tiers',
-  'Unlimited folders and organization runs',
-  'Bring your own AI provider or run local',
-  'Full source code under the GPL v3',
-  'Community support on GitHub',
+  {
+    icon: Infinity,
+    text: 'Every feature, forever — no paid tiers',
+  },
+  {
+    icon: FolderOpen,
+    text: 'Unlimited folders and organization runs',
+  },
+  {
+    icon: Cpu,
+    text: 'Bring your own AI provider or run local',
+  },
+  {
+    icon: Code2,
+    text: 'Full source code under the GPL v3',
+  },
+  {
+    icon: UsersRound,
+    text: 'Community support on GitHub',
+  },
 ]
 
 export function Pricing() {
   return (
     <section
       id="pricing"
-      className="section-seam snap-section px-4 py-20 sm:py-28"
+      className="section-seam page-section px-4 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-3xl">
         <Reveal className="text-center">
@@ -27,7 +44,7 @@ export function Pricing() {
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
             Sorty is released under the GPL v3. No subscription, no activation code,
-            no catch.
+            no catch. If it saves you time, donations help keep the project moving.
           </p>
         </Reveal>
 
@@ -35,7 +52,7 @@ export function Pricing() {
           <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-8 backdrop-blur-xl sm:p-10">
             <div
               aria-hidden
-              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary/20 blur-3xl"
+              className="pointer-events-none absolute -top-24 left-1/2 h-44 w-[28rem] -translate-x-1/2 rounded-[999px] bg-primary/15 blur-3xl"
             />
             <div className="flex flex-col items-start gap-1">
               <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
@@ -48,22 +65,20 @@ export function Pricing() {
             </div>
 
             <ul className="mt-8 space-y-3">
-              {INCLUDED.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-sm">
+              {INCLUDED.map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-start gap-3 text-sm">
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Check className="size-3.5" />
+                    <Icon className="size-3.5" />
                   </span>
-                  <span className="text-muted-foreground">{item}</span>
+                  <span className="text-muted-foreground">{text}</span>
                 </li>
               ))}
             </ul>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <a
+              <DownloadButton
                 href={DOWNLOAD_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+                className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium"
               >
                 <span
                   className="text-[17px] leading-none"
@@ -72,7 +87,7 @@ export function Pricing() {
                   
                 </span>
                 Download for Mac
-              </a>
+              </DownloadButton>
               <a
                 href={GITHUB_URL}
                 target="_blank"
@@ -82,11 +97,20 @@ export function Pricing() {
                 <GithubIcon className="size-4" />
                 Build from source
               </a>
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+              >
+                <Heart className="support-heart-icon size-4" />
+                Donate
+              </a>
             </div>
 
             <p className="mt-5 text-center text-xs text-muted-foreground">
               Apple Silicon &amp; Intel · Works with iCloud Drive, Dropbox, and
-              external drives
+              external drives · Donations are optional
             </p>
           </div>
         </Reveal>

@@ -34,6 +34,8 @@ export default function PrivacyPolicyPage() {
     <LegalPage
       title="Privacy Policy"
       updated="June 2026"
+      pdfHref="/legal/sorty-privacy-policy.pdf"
+      pdfLabel="Download Privacy PDF"
       toc={TOC}
       summary={
         <>
@@ -48,9 +50,17 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="overview" heading="1. Overview">
         <p>
           Sorty (&quot;the App&quot;) is a native macOS application published by
-          the Sorty open-source project and licensed under the GNU General
-          Public License v3.0. This Privacy Policy explains how the App handles
-          information when you use it.
+          the Sorty open-source project and licensed under the{' '}
+          <a
+            href="https://www.gnu.org/licenses/gpl-3.0.en.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GNU General Public License v3.0
+          </a>
+          . This Privacy Policy explains how the App handles information when
+          you use it.
         </p>
         <p>
           Sorty is built privacy-first. The App runs entirely on your device,
@@ -120,10 +130,26 @@ export default function PrivacyPolicyPage() {
           </li>
         </ul>
         <p>
-          For maximum privacy, use a fully on-device provider. Ollama processes
-          everything on your machine, and Apple Foundation Models run on-device
-          via Apple Intelligence (requires macOS 15+). With these options, no
-          file information leaves your Mac.
+          For maximum privacy, use a fully on-device provider.{' '}
+          <a
+            href="https://ollama.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Ollama
+          </a>{' '}
+          processes everything on your machine, and{' '}
+          <a
+            href="https://developer.apple.com/apple-intelligence/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Apple Foundation Models
+          </a>{' '}
+          run on-device via Apple Intelligence (requires macOS 15+). With these
+          options, no file information leaves your Mac.
         </p>
         <p>
           When you use a third-party AI provider, that provider&apos;s own
@@ -216,22 +242,53 @@ export default function PrivacyPolicyPage() {
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
-            <strong className="text-foreground">Sparkle Framework</strong> —
-            handles secure in-app updates.
+            <a
+              href="https://sparkle-project.org"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              <strong>Sparkle Framework</strong>
+            </a>{' '}
+            — handles secure in-app updates.
           </li>
           <li>
             <strong className="text-foreground">AI providers</strong> — each has
             its own security and privacy policy (see above).
           </li>
           <li>
-            <strong className="text-foreground">GitHub</strong> — hosts releases
-            and the update feed.
+            <a
+              href="https://github.com/sorty-organizer/Sorty/releases"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              <strong>GitHub</strong>
+            </a>{' '}
+            — hosts releases and the update feed.
           </li>
         </ul>
         <p>
           Releases are not code-signed with an Apple Developer certificate. You
-          may verify integrity by building from source or checking release
-          notes. See SECURITY.md for full details.
+          may verify integrity by{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            building from source
+          </a>{' '}
+          or checking release notes. See{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/blob/main/SECURITY.md"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            SECURITY.md
+          </a>{' '}
+          for full details.
         </p>
       </LegalSection>
 
@@ -286,9 +343,34 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="contact" heading="11. Contact">
         <p>
-          For privacy or security questions, please use GitHub&apos;s private
-          vulnerability reporting or open a GitHub Discussion for general
-          questions. For security reports specifically, see SECURITY.md.
+          For privacy or security questions, please use{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/security/advisories/new"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GitHub&apos;s private vulnerability reporting
+          </a>{' '}
+          or open a{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/discussions"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            GitHub Discussion
+          </a>{' '}
+          for general questions. For security reports specifically, see{' '}
+          <a
+            href="https://github.com/sorty-organizer/Sorty/blob/main/SECURITY.md"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            SECURITY.md
+          </a>
+          .
         </p>
         <p className="pt-2 text-xs text-muted-foreground/80">
           © 2026 Sorty. Released under the GPL-3.0 license.{' '}

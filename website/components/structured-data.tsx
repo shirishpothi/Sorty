@@ -37,7 +37,7 @@ export function StructuredData() {
         description:
           'Sorty is a free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
         url: SITE_URL,
-        downloadUrl: `${GITHUB_URL}/releases`,
+        downloadUrl: `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`,
         softwareLicense: 'https://www.gnu.org/licenses/gpl-3.0.en.html',
         isAccessibleForFree: true,
         publisher: { '@id': `${SITE_URL}/#organization` },

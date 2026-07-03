@@ -1,9 +1,10 @@
-import { Mail } from 'lucide-react'
+import { Heart, Mail } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
 const COLUMNS = [
   {
@@ -20,6 +21,7 @@ const COLUMNS = [
       { label: 'Changelog', href: `${GITHUB_URL}/releases` },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
+      { label: 'Support the dev', href: SPONSOR_URL },
       { label: 'FAQ', href: '/#faq' },
     ],
   },
@@ -35,12 +37,12 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="snap-footer relative isolate overflow-visible px-4 pt-14">
+    <footer className="relative isolate overflow-visible px-4 pt-14">
       {/* Blue aurora rising from the floor. It intentionally extends above the
           footer so the glow blends into the previous section instead of ending
           at a visible rectangular edge. */}
-      <div className="pointer-events-none absolute inset-x-[-10vw] -top-[26vh] bottom-[-8vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_24%,black_100%)]">
-        <DiaGradient blur={22} peak={0.9} valley={0.42} strength={0.88} />
+      <div className="pointer-events-none absolute inset-x-[-10vw] top-[6vh] bottom-[-16vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_34%,black_100%)]">
+        <DiaGradient blur={15} peak={0.98} valley={0.55} strength={0.72} />
       </div>
 
       <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
@@ -66,6 +68,15 @@ export function SiteFooter() {
               aria-label="Email support"
             >
               <Mail className="size-4" />
+            </a>
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-support flex size-9 items-center justify-center rounded-full"
+              aria-label="Donate to support Sorty"
+            >
+              <Heart className="support-heart-icon size-4" />
             </a>
           </div>
         </div>

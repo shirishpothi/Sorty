@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ShieldCheck } from 'lucide-react'
+import { Download, ShieldCheck } from 'lucide-react'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 
@@ -11,6 +11,8 @@ interface TocItem {
 interface LegalPageProps {
   title: string
   updated: string
+  pdfHref?: string
+  pdfLabel?: string
   /** Short "the short version" callout shown in the gradient banner. */
   summary?: ReactNode
   /** Anchor links rendered as an "On this page" index. */
@@ -21,6 +23,8 @@ interface LegalPageProps {
 export function LegalPage({
   title,
   updated,
+  pdfHref,
+  pdfLabel = 'Download PDF',
   summary,
   toc,
   children,
@@ -47,9 +51,21 @@ export function LegalPage({
           <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
             {title}
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Last updated {updated}
-          </p>
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Last updated {updated}
+            </p>
+            {pdfHref && (
+              <a
+                href={pdfHref}
+                download
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <Download className="size-4" />
+                {pdfLabel}
+              </a>
+            )}
+          </div>
 
           {summary && (
             <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">
