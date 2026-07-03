@@ -51,6 +51,8 @@ jobs:
 
       - name: Build static site
         working-directory: website
+        env:
+          NEXT_PUBLIC_BASE_PATH: /Sorty
         run: pnpm build
 
       - name: Upload Pages artifact

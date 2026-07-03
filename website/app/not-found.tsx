@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { FileIconField } from '@/components/file-icon-field'
 import { SortyLogo } from '@/components/sorty-logo'
 import { cn } from '@/lib/utils'
+import { sitePath } from '@/lib/site-paths'
 
 export default function NotFound() {
   const router = useRouter()
@@ -19,7 +20,7 @@ export default function NotFound() {
     }
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      router.push('/')
+      router.push(sitePath('/'))
       return
     }
 
@@ -33,7 +34,7 @@ export default function NotFound() {
         : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     )
     setCollapsing(true)
-    window.setTimeout(() => router.push('/'), 560)
+    window.setTimeout(() => router.push(sitePath('/')), 560)
   }
 
   return (
@@ -46,7 +47,7 @@ export default function NotFound() {
       />
 
       <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16 text-center">
-        <a href="/" className="absolute top-6 left-6" data-file-bounce>
+        <a href={sitePath('/')} className="absolute top-6 left-6" data-file-bounce>
           <SortyLogo />
         </a>
 

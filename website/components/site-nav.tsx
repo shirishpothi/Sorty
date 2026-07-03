@@ -6,13 +6,14 @@ import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
+import { sitePath } from '@/lib/site-paths'
 
 const LINKS = [
-  { label: 'Features', href: '/#features' },
-  { label: 'Privacy', href: '/privacy-policy' },
-  { label: 'Terms', href: '/terms' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQ', href: '/#faq' },
+  { label: 'Features', href: sitePath('/#features') },
+  { label: 'Privacy', href: sitePath('/privacy-policy') },
+  { label: 'Terms', href: sitePath('/terms') },
+  { label: 'Pricing', href: sitePath('/#pricing') },
+  { label: 'FAQ', href: sitePath('/#faq') },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
@@ -40,7 +41,7 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <a href="/#top" className="shrink-0">
+        <a href={sitePath('/#top')} className="shrink-0">
           <SortyLogo />
         </a>
 

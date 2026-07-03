@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { LegalPage, LegalSection } from '@/components/legal-page'
+import { sitePath } from '@/lib/site-paths'
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
@@ -135,7 +136,7 @@ export default function TermsPage() {
           assume responsibility for reviewing suggested changes before applying
           them. See the{' '}
           <a
-            href="/privacy-policy"
+            href={sitePath('/privacy-policy')}
             className="text-primary underline-offset-4 hover:underline"
           >
             Privacy Policy
@@ -317,11 +318,11 @@ export default function TermsPage() {
         </p>
         <p className="pt-2 text-xs text-muted-foreground/80">
           © 2026 Sorty. Released under the GPL-3.0 license.{' '}
-          <a href="/" className="underline-offset-4 hover:underline">
+          <a href={sitePath('/')} className="underline-offset-4 hover:underline">
             Home
           </a>{' '}
           ·{' '}
-          <a href="/privacy-policy" className="underline-offset-4 hover:underline">
+          <a href={sitePath('/privacy-policy')} className="underline-offset-4 hover:underline">
             Privacy
           </a>{' '}
           ·{' '}

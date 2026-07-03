@@ -6,6 +6,7 @@ import { ArrowRight, Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
+import { sitePath } from '@/lib/site-paths'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
@@ -108,7 +109,7 @@ export function Hero() {
             for your{' '}
             <span className="mac-heading-lockup highlight-in" aria-label="Mac">
               <Image
-                src="/macos-finder.png"
+                src={sitePath('/macos-finder-40.webp')}
                 alt=""
                 width={512}
                 height={512}
@@ -124,7 +125,7 @@ export function Hero() {
           <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             Point{' '}
             <Image
-              src="/sorty-icon.png"
+              src={sitePath('/sorty-icon-40.webp')}
               alt=""
               width={18}
               height={18}
@@ -199,7 +200,7 @@ export function Hero() {
             className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
           />
           <Image
-            src="/sorty-app.png"
+            src={sitePath('/sorty-app.webp')}
             alt="The Sorty app prompting the user to select a directory to organize."
             width={1102}
             height={754}

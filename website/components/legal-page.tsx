@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Download, ShieldCheck } from 'lucide-react'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
+import { sitePath } from '@/lib/site-paths'
 
 interface TocItem {
   id: string
@@ -43,7 +44,7 @@ export function LegalPage({
         />
         <div className="mx-auto max-w-3xl">
           <a
-            href="/"
+            href={sitePath('/')}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Back to Sorty

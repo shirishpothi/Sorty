@@ -2,6 +2,7 @@ import { Heart, Mail } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
+import { sitePath } from '@/lib/site-paths'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
@@ -10,9 +11,9 @@ const COLUMNS = [
   {
     title: 'Product',
     links: [
-      { label: 'Features', href: '/#features' },
-      { label: 'Privacy', href: '/privacy-policy' },
-      { label: 'Pricing', href: '/#pricing' },
+      { label: 'Features', href: sitePath('/#features') },
+      { label: 'Privacy', href: sitePath('/privacy-policy') },
+      { label: 'Pricing', href: sitePath('/#pricing') },
     ],
   },
   {
@@ -22,15 +23,15 @@ const COLUMNS = [
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
       { label: 'Support the dev', href: SPONSOR_URL },
-      { label: 'FAQ', href: '/#faq' },
+      { label: 'FAQ', href: sitePath('/#faq') },
     ],
   },
   {
     title: 'Legal',
     links: [
       { label: 'GPL v3 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
-      { label: 'Privacy Policy', href: '/privacy-policy' },
-      { label: 'Terms', href: '/terms' },
+      { label: 'Privacy Policy', href: sitePath('/privacy-policy') },
+      { label: 'Terms', href: sitePath('/terms') },
     ],
   },
 ]

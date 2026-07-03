@@ -12,6 +12,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { sitePath } from '@/lib/site-paths'
 
 const FEATURES = [
   {
@@ -48,28 +49,28 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-apply.png',
+    src: '/sorty-apply.webp',
     icon: Eye,
     title: 'Preview every move',
     body: 'Review the apply step before Sorty touches a file.',
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-settings.png',
+    src: '/sorty-settings.webp',
     icon: Settings,
     title: 'Choose your AI provider',
     body: 'Connect a cloud provider or run everything locally with Ollama.',
     alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
   {
-    src: '/sorty-health.png',
+    src: '/sorty-health.webp',
     icon: Activity,
     title: 'Keep workspaces healthy',
     body: 'See clutter, stale folders, and automation status in one place.',
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
-    src: '/sorty-duplicates.png',
+    src: '/sorty-duplicates.webp',
     icon: CopyCheck,
     title: 'Review duplicates clearly',
     body: 'Compare duplicate candidates before choosing what stays.',
@@ -164,7 +165,7 @@ export function Features() {
               >
                 <span className={`flex size-7 items-center justify-center rounded-full ${provider.accent}`}>
                   <Image
-                    src={provider.src}
+                    src={sitePath(provider.src)}
                     alt=""
                     width={24}
                     height={24}
@@ -196,7 +197,7 @@ export function Features() {
               </div>
               <div className="p-3">
                 <Image
-                  src={shot.src}
+                  src={sitePath(shot.src)}
                   alt={shot.alt}
                   width={1200}
                   height={800}

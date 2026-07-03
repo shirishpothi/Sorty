@@ -1,6 +1,6 @@
 import { FAQS } from '@/components/faq-data'
 
-const SITE_URL = 'https://sorty.app'
+const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 /**
@@ -16,7 +16,7 @@ export function StructuredData() {
         '@id': `${SITE_URL}/#organization`,
         name: 'Sorty',
         url: SITE_URL,
-        logo: `${SITE_URL}/sorty-icon.png`,
+        logo: `${SITE_URL}/sorty-icon-96.webp`,
         sameAs: [GITHUB_URL],
       },
       {
@@ -41,7 +41,7 @@ export function StructuredData() {
         softwareLicense: 'https://www.gnu.org/licenses/gpl-3.0.en.html',
         isAccessibleForFree: true,
         publisher: { '@id': `${SITE_URL}/#organization` },
-        screenshot: `${SITE_URL}/sorty-app.png`,
+        screenshot: `${SITE_URL}/sorty-app.webp`,
         offers: {
           '@type': 'Offer',
           price: '0',
