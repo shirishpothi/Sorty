@@ -13,8 +13,6 @@ const LINKS = [
   { label: 'Changelog', href: sitePath('/changelog') },
   { label: 'Privacy', href: sitePath('/privacy-policy') },
   { label: 'Terms', href: sitePath('/terms') },
-  { label: 'Pricing', href: sitePath('/#pricing') },
-  { label: 'FAQ', href: sitePath('/#faq') },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
