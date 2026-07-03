@@ -19,7 +19,7 @@ const COLUMNS = [
   {
     title: 'Resources',
     links: [
-      { label: 'Changelog', href: `${GITHUB_URL}/releases` },
+      { label: 'Changelog', href: sitePath('/changelog') },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
       { label: 'Support the dev', href: SPONSOR_URL },

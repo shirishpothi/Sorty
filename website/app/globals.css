@@ -543,6 +543,49 @@
 .copy-command-button.is-copied .copy-command-shine {
   animation: copy-command-shine 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.changelog-image-frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1.7rem;
+  background:
+    radial-gradient(
+      circle at 72% 34%,
+      oklch(0.66 0.22 18 / 26%),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 22% 78%,
+      oklch(0.69 0.16 245 / 22%),
+      transparent 32%
+    ),
+    oklch(1 0 0 / 4%);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 18%) inset,
+    0 28px 70px -34px oklch(0.66 0.22 18 / 72%),
+    0 20px 60px -42px oklch(0.62 0.19 256 / 70%);
+}
+.changelog-image-frame::before {
+  content: "";
+  position: absolute;
+  inset: -42% -32% auto;
+  z-index: 1;
+  height: 58%;
+  pointer-events: none;
+  transform: rotate(-8deg);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(1 0 0 / 22%),
+    transparent
+  );
+  mix-blend-mode: screen;
+}
+.changelog-image-frame img {
+  position: relative;
+  z-index: 0;
+  display: block;
+}
 @keyframes download-button-sheen {
   0% {
     opacity: 0;

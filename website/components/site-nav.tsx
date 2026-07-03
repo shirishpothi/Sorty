@@ -10,6 +10,7 @@ import { sitePath } from '@/lib/site-paths'
 
 const LINKS = [
   { label: 'Features', href: sitePath('/#features') },
+  { label: 'Changelog', href: sitePath('/changelog') },
   { label: 'Privacy', href: sitePath('/privacy-policy') },
   { label: 'Terms', href: sitePath('/terms') },
   { label: 'Pricing', href: sitePath('/#pricing') },
