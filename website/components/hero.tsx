@@ -150,6 +150,32 @@ export function Hero() {
               </span>
               Download for Mac
             </DownloadButton>
+            <svg aria-hidden="true" width="0" height="0" className="absolute">
+              <filter
+                id="liquid-glass-distortion"
+                x="0%"
+                y="0%"
+                width="100%"
+                height="100%"
+                filterUnits="objectBoundingBox"
+              >
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.008 0.008"
+                  numOctaves="2"
+                  seed="92"
+                  result="noise"
+                />
+                <feGaussianBlur in="noise" stdDeviation="2" result="blurred" />
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="blurred"
+                  scale="64"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            </svg>
             <a
               href={GITHUB_URL}
               target="_blank"
