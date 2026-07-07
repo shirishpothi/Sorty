@@ -169,11 +169,13 @@
     @apply bg-background text-foreground;
     max-width: 100%;
     overflow-x: clip;
+    overscroll-behavior-y: none;
   }
   html {
     @apply font-sans;
     max-width: 100%;
     overflow-x: clip;
+    overscroll-behavior-y: none;
     scroll-behavior: smooth;
   }
 }
