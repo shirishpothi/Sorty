@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { sitePath } from '@/lib/site-paths'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -76,14 +77,27 @@ export const metadata: Metadata = {
     images: ['/sorty-app.webp'],
   },
   icons: {
+    shortcut: sitePath('/favicon.ico'),
     icon: [
+      {
+        url: sitePath('/favicon.ico'),
+        sizes: 'any',
+      },
+      {
+        url: sitePath('/icon.svg'),
+        type: 'image/svg+xml',
+      },
       {
         url: `${SITE_URL}/icon-light-32x32.png`,
         media: '(prefers-color-scheme: light)',
+        sizes: '32x32',
+        type: 'image/png',
       },
       {
         url: `${SITE_URL}/icon-dark-32x32.png`,
         media: '(prefers-color-scheme: dark)',
+        sizes: '32x32',
+        type: 'image/png',
       },
     ],
     apple: `${SITE_URL}/apple-icon.png`,
