@@ -318,6 +318,161 @@
 .btn-download:active::before {
   opacity: 0.62;
 }
+.btn-github-star {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  color: oklch(0.985 0 0);
+  border: 1px solid oklch(1 0 0 / 44%);
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 100%) 0%,
+      oklch(1 0 0 / 52%) 31%,
+      oklch(1 0 0 / 0%) 55%,
+      oklch(1 0 0 / 42%) 85%,
+      oklch(1 0 0 / 100%) 100%
+    ),
+    linear-gradient(
+      90deg,
+      oklch(1 0 0 / 100%) 0%,
+      oklch(1 0 0 / 0%) 100%
+    ),
+    oklch(0.23 0.004 260 / 56%);
+  background-blend-mode: overlay, soft-light, normal;
+  backdrop-filter: blur(18px) saturate(165%);
+  -webkit-backdrop-filter: blur(18px) saturate(165%);
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 100%) inset,
+    0 0 0 1.5px oklch(1 0 0 / 0%) inset,
+    0 1.5px 6px 0 oklch(0.86 0 0 / 100%) inset,
+    0 2px 12px -3px oklch(0 0 0 / 20%) inset,
+    0 -16px 12px -1px oklch(1 0 0 / 50%) inset,
+    0 4px 24px -12px oklch(0 0 0 / 50%),
+    0 1px 8px -8px oklch(0 0 0 / 55%),
+    6px 0 4px -6px oklch(0 0 0 / 7.5%),
+    -6px 0 4px -6px oklch(0 0 0 / 7.5%),
+    0 -4px 4px -2.5px oklch(0 0 0 / 7.5%);
+  isolation: isolate;
+  transition:
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.28s ease,
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-github-star::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      ellipse 60% 100% at 50% 0%,
+      oklch(1 0 0 / 100%) 0%,
+      oklch(1 0 0 / 50%) 40%,
+      oklch(1 0 0 / 0%) 72%
+    ),
+    linear-gradient(
+      135deg,
+      oklch(1 0 0 / 20%) 0%,
+      oklch(1 0 0 / 3%) 48%,
+      oklch(1 0 0 / 80%) 100%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.84;
+  transition: opacity 0.22s ease;
+}
+.btn-github-star::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -2;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      180deg,
+      oklch(1 0 0 / 100%) 0%,
+      oklch(1 0 0 / 0%) 100%
+    );
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.btn-github-star > * {
+  position: relative;
+  z-index: 1;
+}
+.btn-github-star:hover,
+.btn-github-star:focus-visible {
+  color: oklch(0.97 0.065 92);
+  border-color: oklch(0.86 0.12 84 / 68%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 100%) inset,
+    0 0 0 1.5px oklch(0.9 0.12 87 / 52%) inset,
+    0 1.5px 6px 0 oklch(0.86 0 0 / 100%) inset,
+    0 2px 12px -3px oklch(0 0 0 / 20%) inset,
+    0 -16px 12px -1px oklch(1 0 0 / 50%) inset,
+    0 6px 28px -12px oklch(0 0 0 / 55%),
+    0 0 22px -8px oklch(0.86 0.12 84 / 72%),
+    6px 0 4px -6px oklch(0 0 0 / 7.5%),
+    -6px 0 4px -6px oklch(0 0 0 / 7.5%),
+    0 1px 8px -8px oklch(0 0 0 / 55%);
+}
+.btn-github-star:hover::before,
+.btn-github-star:focus-visible::before {
+  opacity: 1;
+}
+.btn-github-star:hover::after,
+.btn-github-star:focus-visible::after {
+  opacity: 0.22;
+}
+.btn-github-star:focus-visible {
+  outline: 2px solid oklch(0.86 0.12 84 / 78%);
+  outline-offset: 3px;
+}
+.btn-github-star:active {
+  transform: translateY(0);
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 80%) inset,
+    0 1.5px 6px 0 oklch(0.86 0 0 / 100%) inset,
+    0 2px 12px -3px oklch(0 0 0 / 24%) inset,
+    0 -16px 12px -1px oklch(1 0 0 / 45%) inset,
+    0 4px 18px -12px oklch(0 0 0 / 48%);
+}
+.github-star-github-icon,
+.github-star-icon {
+  transition:
+    opacity 0.2s ease,
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.2s ease,
+    filter 0.2s ease;
+}
+.github-star-github-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+.github-star-icon {
+  color: oklch(0.86 0.14 84);
+  fill: currentColor;
+  filter:
+    drop-shadow(0 0 8px oklch(0.86 0.14 84 / 75%))
+    drop-shadow(0 1px 2px oklch(0 0 0 / 35%));
+  opacity: 0;
+  transform: scale(0.72) rotate(-10deg);
+}
+.btn-github-star:hover .github-star-github-icon,
+.btn-github-star:focus-visible .github-star-github-icon {
+  opacity: 0;
+  transform: scale(0.74) rotate(8deg);
+}
+.btn-github-star:hover .github-star-icon,
+.btn-github-star:focus-visible .github-star-icon {
+  opacity: 1;
+  transform: scale(1.12) rotate(0deg);
+}
 .btn-support {
   position: relative;
   z-index: 1;
@@ -737,6 +892,16 @@
   .btn-support:hover .support-heart-icon,
   .btn-support:focus-visible .support-heart-icon {
     animation: none;
+  }
+  .btn-github-star,
+  .github-star-github-icon,
+  .github-star-icon {
+    transition: none;
+  }
+  .btn-github-star:hover,
+  .btn-github-star:focus-visible,
+  .btn-github-star:active {
+    transform: none;
   }
   .download-modal-backdrop,
   .download-modal-panel {
