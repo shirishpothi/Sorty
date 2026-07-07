@@ -88,19 +88,19 @@ export const metadata: Metadata = {
         type: 'image/svg+xml',
       },
       {
-        url: `${SITE_URL}/icon-light-32x32.png`,
+        url: sitePath('/icon-light-32x32.png'),
         media: '(prefers-color-scheme: light)',
         sizes: '32x32',
         type: 'image/png',
       },
       {
-        url: `${SITE_URL}/icon-dark-32x32.png`,
+        url: sitePath('/icon-dark-32x32.png'),
         media: '(prefers-color-scheme: dark)',
         sizes: '32x32',
         type: 'image/png',
       },
     ],
-    apple: `${SITE_URL}/apple-icon.png`,
+    apple: sitePath('/apple-icon.png'),
   },
 }
 
