@@ -260,13 +260,13 @@ jobs:
       - name: Package universal ZIP
         run: |
           chmod +x ./scripts/package.sh
-          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/package.sh
+          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
 
       - name: Stage build artifacts
         run: |
           mkdir -p release-artifacts
           cp -R "releases/Sorty.app" "release-artifacts/Sorty.app"
-          cp "releases/Sorty-universal.zip" "release-artifacts/"
+          cp "releases/Sorty.zip" "release-artifacts/"
           cp ".build/build_output.log" "release-artifacts/build_output_universal.log" 2>/dev/null || true
 
           # Preserve Sparkle's sign_update so release can sign appcast.xml.
@@ -314,7 +314,7 @@ jobs:
         run: |
           mkdir -p releases
           cp -R artifacts/universal/Sorty.app releases/
-          cp artifacts/universal/Sorty-universal.zip releases/
+          cp artifacts/universal/Sorty.zip releases/
 
           if [ -f "artifacts/universal/sparkle-tools/sign_update" ]; then
             mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
@@ -329,7 +329,7 @@ jobs:
           APPCAST_FILE_OVERRIDE: releases/appcast-v2.xml
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
-          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/generate_appcast_ci.sh
+          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
         run: |
@@ -371,13 +371,13 @@ jobs:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
-            releases/Sorty-universal.zip
+            releases/Sorty.zip
             releases/appcast-v2.xml
           generate_release_notes: true
           append_body: true
           body: |
             ## Installation
-            Download `Sorty-universal.zip` and move `Sorty.app` to `/Applications`.
+            Download `Sorty.zip` and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
@@ -387,7 +387,7 @@ jobs:
             Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
 
             ## Additional Downloads
-            - **Sorty-universal.zip** - Universal build (Apple Silicon + Intel)
+            - **Sorty.zip** - Universal build (Apple Silicon + Intel)
             - **Sorty-Source.zip** - Full source code
 
             ## Changelog (v${{ needs.prepare-release.outputs.version }})

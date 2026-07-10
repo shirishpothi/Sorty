@@ -5,7 +5,7 @@ import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 
 const INCLUDED = [
   {
