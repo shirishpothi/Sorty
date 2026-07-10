@@ -145,6 +145,7 @@ public struct OnboardingView: View {
                 OnboardingWindowTitleConfigurator {
                     hasConfiguredWindowChrome = true
                 }
+                OnboardingScreenBackdropBlurPresenter()
                 OnboardingScreenEdgeGlowPresenter()
             }
             .frame(width: 0, height: 0)
@@ -1087,6 +1088,148 @@ private struct OnboardingScreenEdgeGlow: View {
             startPoint: startPoint,
             endPoint: endPoint
         )
+    }
+}
+
+/// Places a visual-effect surface behind the onboarding window, leaving the
+/// Sorty window clear while softening the rest of the current screen.
+private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ScreenTrackingView()
+        view.onWindowChanged = { window in
+            context.coordinator.attach(to: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.attach(to: nsView.window)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.dismiss()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private weak var hostWindow: NSWindow?
+        private var backdropPanel: NSPanel?
+        private var observers: [NSObjectProtocol] = []
+
+        func attach(to window: NSWindow?) {
+            guard hostWindow !== window else {
+                updatePanelFrame()
+                return
+            }
+
+            removeObservers()
+            hostWindow = window
+
+            guard let window else {
+                dismissPanel()
+                return
+            }
+
+            if backdropPanel == nil {
+                backdropPanel = makeBackdropPanel()
+            }
+
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(
+                    forName: NSWindow.didMoveNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didResizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didChangeScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                }
+            ]
+
+            updatePanelFrame()
+        }
+
+        func dismiss() {
+            removeObservers()
+            dismissPanel()
+            hostWindow = nil
+        }
+
+        private func makeBackdropPanel() -> NSPanel {
+            let panel = NSPanel(
+                contentRect: .zero,
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            panel.isOpaque = false
+            panel.hasShadow = false
+            panel.ignoresMouseEvents = true
+            panel.hidesOnDeactivate = false
+            panel.isReleasedWhenClosed = false
+            panel.level = .normal
+            panel.collectionBehavior = [
+                .canJoinAllSpaces,
+                .fullScreenAuxiliary,
+                .ignoresCycle,
+                .stationary
+            ]
+
+            let backdrop = NSVisualEffectView()
+            backdrop.material = .underWindowBackground
+            backdrop.blendingMode = .behindWindow
+            backdrop.state = .active
+            panel.contentView = backdrop
+            return panel
+        }
+
+        private func updatePanelFrame() {
+            guard let window = hostWindow,
+                  let screen = window.screen ?? NSScreen.main else {
+                return
+            }
+
+            backdropPanel?.setFrame(screen.frame, display: true)
+            backdropPanel?.order(.below, relativeTo: window.windowNumber)
+        }
+
+        private func dismissPanel() {
+            backdropPanel?.orderOut(nil)
+            backdropPanel?.close()
+            backdropPanel = nil
+        }
+
+        private func removeObservers() {
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
+            observers.removeAll()
+        }
+    }
+
+    private final class ScreenTrackingView: NSView {
+        var onWindowChanged: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChanged?(window)
+        }
     }
 }
 
