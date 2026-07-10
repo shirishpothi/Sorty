@@ -227,9 +227,9 @@ export function Hero() {
           />
           <Image
             src={sitePath('/sorty-app.webp')}
-            alt="The Sorty app prompting the user to select a directory to organize."
-            width={1102}
-            height={754}
+            alt="The Sorty app previewing a proposed folder organization before applying it."
+            width={2790}
+            height={2096}
             className="w-full rounded-xl sm:rounded-2xl"
             priority
           />
