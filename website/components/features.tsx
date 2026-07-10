@@ -49,7 +49,7 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-apply.webp',
+    src: '/sorty-apply.webp?v=08ac7b88',
     width: 2782,
     height: 2088,
     icon: Eye,
@@ -58,7 +58,7 @@ const SHOTS = [
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-settings.webp',
+    src: '/sorty-settings.webp?v=08ac7b88',
     width: 2790,
     height: 2096,
     icon: Settings,
@@ -67,7 +67,7 @@ const SHOTS = [
     alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
   {
-    src: '/sorty-health.webp',
+    src: '/sorty-health.webp?v=08ac7b88',
     width: 2790,
     height: 2096,
     icon: Activity,
@@ -76,7 +76,7 @@ const SHOTS = [
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
-    src: '/sorty-duplicates.webp',
+    src: '/sorty-duplicates.webp?v=08ac7b88',
     width: 2790,
     height: 2096,
     icon: CopyCheck,
