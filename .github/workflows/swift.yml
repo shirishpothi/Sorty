@@ -3,27 +3,15 @@ name: Swift CI
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - 'website/**'
+      - '.github/workflows/website.yml'
   pull_request:
     branches: ["main"]
-  workflow_dispatch:
-    inputs:
-      test_scope:
-        description: 'Test Scope'
-        required: true
-        default: 'Unit'
-        type: choice
-        options:
-        - Unit
-        - None
-      release_type:
-        description: 'Release Type'
-        required: true
-        default: 'None'
-        type: choice
-        options:
-        - None
-        - Beta
-        - Production
+    paths-ignore:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  workflow_dispatch: {}
 
 # Cancel in-progress runs for the same branch
 concurrency:
@@ -105,52 +93,11 @@ jobs:
           ./scripts/build.sh
           echo "✅ Build script succeeded"
 
-      - name: Generate Appcast
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: |
-          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "SPARKLE_PRIVATE_KEY is required for appcast generation"
-            exit 1
-          fi
-          chmod +x ./scripts/generate_appcast_ci.sh
-          ./scripts/generate_appcast_ci.sh
-
-      - name: Validate Sparkle Update System
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
-        run: |
-          chmod +x ./scripts/validate_sparkle.sh
-          ./scripts/validate_sparkle.sh
-
       - name: Pre-release validation
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           chmod +x scripts/prerelease_check.sh
           ./scripts/prerelease_check.sh --skip-build --skip-tests --skip-sparkle
-
-      - name: Run Build and Release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          ARGS=""
-          
-          # correct scope mapping
-          if [[ "${{ inputs.test_scope }}" == "None" ]]; then
-             ARGS="$ARGS --no-tests"
-          else
-             # Default or Unit (UI tests are globally disabled in CI)
-             ARGS="$ARGS --skip-ui"
-          fi
-          
-          echo "Running release.sh with args: $ARGS"
-          ./scripts/release.sh $ARGS
-
-      - name: Archive Release Artifacts
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: Release-Artifacts
-          path: releases/
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4

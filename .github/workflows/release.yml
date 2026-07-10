@@ -17,7 +17,6 @@ concurrency:
 
 env:
   PROJECT_NAME: Sorty
-  SCHEME: Sorty
 
 jobs:
   prepare-release:

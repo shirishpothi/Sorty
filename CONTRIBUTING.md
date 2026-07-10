@@ -199,7 +199,7 @@ func testAnalyze() async throws {
 }
 ```
 
-5. **Update Documentation**: Add provider details to README.md and HelpView.swift
+5. **Update Documentation**: Add provider details to README.md and `HELP.md` or `HelpSettingsView.swift`
 
 ## Testing Requirements
 
@@ -264,7 +264,7 @@ Prefer small, reviewable commits and push them early. The goal is to get Blacksm
 
 4. **Update Documentation**:
    - README.md if user-facing changes
-   - HelpView.swift if adding new features
+   - `HELP.md` or `HelpSettingsView.swift` if adding new features
    - AGENTS.md if changing build process
 
 ### PR Requirements
@@ -336,7 +336,7 @@ public func analyze(files: [FileItem], ...) async throws -> OrganizationPlan
 
 When adding features that affect users:
 
-1. Update relevant HelpView.swift sections
+1. Update relevant `HELP.md` or `HelpSettingsView.swift` sections
 2. Add to README.md if significant
 3. Update CHANGELOG.md with user-facing description
 
