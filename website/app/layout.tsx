@@ -1,6 +1,6 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { sitePath } from '@/lib/site-paths'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
-const SITE_URL = 'https://sorty.app'
+const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -62,9 +62,9 @@ export const metadata: Metadata = {
     locale: 'en_US',
     images: [
       {
-        url: '/sorty-app.png',
-        width: 2790,
-        height: 2096,
+        url: '/sorty-app.webp',
+        width: 1102,
+        height: 754,
         alt: 'The Sorty app showing an AI-generated organization plan for a Downloads folder.',
       },
     ],
@@ -74,20 +74,16 @@ export const metadata: Metadata = {
     title: 'Sorty — AI folder organization for your Mac',
     description:
       'A free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
-    images: ['/sorty-app.png'],
+    images: ['/sorty-app.webp'],
   },
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-    ],
-    apple: '/apple-icon.png',
+    shortcut: sitePath('/favicon.png'),
+    icon: {
+      url: sitePath('/favicon.png'),
+      sizes: '96x96',
+      type: 'image/png',
+    },
+    apple: sitePath('/apple-icon.png'),
   },
 }
 
@@ -108,7 +104,6 @@ export default function RootLayout({
     >
       <body className="font-sans antialiased">
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

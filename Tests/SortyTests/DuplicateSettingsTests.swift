@@ -105,7 +105,7 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertTrue(allCases.contains(.shortestPath))
     }
 
-    func testCleanupPreferencePrioritizesNamedFolderThenResolution() {
+    func testCleanupPreferenceSelectsLargestFile() {
         let lowerResolutionOriginal = FileItem(
             path: "/Photos/Originals/photo.jpg",
             name: "photo",
@@ -136,13 +136,13 @@ final class DuplicateSettingsTests: XCTestCase {
 
         let preferredID = CleanupPreferenceResolver.preferredFileID(
             in: [lowerResolutionOriginal, largerEditedCopy, higherResolutionOriginal],
-            prompt: "Keep files in Originals, prefer highest resolution, otherwise newest"
+            strategy: .largest
         )
 
-        XCTAssertEqual(preferredID, higherResolutionOriginal.id)
+        XCTAssertEqual(preferredID, largerEditedCopy.id)
     }
 
-    func testCleanupPreferenceUsesNewestWhenResolutionIsUnavailable() {
+    func testCleanupPreferenceSelectsNewestFile() {
         let olderOriginal = FileItem(
             path: "/Photos/Originals/photo.jpg",
             name: "photo",
@@ -158,7 +158,7 @@ final class DuplicateSettingsTests: XCTestCase {
 
         let preferredID = CleanupPreferenceResolver.preferredFileID(
             in: [olderOriginal, newerOriginal],
-            prompt: "Keep files in Originals, prefer highest resolution, otherwise newest"
+            strategy: .newest
         )
 
         XCTAssertEqual(preferredID, newerOriginal.id)

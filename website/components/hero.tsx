@@ -1,16 +1,76 @@
+'use client'
+
 import Image from 'next/image'
-import { ArrowRight } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { ArrowRight, Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
+import { DownloadButton } from '@/components/download-button'
+import { sitePath } from '@/lib/site-paths'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
+
+const TRUST_ITEMS = [
+  { icon: Monitor, label: 'macOS 15+' },
+  { icon: Cpu, label: 'Apple Silicon & Intel' },
+  { icon: UserX, label: 'No account required' },
+]
 
 export function Hero() {
+  const screenshotRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const card = screenshotRef.current
+    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
+    let frame = 0
+
+    const updateTilt = () => {
+      frame = 0
+      const rect = card.getBoundingClientRect()
+      const viewport = window.innerHeight || document.documentElement.clientHeight
+      const start = viewport * 0.78
+      const end = viewport * 0.28
+      const rawProgress = Math.min(
+        1,
+        Math.max(0, (start - rect.top) / (start - end)),
+      )
+      const progress = rawProgress * rawProgress * (3 - 2 * rawProgress)
+      const tilt = 16 - progress * 16
+      const scale = 0.985 + progress * 0.015
+
+      card.style.setProperty('--hero-screenshot-tilt', `${tilt.toFixed(2)}deg`)
+      card.style.setProperty('--hero-screenshot-scale', scale.toFixed(4))
+    }
+
+    const scheduleTilt = () => {
+      if (frame) {
+        return
+      }
+      frame = window.requestAnimationFrame(updateTilt)
+    }
+
+    updateTilt()
+    window.addEventListener('scroll', scheduleTilt, { passive: true })
+    window.addEventListener('resize', scheduleTilt)
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('scroll', scheduleTilt)
+      window.removeEventListener('resize', scheduleTilt)
+    }
+  }, [])
+
   return (
     <section
       id="top"
-      className="snap-section relative overflow-hidden px-4 pt-36 pb-12 sm:pt-44"
+      className="page-section relative overflow-hidden px-4 pt-28 pb-10 sm:pt-36"
     >
       {/* layered ambient gradient backdrop */}
       <div
@@ -46,75 +106,104 @@ export function Hero() {
             <span className="highlight-pill highlight-in inline-block rounded-2xl px-3 py-1">
               organization
             </span>{' '}
-            for your Mac
+            for your{' '}
+            <span className="mac-heading-lockup highlight-in" aria-label="Mac">
+              <Image
+                src={sitePath('/macos-finder-40.webp')}
+                alt=""
+                width={512}
+                height={512}
+                className="mac-heading-icon"
+                aria-hidden="true"
+              />
+            </span>{' '}
+            Mac
           </h1>
         </Reveal>
 
         <Reveal delay={160}>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Point Sorty at any messy folder and let AI suggest a clean structure.
-            Preview every change, apply when ready, and undo anytime — your files
-            never leave your Mac unless you say so.
+            Point{' '}
+            <Image
+              src={sitePath('/sorty-icon-40.webp')}
+              alt=""
+              width={18}
+              height={18}
+              className="hero-copy-sorty-icon"
+              aria-hidden="true"
+            />{' '}
+            Sorty at any messy folder and let AI suggest a clean structure.
+            Preview every change, apply when ready, and undo anytime; your
+            files never leave your Mac unless you say so.
           </p>
         </Reveal>
 
         <Reveal delay={240}>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
+            <DownloadButton
               id="download"
               href={DOWNLOAD_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-download flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
+              className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
             >
-              <span
-                className="text-[17px] leading-none"
-                aria-hidden="true"
-              >
+              <span className="download-apple-mark" aria-hidden="true">
                 
               </span>
               Download for Mac
-            </a>
+            </DownloadButton>
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:bg-secondary sm:w-auto"
+              className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
             >
-              <GithubIcon className="size-4" />
+              <span className="relative size-4" aria-hidden="true">
+                <GithubIcon className="absolute inset-0 size-4 transition-all duration-200 group-hover:scale-75 group-hover:opacity-0" />
+                <Star className="absolute inset-0 size-4 scale-75 fill-amber-300 text-amber-300 opacity-0 drop-shadow-[0_0_8px_rgba(252,211,77,0.75)] transition-all duration-200 group-hover:scale-110 group-hover:opacity-100" />
+              </span>
               Star on GitHub
+            </a>
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
+            >
+              <Heart className="support-heart-icon size-4" />
+              Support the dev
             </a>
           </div>
         </Reveal>
 
         <Reveal delay={320}>
-          <p className="mt-6 text-xs text-muted-foreground">
-            macOS 15+ · Apple Silicon &amp; Intel · No account required
-          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {TRUST_ITEMS.map(({ icon: Icon, label }) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/45 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-md"
+              >
+                <Icon className="size-3.5 text-primary" />
+                {label}
+              </span>
+            ))}
+          </div>
         </Reveal>
       </div>
 
       {/* App screenshot */}
-      <Reveal delay={120} className="mx-auto mt-16 max-w-5xl">
-        <div className="relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3">
-          <div className="absolute -right-4 -top-4 z-10 hidden size-20 items-center justify-center rounded-3xl border border-border bg-background/75 p-2 shadow-xl shadow-black/35 backdrop-blur-xl sm:flex">
-            <Image
-              src="/sorty-mascot-head.png"
-              alt=""
-              width={96}
-              height={96}
-              className="size-full"
-            />
-          </div>
+      <Reveal delay={120} className="mx-auto mt-12 max-w-5xl">
+        <div
+          ref={screenshotRef}
+          className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
+        >
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
           />
           <Image
-            src="/sorty-app.png"
-            alt="The Sorty app showing an AI-generated organization plan for a Downloads folder, with files grouped into Images, Documents, Invoices and Archives."
-            width={1600}
-            height={1000}
+            src={sitePath('/sorty-app.webp?v=lossless-1')}
+            alt="The Sorty app prompting the user to select a directory to organize."
+            width={1102}
+            height={754}
             className="w-full rounded-xl sm:rounded-2xl"
             priority
           />

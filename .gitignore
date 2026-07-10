@@ -40,7 +40,7 @@ DerivedData
 # Swift PM
 .build/
 .swiftpm/
-Package.resolved
+Sorty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Other
 *.app
@@ -54,6 +54,7 @@ sparkle_keys/
 .env
 
 # Build artifacts & temp files
+releases/appcast*.xml
 .amp/
 .build-*/
 .codex/

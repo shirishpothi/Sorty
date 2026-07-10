@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { sitePath } from '@/lib/site-paths'
 
 export function SortyLogo({
   className,
@@ -11,7 +12,7 @@ export function SortyLogo({
   return (
     <span className={cn('flex items-center gap-2', className)}>
       <Image
-        src="/sorty-icon.png"
+        src={sitePath('/sorty-icon-40.webp')}
         alt="Sorty"
         width={28}
         height={28}

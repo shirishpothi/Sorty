@@ -1,6 +1,8 @@
 import { Lock, ShieldOff, Server, KeyRound, EyeOff } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+
 const POINTS = [
   {
     icon: ShieldOff,
@@ -15,7 +17,7 @@ const POINTS = [
   {
     icon: Server,
     title: 'Or keep everything 100% on-device',
-    body: 'Point Sorty at a local model such as Ollama and absolutely nothing leaves your Mac — not even file names. Full organization, zero network.',
+    body: 'Point Sorty through Ollama and absolutely nothing leaves your Mac — not even file names. Full organization, zero network.',
   },
   {
     icon: KeyRound,
@@ -28,7 +30,7 @@ export function Privacy() {
   return (
     <section
       id="privacy"
-      className="section-seam snap-section px-4 py-20 sm:py-28"
+      className="section-seam page-section px-4 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-5xl">
         <Reveal className="mx-auto max-w-2xl text-center">
@@ -94,7 +96,16 @@ export function Privacy() {
 
         <Reveal className="mt-6">
           <p className="rounded-3xl border border-border bg-card/30 p-5 text-center text-sm text-muted-foreground backdrop-blur-md">
-            Because Sorty is open source under the GPL v3, you can read every
+            Because Sorty is{' '}
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+            >
+              open source
+            </a>{' '}
+            under the GPL v3, you can read every
             line of code yourself and verify all of this.
           </p>
         </Reveal>

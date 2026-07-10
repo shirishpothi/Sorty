@@ -11,9 +11,11 @@ import SwiftUI
 struct HelpSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
 
-    private let docsURL = URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!
-    private let issuesURL = URL(string: "https://github.com/shirishpothi/Sorty/issues")!
-    private let changelogURL = URL(string: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md")!
+    private let docsURL = URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!
+    private let issuesURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues")!
+    private let changelogURL = URL(string: "https://sorty-organizer.github.io/Sorty/changelog")!
+    private let privacyPolicyURL = URL(string: "https://sorty-organizer.github.io/Sorty/privacy-policy")!
+    private let termsOfServiceURL = URL(string: "https://sorty-organizer.github.io/Sorty/terms")!
     private let developerURL = URL(string: "https://github.com/shirishpothi")!
 
     @State private var copiedIssueDetails = false
@@ -42,6 +44,24 @@ struct HelpSettingsView: View {
                             icon: "clock.arrow.circlepath",
                             color: .purple,
                             url: changelogURL
+                        )
+                    }
+
+                    Divider()
+
+                    HStack(spacing: 10) {
+                        HelpIconLink(
+                            title: "Privacy Policy",
+                            icon: "hand.raised",
+                            color: .green,
+                            url: privacyPolicyURL
+                        )
+
+                        HelpIconLink(
+                            title: "Terms of Service",
+                            icon: "doc.text",
+                            color: .indigo,
+                            url: termsOfServiceURL
                         )
                     }
 

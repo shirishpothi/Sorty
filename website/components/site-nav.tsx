@@ -1,21 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Heart, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
+import { DownloadButton } from '@/components/download-button'
+import { sitePath } from '@/lib/site-paths'
 
 const LINKS = [
-  { label: 'Features', href: '/#features' },
-  { label: 'Privacy', href: '/privacy-policy' },
-  { label: 'Terms', href: '/terms' },
-  { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQ', href: '/#faq' },
+  { label: 'Features', href: sitePath('/#features') },
+  { label: 'Changelog', href: sitePath('/changelog') },
+  { label: 'Privacy', href: sitePath('/privacy-policy') },
+  { label: 'Terms', href: sitePath('/terms') },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest`
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
+const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty-universal.zip`
 
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false)
@@ -38,7 +40,7 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <a href="#top" className="shrink-0">
+        <a href={sitePath('/#top')} className="shrink-0">
           <SortyLogo />
         </a>
 
@@ -65,10 +67,17 @@ export function SiteNav() {
             GitHub
           </a>
           <a
-            href={DOWNLOAD_URL}
+            href={SPONSOR_URL}
             target="_blank"
             rel="noreferrer"
-            className="btn-download flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium"
+            className="btn-support hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium lg:flex"
+          >
+            <Heart className="support-heart-icon size-4" />
+            Donate
+          </a>
+          <DownloadButton
+            href={DOWNLOAD_URL}
+            className="gap-1.5 px-4 py-2 text-sm font-medium"
           >
             <span
               className="text-[16px] leading-none"
@@ -77,7 +86,7 @@ export function SiteNav() {
               
             </span>
             <span>Download</span>
-          </a>
+          </DownloadButton>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -109,6 +118,15 @@ export function SiteNav() {
           >
             <GithubIcon className="size-4" />
             View source on GitHub
+          </a>
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
+          >
+            <Heart className="support-heart-icon size-4" />
+            Donate to support Sorty
           </a>
         </div>
       )}

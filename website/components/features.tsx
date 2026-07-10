@@ -1,13 +1,18 @@
 import Image from 'next/image'
 import {
+  Activity,
+  CopyCheck,
   FolderTree,
+  Eye,
   PenLine,
   Brain,
   History,
   AppWindow,
   Cpu,
+  Settings,
 } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { sitePath } from '@/lib/site-paths'
 
 const FEATURES = [
   {
@@ -44,25 +49,29 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-apply.png',
+    src: '/sorty-apply.webp?v=lossless-1',
+    icon: Eye,
     title: 'Preview every move',
     body: 'Review the apply step before Sorty touches a file.',
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-settings.png',
+    src: '/sorty-settings.webp?v=lossless-1',
+    icon: Settings,
     title: 'Choose your AI provider',
     body: 'Connect a cloud provider or run everything locally with Ollama.',
     alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
   {
-    src: '/sorty-health.png',
+    src: '/sorty-health.webp?v=lossless-1',
+    icon: Activity,
     title: 'Keep workspaces healthy',
     body: 'See clutter, stale folders, and automation status in one place.',
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
-    src: '/sorty-duplicates.png',
+    src: '/sorty-duplicates.webp?v=lossless-1',
+    icon: CopyCheck,
     title: 'Review duplicates clearly',
     body: 'Compare duplicate candidates before choosing what stays.',
     alt: 'Sorty duplicates screen showing duplicate file review controls.',
@@ -116,7 +125,7 @@ export function Features() {
   return (
     <section
       id="features"
-      className="section-seam snap-section px-4 py-20 sm:py-28"
+      className="section-seam page-section px-4 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-5xl">
         <Reveal className="mx-auto max-w-2xl text-center">
@@ -156,7 +165,7 @@ export function Features() {
               >
                 <span className={`flex size-7 items-center justify-center rounded-full ${provider.accent}`}>
                   <Image
-                    src={provider.src}
+                    src={sitePath(provider.src)}
                     alt=""
                     width={24}
                     height={24}
@@ -178,12 +187,17 @@ export function Features() {
               className="overflow-hidden rounded-3xl border border-border bg-card/40 backdrop-blur-md"
             >
               <div className="border-b border-border p-6">
-                <h3 className="text-lg font-medium">{shot.title}</h3>
+                <div className="flex items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <shot.icon className="size-4" />
+                  </span>
+                  <h3 className="text-lg font-medium">{shot.title}</h3>
+                </div>
                 <p className="mt-1.5 text-sm text-muted-foreground">{shot.body}</p>
               </div>
               <div className="p-3">
                 <Image
-                  src={shot.src}
+                  src={sitePath(shot.src)}
                   alt={shot.alt}
                   width={1200}
                   height={800}

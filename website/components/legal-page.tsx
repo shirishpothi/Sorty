@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
+import { sitePath } from '@/lib/site-paths'
 
 interface TocItem {
   id: string
@@ -39,7 +40,7 @@ export function LegalPage({
         />
         <div className="mx-auto max-w-3xl">
           <a
-            href="/"
+            href={sitePath('/')}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Back to Sorty
@@ -47,9 +48,11 @@ export function LegalPage({
           <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
             {title}
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Last updated {updated}
-          </p>
+          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Last updated {updated}
+            </p>
+          </div>
 
           {summary && (
             <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">

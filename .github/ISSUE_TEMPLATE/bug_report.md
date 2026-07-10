@@ -72,4 +72,4 @@ Any other information that might help us understand the issue:
 Before submitting, please verify:
 - [ ] I have checked the [Help documentation](https://github.com/sorty-organizer/Sorty/blob/main/HELP.md)
 - [ ] I have checked existing issues (open and closed)
-- [ ] This is not a security issue (report those to shirish.pothi.27@gmail.com)
+- [ ] This is not a security issue (use [private vulnerability reporting](https://github.com/sorty-organizer/Sorty/security/advisories/new))

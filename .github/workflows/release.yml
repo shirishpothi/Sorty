@@ -17,7 +17,6 @@ concurrency:
 
 env:
   PROJECT_NAME: Sorty
-  SCHEME: Sorty
 
 jobs:
   prepare-release:
@@ -327,6 +326,7 @@ jobs:
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APPCAST_FILE_OVERRIDE: releases/appcast-v2.xml
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/generate_appcast_ci.sh
@@ -334,7 +334,7 @@ jobs:
       - name: Validate Sparkle Update System
         run: |
           chmod +x ./scripts/validate_sparkle.sh
-          ./scripts/validate_sparkle.sh
+          ./scripts/validate_sparkle.sh --appcast releases/appcast-v2.xml
 
       - name: Create tag
         if: github.event_name == 'workflow_dispatch'
@@ -372,7 +372,7 @@ jobs:
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
             releases/Sorty-universal.zip
-            releases/appcast.xml
+            releases/appcast-v2.xml
           generate_release_notes: true
           append_body: true
           body: |
@@ -403,9 +403,9 @@ jobs:
 
           if [ -n "$LATEST_STABLE" ]; then
             echo "Updating appcast on latest stable release: $LATEST_STABLE"
-            gh release delete-asset "$LATEST_STABLE" appcast.xml --yes 2>/dev/null || true
-            gh release upload "$LATEST_STABLE" releases/appcast.xml --clobber
-            echo "Updated appcast.xml on $LATEST_STABLE"
+            gh release delete-asset "$LATEST_STABLE" appcast-v2.xml --yes 2>/dev/null || true
+            gh release upload "$LATEST_STABLE" releases/appcast-v2.xml --clobber
+            echo "Updated appcast-v2.xml on $LATEST_STABLE"
           else
             echo "No stable release found to update"
           fi

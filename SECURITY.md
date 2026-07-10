@@ -2,12 +2,7 @@
 
 ## Supported Versions
 
-Security updates are provided for the following versions:
-
-| Version | Supported |
-|---------|-----------|
-| 1.0.x   | Yes       |
-| < 1.0   | No        |
+Security fixes are provided for the latest stable release. Users should update to the newest version before reporting an issue that may already be fixed.
 
 ## Reporting a Vulnerability
 
@@ -23,7 +18,7 @@ We take security seriously. If you discover a security vulnerability, please fol
 
 ### Release Signing
 
-Sorty releases are distributed as pre-built ZIP archives. These releases are **not code-signed** and do not have a Developer ID certificate from Apple. When installing:
+Sorty releases are distributed as pre-built ZIP archives. The app is not signed with an Apple Developer ID certificate or notarized. Sparkle update archives are separately signed with an Ed25519 update key and verified before installation. When installing the app for the first time:
 
 - macOS may show a security warning on first launch
 - You need to remove the quarantine attribute manually: `xattr -cr /Applications/Sorty.app`
@@ -64,7 +59,7 @@ For maximum privacy, use local options:
 
 - All API calls use HTTPS with TLS 1.2+
 - API keys are never logged or transmitted outside AI provider endpoints
-- Update checks fetch version data from GitHub Releases API over HTTPS
+- Update checks fetch Sparkle appcasts and release archives from GitHub Releases over HTTPS
 - No telemetry or analytics data is collected
 
 ### Supply Chain Security
@@ -72,7 +67,7 @@ For maximum privacy, use local options:
 - Dependencies are pinned in Package.resolved
 - GitHub Actions workflows scan for secrets using Gitleaks
 - Automated security checks run on every commit
-- Build artifacts are reproducible from source
+- Release builds are produced by the repository's published GitHub Actions workflows
 
 ## Security Best Practices for Users
 
@@ -139,12 +134,12 @@ Settings → Updates → Manual only
 
 ### Verifying Releases
 
-While releases are not signed, you can verify integrity:
+Sparkle verifies in-app updates against the Ed25519 public key embedded in Sorty. For a manual download, GitHub publishes a SHA-256 digest in the release asset metadata; you can also calculate the local archive digest:
 
 ```bash
 # Download release
-# Check SHA256 hash (if provided in release notes)
-shasum -a 256 Sorty.zip
+# Check the downloaded archive
+shasum -a 256 Sorty-universal.zip
 
 # Or build from source
 git clone https://github.com/sorty-organizer/Sorty.git
@@ -156,7 +151,7 @@ make build
 
 Sorty integrates with third-party services:
 
-- **Sparkle Framework**: Handles app updates securely
+- **Sparkle Framework**: Verifies signed app updates against Sorty's embedded Ed25519 public key
 - **Various AI Providers**: Each has their own security policies
 - **GitHub**: Hosts releases and update feeds
 
@@ -172,4 +167,4 @@ Review the security policies of your chosen AI provider:
 
 ---
 
-Last updated: January 2026
+Last updated: July 2026

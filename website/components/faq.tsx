@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Heart, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reveal } from '@/components/reveal'
 import { FAQS } from '@/components/faq-data'
+
+const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
@@ -44,7 +46,7 @@ export function Faq() {
   return (
     <section
       id="faq"
-      className="section-seam snap-section px-4 py-20 sm:py-28"
+      className="section-seam page-section px-4 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-3xl">
         <Reveal className="text-center">
@@ -61,6 +63,18 @@ export function Faq() {
             </Reveal>
           ))}
         </div>
+
+        <Reveal delay={160} className="mt-10 text-center">
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-support inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+          >
+            <Heart className="support-heart-icon size-4" />
+            Support the developer
+          </a>
+        </Reveal>
       </div>
     </section>
   )

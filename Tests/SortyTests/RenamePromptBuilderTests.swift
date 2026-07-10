@@ -104,4 +104,34 @@ final class RenamePromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Use `unorganized` only as a last resort"))
         XCTAssertTrue(prompt.contains("If a file is merely ambiguous, choose the best broad folder"))
     }
+
+    func testOrganizePromptRejectsRenameFieldsEvenWhenInstructionsAskForRename() {
+        let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            mode: .organize,
+            customInstructions: "Rename every file with a client prefix."
+        )
+
+        XCTAssertTrue(prompt.contains("This run is organize-only"))
+        XCTAssertTrue(prompt.contains("Keep every original filename unchanged"))
+        XCTAssertTrue(prompt.contains("Do not include `suggested_name`, `rename_reason`, or `rename_confidence` fields"))
+        XCTAssertFalse(prompt.contains("Prefer renaming files in this workflow"))
+    }
+
+    func testAppleProviderOrganizePromptDoesNotAppendRenameInstructionsWhenSmartRenameEnabled() {
+        let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
+
+        let prompt = PromptBuilder.buildPromptForProvider(
+            .appleFoundationModel,
+            files: [file],
+            mode: .organize,
+            enableSmartRename: true
+        )
+
+        XCTAssertFalse(prompt.contains("Output language:"))
+        XCTAssertFalse(prompt.contains("suggested_name"))
+        XCTAssertFalse(prompt.contains("rename_reason"))
+    }
 }
