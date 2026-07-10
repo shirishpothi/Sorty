@@ -49,28 +49,28 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-apply.webp?v=f375963a',
+    src: '/sorty-apply.webp?v=lossless-1',
     icon: Eye,
     title: 'Preview every move',
     body: 'Review the apply step before Sorty touches a file.',
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-settings.webp?v=f375963a',
+    src: '/sorty-settings.webp?v=lossless-1',
     icon: Settings,
     title: 'Choose your AI provider',
     body: 'Connect a cloud provider or run everything locally with Ollama.',
     alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
   {
-    src: '/sorty-health.webp?v=f375963a',
+    src: '/sorty-health.webp?v=lossless-1',
     icon: Activity,
     title: 'Keep workspaces healthy',
     body: 'See clutter, stale folders, and automation status in one place.',
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
-    src: '/sorty-duplicates.webp?v=f375963a',
+    src: '/sorty-duplicates.webp?v=lossless-1',
     icon: CopyCheck,
     title: 'Review duplicates clearly',
     body: 'Compare duplicate candidates before choosing what stays.',

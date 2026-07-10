@@ -226,7 +226,7 @@ export function Hero() {
             className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
           />
           <Image
-            src={sitePath('/sorty-app.webp?v=f375963a')}
+            src={sitePath('/sorty-app.webp?v=lossless-1')}
             alt="The Sorty app prompting the user to select a directory to organize."
             width={1102}
             height={754}
