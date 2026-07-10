@@ -345,13 +345,13 @@ struct SortyApp: App {
             }
             .onChange(of: watchedFoldersManager.folders) { _, _ in
                 coordinator?.syncWatchedFolders()
-                widgetSyncManager.sync(
+                widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager
                 )
             }
             .onChange(of: storageLocationsManager.locations) { _, _ in
-                widgetSyncManager.sync(
+                widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager
                 )

@@ -14,6 +14,14 @@ import Combine
 
 @MainActor
 public class MenuBarController: ObservableObject {
+    private static let filenameDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     @Published public var isDropTargeted: Bool = false
     @Published public var droppedFileURL: URL?
     @Published public var suggestion: QuickOrganizeSuggestion?
@@ -103,9 +111,7 @@ public class MenuBarController: ObservableObject {
         let (category, suggestedFolder) = categorizeFile(ext, existingFolders: existingFolders)
 
         // Generate suggested filename based on date
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let datePrefix = dateFormatter.string(from: file.creationDate ?? Date())
+        let datePrefix = Self.filenameDateFormatter.string(from: file.creationDate ?? Date())
 
         let suggestedFilename: String?
         if file.name.hasPrefix("IMG_") || file.name.hasPrefix("DSC") || file.name.hasPrefix("Screenshot") {

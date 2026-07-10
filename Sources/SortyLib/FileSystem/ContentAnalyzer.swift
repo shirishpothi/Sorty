@@ -154,6 +154,7 @@ public actor ContentAnalyzer {
     }
 
     private var memoryCache: [String: CacheEntry] = [:]
+    private let maximumCacheEntryCount = 500
     private var cacheLoaded = false
     private var diskCacheURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -212,6 +213,20 @@ public actor ContentAnalyzer {
             metadata: metadata
         )
         memoryCache[url.path] = entry
+        trimCacheIfNeeded()
+    }
+
+    private func trimCacheIfNeeded() {
+        let overflow = memoryCache.count - maximumCacheEntryCount
+        guard overflow > 0 else { return }
+
+        let oldestKeys = memoryCache
+            .sorted { $0.value.modificationDate < $1.value.modificationDate }
+            .prefix(overflow)
+            .map(\.key)
+        for key in oldestKeys {
+            memoryCache.removeValue(forKey: key)
+        }
     }
 
     private func saveCacheToDisk() {
@@ -220,7 +235,7 @@ public actor ContentAnalyzer {
             let dir = cacheURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(Array(memoryCache.values))
-            try data.write(to: cacheURL)
+            try data.write(to: cacheURL, options: .atomic)
         } catch {
             DebugLogger.log("Failed to save content cache: \(error)")
         }
@@ -231,7 +246,9 @@ public actor ContentAnalyzer {
               let data = try? Data(contentsOf: cacheURL),
               let entries = try? JSONDecoder().decode([CacheEntry].self, from: data) else { return }
 
-        for entry in entries {
+        for entry in entries
+            .sorted(by: { $0.modificationDate > $1.modificationDate })
+            .prefix(maximumCacheEntryCount) {
             memoryCache[entry.filePath] = entry
         }
     }

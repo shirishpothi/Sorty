@@ -202,6 +202,8 @@ enum AIRequestSupport {
     ) async throws -> T {
         do {
             return try await operation()
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as AIClientError {
             guard shouldRetry(error), !Task.isCancelled else {
                 throw error
@@ -209,9 +211,11 @@ enum AIRequestSupport {
             // Single retry with brief backoff
             try await Task.sleep(nanoseconds: 500_000_000) // 500ms
             return try await operation()
-        } catch {
-            // URLSession network errors are worth retrying
-            guard !Task.isCancelled else { throw error }
+        } catch let error as URLError {
+            // Retry only transport failures. Retrying deterministic decoding,
+            // validation, or filesystem errors adds latency and can repeat a
+            // request that the provider already completed successfully.
+            guard shouldRetry(error), !Task.isCancelled else { throw error }
             try await Task.sleep(nanoseconds: 500_000_000) // 500ms
             return try await operation()
         }
@@ -223,6 +227,24 @@ enum AIRequestSupport {
         case .apiError(let statusCode, _):
             return [429, 500, 502, 503, 504].contains(statusCode)
         case .networkError:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func shouldRetry(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut,
+             .cannotFindHost,
+             .cannotConnectToHost,
+             .dnsLookupFailed,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .internationalRoamingOff,
+             .callIsActive,
+             .dataNotAllowed,
+             .secureConnectionFailed:
             return true
         default:
             return false

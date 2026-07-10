@@ -207,6 +207,10 @@ public actor DuplicateDetector {
         var cacheHitCount = 0
 
         for file in candidates {
+            if Task.isCancelled {
+                break
+            }
+
             if let existingHash = file.sha256Hash {
                 resolvedFiles.append((file, existingHash))
                 completedCount += 1
@@ -303,6 +307,10 @@ public actor DuplicateDetector {
     /// Compute hashes for files that don't have them
     public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
         for i in 0..<files.count {
+            if Task.isCancelled {
+                return
+            }
+
             if files[i].sha256Hash == nil {
                 files[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: files[i].path))
             }

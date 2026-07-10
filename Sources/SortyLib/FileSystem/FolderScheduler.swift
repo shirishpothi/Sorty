@@ -150,11 +150,26 @@ public class FolderScheduler: ObservableObject {
 
         case .biweekly:
             components.weekday = schedule.dayOfWeek ?? 1
-            var candidate = calendar.nextDate(after: now, matching: components, matchingPolicy: .nextTime) ?? now
-            if candidate <= now {
-                candidate = calendar.date(byAdding: .weekOfYear, value: 2, to: candidate) ?? candidate
+            if let lastRun = schedule.lastRun,
+               var candidateDay = calendar.date(byAdding: .weekOfYear, value: 2, to: lastRun) {
+                while let candidate = calendar.date(
+                    bySettingHour: schedule.hour,
+                    minute: schedule.minute,
+                    second: 0,
+                    of: candidateDay
+                ) {
+                    if candidate > now {
+                        return candidate
+                    }
+                    guard let nextCandidateDay = calendar.date(
+                        byAdding: .weekOfYear,
+                        value: 2,
+                        to: candidateDay
+                    ) else { break }
+                    candidateDay = nextCandidateDay
+                }
             }
-            return candidate
+            return calendar.nextDate(after: now, matching: components, matchingPolicy: .nextTime) ?? now
 
         case .monthly:
             components.day = schedule.dayOfWeek ?? 1

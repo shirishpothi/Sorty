@@ -280,6 +280,7 @@ struct URLSchemeRow: View {
     let scheme: String
     let description: String
     @State private var copied = false
+    @State private var copyResetTask: Task<Void, Never>?
     
     var body: some View {
         HStack(spacing: 8) {
@@ -301,8 +302,10 @@ struct URLSchemeRow: View {
                 pasteboard.setString(scheme, forType: .string)
                 HapticFeedbackManager.shared.tap()
                 withAnimation { copied = true }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
+                copyResetTask?.cancel()
+                copyResetTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    guard !Task.isCancelled else { return }
                     withAnimation { copied = false }
                 }
             } label: {
@@ -311,8 +314,13 @@ struct URLSchemeRow: View {
                     .foregroundStyle(copied ? .green : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Copy \(scheme)")
+            .accessibilityValue(copied ? "Copied" : "")
         }
         .padding(.horizontal, 10)
+        .onDisappear {
+            copyResetTask?.cancel()
+        }
         .padding(.vertical, 6)
         .background(Color.secondary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 6))

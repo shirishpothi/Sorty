@@ -120,6 +120,8 @@ struct SortyGradientProgressBar: View {
 // MARK: - SortyGradientLoadingBar
 
 struct SortyGradientLoadingBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var width: CGFloat = 150
     var height: CGFloat = 10
@@ -158,9 +160,20 @@ struct SortyGradientLoadingBar: View {
         }
         .frame(width: width, height: height)
         .onAppear {
-            travelPhase = 0
+            travelPhase = reduceMotion ? 0.5 : 0
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
                 travelPhase = 1
+            }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            if shouldReduceMotion {
+                travelPhase = 0.5
+            } else {
+                travelPhase = 0
+                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+                    travelPhase = 1
+                }
             }
         }
     }
@@ -169,6 +182,8 @@ struct SortyGradientLoadingBar: View {
 // MARK: - SortyGradientCircularProgress
 
 struct SortyGradientCircularProgress: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let progress: Double
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var size: CGFloat = 80
@@ -197,7 +212,7 @@ struct SortyGradientCircularProgress: View {
             }
 
             if showsShimmer {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     let arcSpan = animatedProgress * 360
                     let phase = (elapsed * 120).truncatingRemainder(
@@ -238,12 +253,12 @@ struct SortyGradientCircularProgress: View {
         }
         .frame(width: size, height: size)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
                 animatedProgress = clampedProgress
             }
         }
         .onChange(of: clampedProgress) { _, newValue in
-            withAnimation(.easeOut(duration: 0.25)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                 animatedProgress = newValue
             }
         }

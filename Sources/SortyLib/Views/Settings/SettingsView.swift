@@ -69,8 +69,12 @@ struct SettingsView: View {
     }
 
     private var settingsSidebar: some View {
+        let categories = filteredCategories
+        let categoriesByGroup = Dictionary(grouping: categories, by: \.group)
+        let groups = SettingsCategoryGroup.allCases.filter { categoriesByGroup[$0]?.isEmpty == false }
+
         VStack(alignment: .leading, spacing: 4) {
-            if filteredCategories.isEmpty {
+            if categories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")
                         .font(.subheadline.weight(.medium))
@@ -81,9 +85,9 @@ struct SettingsView: View {
                 .padding(.horizontal, 8)
                 .padding(.top, 10)
             } else {
-                ForEach(visibleGroups, id: \.self) { group in
+                ForEach(groups, id: \.self) { group in
                     sectionHeader(group.rawValue)
-                    ForEach(filteredCategories(for: group)) { category in
+                    ForEach(categoriesByGroup[group] ?? []) { category in
                         SidebarButton(
                             title: category.rawValue,
                             icon: category.icon,
@@ -117,13 +121,18 @@ struct SettingsView: View {
 
     private var contentView: some View {
         GeometryReader { geometry in
+            let results = isSearching ? searchResults : []
+
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         if isSearching {
-                            searchResultsHeader
+                            searchResultsHeader(results: results)
                                 .animatedAppearance(delay: 0.03)
-                            searchResultsContent(minHeight: max(geometry.size.height - 128, 320))
+                            searchResultsContent(
+                                results: results,
+                                minHeight: max(geometry.size.height - 128, 320)
+                            )
                                 .animatedAppearance(delay: 0.08)
                         } else {
                             categoryHeader
@@ -195,14 +204,6 @@ struct SettingsView: View {
             }
     }
     
-    private var visibleGroups: [SettingsCategoryGroup] {
-        SettingsCategoryGroup.allCases.filter { !filteredCategories(for: $0).isEmpty }
-    }
-    
-    private func filteredCategories(for group: SettingsCategoryGroup) -> [SettingsCategory] {
-        filteredCategories.filter { $0.group == group }
-    }
-    
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
         category != .tuning
     }
@@ -222,8 +223,8 @@ struct SettingsView: View {
         .padding(.bottom, 4)
     }
 
-    private var searchResultsHeader: some View {
-        let uniqueCategoryCount = Set(searchResults.map(\.category)).count
+    private func searchResultsHeader(results: [SettingsFeatureMatch]) -> some View {
+        let uniqueCategoryCount = Set(results.map(\.category)).count
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
@@ -237,7 +238,7 @@ struct SettingsView: View {
                     .font(.title2.bold())
             }
 
-            Text("\"\(trimmedSearchText)\" matched \(searchResults.count) \(searchResults.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
+            Text("\"\(trimmedSearchText)\" matched \(results.count) \(results.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -245,8 +246,8 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func searchResultsContent(minHeight: CGFloat) -> some View {
-        if searchResults.isEmpty {
+    private func searchResultsContent(results: [SettingsFeatureMatch], minHeight: CGFloat) -> some View {
+        if results.isEmpty {
             VStack(spacing: 16) {
                 Image(systemName: "magnifyingglass.circle")
                     .font(.system(size: 96, weight: .regular))
@@ -268,7 +269,7 @@ struct SettingsView: View {
             .accessibilityLabel("Sorty came up empty. Nothing matches \(trimmedSearchText) yet.")
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(searchResults) { result in
+                ForEach(results) { result in
                     SettingsCard(
                         title: result.snippet.title,
                         icon: result.category.icon,

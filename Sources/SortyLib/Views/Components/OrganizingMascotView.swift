@@ -63,7 +63,7 @@ struct OrganizingMascotView: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: frameInterval)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: frameInterval, paused: reduceMotion)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             
             ZStack {

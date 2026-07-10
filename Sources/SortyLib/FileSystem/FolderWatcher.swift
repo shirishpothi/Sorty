@@ -401,6 +401,7 @@ public final class FolderWatcher: @unchecked Sendable {
     
     private func incrementalFileState(changedPaths: Set<String>, rootPath: String, existingModDates: [String: Date]) -> [String: Date] {
         var modDates = existingModDates
+        let standardizedRootPath = URL(fileURLWithPath: rootPath).standardizedFileURL.path
         
         // Get unique directories affected by the events. Directory paths are
         // scanned recursively so dropped folders are captured without a
@@ -410,19 +411,22 @@ public final class FolderWatcher: @unchecked Sendable {
             let url = URL(fileURLWithPath: path)
             var isDirectory: ObjCBool = false
             if fileManager.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
-                guard path.hasPrefix(rootPath) else { return nil }
-                recursiveDirsToScan.insert(path)
-                return path
+                let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+                guard Self.isPath(standardizedPath, within: standardizedRootPath) else { return nil }
+                recursiveDirsToScan.insert(standardizedPath)
+                return standardizedPath
             } else {
-                let parent = url.deletingLastPathComponent().path
-                guard parent.hasPrefix(rootPath) else { return nil }
+                let parent = url.deletingLastPathComponent().standardizedFileURL.path
+                guard Self.isPath(parent, within: standardizedRootPath) else { return nil }
                 return parent
             }
         })
 
-        for path in changedPaths where path.hasPrefix(rootPath) && !fileManager.fileExists(atPath: path) {
-            let relativePath = path.replacingOccurrences(of: rootPath + "/", with: "")
-            guard !relativePath.isEmpty, relativePath != rootPath else { continue }
+        for path in changedPaths where !fileManager.fileExists(atPath: path) {
+            let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+            guard Self.isPath(standardizedPath, within: standardizedRootPath),
+                  let relativePath = Self.relativePath(of: standardizedPath, within: standardizedRootPath),
+                  !relativePath.isEmpty else { continue }
             modDates.removeValue(forKey: relativePath)
             let deletedDirectoryPrefix = relativePath + "/"
             for key in modDates.keys where key.hasPrefix(deletedDirectoryPrefix) {
@@ -432,12 +436,14 @@ public final class FolderWatcher: @unchecked Sendable {
         
         // Also include the root if any direct children changed
         var dirsToScan = changedDirs
-        if changedPaths.contains(where: { URL(fileURLWithPath: $0).deletingLastPathComponent().path == rootPath }) {
-            dirsToScan.insert(rootPath)
+        if changedPaths.contains(where: {
+            URL(fileURLWithPath: $0).deletingLastPathComponent().standardizedFileURL.path == standardizedRootPath
+        }) {
+            dirsToScan.insert(standardizedRootPath)
         }
 
         let recursivePrefixes = recursiveDirsToScan.map { dir -> String in
-            dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+            dir == standardizedRootPath ? "" : (Self.relativePath(of: dir, within: standardizedRootPath) ?? "") + "/"
         }
         for key in modDates.keys where recursivePrefixes.contains(where: { prefix in
             prefix.isEmpty || key.hasPrefix(prefix)
@@ -447,7 +453,7 @@ public final class FolderWatcher: @unchecked Sendable {
 
         for dir in recursiveDirsToScan {
             let recursiveState = recursiveFileState(atRootPath: dir)
-            let dirRelativePrefix = dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+            let dirRelativePrefix = dir == standardizedRootPath ? "" : (Self.relativePath(of: dir, within: standardizedRootPath) ?? "") + "/"
             for (relativePath, modDate) in recursiveState {
                 modDates[dirRelativePrefix + relativePath] = modDate
             }
@@ -473,13 +479,16 @@ public final class FolderWatcher: @unchecked Sendable {
                 guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]),
                       values.isRegularFile == true else { continue }
                 
-                let relativePath = fileURL.path.replacingOccurrences(of: rootPath + "/", with: "")
+                guard let relativePath = Self.relativePath(
+                    of: fileURL.standardizedFileURL.path,
+                    within: standardizedRootPath
+                ) else { continue }
                 currentFilesInDir.insert(relativePath)
                 modDates[relativePath] = values.contentModificationDate ?? Date.distantPast
             }
             
             // Remove files that were deleted from this directory
-            let dirRelativePrefix = dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+            let dirRelativePrefix = dir == standardizedRootPath ? "" : (Self.relativePath(of: dir, within: standardizedRootPath) ?? "") + "/"
             let existingInDir = modDates.keys.filter { key in
                 if dirRelativePrefix.isEmpty {
                     return !key.contains("/")
@@ -494,6 +503,16 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         
         return modDates
+    }
+
+    private static func isPath(_ path: String, within rootPath: String) -> Bool {
+        path == rootPath || path.hasPrefix(rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+    }
+
+    private static func relativePath(of path: String, within rootPath: String) -> String? {
+        guard isPath(path, within: rootPath) else { return nil }
+        guard path != rootPath else { return "" }
+        return String(path.dropFirst(rootPath.count + (rootPath.hasSuffix("/") ? 0 : 1)))
     }
     
     fileprivate func handleEvents(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool, rootChanged: Bool) {

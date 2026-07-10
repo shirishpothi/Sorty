@@ -56,6 +56,7 @@ struct NotificationPermissionCard: View {
                         }
                         .buttonStyle(.plain)
                         .help("Show what Sorty asks for")
+                        .accessibilityLabel("Notification permission information")
                     }
                     
                     // Action button based on status
@@ -115,10 +116,8 @@ struct NotificationPermissionCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear {
-            Task {
-                await notificationManager.checkNotificationPermission()
-            }
+        .task {
+            await notificationManager.checkNotificationPermission()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task {

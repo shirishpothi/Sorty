@@ -101,17 +101,33 @@ public enum SortyWidgetSnapshotStore {
         storageLocations: [StorageLocation],
         now: Date = Date()
     ) -> SortyWidgetSnapshot {
-        let sortedEntries = entries.sorted { $0.timestamp > $1.timestamp }
-        let latestEntry = sortedEntries.first
-        let completedEntries = sortedEntries.filter { $0.status == .completed }
-        let failedEntries = sortedEntries.filter { $0.status == .failed }
+        var latestEntry: OrganizationHistoryEntry?
+        var totalFilesOrganized = 0
+        var successCount = 0
+        var failedCount = 0
+
+        for entry in entries {
+            if latestEntry.map({ entry.timestamp > $0.timestamp }) ?? true {
+                latestEntry = entry
+            }
+
+            switch entry.status {
+            case .completed:
+                successCount += 1
+                totalFilesOrganized += entry.filesOrganized
+            case .failed:
+                failedCount += 1
+            default:
+                break
+            }
+        }
 
         return SortyWidgetSnapshot(
             generatedAt: now,
-            totalSessions: sortedEntries.count,
-            totalFilesOrganized: completedEntries.reduce(0) { $0 + $1.filesOrganized },
-            successCount: completedEntries.count,
-            failedCount: failedEntries.count,
+            totalSessions: entries.count,
+            totalFilesOrganized: totalFilesOrganized,
+            successCount: successCount,
+            failedCount: failedCount,
             activeWatchedFolderCount: watchedFolders.filter { $0.isEnabled && $0.autoOrganize }.count,
             enabledStorageLocationCount: storageLocations.filter(\.isEnabled).count,
             lastRunDate: latestEntry?.timestamp,

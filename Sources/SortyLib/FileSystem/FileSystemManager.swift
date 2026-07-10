@@ -73,16 +73,23 @@ public actor FileSystemManager {
             }
             defer { try? writeHandle.close() }
 
-            var bytesWritten: UInt64 = 0
-            while true {
-                let chunk = readHandle.readData(ofLength: Self.crossVolumeChunkSize)
-                if chunk.isEmpty { break }
-                writeHandle.write(chunk)
-                bytesWritten += UInt64(chunk.count)
-                let progress = Double(bytesWritten) / Double(fileSize)
-                progressHandler?(min(progress, 1.0))
+            do {
+                var bytesWritten: UInt64 = 0
+                while true {
+                    try Task.checkCancellation()
+                    let chunk = try readHandle.read(upToCount: Self.crossVolumeChunkSize) ?? Data()
+                    if chunk.isEmpty { break }
+                    try writeHandle.write(contentsOf: chunk)
+                    bytesWritten += UInt64(chunk.count)
+                    let progress = Double(bytesWritten) / Double(fileSize)
+                    progressHandler?(min(progress, 1.0))
+                }
+            } catch {
+                try? fileManager.removeItem(at: destination)
+                throw error
             }
         } else {
+            try Task.checkCancellation()
             try fileManager.copyItem(at: source, to: destination)
             progressHandler?(1.0)
         }

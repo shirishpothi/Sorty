@@ -79,6 +79,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     deinit {
+        retryTask?.cancel()
         notificationObservers.forEach(NotificationCenter.default.removeObserver)
     }
     

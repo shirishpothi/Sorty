@@ -4,9 +4,11 @@ import FinderSync
 final class SortyFinderSync: FIFinderSync {
     private static let heartbeatNotificationName = Notification.Name("SortyFinderSyncHeartbeat")
     private static let heartbeatMinimumInterval: TimeInterval = 30
+    private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
     nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(finderOrganizeImage(), isTemplate: false)
-    nonisolated(unsafe) private static let cachedWatchImage = finderWatchImage()
+    nonisolated(unsafe) private static let cachedLightWatchImage = finderWatchImage(isDark: false)
+    nonisolated(unsafe) private static let cachedDarkWatchImage = finderWatchImage(isDark: true)
 
     override init() {
         super.init()
@@ -28,7 +30,9 @@ final class SortyFinderSync: FIFinderSync {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.cachedOrganizeImage
-        let watchImage = Self.cachedWatchImage
+        let watchImage = Self.prefersDarkAppearance
+            ? Self.cachedDarkWatchImage
+            : Self.cachedLightWatchImage
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -173,12 +177,11 @@ final class SortyFinderSync: FIFinderSync {
         return fallback
     }
 
-    private static func finderWatchImage() -> NSImage {
+    private static func finderWatchImage(isDark: Bool) -> NSImage {
         // Finder Sync extensions do NOT honor isTemplate for menu item images.
         // We must explicitly render the SF Symbol in the correct color for the
         // current appearance (white in dark mode, black in light mode).
         // See docs/agent-guides/finder-integration.md "Menu Icon Rendering" for details.
-        let isDark = prefersDarkAppearance()
         let drawColor = isDark ? NSColor.white : NSColor.black
         let menuIconSize = NSSize(width: 16, height: 16)
 
@@ -212,11 +215,8 @@ final class SortyFinderSync: FIFinderSync {
         return rendered
     }
 
-    private static func prefersDarkAppearance() -> Bool {
-        guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
-            return false
-        }
-        return style.caseInsensitiveCompare("Dark") == .orderedSame
+    private static var prefersDarkAppearance: Bool {
+        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
@@ -244,12 +244,15 @@ final class SortyFinderSync: FIFinderSync {
 
     private static func reportHeartbeat(event: String) {
         let now = Date()
+        heartbeatLock.lock()
         if event != "launch",
            let lastHeartbeatDate,
            now.timeIntervalSince(lastHeartbeatDate) < heartbeatMinimumInterval {
+            heartbeatLock.unlock()
             return
         }
         lastHeartbeatDate = now
+        heartbeatLock.unlock()
 
         let userInfo: [String: Any] = [
             "event": event,
