@@ -1185,6 +1185,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
             panel.level = .normal
+            panel.alphaValue = 0
             panel.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
@@ -1193,7 +1194,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             ]
 
             let backdrop = NSVisualEffectView()
-            backdrop.material = .underWindowBackground
+            backdrop.material = .fullScreenUI
             backdrop.blendingMode = .behindWindow
             backdrop.state = .active
             panel.contentView = backdrop
@@ -1208,12 +1209,36 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
             backdropPanel?.setFrame(screen.frame, display: true)
             backdropPanel?.order(.below, relativeTo: window.windowNumber)
+            fadeInPanelIfNeeded()
         }
 
         private func dismissPanel() {
-            backdropPanel?.orderOut(nil)
-            backdropPanel?.close()
-            backdropPanel = nil
+            guard let backdropPanel else { return }
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.45
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                backdropPanel.animator().alphaValue = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak backdropPanel] in
+                guard let self, self.backdropPanel === backdropPanel else { return }
+                backdropPanel?.orderOut(nil)
+                backdropPanel?.close()
+                self.backdropPanel = nil
+            }
+        }
+
+        private func fadeInPanelIfNeeded() {
+            guard let backdropPanel, backdropPanel.alphaValue == 0 else { return }
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.9
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                backdropPanel.animator().alphaValue = 0.86
+            }
         }
 
         private func removeObservers() {
