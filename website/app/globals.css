@@ -269,10 +269,13 @@
     );
   mix-blend-mode: screen;
   opacity: 0.68;
+  filter:
+    brightness(1)
+    drop-shadow(0 2px 4px oklch(0.95 0.04 245 / 0%));
   transition:
-    opacity 0.3s ease,
-    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.3s ease;
+    opacity 0.35s ease,
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.4s ease;
 }
 .btn-download::after {
   content: "";
