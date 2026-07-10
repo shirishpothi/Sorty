@@ -144,7 +144,10 @@ class AppStateTests: XCTestCase {
     func testStartSetupRepairRoutesToProviderSettingsAndPersistsMessage() {
         appState.currentView = .history
 
-        appState.startSetupRepair(message: "Provider setup is incomplete.")
+        appState.startSetupRepair(
+            message: "Provider setup is incomplete.",
+            navigateToSettings: true
+        )
 
         XCTAssertTrue(appState.requiresSetupRepair)
         XCTAssertEqual(appState.setupRepairMessage, "Provider setup is incomplete.")

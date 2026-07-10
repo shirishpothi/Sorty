@@ -121,6 +121,8 @@ public enum SortyResources {
         let possiblePaths = [
             // Direct sibling of executable
             mainBundle.bundleURL.appendingPathComponent("Sorty_SortyLib.bundle"),
+            // SwiftPM test bundles sit beside the executable bundle.
+            mainBundle.bundleURL.deletingLastPathComponent().appendingPathComponent("Sorty_SortyLib.bundle"),
             // In Resources directory
             mainBundle.resourceURL?.appendingPathComponent("Sorty_SortyLib.bundle"),
             // In Frameworks
@@ -146,6 +148,7 @@ public enum SortyResources {
         let bundleName = "Sorty_SortyLib.bundle"
         let candidates = [
             Bundle.main.bundleURL.appendingPathComponent(bundleName),
+            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent(bundleName),
             Bundle.main.resourceURL?.appendingPathComponent(bundleName),
             Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(bundleName)"),
             Bundle(for: BundleLocator.self).resourceURL?.appendingPathComponent(bundleName),

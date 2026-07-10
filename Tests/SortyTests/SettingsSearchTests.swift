@@ -50,8 +50,8 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(matches.first?.snippet.title, "Enable File Tagging")
     }
 
-    func testHelpFeatureMatchPrioritizesAutomationDeeplinks() {
-        let matches = SettingsCategory.help.featureMatches(query: "automation")
+    func testDeeplinkFeatureMatchPrioritizesAutomationDeeplinks() {
+        let matches = SettingsCategory.deeplinks.featureMatches(query: "automation")
 
         XCTAssertEqual(matches.first?.snippet.title, "Automation Deeplinks")
     }
