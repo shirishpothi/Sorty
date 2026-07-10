@@ -1214,7 +1214,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
         private func dismissPanel() {
             guard let backdropPanel else { return }
-            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.45
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
@@ -1361,9 +1361,21 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func dismissPanel() {
-            glowPanel?.orderOut(nil)
-            glowPanel?.close()
-            glowPanel = nil
+            guard let glowPanel else { return }
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                glowPanel.animator().alphaValue = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak glowPanel] in
+                guard let self, self.glowPanel === glowPanel else { return }
+                glowPanel?.orderOut(nil)
+                glowPanel?.close()
+                self.glowPanel = nil
+            }
         }
 
         private func removeObservers() {

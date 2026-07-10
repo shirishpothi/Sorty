@@ -122,6 +122,7 @@ private struct CompletionGlowRing: View {
 // MARK: - Completion Step View
 
 public struct CompletionStepView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
@@ -529,14 +530,14 @@ public struct CompletionStepView: View {
 
     private func startTransition() {
         guard !exitTriggered else { return }
-        exitTriggered = true
+        let exitDuration = reduceMotion ? 0 : 0.52
         HapticFeedbackManager.shared.success()
-        fadeOutAndStopAudio(duration: 0.32)
+        fadeOutAndStopAudio(duration: exitDuration)
 
-        // Fade out all content, then hand off on the *next* run loop turn.
-        // Keep the fade very short so the button feels immediate while still
-        // giving SwiftUI one committed frame before the main window builds.
-        withAnimation(.easeOut(duration: 0.12)) {
+        // Let the completed onboarding settle away before the main window
+        // appears, rather than replacing the whole experience in one frame.
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: exitDuration)) {
+            exitTriggered = true
             contentDismissed = true
             backgroundRevealed = false
             showParticles = false
@@ -544,7 +545,7 @@ public struct CompletionStepView: View {
             revealOpacity = 0
         }
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + exitDuration) {
             onFinish()
         }
     }
