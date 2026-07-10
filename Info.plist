@@ -69,7 +69,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>zpjRF77WXtlsaKEEGiAvx8xAdRY8WE1y0+KVqq9Ztjs=</string>
 	<key>UTExportedTypeDeclarations</key>

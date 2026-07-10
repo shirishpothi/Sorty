@@ -16,7 +16,7 @@ Nightly download:
 https://github.com/sorty-organizer/Sorty/releases/download/nightly/Sorty-nightly.zip
 ```
 
-Stable releases continue to use the existing `release.yml` workflow and `appcast.xml`. The nightly workflow only mutates the moving `nightly` tag and prerelease assets, so it does not create version tags or update the stable appcast.
+Stable releases continue to use the existing `release.yml` workflow and the current-key `appcast-v2.xml` feed. The legacy `appcast.xml` feed remains available only to move old-key installations onto the current update chain. The nightly workflow only mutates the moving `nightly` tag and prerelease assets, so it does not create version tags or update either stable appcast.
 
 Required secret:
 
