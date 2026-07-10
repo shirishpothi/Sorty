@@ -29,7 +29,6 @@ export function DownloadButton({
 }: DownloadButtonProps) {
   const [showNotice, setShowNotice] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>('idle')
-  const [copyAnimationKey, setCopyAnimationKey] = useState(0)
   const intentShellRef = useRef<HTMLSpanElement>(null)
   const copyFeedbackTimeout = useRef<number | null>(null)
   const modalPanelRef = useRef<HTMLDivElement>(null)
@@ -131,7 +130,6 @@ export function DownloadButton({
       copyFeedbackTimeout.current = null
     }
 
-    setCopyAnimationKey((key) => key + 1)
     setCopyFeedback(nextFeedback)
 
     copyFeedbackTimeout.current = window.setTimeout(
@@ -276,7 +274,7 @@ export function DownloadButton({
                   type="button"
                   onClick={() => void copyCommand()}
                   className={cn(
-                    'copy-command-button relative flex h-8 min-w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-200 hover:scale-[1.02] active:scale-[0.97]',
+                    'copy-command-button modal-action-highlight relative grid h-8 min-w-[72px] shrink-0 place-items-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-300 hover:scale-[1.02] active:scale-[0.97]',
                     copySucceeded &&
                       'is-copied gap-1.5 bg-brand text-white shadow-lg shadow-brand/30',
                     copyFailed && 'gap-1.5 bg-destructive text-white',
@@ -286,33 +284,50 @@ export function DownloadButton({
                   aria-label={
                     copySucceeded
                       ? 'Terminal command copied'
-                      : 'Copy Terminal command'
+                      : copyFailed
+                        ? 'Retry copying Terminal command'
+                        : 'Copy Terminal command'
                   }
                 >
                   <span className="copy-command-shine" aria-hidden />
-                  {copySucceeded ? (
-                    <span
-                      key={`copied-${copyAnimationKey}`}
-                      className="copy-command-label is-copied"
-                    >
-                      <Check className="copy-command-check size-3.5" />
-                      Copied
-                    </span>
-                  ) : copyFailed ? (
-                    <span
-                      key={`failed-${copyAnimationKey}`}
-                      className="copy-command-label"
-                    >
-                      <X className="size-3.5" />
-                      Retry
-                    </span>
-                  ) : (
-                    <span className="copy-command-label">
-                      <Copy className="size-3.5" />
-                      Copy
-                    </span>
-                  )}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'copy-command-label col-start-1 row-start-1',
+                      copyFeedback === 'idle' && 'is-visible',
+                    )}
+                  >
+                    <Copy className="size-3.5" />
+                    Copy
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'copy-command-label col-start-1 row-start-1',
+                      copySucceeded && 'is-visible is-copied',
+                    )}
+                  >
+                    <Check className="copy-command-check size-3.5" />
+                    Copied
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'copy-command-label col-start-1 row-start-1',
+                      copyFailed && 'is-visible',
+                    )}
+                  >
+                    <X className="size-3.5" />
+                    Retry
+                  </span>
                 </button>
+                <span className="sr-only" aria-live="polite">
+                  {copySucceeded
+                    ? 'Terminal command copied'
+                    : copyFailed
+                      ? 'Could not copy Terminal command'
+                      : ''}
+                </span>
               </div>
             </div>
 
@@ -324,9 +339,9 @@ export function DownloadButton({
               <button
                 type="button"
                 onClick={() => setShowNotice(false)}
-                className="justify-self-start rounded-full border border-border bg-secondary/55 px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:justify-self-end"
+                className="modal-action-highlight relative justify-self-start overflow-hidden rounded-full border border-border bg-secondary/55 px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:justify-self-end"
               >
-                Done
+                <span className="relative z-10">Done</span>
               </button>
             </div>
           </div>

@@ -268,8 +268,11 @@
       transparent 72%
     );
   mix-blend-mode: screen;
-  opacity: 0.82;
-  transition: opacity 0.3s ease;
+  opacity: 0.68;
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.3s ease;
 }
 .btn-download::after {
   content: "";
@@ -306,6 +309,8 @@
 .btn-download:hover::before,
 .btn-download:focus-visible::before {
   opacity: 1;
+  filter: brightness(1.2);
+  transform: translateX(-50%) scale(1.14, 1.22);
 }
 .btn-download:hover::after {
   animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -317,118 +322,6 @@
 }
 .btn-download:active::before {
   opacity: 0.62;
-}
-/* Liquid glass: refraction layer (::before, SVG displacement over blurred
-   backdrop) + specular edge shine (::after). Browsers that can't apply the
-   SVG filter to the backdrop degrade to plain frosted blur. */
-.btn-github-star {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  isolation: isolate;
-  color: oklch(0.985 0 0);
-  border: 1px solid oklch(1 0 0 / 30%);
-  background: transparent;
-  box-shadow:
-    0 6px 24px -10px oklch(0 0 0 / 45%),
-    0 1px 5px -2px oklch(0 0 0 / 35%);
-  transition:
-    color 0.22s ease,
-    border-color 0.22s ease,
-    box-shadow 0.28s ease,
-    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.btn-github-star::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  border-radius: inherit;
-  background: oklch(0.28 0.006 260 / 26%);
-  backdrop-filter: blur(4px) saturate(175%);
-  -webkit-backdrop-filter: blur(4px) saturate(175%);
-  filter: url(#liquid-glass-distortion);
-}
-.btn-github-star::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  border-radius: inherit;
-  box-shadow:
-    inset 2px 2px 1.5px -1px oklch(1 0 0 / 60%),
-    inset -1.5px -1.5px 1px -1px oklch(1 0 0 / 42%),
-    inset 0 0 14px 1px oklch(1 0 0 / 10%);
-  background: radial-gradient(
-    ellipse 85% 65% at 50% 0%,
-    oklch(1 0 0 / 22%) 0%,
-    oklch(1 0 0 / 0%) 72%
-  );
-  transition: opacity 0.22s ease, box-shadow 0.22s ease;
-}
-.btn-github-star > * {
-  position: relative;
-  z-index: 1;
-}
-.btn-github-star:hover,
-.btn-github-star:focus-visible {
-  color: oklch(0.97 0.065 92);
-  border-color: oklch(0.86 0.12 84 / 62%);
-  transform: translateY(-1px);
-  box-shadow:
-    0 8px 30px -10px oklch(0 0 0 / 52%),
-    0 0 22px -8px oklch(0.86 0.12 84 / 65%),
-    0 1px 5px -2px oklch(0 0 0 / 35%);
-}
-.btn-github-star:hover::after,
-.btn-github-star:focus-visible::after {
-  box-shadow:
-    inset 2px 2px 1.5px -1px oklch(0.95 0.07 90 / 70%),
-    inset -1.5px -1.5px 1px -1px oklch(0.9 0.1 87 / 48%),
-    inset 0 0 16px 1px oklch(0.9 0.1 87 / 14%);
-}
-.btn-github-star:focus-visible {
-  outline: 2px solid oklch(0.86 0.12 84 / 78%);
-  outline-offset: 3px;
-}
-.btn-github-star:active {
-  transform: translateY(0);
-  box-shadow:
-    0 4px 16px -10px oklch(0 0 0 / 45%),
-    0 1px 4px -2px oklch(0 0 0 / 32%);
-}
-.github-star-github-icon,
-.github-star-icon {
-  transition:
-    opacity 0.2s ease,
-    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-    color 0.2s ease,
-    filter 0.2s ease;
-}
-.github-star-github-icon {
-  opacity: 1;
-  transform: scale(1);
-}
-.github-star-icon {
-  color: oklch(0.86 0.14 84);
-  fill: currentColor;
-  filter:
-    drop-shadow(0 0 8px oklch(0.86 0.14 84 / 75%))
-    drop-shadow(0 1px 2px oklch(0 0 0 / 35%));
-  opacity: 0;
-  transform: scale(0.72) rotate(-10deg);
-}
-.btn-github-star:hover .github-star-github-icon,
-.btn-github-star:focus-visible .github-star-github-icon {
-  opacity: 0;
-  transform: scale(0.74) rotate(8deg);
-}
-.btn-github-star:hover .github-star-icon,
-.btn-github-star:focus-visible .github-star-icon {
-  opacity: 1;
-  transform: scale(1.12) rotate(0deg);
 }
 .btn-support {
   position: relative;
@@ -464,8 +357,11 @@
       transparent 72%
     );
   mix-blend-mode: screen;
-  opacity: 0.82;
-  transition: opacity 0.3s ease;
+  opacity: 0.68;
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.3s ease;
 }
 .btn-support > * {
   position: relative;
@@ -486,6 +382,8 @@
 .btn-support:hover::before,
 .btn-support:focus-visible::before {
   opacity: 1;
+  filter: brightness(1.2);
+  transform: translateX(-50%) scale(1.14, 1.22);
 }
 .btn-support:active {
   box-shadow:
@@ -626,7 +524,7 @@
   animation: copy-command-row-pulse 0.52s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .copy-command-button.is-copied {
-  animation: copy-command-button-pop 0.34s cubic-bezier(0.2, 0.9, 0.22, 1.12);
+  animation: copy-command-button-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .copy-command-label {
   position: relative;
@@ -634,12 +532,21 @@
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+  opacity: 0;
+  transform: translateY(0.35rem) scale(0.96);
+  transition:
+    opacity 0.18s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.copy-command-label.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 .copy-command-label.is-copied {
-  animation: copy-command-label-focus-pop 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: copy-command-label-focus-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.copy-command-check {
-  animation: copy-command-check-focus-pop 0.36s cubic-bezier(0.2, 0.9, 0.22, 1.12);
+.copy-command-label.is-copied .copy-command-check {
+  animation: copy-command-check-focus-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .copy-command-shine {
   position: absolute;
@@ -655,7 +562,35 @@
   opacity: 0;
 }
 .copy-command-button.is-copied .copy-command-shine {
-  animation: copy-command-shine 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: copy-command-shine 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-action-highlight::before {
+  content: "";
+  position: absolute;
+  top: -45%;
+  left: 50%;
+  z-index: 0;
+  width: 72%;
+  height: 90%;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(
+    ellipse at top,
+    oklch(1 0 0 / 64%) 0%,
+    oklch(1 0 0 / 18%) 42%,
+    transparent 74%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.3;
+  transform: translateX(-50%) scale(0.9);
+  transition:
+    opacity 0.25s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-action-highlight:hover::before,
+.modal-action-highlight:focus-visible::before {
+  opacity: 0.92;
+  transform: translateX(-50%) scale(1.22, 1.3);
 }
 .changelog-image-frame {
   position: relative;
@@ -769,10 +704,10 @@
 }
 @keyframes copy-command-button-pop {
   0% {
-    transform: scale(0.98);
+    transform: scale(0.985);
   }
-  70% {
-    transform: scale(1.035);
+  64% {
+    transform: scale(1.02);
   }
   100% {
     transform: scale(1);
@@ -780,35 +715,29 @@
 }
 @keyframes copy-command-label-focus-pop {
   0% {
-    opacity: 0;
-    filter: blur(7px);
-    transform: scale(0.82);
+    opacity: 0.35;
+    transform: translateY(0.2rem) scale(0.94);
   }
-  58% {
+  62% {
     opacity: 1;
-    filter: blur(0);
-    transform: scale(1.08);
+    transform: translateY(-0.04rem) scale(1.025);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
-    transform: scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 @keyframes copy-command-check-focus-pop {
   0% {
-    opacity: 0;
-    filter: blur(5px);
-    transform: scale(0.58) rotate(-10deg);
+    opacity: 0.2;
+    transform: scale(0.72) rotate(-8deg);
   }
-  62% {
+  64% {
     opacity: 1;
-    filter: blur(0);
-    transform: scale(1.18) rotate(3deg);
+    transform: scale(1.1) rotate(2deg);
   }
   100% {
     opacity: 1;
-    filter: blur(0);
     transform: scale(1) rotate(0);
   }
 }
@@ -840,7 +769,11 @@
     transition: none;
   }
   .btn-download:hover::before,
-  .btn-download:focus-visible::before {
+  .btn-download:focus-visible::before,
+  .btn-support:hover::before,
+  .btn-support:focus-visible::before,
+  .modal-action-highlight:hover::before,
+  .modal-action-highlight:focus-visible::before {
     transform: translateX(-50%);
   }
   .btn-download:hover::after {
@@ -850,16 +783,6 @@
   .btn-support:focus-visible .support-heart-icon {
     animation: none;
   }
-  .btn-github-star,
-  .github-star-github-icon,
-  .github-star-icon {
-    transition: none;
-  }
-  .btn-github-star:hover,
-  .btn-github-star:focus-visible,
-  .btn-github-star:active {
-    transform: none;
-  }
   .download-modal-backdrop,
   .download-modal-panel {
     animation: none;
@@ -867,9 +790,13 @@
   .copy-command-row.is-copied,
   .copy-command-button.is-copied,
   .copy-command-label.is-copied,
-  .copy-command-check,
+  .copy-command-label.is-copied .copy-command-check,
   .copy-command-button.is-copied .copy-command-shine {
     animation: none;
+  }
+  .copy-command-label,
+  .modal-action-highlight::before {
+    transition: none;
   }
 }
 

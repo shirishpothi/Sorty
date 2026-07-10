@@ -150,41 +150,15 @@ export function Hero() {
               </span>
               Download for Mac
             </DownloadButton>
-            <svg aria-hidden="true" width="0" height="0" className="absolute">
-              <filter
-                id="liquid-glass-distortion"
-                x="0%"
-                y="0%"
-                width="100%"
-                height="100%"
-                filterUnits="objectBoundingBox"
-              >
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.008 0.008"
-                  numOctaves="2"
-                  seed="92"
-                  result="noise"
-                />
-                <feGaussianBlur in="noise" stdDeviation="2" result="blurred" />
-                <feDisplacementMap
-                  in="SourceGraphic"
-                  in2="blurred"
-                  scale="64"
-                  xChannelSelector="R"
-                  yChannelSelector="G"
-                />
-              </filter>
-            </svg>
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="btn-github-star group flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
+              className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
             >
               <span className="relative size-4" aria-hidden="true">
-                <GithubIcon className="github-star-github-icon absolute inset-0 size-4" />
-                <Star className="github-star-icon absolute inset-0 size-4" />
+                <GithubIcon className="absolute inset-0 size-4 transition-all duration-200 group-hover:scale-75 group-hover:opacity-0" />
+                <Star className="absolute inset-0 size-4 scale-75 fill-amber-300 text-amber-300 opacity-0 drop-shadow-[0_0_8px_rgba(252,211,77,0.75)] transition-all duration-200 group-hover:scale-110 group-hover:opacity-100" />
               </span>
               Star on GitHub
             </a>
