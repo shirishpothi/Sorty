@@ -49,36 +49,28 @@ const FEATURES = [
 
 const SHOTS = [
   {
-    src: '/sorty-apply.webp?v=08ac7b88',
-    width: 2782,
-    height: 2088,
+    src: '/sorty-apply.webp?v=f375963a',
     icon: Eye,
     title: 'Preview every move',
     body: 'Review the apply step before Sorty touches a file.',
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
-    src: '/sorty-settings.webp?v=08ac7b88',
-    width: 2790,
-    height: 2096,
+    src: '/sorty-settings.webp?v=f375963a',
     icon: Settings,
     title: 'Choose your AI provider',
     body: 'Connect a cloud provider or run everything locally with Ollama.',
     alt: 'Sorty AI provider settings screen showing configured model providers.',
   },
   {
-    src: '/sorty-health.webp?v=08ac7b88',
-    width: 2790,
-    height: 2096,
+    src: '/sorty-health.webp?v=f375963a',
     icon: Activity,
     title: 'Keep workspaces healthy',
     body: 'See clutter, stale folders, and automation status in one place.',
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
-    src: '/sorty-duplicates.webp?v=08ac7b88',
-    width: 2790,
-    height: 2096,
+    src: '/sorty-duplicates.webp?v=f375963a',
     icon: CopyCheck,
     title: 'Review duplicates clearly',
     body: 'Compare duplicate candidates before choosing what stays.',
@@ -207,8 +199,8 @@ export function Features() {
                 <Image
                   src={sitePath(shot.src)}
                   alt={shot.alt}
-                  width={shot.width}
-                  height={shot.height}
+                  width={1200}
+                  height={800}
                   className="w-full rounded-2xl border border-border"
                 />
               </div>
