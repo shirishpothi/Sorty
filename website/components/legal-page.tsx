@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Download, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { sitePath } from '@/lib/site-paths'
@@ -12,8 +12,6 @@ interface TocItem {
 interface LegalPageProps {
   title: string
   updated: string
-  pdfHref?: string
-  pdfLabel?: string
   /** Short "the short version" callout shown in the gradient banner. */
   summary?: ReactNode
   /** Anchor links rendered as an "On this page" index. */
@@ -24,8 +22,6 @@ interface LegalPageProps {
 export function LegalPage({
   title,
   updated,
-  pdfHref,
-  pdfLabel = 'Download PDF',
   summary,
   toc,
   children,
@@ -56,16 +52,6 @@ export function LegalPage({
             <p className="text-sm text-muted-foreground">
               Last updated {updated}
             </p>
-            {pdfHref && (
-              <a
-                href={pdfHref}
-                download
-                className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                <Download className="size-4" />
-                {pdfLabel}
-              </a>
-            )}
           </div>
 
           {summary && (

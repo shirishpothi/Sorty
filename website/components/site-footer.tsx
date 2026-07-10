@@ -1,4 +1,4 @@
-import { Heart, Mail } from 'lucide-react'
+import { Heart } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
@@ -62,13 +62,6 @@ export function SiteFooter() {
               aria-label="GitHub"
             >
               <GithubIcon className="size-4" />
-            </a>
-            <a
-              href="mailto:hello@sorty.app"
-              className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Email support"
-            >
-              <Mail className="size-4" />
             </a>
             <a
               href={SPONSOR_URL}

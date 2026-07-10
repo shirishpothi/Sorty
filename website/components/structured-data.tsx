@@ -1,6 +1,6 @@
 import { FAQS } from '@/components/faq-data'
 
-const SITE_URL = 'https://sorty.app'
+const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 /**

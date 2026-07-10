@@ -35,8 +35,6 @@ export default function TermsPage() {
     <LegalPage
       title="Terms of Service"
       updated="June 2026"
-      pdfHref="/legal/sorty-terms-of-service.pdf"
-      pdfLabel="Download Terms PDF"
       toc={TOC}
       summary={
         <>
@@ -51,7 +49,7 @@ export default function TermsPage() {
       <LegalSection id="agreement" heading="1. Agreement to Terms">
         <p>
           These Terms of Service (&quot;Terms&quot;) govern your use of the Sorty
-          macOS application (the &quot;App&quot;) and the sorty.app website (the
+          macOS application (the &quot;App&quot;) and the Sorty website (the
           &quot;Site&quot;), collectively the &quot;Service.&quot; By
           downloading, installing, or using the Service, you agree to these
           Terms and the Privacy Policy. If you do not agree, do not use the

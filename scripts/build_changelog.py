@@ -277,7 +277,7 @@ PAGE_TPL = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog — Sorty</title>
 <meta name="description" content="The full Sorty release history. Every version, every change — added, changed, fixed, and removed — with highlights for each release.">
-<link rel="canonical" href="https://sorty.app/changelog/">
+<link rel="canonical" href="https://sorty-organizer.github.io/Sorty/changelog/">
 <link rel="icon" href="/assets/img/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
@@ -286,16 +286,16 @@ PAGE_TPL = """<!DOCTYPE html>
 <meta property="og:site_name" content="Sorty">
 <meta property="og:title" content="Changelog — Sorty">
 <meta property="og:description" content="The full Sorty release history with highlights and changes for every version.">
-<meta property="og:url" content="https://sorty.app/changelog/">
-<meta property="og:image" content="https://sorty.app/assets/img/screenshots/post-gen.jpg">
+<meta property="og:url" content="https://sorty-organizer.github.io/Sorty/changelog/">
+<meta property="og:image" content="https://sorty-organizer.github.io/Sorty/assets/img/screenshots/post-gen.jpg">
 <link rel="stylesheet" href="/assets/css/style.css">
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    {{ "@type": "ListItem", "position": 1, "name": "Sorty", "item": "https://sorty.app/" }},
-    {{ "@type": "ListItem", "position": 2, "name": "Changelog", "item": "https://sorty.app/changelog/" }}
+    {{ "@type": "ListItem", "position": 1, "name": "Sorty", "item": "https://sorty-organizer.github.io/Sorty/" }},
+    {{ "@type": "ListItem", "position": 2, "name": "Changelog", "item": "https://sorty-organizer.github.io/Sorty/changelog/" }}
   ]
 }}
 </script>
@@ -305,7 +305,7 @@ PAGE_TPL = """<!DOCTYPE html>
   "@type": "TechArticle",
   "headline": "Sorty Changelog",
   "description": "Full release history for the Sorty macOS app.",
-  "url": "https://sorty.app/changelog/",
+  "url": "https://sorty-organizer.github.io/Sorty/changelog/",
   "about": {{ "@type": "SoftwareApplication", "name": "Sorty", "softwareVersion": "{latest_version}" }}
 }}
 </script>

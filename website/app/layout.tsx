@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
-const SITE_URL = 'https://sorty.app'
+const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
