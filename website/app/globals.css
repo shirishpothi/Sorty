@@ -263,8 +263,8 @@
   background:
     radial-gradient(
       ellipse at top,
-      oklch(1 0 0 / 70%) 0%,
-      oklch(0.9 0.06 245 / 36%) 36%,
+      oklch(1 0 0 / 92%) 0%,
+      oklch(0.92 0.05 245 / 54%) 38%,
       transparent 72%
     );
   mix-blend-mode: screen;
@@ -309,8 +309,10 @@
 .btn-download:hover::before,
 .btn-download:focus-visible::before {
   opacity: 1;
-  filter: brightness(1.2);
-  transform: translateX(-50%) scale(1.14, 1.22);
+  filter:
+    brightness(1.3)
+    drop-shadow(0 4px 8px oklch(0.95 0.04 245 / 42%));
+  transform: translateX(-50%) scale(1.2, 1.3);
 }
 .btn-download:hover::after {
   animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
