@@ -77,29 +77,12 @@ export const metadata: Metadata = {
     images: ['/sorty-app.webp'],
   },
   icons: {
-    shortcut: sitePath('/favicon.ico'),
-    icon: [
-      {
-        url: sitePath('/favicon.ico'),
-        sizes: 'any',
-      },
-      {
-        url: sitePath('/icon.svg'),
-        type: 'image/svg+xml',
-      },
-      {
-        url: sitePath('/icon-light-32x32.png'),
-        media: '(prefers-color-scheme: light)',
-        sizes: '32x32',
-        type: 'image/png',
-      },
-      {
-        url: sitePath('/icon-dark-32x32.png'),
-        media: '(prefers-color-scheme: dark)',
-        sizes: '32x32',
-        type: 'image/png',
-      },
-    ],
+    shortcut: sitePath('/favicon.png'),
+    icon: {
+      url: sitePath('/favicon.png'),
+      sizes: '96x96',
+      type: 'image/png',
+    },
     apple: sitePath('/apple-icon.png'),
   },
 }
