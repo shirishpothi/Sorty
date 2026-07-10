@@ -1,0 +1,4 @@
+# The Droppy snapshot includes a public Supabase anonymous key. Allow only the
+# historical import commit while retaining secret scanning for all other history.
+[allowlist]
+commits = ["f68a33894adca4b03adb8a3307185e1bcee7964b"]
