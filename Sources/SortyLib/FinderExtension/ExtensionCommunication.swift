@@ -41,6 +41,8 @@ public struct ExtensionCommunication {
     private static let quickActionServiceIconName = "workflowCustomImageTemplate"
     private static let watchWorkflowIconVariantInfoKey = "SortyWatchIconVariant"
     private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
+    private static let stagedApplicationPathDefaultsKey = "finderStagedApplicationPath"
+    private static let stagedApplicationIdentityDefaultsKey = "finderStagedApplicationIdentity"
     private static let finderSyncExtensionName = "SortyFinderSync.appex"
     private static let finderSyncBundleSuffix = ".SortyFinderSync"
     private static let systemApplicationsDirectoryPath = "/Applications"
@@ -587,11 +589,49 @@ public struct ExtensionCommunication {
                 try FileManager.default.moveItem(at: stagingURL, to: destinationAppURL)
             }
 
+            if let identity = applicationFileIdentity(at: destinationAppURL) {
+                UserDefaults.standard.set(destinationAppURL.path, forKey: stagedApplicationPathDefaultsKey)
+                UserDefaults.standard.set(identity, forKey: stagedApplicationIdentityDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: stagedApplicationPathDefaultsKey)
+                UserDefaults.standard.removeObject(forKey: stagedApplicationIdentityDefaultsKey)
+            }
             return destinationAppURL
         } catch {
             try? FileManager.default.removeItem(at: stagingURL)
             return nil
         }
+    }
+
+    public static func stagedApplicationURLForUninstall() -> URL? {
+        guard let path = UserDefaults.standard.string(forKey: stagedApplicationPathDefaultsKey),
+              !path.isEmpty,
+              let expectedIdentity = UserDefaults.standard.string(
+                forKey: stagedApplicationIdentityDefaultsKey
+              ) else {
+            return nil
+        }
+
+        let applicationURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        let userApplicationsURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(userApplicationsDirectoryName, isDirectory: true)
+            .standardizedFileURL
+        guard applicationURL.deletingLastPathComponent().path == userApplicationsURL.path else {
+            return nil
+        }
+        guard applicationFileIdentity(at: applicationURL) == expectedIdentity else {
+            return nil
+        }
+        return applicationURL
+    }
+
+    private static func applicationFileIdentity(at applicationURL: URL) -> String? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: applicationURL.path),
+              let systemNumber = attributes[.systemNumber] as? NSNumber,
+              let fileNumber = attributes[.systemFileNumber] as? NSNumber else {
+            return nil
+        }
+        return "\(systemNumber.uint64Value):\(fileNumber.uint64Value)"
     }
 
     private static func finderSyncExtensionURLForRepair() -> (url: URL?, stagedAppPath: String?) {
@@ -1869,6 +1909,15 @@ public struct ExtensionCommunication {
         return unique
     }
 
+    private static func ownedServiceStatusKeyCandidates(
+        for service: (bundleIdentifier: String, menuTitle: String),
+        from serviceStatus: [String: Any]
+    ) -> [String] {
+        let suffix = serviceStatusKeySuffix(menuTitle: service.menuTitle)
+        let ownedKeys = [service.bundleIdentifier + suffix, "(null)" + suffix]
+        return ownedKeys.filter { serviceStatus[$0] != nil }
+    }
+
     private static func statusEntryPrefersContextMenu(_ currentStatus: [String: Any]) -> Bool {
         guard isEnabledValue(currentStatus["enabled_context_menu"]),
               isEnabledValue(currentStatus["enabled_services_menu"]) else {
@@ -1983,13 +2032,15 @@ public struct ExtensionCommunication {
         UserDefaults.standard.set(Date(), forKey: servicesRegistryRefreshDefaultsKey)
     }
 
-    private static func removeLegacyServiceStatusEntries() {
+    private static func removeServiceStatusEntries(
+        _ services: [(bundleIdentifier: String, menuTitle: String)]
+    ) {
         var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
         var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
         var didRemove = false
 
-        for service in deprecatedSortyServices {
-            for statusKey in serviceStatusKeyCandidates(for: service, from: serviceStatus) where serviceStatus[statusKey] != nil {
+        for service in services {
+            for statusKey in ownedServiceStatusKeyCandidates(for: service, from: serviceStatus) {
                 serviceStatus.removeValue(forKey: statusKey)
                 didRemove = true
             }
@@ -2000,6 +2051,30 @@ public struct ExtensionCommunication {
         pbsDomainValues["NSServicesStatus"] = serviceStatus
         UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
         UserDefaults.standard.synchronize()
+    }
+
+    private static func removeLegacyServiceStatusEntries() {
+        removeServiceStatusEntries(deprecatedSortyServices)
+    }
+
+    /// Remove Sorty's Finder service preferences and refresh the system Services registry.
+    @discardableResult
+    public static func removeAllQuickActionRegistrationState() -> Bool {
+        removeServiceStatusEntries(activeSortyServices + deprecatedSortyServices)
+        NSUpdateDynamicServices()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
+        process.arguments = ["-flush"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
@@ -3690,18 +3765,23 @@ public struct ExtensionCommunication {
     /// Uninstall all Quick Action workflows
     public static func uninstallAllQuickActions() -> (success: Bool, removed: Int) {
         let workflows = [
-            organizeQuickActionWorkflowName,
-            watchQuickActionWorkflowName,
-            excludeQuickActionWorkflowName,
-            scanQuickActionWorkflowName,
-            previewQuickActionWorkflowName
+            (organizeQuickActionWorkflowName, organizeQuickActionBundleIdentifier),
+            (watchQuickActionWorkflowName, watchQuickActionBundleIdentifier),
+            (excludeQuickActionWorkflowName, excludeQuickActionBundleIdentifier),
+            (scanQuickActionWorkflowName, scanQuickActionBundleIdentifier),
+            (previewQuickActionWorkflowName, previewQuickActionBundleIdentifier)
         ]
 
         var removedCount = 0
         for servicesDir in candidateServicesDirectories() {
             for workflow in workflows {
-                let workflowPath = servicesDir.appendingPathComponent(workflow)
+                let workflowPath = servicesDir.appendingPathComponent(workflow.0)
                 if FileManager.default.fileExists(atPath: workflowPath.path) {
+                    let infoPath = workflowPath.appendingPathComponent("Contents/Info.plist")
+                    guard let info = NSDictionary(contentsOf: infoPath) as? [String: Any],
+                          info["CFBundleIdentifier"] as? String == workflow.1 else {
+                        continue
+                    }
                     do {
                         try FileManager.default.removeItem(at: workflowPath)
                         removedCount += 1

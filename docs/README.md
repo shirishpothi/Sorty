@@ -288,7 +288,7 @@ learnings-cli --clear
 
 ## Uninstalling Sorty
 
-Before deleting the app, choose **Help -> Uninstall Sorty...** and confirm. Sorty will relaunch once to remove its saved settings, history, app support data, caches, logs, Keychain credentials, login/background item registrations, and Finder extension state, then quit. Your files and folders are not touched. After it quits, move `Sorty.app` to Trash.
+Choose **Help -> Uninstall Sorty...** and confirm. Sorty removes its saved settings, history, app support data, caches, logs, Keychain credentials, Finder actions and extension state, login/background item registrations, notifications, and privacy permissions. It then closes and deletes the app and any temporary copy it staged in `~/Applications`. Files and folders organized with Sorty are not touched.
 
 If macOS still shows stale Finder extension state, restart Finder:
 

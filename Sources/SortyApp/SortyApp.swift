@@ -24,7 +24,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 SortyAppDelegate.forceQuit = true
             }
         }
@@ -37,10 +37,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if canImport(SortyLib)
-            if UserDefaults.standard.bool(forKey: SortyUninstaller.requestDefaultsKey) {
-                return .terminateNow
-            }
-
             guard shouldWarnBeforeQuitForActiveAutomation,
                 let warningContext = quitWarningContext
             else {
@@ -248,12 +244,7 @@ struct SortyApp: App {
             "finderIntegrationEnabled": true,
         ])
 
-        if SortyUninstaller.consumeDefaultsRequestAndRunIfNeeded() != nil {
-            DispatchQueue.main.async {
-                SortyAppDelegate.forceQuit = true
-                NSApp.terminate(nil)
-            }
-        }
+        SortyUninstaller.discardLegacyRequest()
 
         configureUITestStateIfNeeded()
     }
