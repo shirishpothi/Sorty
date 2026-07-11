@@ -610,11 +610,8 @@ private struct StorageProviderBadge: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(tint.opacity(0.12), in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(tint.opacity(0.22), lineWidth: 1)
-            }
+            .background(tint.opacity(0.08), in: Capsule())
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .fixedSize()
             .help(accessibilityDescription)
             .accessibilityLabel(accessibilityDescription)
