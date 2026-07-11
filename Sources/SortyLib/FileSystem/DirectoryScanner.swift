@@ -98,8 +98,15 @@ actor DirectoryScanner {
             throw ScannerError.invalidURL
         }
 
-        guard fileManager.fileExists(atPath: url.path) else {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
             throw ScannerError.pathNotFound
+        }
+        guard isDirectory.boolValue else {
+            throw ScannerError.notDirectory
+        }
+        guard fileManager.isReadableFile(atPath: url.path) else {
+            throw ScannerError.pathNotReadable
         }
 
         // Check initial memory pressure
@@ -126,7 +133,8 @@ actor DirectoryScanner {
     func scanFile(
         at url: URL,
         deepScan: Bool = false,
-        computeHashes: Bool = false
+        computeHashes: Bool = false,
+        skipCloudPlaceholders: Bool = true
     ) async throws -> FileItem {
         let fileManager = FileManager.default
 
@@ -153,6 +161,16 @@ actor DirectoryScanner {
 
         let pathExtension = url.pathExtension
         let fileName = url.deletingPathExtension().lastPathComponent
+
+        let hasCloudSignals = hasPotentialCloudSignals(
+            at: url,
+            resourceValues: resourceValues,
+            pathExtension: pathExtension
+        )
+        if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: url) {
+            throw ScannerError.cloudPlaceholder
+        }
+        let cloudStatus = hasCloudSignals ? detectCloudStatus(at: url) : nil
 
         // Read Finder comment via extended attribute
         let finderComment = Self.readFinderComment(at: url)
@@ -186,6 +204,7 @@ actor DirectoryScanner {
             ocrText: extractedOCRText,
             imageWidth: extractedDimensions?.width,
             imageHeight: extractedDimensions?.height,
+            cloudStatus: cloudStatus,
             finderComment: finderComment,
             finderTags: finderTags
         )
@@ -723,6 +742,9 @@ enum ScannerError: LocalizedError {
     case alreadyScanning
     case invalidURL
     case pathNotFound
+    case notDirectory
+    case pathNotReadable
+    case cloudPlaceholder
     case enumerationFailed
     case memoryPressureTimeout
 
@@ -734,6 +756,12 @@ enum ScannerError: LocalizedError {
             return "Invalid URL provided"
         case .pathNotFound:
             return "The specified path does not exist"
+        case .notDirectory:
+            return "The specified scan location is not a directory"
+        case .pathNotReadable:
+            return "The specified scan location is not readable"
+        case .cloudPlaceholder:
+            return "The cloud file is not available locally"
         case .enumerationFailed:
             return "Failed to enumerate directory contents"
         case .memoryPressureTimeout:

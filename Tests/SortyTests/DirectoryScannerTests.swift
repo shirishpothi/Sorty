@@ -116,4 +116,31 @@ class DirectoryScannerTests: XCTestCase {
         XCTAssertEqual(files.first?.displayName, "Invoice.pdf")
         XCTAssertEqual(files.first?.cloudStatus, .synced)
     }
+
+    func testScanFileReportsGoogleDriveNativeDocumentAsSynced() async throws {
+        let document = tempDirectory.appendingPathComponent("Planning.gdoc")
+        try #"{"url":"https://docs.google.com/document/d/example"}"#.write(
+            to: document,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let file = try await scanner.scanFile(at: document)
+
+        XCTAssertEqual(file.cloudStatus, .synced)
+    }
+
+    func testScanDirectoryRejectsRegularFile() async throws {
+        let file = tempDirectory.appendingPathComponent("not-a-folder.txt")
+        try "content".write(to: file, atomically: true, encoding: .utf8)
+
+        do {
+            _ = try await scanner.scanDirectory(at: file)
+            XCTFail("Expected a regular file scan root to be rejected")
+        } catch let error as ScannerError {
+            guard case .notDirectory = error else {
+                return XCTFail("Expected notDirectory, got \(error)")
+            }
+        }
+    }
 }

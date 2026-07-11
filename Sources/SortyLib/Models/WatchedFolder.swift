@@ -77,6 +77,7 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var folders: [WatchedFolder] = []
     private let userDefaults = UserDefaults.standard
     private let storageKey = "watchedFolders"
+    private var activeSecurityScopedURLs: [UUID: URL] = [:]
     
     public init() {
         loadFolders()
@@ -100,27 +101,13 @@ public class WatchedFoldersManager: ObservableObject {
     }
 
     public func clearAll() {
-        // Stop accessing all security scoped resources
-        for folder in folders {
-            if let bookmarkData = folder.bookmarkData {
-                var isStale = false
-                if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-        }
+        stopAllSecurityScopedAccess()
         folders.removeAll()
         userDefaults.removeObject(forKey: storageKey)
     }
     
     public func removeFolder(_ folder: WatchedFolder) {
-        // Stop accessing security scoped resource before removing
-        if let bookmarkData = folder.bookmarkData {
-            var isStale = false
-            if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
+        stopSecurityScopedAccess(for: folder.id)
         folders.removeAll { $0.id == folder.id }
         saveFolders()
     }
@@ -188,12 +175,14 @@ public class WatchedFoldersManager: ObservableObject {
             
             var isStale = false
             do {
+                stopSecurityScopedAccess(for: folder.id)
                 let url = try URL(resolvingBookmarkData: bookmarkData,
                                   options: .withSecurityScope,
                                   relativeTo: nil,
                                   bookmarkDataIsStale: &isStale)
                 
                 if url.startAccessingSecurityScopedResource() {
+                    activeSecurityScopedURLs[folder.id] = url
                     // Success!
                     if isStale {
                          // Recreate bookmark
@@ -258,7 +247,10 @@ public class WatchedFoldersManager: ObservableObject {
                 // Start accessing the resolved bookmark URL. We intentionally
                 // do NOT stop this access — it must remain active for the
                 // watched folder to function until the app quits.
-                _ = resolvedURL.startAccessingSecurityScopedResource()
+                stopSecurityScopedAccess(for: folder.id)
+                if resolvedURL.startAccessingSecurityScopedResource() {
+                    activeSecurityScopedURLs[folder.id] = resolvedURL
+                }
             }
 
             var updated = folder
@@ -289,6 +281,18 @@ public class WatchedFoldersManager: ObservableObject {
         if let encoded = try? JSONEncoder().encode(folders) {
             userDefaults.set(encoded, forKey: storageKey)
         }
+    }
+
+    private func stopSecurityScopedAccess(for id: UUID) {
+        guard let url = activeSecurityScopedURLs.removeValue(forKey: id) else { return }
+        url.stopAccessingSecurityScopedResource()
+    }
+
+    private func stopAllSecurityScopedAccess() {
+        for url in activeSecurityScopedURLs.values {
+            url.stopAccessingSecurityScopedResource()
+        }
+        activeSecurityScopedURLs.removeAll()
     }
 
     private static func normalizedPath(_ path: String) -> String {
