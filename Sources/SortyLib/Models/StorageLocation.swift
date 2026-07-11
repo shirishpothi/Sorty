@@ -9,6 +9,92 @@
 import Foundation
 import Combine
 
+public enum StorageProviderKind: String, Codable, Hashable, Sendable {
+    case local
+    case externalVolume
+    case iCloudDrive
+    case googleDrive
+    case dropbox
+    case oneDrive
+    case box
+    case fileProvider
+
+    public var displayName: String {
+        switch self {
+        case .local: return "Local storage"
+        case .externalVolume: return "External volume"
+        case .iCloudDrive: return "iCloud Drive"
+        case .googleDrive: return "Google Drive"
+        case .dropbox: return "Dropbox"
+        case .oneDrive: return "OneDrive"
+        case .box: return "Box"
+        case .fileProvider: return "Cloud File Provider"
+        }
+    }
+}
+
+public enum StorageOrganizationCapability: String, Codable, Hashable, Sendable {
+    case createFiles
+    case createFolders
+    case moveItems
+    case renameItems
+    case trashItems
+    case finderTags
+    case makeAvailableOffline
+    case evictLocalCopy
+    case starItems
+    case createShortcuts
+    case customMetadata
+}
+
+public struct StorageCapabilityProfile: Hashable, Sendable {
+    public let provider: StorageProviderKind
+    public let isReadOnly: Bool
+    public let supportedFileSystemActions: Set<StorageOrganizationCapability>
+    public let providerActionsRequiringIntegration: Set<StorageOrganizationCapability>
+    public let conventions: [String]
+
+    public var promptContext: String {
+        let supported = supportedFileSystemActions
+            .map(\.promptName)
+            .sorted()
+            .joined(separator: ", ")
+        var lines = [
+            "  Environment: \(provider.displayName)\(isReadOnly ? " (read-only)" : "")",
+            "  Available filesystem actions: \(supported.isEmpty ? "read only" : supported)",
+        ]
+        if !providerActionsRequiringIntegration.isEmpty {
+            let gated = providerActionsRequiringIntegration
+                .map(\.promptName)
+                .sorted()
+                .joined(separator: ", ")
+            lines.append(
+                "  Provider-native actions requiring a connected account: \(gated). Do not include these in a plan unless Sorty reports the provider integration as connected."
+            )
+        }
+        lines.append(contentsOf: conventions.map { "  Convention: \($0)" })
+        return lines.joined(separator: "\n")
+    }
+}
+
+private extension StorageOrganizationCapability {
+    var promptName: String {
+        switch self {
+        case .createFiles: return "create files"
+        case .createFolders: return "create folders"
+        case .moveItems: return "move files and folders"
+        case .renameItems: return "rename files and folders"
+        case .trashItems: return "move items to Trash"
+        case .finderTags: return "apply Finder tags"
+        case .makeAvailableOffline: return "make available offline"
+        case .evictLocalCopy: return "remove local download"
+        case .starItems: return "star files and folders"
+        case .createShortcuts: return "create shortcuts"
+        case .customMetadata: return "apply provider metadata"
+        }
+    }
+}
+
 /// RAII-style wrapper for security-scoped resource access
 public class ScopedSecurityAccess {
     public let url: URL
@@ -75,7 +161,115 @@ public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
         if let desc = description, !desc.isEmpty {
             context += ": \(desc)"
         }
-        return context
+        return context + "\n" + capabilityProfile.promptContext
+    }
+
+    public var capabilityProfile: StorageCapabilityProfile {
+        StorageEnvironmentInspector.profile(for: url)
+    }
+}
+
+public enum StorageEnvironmentInspector {
+    public static func profile(for url: URL) -> StorageCapabilityProfile {
+        let provider = providerKind(for: url)
+        let values = try? url.resourceValues(forKeys: [
+            .volumeIsReadOnlyKey,
+            .volumeIsRemovableKey,
+            .volumeIsInternalKey,
+        ])
+        let isReadOnly = values?.volumeIsReadOnly == true
+        var fileSystemActions: Set<StorageOrganizationCapability> = []
+        if !isReadOnly {
+            fileSystemActions = [
+                .createFiles,
+                .createFolders,
+                .moveItems,
+                .renameItems,
+                .trashItems,
+            ]
+            if provider == .local || provider == .externalVolume || provider == .iCloudDrive {
+                fileSystemActions.insert(.finderTags)
+            }
+        }
+
+        let providerActions: Set<StorageOrganizationCapability>
+        let conventions: [String]
+        switch provider {
+        case .googleDrive:
+            providerActions = [.starItems, .createShortcuts, .customMetadata]
+            conventions = [
+                "Starred is per-user Google Drive metadata, not a Finder tag.",
+                "Shared-drive items have exactly one parent; use a Drive shortcut when an item should appear in another location.",
+                "Respect the current user's Drive capabilities and shared-drive role before moving or deleting items.",
+            ]
+        case .dropbox:
+            providerActions = [.customMetadata]
+            conventions = [
+                "Dropbox custom properties require an authenticated Dropbox metadata integration.",
+                "Treat online-only placeholders as unavailable until the provider downloads them.",
+            ]
+        case .oneDrive, .box, .fileProvider:
+            providerActions = [.customMetadata]
+            conventions = [
+                "Provider-native metadata requires an authenticated provider adapter.",
+                "Treat online-only placeholders as unavailable until the provider downloads them.",
+            ]
+        case .iCloudDrive:
+            providerActions = []
+            conventions = [
+                "Treat evicted iCloud items as unavailable until downloaded.",
+                "Finder tags are supported through macOS resource metadata.",
+            ]
+        case .externalVolume:
+            providerActions = []
+            conventions = [
+                "Preserve file metadata during cross-volume transfers and verify the copy before deleting the source.",
+                "Check destination capacity and availability immediately before applying a plan.",
+            ]
+        case .local:
+            providerActions = []
+            conventions = ["Use native macOS file and Finder metadata operations."]
+        }
+
+        return StorageCapabilityProfile(
+            provider: provider,
+            isReadOnly: isReadOnly,
+            supportedFileSystemActions: fileSystemActions,
+            providerActionsRequiringIntegration: providerActions,
+            conventions: conventions
+        )
+    }
+
+    public static func providerKind(for url: URL) -> StorageProviderKind {
+        let components = url.standardizedFileURL.pathComponents.map { $0.lowercased() }
+        let path = components.joined(separator: "/")
+        if path.contains("googledrive") || path.contains("google drive") {
+            return .googleDrive
+        }
+        if path.contains("dropbox") {
+            return .dropbox
+        }
+        if path.contains("onedrive") || path.contains("one drive") {
+            return .oneDrive
+        }
+        if path.contains("cloudstorage/box") {
+            return .box
+        }
+        if components.contains("mobile documents") || path.contains("icloud") {
+            return .iCloudDrive
+        }
+        if components.contains("cloudstorage") {
+            return .fileProvider
+        }
+
+        let values = try? url.resourceValues(forKeys: [
+            .volumeIsRemovableKey,
+            .volumeIsInternalKey,
+        ])
+        if values?.volumeIsRemovable == true || values?.volumeIsInternal == false {
+            return .externalVolume
+        }
+        return .local
     }
 }
 
