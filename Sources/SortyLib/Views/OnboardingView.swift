@@ -1336,7 +1336,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
 
         func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
-                updatePanelFrame()
+                showPanelIfPossible()
                 return
             }
 
