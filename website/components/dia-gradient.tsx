@@ -72,6 +72,25 @@ export function DiaGradient({
   const wrapRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+
+  // Track the rendered size. preserveAspectRatio="none" stretches the viewBox
+  // to fit, which distorts anything specified in viewBox units — most
+  // noticeably the blur: on a phone the horizontal blur collapses to a few
+  // pixels and the columns turn into hard-edged stripes. Knowing the real
+  // size lets us compensate below.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) setSize({ w: width, h: height })
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const prefersReduced = window.matchMedia(
@@ -178,8 +197,17 @@ export function DiaGradient({
     }
   }, [flattenOnScroll])
 
-  const heights = bellHeights(bars, peak, valley)
-  const colW = VBW / bars
+  // On narrow screens, fewer columns keep the same chunky rhythm the field
+  // has on desktop instead of squeezing all of them into skinny stripes.
+  const effectiveBars = size && size.w < 640 ? Math.min(bars, 6) : bars
+  // Anisotropic blur compensation: never let the on-screen blur drop below
+  // what desktop gets. When the viewBox is squeezed (narrow/tall phone
+  // layouts), scale the stdDeviation up per-axis so the bloom stays soft.
+  const blurX = size ? blur * Math.max(1, Math.min(4, VBW / size.w)) : blur
+  const blurY = size ? blur * Math.max(1, Math.min(4, VBH / size.h)) : blur
+
+  const heights = bellHeights(effectiveBars, peak, valley)
+  const colW = VBW / effectiveBars
 
   return (
     <div
@@ -220,7 +248,7 @@ export function DiaGradient({
             ))}
           </linearGradient>
           <filter id="dia-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation={blur} />
+            <feGaussianBlur stdDeviation={`${blurX} ${blurY}`} />
           </filter>
         </defs>
         {heights.map((h, i) => (

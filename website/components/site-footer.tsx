@@ -46,8 +46,8 @@ export function SiteFooter() {
         <DiaGradient blur={15} peak={0.98} valley={0.55} strength={0.72} />
       </div>
 
-      <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
-        <div>
+      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-10">
+        <div className="col-span-2 md:col-span-1">
           <SortyLogo />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
             AI folder organization for your Mac. Free, open source, and private
