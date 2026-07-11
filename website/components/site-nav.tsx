@@ -32,9 +32,10 @@ export function SiteNav() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4">
+      <div className="relative w-full max-w-3xl">
       <nav
         className={cn(
-          'flex w-full max-w-3xl items-center justify-between gap-2 rounded-full border px-2 py-2 pl-4 transition-all duration-500',
+          'flex w-full items-center justify-between gap-2 rounded-full border px-2 py-2 pl-4 transition-all duration-500',
           scrolled
             ? 'border-border bg-background/70 shadow-lg shadow-black/30 backdrop-blur-xl'
             : 'border-transparent bg-background/30 backdrop-blur-md',
@@ -90,10 +91,21 @@ export function SiteNav() {
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground md:hidden"
+            className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground md:hidden"
             aria-label={open ? 'Close menu' : 'Open menu'}
           >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+            <Menu
+              className={cn(
+                'absolute size-5 transition-all duration-300',
+                open ? 'rotate-90 scale-75 opacity-0' : 'rotate-0 scale-100 opacity-100',
+              )}
+            />
+            <X
+              className={cn(
+                'absolute size-5 transition-all duration-300',
+                open ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-75 opacity-0',
+              )}
+            />
           </button>
         </div>
       </nav>
@@ -101,7 +113,7 @@ export function SiteNav() {
       <div
         aria-hidden={!open}
         className={cn(
-          'absolute top-20 w-full max-w-3xl origin-top rounded-3xl border border-border bg-background/80 p-2 backdrop-blur-xl transition-all duration-300 ease-out md:hidden',
+          'absolute inset-x-0 top-full mt-2 origin-top rounded-3xl border border-border bg-background/80 p-2 backdrop-blur-xl transition-all duration-300 ease-out md:hidden',
           open
             ? 'visible translate-y-0 scale-100 opacity-100'
             : 'invisible -translate-y-2 scale-[0.97] opacity-0',
@@ -135,6 +147,7 @@ export function SiteNav() {
           <Heart className="support-heart-icon size-4" />
           Donate to support Sorty
         </a>
+      </div>
       </div>
     </header>
   )
