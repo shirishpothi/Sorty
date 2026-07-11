@@ -161,9 +161,8 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
     public func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            guard let window = view.window else { return }
             Task { @MainActor in
-                context.coordinator.observe(window: window)
+                await context.coordinator.observeOrMaterialize(view: view)
             }
         }
         return view
@@ -171,9 +170,8 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
 
     public func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
             Task { @MainActor in
-                context.coordinator.observe(window: window)
+                await context.coordinator.observeOrMaterialize(view: nsView)
             }
         }
     }
@@ -185,10 +183,51 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
     public final class Coordinator: NSObject {
         private let sessionID: UUID
         private weak var observedWindow: NSWindow?
+        private var fallbackWindowController: NSWindowController?
         private var observations: [NSObjectProtocol] = []
 
         init(sessionID: UUID) {
             self.sessionID = sessionID
+        }
+
+        @MainActor
+        func observeOrMaterialize(view: NSView) async {
+            if let window = view.window {
+                observe(window: window)
+                return
+            }
+
+            try? await Task.sleep(for: .milliseconds(750))
+            if let window = view.window {
+                observe(window: window)
+                return
+            }
+
+            var rootView = view
+            while let superview = rootView.superview {
+                rootView = superview
+            }
+
+            let contentSize = NSSize(
+                width: max(rootView.fittingSize.width, 1100),
+                height: max(rootView.fittingSize.height, 750)
+            )
+            let window = NSWindow(
+                contentRect: NSRect(origin: .zero, size: contentSize),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Sorty"
+            window.contentView = rootView
+            window.center()
+
+            let controller = NSWindowController(window: window)
+            fallbackWindowController = controller
+            controller.showWindow(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            observe(window: window)
         }
 
         @MainActor
