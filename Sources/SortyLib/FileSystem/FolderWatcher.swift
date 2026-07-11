@@ -367,7 +367,13 @@ public final class FolderWatcher: @unchecked Sendable {
 
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: rootPath),
-            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .isDirectoryKey,
+                .fileSizeKey,
+                .contentModificationDateKey,
+                .ubiquitousItemDownloadingStatusKey,
+            ],
             options: [.skipsPackageDescendants, .skipsHiddenFiles]
         ) else {
             return [:]
@@ -384,11 +390,17 @@ public final class FolderWatcher: @unchecked Sendable {
                 continue
             }
 
-            guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]) else {
+            guard let values = try? fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey,
+                .ubiquitousItemDownloadingStatusKey,
+            ]) else {
                 continue
             }
 
-            guard values.isRegularFile == true else {
+            guard values.isRegularFile == true,
+                  !Self.shouldIgnoreCloudPlaceholder(at: fileURL, resourceValues: values) else {
                 continue
             }
 
@@ -465,7 +477,12 @@ public final class FolderWatcher: @unchecked Sendable {
             let dirURL = URL(fileURLWithPath: dir)
             guard let contents = try? fileManager.contentsOfDirectory(
                 at: dirURL,
-                includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+                includingPropertiesForKeys: [
+                    .isRegularFileKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey,
+                    .ubiquitousItemDownloadingStatusKey,
+                ],
                 options: [.skipsHiddenFiles]
             ) else { continue }
             
@@ -476,8 +493,16 @@ public final class FolderWatcher: @unchecked Sendable {
                 let name = fileURL.lastPathComponent
                 guard !Self.isIgnoredFile(name) else { continue }
                 
-                guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]),
-                      values.isRegularFile == true else { continue }
+                guard let values = try? fileURL.resourceValues(forKeys: [
+                    .isRegularFileKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey,
+                    .ubiquitousItemDownloadingStatusKey,
+                ]),
+                      values.isRegularFile == true,
+                      !Self.shouldIgnoreCloudPlaceholder(at: fileURL, resourceValues: values) else {
+                    continue
+                }
                 
                 guard let relativePath = Self.relativePath(
                     of: fileURL.standardizedFileURL.path,
@@ -507,6 +532,28 @@ public final class FolderWatcher: @unchecked Sendable {
 
     private static func isPath(_ path: String, within rootPath: String) -> Bool {
         path == rootPath || path.hasPrefix(rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+    }
+
+    static func shouldIgnoreCloudPlaceholder(
+        at url: URL,
+        resourceValues: URLResourceValues? = nil
+    ) -> Bool {
+        if resourceValues?.ubiquitousItemDownloadingStatus == .notDownloaded {
+            return true
+        }
+
+        let fileName = url.lastPathComponent
+        let pathExtension = url.pathExtension.lowercased()
+        if (fileName.hasPrefix(".") && pathExtension == "icloud") || pathExtension == "cloud" {
+            return true
+        }
+
+        if resourceValues?.fileSize == 0,
+           getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0 {
+            return true
+        }
+
+        return false
     }
 
     private static func relativePath(of path: String, within rootPath: String) -> String? {
@@ -782,7 +829,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         
         if url.startAccessingSecurityScopedResource() {
-            if let oldURL = resolvedURLs[folder.id], oldURL != url {
+            if let oldURL = resolvedURLs[folder.id] {
                 oldURL.stopAccessingSecurityScopedResource()
             }
             resolvedURLs[folder.id] = url
