@@ -1246,6 +1246,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             }
 
             backdropPanel?.setFrame(screen.frame, display: true)
+            maskEffectPanel(backdropPanel, excluding: window)
             backdropPanel?.order(.below, relativeTo: window.windowNumber)
             fadeInPanelIfNeeded()
         }
@@ -1445,6 +1446,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 return
             }
             glowPanel?.setFrame(screen.frame, display: true)
+            maskEffectPanel(glowPanel, excluding: window)
         }
 
         private func showPanelIfPossible() {
@@ -1499,6 +1501,31 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             onWindowChanged?(window)
         }
     }
+}
+
+@MainActor
+private func maskEffectPanel(_ panel: NSPanel?, excluding window: NSWindow) {
+    guard let panel, let contentView = panel.contentView else { return }
+
+    contentView.wantsLayer = true
+    let windowRect = panel.convertFromScreen(window.frame)
+    let excludedRect = contentView.convert(windowRect, from: nil)
+        .insetBy(dx: -12, dy: -12)
+
+    let path = CGMutablePath()
+    path.addRect(contentView.bounds)
+    path.addRoundedRect(
+        in: excludedRect,
+        cornerWidth: 22,
+        cornerHeight: 22
+    )
+
+    let mask = CAShapeLayer()
+    mask.frame = contentView.bounds
+    mask.path = path
+    mask.fillRule = .evenOdd
+    mask.fillColor = NSColor.white.cgColor
+    contentView.layer?.mask = mask
 }
 
 struct OnboardingBottomGradient: View {
@@ -1662,7 +1689,15 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             {
                 window.setContentSize(targetSize)
             }
-            window.center()
+            centerOnFullDisplay(window)
+
+            // SwiftUI can finalize the frame after the representable attaches.
+            // Recenter once after that layout pass, but never on later updates,
+            // so the user remains free to move the window.
+            DispatchQueue.main.async { [weak window] in
+                guard let window else { return }
+                self.centerOnFullDisplay(window)
+            }
 
             // Start fully transparent and slowly fade the whole window in so the
             // onboarding materializes rather than popping into existence.
@@ -1674,6 +1709,16 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                     window.animator().alphaValue = 1
                 }
             }
+        }
+
+        private func centerOnFullDisplay(_ window: NSWindow) {
+            guard let screen = window.screen ?? NSScreen.main else { return }
+            let screenFrame = screen.frame
+            let origin = NSPoint(
+                x: screenFrame.midX - window.frame.width / 2,
+                y: screenFrame.midY - window.frame.height / 2
+            )
+            window.setFrameOrigin(origin)
         }
 
         private func restore() {
