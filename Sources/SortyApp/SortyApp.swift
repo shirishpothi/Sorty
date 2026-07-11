@@ -251,7 +251,7 @@ struct SortyApp: App {
 
     @SceneBuilder
     var body: some Scene {
-        Window("Sorty", id: "main") {
+        WindowGroup("Sorty", id: "main") {
             mainWindowContent(launchRequest: .constant(nil))
         }
         .windowStyle(.automatic)
