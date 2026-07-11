@@ -1,7 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_PATH="$(cd "$(dirname "${1:-releases/Sorty.app}")" && pwd)/$(basename "${1:-releases/Sorty.app}")"
+INPUT_PATH="$(cd "$(dirname "${1:-releases/Sorty.app}")" && pwd)/$(basename "${1:-releases/Sorty.app}")"
+TEMP_DIR=""
+
+if [[ "${INPUT_PATH}" == *.zip ]]; then
+    TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sorty-launch-smoke.XXXXXX")
+    trap 'rm -rf "${TEMP_DIR}"' EXIT
+    ditto -x -k "${INPUT_PATH}" "${TEMP_DIR}"
+    APP_PATH="${TEMP_DIR}/Sorty.app"
+else
+    APP_PATH="${INPUT_PATH}"
+fi
 EXECUTABLE_PATH="${APP_PATH}/Contents/MacOS/Sorty"
 TIMEOUT_SECONDS="${SORTY_LAUNCH_SMOKE_TIMEOUT:-30}"
 
@@ -10,11 +20,9 @@ if [ ! -x "${EXECUTABLE_PATH}" ]; then
     exit 1
 fi
 
-PROCESS_PATTERN="^${EXECUTABLE_PATH}( |$)"
-
-pkill -f "${PROCESS_PATTERN}" >/dev/null 2>&1 || true
+pkill -x Sorty >/dev/null 2>&1 || true
 for _ in {1..20}; do
-    if ! pgrep -f "${PROCESS_PATTERN}" >/dev/null 2>&1; then
+    if ! pgrep -x Sorty >/dev/null 2>&1; then
         break
     fi
     sleep 0.25
@@ -23,7 +31,7 @@ open -n "${APP_PATH}" --args --release-launch-smoke-test
 
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 while (( SECONDS < deadline )); do
-    pid=$(pgrep -f "${PROCESS_PATTERN}" | head -1 || true)
+    pid=$(pgrep -x Sorty | head -1 || true)
     if [ -n "${pid}" ] && swift - "${pid}" <<'SWIFT'
 import CoreGraphics
 import Foundation
@@ -61,7 +69,7 @@ SWIFT
     sleep 1
 done
 
-pid=$(pgrep -f "${PROCESS_PATTERN}" | head -1 || true)
+pid=$(pgrep -x Sorty | head -1 || true)
 if [ -n "${pid}" ]; then
     kill "${pid}" >/dev/null 2>&1 || true
     echo "Sorty launched as process ${pid}, but no visible application window appeared." >&2

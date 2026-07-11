@@ -295,7 +295,7 @@ jobs:
       - name: Smoke test downloadable app launch
         run: |
           chmod +x scripts/smoke_test_app_launch.sh
-          scripts/smoke_test_app_launch.sh releases/Sorty.app
+          scripts/smoke_test_app_launch.sh releases/Sorty.zip
 
       - name: Generate release notes
         run: |
