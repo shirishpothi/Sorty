@@ -12,11 +12,15 @@ on:
         type: string
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: sparkle-publishing
+  cancel-in-progress: false
 
 env:
   PROJECT_NAME: Sorty
+  LEGACY_APPCAST_RELEASE: v1.1.2
+  LEGACY_APPCAST_SHA256: 63941687d2b08847befb4e33b7ec9cb1a9fecc09d2a7c73700850b895aa27ac8
+  MINIMUM_PUBLISHED_BUILD: '202607091757'
+  NIGHTLY_APPCAST_URL: https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml
 
 jobs:
   prepare-release:
@@ -25,6 +29,8 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
+      build_num: ${{ steps.version.outputs.BUILD_NUM }}
+      current_nightly_build: ${{ steps.version.outputs.CURRENT_NIGHTLY_BUILD }}
       is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
 
     steps:
@@ -42,7 +48,31 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          CURRENT_NIGHTLY_BUILD=$(curl --fail --silent --show-error --location "${{ env.NIGHTLY_APPCAST_URL }}" | python3 -c '
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.stdin).getroot()
+          enclosure = root.find("./channel/item/enclosure")
+          if enclosure is None:
+              raise SystemExit("The nightly appcast has no update item.")
+          build = enclosure.get("{http://www.andymatuschak.org/xml-namespaces/sparkle}version")
+          if build is None or not build.isdecimal():
+              raise SystemExit("The nightly appcast has no numeric Sparkle build number.")
+          print(build)
+          ')
+          BUILD_NUM=$(date -u +%Y%m%d%H%M%S)
+          if [ "$BUILD_NUM" -le "$CURRENT_NIGHTLY_BUILD" ]; then
+            BUILD_NUM=$((CURRENT_NIGHTLY_BUILD + 1))
+          fi
+
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "BUILD_NUM=${BUILD_NUM}" >> "$GITHUB_OUTPUT"
+          echo "CURRENT_NIGHTLY_BUILD=${CURRENT_NIGHTLY_BUILD}" >> "$GITHUB_OUTPUT"
 
           if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
             echo "IS_PRERELEASE=true" >> "$GITHUB_OUTPUT"
@@ -52,125 +82,35 @@ jobs:
 
           echo "Releasing version: ${VERSION}"
 
-      - name: Update Changelog
+      - name: Validate release metadata
         if: steps.version.outputs.IS_PRERELEASE == 'false'
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          if grep -q "^## \[${VERSION}\]" CHANGELOG.md 2>/dev/null; then
-            echo "Version ${VERSION} already exists in CHANGELOG.md, skipping"
-            exit 0
-          fi
+          python3 - "$VERSION" <<'PY'
+          import plistlib
+          import re
+          import sys
+          from pathlib import Path
 
-          CURRENT_TAG="v${VERSION}"
-          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | while read -r t; do
-            if [ "$t" != "$CURRENT_TAG" ]; then
-              echo "$t"
-              break
-            fi
-          done)
+          version = sys.argv[1]
+          with Path("Info.plist").open("rb") as handle:
+              plist = plistlib.load(handle)
+          if plist.get("CFBundleShortVersionString") != version:
+              raise SystemExit("Info.plist version does not match the requested release.")
 
-          if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
-          else
-            COMMITS=$(git log --pretty=format:"%s" --no-merges)
-          fi
-
-          if [ -z "$COMMITS" ]; then
-            echo "No commits found, skipping changelog update"
-            exit 0
-          fi
-
-          DATE=$(date +%Y-%m-%d)
-          ADDED=""
-          CHANGED=""
-          FIXED=""
-          REMOVED=""
-          OTHER=""
-
-          while IFS= read -r msg; do
-            msg=$(echo "$msg" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [ -z "$msg" ] && continue
-
-            lower=$(echo "$msg" | tr '[:upper:]' '[:lower:]')
-            body=$(echo "$msg" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:[[:space:]]*//')
-
-            case "$lower" in
-              feat*) ADDED="${ADDED}- ${body}"$'\n' ;;
-              fix*) FIXED="${FIXED}- ${body}"$'\n' ;;
-              refactor*|perf*|style*) CHANGED="${CHANGED}- ${body}"$'\n' ;;
-              revert*) REMOVED="${REMOVED}- ${body}"$'\n' ;;
-              docs*|test*|build*|ci*|chore*) OTHER="${OTHER}- ${body}"$'\n' ;;
-              *) OTHER="${OTHER}- ${msg}"$'\n' ;;
-            esac
-          done <<< "$COMMITS"
-
-          ENTRY_FILE=$(mktemp)
-          echo "## [${VERSION}] - ${DATE}" >> "$ENTRY_FILE"
-          echo "" >> "$ENTRY_FILE"
-
-          if [ -n "$ADDED" ]; then
-            echo "### Added" >> "$ENTRY_FILE"
-            echo "$ADDED" >> "$ENTRY_FILE"
-          fi
-          if [ -n "$CHANGED" ]; then
-            echo "### Changed" >> "$ENTRY_FILE"
-            echo "$CHANGED" >> "$ENTRY_FILE"
-          fi
-          if [ -n "$FIXED" ]; then
-            echo "### Fixed" >> "$ENTRY_FILE"
-            echo "$FIXED" >> "$ENTRY_FILE"
-          fi
-          if [ -n "$REMOVED" ]; then
-            echo "### Removed" >> "$ENTRY_FILE"
-            echo "$REMOVED" >> "$ENTRY_FILE"
-          fi
-          if [ -n "$OTHER" ]; then
-            echo "### Other" >> "$ENTRY_FILE"
-            echo "$OTHER" >> "$ENTRY_FILE"
-          fi
-
-          if [ -z "$ADDED" ] && [ -z "$CHANGED" ] && [ -z "$FIXED" ] && [ -z "$REMOVED" ] && [ -z "$OTHER" ]; then
-            echo "### Changes" >> "$ENTRY_FILE"
-            echo "$COMMITS" | while IFS= read -r line; do
-              echo "- ${line}" >> "$ENTRY_FILE"
-            done
-            echo "" >> "$ENTRY_FILE"
-          fi
-
-          INSERT_LINE=$(grep -n '^## \[' CHANGELOG.md | head -1 | cut -d: -f1)
-          if [ -n "$INSERT_LINE" ]; then
-            {
-              head -n $((INSERT_LINE - 1)) CHANGELOG.md
-              cat "$ENTRY_FILE"
-              tail -n +${INSERT_LINE} CHANGELOG.md
-            } > CHANGELOG.tmp
-          else
-            {
-              cat CHANGELOG.md
-              echo ""
-              cat "$ENTRY_FILE"
-            } > CHANGELOG.tmp
-          fi
-
-          mv CHANGELOG.tmp CHANGELOG.md
-          rm -f "$ENTRY_FILE"
-          echo "Changelog updated for version ${VERSION}"
-
-      - name: Commit Changelog
-        if: steps.version.outputs.IS_PRERELEASE == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          if git diff --cached --quiet; then
-            echo "No changelog changes to commit"
-          else
-            git commit -m "chore: update changelog for v${{ steps.version.outputs.VERSION }}"
-            git push origin HEAD:main
-          fi
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(
+              rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n(?P<body>.*?)(?=^## \[|\Z)",
+              text,
+              flags=re.MULTILINE | re.DOTALL,
+          )
+          if not match:
+              raise SystemExit(f"CHANGELOG.md has no dated entry for {version}.")
+          headings = re.findall(r"^### (.+)$", match.group("body"), flags=re.MULTILINE)
+          if headings != ["New", "Improved", "Fixed"]:
+              raise SystemExit("The release changelog must contain exactly: New, Improved, Fixed.")
+          PY
 
   unit-tests:
     runs-on: blacksmith-6vcpu-macos-15
@@ -243,19 +183,20 @@ jobs:
       - name: Build universal app
         env:
           SORTY_BUILD_DIR: ${{ github.workspace }}/.build
+          VERSION_OVERRIDE: ${{ needs.prepare-release.outputs.version }}
+          BUILD_NUMBER_OVERRIDE: ${{ needs.prepare-release.outputs.build_num }}
         run: |
           chmod +x ./scripts/build.sh
-          if [ "${{ needs.prepare-release.outputs.is_prerelease }}" = "true" ]; then
-            ICON_VARIANT=ci
-          else
-            ICON_VARIANT=release
-          fi
           BUILD_METHOD=xcodebuild \
           SKIP_TESTS=true \
           BUILD_ARCHS="arm64 x86_64" \
-          APP_ICON_VARIANT="$ICON_VARIANT" \
+          APP_ICON_VARIANT=release \
           XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
+
+          cmp \
+            "Assets/AppIcon/AppIcon-Release.icns" \
+            "releases/Sorty.app/Contents/Resources/AppIcon.icns"
 
       - name: Package universal ZIP
         run: |
@@ -323,18 +264,77 @@ jobs:
             chmod +x ".build/artifacts/sparkle/Sparkle/bin/sign_update"
           fi
 
+      - name: Validate downloadable app defaults and architecture
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          PLIST="releases/Sorty.app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$PLIST")" = "15.0"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$PLIST")" = \
+            "https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :SUEnableAutomaticChecks' "$PLIST")" = "true"
+
+          ARCHS=$(lipo -archs "releases/Sorty.app/Contents/MacOS/Sorty")
+          echo "$ARCHS" | grep -qw arm64
+          echo "$ARCHS" | grep -qw x86_64
+
+          if unzip -Z1 releases/Sorty.zip | grep -Ev '^(Sorty\.app/|__MACOSX/)' | grep -q .; then
+            echo "Sorty.zip contains unexpected top-level content." >&2
+            exit 1
+          fi
+
+      - name: Generate release notes
+        run: |
+          python3 scripts/generate_sparkle_release_notes.py \
+            --version "${{ needs.prepare-release.outputs.version }}" \
+            --title "Sorty ${{ needs.prepare-release.outputs.version }}" \
+            --summary "A faster, cleaner, and more reliable Sorty." \
+            --changelog CHANGELOG.md \
+            --markdown releases/release-notes.md \
+            --html releases/release-notes.html
+          grep -q '<h2>New</h2>' releases/release-notes.html
+          grep -q '<h2>Improved</h2>' releases/release-notes.html
+          grep -q '<h2>Fixed</h2>' releases/release-notes.html
+
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           APPCAST_FILE_OVERRIDE: releases/appcast-v2.xml
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/download/v${{ needs.prepare-release.outputs.version }}/release-notes.html
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
+          APPCAST_CHANNEL="nightly" \
+          APPCAST_FILE_OVERRIDE="releases/appcast-nightly.xml" \
+          ZIP_NAME_OVERRIDE="Sorty.zip" \
+          ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
         run: |
           chmod +x ./scripts/validate_sparkle.sh
-          ./scripts/validate_sparkle.sh --appcast releases/appcast-v2.xml
+          ./scripts/validate_sparkle.sh \
+            --appcast releases/appcast-v2.xml \
+            --minimum-build "${{ env.MINIMUM_PUBLISHED_BUILD }}" \
+            --expected-version "${{ needs.prepare-release.outputs.version }}" \
+            --expected-channel default \
+            --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
+          ./scripts/validate_sparkle.sh \
+            --appcast releases/appcast-nightly.xml \
+            --minimum-build "${{ needs.prepare-release.outputs.current_nightly_build }}" \
+            --expected-version "${{ needs.prepare-release.outputs.version }}" \
+            --expected-channel nightly \
+            --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
+
+      - name: Preserve legacy key-transition appcast
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ env.LEGACY_APPCAST_RELEASE }}" \
+            --pattern appcast.xml \
+            --dir releases \
+            --clobber
+          echo "${{ env.LEGACY_APPCAST_SHA256 }}  releases/appcast.xml" | shasum -a 256 -c -
 
       - name: Create tag
         if: github.event_name == 'workflow_dispatch'
@@ -353,7 +353,7 @@ jobs:
             $0 ~ "^## \\[" version "\\]" {in_section=1; next}
             in_section && $0 ~ "^## \\[" {exit}
             in_section {print}
-          ' CHANGELOG.md)
+          ' CHANGELOG.md | sed 's/^### /## /')
 
           if [ -z "$CHANGELOG_CONTENT" ]; then
             CHANGELOG_CONTENT="- No changelog entry found for v${VERSION}."
@@ -372,12 +372,15 @@ jobs:
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
             releases/Sorty.zip
+            releases/appcast.xml
             releases/appcast-v2.xml
-          generate_release_notes: true
-          append_body: true
+            releases/release-notes.html
+          generate_release_notes: false
           body: |
-            ## Installation
-            Download `Sorty.zip` and move `Sorty.app` to `/Applications`.
+            ${{ steps.changelog.outputs.release_changelog }}
+
+            ## Install
+            Download `Sorty.zip`, open it, and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
@@ -386,29 +389,49 @@ jobs:
             ## CLI Tools
             Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
 
-            ## Additional Downloads
-            - **Sorty.zip** - Universal build (Apple Silicon + Intel)
-            - **Sorty-Source.zip** - Full source code
-
-            ## Changelog (v${{ needs.prepare-release.outputs.version }})
-            ${{ steps.changelog.outputs.release_changelog }}
+            `Sorty.zip` is a universal build for Apple silicon and Intel Macs. GitHub provides the source code archives automatically.
           prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
 
-      - name: Update latest stable appcast
+      - name: Offer stable release to nightly users
         if: needs.prepare-release.outputs.is_prerelease == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LATEST_STABLE=$(gh release list --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+          gh release upload "nightly" releases/appcast-nightly.xml --clobber
 
-          if [ -n "$LATEST_STABLE" ]; then
-            echo "Updating appcast on latest stable release: $LATEST_STABLE"
-            gh release delete-asset "$LATEST_STABLE" appcast-v2.xml --yes 2>/dev/null || true
-            gh release upload "$LATEST_STABLE" releases/appcast-v2.xml --clobber
-            echo "Updated appcast-v2.xml on $LATEST_STABLE"
-          else
-            echo "No stable release found to update"
+      - name: Verify published release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          EXPECTED_ASSETS=$(printf '%s\n' Sorty.zip appcast-v2.xml appcast.xml release-notes.html | sort)
+          ACTUAL_ASSETS=$(gh release view "v${VERSION}" --json assets --jq '.assets[].name' | sort)
+          if [ "$ACTUAL_ASSETS" != "$EXPECTED_ASSETS" ]; then
+            echo "Unexpected release assets:" >&2
+            printf '%s\n' "$ACTUAL_ASSETS" >&2
+            exit 1
           fi
+
+          curl --fail --silent --show-error --location --head \
+            "https://github.com/${{ github.repository }}/releases/latest/download/Sorty.zip" >/dev/null
+          curl --fail --silent --show-error --location \
+            "https://github.com/${{ github.repository }}/releases/latest/download/appcast-v2.xml" \
+            --output /tmp/appcast-v2.xml
+          cmp releases/appcast-v2.xml /tmp/appcast-v2.xml
+          curl --fail --silent --show-error --location \
+            "https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml" \
+            --output /tmp/appcast.xml
+          echo "${{ env.LEGACY_APPCAST_SHA256 }}  /tmp/appcast.xml" | shasum -a 256 -c -
+          curl --fail --silent --show-error --location \
+            "https://github.com/${{ github.repository }}/releases/latest/download/release-notes.html" \
+            --output /tmp/release-notes.html
+          grep -q '<h2>New</h2>' /tmp/release-notes.html
+          grep -q '<h2>Improved</h2>' /tmp/release-notes.html
+          grep -q '<h2>Fixed</h2>' /tmp/release-notes.html
+          curl --fail --silent --show-error --location --head \
+            "https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.zip" >/dev/null
+          curl --fail --silent --show-error --location --head \
+            "https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.tar.gz" >/dev/null
 
       - name: Summary
         run: |

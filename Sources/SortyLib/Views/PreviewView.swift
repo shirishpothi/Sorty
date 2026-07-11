@@ -22,7 +22,6 @@ struct PreviewView: View {
     @State private var isApplying = false
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
-    @State private var showPostOrganizationHoning = false
     @State private var showRedoModelPicker = false
     @State private var isRedoingWithModel = false
     @State private var viewingHistoryIndex: Int? = nil
@@ -55,10 +54,6 @@ struct PreviewView: View {
         if editablePlan.totalFiles == 0 { return .emptyDirectory }
         if editablePlan.suggestions.isEmpty && !editablePlan.unorganizedFiles.isEmpty { return .allUnorganized(editablePlan.unorganizedFiles.count) }
         return .none
-    }
-    
-    private var learningsSummary: LearningsManager.LearningsSummary {
-        learningsManager.summary
     }
     
     init(plan: OrganizationPlan, baseURL: URL, onReturnToStart: (() -> Void)? = nil) {
@@ -150,7 +145,6 @@ struct PreviewView: View {
                     NotificationManager.shared.recordActionLifecycle("apply", stage: "completed", detail: baseURL.path)
                     activeNotificationApplyRequestID = nil
                 }
-                if learningsManager.consentManager.canCollectData { Task { @MainActor in try? await Task.sleep(nanoseconds: 500_000_000); showPostOrganizationHoning = true } }
             } else if case .error(let error) = newState {
                 isApplying = false
                 if activeNotificationApplyRequestID != nil {
@@ -186,7 +180,6 @@ struct PreviewView: View {
             NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "cancelled", detail: "preview picker")
             activeNotificationRedoRequestID = nil
         }
-        .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, renameCount: renameCount, config: settingsViewModel.config, learningsMaturity: learningsSummary.maturity, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
         .modelSelectionOverlay(
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,

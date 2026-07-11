@@ -81,26 +81,28 @@ struct AboutView: View {
             
             // Buttons
             VStack(spacing: 12) {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    NSWorkspace.shared.open(sponsorsURL)
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "heart.fill")
-                            .foregroundStyle(.red)
-                        Text("Support the Developer")
-                            .foregroundStyle(.white)
+                if FeatureFlags.supportDeveloperEnabled {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        NSWorkspace.shared.open(sponsorsURL)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.red)
+                            Text("Support the Developer")
+                                .foregroundStyle(.white)
+                        }
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .padding(.vertical, 2)
                     }
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .padding(.vertical, 2)
-                }
-                .buttonStyle(.sortyProminent)
-                .controlSize(.large)
-                .trackHoveredURL(sponsorsURL)
-                .scaleEffect(supportHovered ? 1.04 : 1.0)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { supportHovered = hovering }
-                    if hovering { HapticFeedbackManager.shared.selection() }
+                    .buttonStyle(.sortyProminent)
+                    .controlSize(.large)
+                    .trackHoveredURL(sponsorsURL)
+                    .scaleEffect(supportHovered ? 1.04 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) { supportHovered = hovering }
+                        if hovering { HapticFeedbackManager.shared.selection() }
+                    }
                 }
 
                 HStack(spacing: 12) {

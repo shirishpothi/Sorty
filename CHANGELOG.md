@@ -5,34 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-07-11
 
-### Added
+### New
 
-- **Hero Artwork Asset** — Added a reusable Sorty header/hero image under `Assets/Hero/` for branding and documentation surfaces.
-- **Sensitive Action Authentication Toggle** — Added optional authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets.
-- **Finder Sync Runtime Diagnostics** — New diagnostic system (`FinderSyncDiagnostics`) with status kinds (`verified`, `registered`, `activeElsewhere`, `needsCleanup`, etc.) for precise Finder extension health reporting.
-- **Finder Sync Heartbeat Monitoring** — Extension now posts distributed notifications on launch; the main app caches heartbeats to verify the correct build is loaded into Finder.
-- **Finder Sync Auto-Repair on Launch** — App automatically repairs stale or mismatched Finder Sync registrations on startup without user intervention.
-- **Background Agent Migration** — `LoginItemManager` auto-migrates from legacy `com.sorty.app.plist` to dedicated `com.sorty.app.background-agent.plist` to prevent service label collisions.
-- **Privacy Path Masking** — `PrivacyPathMasker` redacts usernames from file paths in UI and logs for privacy-sensitive displays.
-- **Storage Destination Normalization** — `StorageDestinationNormalizer` resolves AI-suggested folder names (aliases, absolute paths, source-relative paths) to correct storage location paths.
-- **Storage Validation Guards** — Validator now rejects directory items and bulk subfolder migrations to storage locations, preventing unintended mass moves.
+- **Cloud and External Storage Organization** — Organize supported Google Drive, external-drive, and cross-volume destinations with provider-aware actions, capacity checks, and atomic transfers.
+- **Finder Integration Diagnostics** — See whether the correct Finder extension is registered and active, with heartbeat monitoring and automatic repair for stale installations.
+- **Sensitive Action Protection** — Optionally require authentication before revealing secrets, changing network privacy settings, or deleting usage data.
+- **Privacy-Safe Paths** — Usernames are masked in file paths shown on privacy-sensitive screens and logs.
 
-- **Traffic Light UI components** — Added `TrafficLightUpdateButton` component and `TrafficLightStyling` utilities to support status/update indicators in the UI.
-- **Developer tooling** — Added `DevRebuilder` developer utility and a local CI helper script (`scripts/local_ci.sh`) to speed up iterative development and local CI checks.
-- **Notification backend** — Standardized system notifications on native macOS Notification Center delivery.
-- **Docs & tests** — Minor updates to the architecture and Finder integration guides and improvements to Finder integration tests.
-- **CI & workflow updates** — Updated GitHub Actions workflow and Makefile targets to improve quick-build and CI behavior.
+### Improved
 
-### Changed
+- **Focused Organization Experience** — Streamlined the app around organization, duplicates, exclusions, watched folders, history, and passive learnings while removing the experimental Workspace Health and honing flows.
+- **Native Mac Design** — Refined onboarding, organization, duplicate, settings, and support surfaces with native Liquid Glass controls, calmer spacing, clearer hierarchy, and smoother motion.
+- **Smarter Organization Decisions** — Improved prompts, image analysis, retries, storage destination normalization, and preference attribution for more reliable plans.
+- **Cloud Reliability** — Moved storage discovery off the main actor and strengthened cloud scanning, reference folders, file watching, rollback behavior, and unavailable-file reporting.
+- **Learnings and History Portability** — Hardened profile transfer and history import/export while keeping learnings passive and easier to understand.
+- **Updates and Downloads** — Standardized the universal archive as `Sorty.zip` and strengthened the signed Sparkle migration so stable, transition, and nightly users can reach the current release in app.
 
-- **Navigation and Link Hover Polish** — Sidebar commands now share a single navigation item source, and About/support surfaces gained hover-aware external-link pills with updated spacing and interactions.
-- **Learnings and History Flow** — Learnings authentication now uses shared security handling, and history clears now route through the app-level confirmation flow.
-- **Finder Sync Registration Parsing** — `parseFinderSyncRegistrationEntries` now deduplicates entries and prefers explicit enabled/disabled markers over ambiguous states.
-- **Extension Host Eligibility** — Registration repair only targets app bundles in `/Applications` or `~/Applications`; workspace builds are staged to `~/Applications` automatically.
+### Fixed
 
-- **Small UI and app command adjustments** — Tweaked `MainWindowRootView`, `AppCommands`, and a few settings views for improved layout and behavior during Finder/extension interactions.
+- **Fresh-Download Setup** — A first launch that stops before setup finishes no longer causes the next launch to skip onboarding; completed onboarding still persists across updates.
+- **Finder Extension Recovery** — Fixed stale, duplicate, or mismatched Finder registrations and background-agent label collisions after upgrades.
+- **Storage Safety** — Fixed partial cross-volume moves, insufficient-capacity handling, cloud metadata failures, and unavailable storage destinations so operations fail safely.
+- **Organization and History Reliability** — Fixed rename prompt leakage, completion handoff flashes, history CSV typing, and import/export edge cases.
+- **Compatibility and Lifecycle Stability** — Fixed macOS 15 compile blockers, onboarding window lifecycle issues, and several performance and background-automation edge cases.
 
 ## [1.1.2] - 2026-03-01
 

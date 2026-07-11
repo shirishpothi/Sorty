@@ -26,7 +26,7 @@ function contentType(pathname) {
   return MIME_TYPES[extension] || "application/octet-stream";
 }
 
-export default {
+const worker = {
   async fetch(request, env) {
     const url = new URL(request.url);
     const primaryPath = assetPath(url.pathname);
@@ -49,3 +49,5 @@ export default {
     return new Response("Not found", { status: 404 });
   },
 };
+
+export default worker;

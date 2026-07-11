@@ -132,7 +132,7 @@
  1. **ContentView.swift**: 2 previews (Main, Onboarding)
  2. **OrganizeView.swift**: 4 previews (Idle, Scanning, Ready, Error)
  3. **AnalysisView.swift**: 4 previews (Scanning, Organizing, Applying, Long Running)
- 4. **PreviewView.swift**: 3 previews (Standard, With Edits, Post-Organization Honing)
+ 4. **PreviewView.swift**: 2 previews (Standard, With Edits)
  5. **SettingsView.swift**: 5 previews (Rules, Provider, Strategy, Notifications, Advanced)
  6. **OnboardingView.swift**: Multiple step previews
 

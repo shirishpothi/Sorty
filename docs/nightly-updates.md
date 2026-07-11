@@ -16,7 +16,16 @@ Nightly download:
 https://github.com/sorty-organizer/Sorty/releases/download/nightly/Sorty-nightly.zip
 ```
 
-Stable releases continue to use the existing `release.yml` workflow and the current-key `appcast-v2.xml` feed. The legacy `appcast.xml` feed remains available only to move old-key installations onto the current update chain. The nightly workflow only mutates the moving `nightly` tag and prerelease assets, so it does not create version tags or update either stable appcast.
+Stable releases use `release.yml` and publish one universal app archive named `Sorty.zip`. The release also includes `release-notes.html` and two required feeds: the current-key `appcast-v2.xml` feed and the immutable legacy `appcast.xml` bridge. The bridge keeps `/releases/latest/` able to move old-key 1.1.2 installations through `Sorty-key-transition-v2.zip`; removing either feed would strand an installed cohort. Publishing a stable release temporarily points the nightly appcast at that stable build as well, ensuring current nightly users can move to the new version before the next nightly replaces the feed.
+
+GitHub supplies the source code ZIP and tarball automatically. A stable release should therefore expose exactly these uploaded assets:
+
+```text
+Sorty.zip
+appcast.xml
+appcast-v2.xml
+release-notes.html
+```
 
 Required secret:
 

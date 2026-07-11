@@ -50,7 +50,6 @@ final class OrganizationWorkflowTests: XCTestCase {
             "SettingsSidebarItem",
             "HistorySidebarItem",
             "DuplicatesSidebarItem",
-            "WorkspaceHealthSidebarItem",
             "ExclusionsSidebarItem",
             "WatchedFoldersSidebarItem",
             "LearningsSidebarItem"

@@ -8,7 +8,6 @@ import SortyLib
 enum SortyShortcutDestination: String, AppEnum {
     case organize
     case history
-    case workspaceHealth
     case watchedFolders
 
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Sorty Destination")
@@ -16,7 +15,6 @@ enum SortyShortcutDestination: String, AppEnum {
     static let caseDisplayRepresentations: [SortyShortcutDestination: DisplayRepresentation] = [
         .organize: DisplayRepresentation(title: "Organize"),
         .history: DisplayRepresentation(title: "History"),
-        .workspaceHealth: DisplayRepresentation(title: "Workspace Health"),
         .watchedFolders: DisplayRepresentation(title: "Watched Folders")
     ]
 
@@ -26,8 +24,6 @@ enum SortyShortcutDestination: String, AppEnum {
             return .organize(path: nil, persona: nil, mode: nil, autostart: false)
         case .history:
             return .history
-        case .workspaceHealth:
-            return .health
         case .watchedFolders:
             return .watched(action: nil, path: nil)
         }
@@ -39,20 +35,9 @@ enum SortyShortcutDestination: String, AppEnum {
             return "Opening Sorty Organizer."
         case .history:
             return "Opening Sorty History."
-        case .workspaceHealth:
-            return "Opening Workspace Health in Sorty."
         case .watchedFolders:
             return "Opening Watched Folders in Sorty."
         }
-    }
-}
-
-private enum SortyShortcutFeatureFlags {
-    static var workspaceHealthEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "workspaceHealthEnabled") == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: "workspaceHealthEnabled")
     }
 }
 
@@ -78,10 +63,6 @@ struct OpenSortyDestinationIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        if destination == .workspaceHealth, !SortyShortcutFeatureFlags.workspaceHealthEnabled {
-            return .result(dialog: "Workspace Health is not enabled in Sorty.")
-        }
-
         guard let url = DeeplinkHandler.url(for: destination.deeplink) else {
             return .result(dialog: "Sorty couldn't build that shortcut.")
         }
@@ -179,21 +160,6 @@ struct SortyAppShortcutsProvider: AppShortcutsProvider {
                 systemImageName: "folder.badge.gearshape"
             )
         ]
-
-        if SortyShortcutFeatureFlags.workspaceHealthEnabled {
-            shortcuts.insert(
-                AppShortcut(
-                    intent: OpenSortyDestinationIntent(destination: .workspaceHealth),
-                    phrases: [
-                        "Open workspace health in \(.applicationName)",
-                        "Show workspace health in \(.applicationName)"
-                    ],
-                    shortTitle: "Workspace Health",
-                    systemImageName: "waveform.path.ecg"
-                ),
-                at: 2
-            )
-        }
 
         return shortcuts
     }

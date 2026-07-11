@@ -97,8 +97,8 @@ export function DiaGradient({
       '(prefers-reduced-motion: reduce)',
     ).matches
     if (prefersReduced) {
-      setShown(true)
-      return
+      const id = requestAnimationFrame(() => setShown(true))
+      return () => cancelAnimationFrame(id)
     }
     // Double-rAF so the browser paints the flat (scaleY 0) state first, then
     // transitions up — otherwise the initial state is never painted and the

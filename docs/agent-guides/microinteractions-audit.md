@@ -126,7 +126,7 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
 ### 8. Empty states — teach, don't just say "nothing"
 - Many `ContentUnavailableView`/`isEmpty` sites
   (`PreviewView`, `HistoryView`, `WatchedFoldersView`, `StorageLocationsView`,
-  `DuplicatesView`, `WorkspaceHealthView`, `LearningsView`, `PersonaPickerView`).
+  `DuplicatesView`, `LearningsView`, `PersonaPickerView`).
 - Skill guidance: empty states should *teach the interface* and use a `.breathe`
   or `.pulse` symbol, not a static glyph. Add a single ambient `.breathe`/
   `.pulse.byLayer` symbol + a one-line "next step" CTA to each empty state.

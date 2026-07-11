@@ -110,7 +110,6 @@ final class ResourceLoadingTests: XCTestCase {
         let expectedImages = [
             "whats-new-preview",
             "whats-new-finder-integration",
-            "whats-new-nightly",
             "whats-new-design-system-1",
             "whats-new-design-system-2",
             "whats-new-design-system-3",

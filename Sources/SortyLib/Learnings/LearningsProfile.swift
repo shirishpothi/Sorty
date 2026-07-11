@@ -48,9 +48,6 @@ public struct LearningsProfile: Codable, Sendable {
     
     // MARK: - Existing Properties
     
-    /// User's philosophical preferences derived from Honing sessions
-    public var honingAnswers: [HoningAnswer]
-    
     /// Global rules inferred from all past interactions
     public var inferredRules: [InferredRule]
     
@@ -94,7 +91,6 @@ public struct LearningsProfile: Codable, Sendable {
         historyReverts: [RevertEvent] = [],
         cancelledOrganizations: [CancelledOrganization] = [],
         regeneratedOrganizations: [RegeneratedOrganization] = [],
-        honingAnswers: [HoningAnswer] = [],
         inferredRules: [InferredRule] = [],
         corrections: [LabeledExample] = [],
         rejections: [LabeledExample] = [],
@@ -117,7 +113,6 @@ public struct LearningsProfile: Codable, Sendable {
         self.historyReverts = historyReverts
         self.cancelledOrganizations = cancelledOrganizations
         self.regeneratedOrganizations = regeneratedOrganizations
-        self.honingAnswers = honingAnswers
         self.inferredRules = inferredRules
         self.corrections = corrections
         self.rejections = rejections
@@ -142,7 +137,6 @@ public struct LearningsProfile: Codable, Sendable {
         case historyReverts
         case cancelledOrganizations
         case regeneratedOrganizations
-        case honingAnswers
         case inferredRules
         case corrections
         case rejections
@@ -169,7 +163,6 @@ public struct LearningsProfile: Codable, Sendable {
         historyReverts = try container.decodeIfPresent([RevertEvent].self, forKey: .historyReverts) ?? []
         cancelledOrganizations = try container.decodeIfPresent([CancelledOrganization].self, forKey: .cancelledOrganizations) ?? []
         regeneratedOrganizations = try container.decodeIfPresent([RegeneratedOrganization].self, forKey: .regeneratedOrganizations) ?? []
-        honingAnswers = try container.decodeIfPresent([HoningAnswer].self, forKey: .honingAnswers) ?? []
         inferredRules = try container.decodeIfPresent([InferredRule].self, forKey: .inferredRules) ?? []
         corrections = try container.decodeIfPresent([LabeledExample].self, forKey: .corrections) ?? []
         rejections = try container.decodeIfPresent([LabeledExample].self, forKey: .rejections) ?? []
@@ -195,7 +188,6 @@ public struct LearningsProfile: Codable, Sendable {
         try container.encode(historyReverts, forKey: .historyReverts)
         try container.encode(cancelledOrganizations, forKey: .cancelledOrganizations)
         try container.encode(regeneratedOrganizations, forKey: .regeneratedOrganizations)
-        try container.encode(honingAnswers, forKey: .honingAnswers)
         try container.encode(inferredRules, forKey: .inferredRules)
         try container.encode(corrections, forKey: .corrections)
         try container.encode(rejections, forKey: .rejections)

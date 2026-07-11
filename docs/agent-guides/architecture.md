@@ -47,7 +47,6 @@ New AI providers must:
 ## Deeplinks
 URL scheme `sorty://` — see `DeeplinkHandler` for routes:
 - `sorty://organize?path=/path&persona=Developer&autostart=true`
-- `sorty://learnings?action=honing`
 - `sorty://settings`
 
 ## Finder Extension

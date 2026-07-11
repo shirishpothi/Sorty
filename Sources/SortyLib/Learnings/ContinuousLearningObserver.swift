@@ -715,7 +715,6 @@ public extension Notification.Name {
     static let steeringPromptProvided = Notification.Name("steeringPromptProvided")
     
     // Learnings menu actions
-    static let startHoningSession = Notification.Name("startHoningSession")
     static let showLearningsStats = Notification.Name("showLearningsStats")
     static let pauseLearning = Notification.Name("pauseLearning")
     static let exportLearningsProfile = Notification.Name("exportLearningsProfile")

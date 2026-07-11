@@ -3,7 +3,7 @@
 //  Sorty
 //
 //  Main container view with full-width layout
-//  Updated to include Workspace Health and Duplicates navigation
+//  Updated to include Duplicates navigation
 //  Enhanced with micro-animations and haptic feedback
 //
 
@@ -112,9 +112,6 @@ public struct ContentView: View {
         .accessibilityLabel("Main Navigation")
         .frame(minWidth: 1000, minHeight: 700)
         .onAppear {
-            if appState.currentView == .workspaceHealth, !FeatureFlags.workspaceHealthEnabled {
-                appState.currentView = .organize
-            }
             displayedView = appState.currentView
             columnVisibility = appState.showingSidebar ? .all : .detailOnly
         }
@@ -133,9 +130,7 @@ public struct ContentView: View {
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
                 previousView = oldValue
-                displayedView = newValue == .workspaceHealth && !FeatureFlags.workspaceHealthEnabled
-                    ? .organize
-                    : newValue
+                displayedView = newValue
             }
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
@@ -177,12 +172,6 @@ public struct ContentView: View {
             SettingsView()
         case .history:
             HistoryView()
-        case .workspaceHealth:
-            if FeatureFlags.workspaceHealthEnabled {
-                WorkspaceHealthView()
-            } else {
-                OrganizeView()
-            }
         case .duplicates:
             DuplicatesView()
         case .exclusions:

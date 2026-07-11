@@ -43,7 +43,6 @@ let package = Package(
                 .copy("Resources/whats-new-design-system-5.png"),
                 .copy("Resources/whats-new-preview.png"),
                 .copy("Resources/whats-new-finder-integration.png"),
-                .copy("Resources/whats-new-nightly.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
                 .process("Resources/automation-demo.mp4"),
                 .process("Resources/files-and-folders-demo.mp4"),

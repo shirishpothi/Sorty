@@ -137,6 +137,8 @@ If you see an error indicating that access to a watched folder has been lost (e.
 2. If the app shows "Up to date", you have the latest version.
 3. Alternatively, compare the version in **About** with the [latest release](https://github.com/sorty-organizer/Sorty/releases/latest).
 
+New installations use the version-independent [`Sorty.zip`](https://github.com/sorty-organizer/Sorty/releases/latest/download/Sorty.zip) download. Move `Sorty.app` to `/Applications`; Sorty opens onboarding until setup is completed.
+
 ## Project Structure
 
 - `Sources/SortyLib/`: Shared product logic, services, models, and SwiftUI views.

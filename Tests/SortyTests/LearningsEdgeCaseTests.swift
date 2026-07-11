@@ -94,92 +94,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertEqual(activeRules.first?.explanation, "Move PDFs to Archive")
     }
     
-    // MARK: - Ambiguous Input Tests
-    
-    func testAmbiguousAnswerWithBothArchiveAndDelete() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "archive old files and delete duplicates")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertNotNil(manager.behaviorPreferences)
-        // "archive" appears before "delete", so archive preference wins in iteration
-        XCTAssertEqual(manager.behaviorPreferences?.deletionVsArchive, .archive)
-    }
-    
-    func testAmbiguousAnswerDeleteOnlyKeyword() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "delete everything old")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertEqual(manager.behaviorPreferences?.deletionVsArchive, .delete)
-    }
-    
-    func testAmbiguousAnswerArchiveByYear() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "archive files by year")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertEqual(manager.behaviorPreferences?.deletionVsArchive, .archiveByYear)
-    }
-    
-    func testMultipleHoningAnswersCombine() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Use flat structure"),
-            HoningAnswer(questionId: "q2", selectedOption: "Organize by date and year"),
-            HoningAnswer(questionId: "q3", selectedOption: "Keep the newest version")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertEqual(manager.behaviorPreferences?.folderDepthPreference, .flat)
-        XCTAssertEqual(manager.behaviorPreferences?.dateVsContentPreference, .date)
-        XCTAssertEqual(manager.behaviorPreferences?.duplicateKeeperStrategy, .keepNewest)
-    }
-    
-    func testProjectOrganizationPreference() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Organize by project name")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertEqual(manager.behaviorPreferences?.dateVsContentPreference, .project)
-    }
-    
-    func testDeepHierarchyPreference() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Use deep hierarchy for everything")
-        ]
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertEqual(manager.behaviorPreferences?.folderDepthPreference, .deep)
-    }
-    
     // MARK: - Rule Auto-Disable Tests
     
     func testRuleAutoDisableOnHighFailureRate() {
@@ -347,31 +261,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertTrue(rules.isEmpty, "getActiveRules should return empty array when profile is nil")
     }
     
-    func testExtractBehaviorPreferencesWithNilProfile() {
-        manager.currentProfile = nil
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertNil(manager.behaviorPreferences,
-                      "extractBehaviorPreferences should not set preferences when profile is nil")
-    }
-    
-    func testExtractBehaviorPreferencesWithEmptyAnswers() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.honingAnswers = []
-        manager.currentProfile = profile
-        
-        manager.extractBehaviorPreferences()
-        
-        XCTAssertNotNil(manager.behaviorPreferences)
-        // Should return defaults
-        XCTAssertEqual(manager.behaviorPreferences?.deletionVsArchive, .archive)
-        XCTAssertEqual(manager.behaviorPreferences?.folderDepthPreference, .balanced)
-        XCTAssertEqual(manager.behaviorPreferences?.dateVsContentPreference, .content)
-        XCTAssertEqual(manager.behaviorPreferences?.duplicateKeeperStrategy, .keepNewest)
-    }
-    
     func testGeneratePromptContextWithNilProfile() {
         manager.currentProfile = nil
         
@@ -386,7 +275,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertTrue(profile.corrections.isEmpty)
         XCTAssertTrue(profile.rejections.isEmpty)
         XCTAssertTrue(profile.positiveExamples.isEmpty)
-        XCTAssertTrue(profile.honingAnswers.isEmpty)
         XCTAssertTrue(profile.additionalInstructionsHistory.isEmpty)
         XCTAssertTrue(profile.postOrganizationChanges.isEmpty)
         XCTAssertTrue(profile.historyReverts.isEmpty)
@@ -507,25 +395,18 @@ final class LearningsEdgeCaseTests: XCTestCase {
             additionalInstructionsHistory: (0..<100).map {
                 UserInstruction(instruction: "Instruction \($0)")
             },
-            honingAnswers: (0..<50).map {
-                HoningAnswer(questionId: "q\($0)", selectedOption: "Option \($0)")
-            },
             inferredRules: (0..<20).map {
                 InferredRule(pattern: "\($0)", template: "\($0)/", priority: $0, explanation: "Rule \($0)")
             }
         )
         
         XCTAssertEqual(profile.additionalInstructionsHistory.count, 100)
-        XCTAssertEqual(profile.honingAnswers.count, 50)
         XCTAssertEqual(profile.inferredRules.count, 20)
     }
     
     func testProfileCodableRoundTrip() throws {
         var profile = LearningsProfile()
         profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "flat structure")
-        ]
         profile.inferredRules = [
             InferredRule(pattern: ".*\\.pdf", template: "Docs/{filename}", priority: 80, explanation: "PDFs to Docs")
         ]
@@ -540,8 +421,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
         let decoded = try decoder.decode(LearningsProfile.self, from: data)
         
         XCTAssertEqual(decoded.consentGranted, true)
-        XCTAssertEqual(decoded.honingAnswers.count, 1)
-        XCTAssertEqual(decoded.honingAnswers.first?.selectedOption, "flat structure")
         XCTAssertEqual(decoded.inferredRules.count, 1)
         XCTAssertEqual(decoded.inferredRules.first?.pattern, ".*\\.pdf")
         XCTAssertEqual(decoded.additionalInstructionsHistory.count, 1)

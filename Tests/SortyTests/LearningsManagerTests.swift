@@ -12,11 +12,14 @@ import XCTest
 final class LearningsManagerTests: XCTestCase {
     
     var manager: LearningsManager!
+    private var testDefaults: UserDefaults!
+    private var testDefaultsSuiteName: String!
     
     override func setUp() async throws {
-        UserDefaults.standard.removeObject(forKey: "learningsModelDirectories")
-        UserDefaults.standard.removeObject(forKey: "learningsModelSelection")
-        manager = LearningsManager()
+        testDefaultsSuiteName = "LearningsManagerTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        manager = LearningsManager(userDefaults: testDefaults)
         // Reset to empty profile for tests
         manager.currentProfile = LearningsProfile()
         // Clear any persisted model directories from prior runs
@@ -28,9 +31,10 @@ final class LearningsManagerTests: XCTestCase {
     override func tearDown() async throws {
         // Clean up persisted model directories
         manager.modelDirectories = []
-        UserDefaults.standard.removeObject(forKey: "learningsModelDirectories")
-        UserDefaults.standard.removeObject(forKey: "learningsModelSelection")
         manager = nil
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = nil
         
     }
 
@@ -122,9 +126,6 @@ final class LearningsManagerTests: XCTestCase {
         // 1. Setup Profile
         var profile = LearningsProfile()
         profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Sort by Date")
-        ]
         profile.inferredRules = [
             InferredRule(pattern: ".*", template: "{ext}/", priority: 10, explanation: "Group by extension")
         ]
@@ -143,7 +144,6 @@ final class LearningsManagerTests: XCTestCase {
         // 3. Verify - check for key sections (format may vary based on rule confidence)
         XCTAssertFalse(context.isEmpty, "Context should not be empty")
         XCTAssertTrue(context.contains("CRITICAL PREFERENCES") || context.contains("PREFERENCES"), "Missing Preferences section")
-        XCTAssertTrue(context.contains("Sort by Date"), "Missing actual preference 'Sort by Date'")
         // Rules are split by confidence level - check for either high-confidence or learned patterns
         XCTAssertTrue(context.contains("LEARNED PATTERNS") || context.contains("HIGH-CONFIDENCE RULES") || context.contains("Group by extension"), "Missing Rules section")
         XCTAssertTrue(context.contains("USER INSTRUCTIONS") || context.contains("FEEDBACK"), "Missing Instructions section")
@@ -437,7 +437,6 @@ final class LearningsProfileTests: XCTestCase {
     func testProfileCreation() {
         let profile = LearningsProfile(
             createdAt: Date(),
-            honingAnswers: [],
             inferredRules: [],
             corrections: [],
             rejections: [],
@@ -446,7 +445,6 @@ final class LearningsProfileTests: XCTestCase {
         
         XCTAssertTrue(profile.corrections.isEmpty)
         XCTAssertTrue(profile.inferredRules.isEmpty)
-        XCTAssertTrue(profile.honingAnswers.isEmpty)
     }
     
     func testAddExample() {
@@ -583,15 +581,23 @@ final class LearningsConfidenceTests: XCTestCase {
 final class EnhancedLearningsTests: XCTestCase {
     
     var manager: LearningsManager!
+    private var testDefaults: UserDefaults!
+    private var testDefaultsSuiteName: String!
     
     override func setUp() async throws {
-        manager = LearningsManager()
+        testDefaultsSuiteName = "EnhancedLearningsTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        manager = LearningsManager(userDefaults: testDefaults)
         manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
     }
     
     override func tearDown() async throws {
         manager = nil
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = nil
     }
     
     // MARK: - Scoped Rule Tests
@@ -726,6 +732,68 @@ final class EnhancedLearningsTests: XCTestCase {
 
         XCTAssertEqual(manager.currentProfile?.learningExclusionPatterns.count, 1)
         XCTAssertEqual(manager.currentProfile?.learningExclusionPatterns.first, "Downloads/Cache")
+    }
+
+    func testDataRetentionRemovesExpiredLearningRecordsAndDependentRules() async {
+        let now = Date()
+        let expiredDate = Calendar.current.date(byAdding: .day, value: -31, to: now)!
+        let retainedDate = Calendar.current.date(byAdding: .day, value: -29, to: now)!
+        let expiredExample = LabeledExample(
+            id: "expired-example",
+            srcPath: "/old.txt",
+            dstPath: "/Archive/old.txt",
+            timestamp: expiredDate
+        )
+        let retainedExample = LabeledExample(
+            id: "retained-example",
+            srcPath: "/new.txt",
+            dstPath: "/Archive/new.txt",
+            timestamp: retainedDate
+        )
+        var profile = LearningsProfile()
+        profile.positiveExamples = [expiredExample, retainedExample]
+        profile.sessions = [
+            OrganizationSession(timestamp: expiredDate, folderPath: "/Old"),
+            OrganizationSession(timestamp: retainedDate, folderPath: "/Current")
+        ]
+        profile.inferredRules = [
+            InferredRule(
+                pattern: "old",
+                template: "Archive/{filename}",
+                exampleIds: [expiredExample.id],
+                explanation: "Expired evidence"
+            ),
+            InferredRule(
+                pattern: "new",
+                template: "Archive/{filename}",
+                exampleIds: [retainedExample.id],
+                explanation: "Retained evidence"
+            )
+        ]
+        manager.currentProfile = profile
+        manager.dataRetentionDays = 30
+
+        await manager.applyDataRetentionPolicy(now: now)
+
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.map(\.id), [retainedExample.id])
+        XCTAssertEqual(manager.currentProfile?.sessions.map(\.folderPath), ["/Current"])
+        XCTAssertEqual(manager.currentProfile?.inferredRules.map(\.pattern), ["new"])
+    }
+
+    func testForeverRetentionKeepsOldLearningRecords() async {
+        let oldExample = LabeledExample(
+            srcPath: "/old.txt",
+            dstPath: "/Archive/old.txt",
+            timestamp: Date(timeIntervalSince1970: 0)
+        )
+        var profile = LearningsProfile()
+        profile.positiveExamples = [oldExample]
+        manager.currentProfile = profile
+        manager.dataRetentionDays = 0
+
+        await manager.applyDataRetentionPolicy()
+
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.map(\.id), [oldExample.id])
     }
 
     func testExcludedPathsAreIgnoredWhenRecordingLearnings() async {
@@ -1012,11 +1080,12 @@ final class EnhancedLearningsTests: XCTestCase {
 
         XCTAssertEqual(result.importedRecordCount, 1)
         XCTAssertEqual(result.previousRecordCount, 1)
-        XCTAssertEqual(result.resultingRecordCount, 2)
+        XCTAssertEqual(result.resultingRecordCount, 3)
         XCTAssertEqual(result.restoredSettingCount, 4)
         XCTAssertFalse(result.wasLegacyProfile)
         XCTAssertEqual(manager.currentProfile?.corrections.first?.id, "imported-correction")
         XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.id, "existing-example")
+        XCTAssertEqual(manager.currentProfile?.sessions.count, 1)
         XCTAssertEqual(manager.currentProfile?.consentGranted, true)
         XCTAssertEqual(manager.learningStrength, 0.7)
         XCTAssertFalse(manager.useAIForLearnings)

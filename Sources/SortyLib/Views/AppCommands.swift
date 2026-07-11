@@ -169,12 +169,6 @@ public struct SortyCommands: Commands {
             
             Divider()
             
-            Button("Start Honing Session", systemImage: "target") {
-                appState?.startHoningSession()
-            }
-            .keyboardShortcut("h", modifiers: [.command, .option])
-            .disabled(appState == nil)
-            
             Button("View Statistics", systemImage: "chart.pie") {
                 appState?.showLearningsStats()
             }
@@ -255,7 +249,9 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!) { Label("Report Issue", systemImage: "ladybug") }
 
-            Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
+            if FeatureFlags.supportDeveloperEnabled {
+                Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
+            }
             
             Divider()
             
@@ -426,12 +422,6 @@ public class AppState: ObservableObject {
     @Published public var duplicateSettings = DuplicateSettingsManager()
     @Published public var duplicateSelectedDirectory: URL?
     @Published public var duplicateSelectedGroup: UnifiedDuplicateGroup?
-    @Published public var workspaceHealthSelectedDirectory: URL?
-    @Published public var workspaceHealthSelectedOpportunity: CleanupOpportunity?
-    @Published public var workspaceHealthIsAnalyzing = false
-    @Published public var workspaceHealthAnalysisStage: String?
-    @Published public var workspaceHealthAnalysisError: String?
-    @Published public var workspaceHealthAnalysisStartedAt: Date?
     @Published public var debugMode: Bool = false
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
@@ -488,7 +478,6 @@ public class AppState: ObservableObject {
         case settings
         case organize
         case history
-        case workspaceHealth
         case duplicates
         case exclusions
         case watchedFolders
@@ -1302,11 +1291,6 @@ public class AppState: ObservableObject {
         )
     }
     
-    public func startHoningSession() {
-        currentView = .learnings
-        postWindowScopedNotification(.startHoningSession)
-    }
-    
     public func showLearningsStats() {
         currentView = .learnings
         postWindowScopedNotification(.showLearningsStats)
@@ -1416,12 +1400,6 @@ public class AppState: ObservableObject {
         selectedDirectory = nil
         duplicateSelectedDirectory = nil
         duplicateSelectedGroup = nil
-        workspaceHealthSelectedDirectory = nil
-        workspaceHealthSelectedOpportunity = nil
-        workspaceHealthIsAnalyzing = false
-        workspaceHealthAnalysisStage = nil
-        workspaceHealthAnalysisError = nil
-        workspaceHealthAnalysisStartedAt = nil
         pendingDuplicatesHandoff = nil
         highlightedWatchedFolderID = nil
         pendingNotificationActionRequest = nil

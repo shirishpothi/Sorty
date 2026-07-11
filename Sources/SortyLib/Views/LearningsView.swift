@@ -9,7 +9,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Liquid Glass Styles (used by LearningsHoningView)
+// MARK: - Liquid Glass Styles
 
 struct LiquidGlassModifier: ViewModifier {
     var cornerRadius: CGFloat = 12
@@ -35,7 +35,6 @@ struct LearningsView: View {
     @EnvironmentObject var exclusionRules: ExclusionRulesManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var showingHoningSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingWithdrawConfirmation = false
     @State private var activeFileImporter: ActiveFileImporter?
@@ -275,14 +274,6 @@ struct LearningsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
-        .sheet(isPresented: $showingHoningSheet) {
-            LearningsHoningView(config: settingsViewModel.config) { answers in
-                Task {
-                    await manager.saveHoningResults(answers)
-                    showingHoningSheet = false
-                }
-            }
-        }
         .modelSelectionOverlay(
             isPresented: $showLearningsModelPicker,
             currentProvider: usesDedicatedLearningsModel
@@ -332,12 +323,6 @@ struct LearningsView: View {
                 Text(
                     "Learning will stop but your existing data will be preserved. You can re-enable learning later."
                 )
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { notification in
-            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            if manager.consentManager.hasConsented {
-                showingHoningSheet = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { notification in
@@ -406,20 +391,6 @@ struct LearningsView: View {
                 Spacer()
 
                 HStack(spacing: 10) {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        showingHoningSheet = true
-                    } label: {
-                        Label("Refine", systemImage: "wand.and.stars")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.onboardingPill(size: .small))
-                    .onHover { hovering in
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-
                     Button {
                         toggleSessionLearningPaused()
                     } label: {

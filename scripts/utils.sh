@@ -78,14 +78,20 @@ get_total_duration() {
 
 # Info extraction
 get_version() {
-    # 1. Try Git Tag (Latest)
+    # 1. Allow release pipelines to supply the version explicitly.
+    if [ -n "${VERSION_OVERRIDE:-}" ]; then
+        echo "${VERSION_OVERRIDE}"
+        return
+    fi
+
+    # 2. Try Git Tag (Latest)
     local git_tag=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
     if [ -n "$git_tag" ]; then
         echo "$git_tag"
         return
     fi
 
-    # 2. Fallback to Info.plist (Source of Truth for Dev/No Tag)
+    # 3. Fallback to Info.plist (Source of Truth for Dev/No Tag)
     /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "${PROJECT_DIR}/Info.plist" 2>/dev/null || echo "1.0.0"
 }
 

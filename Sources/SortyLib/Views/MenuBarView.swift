@@ -158,12 +158,6 @@ public struct MenuBarView: View {
                 openDestination(.history)
             }
 
-            if FeatureFlags.workspaceHealthEnabled {
-                MenuBarButton(title: "Workspace Health", icon: "heart.text.square") {
-                    openDestination(.health)
-                }
-            }
-
             MenuBarButton(title: "Storage Locations", icon: "externaldrive.fill") {
                 openDestination(.storage(action: nil, path: nil))
             }
@@ -306,8 +300,10 @@ public struct MenuBarView: View {
                 openSettings()
             }
 
-            MenuBarButton(title: "Support the Developer", icon: "heart.fill", hoverIconColor: .red, showsExternalArrow: true) {
-                openSupportDeveloper()
+            if FeatureFlags.supportDeveloperEnabled {
+                MenuBarButton(title: "Support the Developer", icon: "heart.fill", hoverIconColor: .red, showsExternalArrow: true) {
+                    openSupportDeveloper()
+                }
             }
 
             Divider()

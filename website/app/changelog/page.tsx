@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import {
   ArrowUpRight,
-  Eye,
   FolderGit2,
   ShieldCheck,
   Sparkles,
@@ -16,7 +15,7 @@ import { sitePath } from '@/lib/site-paths'
 export const metadata: Metadata = {
   title: 'Changelog',
   description:
-    'See what changed in Sorty, with screenshots for visual updates starting with the unreleased Sorty 1.2.0 release.',
+    'See what changed in Sorty across the latest update and previous stable releases.',
   alternates: {
     canonical: '/changelog',
   },
@@ -25,8 +24,8 @@ export const metadata: Metadata = {
 const RELEASES = [
   {
     version: 'Sorty 1.2.0',
-    status: 'Unreleased',
-    date: 'In progress',
+    status: 'Latest release',
+    date: 'July 11, 2026',
     title: 'A faster, cleaner, more reliable Sorty',
     summary:
       'A rebuilt macOS experience with smarter Finder integration, smoother organization, stronger privacy controls, and a polished new design system.',
@@ -36,23 +35,207 @@ const RELEASES = [
     highlights: [
       {
         icon: Sparkles,
-        title: 'Polished design system',
-        body: 'Refined glass surfaces, tighter spacing, and clearer visual hierarchy across the main Sorty flows.',
+        title: 'New',
+        body: 'Cloud and external-storage organization, Finder integration diagnostics, sensitive-action protection, and privacy-safe path displays.',
       },
       {
         icon: FolderGit2,
-        title: 'Smarter Finder integration',
-        body: 'Finder handoff and workspace entry points have been rebuilt to feel faster and more native.',
-      },
-      {
-        icon: Eye,
-        title: 'Smoother organization',
-        body: 'Preview, apply, and review flows are being tuned so the path from messy folder to organized workspace is easier to trust.',
+        title: 'Improved',
+        body: 'A more focused organization experience with stronger cloud reliability, smarter decisions, passive learnings, and refined native Mac design.',
       },
       {
         icon: ShieldCheck,
-        title: 'Stronger privacy controls',
-        body: 'Local-first boundaries and provider controls are clearer, with better guardrails around what Sorty can access.',
+        title: 'Fixed',
+        body: 'Fresh-download setup, Finder extension recovery, cross-volume storage safety, history portability, and macOS lifecycle stability.',
+      },
+    ],
+  },
+]
+
+const PREVIOUS_RELEASES = [
+  {
+    version: 'Sorty 1.1.2',
+    date: 'March 1, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Preview learnings capture for accepted placements, manual moves, rejections, and rename feedback.',
+          'Deeplink automation coverage for exclusions, scans, storage routes, and case-insensitive host matching.',
+          'Settings search and focus-target tests across Help, Rules, and deeplink aliases.',
+          'Dedicated Finder Integration and Xcode Project agent guides.',
+          'Faster debug builds with update and linker deduplication skipping.',
+          'A git information injection toggle for rapid development loops.',
+          'More precise folder watcher snapshots after in-app file operations.',
+          'Detection and filtering for internal file moves and Sorty-generated file system events.',
+          'Hover effects, haptics, and glass background support in the About window.',
+          'Smoother shimmer effects and progress indicators.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Streamlined the analysis view into a cleaner, distraction-free interface.',
+          'Simplified the folder and file preview by removing legacy destination and validation overlays.',
+          'Removed redundant vision batching and OCR language settings.',
+          'Reworked the duplicate-files empty state with a clearer call to action.',
+          'Improved onboarding spacing, scaling, and truncation.',
+          'Refreshed Help and Support actions with compact controls, hover feedback, and haptics.',
+          'Renamed the learnings impact metric from Rejected to Reverted.',
+          'Simplified releases around one universal app artifact.',
+          'Updated the copyright year to 2026.',
+          'Improved CI validation coverage and history view defaults.',
+          'Allowed all Sparkle update channels and refined the About window appearance.',
+        ],
+      },
+      {
+        title: 'Removed',
+        items: [
+          'Sorting Lab and AI Console.',
+          'Manual rename steering and the rename summary.',
+          'Quick Rename mode in favor of the unified organization flow.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Learnings are now captured before preview plan mutations.',
+          'Folder watcher snapshots now prevent missed automation events during organization.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'Sorty 1.1.1',
+    date: 'February 13, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'A Delete All Data option for wiping usage history, watched folders, and local caches.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Reset All Settings now returns directly to onboarding.',
+          'Custom AI provider endpoints now add a missing URL scheme automatically.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'A potential crash when changing AI configurations rapidly.',
+          'Production code-signing entitlement issues.',
+          'Completion checkmark rendering and missing menu bar mascot assets in release builds.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'Sorty 1.1.0',
+    date: 'February 11, 2026',
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'Reusable, AI-powered naming presets.',
+          'Conflict handling for overwrite, skip, or keep-both decisions.',
+          'A one-click installer for the Sorty command-line tool.',
+          'Sparkle updates for installing new releases in the app.',
+          'Privacy mode for obscuring paths and API keys while sharing your screen.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Introduced a new visual identity and glass design system.',
+          'Redesigned onboarding with a simulated demo and guided walkthrough.',
+          'Reorganized settings into focused AI, automation, and system sections.',
+          'Added reasoning badges to explain suggested file moves.',
+          'Improved semantic duplicate detection and directory scanning performance.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Folder watcher memory leaks during long-running sessions.',
+          'Communication delays between Finder and the main app.',
+          'Missing background organization notifications.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'Sorty 1.0.6',
+    date: 'February 1, 2026',
+    sections: [],
+  },
+  {
+    version: 'Sorty 1.0.5',
+    date: 'January 31, 2026',
+    sections: [],
+  },
+  {
+    version: 'Sorty 1.0.4',
+    date: 'January 29, 2026',
+    sections: [],
+  },
+  {
+    version: 'Sorty 1.0.3',
+    date: 'January 29, 2026',
+    sections: [],
+  },
+  {
+    version: 'Sorty 1.0.2',
+    date: 'January 28, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Made history persistence tests deterministic by isolating their settings storage.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'Sorty 1.0.1',
+    date: 'January 28, 2026',
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'System notifications now consistently display the Sorty app icon.',
+        ],
+      },
+    ],
+  },
+  {
+    version: 'Sorty 1.0.0',
+    date: 'January 27, 2026',
+    sections: [
+      {
+        title: 'Features',
+        items: [
+          'AI-powered organization with OpenAI, Anthropic, Groq, Ollama, GitHub Copilot, and Apple Foundation Models.',
+          'A learnings profile that adapts suggestions to your organization preferences.',
+          'Custom AI personas for different workflows.',
+          'Image understanding through vision-capable AI providers.',
+          'Finder integration for organizing folders from the context menu.',
+          'Workspace health tools for clutter, duplicates, and cleanup suggestions.',
+          'An interactive preview for reviewing every proposed move.',
+          'Full undo through organization history.',
+          'Watched folders for automatic background organization.',
+          'Command-line tools and deeplinks for scripts and automations.',
+          'Menu bar controls and keyboard navigation.',
+        ],
+      },
+      {
+        title: 'Requirements',
+        items: [
+          'macOS 15.1 or later.',
+          'An API key for your preferred provider, or Apple Intelligence for on-device AI features.',
+        ],
       },
     ],
   },
@@ -82,8 +265,8 @@ export default function ChangelogPage() {
               What changed in Sorty
             </h1>
             <p className="mt-6 max-w-2xl text-pretty text-lg leading-8 text-muted-foreground">
-              Release notes for the Mac folder organizer, now with UI images so
-              visual changes are easy to scan before you update.
+              Follow Sorty&apos;s latest changes and browse the history of stable
+              releases for the Mac folder organizer.
             </p>
           </Reveal>
         </div>
@@ -152,7 +335,7 @@ export default function ChangelogPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-px border-t border-border bg-border md:grid-cols-2">
+                  <div className="grid gap-px border-t border-border bg-border md:grid-cols-3">
                     {release.highlights.map((highlight) => (
                       <div
                         key={highlight.title}
@@ -175,6 +358,59 @@ export default function ChangelogPage() {
                 </article>
               </Reveal>
             ))}
+          </div>
+
+          <div className="mt-20 border-t border-border pt-14 sm:mt-24 sm:pt-16">
+            <Reveal>
+              <p className="text-sm font-medium text-primary">Release history</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Previous stable releases
+              </h2>
+            </Reveal>
+
+            <div className="mt-8 space-y-5">
+              {PREVIOUS_RELEASES.map((release, index) => (
+                <Reveal key={release.version} delay={Math.min(index * 45, 180)}>
+                  <article className="rounded-3xl border border-border bg-card/40 p-6 shadow-lg shadow-black/10 backdrop-blur-xl sm:p-8">
+                    <header className="flex flex-col gap-1 border-b border-border pb-5 sm:flex-row sm:items-baseline sm:justify-between">
+                      <h3 className="text-2xl font-semibold tracking-tight">
+                        {release.version}
+                      </h3>
+                      <time className="text-sm text-muted-foreground">
+                        {release.date}
+                      </time>
+                    </header>
+
+                    {release.sections.length > 0 ? (
+                      <div className="mt-6 grid gap-8 lg:grid-cols-2">
+                        {release.sections.map((section) => (
+                          <section key={section.title}>
+                            <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
+                              {section.title}
+                            </h4>
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground">
+                              {section.items.map((item) => (
+                                <li key={item} className="flex gap-3">
+                                  <span
+                                    aria-hidden
+                                    className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-primary/70"
+                                  />
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-5 text-sm text-muted-foreground">
+                        No detailed release notes were published for this maintenance update.
+                      </p>
+                    )}
+                  </article>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </div>
       </section>

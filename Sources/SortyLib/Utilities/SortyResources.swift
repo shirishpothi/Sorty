@@ -116,6 +116,7 @@ public enum SortyResources {
     private static func findSPMBundle() -> Bundle? {
         // Try to locate the SPM bundle relative to the executable
         let mainBundle = Bundle.main
+        let bundleName = "Sorty_SortyLib.bundle"
 
         // Look for Sorty_SortyLib.bundle in various locations
         let roots = [mainBundle.bundleURL, mainBundle.resourceURL].compactMap { $0 }
@@ -140,9 +141,37 @@ public enum SortyResources {
             }
         }
 
+        // `swift test` can report the xctest launcher in Xcode's toolchain as
+        // Bundle.main, so no executable-relative candidate reaches the package
+        // build directory. Search the local SwiftPM build root without relying
+        // on Bundle.module, whose generated accessor traps when a bundle is
+        // absent from an Xcode-built app.
+        let localBuildRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(".build", isDirectory: true)
+        if let enumerator = FileManager.default.enumerator(
+            at: localBuildRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            while let candidate = enumerator.nextObject() as? URL {
+                let relativeDepth = candidate.pathComponents.count - localBuildRoot.pathComponents.count
+                if relativeDepth > 4 {
+                    enumerator.skipDescendants()
+                    continue
+                }
+                if candidate.lastPathComponent == bundleName,
+                   let bundle = Bundle(path: candidate.path) {
+                    return bundle
+                }
+            }
+        }
+
         for path in possiblePaths {
             if FileManager.default.fileExists(atPath: path.path) {
-                if let bundle = Bundle(url: path) {
+                // SwiftPM resource bundles on macOS are directory bundles and may
+                // not contain an Info.plist. Bundle(path:) matches the generated
+                // Bundle.module accessor and still resolves those bundles.
+                if let bundle = Bundle(path: path.path) {
                     return bundle
                 }
             }

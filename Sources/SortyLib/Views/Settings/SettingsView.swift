@@ -73,7 +73,7 @@ struct SettingsView: View {
         let categoriesByGroup = Dictionary(grouping: categories, by: \.group)
         let groups = SettingsCategoryGroup.allCases.filter { categoriesByGroup[$0]?.isEmpty == false }
 
-        VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 4) {
             if categories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")

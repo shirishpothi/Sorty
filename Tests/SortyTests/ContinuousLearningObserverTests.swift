@@ -37,9 +37,6 @@ final class ContinuousLearningObserverTests: XCTestCase {
     func testGeneratePromptContextMigratesLegacySignalsIntoSessions() async {
         var profile = LearningsProfile()
         profile.consentGranted = true
-        profile.honingAnswers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Prefer project-based organization")
-        ]
         profile.additionalInstructionsHistory = [
             UserInstruction(
                 timestamp: Date(),

@@ -7,7 +7,6 @@ public final class WindowSession: ObservableObject {
     public let id: UUID
     @Published public var appState: AppState
     @Published public var organizer: FolderOrganizer
-    @Published public var healthManager: WorkspaceHealthManager
 
     private var didConfigure = false
 
@@ -18,7 +17,6 @@ public final class WindowSession: ObservableObject {
         self.id = id
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)
         self.organizer = FolderOrganizer()
-        self.healthManager = WorkspaceHealthManager()
     }
 
     public func configureIfNeeded(
@@ -95,8 +93,6 @@ public final class WindowSession: ObservableObject {
 
         case .learnings(let action, _):
             switch action {
-            case .honing:
-                appState.startHoningSession()
             case .stats:
                 appState.showLearningsStats()
             case .withdraw:
@@ -138,9 +134,6 @@ public final class WindowSession: ObservableObject {
 
         case .history:
             appState.currentView = .history
-
-        case .health:
-            appState.currentView = FeatureFlags.workspaceHealthEnabled ? .workspaceHealth : .organize
 
         case .persona(let action, let prompt, let generate):
             appState.openSettingsWindow(section: .strategy)
@@ -206,12 +199,6 @@ public final class WindowSession: ObservableObject {
                 exclusionRules.addRule(rule)
             }
 
-        case .scan(let path):
-            if let path {
-                appState.selectedDirectory = URL(fileURLWithPath: path)
-            }
-            appState.currentView = FeatureFlags.workspaceHealthEnabled ? .workspaceHealth : .organize
-
         case .storage(let action, let path):
             appState.currentView = .storageLocations
             if action == "add", let path {
@@ -238,9 +225,6 @@ public final class WindowSession: ObservableObject {
         case "storage", "storage-locations":
             appState.selectedSettingsSection = .rules
             appState.settingsFocusTarget = .rulesStorageLocations
-        case "health", "workspace-health":
-            appState.selectedSettingsSection = .rules
-            appState.settingsFocusTarget = nil
         default:
             let category = SettingsCategory.allCases.first {
                 $0.rawValue.lowercased().contains(section) ||

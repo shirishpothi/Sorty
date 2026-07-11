@@ -7,6 +7,10 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 APPCAST_PATH=""
 PLIST_PATH=""
+MINIMUM_BUILD=""
+EXPECTED_VERSION=""
+EXPECTED_CHANNEL=""
+EXPECTED_RELEASE_TAG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -18,8 +22,24 @@ while [[ $# -gt 0 ]]; do
             PLIST_PATH="$2"
             shift 2
             ;;
+        --minimum-build)
+            MINIMUM_BUILD="$2"
+            shift 2
+            ;;
+        --expected-version)
+            EXPECTED_VERSION="$2"
+            shift 2
+            ;;
+        --expected-channel)
+            EXPECTED_CHANNEL="$2"
+            shift 2
+            ;;
+        --expected-release-tag)
+            EXPECTED_RELEASE_TAG="$2"
+            shift 2
+            ;;
         --help)
-            echo "Usage: $0 [--appcast <path>] [--plist <path>]"
+            echo "Usage: $0 [--appcast <path>] [--plist <path>] [--minimum-build <number>] [--expected-version <version>] [--expected-channel <default|name>] [--expected-release-tag <tag>]"
             exit 0
             ;;
         *)
@@ -117,6 +137,7 @@ APP_PATH="$(dirname "$(dirname "$PLIST_PATH")")"
 
 PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null || echo "")
 PLIST_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "")
+PLIST_MINIMUM_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$PLIST_PATH" 2>/dev/null || echo "")
 FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$PLIST_PATH" 2>/dev/null || echo "")
 PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$PLIST_PATH" 2>/dev/null || echo "")
 
@@ -158,6 +179,8 @@ else
     ENC_SIG=$(xmllint --xpath 'string((//item)[1]/*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$APPCAST_PATH" 2>/dev/null || echo "")
     ENC_SHORT=$(xmllint --xpath 'string((//item)[1]/*[local-name()="enclosure"]/@*[local-name()="shortVersionString"])' "$APPCAST_PATH" 2>/dev/null || echo "")
     ENC_VERSION=$(xmllint --xpath 'string((//item)[1]/*[local-name()="enclosure"]/@*[local-name()="version"])' "$APPCAST_PATH" 2>/dev/null || echo "")
+    ENC_CHANNEL=$(xmllint --xpath 'string((//item)[1]/*[local-name()="channel"])' "$APPCAST_PATH" 2>/dev/null || echo "")
+    ENC_MINIMUM_SYSTEM_VERSION=$(xmllint --xpath 'string((//item)[1]/*[local-name()="minimumSystemVersion"])' "$APPCAST_PATH" 2>/dev/null || echo "")
 
     if [ -z "$ENC_URL" ]; then
         fail "Latest enclosure url missing"
@@ -217,6 +240,34 @@ SWIFT
 
     if [ -n "$PLIST_BUILD" ] && [ "$ENC_VERSION" != "$PLIST_BUILD" ]; then
         fail "Enclosure version (${ENC_VERSION}) does not match Info.plist (${PLIST_BUILD})"
+    fi
+
+    if [ -n "$EXPECTED_VERSION" ] && [ "$ENC_SHORT" != "$EXPECTED_VERSION" ]; then
+        fail "Enclosure shortVersionString (${ENC_SHORT}) does not match expected release version (${EXPECTED_VERSION})"
+    fi
+
+    if [ "$EXPECTED_CHANNEL" = "default" ]; then
+        if [ -n "$ENC_CHANNEL" ]; then
+            fail "Appcast channel (${ENC_CHANNEL}) must be the default channel"
+        fi
+    elif [ -n "$EXPECTED_CHANNEL" ] && [ "$ENC_CHANNEL" != "$EXPECTED_CHANNEL" ]; then
+        fail "Appcast channel (${ENC_CHANNEL}) does not match expected channel (${EXPECTED_CHANNEL})"
+    fi
+
+    if [ -n "$EXPECTED_RELEASE_TAG" ] && [[ "$ENC_URL" != *"/releases/download/${EXPECTED_RELEASE_TAG}/"* ]]; then
+        fail "Enclosure URL does not point to expected release tag ${EXPECTED_RELEASE_TAG}"
+    fi
+
+    if [ -n "$MINIMUM_BUILD" ]; then
+        if [[ ! "$ENC_VERSION" =~ ^[0-9]+$ ]] || [[ ! "$MINIMUM_BUILD" =~ ^[0-9]+$ ]]; then
+            fail "Enclosure and minimum build versions must be numeric"
+        elif [ "$ENC_VERSION" -le "$MINIMUM_BUILD" ]; then
+            fail "Enclosure version (${ENC_VERSION}) must be newer than published build ${MINIMUM_BUILD}"
+        fi
+    fi
+
+    if [ -n "$PLIST_MINIMUM_SYSTEM_VERSION" ] && [ "$ENC_MINIMUM_SYSTEM_VERSION" != "$PLIST_MINIMUM_SYSTEM_VERSION" ]; then
+        fail "Appcast minimumSystemVersion (${ENC_MINIMUM_SYSTEM_VERSION}) does not match Info.plist (${PLIST_MINIMUM_SYSTEM_VERSION})"
     fi
 fi
 

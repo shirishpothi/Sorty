@@ -584,7 +584,7 @@ private struct MetalFxPillSurface: View {
         // AngularGradient eventually loses precision and can render a dark seam.
         let phase = time.truncatingRemainder(dividingBy: 12) / 12
 
-        ZStack {
+        return ZStack {
             Capsule()
                 .fill(baseFill)
 

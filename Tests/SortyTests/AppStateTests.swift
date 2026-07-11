@@ -241,7 +241,7 @@ class AppStateTests: XCTestCase {
     
     func testAllAppViewCases() {
         let allViews: [AppState.AppView] = [
-            .settings, .organize, .history, .workspaceHealth,
+            .settings, .organize, .history,
             .duplicates, .exclusions, .watchedFolders, .learnings
         ]
         
@@ -427,25 +427,6 @@ class AppStateTests: XCTestCase {
     }
     
     // MARK: - Learnings Actions Tests
-    
-    func testStartHoningSession() {
-        let expectation = XCTestExpectation(description: "Notification received")
-        
-        let observer = NotificationCenter.default.addObserver(
-            forName: .startHoningSession,
-            object: nil,
-            queue: nil
-        ) { _ in
-            expectation.fulfill()
-        }
-        
-        appState.startHoningSession()
-        
-        XCTAssertEqual(appState.currentView, .learnings)
-        
-        wait(for: [expectation], timeout: 2.0)
-        NotificationCenter.default.removeObserver(observer)
-    }
     
     func testShowLearningsStats() {
         let expectation = XCTestExpectation(description: "Notification received")
@@ -677,7 +658,6 @@ class AppViewEnumTests: XCTestCase {
         XCTAssertEqual(AppState.AppView.settings, AppState.AppView.settings)
         XCTAssertEqual(AppState.AppView.organize, AppState.AppView.organize)
         XCTAssertEqual(AppState.AppView.history, AppState.AppView.history)
-        XCTAssertEqual(AppState.AppView.workspaceHealth, AppState.AppView.workspaceHealth)
         XCTAssertEqual(AppState.AppView.duplicates, AppState.AppView.duplicates)
         XCTAssertEqual(AppState.AppView.exclusions, AppState.AppView.exclusions)
         XCTAssertEqual(AppState.AppView.watchedFolders, AppState.AppView.watchedFolders)
@@ -692,7 +672,7 @@ class AppViewEnumTests: XCTestCase {
     
     func testAllViewsAreDifferent() {
         let allViews: [AppState.AppView] = [
-            .settings, .organize, .history, .workspaceHealth,
+            .settings, .organize, .history,
             .duplicates, .exclusions, .watchedFolders, .learnings
         ]
         
@@ -761,7 +741,6 @@ class OrganizationStateTests: XCTestCase {
 class NotificationNamesTests: XCTestCase {
     
     func testLearningsNotificationNamesExist() {
-        XCTAssertNotNil(Notification.Name.startHoningSession)
         XCTAssertNotNil(Notification.Name.showLearningsStats)
         XCTAssertNotNil(Notification.Name.pauseLearning)
         XCTAssertNotNil(Notification.Name.exportLearningsProfile)
@@ -776,7 +755,6 @@ class NotificationNamesTests: XCTestCase {
     
     func testNotificationNamesAreUnique() {
         let names: [Notification.Name] = [
-            .startHoningSession,
             .showLearningsStats,
             .pauseLearning,
             .exportLearningsProfile,

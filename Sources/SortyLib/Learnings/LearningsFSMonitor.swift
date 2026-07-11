@@ -10,7 +10,6 @@ import Foundation
 import Combine
 
 /// Snapshot of a directory's contents for detecting moves
-// (Renamed to avoid conflict with WorkspaceHealth.DirectorySnapshot)
 public struct FSSnapshot: Sendable {
     let files: Set<String>  // Full paths
     let timestamp: Date

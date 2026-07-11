@@ -69,7 +69,6 @@ public class LearningsAnalyzer: ObservableObject {
             let aiRules = await llm.induceRules(
                 from: trainingExamples,
                 exampleFolders: exampleFolderURLs,
-                honingAnswers: profile.honingAnswers,
                 steeringPrompts: profile.steeringPrompts,
                 guidingInstructions: profile.guidingInstructionsHistory
             )

@@ -54,9 +54,6 @@ When enabled, Sorty reads file content for better accuracy:
 ### File Tagging
 Files can be tagged with Finder-compatible tags like "Invoice", "Personal", "Important", or "Archive". These tags are searchable in Spotlight and Finder.
 
-### Workspace Health
-Monitor your directories for clutter growth, identify cleanup opportunities, and track organization patterns over time.
-
 ---
 
 ## Organization
@@ -93,7 +90,6 @@ The Learnings is a passive learning system that builds a personalized understand
 | Behavior | Description | Priority |
 |----------|-------------|----------|
 | Steering Prompts | Post-organization feedback | Highest |
-| Honing Answers | Explicit preferences from Q&A | High |
 | Guiding Instructions | Pre-organization instructions | High |
 | Manual Corrections | Files you move after Sorty organization | Medium |
 | Reverts | Sessions you undo | Medium |
@@ -199,7 +195,6 @@ If Finder still shows stale state, run the in-app repair buttons again and then 
 |----------|--------|
 | ⌘O | Open Directory |
 | ⌘1 | Organize View |
-| ⌘2 | Workspace Health |
 | ⌘3 | Duplicates |
 | ⌘4 | Exclusions |
 | ⌘5 | Watched Folders |
@@ -231,7 +226,6 @@ sorty://duplicates?path=/Users/me/Documents
 sorty://persona?action=generate&prompt=sci-fi%20collector
 sorty://watched?action=add&path=/Users/me/Downloads
 sorty://rules?action=add&type=pattern&pattern=*.log
-sorty://learnings?action=honing
 sorty://settings
 ```
 

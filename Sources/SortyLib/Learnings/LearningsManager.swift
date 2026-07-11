@@ -59,6 +59,8 @@ public class LearningsManager: ObservableObject {
     @Published public var dataRetentionDays: Int = 0 {
         didSet {
             userDefaults.set(dataRetentionDays, forKey: "learningDataRetentionDays")
+            guard dataRetentionDays != oldValue else { return }
+            Task { await applyDataRetentionPolicy() }
         }
     }
     
@@ -87,7 +89,6 @@ public class LearningsManager: ObservableObject {
         public let maturity: Maturity
         public let sessionCount: Int
         public let activeRuleCount: Int
-        public let honingAnswerCount: Int
         public let recentSessionCount: Int // Sessions in last 7 days
         public let hasActiveRules: Bool
         public let statusText: String
@@ -122,7 +123,6 @@ public class LearningsManager: ObservableObject {
                 maturity: .new,
                 sessionCount: 0,
                 activeRuleCount: 0,
-                honingAnswerCount: 0,
                 recentSessionCount: 0,
                 hasActiveRules: false,
                 statusText: "Learning disabled",
@@ -137,7 +137,6 @@ public class LearningsManager: ObservableObject {
                 maturity: .new,
                 sessionCount: 0,
                 activeRuleCount: 0,
-                honingAnswerCount: 0,
                 recentSessionCount: 0,
                 hasActiveRules: false,
                 statusText: "Learnings locked",
@@ -157,7 +156,6 @@ public class LearningsManager: ObservableObject {
                 maturity: computeMaturity(sessionCount: sessionCount, ruleCount: activeRuleCount),
                 sessionCount: sessionCount,
                 activeRuleCount: activeRuleCount,
-                honingAnswerCount: profile?.honingAnswers.count ?? 0,
                 recentSessionCount: recentSessionCount,
                 hasActiveRules: activeRuleCount > 0,
                 statusText: activeRuleCount > 0 ? "Learning paused (\(activeRuleCount) active pattern\(activeRuleCount == 1 ? "" : "s"))" : "Learning paused",
@@ -172,7 +170,6 @@ public class LearningsManager: ObservableObject {
                 maturity: .new,
                 sessionCount: 0,
                 activeRuleCount: 0,
-                honingAnswerCount: 0,
                 recentSessionCount: 0,
                 hasActiveRules: false,
                 statusText: "Ready to learn",
@@ -183,7 +180,6 @@ public class LearningsManager: ObservableObject {
         let sessionCount = profile.sessions.count
         let activeRules = profile.inferredRules.filter { $0.isEnabled && $0.status == .active }
         let activeRuleCount = activeRules.count
-        let honingAnswerCount = profile.honingAnswers.count
         
         // Count recent sessions (last 7 days)
         let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
@@ -196,7 +192,7 @@ public class LearningsManager: ObservableObject {
         let statusText: String
         let shortStatusText: String
         
-        if sessionCount == 0 && honingAnswerCount == 0 {
+        if sessionCount == 0 {
             state = .empty
             statusText = "Ready to learn from your organization"
             shortStatusText = "Ready"
@@ -221,7 +217,6 @@ public class LearningsManager: ObservableObject {
             maturity: maturity,
             sessionCount: sessionCount,
             activeRuleCount: activeRuleCount,
-            honingAnswerCount: honingAnswerCount,
             recentSessionCount: recentSessionCount,
             hasActiveRules: activeRuleCount > 0,
             statusText: statusText,
@@ -340,7 +335,6 @@ public class LearningsManager: ObservableObject {
                 Self.learningsModelSelectionKey,
                 Self.modelDirectoriesKey,
                 "lastLocalRuleInference",
-                "HoningRetryCount"
             ].forEach(userDefaults.removeObject(forKey:))
 
             return true
@@ -398,7 +392,9 @@ public class LearningsManager: ObservableObject {
     }
 
     private func prepareLoadedProfile(_ profile: LearningsProfile) -> LearningsProfile {
-        migrateLegacySessionsIfNeeded(in: profile)
+        var prepared = migrateLegacySessionsIfNeeded(in: profile)
+        pruneOldData(in: &prepared)
+        return prepared
     }
 
     public func upsertOrganizationSession(_ session: OrganizationSession) {
@@ -1176,13 +1172,6 @@ public class LearningsManager: ObservableObject {
         
         profile.inlineLearningMomentAnswers.append(answer)
         
-        // Convert to a HoningAnswer for compatibility with existing prompt context
-        let honingAnswer = HoningAnswer(
-            questionId: answer.momentId,
-            selectedOption: answer.selectedOption
-        )
-        profile.honingAnswers.append(honingAnswer)
-        
         // Record as a steering prompt if the answer implies a clear preference
         let steeringPrompt = SteeringPrompt(
             prompt: "User preference: \(answer.selectedOption)",
@@ -1220,7 +1209,49 @@ public class LearningsManager: ObservableObject {
     /// Caps history arrays at 100 items to prevent bloat
     private func pruneOldData() {
         guard var profile = currentProfile else { return }
-        
+        pruneOldData(in: &profile)
+        currentProfile = profile
+    }
+
+    /// Applies the selected retention period immediately and persists the deletion.
+    /// This is also used after loading so expired records are never exposed or reused.
+    public func applyDataRetentionPolicy(now: Date = Date()) async {
+        guard var profile = currentProfile else { return }
+        let previousSnapshot = learningProfileSnapshot(profile)
+        pruneOldData(in: &profile, now: now)
+        guard learningProfileSnapshot(profile) != previousSnapshot else { return }
+        currentProfile = profile
+        await saveProfile()
+    }
+
+    private func pruneOldData(in profile: inout LearningsProfile, now: Date = Date()) {
+        if dataRetentionDays > 0,
+           let cutoff = Calendar.current.date(byAdding: .day, value: -dataRetentionDays, to: now) {
+            profile.additionalInstructionsHistory.removeAll { $0.timestamp < cutoff }
+            profile.guidingInstructionsHistory.removeAll { $0.timestamp < cutoff }
+            profile.steeringPrompts.removeAll { $0.timestamp < cutoff }
+            profile.postOrganizationChanges.removeAll { $0.timestamp < cutoff }
+            profile.renameFeedbackHistory.removeAll { $0.timestamp < cutoff }
+            profile.historyReverts.removeAll { $0.timestamp < cutoff }
+            profile.positiveExamples.removeAll { $0.timestamp < cutoff }
+            profile.rejections.removeAll { $0.timestamp < cutoff }
+            profile.corrections.removeAll { $0.timestamp < cutoff }
+            profile.jobHistory.removeAll { $0.timestamp < cutoff }
+            profile.cancelledOrganizations.removeAll { $0.timestamp < cutoff }
+            profile.regeneratedOrganizations.removeAll { $0.timestamp < cutoff }
+            profile.sessions.removeAll { ($0.completedAt ?? $0.timestamp) < cutoff }
+            profile.inlineLearningMomentAnswers.removeAll { $0.timestamp < cutoff }
+
+            let retainedEvidenceIDs = Set(profile.positiveExamples.map(\.id))
+                .union(profile.rejections.map(\.id))
+                .union(profile.corrections.map(\.id))
+            profile.inferredRules.removeAll { rule in
+                let evidenceIDs = Set(rule.exampleIds).union(rule.evidenceIds)
+                return !evidenceIDs.isEmpty && evidenceIDs.isDisjoint(with: retainedEvidenceIDs)
+            }
+            profile.rejectedRuleCooldowns = profile.rejectedRuleCooldowns.filter { $0.value >= cutoff }
+        }
+
         let cap = 100
         if profile.additionalInstructionsHistory.count > cap {
             profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
@@ -1261,8 +1292,9 @@ public class LearningsManager: ObservableObject {
         if profile.sessions.count > cap {
             profile.sessions = Array(profile.sessions.prefix(cap))
         }
-        
-        currentProfile = profile
+        if profile.inlineLearningMomentAnswers.count > cap {
+            profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
+        }
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
@@ -1363,7 +1395,6 @@ public class LearningsManager: ObservableObject {
         let sanitizedProfile = filteredLearningProfile(from: profile)
         if learningProfileSnapshot(sanitizedProfile) != learningProfileSnapshot(profile) {
             currentProfile = sanitizedProfile
-            extractBehaviorPreferences()
         }
 
         error = nil
@@ -1382,7 +1413,6 @@ public class LearningsManager: ObservableObject {
                 var updatedProfile = sanitizedProfile
                 updatedProfile.inferredRules = mergeInferredRules(existing: sanitizedProfile.inferredRules, new: result.inferredRules)
                 currentProfile = updatedProfile
-                extractBehaviorPreferences()
                 await saveProfile()
             }
         } catch {
@@ -1416,26 +1446,6 @@ public class LearningsManager: ObservableObject {
         }
 
         await runAnalysis(rootPaths: [], examplePaths: enabledModelDirectoryPaths())
-    }
-    
-    /// Save results from a Honing Session
-    public func saveHoningResults(_ answers: [HoningAnswer]) async {
-        guard var profile = currentProfile else { return }
-        
-        var existing = profile.honingAnswers
-        for newAns in answers {
-            if let idx = existing.firstIndex(where: { $0.questionId == newAns.questionId }) {
-                existing[idx] = newAns
-            } else {
-                existing.append(newAns)
-            }
-        }
-        profile.honingAnswers = existing
-        currentProfile = profile
-        await saveProfile()
-        
-        // Trigger re-analysis or just update rules
-        // For now, we just save. The UI might trigger re-analysis.
     }
     
     /// Accept a proposed mapping
@@ -1986,7 +1996,6 @@ public class LearningsManager: ObservableObject {
             .sorted(by: { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) })
 
         var hardRules: [String] = []
-        hardRules.append(contentsOf: filteredProfile.honingAnswers.prefix(3).map { "Explicit preference: \($0.selectedOption)" })
 
         let recentInstructions = (filteredProfile.additionalInstructionsHistory + filteredProfile.guidingInstructionsHistory)
             .sorted(by: { $0.timestamp > $1.timestamp })
@@ -2239,47 +2248,6 @@ public class LearningsManager: ObservableObject {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&apos;")
-    }
-    
-    /// Generate contextual honing questions based on recent learnings
-    public func generateContextualHoningTopics() -> [String] {
-        guard let profile = currentProfile else { return [] }
-        
-        var topics: [String] = []
-        
-        // Analyze recent corrections to find patterns
-        let recentCorrections = profile.postOrganizationChanges.suffix(20)
-        var folderTypes = Set<String>()
-        
-        for change in recentCorrections {
-            let srcFolder = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
-            let dstFolder = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
-            if srcFolder != dstFolder {
-                folderTypes.insert(dstFolder)
-            }
-        }
-        
-        // Generate questions based on common patterns
-        if folderTypes.contains(where: { $0.lowercased().contains("archive") }) {
-            topics.append("archiving_strategy")
-        }
-        if folderTypes.contains(where: { $0.lowercased().contains("project") }) {
-            topics.append("project_organization")
-        }
-        if folderTypes.count > 5 {
-            topics.append("folder_depth_preference")
-        }
-        
-        // Check for steering prompt patterns
-        let steeringKeywords = profile.steeringPrompts.flatMap { $0.prompt.lowercased().components(separatedBy: " ") }
-        if steeringKeywords.contains("date") || steeringKeywords.contains("year") {
-            topics.append("date_based_organization")
-        }
-        if steeringKeywords.contains("type") || steeringKeywords.contains("extension") {
-            topics.append("file_type_organization")
-        }
-        
-        return topics
     }
     
     // MARK: - Impact Metrics
@@ -2538,51 +2506,6 @@ public class LearningsManager: ObservableObject {
 
             return fileName == normalizedPattern || pathComponents.contains(normalizedPattern)
         }
-    }
-    
-    /// Extract behavior preferences from honing answers
-    public func extractBehaviorPreferences() {
-        guard let profile = currentProfile else { return }
-        behaviorPreferences = behaviorPreferences(from: filteredLearningProfile(from: profile))
-    }
-
-    private func behaviorPreferences(from profile: LearningsProfile) -> BehaviorPreferences {
-        var prefs = BehaviorPreferences()
-
-        for answer in profile.honingAnswers {
-            let option = answer.selectedOption.lowercased()
-            
-            // Map answers to preferences based on keywords
-            if option.contains("archive") && option.contains("year") {
-                prefs.deletionVsArchive = .archiveByYear
-            } else if option.contains("archive") {
-                prefs.deletionVsArchive = .archive
-            } else if option.contains("delete") {
-                prefs.deletionVsArchive = .delete
-            }
-            
-            if option.contains("flat") {
-                prefs.folderDepthPreference = .flat
-            } else if option.contains("deep") || option.contains("hierarchy") {
-                prefs.folderDepthPreference = .deep
-            }
-            
-            if option.contains("date") || option.contains("year") || option.contains("month") {
-                prefs.dateVsContentPreference = .date
-            } else if option.contains("project") {
-                prefs.dateVsContentPreference = .project
-            } else if option.contains("content") || option.contains("type") {
-                prefs.dateVsContentPreference = .content
-            }
-            
-            if option.contains("newest") || option.contains("recent") {
-                prefs.duplicateKeeperStrategy = .keepNewest
-            } else if option.contains("oldest") || option.contains("original") {
-                prefs.duplicateKeeperStrategy = .keepOldest
-            }
-        }
-
-        return prefs
     }
     
     // MARK: - Model Directories (Local Persistence)
@@ -3044,7 +2967,6 @@ public class LearningsManager: ObservableObject {
         let filtered = filteredLearningProfile(from: profile)
         guard learningProfileSnapshot(filtered) != learningProfileSnapshot(profile) else { return }
         currentProfile = filtered
-        extractBehaviorPreferences()
         await saveProfile()
     }
 

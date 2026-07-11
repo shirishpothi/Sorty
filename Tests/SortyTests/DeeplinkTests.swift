@@ -194,17 +194,6 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
-    func testHealthDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://health")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .health)
-        handler.clearPending()
-    }
-    
-    @MainActor
     func testPersonaDeeplink() {
         let handler = DeeplinkHandler.shared
         
@@ -274,22 +263,6 @@ final class DeeplinkTests: XCTestCase {
     }
 
     @MainActor
-    func testScanDeeplink() {
-        let handler = DeeplinkHandler.shared
-
-        let url = URL(string: "sorty://scan?path=/tmp/workspace")!
-        handler.handle(url: url)
-
-        if case .scan(let path) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp/workspace")
-        } else {
-            XCTFail("Expected scan destination")
-        }
-
-        handler.clearPending()
-    }
-
-    @MainActor
     func testStorageDeeplink() {
         let handler = DeeplinkHandler.shared
 
@@ -335,22 +308,6 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
-    func testLearningsHoningDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://learnings?action=honing")!
-        handler.handle(url: url)
-        
-        if case .learnings(let action, _) = handler.pendingDestination {
-            XCTAssertEqual(action, .honing)
-        } else {
-            XCTFail("Expected learnings honing destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
     func testUnknownDeeplink() {
         let handler = DeeplinkHandler.shared
         handler.clearPending()
@@ -365,8 +322,8 @@ final class DeeplinkTests: XCTestCase {
     func testUnknownDeeplinkClearsPriorDestination() {
         let handler = DeeplinkHandler.shared
         
-        handler.handle(url: URL(string: "sorty://health")!)
-        XCTAssertEqual(handler.pendingDestination, .health)
+        handler.handle(url: URL(string: "sorty://history")!)
+        XCTAssertEqual(handler.pendingDestination, .history)
         
         handler.handle(url: URL(string: "sorty://unknown")!)
         XCTAssertNil(handler.pendingDestination)
@@ -481,8 +438,6 @@ final class DeeplinkTests: XCTestCase {
         let url = DeeplinkHandler.url(for: .learnings(action: nil, project: "MyProject"))
         XCTAssertEqual(url?.absoluteString, "sorty://learnings?project=MyProject")
         
-        let hunkURL = DeeplinkHandler.url(for: .learnings(action: .honing, project: nil))
-        XCTAssertEqual(hunkURL?.absoluteString, "sorty://learnings?action=honing")
     }
     
     @MainActor
@@ -495,12 +450,6 @@ final class DeeplinkTests: XCTestCase {
     func testGenerateExclusionsURL() {
         let url = DeeplinkHandler.url(for: .exclusions(action: "add", pattern: "*.log"))
         XCTAssertEqual(url?.absoluteString, "sorty://exclusions?action=add&pattern=*.log")
-    }
-
-    @MainActor
-    func testGenerateScanURL() {
-        let url = DeeplinkHandler.url(for: .scan(path: "/tmp/workspace"))
-        XCTAssertEqual(url?.absoluteString, "sorty://scan?path=/tmp/workspace")
     }
 
     @MainActor

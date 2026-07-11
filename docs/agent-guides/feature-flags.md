@@ -20,6 +20,24 @@ defaults write com.sorty.app <key> -bool false
 | File Tagging | `fileTaggingEnabled` | `true` | Finder file tagging during organization (may not work in sandboxed envs) |
 | Batch Organization | `batchOrganizationEnabled` | `false` | Multi-folder batch organization in the sidebar |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
+| Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
+
+### Support the Developer
+Quit Sorty before changing the value, then reopen it. The `-container` option writes to the same sandboxed preferences domain that Sorty reads; omitting it writes a separate host preference that the app does not reliably see.
+
+```bash
+# Hide all Support the Developer links and buttons
+defaults -container com.sorty.app write com.sorty.app supportDeveloperEnabled -bool false
+
+# Show them again
+defaults -container com.sorty.app write com.sorty.app supportDeveloperEnabled -bool true
+
+# Restore the default, which is shown
+defaults -container com.sorty.app delete com.sorty.app supportDeveloperEnabled
+
+# Confirm the stored value
+defaults -container com.sorty.app read com.sorty.app supportDeveloperEnabled
+```
 
 ## Finder Integration Repair
 

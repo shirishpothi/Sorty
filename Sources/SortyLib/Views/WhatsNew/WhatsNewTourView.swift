@@ -2,36 +2,21 @@ import AppKit
 import SwiftUI
 
 public struct WhatsNewTourView: View {
-    @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
     private let imageTransitionAnimation = Animation.easeInOut(duration: 0.72)
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
 
-    public init(
-        nightlyUpdatesEnabled: Binding<Bool>,
-        onFinish: @escaping () -> Void
-    ) {
-        _nightlyUpdatesEnabled = nightlyUpdatesEnabled
+    public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
     }
 
     public var body: some View {
         VStack(spacing: 12) {
-            if currentPage == 0 {
-                updateChannelCard
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             ZStack {
                 tourPage(page)
                     .id(currentPage)
                     .transition(.opacity)
-            }
-
-            if currentPage == pages.count - 1 {
-                nightlyUpdatesCard
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.vertical, 16)
@@ -46,79 +31,6 @@ public struct WhatsNewTourView: View {
                 workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
             }
         }
-    }
-
-    private var updateChannelCard: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(
-                    LinearGradient(
-                        colors: [Color.accentColor, Color.teal],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Available from the regular updater")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Text("Everyone on Sorty 1.1.2 can find this build with Check for Updates. After installing it, you can choose whether future checks use stable or nightly builds.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14)
-        .background(Color.accentColor.opacity(0.08))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 18)
-    }
-
-    private var nightlyUpdatesCard: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "moon.stars.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.purple)
-                .frame(width: 36, height: 36)
-                .background(Color.purple.opacity(0.12))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Get future nightly builds")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-
-                Text("This update is available on the regular release channel. Turn on nightlies if you want newer, more fragile builds after this one.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
-            Toggle("Nightly", isOn: $nightlyUpdatesEnabled)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .accessibilityLabel("Enable nightly builds")
-        }
-        .padding(14)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 18)
     }
 
     private var page: WhatsNewPage {
@@ -136,11 +48,6 @@ public struct WhatsNewTourView: View {
                 imageNames: designSystemImages,
                 title: "A new design system",
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
-            ),
-            WhatsNewPage(
-                imageName: "whats-new-nightly.png",
-                title: "Choose future builds",
-                description: "Keep stable updates by default, or turn on nightlies if you want newer, less-polished builds after this release."
             ),
         ]
     }
@@ -471,5 +378,5 @@ private enum WhatsNewImageLoader {
 }
 
 #Preview {
-    WhatsNewTourView(nightlyUpdatesEnabled: .constant(false)) {}
+    WhatsNewTourView {}
 }

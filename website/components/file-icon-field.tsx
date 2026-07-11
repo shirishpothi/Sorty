@@ -368,7 +368,7 @@ export function FileIconField({
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(animationFrame)
     }
-  }, [])
+  }, [obstacleSelector])
 
   return (
     <canvas

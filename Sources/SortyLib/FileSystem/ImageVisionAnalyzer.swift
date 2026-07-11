@@ -17,6 +17,12 @@ import PDFKit
 public final class ImageVisionAnalyzer: Sendable {
     private let maxDimension: CGFloat = 1024.0
     private let compressionQuality: CGFloat = 0.8
+    private let maxConcurrentPreparations = 4
+
+    private static let cacheLock = NSLock()
+    private static let maximumCachedFileCount = 96
+    private static let maximumCacheSize = 64 * 1024 * 1024
+    private static let maximumCacheAge: TimeInterval = 14 * 24 * 60 * 60
 
     private static var visionCacheDirectory: URL? {
         FileManager.default
@@ -37,39 +43,37 @@ public final class ImageVisionAnalyzer: Sendable {
             return nil
         }
 
-        if let cached = cachedImageData(for: url) {
-            return cached
-        }
-
         return await Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return nil }
+
+            if let cached = self.cachedImageData(for: url) {
+                return cached
+            }
+
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
                 DebugLogger.log("ImageVisionAnalyzer: failed to create image source for \(url.lastPathComponent)")
                 return nil
             }
-            guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to decode CGImage for \(url.lastPathComponent)")
+
+            // Downsample while decoding so very large source images never need a
+            // full-resolution bitmap in memory before being reduced for upload.
+            let thumbnailOptions: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: Int(self.maxDimension),
+                kCGImageSourceShouldCacheImmediately: true,
+            ]
+            guard let preparedImage = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                thumbnailOptions as CFDictionary
+            ) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to downsample \(url.lastPathComponent)")
                 return nil
             }
-            
-            let width = CGFloat(cgImage.width)
-            let height = CGFloat(cgImage.height)
-            
-            // Calculate aspect-fit dimensions
-            var targetSize = CGSize(width: width, height: height)
-            if width > self.maxDimension || height > self.maxDimension {
-                if width > height {
-                    targetSize = CGSize(width: self.maxDimension, height: (height / width) * self.maxDimension)
-                } else {
-                    targetSize = CGSize(width: (width / height) * self.maxDimension, height: self.maxDimension)
-                }
-            }
-            
-            // Resize and compress
-            guard let resizedImage = self.resize(cgImage, to: targetSize) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to resize image \(url.lastPathComponent)")
-                return nil
-            }
-            guard let jpegData = self.convertToJPEG(resizedImage) else {
+
+            guard !Task.isCancelled else { return nil }
+            guard let jpegData = self.convertToJPEG(preparedImage) else {
                 DebugLogger.log("ImageVisionAnalyzer: failed to convert image to JPEG \(url.lastPathComponent)")
                 return nil
             }
@@ -82,7 +86,9 @@ public final class ImageVisionAnalyzer: Sendable {
     /// Prepares multiple images in parallel
     public func prepareImagesForVision(urls: [URL]) async -> [URL: Data] {
         await withTaskGroup(of: (URL, Data?).self) { group in
-            for url in urls {
+            var iterator = Array(Set(urls)).makeIterator()
+            for _ in 0..<min(maxConcurrentPreparations, urls.count) {
+                guard let url = iterator.next() else { break }
                 group.addTask {
                     let data = await self.prepareImageForVision(at: url)
                     return (url, data)
@@ -93,6 +99,13 @@ public final class ImageVisionAnalyzer: Sendable {
             for await (url, data) in group {
                 if let data = data {
                     results[url] = data
+                }
+
+                if let nextURL = iterator.next(), !Task.isCancelled {
+                    group.addTask {
+                        let data = await self.prepareImageForVision(at: nextURL)
+                        return (nextURL, data)
+                    }
                 }
             }
             return results
@@ -107,31 +120,59 @@ public final class ImageVisionAnalyzer: Sendable {
         pdfPageLimit: Int = 2
     ) async -> [String: Data] {
         await withTaskGroup(of: [String: Data].self) { group in
-            for file in files {
+            var iterator = files.makeIterator()
+            for _ in 0..<min(maxConcurrentPreparations, files.count) {
+                guard let file = iterator.next() else { break }
                 group.addTask {
-                    guard let url = file.url else { return [:] }
-                    let ext = file.extension.lowercased()
-                    let attachmentName = self.attachmentLabel(for: file, baseDirectoryURL: baseDirectoryURL)
-
-                    if ["jpg", "jpeg", "png", "heic", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
-                       let data = await self.prepareImageForVision(at: url) {
-                        return [attachmentName: data]
-                    }
-
-                    if ext == "pdf" {
-                        return await self.preparePDFForVision(at: url, displayName: attachmentName, maxPages: pdfPageLimit)
-                    }
-
-                    return [:]
+                    await self.prepareFileForVision(
+                        file,
+                        baseDirectoryURL: baseDirectoryURL,
+                        pdfPageLimit: pdfPageLimit
+                    )
                 }
             }
 
             var results: [String: Data] = [:]
             for await partial in group {
                 results.merge(partial) { _, new in new }
+
+                if let nextFile = iterator.next(), !Task.isCancelled {
+                    group.addTask {
+                        await self.prepareFileForVision(
+                            nextFile,
+                            baseDirectoryURL: baseDirectoryURL,
+                            pdfPageLimit: pdfPageLimit
+                        )
+                    }
+                }
             }
             return results
         }
+    }
+
+    private func prepareFileForVision(
+        _ file: FileItem,
+        baseDirectoryURL: URL?,
+        pdfPageLimit: Int
+    ) async -> [String: Data] {
+        guard let url = file.url else { return [:] }
+
+        let ext = file.extension.lowercased()
+        let attachmentName = attachmentLabel(for: file, baseDirectoryURL: baseDirectoryURL)
+        if ["jpg", "jpeg", "png", "heic", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
+           let data = await prepareImageForVision(at: url) {
+            return [attachmentName: data]
+        }
+
+        if ext == "pdf" {
+            return await preparePDFForVision(
+                at: url,
+                displayName: attachmentName,
+                maxPages: pdfPageLimit
+            )
+        }
+
+        return [:]
     }
 
     private func attachmentLabel(for file: FileItem, baseDirectoryURL: URL?) -> String {
@@ -160,24 +201,9 @@ public final class ImageVisionAnalyzer: Sendable {
 
     public static func clearSharedCache() {
         guard let directory = visionCacheDirectory else { return }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
         try? FileManager.default.removeItem(at: directory)
-    }
-    
-    private func resize(_ image: CGImage, to size: CGSize) -> CGImage? {
-        let context = CGContext(
-            data: nil,
-            width: Int(size.width),
-            height: Int(size.height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
-        
-        context?.interpolationQuality = .medium
-        context?.draw(image, in: CGRect(origin: .zero, size: size))
-        
-        return context?.makeImage()
     }
     
     private func convertToJPEG(_ image: CGImage) -> Data? {
@@ -260,6 +286,9 @@ public final class ImageVisionAnalyzer: Sendable {
     }
 
     private func cachedImageData(for url: URL) -> Data? {
+        Self.cacheLock.lock()
+        defer { Self.cacheLock.unlock() }
+
         guard let cacheURL = cacheFileURL(for: url),
               FileManager.default.fileExists(atPath: cacheURL.path),
               let data = try? Data(contentsOf: cacheURL) else {
@@ -274,13 +303,62 @@ public final class ImageVisionAnalyzer: Sendable {
             return
         }
 
+        Self.cacheLock.lock()
+        defer { Self.cacheLock.unlock() }
+
         do {
             if !FileManager.default.fileExists(atPath: cacheDirectory.path) {
                 try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
             }
             try data.write(to: cacheURL, options: .atomic)
+            Self.pruneCache(in: cacheDirectory, preserving: cacheURL)
         } catch {
             DebugLogger.log("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
+        }
+    }
+
+    private static func pruneCache(in directory: URL, preserving preservedURL: URL) {
+        let keys: Set<URLResourceKey> = [
+            .contentModificationDateKey,
+            .fileSizeKey,
+            .isRegularFileKey,
+        ]
+        guard let cacheFiles = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        let expirationDate = Date().addingTimeInterval(-maximumCacheAge)
+        var retained: [(url: URL, modificationDate: Date, size: Int)] = []
+        retained.reserveCapacity(cacheFiles.count)
+
+        for fileURL in cacheFiles {
+            guard let values = try? fileURL.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else {
+                continue
+            }
+
+            let modificationDate = values.contentModificationDate ?? .distantPast
+            if fileURL != preservedURL, modificationDate < expirationDate {
+                try? FileManager.default.removeItem(at: fileURL)
+                continue
+            }
+
+            retained.append((fileURL, modificationDate, values.fileSize ?? 0))
+        }
+
+        retained.sort { $0.modificationDate > $1.modificationDate }
+        var retainedSize = 0
+        for (index, file) in retained.enumerated() {
+            retainedSize += file.size
+            let exceedsCount = index >= maximumCachedFileCount
+            let exceedsSize = retainedSize > maximumCacheSize
+            if file.url != preservedURL, exceedsCount || exceedsSize {
+                try? FileManager.default.removeItem(at: file.url)
+            }
         }
     }
 

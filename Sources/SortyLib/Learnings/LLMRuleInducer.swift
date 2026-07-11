@@ -27,7 +27,6 @@ public actor LLMRuleInducer {
     public func induceRules(
         from examples: [LabeledExample],
         exampleFolders: [URL],
-        honingAnswers: [HoningAnswer] = [],
         steeringPrompts: [SteeringPrompt] = [],
         guidingInstructions: [UserInstruction] = [],
         currentFolderPath: String? = nil,
@@ -45,7 +44,6 @@ public actor LLMRuleInducer {
         let prompt = buildEnhancedPrompt(
             examples: weightedExamples,
             exampleFolders: exampleFolders,
-            honingAnswers: honingAnswers,
             steeringPrompts: steeringPrompts,
             guidingInstructions: guidingInstructions,
             currentFolderPath: currentFolderPath,
@@ -112,7 +110,7 @@ public actor LLMRuleInducer {
         - "evidence": An array of strings describing which specific examples or instructions from the input the AI used to form this rule. Be specific, e.g., "Example: 'Invoice_2023_01.pdf' -> 'Finance/2023/Invoices/...'"
         
         PRIORITY GUIDELINES:
-        - Rules from explicit user feedback (steering prompts, honing answers): 80-100
+        - Rules from explicit user feedback (steering prompts): 80-100
         - Rules from recent corrections (user moved file after AI): 60-80
         - Rules from older corrections or implicit patterns: 40-60
         - Fallback category-based rules: 20-40
@@ -142,7 +140,6 @@ public actor LLMRuleInducer {
     private func buildEnhancedPrompt(
         examples: [WeightedExample],
         exampleFolders: [URL],
-        honingAnswers: [HoningAnswer],
         steeringPrompts: [SteeringPrompt],
         guidingInstructions: [UserInstruction],
         currentFolderPath: String? = nil,
@@ -161,17 +158,7 @@ public actor LLMRuleInducer {
             context += "\n"
         }
         
-        // 1. Honing Answers (High Level Philosophy)
-        if !honingAnswers.isEmpty {
-            context += "### USER ORGANIZATION PHILOSOPHY:\n"
-            context += "The user has explicitly answered these questions about their preferences:\n"
-            for answer in honingAnswers {
-                context += "- Preference: \(answer.selectedOption)\n"
-            }
-            context += "\nThese preferences should inform ALL inferred rules.\n\n"
-        }
-        
-        // 2. Guiding Instructions
+        // 1. Guiding Instructions
         if !guidingInstructions.isEmpty {
             context += "### USER GUIDING INSTRUCTIONS:\n"
             let recentInstructions = guidingInstructions.suffix(10)
@@ -230,12 +217,11 @@ public actor LLMRuleInducer {
     }
     
     // Legacy prompt builder for backwards compatibility
-    private func buildPrompt(examples: [LabeledExample], exampleFolders: [URL], honingAnswers: [HoningAnswer]) -> String {
+    private func buildPrompt(examples: [LabeledExample], exampleFolders: [URL]) -> String {
         let weightedExamples = applyTemporalWeighting(examples)
         return buildEnhancedPrompt(
             examples: weightedExamples,
             exampleFolders: exampleFolders,
-            honingAnswers: honingAnswers,
             steeringPrompts: [],
             guidingInstructions: []
         )

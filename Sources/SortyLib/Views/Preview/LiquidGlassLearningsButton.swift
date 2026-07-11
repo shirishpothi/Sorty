@@ -20,9 +20,6 @@ private struct LearningsInsightRow: Identifiable {
         case .ruleEvidence:
             self.icon = "doc.text.magnifyingglass"
             self.color = .mint
-        case .honingPreference:
-            self.icon = "slider.horizontal.3"
-            self.color = .teal
         }
     }
 }
@@ -43,11 +40,7 @@ struct LiquidGlassLearningsButton: View {
     }
 
     private var learningRows: [LearningsInsightRow] {
-        attribution.learningsItems.map(LearningsInsightRow.init(item:))
-    }
-
-    private var honingRows: [LearningsInsightRow] {
-        attribution.honingItems.map(LearningsInsightRow.init(item:))
+        attribution.items.map(LearningsInsightRow.init(item:))
     }
 
     private var hasContent: Bool {
@@ -99,12 +92,6 @@ struct LiquidGlassLearningsButton: View {
                         }
                     }
 
-                    if !honingRows.isEmpty {
-                        sectionHeader("Honing")
-                        ForEach(honingRows) { row in
-                            insightRow(row)
-                        }
-                    }
                 }
                 .padding(12)
                 .frame(minWidth: 240, maxWidth: 340)

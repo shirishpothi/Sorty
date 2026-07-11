@@ -23,7 +23,6 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var globalShortcutManager: GlobalShortcutManager
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
-    @AppStorage(SparkleUpdateFeed.nightlyUpdatesEnabledKey) private var nightlyUpdatesEnabled = false
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
     @AppStorage("lastSeenWhatsNewBuild") private var lastSeenWhatsNewBuild = ""
     @AppStorage("forceShowWhatsNewOnLaunch") private var forceShowWhatsNewOnLaunch = false
@@ -55,7 +54,7 @@ struct MainWindowRootView: View {
                 deleteAction: windowSession.appState.deleteUsageData
             )
             .sheet(isPresented: $isShowingWhatsNew) {
-                WhatsNewTourView(nightlyUpdatesEnabled: $nightlyUpdatesEnabled) {
+                WhatsNewTourView {
                     markWhatsNewSeen()
                 }
             }
@@ -219,7 +218,6 @@ struct MainWindowRootView: View {
             .environmentObject(openAIAuth)
             .environmentObject(codexAuth)
             .environmentObject(notificationSettings)
-            .environmentObject(windowSession.healthManager)
             .environmentObject(loginItemManager)
             .environmentObject(namingPresetManager)
             .environmentObject(globalShortcutManager)

@@ -27,6 +27,7 @@ APP_PLIST="${RELEASE_DIR}/${PROJECT_NAME}.app/Contents/Info.plist"
 if [ -f "${APP_PLIST}" ]; then
     VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_PLIST}" 2>/dev/null || true)
     BUILD_NUM=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${APP_PLIST}" 2>/dev/null || true)
+    MINIMUM_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "${APP_PLIST}" 2>/dev/null || true)
 fi
 
 VERSION="${APPCAST_VERSION:-${VERSION:-$(get_version)}}"
@@ -100,6 +101,7 @@ cat > "$APPCAST_FILE" <<EOF
       <title>${APPCAST_ITEM_TITLE}</title>
 $(if [ -n "${APPCAST_CHANNEL}" ]; then printf '      <sparkle:channel>%s</sparkle:channel>\n' "${APPCAST_CHANNEL}"; fi)
       <sparkle:releaseNotesLink>${RELEASE_NOTES_URL}</sparkle:releaseNotesLink>
+$(if [ -n "${MINIMUM_SYSTEM_VERSION:-}" ]; then printf '      <sparkle:minimumSystemVersion>%s</sparkle:minimumSystemVersion>\n' "${MINIMUM_SYSTEM_VERSION}"; fi)
       <pubDate>${DATE}</pubDate>
       <enclosure url="${RELEASE_URL}"
                  sparkle:version="${BUILD_NUM}"

@@ -15,6 +15,7 @@ import Sparkle
 
 public enum SparkleUpdateFeed {
     public static let nightlyUpdatesEnabledKey = "nightlyUpdatesEnabled"
+    public static let stableAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml"
     public static let nightlyAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml"
 }
 
@@ -308,7 +309,7 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
             return SparkleUpdateFeed.nightlyAppcastURLString
         }
 
-        return nil
+        return SparkleUpdateFeed.stableAppcastURLString
     }
 }
 

@@ -197,7 +197,6 @@ struct HelpSettingsView: View {
         ### App Settings
         - Privacy mode: \(yesNo(defaults.bool(forKey: "privacyModeEnabled")))
         - Internet privacy mode: \(yesNo(FeatureFlags.internetPrivacyModeEnabled))
-        - Workspace Health: \(yesNo(FeatureFlags.workspaceHealthEnabled))
         - Menu bar extra: \(yesNo(defaults.object(forKey: "showMenuBarExtra") as? Bool ?? true))
         - Completed onboarding: \(yesNo(defaults.bool(forKey: "hasCompletedOnboarding")))
         - App support path: \(appSupportPath)
@@ -247,15 +246,6 @@ struct DeeplinkSettingsView: View {
             DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.")
         ]
 
-        if FeatureFlags.workspaceHealthEnabled {
-            organizationEntries.append(
-                DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open Workspace Health.")
-            )
-            organizationEntries.append(
-                DeeplinkEntry(title: "Scan Folder", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open Workspace Health scan for a folder.")
-            )
-        }
-
         return [
             DeeplinkGroup(
                 title: "Core",
@@ -283,7 +273,7 @@ struct DeeplinkSettingsView: View {
                     DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
                     DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
                     DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
-                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
+                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=stats", summary: "Open Learnings with action: stats, withdraw, export, import, or clear."),
                     DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup.")
                 ]
             ),

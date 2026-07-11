@@ -112,20 +112,6 @@ final class FeatureSpecificUITests: XCTestCase {
         )
     }
 
-    // MARK: - Workspace Health Feature Tests
-
-    func testWorkspaceHealthViewLoads() throws {
-        let healthSidebarItem = app.buttons["WorkspaceHealthSidebarItem"]
-        XCTAssertTrue(healthSidebarItem.waitForExistence(timeout: 3.0))
-        healthSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        XCTAssertTrue(
-            app.windows.firstMatch.exists,
-            "Workspace Health view should load without crashing"
-        )
-    }
-
     // MARK: - Help / Deep Link Tests
 
     func testHelpDeeplinkOpensApp() throws {

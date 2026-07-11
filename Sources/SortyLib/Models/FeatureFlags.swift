@@ -115,23 +115,6 @@ public enum FeatureFlags {
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
     }
 
-    /// Controls whether Workspace Health is visible in navigation and deeplink entry points.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app workspaceHealthEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app workspaceHealthEnabled -bool false
-    /// ```
-    public static var workspaceHealthEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "workspaceHealthEnabled") == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: "workspaceHealthEnabled")
-    }
-
     /// Controls whether subscription-based auth methods are available for supported AI providers.
     ///
     /// Enabled by default. Disable via Terminal:
@@ -147,6 +130,23 @@ public enum FeatureFlags {
             return true
         }
         return UserDefaults.standard.bool(forKey: "subscriptionAuthEnabled")
+    }
+
+    /// Controls whether in-app links and buttons supporting the developer are shown.
+    ///
+    /// Shown by default. Hide them via Terminal:
+    /// ```
+    /// defaults -container com.sorty.app write com.sorty.app supportDeveloperEnabled -bool false
+    /// ```
+    /// Show them again:
+    /// ```
+    /// defaults -container com.sorty.app write com.sorty.app supportDeveloperEnabled -bool true
+    /// ```
+    public static var supportDeveloperEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "supportDeveloperEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "supportDeveloperEnabled")
     }
 
     /// Preview harness mode for rapid development iteration.

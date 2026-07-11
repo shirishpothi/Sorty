@@ -28,13 +28,7 @@ struct ExperimentalSettingsView: View {
                 defaultsKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey,
                 defaultValue: false,
                 restartMessage: "Use Check for Updates after switching channels."
-            ),
-            ExperimentalFlag(
-                name: "Workspace Health",
-                description: "Shows Workspace Health navigation, menu actions, deeplinks, and shortcuts.",
-                defaultsKey: "workspaceHealthEnabled",
-                defaultValue: false
-            ),
+            )
         ]
     }
 }
@@ -72,10 +66,6 @@ struct ExperimentalFlag: Identifiable {
 struct ExperimentalFlagRow: View {
     let flag: ExperimentalFlag
     @State private var isEnabled: Bool
-    @State private var isDeprecationNoticePresented = false
-
-    private let forkURL = URL(string: "https://github.com/sorty-organizer/Sorty/fork")!
-    private let featureRequestURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
 
     init(flag: ExperimentalFlag) {
         self.flag = flag
@@ -97,12 +87,6 @@ struct ExperimentalFlagRow: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if flag.defaultsKey == "workspaceHealthEnabled" {
-                deprecationNoticeButton
-                    .padding(12)
-            }
-        }
         .onAppear {
             isEnabled = flag.currentValue()
         }
@@ -122,60 +106,6 @@ struct ExperimentalFlagRow: View {
                 HapticFeedbackManager.shared.selection()
             }
         )
-    }
-
-    private var deprecationNoticeButton: some View {
-        Button {
-            HapticFeedbackManager.shared.selection()
-            isDeprecationNoticePresented.toggle()
-        } label: {
-            Image(systemName: "scissors")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.red)
-                .frame(width: 28, height: 28)
-                .background(.red.opacity(0.14), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .help("Workspace Health deprecation warning")
-        .accessibilityLabel("Workspace Health deprecation warning") // [VERIFY] confirm label matches intent
-        .accessibilityHint("Shows details and options for supporting the feature")
-        .popover(isPresented: $isDeprecationNoticePresented, arrowEdge: .top) {
-            deprecationNotice
-                .systemLiquidGlassPopover(cornerRadius: 12)
-        }
-    }
-
-    private var deprecationNotice: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Scheduled for deprecation", systemImage: "scissors")
-                .font(.headline)
-                .foregroundStyle(.red)
-
-            Text("Workspace Health is on the chopping block and may be removed from a future version of Sorty.")
-                .font(.subheadline)
-
-            Text("To keep it alive, fork the open-source code or file a GitHub issue explaining why the feature should remain.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Link(destination: forkURL) {
-                    Label("Fork Sorty", systemImage: "tuningfork")
-                }
-                .buttonStyle(.sortyBordered(intent: .info, size: .small))
-                .trackHoveredURL(forkURL)
-
-                Link(destination: featureRequestURL) {
-                    Label("Advocate on GitHub", systemImage: "bubble.left.and.bubble.right")
-                }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                .trackHoveredURL(featureRequestURL)
-            }
-        }
-        .padding(16)
-        .frame(width: 340, alignment: .leading)
-        .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

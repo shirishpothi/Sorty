@@ -9,7 +9,6 @@
 6. [Managing Duplicates](#managing-duplicates)
 7. [Watched Folders](#watched-folders)
 8. [Exclusion Rules](#exclusion-rules)
-9. [Workspace Health](#workspace-health)
 10. [App Deeplinks](#app-deeplinks)
 11. [Keyboard Shortcuts](#keyboard-shortcuts)
 12. [Menu Bar Commands](#menu-bar-commands)
@@ -68,9 +67,6 @@ Set up automatic organization for folders like Downloads. New files are organize
 
 ### Duplicate Detection
 Find and safely remove duplicate files using SHA-256 content hashing. Recover space while maintaining a safety net.
-
-### Workspace Health
-Monitor your directories for clutter growth, identify cleanup opportunities, and track organization patterns over time.
 
 ---
 
@@ -135,7 +131,6 @@ After initial setup, you'll need to authenticate each time you access The Learni
 | Behavior | What's Captured | Priority |
 |----------|-----------------|----------|
 | **Steering Prompts** | Post-organization feedback and instructions | Highest |
-| **Honing Answers** | Your explicit preferences from Q&A sessions | High |
 | **Guiding Instructions** | Instructions you provide before organizing | High |
 | **Manual Corrections** | Files you move after AI organization | Medium |
 | **Reverts** | Organization sessions you undo | Medium |
@@ -155,21 +150,10 @@ The system uses your learnings in several ways:
 The Learnings dashboard has three tabs:
 
 - **Overview**: Quick stats, learning progress, and action buttons
-- **Preferences**: Grouped view of all learned preferences (honing answers, inferred rules, feedback)
+- **Preferences**: Grouped view of inferred rules and feedback
 - **Activity**: Timeline of corrections, reverts, and instructions with expandable details
 
-### Honing Sessions
-
-Use the **Refine Preferences** button to start a honing session:
-
-1. Answer 3-5 questions about your organization philosophy
-2. Questions are AI-generated based on your recent activity
-3. Answers become high-priority preferences for future organizations
-4. Honing is also offered after completing an organization
-
-**Example questions:**
-- "When you finish a project, what is your preferred archival strategy?"
-- "How do you prefer to organize documents by date?"
+Learnings are inferred passively from normal use, corrections, reversions, and feedback. For explicit persistent instructions, create or edit a Persona.
 
 ### Security & Privacy
 
@@ -205,7 +189,6 @@ sorty learnings
 | Deeplink | Description |
 |----------|-------------|
 | `sorty://learnings` | Open Learnings dashboard |
-| `sorty://learnings?action=honing` | Start a honing session |
 | `sorty://learnings?action=stats` | View learning statistics |
 
 ---
@@ -325,7 +308,6 @@ The app provides comprehensive URL schemes to control all aspects of the applica
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://health` | | Open Workspace Health |
 
 ### Navigation Routes
 
@@ -396,37 +378,6 @@ Run "Calibrate" to perform a one-time full organization. This establishes the ba
 
 ---
 
-## Workspace Health
-
-### Health Metrics
-
-| Metric | Description |
-|--------|-------------|
-| **Space Distribution** | How disk space is used across file types |
-| **Clutter Growth** | Rate of new unorganized files |
-| **Empty Folders** | Directories with no contents |
-| **Very Old Files** | Files not accessed in 1+ year |
-| **Broken Symlinks** | Symbolic links pointing to missing targets |
-| **Duplicate Candidates** | Potential duplicate files |
-
-### Cleanup Opportunities
-
-Sorty identifies:
-- **Screenshot Clutter**: Many screenshots that could be organized
-- **Download Clutter**: Old files in Downloads folder
-- **Large Files**: Files > 100MB that may need attention
-- **Temporary Files**: Cache and temp files safe to delete
-- **Unorganized Files**: Files in folder root needing organization
-
-### Growth Tracking
-
-Weekly insights show:
-- How much your folders grew
-- Which file types are accumulating
-- Recommendations for keeping things tidy
-
----
-
 ## Keyboard Shortcuts
 
 ### Navigation
@@ -434,7 +385,6 @@ Weekly insights show:
 | Shortcut | Action |
 |----------|--------|
 | ⌘1 | Go to Organize |
-| ⌘2 | Go to Workspace Health |
 | ⌘3 | Go to Duplicates |
 | ⌘4 | Go to Exclusions |
 | ⌘5 | Go to Watched Folders |
@@ -463,14 +413,6 @@ Weekly insights show:
 | ⇧⌘P | Preview Changes |
 | ⎋ | Cancel Operation |
 
-### Learnings
-
-| Shortcut | Action |
-|----------|--------|
-| ⌥⌘H | Start Honing Session |
-
----
-
 ## Menu Bar Commands
 
 Sorty provides a comprehensive menu bar with commands organized into logical groups.
@@ -489,7 +431,6 @@ Sorty provides a comprehensive menu bar with commands organized into logical gro
 |---------|----------|-------------|
 | Show/Hide Sidebar | ⌘\ | Toggle the navigation sidebar |
 | Organize | ⌘1 | Navigate to main organization view |
-| Workspace Health | ⌘2 | Navigate to health monitoring |
 | Duplicates | ⌘3 | Navigate to duplicate finder |
 | Exclusions | ⌘4 | Navigate to exclusion rules |
 | Watched Folders | ⌘5 | Navigate to watched folders |
@@ -512,7 +453,6 @@ Sorty provides a comprehensive menu bar with commands organized into logical gro
 | Command | Shortcut | Description |
 |---------|----------|-------------|
 | Open Dashboard | ⇧⌘L | Open The Learnings dashboard |
-| Start Honing Session | ⌥⌘H | Begin a preference refinement Q&A |
 | View Statistics | — | See learning metrics and progress |
 | Pause Learning | — | Temporarily stop data collection |
 | Export Learning Profile... | — | Save preferences to a file |
@@ -540,6 +480,8 @@ Sorty includes a built-in update checker that helps you stay current with the la
 1. Go to **Help → Check for Updates...** (or use the About menu)
 2. Sorty will check the configured Sparkle update feed for a newer version
 3. If an update is available, Sparkle will show the available release and install options
+
+For a new installation, download [`Sorty.zip`](https://github.com/sorty-organizer/Sorty/releases/latest/download/Sorty.zip), open it, and move `Sorty.app` to `/Applications`. Sorty shows onboarding until setup is completed.
 
 ### How the Update System Works
 

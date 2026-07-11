@@ -17,15 +17,11 @@ public final class RefreshManager: ObservableObject {
     
     /// Represents a scheduled refresh action
     private struct ScheduledAction: @unchecked Sendable {
-        let id: UUID
-        let interval: TimeInterval
-        let action: @Sendable () -> Void
         let timer: Timer
     }
     
     /// Task-based refresh for async operations
     private struct AsyncScheduledTask {
-        let id: UUID
         let task: Task<Void, Never>
     }
     
@@ -44,8 +40,12 @@ public final class RefreshManager: ObservableObject {
     public init() {}
     
     deinit {
-        // Cleanup is handled by invalidate() on timers and Task.cancel() on async tasks
-        // The actual cleanup is performed synchronously without MainActor requirements
+        for action in scheduledActions.values {
+            action.timer.invalidate()
+        }
+        for task in asyncTasks.values {
+            task.task.cancel()
+        }
     }
     
     // MARK: - Timer Scheduling
@@ -58,28 +58,17 @@ public final class RefreshManager: ObservableObject {
     @discardableResult
     public func schedule(interval: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
         let id = UUID()
-        
-        // Use a weak self pattern via a wrapper
-        weak var weakSelf = self
-        
-        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let safeInterval = normalizedRepeatingInterval(interval)
+
+        let timer = Timer(timeInterval: safeInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self = self, !self.isPaused else { return }
+                guard let self, !self.isPaused else { return }
                 action()
             }
         }
-        
-        // Add to RunLoop to ensure it fires
         RunLoop.main.add(timer, forMode: .common)
-        
-        let scheduledAction = ScheduledAction(
-            id: id,
-            interval: interval,
-            action: action,
-            timer: timer
-        )
-        
-        scheduledActions[id] = scheduledAction
+
+        scheduledActions[id] = ScheduledAction(timer: timer)
         
         // Fire immediately if not paused
         if !isPaused {
@@ -96,26 +85,29 @@ public final class RefreshManager: ObservableObject {
     ///   - action: Async action to perform (captured with weak self)
     /// - Returns: A unique identifier for the scheduled task
     @discardableResult
-    public func scheduleAsync(interval: TimeInterval, action: @escaping () async -> Void) -> UUID {
+    public func scheduleAsync(
+        interval: TimeInterval,
+        action: @escaping @Sendable () async -> Void
+    ) -> UUID {
         let id = UUID()
-        let nanoseconds = UInt64(interval * 1_000_000_000)
+        let safeInterval = normalizedRepeatingInterval(interval)
         
-        weak var weakSelf = self
-        
-        let task = Task { [weak self] in
+        let task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                guard let self = self, !self.isPaused else {
-                    try? await Task.sleep(nanoseconds: nanoseconds)
-                    continue
+                guard self != nil else { return }
+                if self?.isPaused == false {
+                    await action()
                 }
-                
-                await action()
-                
-                try? await Task.sleep(nanoseconds: nanoseconds)
+
+                do {
+                    try await Task.sleep(for: .seconds(safeInterval))
+                } catch {
+                    return
+                }
             }
         }
         
-        asyncTasks[id] = AsyncScheduledTask(id: id, task: task)
+        asyncTasks[id] = AsyncScheduledTask(task: task)
         
         return id
     }
@@ -128,31 +120,24 @@ public final class RefreshManager: ObservableObject {
     @discardableResult
     public func scheduleOnce(delay: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
         let id = UUID()
-        
-        let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        let safeDelay = delay.isFinite ? max(0, delay) : 0
+
+        let timer = Timer(timeInterval: safeDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let strongSelf = self else { return }
+                guard let self else { return }
                 
-                if strongSelf.isPaused {
+                if self.isPaused {
                     // Store for later execution if paused
-                    strongSelf.pendingResumes[id] = action
+                    self.pendingResumes[id] = action
                     return
                 }
                 action()
-                strongSelf.scheduledActions.removeValue(forKey: id)
+                self.scheduledActions.removeValue(forKey: id)
             }
         }
-        
         RunLoop.main.add(timer, forMode: .common)
-        
-        let scheduledAction = ScheduledAction(
-            id: id,
-            interval: delay,
-            action: action,
-            timer: timer
-        )
-        
-        scheduledActions[id] = scheduledAction
+
+        scheduledActions[id] = ScheduledAction(timer: timer)
         
         return id
     }
@@ -198,12 +183,15 @@ public final class RefreshManager: ObservableObject {
     /// Resume all paused timers
     public func resume() {
         isPaused = false
-        
-        // Execute any pending one-time actions
-        for (_, action) in pendingResumes {
+
+        // Clear bookkeeping before invoking callbacks because a callback may
+        // synchronously schedule or cancel more work on this manager.
+        let pending = pendingResumes
+        pendingResumes.removeAll()
+        for (id, action) in pending {
+            scheduledActions.removeValue(forKey: id)?.timer.invalidate()
             action()
         }
-        pendingResumes.removeAll()
     }
     
     /// Check if the manager is currently paused
@@ -231,6 +219,11 @@ public final class RefreshManager: ObservableObject {
     /// Create a coordinated refresh group that can be controlled together
     public func createCoordinatedGroup() -> CoordinatedRefreshGroup {
         CoordinatedRefreshGroup(manager: self)
+    }
+
+    private func normalizedRepeatingInterval(_ interval: TimeInterval) -> TimeInterval {
+        guard interval.isFinite, interval > 0 else { return 1 }
+        return max(interval, 0.01)
     }
 }
 

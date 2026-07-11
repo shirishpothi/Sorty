@@ -27,13 +27,16 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "postcss": "^8.5",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.2.6",
+    "postcss": "^8.5.16",
     "tailwindcss": "^4.2.0",
     "typescript": "5.7.3"
   },
   "pnpm": {
     "overrides": {
-      "hono": "4.12.25"
+      "hono": "4.12.25",
+      "postcss": "8.5.16"
     }
   }
 }

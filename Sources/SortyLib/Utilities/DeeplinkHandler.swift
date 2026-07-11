@@ -19,18 +19,15 @@ public enum DeeplinkDestination: Equatable {
     case help(section: String?)
     case open(path: String?)
     case history
-    case health
     case persona(action: String?, prompt: String?, generate: Bool)
     case watched(action: String?, path: String?)
     case rules(action: String?, type: String?, pattern: String?)
     case exclusions(action: String?, pattern: String?)
     case exclude(path: String?)
-    case scan(path: String?)
     case storage(action: String?, path: String?)
     
     /// Actions specific to Learnings feature
     public enum LearningsAction: String, Equatable {
-        case honing       // Start honing session
         case stats        // Show detailed statistics
         case withdraw     // Withdraw consent (pause learning)
         case export       // Export profile data
@@ -111,9 +108,6 @@ public class DeeplinkHandler: ObservableObject {
         case "history":
             pendingDestination = .history
             
-        case "health":
-            pendingDestination = .health
-            
         case "persona":
             let action = queryValue(for: "action")
             let prompt = queryValue(for: "prompt")
@@ -138,10 +132,6 @@ public class DeeplinkHandler: ObservableObject {
 
         case "exclude":
             pendingDestination = .exclude(path: queryValue(for: "path") ?? queryValue(for: "pattern"))
-            
-        case "scan":
-            let path = queryValue(for: "path")
-            pendingDestination = .scan(path: path)
             
         case "storage":
             let action = queryValue(for: "action")
@@ -224,9 +214,6 @@ public class DeeplinkHandler: ObservableObject {
         case .history:
             components.host = "history"
             
-        case .health:
-            components.host = "health"
-            
         case .persona(let action, let prompt, let generate):
             components.host = "persona"
             var items: [URLQueryItem] = []
@@ -280,12 +267,6 @@ public class DeeplinkHandler: ObservableObject {
         case .exclude(let path):
             components.host = "exclude"
             if let path {
-                components.queryItems = [URLQueryItem(name: "path", value: path)]
-            }
-            
-        case .scan(let path):
-            components.host = "scan"
-            if let path = path {
                 components.queryItems = [URLQueryItem(name: "path", value: path)]
             }
             

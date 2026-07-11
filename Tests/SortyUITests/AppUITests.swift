@@ -264,19 +264,6 @@ final class AppUITests: XCTestCase {
         }
     }
 
-    // MARK: - Workspace Health Functional Tests
-
-    func testAnalyzeButtonIsResponsive() throws {
-        navigateToView("WorkspaceHealthSidebarItem")
-
-        let analyzeButton = app.buttons["AnalyzeFolderButton"]
-        XCTAssertTrue(waitForElement(analyzeButton), "Analyze button should exist")
-        XCTAssertTrue(analyzeButton.isEnabled, "Analyze button should be enabled initially")
-
-        // We can't fully test the analyze function in UI tests without file picker interaction,
-        // but we can verify the button is functional
-    }
-
     // MARK: - Duplicates View Functional Tests
 
     func testDuplicatesScanButtonIntegration() throws {
@@ -479,7 +466,6 @@ final class AppUITests: XCTestCase {
     func testAllViewsLoadWithoutCrash() throws {
         let sidebarItems = [
             "OrganizeSidebarItem",
-            "WorkspaceHealthSidebarItem",
             "DuplicatesSidebarItem",
             "SettingsSidebarItem",
             "HistorySidebarItem",
@@ -504,7 +490,6 @@ final class AppUITests: XCTestCase {
             "ExclusionsSidebarItem",
             "WatchedFoldersSidebarItem",
             "DuplicatesSidebarItem",
-            "WorkspaceHealthSidebarItem",
             "HistorySidebarItem",
             "LearningsSidebarItem"
         ]
@@ -549,7 +534,6 @@ final class AppUITests: XCTestCase {
     func testAllSidebarItemsExistAndAreClickable() throws {
         let sidebarItems: [(identifier: String, expectedContent: String)] = [
             ("OrganizeSidebarItem", "Organize"),
-            ("WorkspaceHealthSidebarItem", "Workspace Health"),
             ("DuplicatesSidebarItem", "Duplicate"),
             ("SettingsSidebarItem", "Settings"),
             ("HistorySidebarItem", "History"),
@@ -592,7 +576,6 @@ final class AppUITests: XCTestCase {
         // Navigate through all other views
         let otherViews = [
             "OrganizeSidebarItem",
-            "WorkspaceHealthSidebarItem",
             "DuplicatesSidebarItem",
             "HistorySidebarItem",
             "ExclusionsSidebarItem",
@@ -621,11 +604,6 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(app.switches["ReasoningToggle"].waitForExistence(timeout: 2.0) ||
                      app.switches["DeepScanToggle"].waitForExistence(timeout: 2.0),
                      "Settings toggles should have accessibility identifiers")
-
-        // Test Workspace Health
-        navigateToView("WorkspaceHealthSidebarItem")
-        XCTAssertTrue(app.buttons["AnalyzeFolderButton"].waitForExistence(timeout: 2.0),
-                     "Analyze button should have accessibility identifier")
 
         // Test Duplicates
         navigateToView("DuplicatesSidebarItem")

@@ -13,7 +13,7 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
         XCTAssertNil(result.scope)
     }
 
-    func testResolveUsesDirectRuleIDAndExtractsExplicitHoningSignals() {
+    func testResolveUsesDirectRuleIDAndEvidence() {
         let file = FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf", size: 1024)
         let suggestion = FolderSuggestion(folderName: "Reports", files: [file], ruleId: "rule-1")
 
@@ -24,8 +24,8 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
             priority: 80,
             explanation: "PDF files should go in Reports",
             supportCount: 4,
-            evidenceIds: ["Preference: Prefer project folders"],
-            evidenceDescription: "User moved similar PDFs; Preference: Prefer project folders"
+            evidenceIds: ["User moved similar PDFs"],
+            evidenceDescription: "User moved similar PDFs"
         )
         let profile = LearningsProfile(inferredRules: [rule])
 
@@ -33,10 +33,8 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
 
         XCTAssertTrue(result.hasContent)
         XCTAssertEqual(result.scope, .fileRuleMatch)
-        XCTAssertEqual(result.learningsItems.filter { $0.kind == .learnedRule }.count, 1)
-        XCTAssertEqual(result.learningsItems.filter { $0.kind == .ruleEvidence }.count, 1)
-        XCTAssertEqual(result.honingItems.count, 1)
-        XCTAssertTrue(result.honingItems[0].detail.contains("Prefer project folders"))
+        XCTAssertEqual(result.items.filter { $0.kind == .learnedRule }.count, 1)
+        XCTAssertEqual(result.items.filter { $0.kind == .ruleEvidence }.count, 1)
     }
 
     func testResolveUsesSemanticTagRuleFallback() {
@@ -56,10 +54,10 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
 
         XCTAssertTrue(result.hasContent)
         XCTAssertEqual(result.scope, .fileRuleMatch)
-        XCTAssertEqual(result.learningsItems.filter { $0.kind == .learnedRule }.count, 1)
+        XCTAssertEqual(result.items.filter { $0.kind == .learnedRule }.count, 1)
     }
 
-    func testResolveDoesNotUseGlobalHoningAnswersWithoutExplicitEvidence() {
+    func testResolveUsesOnlyRuleEvidence() {
         let file = FileItem(path: "/tmp/image.png", name: "image", extension: "png", size: 4096)
         let suggestion = FolderSuggestion(folderName: "Images", files: [file], ruleId: "rule-3")
 
@@ -71,15 +69,12 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
             explanation: "PNG files should go in Images",
             evidenceDescription: "User moved screenshots into Images"
         )
-        let profile = LearningsProfile(
-            honingAnswers: [HoningAnswer(questionId: "q1", selectedOption: "Always group by project")],
-            inferredRules: [rule]
-        )
+        let profile = LearningsProfile(inferredRules: [rule])
 
         let result = FileLearningsAttributionResolver.resolve(file: file, suggestion: suggestion, profile: profile)
 
         XCTAssertTrue(result.hasContent)
-        XCTAssertTrue(result.honingItems.isEmpty)
+        XCTAssertEqual(result.items.count, 2)
     }
 
     func testResolveFallsBackToHeuristicRuleMatchingWhenRuleIDIsMissing() {
@@ -115,6 +110,6 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
         XCTAssertTrue(result.hasContent)
         XCTAssertEqual(result.rule?.id, "rule-pdf")
         XCTAssertEqual(result.scope, LearningsAttributionScope.fileRuleMatch)
-        XCTAssertEqual(result.learningsItems.filter { $0.kind == LearningsAttributionKind.learnedRule }.count, 1)
+        XCTAssertEqual(result.items.filter { $0.kind == LearningsAttributionKind.learnedRule }.count, 1)
     }
 }

@@ -150,7 +150,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .help:
             return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "issue details", "bug report", "diagnostics"]
         case .experimental:
-            return ["experimental", "labs", "beta", "feature flags", "defaults", "nightly updates", "workspace health", "crash risk"]
+            return ["experimental", "labs", "beta", "feature flags", "defaults", "nightly updates", "crash risk"]
         }
     }
 
@@ -238,8 +238,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .experimental:
             return [
-                SettingsFeatureSnippet(title: "Nightly Updates", summary: "Try fresh builds from the nightly feed with higher crash risk.", keywords: ["experimental", "beta", "defaults"]),
-                SettingsFeatureSnippet(title: "Workspace Health", summary: "Enable the experimental workspace health view, shortcuts, and deeplinks.", keywords: ["experimental", "health", "scan"])
+                SettingsFeatureSnippet(title: "Nightly Updates", summary: "Try fresh builds from the nightly feed with higher crash risk.", keywords: ["experimental", "beta", "defaults"])
             ]
         }
     }

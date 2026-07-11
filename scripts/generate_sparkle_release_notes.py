@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Generate Markdown and HTML release notes for Sparkle appcasts."""
+"""Generate deterministic Markdown and HTML release notes for Sparkle."""
 
 from __future__ import annotations
 
 import argparse
 import html
 import os
+import re
 import subprocess
 from pathlib import Path
+
+
+REQUIRED_SECTIONS = ("New", "Improved", "Fixed")
 
 
 def git_lines(args: list[str]) -> list[str]:
@@ -22,146 +26,127 @@ def git_lines(args: list[str]) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def commit_range(args: argparse.Namespace) -> tuple[str, str, str]:
-    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
-    head = "".join(git_lines(["rev-parse", "HEAD"])) or "HEAD"
-    if args.from_tag:
-        baseline = args.from_tag
-        return f"{baseline}..HEAD", f"https://github.com/{repository}/compare/{baseline}...{head}", baseline
+def commit_sections(from_tag: str, fallback_count: int) -> dict[str, list[str]]:
+    range_spec = f"{from_tag}..HEAD" if from_tag else f"HEAD~{fallback_count}..HEAD"
+    subjects = git_lines(["log", range_spec, "--pretty=format:%s", "--no-merges"])
+    sections: dict[str, list[str]] = {heading: [] for heading in REQUIRED_SECTIONS}
+    for subject in subjects:
+        lower = subject.lower()
+        cleaned = re.sub(
+            r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+\))?:\s*",
+            "",
+            subject,
+            flags=re.IGNORECASE,
+        )
+        if lower.startswith(("feat", "add", "introduce")):
+            sections["New"].append(cleaned)
+        elif lower.startswith(("fix", "repair", "restore")):
+            sections["Fixed"].append(cleaned)
+        else:
+            sections["Improved"].append(cleaned)
 
-    previous = "".join(git_lines(["rev-list", "-n", "1", "nightly"]))
-    if previous:
-        return f"{previous}..HEAD", f"https://github.com/{repository}/compare/{previous}...{head}", previous[:7]
-    return f"HEAD~{args.fallback_count}..HEAD", f"https://github.com/{repository}/commit/{head}", f"last {args.fallback_count} commits"
+    for heading in REQUIRED_SECTIONS:
+        if not sections[heading]:
+            sections[heading].append(f"No {heading.lower()} items in this build.")
+    return sections
 
 
-def categorize(subject: str) -> str:
-    lower = subject.lower()
-    if any(token in lower for token in ("design", "tour", "what's new", "whats new", "ui", "settings")):
-        return "User-facing changes"
-    if any(token in lower for token in ("nightly", "appcast", "sparkle", "release", "ci:")):
-        return "Update system"
-    if lower.startswith(("fix:", "bug", "repair")):
-        return "Fixes"
-    return "Engineering"
+def changelog_sections(path: Path, version: str) -> dict[str, list[str]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start_pattern = re.compile(rf"^## \[{re.escape(version)}\](?:\s+-\s+.+)?$")
+    start = next((index for index, line in enumerate(lines) if start_pattern.match(line)), None)
+    if start is None:
+        raise SystemExit(f"CHANGELOG entry for {version} was not found in {path}.")
 
-
-def load_commits(range_spec: str) -> dict[str, list[tuple[str, str]]]:
-    rows = git_lines(["log", range_spec, "--pretty=format:%h%x09%s", "--no-merges"])
-    groups: dict[str, list[tuple[str, str]]] = {
-        "User-facing changes": [],
-        "Update system": [],
-        "Fixes": [],
-        "Engineering": [],
-    }
-    for row in rows:
-        if "\t" not in row:
+    sections: dict[str, list[str]] = {heading: [] for heading in REQUIRED_SECTIONS}
+    current: str | None = None
+    for line in lines[start + 1 :]:
+        if line.startswith("## ["):
+            break
+        if line.startswith("### "):
+            heading = line.removeprefix("### ").strip()
+            current = heading if heading in sections else None
             continue
-        short_hash, subject = row.split("\t", 1)
-        groups[categorize(subject)].append((short_hash, subject))
-    return {key: value for key, value in groups.items() if value}
+        if current and line.startswith("- "):
+            sections[current].append(line.removeprefix("- ").strip())
 
+    missing = [heading for heading, items in sections.items() if not items]
+    if missing:
+        raise SystemExit(
+            f"CHANGELOG {version} must contain non-empty sections in this order: "
+            + ", ".join(REQUIRED_SECTIONS)
+            + f". Missing: {', '.join(missing)}."
+        )
 
-def commit_url(short_hash: str) -> str:
-    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
-    return f"https://github.com/{repository}/commit/{short_hash}"
-
-
-def markdown(
-    args: argparse.Namespace,
-    groups: dict[str, list[tuple[str, str]]],
-    compare_url: str,
-    baseline_label: str,
-) -> str:
-    lines = [
-        f"## {args.title}",
-        "",
-        args.summary,
-        "",
-        "### TL;DR",
-        "- This preview is available through the normal Sorty update flow.",
-        "- Installing it does not opt you into future nightly builds.",
-        "- Future nightly builds are controlled from Settings > Experimental > Nightly Updates.",
-        "",
-        f"Changes shown below are everything since `{baseline_label}`.",
-        "",
+    encountered = [
+        line.removeprefix("### ").strip()
+        for line in lines[start + 1 :]
+        if line.startswith("### ")
     ]
-    if groups:
-        for heading, commits in groups.items():
-            lines.append(f"### {heading}")
-            for short_hash, subject in commits:
-                lines.append(f"- {subject} ([`{short_hash}`]({commit_url(short_hash)}))")
-            lines.append("")
-    else:
-        lines.extend(["### Changes", "- No user-facing commits since the previous nightly.", ""])
+    if encountered[: len(REQUIRED_SECTIONS)] != list(REQUIRED_SECTIONS):
+        raise SystemExit(
+            f"CHANGELOG {version} section order must be: "
+            + " -> ".join(REQUIRED_SECTIONS)
+        )
+    return sections
 
-    lines.extend(
-        [
-            "### Update Channel",
-            "Future nightly-only builds are more fragile and may include unfinished changes.",
-            "Turn them on or off from Settings > Experimental > Nightly Updates.",
-            "",
-            f"Full change comparison: {compare_url}",
-            "",
-        ]
-    )
+
+def markdown_document(title: str, summary: str, sections: dict[str, list[str]]) -> str:
+    lines = [f"## {title}", "", summary, ""]
+    for heading in REQUIRED_SECTIONS:
+        lines.append(f"### {heading}")
+        lines.extend(f"- {item}" for item in sections[heading])
+        lines.append("")
     return "\n".join(lines)
 
 
+def inline_html(markdown_text: str) -> str:
+    escaped = html.escape(markdown_text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    return re.sub(r"`(.+?)`", r"<code>\1</code>", escaped)
+
+
 def html_document(
-    args: argparse.Namespace,
-    groups: dict[str, list[tuple[str, str]]],
-    compare_url: str,
-    baseline_label: str,
+    title: str,
+    summary: str,
+    release_tag: str,
+    sections: dict[str, list[str]],
 ) -> str:
-    sections = []
-    for heading, commits in groups.items():
-        items = "".join(
-            f'<li>{html.escape(subject)} <a class="hash" href="{html.escape(commit_url(short_hash))}">{html.escape(short_hash)}</a></li>'
-            for short_hash, subject in commits
-        )
-        sections.append(f"<h2>{html.escape(heading)}</h2><ul>{items}</ul>")
-    if not sections:
-        sections.append("<h2>Changes</h2><ul><li>No user-facing commits since the previous nightly.</li></ul>")
+    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
+    release_url = f"https://github.com/{repository}/releases/tag/{release_tag}"
+    rendered_sections = []
+    for heading in REQUIRED_SECTIONS:
+        items = "".join(f"<li>{inline_html(item)}</li>" for item in sections[heading])
+        rendered_sections.append(f"<section><h2>{heading}</h2><ul>{items}</ul></section>")
 
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(args.title)}</title>
+  <title>{html.escape(title)}</title>
   <style>
     :root {{ color-scheme: light dark; }}
     body {{ margin: 0; padding: 28px; font: -apple-system-body; color: CanvasText; background: Canvas; }}
     main {{ max-width: 720px; margin: 0 auto; }}
-    h1 {{ font: -apple-system-title1; margin: 0 0 8px; }}
-    h2 {{ font: -apple-system-headline; margin: 28px 0 10px; }}
-    p {{ line-height: 1.45; opacity: 0.82; }}
+    h1 {{ margin: 0 0 8px; font: -apple-system-title1; }}
+    h2 {{ margin: 28px 0 10px; font: -apple-system-headline; }}
+    p {{ line-height: 1.5; }}
     ul {{ margin: 0; padding-left: 22px; }}
-    li {{ margin: 8px 0; line-height: 1.4; }}
-    .callout {{ border: 1px solid rgba(128, 128, 128, 0.24); border-radius: 14px; padding: 14px 16px; background: rgba(128, 128, 128, 0.08); }}
-    .hash {{ opacity: 0.62; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }}
+    li {{ margin: 9px 0; line-height: 1.45; }}
+    .summary {{ color: color-mix(in srgb, CanvasText 78%, transparent); }}
+    .callout {{ margin: 22px 0 8px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, CanvasText 7%, Canvas); }}
+    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }}
     a {{ color: LinkText; }}
   </style>
 </head>
 <body>
   <main>
-    <h1>{html.escape(args.title)}</h1>
-    <p>{html.escape(args.summary)}</p>
-    <p>Changes shown below are everything since <span class="hash">{html.escape(baseline_label)}</span>.</p>
-    <div class="callout">
-      <strong>Update behavior:</strong> This preview is offered through the normal update channel. Installing it does not switch Sorty to future nightly builds unless you enable Nightly Updates in Settings &gt; Experimental.
-    </div>
-    <h2>TL;DR</h2>
-    <ul>
-      <li>This preview is available through the normal Sorty update flow.</li>
-      <li>Installing it does not opt you into future nightly builds.</li>
-      <li>Future nightly builds are controlled from Settings &gt; Experimental &gt; Nightly Updates.</li>
-    </ul>
-    {''.join(sections)}
-    <h2>Update Channel</h2>
-    <p>Turn future nightly builds on or off from Settings &gt; Experimental &gt; Nightly Updates.</p>
-    <p><a href="{html.escape(compare_url)}">View the full change comparison</a></p>
+    <h1>{html.escape(title)}</h1>
+    <p class="summary">{html.escape(summary)}</p>
+    <div class="callout"><strong>Update:</strong> Install this release in Sorty with <strong>Check for Updates</strong>, or download <code>Sorty.zip</code> for a new installation.</div>
+    {''.join(rendered_sections)}
+    <p><a href="{html.escape(release_url)}">View this release on GitHub</a></p>
   </main>
 </body>
 </html>
@@ -170,18 +155,30 @@ def html_document(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--version", default="")
     parser.add_argument("--title", required=True)
     parser.add_argument("--summary", required=True)
-    parser.add_argument("--markdown", required=True)
-    parser.add_argument("--html", required=True)
+    parser.add_argument("--changelog", default="CHANGELOG.md")
     parser.add_argument("--from-tag", default="")
     parser.add_argument("--fallback-count", type=int, default=25)
+    parser.add_argument("--markdown", required=True)
+    parser.add_argument("--html", required=True)
     args = parser.parse_args()
 
-    range_spec, compare_url, baseline_label = commit_range(args)
-    groups = load_commits(range_spec)
-    Path(args.markdown).write_text(markdown(args, groups, compare_url, baseline_label), encoding="utf-8")
-    Path(args.html).write_text(html_document(args, groups, compare_url, baseline_label), encoding="utf-8")
+    if args.version:
+        sections = changelog_sections(Path(args.changelog), args.version)
+        release_tag = f"v{args.version}"
+    else:
+        sections = commit_sections(args.from_tag, args.fallback_count)
+        release_tag = "nightly"
+    Path(args.markdown).write_text(
+        markdown_document(args.title, args.summary, sections),
+        encoding="utf-8",
+    )
+    Path(args.html).write_text(
+        html_document(args.title, args.summary, release_tag, sections),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

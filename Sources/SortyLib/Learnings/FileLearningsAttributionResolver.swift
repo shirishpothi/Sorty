@@ -8,7 +8,6 @@ public enum LearningsAttributionScope: String, Sendable {
 public enum LearningsAttributionKind: String, Sendable {
     case learnedRule
     case ruleEvidence
-    case honingPreference
 }
 
 public struct LearningsAttributionItem: Sendable, Hashable {
@@ -36,14 +35,6 @@ public struct FileLearningsAttribution: Sendable {
 
     public var hasContent: Bool {
         !items.isEmpty
-    }
-
-    public var learningsItems: [LearningsAttributionItem] {
-        items.filter { $0.kind != .honingPreference }
-    }
-
-    public var honingItems: [LearningsAttributionItem] {
-        items.filter { $0.kind == .honingPreference }
     }
 
     public static let empty = FileLearningsAttribution(rule: nil, scope: nil, items: [])
@@ -107,16 +98,6 @@ public enum FileLearningsAttributionResolver {
                 )
             }
 
-            let honingSignals = explicitHoningSignals(from: rule)
-            items.append(
-                contentsOf: honingSignals.map {
-                    LearningsAttributionItem(
-                        kind: .honingPreference,
-                        title: "Honing Preference Used",
-                        detail: $0
-                    )
-                }
-            )
         } else {
             items.append(
                 LearningsAttributionItem(
@@ -277,52 +258,4 @@ public enum FileLearningsAttributionResolver {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private static func explicitHoningSignals(from rule: InferredRule) -> [String] {
-        let evidenceSources: [String] = [rule.evidenceDescription].compactMap { $0 } + rule.evidenceIds
-        var signals: [String] = []
-        var seen: Set<String> = []
-
-        for rawEvidence in evidenceSources {
-            for segment in rawEvidence.components(separatedBy: CharacterSet(charactersIn: ";\n")) {
-                let normalized = normalizedEvidenceSegment(segment)
-                guard !normalized.isEmpty else { continue }
-
-                guard let signal = honingSignal(from: normalized) else { continue }
-
-                let key = signal.lowercased()
-                if seen.insert(key).inserted {
-                    signals.append(signal)
-                }
-            }
-        }
-
-        return signals
-    }
-
-    private static func normalizedEvidenceSegment(_ segment: String) -> String {
-        segment
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "-•"))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func honingSignal(from segment: String) -> String? {
-        let lowercased = segment.lowercased()
-        let markers = [
-            "preference:",
-            "honing:",
-            "honing preference:",
-            "user preference:",
-            "from honing:"
-        ]
-
-        for marker in markers {
-            if lowercased.hasPrefix(marker) {
-                let extracted = segment.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
-                return extracted.isEmpty ? nil : extracted
-            }
-        }
-
-        return nil
-    }
 }

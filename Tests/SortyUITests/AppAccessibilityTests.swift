@@ -28,7 +28,6 @@ final class AppAccessibilityTests: XCTestCase {
     func testSidebarNavigationElementsExist() throws {
         let sidebarItems = [
             "OrganizeSidebarItem",
-            "WorkspaceHealthSidebarItem",
             "DuplicatesSidebarItem",
             "SettingsSidebarItem",
             "HistorySidebarItem",
@@ -105,17 +104,4 @@ final class AppAccessibilityTests: XCTestCase {
         XCTAssertTrue(hasDropZone, "Organize view should show folder selection UI")
     }
 
-    // MARK: - Workspace Health Accessibility
-
-    func testWorkspaceHealthViewCoreElementsExist() throws {
-        let healthSidebarItem = app.buttons["WorkspaceHealthSidebarItem"]
-        XCTAssertTrue(healthSidebarItem.waitForExistence(timeout: 3.0))
-        healthSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // Workspace Health should show metric cards or a folder selection prompt
-        // Verify the view loaded
-        let healthViewExists = app.windows.firstMatch.exists
-        XCTAssertTrue(healthViewExists, "Workspace Health view should load")
-    }
 }

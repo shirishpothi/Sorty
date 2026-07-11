@@ -55,15 +55,6 @@ final class DeeplinkUITests: XCTestCase {
         XCTAssertTrue(found, "History view should be shown")
     }
 
-    func testHealthDeeplinkNavigation() throws {
-        app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://health"
-        app.launch()
-        
-        // Verify Workspace Health view by checking for Analyze button
-        let analyzeButton = app.buttons["AnalyzeFolderButton"]
-        XCTAssertTrue(waitForElement(analyzeButton, timeout: 10.0), "Workspace Health view (AnalyzeFolderButton) should be shown")
-    }
-
     func testOrganizeDeeplinkWithParameters() throws {
         // Trigger deeplink: sorty://organize?path=/tmp&persona=developer
         app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://organize?path=/tmp&persona=developer"

@@ -566,7 +566,7 @@ public enum FileCategory: String, Codable, Sendable, CaseIterable {
 
 // MARK: - Behavior Preferences
 
-/// User's explicit organization philosophy derived from honing and behavior
+/// Organization preferences inferred from observed behavior.
 public struct BehaviorPreferences: Codable, Sendable, Equatable {
     public var deletionVsArchive: DeletionPreference
     public var folderDepthPreference: FolderDepthPreference

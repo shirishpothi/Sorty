@@ -79,20 +79,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
             )
         ])
 
-        if FeatureFlags.workspaceHealthEnabled {
-            items.insert(
-                SidebarNavigationItem(
-                    view: .workspaceHealth,
-                    title: "Workspace Health",
-                    systemImage: "heart.text.square",
-                    accessibilityIdentifier: "WorkspaceHealthSidebarItem",
-                    accessibilityHint: "Inspect workspace quality and cleanup opportunities",
-                    helpText: "Check workspace health insights"
-                ),
-                at: 3
-            )
-        }
-
         return items
     }
 }
