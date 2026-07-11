@@ -210,14 +210,24 @@ private enum MascotHeartParticleTargets {
         to end: CGPoint,
         count: Int
     ) -> [CGPoint] {
-        (0..<count).map { index in
-            let progress = CGFloat(index) / CGFloat(max(count - 1, 1))
+        guard count > 0 else { return [] }
+
+        let denominator = CGFloat(max(count - 1, 1))
+        var points: [CGPoint] = []
+        points.reserveCapacity(count)
+
+        for index in 0..<count {
+            let progress = CGFloat(index) / denominator
             let inverse = 1 - progress
-            return CGPoint(
-                x: inverse * inverse * start.x + 2 * inverse * progress * control.x + progress * progress * end.x,
-                y: inverse * inverse * start.y + 2 * inverse * progress * control.y + progress * progress * end.y
-            )
+            let startWeight = inverse * inverse
+            let controlWeight = 2 * inverse * progress
+            let endWeight = progress * progress
+            let x = startWeight * start.x + controlWeight * control.x + endWeight * end.x
+            let y = startWeight * start.y + controlWeight * control.y + endWeight * end.y
+            points.append(CGPoint(x: x, y: y))
         }
+
+        return points
     }
 
     private static func roundedRectangleOutline(rect: CGRect, radius: CGFloat, count: Int) -> [CGPoint] {
