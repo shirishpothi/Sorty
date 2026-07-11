@@ -5,7 +5,7 @@
     <key>DeveloperName</key>
     <string>Sorty</string>
     <key>ApplicationDescription</key>
-    <string>Sorty organizes files and folders using AI providers you configure. It can also sign in to GitHub Copilot, check for app updates, and optionally load contributor data.</string>
+    <string>Sorty organizes files and folders using AI providers and storage locations you configure. It can also sign in to GitHub Copilot, check for app updates, and optionally load contributor data.</string>
     <key>Website</key>
     <string>https://github.com/shirishpothi/Sorty</string>
     <key>Connections</key>
@@ -71,6 +71,16 @@
             <string>Sorty sends AI requests to Google when you choose Gemini.</string>
             <key>DenyConsequences</key>
             <string>If you deny these connections, Gemini-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>www.googleapis.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty uses the Google Drive API to update file metadata and organize items in Google Drive locations.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, Google Drive organization and metadata updates will fail.</string>
         </dict>
         <dict>
             <key>Host</key>
