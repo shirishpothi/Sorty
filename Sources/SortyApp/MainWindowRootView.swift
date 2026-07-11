@@ -49,6 +49,9 @@ struct MainWindowRootView: View {
 
     var body: some View {
         contentWithNotificationRouting
+            .onAppear {
+                recordLaunchSmokeSuccessIfRequested()
+            }
             .deleteUsageDataConfirmationAlert(
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
                 deleteAction: windowSession.appState.deleteUsageData
@@ -58,6 +61,18 @@ struct MainWindowRootView: View {
                     markWhatsNewSeen()
                 }
             }
+    }
+
+    private func recordLaunchSmokeSuccessIfRequested() {
+        guard let resultPath = ProcessInfo.processInfo.environment["SORTY_LAUNCH_SMOKE_RESULT"],
+              !resultPath.isEmpty else {
+            return
+        }
+
+        try? Data("main-window-appeared\n".utf8).write(
+            to: URL(fileURLWithPath: resultPath),
+            options: .atomic
+        )
     }
 
     private var contentWithNotificationRouting: some View {

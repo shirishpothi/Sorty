@@ -27,11 +27,25 @@ for _ in {1..20}; do
     fi
     sleep 0.25
 done
-open -n "${APP_PATH}" --args --release-launch-smoke-test
+
+RESULT_PATH="${TEMP_DIR:-${TMPDIR:-/tmp}}/sorty-main-window-appeared"
+rm -f "${RESULT_PATH}"
+
+if [ "${CI:-false}" = "true" ]; then
+    SORTY_LAUNCH_SMOKE_RESULT="${RESULT_PATH}" \
+        "${EXECUTABLE_PATH}" --release-launch-smoke-test >/tmp/sorty-launch-smoke.log 2>&1 &
+else
+    open -n "${APP_PATH}" --args --release-launch-smoke-test
+fi
 
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 while (( SECONDS < deadline )); do
     pid=$(pgrep -x Sorty | head -1 || true)
+    if [ "${CI:-false}" = "true" ] && [ -s "${RESULT_PATH}" ]; then
+        echo "Sorty launch smoke test passed: main window root appeared."
+        kill "${pid}" >/dev/null 2>&1 || true
+        exit 0
+    fi
     if [ -n "${pid}" ] && swift - "${pid}" <<'SWIFT'
 import CoreGraphics
 import Foundation
