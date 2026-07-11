@@ -60,18 +60,26 @@ public actor FileSystemManager {
     private func copyWithProgress(from source: URL, to destination: URL, progressHandler: (@Sendable (Double) -> Void)?) async throws {
         let sourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
         let fileSize = (sourceAttributes[.size] as? UInt64) ?? 0
+        let stagingURL = destination.deletingLastPathComponent().appendingPathComponent(
+            ".sorty-transfer-\(UUID().uuidString)-\(destination.lastPathComponent)"
+        )
+
+        defer {
+            if fileManager.fileExists(atPath: stagingURL.path) {
+                try? fileManager.removeItem(at: stagingURL)
+            }
+        }
 
         if fileSize > Self.largeFileThreshold {
             guard let readHandle = FileHandle(forReadingAtPath: source.path) else {
                 throw FileSystemError.fileNotFound
             }
-            defer { try? readHandle.close() }
 
-            fileManager.createFile(atPath: destination.path, contents: nil)
-            guard let writeHandle = FileHandle(forWritingAtPath: destination.path) else {
+            guard fileManager.createFile(atPath: stagingURL.path, contents: nil),
+                  let writeHandle = FileHandle(forWritingAtPath: stagingURL.path) else {
+                try? readHandle.close()
                 throw FileSystemError.permissionDenied
             }
-            defer { try? writeHandle.close() }
 
             do {
                 var bytesWritten: UInt64 = 0
@@ -84,23 +92,39 @@ public actor FileSystemManager {
                     let progress = Double(bytesWritten) / Double(fileSize)
                     progressHandler?(min(progress, 1.0))
                 }
+                try writeHandle.synchronize()
+                try writeHandle.close()
+                try readHandle.close()
+                guard copyfile(
+                    source.path,
+                    stagingURL.path,
+                    nil,
+                    copyfile_flags_t(COPYFILE_METADATA)
+                ) == 0 else {
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
             } catch {
-                try? fileManager.removeItem(at: destination)
+                try? writeHandle.close()
+                try? readHandle.close()
                 throw error
             }
         } else {
             try Task.checkCancellation()
-            try fileManager.copyItem(at: source, to: destination)
+            try fileManager.copyItem(at: source, to: stagingURL)
             progressHandler?(1.0)
         }
 
-        let destAttributes = try fileManager.attributesOfItem(atPath: destination.path)
+        try Task.checkCancellation()
+        let destAttributes = try fileManager.attributesOfItem(atPath: stagingURL.path)
         let destSize = (destAttributes[.size] as? UInt64) ?? 0
         guard destSize == fileSize else {
-            try? fileManager.removeItem(at: destination)
             throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
         }
 
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            throw CocoaError(.fileWriteFileExists)
+        }
+        try fileManager.moveItem(at: stagingURL, to: destination)
         try fileManager.removeItem(at: source)
     }
 

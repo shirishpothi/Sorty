@@ -304,6 +304,43 @@ class FileSystemManagerTests: XCTestCase {
         await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
     }
 
+    @MainActor
+    func testCrossVolumeMovePreservesMetadataAndLeavesNoStagingFile() async throws {
+        let source = tempDirectory.appendingPathComponent("report.txt")
+        try "important".write(to: source, atomically: true, encoding: .utf8)
+        let modificationDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes(
+            [.modificationDate: modificationDate],
+            ofItemAtPath: source.path
+        )
+        let file = FileItem(
+            path: source.path,
+            name: "report",
+            extension: "txt",
+            size: 9,
+            isDirectory: false
+        )
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Archive", files: [file])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+
+        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+
+        let destination = tempDirectory.appendingPathComponent("Archive/report.txt")
+        let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+        let destinationDate = try XCTUnwrap(attributes[.modificationDate] as? Date)
+        let archiveContents = try FileManager.default.contentsOfDirectory(
+            atPath: destination.deletingLastPathComponent().path
+        )
+        XCTAssertEqual(destinationDate.timeIntervalSince1970, modificationDate.timeIntervalSince1970, accuracy: 1)
+        XCTAssertFalse(archiveContents.contains { $0.hasPrefix(".sorty-transfer-") })
+
+        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
+    }
+
 
     // MARK: - File Tagging Tests
     
