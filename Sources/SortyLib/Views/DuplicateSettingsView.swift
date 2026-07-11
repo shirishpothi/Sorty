@@ -31,8 +31,7 @@ struct DuplicateSettingsView: View {
                     }) {
                         Image(systemName: "arrow.counterclockwise")
                     }
-                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .systemLiquidGlassButton()
                     .help("Reset to Defaults")
                     .accessibilityLabel("Reset to Defaults")
                     

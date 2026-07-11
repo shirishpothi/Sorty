@@ -1955,8 +1955,7 @@ struct ModelDirectoryRow: View {
                     Label("Open", systemImage: "arrow.up.right.square")
                         .font(.caption.bold())
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                .systemLiquidGlassBackground(cornerRadius: 999)
+                .systemLiquidGlassButton()
                 .accessibilityIdentifier("OpenModelDirectoryButton_\(directory.id)")
             }
 
@@ -1973,7 +1972,6 @@ struct ModelDirectoryRow: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .scaleEffect(0.8)
-            .systemLiquidGlassBackground(cornerRadius: 999)
             .accessibilityLabel("Use \(directory.displayName) in previews")
             .accessibilityIdentifier("ModelDirectoryToggle_\(directory.id)")
 
@@ -1986,8 +1984,7 @@ struct ModelDirectoryRow: View {
                 Label("Remove", systemImage: "xmark")
                     .font(.caption.bold())
             }
-            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-            .systemLiquidGlassBackground(cornerRadius: 999)
+            .systemLiquidGlassButton()
             .accessibilityLabel("Remove \(directory.displayName)")
         }
         .padding(10)

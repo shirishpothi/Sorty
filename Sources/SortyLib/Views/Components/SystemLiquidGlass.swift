@@ -18,6 +18,17 @@ private struct BehindWindowBackdropView: NSViewRepresentable {
 }
 
 extension View {
+    /// Uses the native interactive Liquid Glass button style on macOS 26,
+    /// while preserving Sorty's compact secondary pill on older systems.
+    @ViewBuilder
+    func systemLiquidGlassButton() -> some View {
+        if #available(macOS 26.0, *) {
+            self.buttonStyle(.glass)
+        } else {
+            self.buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+        }
+    }
+
     /// Liquid glass that shows through to content behind the window.
     /// Falls back to a plain behind-window material before macOS 26.
     @ViewBuilder

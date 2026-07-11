@@ -571,8 +571,7 @@ struct DuplicatesHeaderNew: View {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .systemLiquidGlassButton()
                     .help("Detection Settings")
                     .disabled(manager.isScanning)
 
