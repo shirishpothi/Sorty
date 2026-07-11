@@ -292,6 +292,11 @@ jobs:
             exit 1
           fi
 
+      - name: Smoke test downloadable app launch
+        run: |
+          chmod +x scripts/smoke_test_app_launch.sh
+          scripts/smoke_test_app_launch.sh releases/Sorty.app
+
       - name: Generate release notes
         run: |
           python3 scripts/generate_sparkle_release_notes.py \
