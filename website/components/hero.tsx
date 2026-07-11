@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
-import { ArrowRight, Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
+import { Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -87,19 +87,6 @@ export function Hero() {
       />
 
       <div className="mx-auto max-w-3xl text-center">
-        <Reveal>
-          <a
-            href="#features"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground"
-          >
-            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-medium text-primary">
-              Free &amp; Open Source
-            </span>
-            Licensed under GPL v3
-            <ArrowRight className="size-3.5" />
-          </a>
-        </Reveal>
-
         <Reveal delay={80}>
           <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
             AI folder{' '}
