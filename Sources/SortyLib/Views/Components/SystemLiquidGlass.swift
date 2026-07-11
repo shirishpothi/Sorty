@@ -23,7 +23,9 @@ extension View {
     @ViewBuilder
     func systemLiquidGlassButton() -> some View {
         if #available(macOS 26.0, *) {
-            self.buttonStyle(.glass)
+            self
+                .buttonStyle(.glass)
+                .tint(.secondary)
         } else {
             self.buttonStyle(.onboardingPill(isSecondary: true, size: .small))
         }
