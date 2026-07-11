@@ -55,16 +55,19 @@ extension EnvironmentValues {
 struct WorkflowContainer<Content: View>: View {
     let currentStep: WorkflowStep?
     let showStepIndicator: Bool
+    let allowsScrolling: Bool
     @ViewBuilder var content: Content
     @Environment(\.workflowGradientHidden) private var gradientHidden
 
     init(
         currentStep: WorkflowStep? = nil,
         showStepIndicator: Bool = false,
+        allowsScrolling: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self.currentStep = currentStep
         self.showStepIndicator = showStepIndicator
+        self.allowsScrolling = allowsScrolling
         self.content = content()
     }
 
@@ -77,15 +80,12 @@ struct WorkflowContainer<Content: View>: View {
             }
 
             GeometryReader { geometry in
-                ScrollView {
-                    VStack(spacing: 24) {
-                        content
+                if allowsScrolling {
+                    ScrollView {
+                        workflowContent(minHeight: geometry.size.height)
                     }
-                    .frame(maxWidth: 580)
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 28)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: geometry.size.height)
+                } else {
+                    workflowContent(minHeight: geometry.size.height)
                 }
             }
         }
@@ -94,6 +94,17 @@ struct WorkflowContainer<Content: View>: View {
                 WorkflowGradientBackground()
             }
         }
+    }
+
+    private func workflowContent(minHeight: CGFloat) -> some View {
+        VStack(spacing: 24) {
+            content
+        }
+        .frame(maxWidth: 580)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: minHeight)
     }
 }
 

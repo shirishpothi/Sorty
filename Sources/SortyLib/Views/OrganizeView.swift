@@ -735,7 +735,7 @@ struct ReadyToOrganizeView: View {
     }
 
     var body: some View {
-        WorkflowContainer(currentStep: .configure) {
+        WorkflowContainer(currentStep: .configure, allowsScrolling: false) {
             // Compact header
             VStack(spacing: 16) {
                 iconSection
