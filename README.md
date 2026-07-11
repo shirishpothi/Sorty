@@ -3,7 +3,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
-[![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
+[![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)](https://www.apple.com/macos)
 [![Security Checks](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml)
 
 A native macOS SwiftUI application that helps organize directory contents into relevant, semantically-named folders.
@@ -19,8 +19,8 @@ A native macOS SwiftUI application that helps organize directory contents into r
 - **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
 - **Custom Personas**: Create and edit specialized profiles for different workflows (e.g., Developer, Photographer, Student).
 - **Multiple AI Providers**: 
-  - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, Groq, Ollama, etc.)
-  - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
+  - OpenAI, Anthropic, Gemini, GitHub Copilot, Groq, OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
+  - Apple Foundation Models (on-device and privacy-focused; requires macOS 26+ with Apple Intelligence).
 - **Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
@@ -29,15 +29,14 @@ A native macOS SwiftUI application that helps organize directory contents into r
 - **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
 - **Automatic Updates**: Background update checking on app launch (once per 24 hours) with manual check available via menu.
 - **Storage Locations**: Define custom storage destinations for organized files.
-- **HUD & Toast Notifications**: Non-intrusive visual feedback for operations and status updates.
-- **Cleanup Preview**: Preview and confirm cleanup actions before execution.
+- **HUD Notifications**: Non-intrusive visual feedback and actions for operations and status updates.
 - **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
 
 
 ## Quick Start
 
 ### Prerequisites
-- macOS 15.1 or later
+- macOS 15.0 or later
 - Xcode 16.0 or later
 - (Optional) API key for OpenAI or compatible provider
 
@@ -77,7 +76,7 @@ make run
 - Navigate to the **Settings** tab in the app.
 - Configure your preferred provider:
   - **OpenAI-Compatible**: Enter the API URL and your private key.
-  - **Apple Foundation Models**: Requires macOS 15+ with Apple Intelligence enabled.
+  - **Apple Foundation Models**: Requires macOS 26+ with Apple Intelligence enabled.
 
 ### 2. Finder Integration
 Sorty includes Finder Integration as a core app feature:
@@ -98,17 +97,17 @@ Sorty includes Finder Integration as a core app feature:
 Sorty is designed with security and privacy in mind:
 
 **Data Handling:**
-- File analysis happens via your chosen AI provider (OpenAI, Anthropic, Ollama, Apple Intelligence)
-- File contents are NOT uploaded unless you explicitly enable Deep Scan
+- File analysis happens via your chosen provider, including supported cloud services, Ollama, or Apple Foundation Models
+- Deep Scan extracts supported file content locally; only the resulting metadata and text summaries are sent to your selected cloud provider
 - API keys are stored in the macOS Keychain
-- The Learnings profile is encrypted with AES-256 and protected by Touch ID/Face ID
+- The Learnings profile is encrypted with AES-256 and protected by Touch ID or your Mac login password
 - **Privacy Mode**: Enabled by default, blurs sensitive handles until hover and hides API keys with a manual reveal toggle.
 
 **Release Signing:**
 Pre-built releases are NOT code-signed. You will need to remove macOS quarantine flags after installation (see Installation section). Build from source if you prefer complete control.
 
 **Best Practices:**
-- Use Ollama or Apple Foundation Models for on-device processing. (However, for remotely large directories small local model likely won't suffice)
+- Use Ollama or Apple Foundation Models for on-device processing. For very large directories, choose a model with enough context capacity.
 - Review which files are being sent to cloud AI providers
 - Enable Safe Deletion for duplicate management
 - Regularly backup important directories
@@ -140,10 +139,13 @@ If you see an error indicating that access to a watched folder has been lost (e.
 
 ## Project Structure
 
-- `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
+- `Sources/SortyLib/`: Shared product logic, services, models, and SwiftUI views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
-- `Tests/`: Unit and UI test suites organized by component.
-- `Assets/`: App icons and screenshots.
+- `Sources/SortyFinderSync/`: Finder Sync extension entry point.
+- `Sources/SortyWidgets/`: WidgetKit extension and shared widget surfaces.
+- `Tests/SortyTests/`: Unit and integration tests.
+- `Tests/SortyUITests/`: macOS UI and accessibility tests.
+- `website/`: Public Next.js website and current product screenshots.
 - `scripts/`: Build and automation scripts.
 
 ## Architecture
@@ -208,7 +210,7 @@ flowchart LR
         Duplicates["DuplicateDetector<br/>SemanticDuplicateDetector"]
         FileSystem["FileSystemManager<br/>create, move, tag, restore"]
         History["OrganizationHistory<br/>analytics and rollback"]
-        Conflicts["Conflict resolution<br/>cleanup preview"]
+        Conflicts["Conflict resolution"]
     end
 
     subgraph Learning["Learnings System"]
@@ -384,7 +386,7 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 #
 
 <div align="center">
-  <img src="Assets/AppIcon/AppIcon-Release.png" alt="Sorty logo" width="150" />
+  <img src="Sources/SortyLib/Resources/AppIcons/AppIcon-Release.png" alt="Sorty logo" width="150" />
   <br>
   <strong>Sorty: The FOSS File Organiser</strong>
 </div>
