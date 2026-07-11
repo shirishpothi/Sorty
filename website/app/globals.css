@@ -206,27 +206,12 @@
   transform: translateY(0) scale(1);
 }
 
-@keyframes hero-heading-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.hero-heading-fade {
-  animation: hero-heading-fade 0.7s ease-out 0.08s both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;
     filter: none;
     transform: none;
     transition: none;
-  }
-  .hero-heading-fade {
-    animation: none;
   }
   html {
     scroll-behavior: auto;
