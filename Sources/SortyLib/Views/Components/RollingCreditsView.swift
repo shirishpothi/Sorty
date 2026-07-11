@@ -83,7 +83,7 @@ final class GitHubContributorsFetcher: ObservableObject {
     @Published private(set) var contributors: [CreditItem] = []
     @Published private(set) var isLoading = false
 
-    private static let repoOwner = "shirishpothi"
+    private static let repoOwner = "sorty-organizer"
     private static let repoName = "Sorty"
     private static let cacheKey = "cachedGitHubContributors"
     private static let cacheTimestampKey = "cachedGitHubContributorsTimestamp"
