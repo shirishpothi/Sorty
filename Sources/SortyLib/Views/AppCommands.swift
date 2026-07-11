@@ -1206,7 +1206,14 @@ public class AppState: ObservableObject {
 
         for entry in entries {
             let folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
-            let row = [
+            let undoRestoredCount = entry.undoRestoredCount.map(String.init) ?? ""
+            let undoFailedFiles = csvEscape(entry.undoFailedFiles?.joined(separator: " | ") ?? "")
+            let duplicatesDeleted = entry.duplicatesDeleted.map(String.init) ?? ""
+            let recoveredSpace = entry.recoveredSpace.map(String.init) ?? ""
+            let planSuggestionCount = entry.plan.map { String($0.suggestions.count) } ?? ""
+            let recordedOperationCount = entry.operations.map { String($0.count) } ?? ""
+            let errorMessage = csvEscape(entry.errorMessage ?? "")
+            let row: [String] = [
                 entry.id.uuidString,
                 dateFormatter.string(from: entry.timestamp),
                 csvEscape(entry.directoryPath),
@@ -1216,14 +1223,14 @@ public class AppState: ObservableObject {
                 String(entry.filesOrganized),
                 String(entry.foldersCreated),
                 String(entry.isUndone),
-                entry.undoRestoredCount.map { String($0) } ?? "",
-                csvEscape(entry.undoFailedFiles?.joined(separator: " | ") ?? ""),
-                entry.duplicatesDeleted.map { String($0) } ?? "",
-                entry.recoveredSpace.map { String($0) } ?? "",
+                undoRestoredCount,
+                undoFailedFiles,
+                duplicatesDeleted,
+                recoveredSpace,
                 entry.duplicateCleanupMode?.rawValue ?? "",
-                entry.plan.map { String($0.suggestions.count) } ?? "",
-                entry.operations.map { String($0.count) } ?? "",
-                csvEscape(entry.errorMessage ?? "")
+                planSuggestionCount,
+                recordedOperationCount,
+                errorMessage
             ].joined(separator: ",")
             lines.append(row)
         }
