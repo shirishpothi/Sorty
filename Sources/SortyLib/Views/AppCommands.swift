@@ -1213,7 +1213,7 @@ public class AppState: ObservableObject {
             let planSuggestionCount = entry.plan.map { String($0.suggestions.count) } ?? ""
             let recordedOperationCount = entry.operations.map { String($0.count) } ?? ""
             let errorMessage = csvEscape(entry.errorMessage ?? "")
-            let row: [String] = [
+            let fields: [String] = [
                 entry.id.uuidString,
                 dateFormatter.string(from: entry.timestamp),
                 csvEscape(entry.directoryPath),
@@ -1231,7 +1231,8 @@ public class AppState: ObservableObject {
                 planSuggestionCount,
                 recordedOperationCount,
                 errorMessage
-            ].joined(separator: ",")
+            ]
+            let row = fields.joined(separator: ",")
             lines.append(row)
         }
 
