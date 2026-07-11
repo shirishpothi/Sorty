@@ -70,10 +70,8 @@ export function DiaGradient({
   flattenOnScroll?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
-  const [riseSettled, setRiseSettled] = useState(false)
-  const [scrollScale, setScrollScale] = useState(1)
-  const [scrollOpacity, setScrollOpacity] = useState(1)
 
   useEffect(() => {
     const prefersReduced = window.matchMedia(
@@ -81,73 +79,107 @@ export function DiaGradient({
     ).matches
     if (prefersReduced) {
       setShown(true)
-      setRiseSettled(true)
       return
     }
     // Double-rAF so the browser paints the flat (scaleY 0) state first, then
     // transitions up — otherwise the initial state is never painted and the
     // rise animation is skipped.
-    let timeout: ReturnType<typeof setTimeout> | undefined
     const id = requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        setShown(true)
-        timeout = setTimeout(() => setRiseSettled(true), riseMs)
-      }),
+      requestAnimationFrame(() => setShown(true)),
     )
-    return () => {
-      cancelAnimationFrame(id)
-      if (timeout) clearTimeout(timeout)
-    }
+    return () => cancelAnimationFrame(id)
   }, [])
 
+  // Scroll flatten lives on its own inner element, driven imperatively by a
+  // rAF loop that eases the current scale/opacity toward a scroll-derived
+  // target each frame (exponential smoothing). No React state and no CSS
+  // transition here: state-per-scroll-frame plus a restarting transition is
+  // what made the old version feel stepped and abrupt.
   useEffect(() => {
     if (!flattenOnScroll) return
 
     const prefersReduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches
-    if (prefersReduced) {
-      setScrollScale(1)
-      setScrollOpacity(1)
-      return
-    }
+    if (prefersReduced) return
 
+    const anim = { scale: 1, opacity: 1, targetScale: 1, targetOpacity: 1 }
     let frame = 0
-    const update = () => {
-      frame = 0
+    let lastTime = 0
+
+    const computeTargets = () => {
       const el = wrapRef.current
       if (!el) return
-
+      // rect.bottom is invariant under our bottom-origin scaleY, so measuring
+      // the (possibly mid-animation) wrapper is safe — no feedback loop.
       const rect = el.getBoundingClientRect()
       const viewportHeight = window.innerHeight || 1
       const awayDistance = viewportHeight * 0.52
-      const awayProgress = Math.max(
+      const p = Math.max(
         0,
         Math.min(1, (rect.bottom - viewportHeight) / awayDistance),
       )
-      const eased = 1 - Math.pow(1 - awayProgress, 1.45)
-      setScrollScale(1 - eased * 0.34)
-      setScrollOpacity(1 - eased * 0.22)
+      // Smoothstep: zero slope at both ends, so the effect ramps in and out
+      // gently instead of kicking in abruptly at the boundaries.
+      const eased = p * p * (3 - 2 * p)
+      anim.targetScale = 1 - eased * 0.34
+      anim.targetOpacity = 1 - eased * 0.22
     }
 
-    const requestUpdate = () => {
-      if (frame) return
-      frame = requestAnimationFrame(update)
+    const apply = () => {
+      const el = scrollRef.current
+      if (!el) return
+      el.style.transform = `scaleY(${anim.scale})`
+      el.style.opacity = String(anim.opacity)
     }
 
-    update()
-    window.addEventListener('scroll', requestUpdate, { passive: true })
-    window.addEventListener('resize', requestUpdate)
+    const step = (now: number) => {
+      frame = 0
+      const dt = lastTime ? Math.min(now - lastTime, 64) : 16
+      lastTime = now
+      // Exponential smoothing toward the target (time constant ~120ms):
+      // frame-rate independent, always converging, never restarts.
+      const k = 1 - Math.exp(-dt / 120)
+      anim.scale += (anim.targetScale - anim.scale) * k
+      anim.opacity += (anim.targetOpacity - anim.opacity) * k
+      const settled =
+        Math.abs(anim.targetScale - anim.scale) < 0.0005 &&
+        Math.abs(anim.targetOpacity - anim.opacity) < 0.0005
+      if (settled) {
+        anim.scale = anim.targetScale
+        anim.opacity = anim.targetOpacity
+      }
+      apply()
+      if (!settled) {
+        frame = requestAnimationFrame(step)
+      } else {
+        lastTime = 0
+      }
+    }
+
+    const kick = () => {
+      computeTargets()
+      if (!frame) frame = requestAnimationFrame(step)
+    }
+
+    // Start at the current target so initial paint doesn't animate — the
+    // one-shot rise on the outer wrapper owns the entrance.
+    computeTargets()
+    anim.scale = anim.targetScale
+    anim.opacity = anim.targetOpacity
+    apply()
+
+    window.addEventListener('scroll', kick, { passive: true })
+    window.addEventListener('resize', kick)
     return () => {
       if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', requestUpdate)
-      window.removeEventListener('resize', requestUpdate)
+      window.removeEventListener('scroll', kick)
+      window.removeEventListener('resize', kick)
     }
   }, [flattenOnScroll])
 
   const heights = bellHeights(bars, peak, valley)
   const colW = VBW / bars
-  const scaleY = shown ? scrollScale : 0
 
   return (
     <div
@@ -157,14 +189,20 @@ export function DiaGradient({
         height: '100%',
         width: '100%',
         transformOrigin: 'bottom',
-        transform: `scaleY(${scaleY})`,
-        opacity: shown ? scrollOpacity : 0,
-        transition: riseSettled
-          ? 'transform 90ms linear, opacity 90ms linear'
-          : `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
-        willChange: 'transform, opacity',
+        transform: `scaleY(${shown ? 1 : 0})`,
+        opacity: shown ? 1 : 0,
+        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
       }}
     >
+      <div
+        ref={scrollRef}
+        style={{
+          height: '100%',
+          width: '100%',
+          transformOrigin: 'bottom',
+          willChange: 'transform, opacity',
+        }}
+      >
       <svg
         style={{ height: '100%', width: '100%', opacity: strength }}
         viewBox={`0 0 ${VBW} ${VBH}`}
@@ -197,6 +235,7 @@ export function DiaGradient({
           </g>
         ))}
       </svg>
+      </div>
     </div>
   )
 }
