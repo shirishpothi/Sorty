@@ -132,6 +132,7 @@
 		AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002C /* OrganizationCompleteView.swift */; };
 		AABBCC22000200000000002D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002D /* OnboardingView.swift */; };
 		AABBCC22000200000000002E /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002E /* ModelCatalog.swift */; };
+		EE2200020000000000000002 /* GoogleDriveIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1100010000000000000002 /* GoogleDriveIntegrationTests.swift */; };
 		AABBCC22000200000000002F /* SparkleUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002F /* SparkleUpdateManager.swift */; };
 		AABBCC220002000000000030 /* FinderAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000030 /* FinderAutomation.swift */; };
 		AABBCC220002000000000031 /* AutomationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000031 /* AutomationManager.swift */; };
@@ -485,6 +486,8 @@
 		AABBCC11000100000000002C /* OrganizationCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationCompleteView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002E /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
+		EE1100010000000000000001 /* GoogleDriveIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveIntegration.swift; sourceTree = "<group>"; };
+		EE1100010000000000000002 /* GoogleDriveIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveIntegrationTests.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002F /* SparkleUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000030 /* FinderAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderAutomation.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000031 /* AutomationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationManager.swift; sourceTree = "<group>"; };
@@ -888,6 +891,7 @@
 			isa = PBXGroup;
 			children = (
 				AABBCC11000100000000002E /* ModelCatalog.swift */,
+				EE1100010000000000000001 /* GoogleDriveIntegration.swift */,
 			);
 			path = Sources/SortyLib/Services;
 			sourceTree = "<group>";
@@ -1054,6 +1058,7 @@
 		2320034425A6F5C505152AE2 /* SortyTests */ = {
 			isa = PBXGroup;
 			children = (
+				EE1100010000000000000002 /* GoogleDriveIntegrationTests.swift */,
 				94E640E9F5531D468E67A0EC /* AIInsightExtractorTests.swift */,
 				B41C3F34679E0B27BE6BD9DD /* AppStateTests.swift */,
 				30D2110751104271FD9C41A7 /* BuildInfoTests.swift */,
@@ -1307,6 +1312,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EE2200020000000000000002 /* GoogleDriveIntegrationTests.swift in Sources */,
 				59558C17C04E18C2E143EEDA /* AIInsightExtractorTests.swift in Sources */,
 				232608AB5B682D35BDDCAA8D /* AppStateTests.swift in Sources */,
 				24E239749E34CEDE786523FC /* BuildInfoTests.swift in Sources */,
