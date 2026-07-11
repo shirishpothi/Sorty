@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import {
   ArrowUpRight,
-  CheckCircle2,
   Eye,
   FolderGit2,
   ShieldCheck,
@@ -59,12 +58,6 @@ const RELEASES = [
   },
 ]
 
-const CHANGELOG_PROMISES = [
-  'Screenshots for visual changes',
-  'Plain-English release notes',
-  'Unreleased work called out clearly',
-]
-
 export default function ChangelogPage() {
   return (
     <main className="relative min-h-screen overflow-x-clip">
@@ -92,21 +85,6 @@ export default function ChangelogPage() {
               Release notes for the Mac folder organizer, now with UI images so
               visual changes are easy to scan before you update.
             </p>
-          </Reveal>
-
-          <Reveal
-            delay={120}
-            className="mt-8 flex flex-wrap gap-2"
-          >
-            {CHANGELOG_PROMISES.map((item) => (
-              <span
-                key={item}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-card/45 px-3.5 py-2 text-sm text-foreground/85 shadow-sm shadow-black/20 backdrop-blur-md"
-              >
-                <CheckCircle2 className="size-4 text-primary" />
-                {item}
-              </span>
-            ))}
           </Reveal>
         </div>
       </section>
