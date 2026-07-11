@@ -2300,15 +2300,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             Never use relative placeholders like "storage" or "storage/anything".
             If none of the approved roots fit, organize files with relative folders under the source directory instead.
             """
-        case .sourceInStorageLocation(let file, let location):
-            LogManager.shared.log("Retrying: source in storage location (\(file) in \(location))", category: "FolderOrganizer")
-            enhancement = """
-            
-            CRITICAL CORRECTION REQUIRED:
-            "\(file)" is already inside storage location "\(location)".
-            Files already inside storage locations MUST NOT be moved to non-storage destinations.
-            Keep that file inside the same storage location (you may use subfolders there), or leave it unorganized.
-            """
         default:
             return nil
         }

@@ -2,8 +2,7 @@
 //  StorageLocation.swift
 //  Sorty
 //
-//  Model for storage locations - directories where files can be moved TO
-//  but won't be reorganized themselves. These serve as destination bins.
+//  Model for local, cloud, and external locations Sorty can organize across.
 //
 
 import Foundation
@@ -118,8 +117,7 @@ public class ScopedSecurityAccess {
     }
 }
 
-/// A storage location that can receive files during organization
-/// These directories are NOT organized - they serve as destination bins
+/// A local, cloud, or external location that can participate in organization.
 public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var path: String
@@ -415,16 +413,11 @@ public class StorageLocationsManager: ObservableObject {
         }
         
         var prompt = """
-        ## STORAGE LOCATIONS (Additional Destinations)
+        ## ORGANIZATION LOCATIONS
         
-        The following directories are approved destination bins.
-        IMPORTANT: Be very conservative about routing files to storage locations.
-        Only move a file to a storage location when:
-        - The user explicitly requested that specific file or type of file go there, OR
-        - The file is an exceptionally clear and obvious fit for the location's stated purpose.
-        When in doubt, keep files organized within the source directory — most files should stay local.
-        Do NOT move entire folder groups or large batches of files to storage; prefer individual files that clearly belong.
-        Never treat storage as the default destination. It is optional and should usually be unused.
+        The following local, cloud, and external directories are approved organization locations.
+        Treat them as first-class sources and destinations. Apply the user's instructions and each
+        location's stated purpose consistently, regardless of where the location is stored.
         
         """
         
@@ -455,14 +448,12 @@ public class StorageLocationsManager: ObservableObject {
         3. FIRST check KNOWN_STORAGE_SUBFOLDERS. When an existing subfolder matches the file's purpose, use its EXACT absolute path as the folder "name" in JSON.
         4. Never use relative placeholders such as "storage", "storage location", "archive", "Spreadsheets", or any other relative name as folder names when targeting storage.
         5. Match files to storage locations based on each location's stated purpose/description.
-        6. Files that don't clearly fit any storage location MUST be organized within the source directory using relative paths. This is the default — most files should stay in the source.
-        7. Do NOT move files that are already inside a storage location to non-storage destinations.
-        8. It is perfectly fine — and often preferred — to use ZERO storage locations in a plan. Only route files to storage when there is a strong, specific reason. Err on the side of keeping files in the source directory.
+        6. Files that don't fit another organization location should be organized within the source directory using relative paths.
+        7. Files and folders may move into, out of, or within these locations when the plan calls for it.
+        8. Use zero or more organization locations according to the user's request and the content being organized.
         9. Use the FULL absolute path as the folder "name" in JSON (e.g. "name": "/Users/me/Archive/Documents").
            Do NOT split the path into a nested folder hierarchy. Do NOT use PascalCase variants of folder names.
-        10. Place files directly in the matching storage subfolder. Do NOT create additional sub-categories inside storage locations unless the user explicitly requests it.
-        11. Do NOT move directory items to storage. Route individual files only.
-        12. Do NOT route all files from one source subfolder into storage unless the user explicitly asked for that exact folder.
+        10. Existing and new subfolders may be used in any location just as they can in the source directory.
         
         REQUIRED JSON FORMAT when routing files to storage:
         {"folders":[{"name":"\(examplePath)","files":[{"filename":"example.xlsx"}]}]}

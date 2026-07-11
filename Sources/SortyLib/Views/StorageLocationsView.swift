@@ -3,7 +3,7 @@
 //  Sorty
 //
 //  View for managing storage locations - directories where files can be moved TO
-//  but won't be reorganized themselves. These serve as destination bins.
+//  These can participate as sources and destinations in normal organization workflows.
 //
 
 import SwiftUI
@@ -195,14 +195,14 @@ struct EmptyStorageLocationsView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("Add directories like Archives, Projects, or external drives as destinations for files during organization")
+                Text("Add local, cloud, or external folders that Sorty can organize across")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("No Storage Locations. Add directories like Archives, Projects, or external drives as destinations for files during organization.")
+            .accessibilityLabel("No Storage Locations. Add local, cloud, or external folders that Sorty can organize across.")
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(

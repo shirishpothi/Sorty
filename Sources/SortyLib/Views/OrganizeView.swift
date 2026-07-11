@@ -936,12 +936,12 @@ struct ReadyToOrganizeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(showStorageLocations ? "Hide storage destination locations" : "Show storage destination locations")
-            .accessibilityHint("Expand to manage folders files can move into")
+            .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
+            .accessibilityHint("Expand to manage local, cloud, and external organization locations")
             
             if showStorageLocations {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Files can be moved to these destination folders during organization")
+                    Text("Organize across these local, cloud, and external folders")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
@@ -971,8 +971,8 @@ struct ReadyToOrganizeView: View {
                         }
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
-                        .help("Add a folder that Sorty can use as a destination")
-                        .accessibilityHint("Opens folder picker to add a destination location")
+                        .help("Add a folder that Sorty can organize with")
+                        .accessibilityHint("Opens the folder picker to add an organization location")
 
                         Spacer()
 

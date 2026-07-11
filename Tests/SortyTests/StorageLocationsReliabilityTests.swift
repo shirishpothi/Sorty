@@ -158,7 +158,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         )
     }
 
-    func testValidatorRejectsMovingDirectoryItemToStorage() throws {
+    func testValidatorAllowsMovingDirectoryItemToStorage() throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
         let projectDir = sourceDir.appendingPathComponent("Project Alpha", isDirectory: true)
@@ -181,22 +181,17 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             notes: "directory to storage"
         )
 
-        XCTAssertThrowsError(
+        XCTAssertNoThrow(
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
                 allowedStorageLocations: [StorageLocation(path: storageDir.path)],
                 maxTopLevelFolders: 10
             )
-        ) { error in
-            guard case ValidationError.directoryMovedToStorage("Project Alpha") = error else {
-                XCTFail("Expected directoryMovedToStorage error, got: \(error)")
-                return
-            }
-        }
+        )
     }
 
-    func testValidatorRejectsBulkFolderMigrationToStorage() throws {
+    func testValidatorAllowsBulkFolderMigrationToStorage() throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
         let invoicesDir = sourceDir.appendingPathComponent("Invoices", isDirectory: true)
@@ -226,19 +221,14 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             notes: "bulk storage migration"
         )
 
-        XCTAssertThrowsError(
+        XCTAssertNoThrow(
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
                 allowedStorageLocations: [StorageLocation(path: storageDir.path)],
                 maxTopLevelFolders: 10
             )
-        ) { error in
-            guard case ValidationError.folderBulkMovedToStorage("Invoices", 3) = error else {
-                XCTFail("Expected folderBulkMovedToStorage error, got: \(error)")
-                return
-            }
-        }
+        )
     }
 
     func testValidatorAllowsSelectiveStorageMoveFromSubfolder() throws {
@@ -282,6 +272,37 @@ final class StorageLocationsReliabilityTests: XCTestCase {
                 plan,
                 at: sourceDir,
                 allowedStorageLocations: [StorageLocation(path: storageDir.path)],
+                maxTopLevelFolders: 10
+            )
+        )
+    }
+
+    func testValidatorAllowsOrganizingFromStorageLocationIntoSourceFolder() throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let cloudDir = tempRoot.appendingPathComponent("Cloud", isDirectory: true)
+        let cloudFile = cloudDir.appendingPathComponent("project-notes.txt")
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: cloudDir, withIntermediateDirectories: true)
+        try "notes".write(to: cloudFile, atomically: true, encoding: .utf8)
+
+        let file = FileItem(
+            path: cloudFile.path,
+            name: "project-notes",
+            extension: "txt",
+            size: 5,
+            isDirectory: false
+        )
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Projects", files: [file])],
+            unorganizedFiles: [],
+            notes: "cloud to source"
+        )
+
+        XCTAssertNoThrow(
+            try FileOrganizationValidator.validate(
+                plan,
+                at: sourceDir,
+                allowedStorageLocations: [StorageLocation(path: cloudDir.path)],
                 maxTopLevelFolders: 10
             )
         )
