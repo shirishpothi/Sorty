@@ -8,13 +8,17 @@
 
 A native macOS SwiftUI application that helps organize directory contents into relevant, semantically-named folders.
 
-<div align="center">
+<p align="center">
+  <img src="website/public/sorty-app.webp" alt="Sorty organization workspace" width="820" />
+</p>
 
-| <img src="Assets/Screenshots/New UI/Live Insights View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Watched Folder View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Post Generation View.png" width="300" /> |
-| :---: | :---: | :---: |
-| *Streaming Sorty Organisation, with Live Insights* | *Watched Folders* | *Interactive preview* |
+| <img src="website/public/sorty-apply.webp" alt="Sorty preview showing proposed file moves" width="400" /> | <img src="website/public/sorty-duplicates.webp" alt="Sorty duplicate file review" width="400" /> |
+| :---: | :---: |
+| *Preview every move before applying it* | *Review duplicate files clearly* |
 
-</div>
+| <img src="website/public/sorty-settings.webp" alt="Sorty AI provider settings" width="400" /> | <img src="website/public/sorty-1.2.0-changelog.png" alt="Sorty latest release highlights" width="400" /> |
+| :---: | :---: |
+| *Choose your preferred AI provider* | *See what is new in the latest release* |
 
 
 ## Features
@@ -27,7 +31,6 @@ A native macOS SwiftUI application that helps organize directory contents into r
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
 - **Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
-- **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
 - **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - **Interactive Preview**: Review and tweak suggested organization before any files are moved.
@@ -235,7 +238,6 @@ flowchart LR
     subgraph FeatureSurfaces["Feature Surfaces"]
         OrganizeView["Organize and preview"]
         WatchedFoldersView["Watched folders"]
-        WorkspaceHealth["WorkspaceHealthView"]
         DuplicatesView["DuplicatesView"]
         LearningsView["LearningsView"]
         SettingsView["Settings"]
@@ -346,12 +348,11 @@ For PRs and releases, rely on the GitHub Actions checks:
 Tests are located in `Tests/SortyTests/` and cover the following areas:
 
 - **Unit Tests**: Core functionality including file organization, duplicate detection, exclusion rules, response parsing, and utility functions.
-- **Integration Tests**: End-to-end workflows for AI providers, file system operations, history management, and workspace health monitoring.
+- **Integration Tests**: End-to-end workflows for AI providers, file system operations, and history management.
 - **Component Tests**: Individual modules such as personas, learnings manager, deeplinks, and security.
 
 Key test files include:
 - `SortyTests.swift` - Core organization logic
-- `WorkspaceHealthTests.swift` - Health monitoring features
 - `LearningsManagerTests.swift` - Passive learning system
 - `FinderIntegrationStatusTests.swift` - Finder Sync diagnostics, registration parsing, and auto-repair
 - `StorageDestinationNormalizerTests.swift` - Storage location path resolution and normalization
@@ -368,9 +369,8 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 |----------|-------------|
 | `sorty://organize?path=<path>&persona=<id>&autostart=true` | Start organization |
 | `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
-| `sorty://learnings?action=honing` | Open Learnings with specific action |
+| `sorty://learnings?action=stats` | Open Learnings statistics |
 | `sorty://settings?section=ai` | Open specific settings section |
-| `sorty://health` | Open Workspace Health |
 | `sorty://history` | Open organization history |
 | `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
 | `sorty://watched?action=add&path=<path>` | Add watched folder |
