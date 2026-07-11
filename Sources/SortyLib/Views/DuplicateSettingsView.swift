@@ -82,9 +82,8 @@ struct DuplicateSettingsView: View {
                                     }
                                     .padding(.horizontal, SortyDesignSystem.Spacing.md)
                                     .padding(.vertical, SortyDesignSystem.Spacing.sm)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
-                                            .fill(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.12) : SortyDesignSystem.Colors.backgroundTertiary.opacity(0.25))
+                                    .systemLiquidGlassBackground(
+                                        cornerRadius: SortyDesignSystem.Radius.medium
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
