@@ -1557,7 +1557,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected source folder context into prompt")
         }
 
-        if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+        if !isRenameOnly, let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             let sourceDir = StorageLocationPathResolver.canonicalPath(directory.path)
             let enabledLocations = storageLocationsManager?.enabledLocations ?? []
 
@@ -1816,7 +1816,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-        let normalizedInputPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+        let normalizedInputPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
@@ -1986,8 +1986,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         in plan: OrganizationPlan,
         allowedLocations: [StorageLocation],
         sourceDirectoryURL: URL? = nil
-    ) -> OrganizationPlan {
-        let knownSubfolders = storageLocationsManager?.discoverAllSubfolders() ?? [:]
+    ) async -> OrganizationPlan {
+        let knownSubfolders = await storageLocationsManager?.discoverAllSubfolders() ?? [:]
 
         if !allowedLocations.isEmpty {
             let originalFolders = plan.suggestions.map(\.folderName)
@@ -2337,7 +2337,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 )
             }
             
-            let normalizedRetryPlan = normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
+            let normalizedRetryPlan = await normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
 
             // Validate the retry plan
             try validator.validate(
@@ -2546,7 +2546,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             
             // Add Storage Locations context
-            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            if let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 finalPrompt += "\n\n" + storageContext
             }
             finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
@@ -2567,7 +2567,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
             let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
-            var planAfterValidation = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            var planAfterValidation = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
                 try validator.validate(
                     planAfterValidation,
@@ -2766,7 +2766,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Add Storage Locations context
-            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            if let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 finalPrompt += "\n\n" + storageContext
             }
             finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
@@ -2787,7 +2787,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Validate selected-files plan before apply.
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
             let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
-            var validatedPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            var validatedPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
                 try validator.validate(
                     validatedPlan,
@@ -2846,7 +2846,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Re-validate at apply time to protect all entry points, including regenerated previews.
         let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-        let normalizedPlan = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
+        let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
         let planToApply = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: normalizedPlan))
         self.currentPlan = planToApply
         try validator.validate(
@@ -3048,7 +3048,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
         }
-        if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+        if !isRenameOnly, let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             instructions += "\n\n" + storageContext
         }
         instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
@@ -3411,7 +3411,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             
             // Add Storage Locations context
-            if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            if !isRenameOnly, let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 instructions += "\n\n" + storageContext
             }
             instructions += exclusionInstructions(forRenameOnly: isRenameOnly)

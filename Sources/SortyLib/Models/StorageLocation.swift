@@ -14,7 +14,7 @@ public class ScopedSecurityAccess {
     public let url: URL
     private let didAccess: Bool
     private var didCleanup = false
-    
+
     public init(url: URL, didAccess: Bool) {
         self.url = url
         self.didAccess = didAccess
@@ -86,6 +86,7 @@ public class StorageLocationsManager: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
+    private let subfolderDiscovery = StorageSubfolderDiscoveryService()
     
     public init() {
         loadLocations()
@@ -192,16 +193,31 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     /// Generates prompt context for all enabled storage locations
-    public func generatePromptContext() -> String? {
+    public func generatePromptContext() async -> String? {
         let enabled = enabledLocations
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         guard !enabled.isEmpty else { return nil }
         let validPaths = enabled.map(\.path)
-        let existingSubfoldersByRoot = enabled.reduce(into: [String: [String]]()) { result, location in
-            let existingSubfolders = discoverExistingSubfolders(for: location)
-            if !existingSubfolders.isEmpty {
-                result[location.path] = existingSubfolders
+        let existingSubfoldersByRoot = await withTaskGroup(
+            of: (String, [String]).self,
+            returning: [String: [String]].self
+        ) { group in
+            for location in enabled {
+                group.addTask { [subfolderDiscovery] in
+                    let subfolders = await subfolderDiscovery.discover(
+                        for: location,
+                        maxDepth: 3,
+                        maxCount: 12
+                    )
+                    return (location.path, subfolders)
+                }
             }
+
+            var result: [String: [String]] = [:]
+            for await (path, subfolders) in group where !subfolders.isEmpty {
+                result[path] = subfolders
+            }
+            return result
         }
         
         var prompt = """
@@ -264,17 +280,28 @@ public class StorageLocationsManager: ObservableObject {
 
     /// Returns known subfolders for each enabled storage location.
     /// Keys are canonical root paths; values are lists of discovered subfolder absolute paths.
-    public func discoverAllSubfolders() -> [String: [String]] {
+    public func discoverAllSubfolders() async -> [String: [String]] {
         let enabled = enabledLocations
-        return enabled.reduce(into: [String: [String]]()) { result, location in
-            let subfolders = discoverExistingSubfolders(
-                for: location,
-                maxDepth: 3,
-                maxCount: 200
-            )
-            if !subfolders.isEmpty {
-                result[location.path] = subfolders
+        return await withTaskGroup(
+            of: (String, [String]).self,
+            returning: [String: [String]].self
+        ) { group in
+            for location in enabled {
+                group.addTask { [subfolderDiscovery] in
+                    let subfolders = await subfolderDiscovery.discover(
+                        for: location,
+                        maxDepth: 3,
+                        maxCount: 200
+                    )
+                    return (location.path, subfolders)
+                }
             }
+
+            var result: [String: [String]] = [:]
+            for await (path, subfolders) in group where !subfolders.isEmpty {
+                result[path] = subfolders
+            }
+            return result
         }
     }
     
@@ -398,53 +425,6 @@ public class StorageLocationsManager: ObservableObject {
         activeSecurityScopedURLs.removeAll()
     }
 
-    private func discoverExistingSubfolders(
-        for location: StorageLocation,
-        maxDepth: Int = 3,
-        maxCount: Int = 12
-    ) -> [String] {
-        let scopedAccess = resolveURL(for: location)
-        let rootURL = scopedAccess?.url ?? location.url
-        defer { scopedAccess?.cleanup() }
-
-        var discovered: [String] = []
-        let fileManager = FileManager.default
-
-        func scan(_ directoryURL: URL, depth: Int) {
-            guard depth <= maxDepth, discovered.count < maxCount else { return }
-
-            guard let contents = try? fileManager.contentsOfDirectory(
-                at: directoryURL,
-                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-                options: [.skipsHiddenFiles]
-            ) else {
-                return
-            }
-
-            let subdirectories = contents.compactMap { item -> URL? in
-                guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
-                      values.isDirectory == true,
-                      values.isSymbolicLink != true else {
-                    return nil
-                }
-                return item
-            }
-            .sorted { lhs, rhs in
-                lhs.lastPathComponent.localizedCaseInsensitiveCompare(rhs.lastPathComponent) == .orderedAscending
-            }
-
-            for subdirectory in subdirectories {
-                discovered.append(StorageLocationPathResolver.canonicalPath(subdirectory.path))
-                guard discovered.count < maxCount else { break }
-                scan(subdirectory, depth: depth + 1)
-                guard discovered.count < maxCount else { break }
-            }
-        }
-
-        scan(rootURL, depth: 1)
-        return discovered
-    }
-
     private func loadLocations() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) {
@@ -460,11 +440,124 @@ public class StorageLocationsManager: ObservableObject {
             locations = normalized
         }
     }
-    
+
     private func saveLocations() {
         if let encoded = try? JSONEncoder().encode(locations) {
             userDefaults.set(encoded, forKey: storageKey)
         }
+    }
+}
+
+private actor StorageSubfolderDiscoveryService {
+    private struct CacheKey: Hashable {
+        let locationID: UUID
+        let path: String
+        let maxDepth: Int
+        let maxCount: Int
+    }
+
+    private struct CacheEntry {
+        let subfolders: [String]
+        let createdAt: ContinuousClock.Instant
+    }
+
+    private let cacheLifetime: Duration = .seconds(15)
+    private var cache: [CacheKey: CacheEntry] = [:]
+
+    func discover(
+        for location: StorageLocation,
+        maxDepth: Int,
+        maxCount: Int
+    ) async -> [String] {
+        let key = CacheKey(
+            locationID: location.id,
+            path: location.path,
+            maxDepth: maxDepth,
+            maxCount: maxCount
+        )
+        let clock = ContinuousClock()
+        if let cached = cache[key], cached.createdAt.duration(to: clock.now) < cacheLifetime {
+            return cached.subfolders
+        }
+
+        let subfolders = await Task.detached(priority: .utility) {
+            Self.scan(location: location, maxDepth: maxDepth, maxCount: maxCount)
+        }.value
+        cache[key] = CacheEntry(subfolders: subfolders, createdAt: clock.now)
+        return subfolders
+    }
+
+    private nonisolated static func scan(
+        location: StorageLocation,
+        maxDepth: Int,
+        maxCount: Int
+    ) -> [String] {
+        let rootURL: URL
+        var accessedURL: URL?
+
+        if let bookmarkData = location.bookmarkData {
+            var isStale = false
+            if let resolvedURL = try? URL(
+                resolvingBookmarkData: bookmarkData,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ), resolvedURL.startAccessingSecurityScopedResource() {
+                rootURL = resolvedURL
+                accessedURL = resolvedURL
+            } else {
+                rootURL = location.url
+            }
+        } else {
+            rootURL = location.url
+        }
+        defer { accessedURL?.stopAccessingSecurityScopedResource() }
+
+        var discovered: [String] = []
+        let fileManager = FileManager()
+
+        func scanDirectory(_ directoryURL: URL, depth: Int) {
+            guard !Task.isCancelled,
+                  depth <= maxDepth,
+                  discovered.count < maxCount else {
+                return
+            }
+
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                return
+            }
+
+            let subdirectories = contents.compactMap { item -> URL? in
+                guard !Task.isCancelled,
+                      let values = try? item.resourceValues(
+                        forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+                      ),
+                      values.isDirectory == true,
+                      values.isSymbolicLink != true else {
+                    return nil
+                }
+                return item
+            }
+            .sorted {
+                $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent)
+                    == .orderedAscending
+            }
+
+            for subdirectory in subdirectories {
+                guard !Task.isCancelled else { return }
+                discovered.append(StorageLocationPathResolver.canonicalPath(subdirectory.path))
+                guard discovered.count < maxCount else { break }
+                scanDirectory(subdirectory, depth: depth + 1)
+                guard discovered.count < maxCount else { break }
+            }
+        }
+
+        scanDirectory(rootURL, depth: 1)
+        return discovered
     }
 }
 

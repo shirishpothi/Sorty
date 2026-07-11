@@ -296,7 +296,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
     }
 
     @MainActor
-    func testStoragePromptContextIncludesValidPathList() {
+    func testStoragePromptContextIncludesValidPathList() async {
         let manager = StorageLocationsManager()
         manager.clearAll()
         defer { manager.clearAll() }
@@ -309,7 +309,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         manager.addLocation(StorageLocation(path: archive.path, name: "Archive"))
         manager.addLocation(StorageLocation(path: projects.path, name: "Projects"))
 
-        let context = manager.generatePromptContext()
+        let context = await manager.generatePromptContext()
         XCTAssertNotNil(context)
         XCTAssertTrue(context?.contains("VALID_STORAGE_PATHS") == true)
         XCTAssertTrue(context?.contains(archive.path) == true)
@@ -370,7 +370,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
     }
 
     @MainActor
-    func testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet() throws {
+    func testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet() async throws {
         let manager = StorageLocationsManager()
         manager.clearAll()
         defer { manager.clearAll() }
@@ -385,7 +385,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
         manager.addLocation(StorageLocation(path: archive.path, name: "Archive"))
 
-        let discovered = manager.discoverAllSubfolders()
+        let discovered = await manager.discoverAllSubfolders()
         let paths = discovered[StorageLocationPathResolver.canonicalPath(archive.path)] ?? []
 
         XCTAssertTrue(paths.contains(archive.appendingPathComponent("Folder20", isDirectory: true).path))
