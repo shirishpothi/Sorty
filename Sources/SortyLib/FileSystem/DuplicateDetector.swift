@@ -175,6 +175,7 @@ public actor DuplicateDetector {
         public let candidateCount: Int
         public let hashedCount: Int
         public let cacheHitCount: Int
+        public let unreadableCount: Int
     }
 
     private var hashCache: [HashCacheKey: String] = [:]
@@ -195,7 +196,13 @@ public actor DuplicateDetector {
             .flatMap { $0 }
 
         guard !candidates.isEmpty else {
-            return ExactScanResult(groups: [], candidateCount: 0, hashedCount: 0, cacheHitCount: 0)
+            return ExactScanResult(
+                groups: [],
+                candidateCount: 0,
+                hashedCount: 0,
+                cacheHitCount: 0,
+                unreadableCount: 0
+            )
         }
 
         let activeKeys = Set(candidates.map(Self.cacheKey(for:)))
@@ -205,6 +212,8 @@ public actor DuplicateDetector {
         var pendingFiles: [(file: FileItem, key: HashCacheKey)] = []
         var completedCount = 0
         var cacheHitCount = 0
+        var hashedCount = 0
+        var unreadableCount = 0
 
         for file in candidates {
             if Task.isCancelled {
@@ -246,6 +255,9 @@ public actor DuplicateDetector {
                 if let hash {
                     hashCache[key] = hash
                     resolvedFiles.append((file, hash))
+                    hashedCount += 1
+                } else {
+                    unreadableCount += 1
                 }
 
                 completedCount += 1
@@ -275,8 +287,9 @@ public actor DuplicateDetector {
         return ExactScanResult(
             groups: groups,
             candidateCount: candidates.count,
-            hashedCount: pendingFiles.count,
-            cacheHitCount: cacheHitCount
+            hashedCount: hashedCount,
+            cacheHitCount: cacheHitCount,
+            unreadableCount: unreadableCount
         )
     }
     
@@ -390,6 +403,7 @@ public class DuplicateDetectionManager: ObservableObject {
     @Published public private(set) var hashCandidateCount: Int = 0
     @Published public private(set) var hashedFileCount: Int = 0
     @Published public private(set) var hashCacheHitCount: Int = 0
+    @Published public private(set) var unreadableFileCount: Int = 0
     @Published public private(set) var scanDuration: TimeInterval = 0
     
     private let detector = DuplicateDetector()
@@ -433,6 +447,7 @@ public class DuplicateDetectionManager: ObservableObject {
         hashCandidateCount = 0
         hashedFileCount = 0
         hashCacheHitCount = 0
+        unreadableFileCount = 0
         scanDuration = 0
 
         let total = eligibleFiles.count
@@ -464,6 +479,7 @@ public class DuplicateDetectionManager: ObservableObject {
         hashCandidateCount = exactResult.candidateCount
         hashedFileCount = exactResult.hashedCount
         hashCacheHitCount = exactResult.cacheHitCount
+        unreadableFileCount = exactResult.unreadableCount
         
         if Task.isCancelled {
             isScanning = false
@@ -535,6 +551,7 @@ public class DuplicateDetectionManager: ObservableObject {
         hashCandidateCount = 0
         hashedFileCount = 0
         hashCacheHitCount = 0
+        unreadableFileCount = 0
         scanDuration = 0
     }
 

@@ -163,6 +163,29 @@ class DuplicateDetectorTests: XCTestCase {
     }
 
     @MainActor
+    func testManagerReportsFilesThatDisappearBeforeHashing() async {
+        let missingFiles = ["first.bin", "second.bin"].map { name in
+            FileItem(
+                path: "/missing/\(name)",
+                name: (name as NSString).deletingPathExtension,
+                extension: "bin",
+                size: 8,
+                isDirectory: false
+            )
+        }
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = false
+        let manager = DuplicateDetectionManager()
+
+        await manager.scanForDuplicates(files: missingFiles, settings: settings)
+
+        XCTAssertEqual(manager.hashCandidateCount, 2)
+        XCTAssertEqual(manager.hashedFileCount, 0)
+        XCTAssertEqual(manager.unreadableFileCount, 2)
+        XCTAssertTrue(manager.duplicateGroups.isEmpty)
+    }
+
+    @MainActor
     func testManagerPromotesSemanticCandidatesWithIdenticalContentToExactDuplicates() async throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory

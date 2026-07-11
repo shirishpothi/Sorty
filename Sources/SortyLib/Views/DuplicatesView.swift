@@ -234,10 +234,16 @@ struct DuplicatesView: View {
 
     private var noDuplicatesView: some View {
         DuplicatesEmptyStateView(
-            title: "No Duplicates Found",
-            description: "All files in this folder are unique. Your workspace is healthy!",
-            icon: "checkmark.circle.fill",
-            heroTint: .green,
+            title: detectionManager.unreadableFileCount > 0
+                ? "Scan Incomplete"
+                : "No Duplicates Found",
+            description: detectionManager.unreadableFileCount > 0
+                ? "Sorty couldn't read \(detectionManager.unreadableFileCount) file\(detectionManager.unreadableFileCount == 1 ? "" : "s"). Make cloud files available offline or reconnect the drive, then scan again."
+                : "All readable files in this folder are unique.",
+            icon: detectionManager.unreadableFileCount > 0
+                ? "exclamationmark.triangle.fill"
+                : "checkmark.circle.fill",
+            heroTint: detectionManager.unreadableFileCount > 0 ? .orange : .green,
             actionTitle: "Scan Another Folder",
             action: selectDirectory
         )
@@ -634,6 +640,16 @@ private struct DuplicatesResultsSidebarHeader: View {
                 DuplicatesNerdStatsStrip(manager: manager)
             }
 
+            if manager.unreadableFileCount > 0 {
+                Label(
+                    "\(manager.unreadableFileCount) file\(manager.unreadableFileCount == 1 ? " was" : "s were") unavailable and excluded from these results.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             if manager.semanticGroupCount > 0 {
                 Label("Cleanup All only removes exact duplicates.", systemImage: "checkmark.shield")
                     .font(.caption)
@@ -666,13 +682,16 @@ private struct DuplicatesNerdStatsStrip: View {
                 stat("Hashed", value: "\(manager.hashedFileCount)")
                 stat("Cache hits", value: "\(manager.hashCacheHitCount)")
             }
+            if manager.unreadableFileCount > 0 {
+                stat("Unreadable", value: "\(manager.unreadableFileCount)")
+            }
             stat("Duration", value: formattedDuration)
         }
         .padding(10)
         .systemLiquidGlassBackground(cornerRadius: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.hashedFileCount) files hashed. \(manager.hashCacheHitCount) cache hits. Duration \(formattedDuration)."
+            "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.hashedFileCount) files hashed. \(manager.hashCacheHitCount) cache hits. \(manager.unreadableFileCount) unreadable files. Duration \(formattedDuration)."
         )
     }
 
