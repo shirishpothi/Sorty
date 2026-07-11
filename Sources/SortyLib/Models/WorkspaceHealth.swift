@@ -2202,6 +2202,12 @@ public extension WorkspaceHealthManager {
     nonisolated static func scanFiles(at url: URL, ignoredPaths: [String]) throws -> [FileItem] {
         var files: [FileItem] = []
         let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              fileManager.isReadableFile(atPath: url.path) else {
+            throw WorkspaceHealthScanError.unreadableDirectory(url.path)
+        }
 
         let ignoredPrefixes = Set(ignoredPaths.map {
             URL(fileURLWithPath: $0).standardizedFileURL.path
@@ -2209,7 +2215,14 @@ public extension WorkspaceHealthManager {
 
         guard let enumerator = fileManager.enumerator(
             at: url,
-            includingPropertiesForKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .contentAccessDateKey, .isDirectoryKey],
+            includingPropertiesForKeys: [
+                .fileSizeKey,
+                .creationDateKey,
+                .contentModificationDateKey,
+                .contentAccessDateKey,
+                .isDirectoryKey,
+                .ubiquitousItemDownloadingStatusKey,
+            ],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
             throw WorkspaceHealthScanError.unreadableDirectory(url.path)
@@ -2225,8 +2238,21 @@ public extension WorkspaceHealthManager {
             }
 
             autoreleasepool {
-                let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .contentAccessDateKey, .isDirectoryKey])
-                if resourceValues?.isDirectory == true {
+                guard let resourceValues = try? fileURL.resourceValues(forKeys: [
+                    .fileSizeKey,
+                    .creationDateKey,
+                    .contentModificationDateKey,
+                    .contentAccessDateKey,
+                    .isDirectoryKey,
+                    .ubiquitousItemDownloadingStatusKey,
+                ]) else {
+                    return
+                }
+                if resourceValues.isDirectory == true
+                    || FolderWatcher.shouldIgnoreCloudPlaceholder(
+                        at: fileURL,
+                        resourceValues: resourceValues
+                    ) {
                     return
                 }
 
@@ -2235,15 +2261,21 @@ public extension WorkspaceHealthManager {
                     path: fileURL.path,
                     name: name,
                     extension: fileURL.pathExtension,
-                    size: Int64(resourceValues?.fileSize ?? 0),
+                    size: Int64(resourceValues.fileSize ?? 0),
                     isDirectory: false,
-                    creationDate: resourceValues?.creationDate,
-                    modificationDate: resourceValues?.contentModificationDate,
-                    lastAccessDate: resourceValues?.contentAccessDate
+                    creationDate: resourceValues.creationDate,
+                    modificationDate: resourceValues.contentModificationDate,
+                    lastAccessDate: resourceValues.contentAccessDate
                 )
 
                 files.append(item)
             }
+        }
+
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              fileManager.isReadableFile(atPath: url.path) else {
+            throw WorkspaceHealthScanError.unreadableDirectory(url.path)
         }
 
         return files

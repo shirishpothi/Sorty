@@ -87,6 +87,42 @@ class DirectorySnapshotTests: XCTestCase {
     }
 }
 
+final class WorkspaceHealthCloudScanTests: XCTestCase {
+    func testScanSkipsOfflinePlaceholderFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "WorkspaceHealthCloudScan-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try "local".write(
+            to: directory.appendingPathComponent("available.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try Data().write(to: directory.appendingPathComponent("offline.cloud"))
+
+        let files = try WorkspaceHealthManager.scanFiles(at: directory, ignoredPaths: [])
+
+        XCTAssertEqual(files.map(\.displayName), ["available.txt"])
+    }
+
+    func testScanRejectsUnavailableRoot() {
+        let missingDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "MissingWorkspaceHealthRoot-\(UUID().uuidString)",
+            isDirectory: true
+        )
+
+        XCTAssertThrowsError(
+            try WorkspaceHealthManager.scanFiles(at: missingDirectory, ignoredPaths: [])
+        ) { error in
+            guard case WorkspaceHealthScanError.unreadableDirectory = error else {
+                return XCTFail("Expected unreadableDirectory, got \(error)")
+            }
+        }
+    }
+}
+
 // MARK: - Directory Growth Tests
 
 class DirectoryGrowthTests: XCTestCase {
