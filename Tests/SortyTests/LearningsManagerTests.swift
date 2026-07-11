@@ -301,6 +301,25 @@ final class LearningsManagerTests: XCTestCase {
        XCTAssertTrue(context.isEmpty)
     }
 
+    func testFailedModelDirectoryRescanPreservesLastGoodSnapshot() async throws {
+       let directory = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyModelSnapshot-\(UUID().uuidString)", isDirectory: true)
+       try FileManager.default.createDirectory(
+           at: directory.appendingPathComponent("Projects", isDirectory: true),
+           withIntermediateDirectories: true
+       )
+       _ = manager.addModelDirectory(path: directory.path)
+       let id = try XCTUnwrap(manager.modelDirectories.first?.id)
+       await manager.rescanModelDirectory(id: id)
+       let snapshot = try XCTUnwrap(manager.modelDirectories.first?.scanSnapshot)
+       try FileManager.default.removeItem(at: directory)
+
+       await manager.rescanModelDirectory(id: id)
+
+       XCTAssertEqual(manager.modelDirectories.first?.scanSnapshot, snapshot)
+       XCTAssertEqual(manager.modelDirectories.first?.lastScannedAt, snapshot.scannedAt)
+    }
+
     func testLearningsModelOverrideUsesDedicatedModelForAnalysis() {
        manager.setLearningsModelOverride(provider: .openAI, model: "gpt-5-mini")
 

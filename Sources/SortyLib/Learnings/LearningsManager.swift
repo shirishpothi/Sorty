@@ -41,6 +41,7 @@ public class LearningsManager: ObservableObject {
     }
     @Published public var sessionLearningPaused: Bool = false
     @Published public var modelDirectories: [ReferenceModelDirectory] = []
+    private var activeModelDirectoryURLs: [String: URL] = [:]
     @Published public private(set) var learningsModelSelection: LearningsModelSelection?
     @Published public var behaviorPreferences: BehaviorPreferences?
 
@@ -325,6 +326,7 @@ public class LearningsManager: ObservableObject {
             isLocked = false
             requiresInitialSetup = true
             learningsModelSelection = nil
+            stopAllModelDirectoryAccess()
             modelDirectories = []
             learningStrength = 0.5
             useAIForLearnings = true
@@ -2418,6 +2420,7 @@ public class LearningsManager: ObservableObject {
     
     /// Remove a model directory by its ID
     public func removeModelDirectory(id: String) {
+        stopModelDirectoryAccess(id: id)
         modelDirectories.removeAll { $0.id == id }
         saveModelDirectories()
     }
@@ -2439,6 +2442,7 @@ public class LearningsManager: ObservableObject {
     private func restoreModelDirectoryAccess() {
         var didUpdate = false
         for i in modelDirectories.indices {
+            stopModelDirectoryAccess(id: modelDirectories[i].id)
             guard let bookmark = modelDirectories[i].bookmarkData else { continue }
             
             do {
@@ -2450,7 +2454,11 @@ public class LearningsManager: ObservableObject {
                     bookmarkDataIsStale: &isStale
                 )
                 
-                _ = resolvedURL.startAccessingSecurityScopedResource()
+                guard resolvedURL.startAccessingSecurityScopedResource() else {
+                    DebugLogger.log("Failed to access model directory: \(modelDirectories[i].displayName)")
+                    continue
+                }
+                activeModelDirectoryURLs[modelDirectories[i].id] = resolvedURL
                 
                 if isStale {
                     do {
@@ -2488,12 +2496,34 @@ public class LearningsManager: ObservableObject {
             return
         }
         
-        let snapshot = await ReferenceDirectoryScanner.scan(url: directoryURL)
+        let snapshot: ReferenceDirectorySnapshot
+        do {
+            snapshot = try await ReferenceDirectoryScanner.scan(url: directoryURL)
+        } catch is CancellationError {
+            return
+        } catch {
+            DebugLogger.log(
+                "Preserving previous snapshot for \(directory.displayName) after scan failure: \(error.localizedDescription)"
+            )
+            return
+        }
         
         guard let currentIndex = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
         modelDirectories[currentIndex].scanSnapshot = snapshot
         modelDirectories[currentIndex].lastScannedAt = snapshot.scannedAt
         saveModelDirectories()
+    }
+
+    private func stopModelDirectoryAccess(id: String) {
+        guard let url = activeModelDirectoryURLs.removeValue(forKey: id) else { return }
+        url.stopAccessingSecurityScopedResource()
+    }
+
+    private func stopAllModelDirectoryAccess() {
+        for url in activeModelDirectoryURLs.values {
+            url.stopAccessingSecurityScopedResource()
+        }
+        activeModelDirectoryURLs.removeAll()
     }
     
     /// Returns enabled, accessible reference directory paths (capped at maxEnabledModelDirectories)

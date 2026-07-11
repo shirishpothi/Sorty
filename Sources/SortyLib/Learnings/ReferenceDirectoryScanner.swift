@@ -8,6 +8,17 @@
 
 import Foundation
 
+public enum ReferenceDirectoryScanError: LocalizedError, Sendable {
+    case unavailable(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable(let path):
+            return "The reference directory is unavailable: \(path)"
+        }
+    }
+}
+
 public struct ReferenceDirectoryScanner: Sendable {
     
     private static let maxDepth = 3
@@ -16,35 +27,71 @@ public struct ReferenceDirectoryScanner: Sendable {
     private static let maxSampleFileNames = 5
     
     /// Scan a directory and return a snapshot. Safe to call off the main actor.
-    public static func scan(url: URL) async -> ReferenceDirectorySnapshot {
-        await Task.detached {
-            performScan(url: url)
+    public static func scan(url: URL) async throws -> ReferenceDirectorySnapshot {
+        try await Task.detached(priority: .utility) {
+            try performScan(url: url)
         }.value
     }
     
-    private static func performScan(url: URL) -> ReferenceDirectorySnapshot {
+    private static func performScan(url: URL) throws -> ReferenceDirectorySnapshot {
         let fm = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              fm.isReadableFile(atPath: url.path) else {
+            throw ReferenceDirectoryScanError.unavailable(url.path)
+        }
         var folders: [ReferenceFolder] = []
         var totalFileCount = 0
         var allFolderNames: [String] = []
+        var encounteredReadFailure = false
         
         func scanDirectory(_ scanURL: URL, depth: Int, prefix: String) {
-            guard depth <= maxDepth, folders.count < maxFolders else { return }
-            
-            guard let contents = try? fm.contentsOfDirectory(
-                at: scanURL,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            ) else { return }
-            
-            let subdirs = contents.filter {
-                (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            }.sorted {
-                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            guard !Task.isCancelled,
+                  depth <= maxDepth,
+                  folders.count < maxFolders else {
+                return
             }
             
-            let files = contents.filter {
-                (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true
+            let contents: [URL]
+            do {
+                contents = try fm.contentsOfDirectory(
+                    at: scanURL,
+                    includingPropertiesForKeys: [
+                        .isDirectoryKey,
+                        .fileSizeKey,
+                        .ubiquitousItemDownloadingStatusKey,
+                    ],
+                    options: [.skipsHiddenFiles]
+                )
+            } catch {
+                encounteredReadFailure = true
+                return
+            }
+            
+            var subdirs: [URL] = []
+            var files: [URL] = []
+            for item in contents {
+                guard let values = try? item.resourceValues(forKeys: [
+                    .isDirectoryKey,
+                    .fileSizeKey,
+                    .ubiquitousItemDownloadingStatusKey,
+                ]) else {
+                    encounteredReadFailure = true
+                    continue
+                }
+                if values.isDirectory == true {
+                    subdirs.append(item)
+                } else if !FolderWatcher.shouldIgnoreCloudPlaceholder(
+                        at: item,
+                        resourceValues: values
+                ) {
+                    files.append(item)
+                }
+            }
+            subdirs.sort {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
+                    == .orderedAscending
             }
             
             let sampledFiles = files.prefix(maxFilesPerFolder)
@@ -77,13 +124,20 @@ public struct ReferenceDirectoryScanner: Sendable {
             }
             
             for subdir in subdirs {
-                guard folders.count < maxFolders else { return }
+                guard !Task.isCancelled, folders.count < maxFolders else { return }
                 let name = prefix.isEmpty ? subdir.lastPathComponent : "\(prefix)/\(subdir.lastPathComponent)"
                 scanDirectory(subdir, depth: depth + 1, prefix: name)
             }
         }
         
         scanDirectory(url, depth: 0, prefix: "")
+        try Task.checkCancellation()
+        guard !encounteredReadFailure,
+              fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              fm.isReadableFile(atPath: url.path) else {
+            throw ReferenceDirectoryScanError.unavailable(url.path)
+        }
         
         let conventions = detectNamingConventions(folderNames: allFolderNames)
         
