@@ -178,7 +178,7 @@ resolve_codesign_identity() {
 }
 
 codesign_cmd() {
-    local -a cmd=(codesign --force --sign "${SIGNING_IDENTITY}")
+    local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
     "${cmd[@]}"
 }
@@ -190,7 +190,7 @@ codesign_cmd_hardened_runtime() {
 }
 
 codesign_cmd_allow_failure() {
-    local -a cmd=(codesign --force --sign "${SIGNING_IDENTITY}")
+    local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
     "${cmd[@]}" || true
 }
