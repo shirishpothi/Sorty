@@ -1606,7 +1606,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             } else {
                 selectedBatch = imageFiles
             }
-            updateProgress(0.25, stage: "Analyzing \(selectedBatch.count) of \(imageFiles.count) images with Vision AI...")
+            updateProgress(0.25, stage: "Sorty is analyzing your images (\(selectedBatch.count)/\(imageFiles.count))")
 
             let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedBatch.compactMap { $0.url })
             var analyzedNames: [String] = []
