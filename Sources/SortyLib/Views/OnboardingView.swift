@@ -1661,8 +1661,8 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 || window.contentLayoutRect.height < targetSize.height
             {
                 window.setContentSize(targetSize)
-                window.center()
             }
+            window.center()
 
             // Start fully transparent and slowly fade the whole window in so the
             // onboarding materializes rather than popping into existence.
