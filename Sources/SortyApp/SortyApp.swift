@@ -16,6 +16,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
     private static let buildAutoCloseRequestKey = "buildAutoCloseRequest"
     @MainActor static var forceQuit = false
+    private var recoveryWindowController: NSWindowController?
 
     override init() {
         super.init()
@@ -187,6 +188,30 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSApp.setActivationPolicy(.regular)
         }
+    }
+
+    func presentRecoveryWindow<Content: View>(rootView: Content) {
+        guard recoveryWindowController == nil else {
+            recoveryWindowController?.showWindow(nil)
+            return
+        }
+
+        let hostingController = NSHostingController(rootView: rootView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 750),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Sorty"
+        window.contentViewController = hostingController
+        window.center()
+
+        let controller = NSWindowController(window: window)
+        recoveryWindowController = controller
+        controller.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -425,6 +450,18 @@ struct SortyApp: App {
             try? await automationOrganizer.configure(with: settingsViewModel.config)
             learningsManager.configure(with: settingsViewModel.config)
             menuBarController.configure(settings: settingsViewModel)
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            let hasMainWindow = NSApplication.shared.windows.contains { window in
+                window.canBecomeMain && (window.isVisible || window.isMiniaturized)
+            }
+            guard !hasMainWindow else { return }
+
+            appDelegate.presentRecoveryWindow(
+                rootView: mainWindowContent(launchRequest: .constant(nil))
+            )
         }
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
