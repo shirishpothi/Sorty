@@ -352,6 +352,50 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testCrossVolumeDirectoryMoveVerifiesEntireTree() async throws {
+        let sourceFolder = tempDirectory.appendingPathComponent("Project", isDirectory: true)
+        let nestedFolder = sourceFolder.appendingPathComponent("Nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nestedFolder, withIntermediateDirectories: true)
+        try "alpha".write(
+            to: sourceFolder.appendingPathComponent("alpha.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "beta".write(
+            to: nestedFolder.appendingPathComponent("beta.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let item = FileItem(
+            path: sourceFolder.path,
+            name: "Project",
+            extension: "",
+            size: 0,
+            isDirectory: true
+        )
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "External", files: [item])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+
+        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+
+        let destination = tempDirectory.appendingPathComponent("External/Project", isDirectory: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceFolder.path))
+        XCTAssertEqual(
+            try String(contentsOf: destination.appendingPathComponent("alpha.txt"), encoding: .utf8),
+            "alpha"
+        )
+        XCTAssertEqual(
+            try String(contentsOf: destination.appendingPathComponent("Nested/beta.txt"), encoding: .utf8),
+            "beta"
+        )
+        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
+    }
+
+    @MainActor
     func testApplyFailsBeforeCreatingFoldersWhenSourceDisappears() async throws {
         let source = tempDirectory.appendingPathComponent("offline.txt")
         try "cloud content".write(to: source, atomically: true, encoding: .utf8)
@@ -381,6 +425,39 @@ class FileSystemManagerTests: XCTestCase {
         }
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: destinationFolder.path))
+    }
+
+    @MainActor
+    func testApplyReportsProviderFailureInsteadOfFalseSuccess() async throws {
+        let source = tempDirectory.appendingPathComponent("cloud-file.txt")
+        try "cloud content".write(to: source, atomically: true, encoding: .utf8)
+        let file = FileItem(
+            path: source.path,
+            name: "cloud-file",
+            extension: "txt",
+            size: 13,
+            isDirectory: false
+        )
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "First", files: [file]),
+                FolderSuggestion(folderName: "Second", files: [file]),
+            ],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+            XCTFail("Expected the second provider mutation to fail the apply")
+        } catch FileSystemError.partialApplyFailure(let operations, _) {
+            XCTAssertEqual(operations.filter { $0.type == .moveFile }.count, 1)
+        } catch {
+            XCTFail("Expected partialApplyFailure, got \(error)")
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("First/cloud-file.txt").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Second/cloud-file.txt").path))
     }
 
     @MainActor

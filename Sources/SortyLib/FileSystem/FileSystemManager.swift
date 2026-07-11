@@ -29,6 +29,57 @@ public actor FileSystemManager {
     private static let crossVolumeChunkSize: Int = 1_024 * 1_024 * 4 // 4 MB
     private static let largeFileThreshold: UInt64 = 50 * 1_024 * 1_024 // 50 MB
 
+    private struct TransferSnapshot: Equatable {
+        let itemCount: Int
+        let totalBytes: UInt64
+        let latestModificationDate: Date?
+
+        func matchesCopiedContent(_ other: TransferSnapshot) -> Bool {
+            itemCount == other.itemCount && totalBytes == other.totalBytes
+        }
+    }
+
+    private func transferSnapshot(at url: URL) throws -> TransferSnapshot {
+        let rootValues = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+        guard rootValues.isDirectory == true else {
+            return TransferSnapshot(
+                itemCount: 1,
+                totalBytes: UInt64(max(rootValues.fileSize ?? 0, 0)),
+                latestModificationDate: rootValues.contentModificationDate
+            )
+        }
+
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            options: [],
+            errorHandler: { _, _ in false }
+        ) else {
+            throw FileSystemError.crossVolumeCopyVerificationFailed(url.path)
+        }
+
+        var itemCount = 1
+        var totalBytes: UInt64 = 0
+        var latestModificationDate = rootValues.contentModificationDate
+        for case let itemURL as URL in enumerator {
+            try Task.checkCancellation()
+            let values = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+            itemCount += 1
+            if values.isDirectory != true {
+                totalBytes += UInt64(max(values.fileSize ?? 0, 0))
+            }
+            if let date = values.contentModificationDate,
+               latestModificationDate == nil || date > latestModificationDate! {
+                latestModificationDate = date
+            }
+        }
+        return TransferSnapshot(
+            itemCount: itemCount,
+            totalBytes: totalBytes,
+            latestModificationDate: latestModificationDate
+        )
+    }
+
     public func setCrossVolumeProgressHandler(_ handler: (@Sendable (String, Double) -> Void)?) {
         crossVolumeProgressHandler = handler
     }
@@ -65,6 +116,7 @@ public actor FileSystemManager {
     private func copyWithProgress(from source: URL, to destination: URL, progressHandler: (@Sendable (Double) -> Void)?) async throws {
         let sourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
         let fileSize = (sourceAttributes[.size] as? UInt64) ?? 0
+        let sourceSnapshot = try transferSnapshot(at: source)
         let stagingURL = destination.deletingLastPathComponent().appendingPathComponent(
             ".sorty-transfer-\(UUID().uuidString)-\(destination.lastPathComponent)"
         )
@@ -120,9 +172,10 @@ public actor FileSystemManager {
         }
 
         try Task.checkCancellation()
-        let destAttributes = try fileManager.attributesOfItem(atPath: stagingURL.path)
-        let destSize = (destAttributes[.size] as? UInt64) ?? 0
-        guard destSize == fileSize else {
+        let currentSourceSnapshot = try transferSnapshot(at: source)
+        let destinationSnapshot = try transferSnapshot(at: stagingURL)
+        guard currentSourceSnapshot == sourceSnapshot,
+              sourceSnapshot.matchesCopiedContent(destinationSnapshot) else {
             throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
         }
 
@@ -928,6 +981,13 @@ public actor FileSystemManager {
                 allOperations.append(contentsOf: result.operations)
             }
 
+            if !allFailures.isEmpty {
+                throw FileSystemError.partialFailure(
+                    successCount: allOperations.count,
+                    failures: allFailures
+                )
+            }
+
             progress?(0.1, "Moving files...")
 
             for suggestion in plan.suggestions {
@@ -935,6 +995,13 @@ public actor FileSystemManager {
                     updateProgress(message)
                 }, failures: &allFailures)
                 allOperations.append(contentsOf: result.operations)
+            }
+
+            if !allFailures.isEmpty {
+                throw FileSystemError.partialFailure(
+                    successCount: allOperations.count,
+                    failures: allFailures
+                )
             }
 
             if enableTagging {
