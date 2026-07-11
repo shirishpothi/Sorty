@@ -141,7 +141,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (data, response) = try await AIRequestSupport.withTransientRetry {
+            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
                 try await session.data(for: request)
             }
 
@@ -173,7 +173,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (bytes, response) = try await session.bytes(for: request)
+            let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry {
+                try await session.bytes(for: request)
+            }
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AIClientError.invalidResponse
@@ -259,7 +261,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         request.timeoutInterval = min(config.requestTimeout, 60)
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
             try await session.data(for: request)
         }
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
@@ -287,7 +289,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         )
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
             try await session.data(for: request)
         }
         

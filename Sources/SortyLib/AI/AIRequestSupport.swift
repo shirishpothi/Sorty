@@ -193,31 +193,44 @@ enum AIRequestSupport {
             extractText(from: choice["text"])
     }
 
-    /// Retries a network operation once on transient HTTP errors (429, 500, 502, 503, 504).
-    /// Cancellation-aware: checks Task.isCancelled before retrying.
-    /// - Parameter operation: The async throwing closure to retry
-    /// - Returns: The result of the operation
-    static func withTransientRetry<T>(
-        _ operation: () async throws -> T
-    ) async throws -> T {
-        do {
-            return try await operation()
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as AIClientError {
-            guard shouldRetry(error), !Task.isCancelled else {
-                throw error
+    /// Retries transient transport and HTTP failures with bounded backoff.
+    ///
+    /// HTTP status inspection deliberately happens inside this wrapper. URLSession considers
+    /// responses such as 502 successful network calls, so validating them after this function
+    /// returns prevents the retry policy from ever seeing them.
+    static func withTransientHTTPRetry<Payload>(
+        delays: [Duration] = [.milliseconds(500), .seconds(1)],
+        _ operation: () async throws -> (Payload, URLResponse)
+    ) async throws -> (Payload, URLResponse) {
+        var attempt = 0
+
+        while true {
+            try Task.checkCancellation()
+
+            do {
+                let result = try await operation()
+                guard let response = result.1 as? HTTPURLResponse,
+                      isTransientStatusCode(response.statusCode),
+                      attempt < delays.count else {
+                    return result
+                }
+
+                let delay = retryDelay(from: response, fallback: delays[attempt])
+                attempt += 1
+                try await Task.sleep(for: delay)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as AIClientError {
+                guard shouldRetry(error), attempt < delays.count else { throw error }
+                let delay = delays[attempt]
+                attempt += 1
+                try await Task.sleep(for: delay)
+            } catch let error as URLError {
+                guard shouldRetry(error), attempt < delays.count else { throw error }
+                let delay = delays[attempt]
+                attempt += 1
+                try await Task.sleep(for: delay)
             }
-            // Single retry with brief backoff
-            try await Task.sleep(nanoseconds: 500_000_000) // 500ms
-            return try await operation()
-        } catch let error as URLError {
-            // Retry only transport failures. Retrying deterministic decoding,
-            // validation, or filesystem errors adds latency and can repeat a
-            // request that the provider already completed successfully.
-            guard shouldRetry(error), !Task.isCancelled else { throw error }
-            try await Task.sleep(nanoseconds: 500_000_000) // 500ms
-            return try await operation()
         }
     }
 
@@ -225,7 +238,7 @@ enum AIRequestSupport {
     private static func shouldRetry(_ error: AIClientError) -> Bool {
         switch error {
         case .apiError(let statusCode, _):
-            return [429, 500, 502, 503, 504].contains(statusCode)
+            return isTransientStatusCode(statusCode)
         case .networkError:
             return true
         default:
@@ -249,5 +262,19 @@ enum AIRequestSupport {
         default:
             return false
         }
+    }
+
+    private static func isTransientStatusCode(_ statusCode: Int) -> Bool {
+        [429, 500, 502, 503, 504].contains(statusCode)
+    }
+
+    private static func retryDelay(from response: HTTPURLResponse, fallback: Duration) -> Duration {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After"),
+              let seconds = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              seconds.isFinite else {
+            return fallback
+        }
+
+        return .milliseconds(Int64(min(max(seconds, 0.25), 10) * 1_000))
     }
 }

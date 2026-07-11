@@ -80,4 +80,47 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
 
         XCTAssertNoThrow(try AIRequestSupport.makeJSONRequest(url: local, method: "GET"))
     }
+
+    func testTransientHTTPRetryInspectsStatusBeforeReturning() async throws {
+        let url = URL(string: "https://example.com/v1/chat/completions")!
+        var attempts = 0
+
+        let (_, response) = try await AIRequestSupport.withTransientHTTPRetry(
+            delays: [.zero, .zero]
+        ) {
+            attempts += 1
+            let statusCode = attempts < 3 ? 502 : 200
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: statusCode,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (Data(), response as URLResponse)
+        }
+
+        XCTAssertEqual(attempts, 3)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+    }
+
+    func testTransientHTTPRetryDoesNotRepeatDeterministicClientErrors() async throws {
+        let url = URL(string: "https://example.com/v1/chat/completions")!
+        var attempts = 0
+
+        let (_, response) = try await AIRequestSupport.withTransientHTTPRetry(
+            delays: [.zero, .zero]
+        ) {
+            attempts += 1
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 400,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (Data(), response as URLResponse)
+        }
+
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 400)
+    }
 }

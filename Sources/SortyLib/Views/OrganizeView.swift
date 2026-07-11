@@ -42,10 +42,7 @@ struct OrganizeView: View {
                         case .scanning, .organizing, .ready, .applying, .completed:
                             returnToStartAfterCancellation()
                         default:
-                            withAnimation(.pageTransition) {
-                                appState.selectedDirectory = nil
-                                organizer.reset()
-                            }
+                            returnToDirectorySelection()
                         }
                     },
                     onClear: {
@@ -399,6 +396,33 @@ struct OrganizeView: View {
                 }
                 showsCompletionContent = false
                 keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
+                isShowingReturnToStartContent = false
+                returnsToDirectorySelection = false
+                isReturningToStart = false
+            }
+        }
+    }
+
+    private func returnToDirectorySelection() {
+        guard !isReturningToStart else { return }
+
+        returnsToDirectorySelection = true
+        isShowingReturnToStartContent = true
+        withAnimation(returnToStartExitAnimation) {
+            isReturningToStart = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(60) : .milliseconds(200))
+            guard !Task.isCancelled else { return }
+
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                organizer.reset()
+                appState.selectedDirectory = nil
+                showsCompletionContent = false
+                keepsReadyContentVisibleAfterReturn = false
                 isShowingReturnToStartContent = false
                 returnsToDirectorySelection = false
                 isReturningToStart = false

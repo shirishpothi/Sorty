@@ -120,7 +120,9 @@ public enum AIClientError: LocalizedError, Sendable {
         case 429: return "Rate limit exceeded. You've sent too many requests. Please wait a moment before trying again."
         case 500: return "Internal server error. The AI provider is experiencing technical difficulties."
         case 501: return "Not supported. This provider or feature is not available in your current environment."
+        case 502: return "The AI provider or its upstream model temporarily failed to respond. Sorty retried the request, but the service is still unavailable."
         case 503: return "Service unavailable. The AI provider's servers are overloaded or undergoing maintenance."
+        case 504: return "The AI provider timed out while waiting for the model. Sorty retried the request, but the service is still unavailable."
         default: return "The request failed with an unexpected status code."
         }
     }
@@ -160,5 +162,4 @@ public enum AIClientError: LocalizedError, Sendable {
         return message.count > 300 ? String(message.prefix(300)) + "..." : message
     }
 }
-
 

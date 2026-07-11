@@ -244,7 +244,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 request.setValue(value, forHTTPHeaderField: key)
             }
 
-            let (_, response) = try await AIRequestSupport.withTransientRetry {
+            let (_, response) = try await AIRequestSupport.withTransientHTTPRetry {
                 try await session.data(for: request)
             }
 
@@ -294,7 +294,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-            let (data, response) = try await AIRequestSupport.withTransientRetry {
+            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
                 try await session.data(for: request)
             }
 
@@ -347,7 +347,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
             do {
-                let (data, response) = try await AIRequestSupport.withTransientRetry {
+                let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
                     try await session.data(for: request)
                 }
                 let endTime = Date()
@@ -427,7 +427,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             var accumulatedContentBuffer = ""
 
             do {
-                let (bytes, response) = try await session.bytes(for: request)
+                let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry {
+                    try await session.bytes(for: request)
+                }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw AIClientError.invalidResponse

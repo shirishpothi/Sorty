@@ -89,6 +89,7 @@ extension View {
 // MARK: - Model Selection Popover (Two-Column Layout)
 
 struct ModelSelectionPopover: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
@@ -300,7 +301,12 @@ struct ModelSelectionPopover: View {
     
     private func providerRow(_ provider: AIProvider) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            HapticFeedbackManager.shared.selection()
+            withAnimation(
+                reduceMotion
+                    ? .easeOut(duration: 0.12)
+                    : .spring(response: 0.35, dampingFraction: 0.5)
+            ) {
                 selectedProvider = provider
                 showCustomInput = false
             }
@@ -422,6 +428,7 @@ struct ModelSelectionPopover: View {
                     
                     ForEach(modelsForSelectedProvider, id: \.self) { model in
                         modelRow(model)
+                            .transition(modelRowTransition)
                     }
                     
                     if !showCustomInput {
@@ -432,6 +439,7 @@ struct ModelSelectionPopover: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 8)
+                .animation(modelListAnimation, value: modelsForSelectedProvider)
             }
         }
         .frame(maxWidth: .infinity)
@@ -698,6 +706,25 @@ struct ModelSelectionPopover: View {
             return catalogModels.map { $0.id }
         }
         return provider.recommendedModels
+    }
+
+    private var modelListAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.35, dampingFraction: 0.5)
+    }
+
+    private var modelRowTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+
+        return .asymmetric(
+            insertion: .opacity
+                .combined(with: .scale(scale: 0.96, anchor: .top))
+                .combined(with: .offset(y: 5)),
+            removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+        )
     }
 }
 

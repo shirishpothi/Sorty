@@ -493,6 +493,7 @@ public struct HapticBounceButtonStyle: ButtonStyle {
 public struct MetalFxPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var isPaused: Bool
     var usesSubtleIdleBeam: Bool
@@ -519,7 +520,8 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
                     isEnabled: isEnabled,
                     isPaused: isPaused,
                     usesSubtleIdleBeam: usesSubtleIdleBeam,
-                    colorScheme: colorScheme
+                    colorScheme: colorScheme,
+                    reduceMotion: reduceMotion
                 )
             }
             .contentShape(Capsule())
@@ -553,6 +555,7 @@ private struct MetalFxPillSurface: View {
     let isPaused: Bool
     let usesSubtleIdleBeam: Bool
     let colorScheme: ColorScheme
+    let reduceMotion: Bool
 
     private var isIntensified: Bool {
         isHovering || isPressed
@@ -563,7 +566,7 @@ private struct MetalFxPillSurface: View {
     }
 
     private var shouldAnimateSurface: Bool {
-        !isPaused && isEnabled
+        !isPaused && isEnabled && !reduceMotion
     }
 
     var body: some View {
@@ -577,6 +580,10 @@ private struct MetalFxPillSurface: View {
     }
 
     private func surface(time: TimeInterval) -> some View {
+        // Keep phase values small. Feeding an ever-growing uptime value into
+        // AngularGradient eventually loses precision and can render a dark seam.
+        let phase = time.truncatingRemainder(dividingBy: 12) / 12
+
         ZStack {
             Capsule()
                 .fill(baseFill)
@@ -586,7 +593,7 @@ private struct MetalFxPillSurface: View {
                     AngularGradient(
                         colors: ringColors,
                         center: .center,
-                        angle: .degrees(time * 52)
+                        angle: .degrees(phase * 360)
                     ),
                     lineWidth: isIntensified ? 3.2 : 1.6
                 )
@@ -607,7 +614,7 @@ private struct MetalFxPillSurface: View {
                     lineWidth: 1
                 )
 
-            movingCatchlight(time: time)
+            movingCatchlight(phase: phase)
                 .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
 
             Capsule()
@@ -624,6 +631,7 @@ private struct MetalFxPillSurface: View {
                 )
                 .padding(3)
         }
+        .clipShape(Capsule())
         .compositingGroup()
     }
 
@@ -663,8 +671,8 @@ private struct MetalFxPillSurface: View {
         ]
     }
 
-    private func movingCatchlight(time: TimeInterval) -> some View {
-        let travel = (sin(time * 1.2) + 1) / 2
+    private func movingCatchlight(phase: Double) -> some View {
+        let travel = (sin(phase * 2 * .pi) + 1) / 2
 
         return Capsule()
             .strokeBorder(
