@@ -942,6 +942,126 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertEqual(pausedSession?.reaction, .inProgress)
         XCTAssertFalse(pausedSession?.events.contains(where: { $0.kind == .feedback }) ?? false)
     }
+
+    func testProfileArchiveCarriesMetadataSettingsAndFullProfile() throws {
+        var profile = LearningsProfile()
+        profile.positiveExamples = [
+            LabeledExample(
+                id: "example-1",
+                srcPath: "/Downloads/report.pdf",
+                dstPath: "/Documents/Reports/report.pdf"
+            )
+        ]
+        manager.currentProfile = profile
+        manager.learningStrength = 0.8
+        manager.useAIForLearnings = false
+        manager.dataRetentionDays = 90
+        manager.setLearningsModelOverride(provider: .openRouter, model: "openrouter/free")
+
+        let data = try manager.makeProfileArchiveData(
+            appVersion: "1.2.3",
+            buildVersion: "456",
+            exportedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let archive = try decoder.decode(LearningsProfileArchive.self, from: data)
+
+        XCTAssertEqual(archive.schemaVersion, 2)
+        XCTAssertEqual(archive.appVersion, "1.2.3")
+        XCTAssertEqual(archive.buildVersion, "456")
+        XCTAssertEqual(archive.summary.positiveExamples, 1)
+        XCTAssertEqual(archive.summary.totalRecordCount, 1)
+        XCTAssertEqual(archive.settings.learningStrength, 0.8)
+        XCTAssertFalse(archive.settings.usesAIForAnalysis)
+        XCTAssertEqual(archive.settings.dataRetentionDays, 90)
+        XCTAssertEqual(archive.settings.modelSelection?.model, "openrouter/free")
+        XCTAssertEqual(archive.profile.positiveExamples.first?.id, "example-1")
+        XCTAssertEqual(archive.profileDigestSHA256.count, 64)
+    }
+
+    func testProfileImportMergesRecordsRestoresSettingsAndPreservesConsent() async throws {
+        var exportedProfile = LearningsProfile(consentGranted: false)
+        exportedProfile.corrections = [
+            LabeledExample(
+                id: "imported-correction",
+                srcPath: "/Downloads/draft.txt",
+                dstPath: "/Projects/Draft/draft.txt",
+                action: .edit
+            )
+        ]
+        manager.currentProfile = exportedProfile
+        manager.learningStrength = 0.7
+        manager.useAIForLearnings = false
+        manager.dataRetentionDays = 0
+        let archiveData = try manager.makeProfileArchiveData()
+
+        var existingProfile = LearningsProfile(consentGranted: true, consentDate: Date())
+        existingProfile.positiveExamples = [
+            LabeledExample(
+                id: "existing-example",
+                srcPath: "/Desktop/photo.jpg",
+                dstPath: "/Photos/photo.jpg"
+            )
+        ]
+        manager.currentProfile = existingProfile
+        manager.learningStrength = 0.2
+        manager.useAIForLearnings = true
+
+        let result = try await manager.importProfile(data: archiveData)
+
+        XCTAssertEqual(result.importedRecordCount, 1)
+        XCTAssertEqual(result.previousRecordCount, 1)
+        XCTAssertEqual(result.resultingRecordCount, 2)
+        XCTAssertEqual(result.restoredSettingCount, 4)
+        XCTAssertFalse(result.wasLegacyProfile)
+        XCTAssertEqual(manager.currentProfile?.corrections.first?.id, "imported-correction")
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.id, "existing-example")
+        XCTAssertEqual(manager.currentProfile?.consentGranted, true)
+        XCTAssertEqual(manager.learningStrength, 0.7)
+        XCTAssertFalse(manager.useAIForLearnings)
+    }
+
+    func testProfileImportRejectsModifiedArchive() async throws {
+        manager.currentProfile = LearningsProfile(
+            positiveExamples: [
+                LabeledExample(srcPath: "/a.txt", dstPath: "/Archive/a.txt")
+            ]
+        )
+        let data = try manager.makeProfileArchiveData()
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let archive = try decoder.decode(LearningsProfileArchive.self, from: data)
+
+        var modifiedProfile = archive.profile
+        modifiedProfile.positiveExamples.append(
+            LabeledExample(srcPath: "/b.txt", dstPath: "/Archive/b.txt")
+        )
+        let modifiedArchive = LearningsProfileArchive(
+            schemaVersion: archive.schemaVersion,
+            exportedAt: archive.exportedAt,
+            appVersion: archive.appVersion,
+            buildVersion: archive.buildVersion,
+            profileCreatedAt: archive.profileCreatedAt,
+            summary: archive.summary,
+            settings: archive.settings,
+            profileDigestSHA256: archive.profileDigestSHA256,
+            profile: modifiedProfile
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+
+        do {
+            _ = try await manager.importProfile(data: encoder.encode(modifiedArchive))
+            XCTFail("Expected an integrity validation error")
+        } catch let error as LearningsProfileTransferError {
+            guard case .inconsistentArchive = error else {
+                XCTFail("Expected inconsistentArchive, got \(error)")
+                return
+            }
+        }
+    }
     
     // MARK: - Scope Display Names
     

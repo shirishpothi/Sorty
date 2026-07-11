@@ -1129,14 +1129,16 @@ struct LearningsView: View {
         VStack(spacing: 12) {
             Image("LearningsEmptyState")
                 .resizable()
+                .interpolation(.high)
                 .scaledToFit()
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .frame(width: 92, height: 92)
                 .accessibilityIgnoresInvertColors()
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                    reduceMotion
+                        ? .easeOut(duration: 0.12)
+                        : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
                     value: emptyLearningsHasAppeared
                 )
                 .accessibilityHidden(true)
@@ -1145,7 +1147,9 @@ struct LearningsView: View {
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .offset(y: emptyLearningsHasAppeared ? 0 : 8)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                    reduceMotion
+                        ? .easeOut(duration: 0.12)
+                        : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
                     value: emptyLearningsHasAppeared)
             Text(
                 "Organize some folders, and Sorty will pick up your preferences from corrections and feedback."
@@ -1157,7 +1161,9 @@ struct LearningsView: View {
             .opacity(emptyLearningsHasAppeared ? 1 : 0)
             .offset(y: emptyLearningsHasAppeared ? 0 : 10)
             .animation(
-                .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                reduceMotion
+                    ? .easeOut(duration: 0.12)
+                    : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
                 value: emptyLearningsHasAppeared)
         }
         .padding(20)
@@ -1166,10 +1172,13 @@ struct LearningsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                emptyLearningsHasAppeared = true
+        .task {
+            guard !emptyLearningsHasAppeared else { return }
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(100))
             }
+            guard !Task.isCancelled else { return }
+            emptyLearningsHasAppeared = true
         }
     }
 
@@ -1197,9 +1206,9 @@ struct LearningsView: View {
                 VStack(spacing: 12) {
                     Image("ActivityEmptyState")
                         .resizable()
+                        .interpolation(.high)
                         .scaledToFit()
-                        .frame(width: 72, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .frame(width: 92, height: 92)
                         .accessibilityIgnoresInvertColors()
                         .accessibilityHidden(true)
                     Text("No activity yet")
@@ -1586,7 +1595,7 @@ struct LearningsView: View {
     // MARK: - Export / Import
 
     private func exportProfile() {
-        guard let profile = manager.currentProfile else { return }
+        guard manager.currentProfile != nil else { return }
         let panel = NSSavePanel()
         let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
         panel.allowedContentTypes = [learningsType]
@@ -1596,16 +1605,19 @@ struct LearningsView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             do {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(profile)
-                try data.write(to: url)
+                let summary = try manager.exportProfile(to: url)
                 HapticFeedbackManager.shared.success()
+                NotificationManager.shared.showHUDInfo(
+                    title: "Learning Profile Exported",
+                    message: "Saved \(summary.totalRecordCount) learning records with profile settings and integrity metadata.",
+                    icon: "checkmark.circle.fill",
+                    iconColor: .green
+                )
                 NSWorkspace.shared.open(url)
             } catch {
                 DebugLogger.log("Failed to export profile: \(error)")
                 HapticFeedbackManager.shared.error()
+                manager.error = "Export failed: \(error.localizedDescription)"
             }
         }
     }
@@ -1636,8 +1648,29 @@ struct LearningsView: View {
             guard let url = urls.first else { return }
             Task {
                 do {
-                    try await manager.importProfile(from: url)
+                    let importResult = try await manager.importProfile(from: url)
                     HapticFeedbackManager.shared.success()
+                    var details = [
+                        "Merged \(importResult.importedRecordCount) records with \(importResult.previousRecordCount) existing records.",
+                        "The profile now contains \(importResult.resultingRecordCount) records."
+                    ]
+                    if importResult.restoredSettingCount > 0 {
+                        details.append("Restored \(importResult.restoredSettingCount) learning settings.")
+                    }
+                    if importResult.omittedByRetentionPolicy > 0 {
+                        details.append(
+                            "\(importResult.omittedByRetentionPolicy) older records were omitted by your retention policy."
+                        )
+                    }
+                    if importResult.wasLegacyProfile {
+                        details.append("The legacy profile was upgraded to the current format.")
+                    }
+                    NotificationManager.shared.showHUDInfo(
+                        title: "Learning Profile Imported",
+                        message: details.joined(separator: " "),
+                        icon: "checkmark.circle.fill",
+                        iconColor: .green
+                    )
                 } catch {
                     DebugLogger.log("Failed to import profile: \(error)")
                     HapticFeedbackManager.shared.error()

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CryptoKit
 import SwiftUI
 import Combine
 
@@ -1488,24 +1489,325 @@ public class LearningsManager: ObservableObject {
         let data = try encoder.encode(profile.inferredRules)
         try data.write(to: url)
     }
+
+    /// Export a portable, integrity-checked profile archive.
+    @discardableResult
+    func exportProfile(to url: URL) throws -> LearningsProfileArchiveSummary {
+        let data = try makeProfileArchiveData()
+        try data.write(to: url, options: .atomic)
+        guard let profile = currentProfile else {
+            throw LearningsProfileTransferError.noProfile
+        }
+        return LearningsProfileArchiveSummary(profile: profile)
+    }
+
+    func makeProfileArchiveData(
+        appVersion: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+        buildVersion: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+        exportedAt: Date = Date()
+    ) throws -> Data {
+        guard let profile = currentProfile else {
+            throw LearningsProfileTransferError.noProfile
+        }
+
+        let archive = LearningsProfileArchive(
+            schemaVersion: LearningsProfileArchive.currentSchemaVersion,
+            exportedAt: exportedAt,
+            appVersion: appVersion,
+            buildVersion: buildVersion,
+            profileCreatedAt: profile.createdAt,
+            summary: LearningsProfileArchiveSummary(profile: profile),
+            settings: LearningsProfileSettingsSnapshot(
+                learningStrength: learningStrength,
+                usesAIForAnalysis: useAIForLearnings,
+                dataRetentionDays: dataRetentionDays,
+                modelSelection: learningsModelSelection
+            ),
+            profileDigestSHA256: try profileDigest(profile),
+            profile: profile
+        )
+
+        let encoder = Self.profileJSONEncoder()
+        return try encoder.encode(archive)
+    }
     
     // MARK: - Import
     
-    /// Import profile from file
-    public func importProfile(from url: URL) async throws {
-        // Start accessing security scoped resource
-        guard url.startAccessingSecurityScopedResource() else {
-            throw LearningsError.saveFailed("Permission denied to access file")
+    /// Import and merge a portable profile without importing its consent state.
+    public func importProfile(from url: URL) async throws -> LearningsProfileImportResult {
+        let fileExtension = url.pathExtension.lowercased()
+        guard fileExtension == "learnings" || fileExtension == "json" else {
+            throw LearningsProfileTransferError.unsupportedFile
         }
-        defer { url.stopAccessingSecurityScopedResource() }
-        
-        let data = try Data(contentsOf: url)
+
+        let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard resourceValues.isRegularFile == true else {
+            throw LearningsProfileTransferError.unsupportedFile
+        }
+        guard (resourceValues.fileSize ?? 0) <= Self.maximumProfileImportBytes else {
+            throw LearningsProfileTransferError.fileTooLarge
+        }
+
+        let hasScopedAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasScopedAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        return try await importProfile(data: data)
+    }
+
+    func importProfile(data: Data) async throws -> LearningsProfileImportResult {
+        guard data.count <= Self.maximumProfileImportBytes else {
+            throw LearningsProfileTransferError.fileTooLarge
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        
-        let profile = try decoder.decode(LearningsProfile.self, from: data)
-        currentProfile = profile
+
+        let topLevel = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let archive: LearningsProfileArchive?
+        let importedProfile: LearningsProfile
+        let wasLegacyProfile: Bool
+
+        if topLevel?["schemaVersion"] != nil {
+            do {
+                let decodedArchive = try decoder.decode(LearningsProfileArchive.self, from: data)
+                try validateArchive(decodedArchive)
+                archive = decodedArchive
+                importedProfile = decodedArchive.profile
+                wasLegacyProfile = false
+            } catch let error as LearningsProfileTransferError {
+                throw error
+            } catch {
+                throw LearningsProfileTransferError.inconsistentArchive
+            }
+        } else {
+            do {
+                importedProfile = try decoder.decode(LearningsProfile.self, from: data)
+                archive = nil
+                wasLegacyProfile = true
+            } catch {
+                throw LearningsProfileTransferError.unsupportedFile
+            }
+        }
+
+        let importedSummary = LearningsProfileArchiveSummary(profile: importedProfile)
+        guard importedSummary.totalRecordCount <= Self.maximumProfileImportRecords else {
+            throw LearningsProfileTransferError.tooManyRecords
+        }
+
+        let existingProfile = currentProfile ?? LearningsProfile(
+            consentGranted: consentManager.hasConsented
+        )
+        let previousRecordCount = LearningsProfileArchiveSummary(profile: existingProfile).totalRecordCount
+        let preparedImport = migrateLegacySessionsIfNeeded(in: importedProfile)
+        var mergedProfile = mergeProfiles(existing: existingProfile, imported: preparedImport)
+
+        let restoredSettingCount: Int
+        if let settings = archive?.settings {
+            try validateSettings(settings)
+            applyImportedSettings(settings)
+            restoredSettingCount = 4
+        } else {
+            restoredSettingCount = 0
+        }
+
+        let mergedRecordCount = LearningsProfileArchiveSummary(profile: mergedProfile).totalRecordCount
+        pruneImportedProfile(&mergedProfile)
+        currentProfile = mergedProfile
         await saveProfile()
+
+        let resultingRecordCount = LearningsProfileArchiveSummary(
+            profile: currentProfile ?? mergedProfile
+        ).totalRecordCount
+        return LearningsProfileImportResult(
+            importedRecordCount: importedSummary.totalRecordCount,
+            previousRecordCount: previousRecordCount,
+            resultingRecordCount: resultingRecordCount,
+            omittedByRetentionPolicy: max(0, mergedRecordCount - resultingRecordCount),
+            restoredSettingCount: restoredSettingCount,
+            wasLegacyProfile: wasLegacyProfile
+        )
+    }
+
+    private static let maximumProfileImportBytes = 25 * 1_024 * 1_024
+    private static let maximumProfileImportRecords = 10_000
+
+    private static func profileJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    private func profileDigest(_ profile: LearningsProfile) throws -> String {
+        let data = try Self.profileJSONEncoder().encode(profile)
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func validateArchive(_ archive: LearningsProfileArchive) throws {
+        guard (1...LearningsProfileArchive.currentSchemaVersion).contains(archive.schemaVersion) else {
+            throw LearningsProfileTransferError.unsupportedSchema(archive.schemaVersion)
+        }
+        guard archive.profileCreatedAt == archive.profile.createdAt,
+              archive.summary == LearningsProfileArchiveSummary(profile: archive.profile),
+              archive.profileDigestSHA256 == (try profileDigest(archive.profile)) else {
+            throw LearningsProfileTransferError.inconsistentArchive
+        }
+        guard archive.summary.totalRecordCount <= Self.maximumProfileImportRecords else {
+            throw LearningsProfileTransferError.tooManyRecords
+        }
+        try validateSettings(archive.settings)
+    }
+
+    private func validateSettings(_ settings: LearningsProfileSettingsSnapshot) throws {
+        guard settings.learningStrength.isFinite,
+              (0...1).contains(settings.learningStrength),
+              [0, 30, 90, 365].contains(settings.dataRetentionDays),
+              settings.modelSelection?.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != true else {
+            throw LearningsProfileTransferError.invalidSettings
+        }
+    }
+
+    private func applyImportedSettings(_ settings: LearningsProfileSettingsSnapshot) {
+        learningStrength = settings.learningStrength
+        useAIForLearnings = settings.usesAIForAnalysis
+        dataRetentionDays = settings.dataRetentionDays
+
+        if let selection = settings.modelSelection {
+            setLearningsModelOverride(provider: selection.provider, model: selection.model)
+        } else {
+            clearLearningsModelOverride()
+        }
+    }
+
+    private func mergeProfiles(
+        existing: LearningsProfile,
+        imported: LearningsProfile
+    ) -> LearningsProfile {
+        // Mutate a copy of the existing profile so fields introduced by newer app
+        // versions remain intact even when an older archive does not know about them.
+        var mergedProfile = existing
+        var rejectedRuleCooldowns = existing.rejectedRuleCooldowns
+        for (ruleID, importedDate) in imported.rejectedRuleCooldowns {
+            rejectedRuleCooldowns[ruleID] = max(rejectedRuleCooldowns[ruleID] ?? .distantPast, importedDate)
+        }
+
+        mergedProfile.additionalInstructionsHistory = mergedByID(
+            existing.additionalInstructionsHistory,
+            imported.additionalInstructionsHistory
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.guidingInstructionsHistory = mergedByID(
+            existing.guidingInstructionsHistory,
+            imported.guidingInstructionsHistory
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.steeringPrompts = mergedByID(existing.steeringPrompts, imported.steeringPrompts)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.postOrganizationChanges = mergedByID(
+            existing.postOrganizationChanges,
+            imported.postOrganizationChanges
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.renameFeedbackHistory = mergedByID(
+            existing.renameFeedbackHistory,
+            imported.renameFeedbackHistory
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.historyReverts = mergedByID(existing.historyReverts, imported.historyReverts)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.cancelledOrganizations = mergedByID(
+            existing.cancelledOrganizations,
+            imported.cancelledOrganizations
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.regeneratedOrganizations = mergedByID(
+            existing.regeneratedOrganizations,
+            imported.regeneratedOrganizations
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.inferredRules = mergedByID(existing.inferredRules, imported.inferredRules)
+        mergedProfile.corrections = mergedByID(existing.corrections, imported.corrections)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.rejections = mergedByID(existing.rejections, imported.rejections)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.positiveExamples = mergedByID(existing.positiveExamples, imported.positiveExamples)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.jobHistory = mergedByID(existing.jobHistory, imported.jobHistory)
+            .sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.rejectedRuleCooldowns = rejectedRuleCooldowns
+        mergedProfile.learningExclusionPatterns = Array(
+            Set(existing.learningExclusionPatterns + imported.learningExclusionPatterns)
+        ).sorted()
+        mergedProfile.sessions = mergedByID(existing.sessions, imported.sessions)
+            .sorted { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) }
+        mergedProfile.inlineLearningMomentAnswers = mergedByID(
+            existing.inlineLearningMomentAnswers,
+            imported.inlineLearningMomentAnswers
+        ).sorted { $0.timestamp < $1.timestamp }
+        return mergedProfile
+    }
+
+    private func pruneImportedProfile(_ profile: inout LearningsProfile, now: Date = Date()) {
+        if dataRetentionDays > 0,
+           let cutoff = Calendar.current.date(byAdding: .day, value: -dataRetentionDays, to: now) {
+            profile.additionalInstructionsHistory.removeAll { $0.timestamp < cutoff }
+            profile.guidingInstructionsHistory.removeAll { $0.timestamp < cutoff }
+            profile.steeringPrompts.removeAll { $0.timestamp < cutoff }
+            profile.postOrganizationChanges.removeAll { $0.timestamp < cutoff }
+            profile.renameFeedbackHistory.removeAll { $0.timestamp < cutoff }
+            profile.historyReverts.removeAll { $0.timestamp < cutoff }
+            profile.positiveExamples.removeAll { $0.timestamp < cutoff }
+            profile.rejections.removeAll { $0.timestamp < cutoff }
+            profile.corrections.removeAll { $0.timestamp < cutoff }
+            profile.jobHistory.removeAll { $0.timestamp < cutoff }
+            profile.cancelledOrganizations.removeAll { $0.timestamp < cutoff }
+            profile.regeneratedOrganizations.removeAll { $0.timestamp < cutoff }
+            profile.sessions.removeAll { ($0.completedAt ?? $0.timestamp) < cutoff }
+            profile.inlineLearningMomentAnswers.removeAll { $0.timestamp < cutoff }
+
+            let retainedEvidenceIDs = Set(profile.positiveExamples.map(\.id))
+                .union(profile.rejections.map(\.id))
+                .union(profile.corrections.map(\.id))
+            profile.inferredRules.removeAll { rule in
+                let evidenceIDs = Set(rule.exampleIds).union(rule.evidenceIds)
+                return !evidenceIDs.isEmpty && evidenceIDs.isDisjoint(with: retainedEvidenceIDs)
+            }
+            profile.rejectedRuleCooldowns = profile.rejectedRuleCooldowns.filter { $0.value >= cutoff }
+        }
+
+        let cap = 100
+        profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
+        profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
+        profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
+        profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
+        profile.renameFeedbackHistory = Array(profile.renameFeedbackHistory.suffix(cap))
+        profile.historyReverts = Array(profile.historyReverts.suffix(cap))
+        profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
+        profile.rejections = Array(profile.rejections.suffix(cap))
+        profile.corrections = Array(profile.corrections.suffix(cap))
+        profile.jobHistory = Array(profile.jobHistory.suffix(cap))
+        profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
+        profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
+        profile.sessions = Array(profile.sessions.prefix(cap))
+        profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
+    }
+
+    private func mergedByID<Element: Identifiable>(
+        _ existing: [Element],
+        _ imported: [Element]
+    ) -> [Element] where Element.ID: Hashable {
+        var merged = existing
+        var indexes = Dictionary(uniqueKeysWithValues: existing.enumerated().map { ($1.id, $0) })
+
+        for element in imported {
+            if let index = indexes[element.id] {
+                merged[index] = element
+            } else {
+                indexes[element.id] = merged.count
+                merged.append(element)
+            }
+        }
+
+        return merged
     }
     
     // MARK: - Apply & Rollback

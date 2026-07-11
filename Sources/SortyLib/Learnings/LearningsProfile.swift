@@ -209,6 +209,127 @@ public struct LearningsProfile: Codable, Sendable {
     }
 }
 
+// MARK: - Portable Profile Archive
+
+struct LearningsProfileArchive: Codable, Sendable {
+    static let currentSchemaVersion = 2
+
+    let schemaVersion: Int
+    let exportedAt: Date
+    let appVersion: String?
+    let buildVersion: String?
+    let profileCreatedAt: Date
+    let summary: LearningsProfileArchiveSummary
+    let settings: LearningsProfileSettingsSnapshot
+    let profileDigestSHA256: String
+    let profile: LearningsProfile
+}
+
+struct LearningsProfileSettingsSnapshot: Codable, Sendable {
+    let learningStrength: Double
+    let usesAIForAnalysis: Bool
+    let dataRetentionDays: Int
+    let modelSelection: LearningsModelSelection?
+}
+
+struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
+    let additionalInstructions: Int
+    let guidingInstructions: Int
+    let steeringPrompts: Int
+    let postOrganizationChanges: Int
+    let renameFeedbackEvents: Int
+    let historyReverts: Int
+    let cancelledOrganizations: Int
+    let regeneratedOrganizations: Int
+    let inferredRules: Int
+    let corrections: Int
+    let rejections: Int
+    let positiveExamples: Int
+    let jobHistory: Int
+    let rejectedRuleCooldowns: Int
+    let learningExclusionPatterns: Int
+    let sessions: Int
+    let inlineLearningMomentAnswers: Int
+
+    init(profile: LearningsProfile) {
+        additionalInstructions = profile.additionalInstructionsHistory.count
+        guidingInstructions = profile.guidingInstructionsHistory.count
+        steeringPrompts = profile.steeringPrompts.count
+        postOrganizationChanges = profile.postOrganizationChanges.count
+        renameFeedbackEvents = profile.renameFeedbackHistory.count
+        historyReverts = profile.historyReverts.count
+        cancelledOrganizations = profile.cancelledOrganizations.count
+        regeneratedOrganizations = profile.regeneratedOrganizations.count
+        inferredRules = profile.inferredRules.count
+        corrections = profile.corrections.count
+        rejections = profile.rejections.count
+        positiveExamples = profile.positiveExamples.count
+        jobHistory = profile.jobHistory.count
+        rejectedRuleCooldowns = profile.rejectedRuleCooldowns.count
+        learningExclusionPatterns = profile.learningExclusionPatterns.count
+        sessions = profile.sessions.count
+        inlineLearningMomentAnswers = profile.inlineLearningMomentAnswers.count
+    }
+
+    var totalRecordCount: Int {
+        additionalInstructions
+            + guidingInstructions
+            + steeringPrompts
+            + postOrganizationChanges
+            + renameFeedbackEvents
+            + historyReverts
+            + cancelledOrganizations
+            + regeneratedOrganizations
+            + inferredRules
+            + corrections
+            + rejections
+            + positiveExamples
+            + jobHistory
+            + rejectedRuleCooldowns
+            + learningExclusionPatterns
+            + sessions
+            + inlineLearningMomentAnswers
+    }
+}
+
+public struct LearningsProfileImportResult: Equatable, Sendable {
+    public let importedRecordCount: Int
+    public let previousRecordCount: Int
+    public let resultingRecordCount: Int
+    public let omittedByRetentionPolicy: Int
+    public let restoredSettingCount: Int
+    public let wasLegacyProfile: Bool
+}
+
+enum LearningsProfileTransferError: LocalizedError, Sendable {
+    case unsupportedFile
+    case fileTooLarge
+    case unsupportedSchema(Int)
+    case inconsistentArchive
+    case tooManyRecords
+    case invalidSettings
+    case noProfile
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedFile:
+            return "This isn't a supported Sorty learnings profile."
+        case .fileTooLarge:
+            return "This learnings profile is larger than the 25 MB import limit."
+        case .unsupportedSchema(let version):
+            return "This learnings profile uses schema version \(version), which this version of Sorty does not support."
+        case .inconsistentArchive:
+            return "This learnings profile is incomplete or has been modified and cannot be imported safely."
+        case .tooManyRecords:
+            return "This learnings profile contains more than 10,000 records and cannot be imported safely."
+        case .invalidSettings:
+            return "This learnings profile contains invalid learning settings."
+        case .noProfile:
+            return "There is no learnings profile to export."
+        }
+    }
+}
+
 // MARK: - Behavior Tracking Models
 
 /// Represents a user instruction (additional or guiding)
