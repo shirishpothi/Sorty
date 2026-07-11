@@ -183,8 +183,7 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(
-                                    lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+                                lineWidth: 1
                             )
                     }
             } else {
@@ -204,8 +203,7 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(
-                                    lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+                                lineWidth: 1
                             )
                     }
             }
