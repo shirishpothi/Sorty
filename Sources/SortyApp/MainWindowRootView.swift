@@ -5,6 +5,7 @@ import SortyLib
 #endif
 
 struct MainWindowRootView: View {
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
@@ -51,6 +52,7 @@ struct MainWindowRootView: View {
         contentWithNotificationRouting
             .onAppear {
                 recordLaunchSmokeSuccessIfRequested()
+                restorePhysicalWindowIfNeeded()
             }
             .deleteUsageDataConfirmationAlert(
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
@@ -73,6 +75,20 @@ struct MainWindowRootView: View {
             to: URL(fileURLWithPath: resultPath),
             options: .atomic
         )
+    }
+
+    private func restorePhysicalWindowIfNeeded() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard MainWindowRouter.shared.preferredSessionID == nil,
+                  !LaunchWindowRecovery.hasRequestedFallbackWindow else {
+                return
+            }
+
+            LaunchWindowRecovery.hasRequestedFallbackWindow = true
+            openWindow(value: WindowLaunchRequest())
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 
     private var contentWithNotificationRouting: some View {

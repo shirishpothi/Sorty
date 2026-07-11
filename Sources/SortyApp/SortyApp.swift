@@ -12,6 +12,11 @@ import SwiftUI
 #endif
 
 @MainActor
+enum LaunchWindowRecovery {
+    static var hasRequestedFallbackWindow = false
+}
+
+@MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
     private static let buildAutoCloseRequestKey = "buildAutoCloseRequest"
