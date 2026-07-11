@@ -64,6 +64,16 @@ public enum OpenSourceCredits {
             url: URL(string: "https://github.com/sparkle-project/Sparkle/blob/master/LICENSE")!
         ),
         CreditItem(
+            name: "ed25519 (via Sparkle)",
+            license: "zlib",
+            url: URL(string: "https://github.com/orlp/ed25519")!
+        ),
+        CreditItem(
+            name: "SUSignatureVerifier (via Sparkle)",
+            license: "BSD-2-Clause",
+            url: URL(string: "https://github.com/sparkle-project/Sparkle/blob/master/LICENSE")!
+        ),
+        CreditItem(
             name: "Beam",
             license: "MIT",
             url: URL(string: "https://github.com/tornikegomareli/beam")!
@@ -72,6 +82,16 @@ public enum OpenSourceCredits {
             name: "Permiso",
             license: "MIT",
             url: URL(string: "https://github.com/jevonmao/Permiso")!
+        ),
+        CreditItem(
+            name: "TourKit",
+            license: "MIT · design reference",
+            url: URL(string: "https://github.com/rampatra/TourKit")!
+        ),
+        CreditItem(
+            name: "SymbolParticleMorph",
+            license: "MIT · animation reference",
+            url: URL(string: "https://github.com/AndreasInk/SymbolParticleMorph")!
         )
     ]
 }
