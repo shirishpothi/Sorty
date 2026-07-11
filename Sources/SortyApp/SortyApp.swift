@@ -285,6 +285,7 @@ struct SortyApp: App {
                 }
         } label: {
             MenuBarLabel()
+                .background(MainWindowLaunchRestorer())
         }
         .menuBarExtraStyle(.window)
     }
@@ -578,5 +579,37 @@ struct SortyApp: App {
                 }
             }
         }
+    }
+}
+
+private struct MainWindowLaunchRestorer: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task {
+                try? await Task.sleep(for: .milliseconds(500))
+                restoreMainWindowIfNeeded()
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSApplication.didBecomeActiveNotification
+                )
+            ) { _ in
+                restoreMainWindowIfNeeded()
+            }
+            .accessibilityHidden(true)
+    }
+
+    @MainActor
+    private func restoreMainWindowIfNeeded() {
+        let hasVisibleMainWindow = NSApplication.shared.windows.contains { window in
+            window.canBecomeMain && (window.isVisible || window.isMiniaturized)
+        }
+        guard !hasVisibleMainWindow else { return }
+
+        openWindow(id: "main")
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }

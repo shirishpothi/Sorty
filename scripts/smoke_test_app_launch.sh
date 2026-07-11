@@ -20,7 +20,8 @@ if [ ! -x "${EXECUTABLE_PATH}" ]; then
     exit 1
 fi
 
-pkill -x Sorty >/dev/null 2>&1 || true
+xattr -dr com.apple.quarantine "${APP_PATH}" >/dev/null 2>&1 || true
+pkill -9 -x Sorty >/dev/null 2>&1 || true
 for _ in {1..20}; do
     if ! pgrep -x Sorty >/dev/null 2>&1; then
         break
@@ -43,7 +44,7 @@ while (( SECONDS < deadline )); do
     pid=$(pgrep -x Sorty | head -1 || true)
     if [ "${CI:-false}" = "true" ] && [ -s "${RESULT_PATH}" ]; then
         echo "Sorty launch smoke test passed: main window root appeared."
-        kill "${pid}" >/dev/null 2>&1 || true
+        kill -9 "${pid}" >/dev/null 2>&1 || true
         exit 0
     fi
     if [ -n "${pid}" ] && swift - "${pid}" <<'SWIFT'
@@ -77,7 +78,7 @@ exit(hasVisibleApplicationWindow ? 0 : 1)
 SWIFT
     then
         echo "Sorty launch smoke test passed: visible application window detected."
-        kill "${pid}" >/dev/null 2>&1 || true
+        kill -9 "${pid}" >/dev/null 2>&1 || true
         exit 0
     fi
     sleep 1
@@ -85,7 +86,7 @@ done
 
 pid=$(pgrep -x Sorty | head -1 || true)
 if [ -n "${pid}" ]; then
-    kill "${pid}" >/dev/null 2>&1 || true
+    kill -9 "${pid}" >/dev/null 2>&1 || true
     echo "Sorty launched as process ${pid}, but no visible application window appeared." >&2
 else
     echo "Sorty did not remain running after launch." >&2
