@@ -1098,20 +1098,6 @@ struct LearningsView: View {
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showingHoningSheet = true
-                } label: {
-                    Label("Refine", systemImage: "wand.and.stars")
-                        .font(.caption.bold())
-                }
-                .buttonStyle(.onboardingPill(size: .small))
-                .onHover { hovering in
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
-                .accessibilityLabel("Refine preferences with a honing session")
             }
 
             if let profile = manager.currentProfile {
