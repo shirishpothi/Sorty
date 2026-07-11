@@ -51,7 +51,6 @@ struct MainWindowRootView: View {
         contentWithNotificationRouting
             .onAppear {
                 recordLaunchSmokeSuccessIfRequested()
-                requestPhysicalWindowIfNeeded()
             }
             .deleteUsageDataConfirmationAlert(
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
@@ -76,17 +75,6 @@ struct MainWindowRootView: View {
         )
     }
 
-    private func requestPhysicalWindowIfNeeded() {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(750))
-            let hasMainWindow = NSApplication.shared.windows.contains { window in
-                window.canBecomeMain && (window.isVisible || window.isMiniaturized)
-            }
-            guard !hasMainWindow else { return }
-
-            NotificationCenter.default.post(name: .requestPhysicalMainWindow, object: nil)
-        }
-    }
 
 
     private var contentWithNotificationRouting: some View {

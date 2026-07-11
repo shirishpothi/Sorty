@@ -11,10 +11,6 @@ import SwiftUI
     import SortyLib
 #endif
 
-extension Notification.Name {
-    static let requestPhysicalMainWindow = Notification.Name("SortyRequestPhysicalMainWindow")
-}
-
 @MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
@@ -217,6 +213,17 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
+
+    func scheduleRecoveryWindow(rootView: @escaping @MainActor () -> AnyView) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            let hasMainWindow = NSApplication.shared.windows.contains { window in
+                window.canBecomeMain && (window.isVisible || window.isMiniaturized)
+            }
+            guard !hasMainWindow else { return }
+            presentRecoveryWindow(rootView: rootView())
+        }
+    }
 }
 
 @main
@@ -329,20 +336,13 @@ struct SortyApp: App {
 
     private func mainWindowConfigurationHandlers<Content: View>(_ content: Content) -> some View {
         content
+            .onAppear {
+                appDelegate.scheduleRecoveryWindow {
+                    AnyView(mainWindowContent(launchRequest: .constant(nil)))
+                }
+            }
             .task {
                 configureGlobalsIfNeeded()
-            }
-            .onReceive(
-                NotificationCenter.default.publisher(for: .requestPhysicalMainWindow)
-            ) { _ in
-                let hasMainWindow = NSApplication.shared.windows.contains { window in
-                    window.canBecomeMain && (window.isVisible || window.isMiniaturized)
-                }
-                guard !hasMainWindow else { return }
-
-                appDelegate.presentRecoveryWindow(
-                    rootView: mainWindowContent(launchRequest: .constant(nil))
-                )
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in

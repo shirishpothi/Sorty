@@ -36,7 +36,7 @@ if [ "${CI:-false}" = "true" ]; then
     SORTY_LAUNCH_SMOKE_RESULT="${RESULT_PATH}" \
         "${EXECUTABLE_PATH}" --release-launch-smoke-test >/tmp/sorty-launch-smoke.log 2>&1 &
 else
-    open -n "${APP_PATH}" --args --release-launch-smoke-test
+    "${EXECUTABLE_PATH}" --release-launch-smoke-test >/tmp/sorty-launch-smoke.log 2>&1 &
 fi
 
 deadline=$((SECONDS + TIMEOUT_SECONDS))
