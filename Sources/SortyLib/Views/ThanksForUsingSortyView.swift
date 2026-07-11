@@ -5,56 +5,47 @@
 //  Appreciation window with interactive stats and liquid glass styling.
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 struct ThanksForUsingSortyView: View {
-    static let preferredWindowWidth: CGFloat = 560
-    static let preferredWindowHeight: CGFloat = 700
+    static let preferredWindowWidth: CGFloat = 480
+    static let preferredWindowHeight: CGFloat = 520
 
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
 
-    @State private var iconHovered = false
-    @State private var heartHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var hoveredStatID: String?
     @State private var selectedStatID: String?
     @State private var stats = UserStatsSnapshot.load()
-    @State private var isHeartBeating = false
     @State private var supportHovered = false
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
             header
-            supportButton
-            beatingHeart
+            if FeatureFlags.supportDeveloperEnabled {
+                supportButton
+            }
             statsTable
         }
-        .padding(28)
+        .padding(24)
         .frame(width: Self.preferredWindowWidth, height: Self.preferredWindowHeight)
         .modifier(WindowGlassBackground())
         .windowLinkHoverPillHost()
         .accessibilityIdentifier("ThanksForUsingSortyView")
         .onAppear {
             stats = UserStatsSnapshot.load()
-            isHeartBeating = true
             HapticFeedbackManager.shared.selection()
         }
     }
 
     private var header: some View {
         VStack(spacing: 8) {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
-                .resizable()
-                .frame(width: 140, height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .scaleEffect(iconHovered ? 1.04 : 1.0)
-                .animation(.easeInOut(duration: 0.18), value: iconHovered)
-                .onHover { hovering in
-                    iconHovered = hovering
-                    if hovering {
-                        HapticFeedbackManager.shared.light()
-                    }
-                }
+            MascotHeartParticleMorphView(color: SortyDesignSystem.Colors.resolvedAccent)
+                .frame(width: 120, height: 120)
+                .accessibilityHidden(true)
+                .accessibilityIdentifier("thanksWindowHeart")
 
             Text("Thanks for using Sorty")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -81,7 +72,7 @@ struct ThanksForUsingSortyView: View {
         .controlSize(.large)
         .trackHoveredURL(sponsorsURL)
         .scaleEffect(supportHovered ? 1.04 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: supportHovered)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: supportHovered)
         .onHover { hovering in
             supportHovered = hovering
             if hovering {
@@ -89,38 +80,6 @@ struct ThanksForUsingSortyView: View {
             }
         }
         .accessibilityIdentifier("thanksSupportDeveloperButton")
-    }
-
-    private var beatingHeart: some View {
-        Circle()
-            .fill(Color.clear)
-            .frame(width: 144, height: 144)
-            .modifier(LiquidSurface(cornerRadius: 65))
-            .overlay(alignment: .center) {
-                Image(systemName: "heart.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 84, height: 84)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(heartHovered ? Color.pink : Color.red)
-                    .scaleEffect(isHeartBeating ? (heartHovered ? 1.14 : 1.04) : 0.92)
-                    .shadow(color: Color.red.opacity(0.22), radius: 18, y: 8)
-                    .animation(.easeInOut(duration: 0.72).repeatForever(autoreverses: true), value: isHeartBeating)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.78), value: heartHovered)
-            }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 2)
-        .contentShape(Circle())
-        .onHover { hovering in
-            heartHovered = hovering
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
-        }
-        .onTapGesture {
-            HapticFeedbackManager.shared.tap()
-        }
-        .accessibilityIdentifier("thanksWindowHeart")
     }
 
     private var statsTable: some View {
@@ -151,7 +110,7 @@ struct ThanksForUsingSortyView: View {
             Divider()
             statsCell(item: right)
         }
-        .frame(height: 88)
+        .frame(height: 72)
     }
 
     private func statsCell(item: StatItem) -> some View {
@@ -164,7 +123,7 @@ struct ThanksForUsingSortyView: View {
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(isHighlighted ? Color.white.opacity(0.09) : Color.clear)
         .animation(.easeInOut(duration: 0.16), value: isHighlighted)
