@@ -54,21 +54,25 @@ struct StorageLocationsView: View {
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
+            allowsMultipleSelection: true
         ) { result in
             switch result {
             case .success(let urls):
-                if let url = urls.first {
-                    HapticFeedbackManager.shared.success()
-                    
+                var failures: [String] = []
+                for url in urls {
                     do {
-                        try storageLocationsManager.addLocation(url: url, customName: suggestedLocationName)
-                        suggestedLocationName = nil
+                        let customName = urls.count == 1 ? suggestedLocationName : nil
+                        try storageLocationsManager.addLocation(url: url, customName: customName)
                     } catch {
-                        HapticFeedbackManager.shared.error()
-                        addLocationErrorMessage = error.localizedDescription
+                        failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
                         DebugLogger.log("Failed to add storage location: \(error)")
                     }
+                }
+                if failures.isEmpty {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                    addLocationErrorMessage = failures.joined(separator: "\n")
                 }
             case .failure(let error):
                 HapticFeedbackManager.shared.error()
@@ -111,15 +115,25 @@ struct StorageLocationsView: View {
                 
                 HStack(spacing: 8) {
                     let enabledCount = storageLocationsManager.enabledLocations.count
-                    let totalCount = storageLocationsManager.locations.count
+                    let unavailableCount = storageLocationsManager.locations.filter {
+                        !$0.exists || $0.accessStatus == .lost
+                    }.count
+                    let disabledCount = storageLocationsManager.locations.filter { !$0.isEnabled }.count
                     
                     Text("\(enabledCount) active")
                         .foregroundStyle(enabledCount > 0 ? .green : .secondary)
                     
-                    if totalCount > enabledCount {
+                    if unavailableCount > 0 {
                         Text("•")
                             .foregroundStyle(.secondary)
-                        Text("\(totalCount - enabledCount) disabled")
+                        Text("\(unavailableCount) need attention")
+                            .foregroundStyle(.orange)
+                    }
+
+                    if disabledCount > 0 {
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text("\(disabledCount) disabled")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -139,6 +153,18 @@ struct StorageLocationsView: View {
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddStorageLocationButton")
+
+            if !storageLocationsManager.locations.isEmpty {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    storageLocationsManager.refreshAccessStatus()
+                } label: {
+                    Label("Check Access", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.sortyBordered)
+                .help("Check folder availability and refresh permissions")
+                .accessibilityIdentifier("RefreshStorageLocationAccessButton")
+            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
@@ -151,6 +177,7 @@ struct EmptyStorageLocationsView: View {
     let onAddLocation: () -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(spacing: 24) {
@@ -158,7 +185,8 @@ struct EmptyStorageLocationsView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared
+                    reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                    value: hasAppeared
                 )
                 .accessibilityHidden(true)
 
@@ -177,7 +205,10 @@ struct EmptyStorageLocationsView: View {
             .accessibilityLabel("No Storage Locations. Add directories like Archives, Projects, or external drives as destinations for files during organization.")
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                value: hasAppeared
+            )
 
             Button {
                 onAddLocation()
@@ -188,7 +219,10 @@ struct EmptyStorageLocationsView: View {
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                value: hasAppeared
+            )
             .accessibilityIdentifier("EmptyStateAddStorageLocationButton")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -326,6 +360,7 @@ struct StorageLocationCard: View {
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Reveal in Finder")
+                        .accessibilityLabel("Reveal \(location.name) in Finder")
                         
                         Button {
                             HapticFeedbackManager.shared.tap()
@@ -337,6 +372,7 @@ struct StorageLocationCard: View {
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Configure")
+                        .accessibilityLabel("Configure \(location.name)")
                         
                         Button {
                             HapticFeedbackManager.shared.tap()
@@ -351,6 +387,7 @@ struct StorageLocationCard: View {
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Remove")
+                        .accessibilityLabel("Remove \(location.name)")
                     }
                     .transition(.scale.combined(with: .opacity))
                 }
@@ -366,6 +403,8 @@ struct StorageLocationCard: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .labelsHidden()
+                .accessibilityLabel("Enable \(location.name)")
+                .accessibilityValue(location.isEnabled ? "On" : "Off")
             }
             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: location.isEnabled)
         }

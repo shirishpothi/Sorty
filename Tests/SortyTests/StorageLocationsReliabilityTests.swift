@@ -333,6 +333,40 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             StorageLocationPathResolver.canonicalPath(archive.path)
         )
         XCTAssertNotNil(manager.locations.first?.bookmarkData)
+        XCTAssertEqual(manager.locations.first?.accessStatus, .valid)
+    }
+
+    @MainActor
+    func testAddingDuplicateLocationThrowsClearError() throws {
+        let manager = StorageLocationsManager()
+        manager.clearAll()
+        defer { manager.clearAll() }
+
+        let archive = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        try manager.addLocation(url: archive)
+
+        XCTAssertThrowsError(try manager.addLocation(url: archive)) { error in
+            XCTAssertEqual(error as? StorageLocationError, .duplicateLocation)
+        }
+        XCTAssertEqual(manager.locations.count, 1)
+    }
+
+    @MainActor
+    func testRepeatedAccessRefreshKeepsLocationValid() throws {
+        let manager = StorageLocationsManager()
+        manager.clearAll()
+        defer { manager.clearAll() }
+
+        let archive = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        try manager.addLocation(url: archive)
+
+        manager.refreshAccessStatus()
+        manager.refreshAccessStatus()
+
+        XCTAssertEqual(manager.locations.first?.accessStatus, .valid)
+        XCTAssertEqual(manager.enabledLocations.count, 1)
     }
 
     @MainActor

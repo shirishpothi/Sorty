@@ -13,6 +13,7 @@ import Combine
 public class ScopedSecurityAccess {
     public let url: URL
     private let didAccess: Bool
+    private var didCleanup = false
     
     public init(url: URL, didAccess: Bool) {
         self.url = url
@@ -24,7 +25,8 @@ public class ScopedSecurityAccess {
     }
     
     public func cleanup() {
-        if didAccess {
+        if didAccess && !didCleanup {
+            didCleanup = true
             url.stopAccessingSecurityScopedResource()
         }
     }
@@ -83,6 +85,7 @@ public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
     private let userDefaults = UserDefaults.standard
     private let storageKey = "storageLocations"
+    private var activeSecurityScopedURLs: [UUID: URL] = [:]
     
     public init() {
         loadLocations()
@@ -112,15 +115,7 @@ public class StorageLocationsManager: ObservableObject {
     }
 
     public func clearAll() {
-        // Stop accessing all security scoped resources
-        for location in locations {
-            if let bookmarkData = location.bookmarkData {
-                var isStale = false
-                if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-        }
+        stopAllSecurityScopedAccess()
         locations.removeAll()
         userDefaults.removeObject(forKey: storageKey)
     }
@@ -136,6 +131,11 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     public func addLocation(url: URL, description: String? = nil, customName: String? = nil) throws {
+        let canonicalPath = StorageLocationPathResolver.canonicalPath(url.path)
+        guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, canonicalPath) }) else {
+            throw StorageLocationError.duplicateLocation
+        }
+
         // For picker URLs, explicitly starting security scope improves bookmark reliability
         // for folders outside default sandbox access (for example Downloads/Desktop/external volumes).
         let didStart = url.startAccessingSecurityScopedResource()
@@ -151,36 +151,21 @@ public class StorageLocationsManager: ObservableObject {
             relativeTo: nil
         )
 
-        // Activate the newly created bookmark in this session so the location is immediately usable.
-        var isStale = false
-        if let resolvedURL = try? URL(
-            resolvingBookmarkData: bookmarkData,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) {
-            _ = resolvedURL.startAccessingSecurityScopedResource()
-        }
-        
-        let location = StorageLocation(
+        var location = StorageLocation(
             path: url.path,
             name: customName ?? url.lastPathComponent,
             description: description,
             isEnabled: true,
             bookmarkData: bookmarkData
         )
-        
-        addLocation(location)
+        location.accessStatus = .unknown
+        locations.append(location)
+        saveLocations()
+        refreshAccess(for: location)
     }
     
     public func removeLocation(_ location: StorageLocation) {
-        // Stop accessing security scoped resource before removing
-        if let bookmarkData = location.bookmarkData {
-            var isStale = false
-            if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
+        stopSecurityScopedAccess(for: location.id)
         locations.removeAll { $0.id == location.id }
         saveLocations()
     }
@@ -319,53 +304,15 @@ public class StorageLocationsManager: ObservableObject {
     
     /// Restores access to all security-scoped bookmarks
     public func restoreSecurityScopedAccess() {
-        var updatedLocations = locations
-        var hasChanges = false
-        
-        for (index, location) in locations.enumerated() {
-            guard let bookmarkData = location.bookmarkData else {
-                continue
-            }
-            
-            var isStale = false
-            do {
-                let url = try URL(resolvingBookmarkData: bookmarkData,
-                                  options: .withSecurityScope,
-                                  relativeTo: nil,
-                                  bookmarkDataIsStale: &isStale)
-                
-                if url.startAccessingSecurityScopedResource() {
-                    if isStale {
-                        // Recreate bookmark
-                        if let newData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
-                            updatedLocations[index].bookmarkData = newData
-                            hasChanges = true
-                        }
-                        updatedLocations[index].accessStatus = .stale
-                    } else {
-                        updatedLocations[index].accessStatus = .valid
-                    }
-                    
-                    // Update path if it changed
-                    if url.path != location.path {
-                        updatedLocations[index].path = url.path
-                        hasChanges = true
-                    }
-                } else {
-                    updatedLocations[index].accessStatus = .lost
-                    hasChanges = true
-                }
-            } catch {
-                DebugLogger.log("Failed to resolve storage location bookmark: \(error)")
-                updatedLocations[index].accessStatus = .lost
-                hasChanges = true
-            }
+        for location in locations {
+            refreshAccess(for: location)
         }
-        
-        if hasChanges {
-            locations = updatedLocations
-            saveLocations()
-        }
+    }
+
+    /// Re-checks all locations and repairs stale bookmarks where possible.
+    /// Safe to call repeatedly; each location has at most one long-lived access session.
+    public func refreshAccessStatus() {
+        restoreSecurityScopedAccess()
     }
     
     /// Re-authorizes a storage location by creating a new security-scoped bookmark from a freshly-picked URL
@@ -386,13 +333,69 @@ public class StorageLocationsManager: ObservableObject {
             updated.bookmarkData = newBookmarkData
             updated.path = url.path
             updated.accessStatus = .valid
+            stopSecurityScopedAccess(for: location.id)
             updateLocation(updated)
+            activeSecurityScopedURLs[location.id] = url
 
             DebugLogger.log("Successfully reauthorized storage location: \(location.name)")
         } catch {
             url.stopAccessingSecurityScopedResource()
             DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
         }
+    }
+
+    private func refreshAccess(for location: StorageLocation) {
+        guard let index = locations.firstIndex(where: { $0.id == location.id }) else { return }
+        guard let bookmarkData = location.bookmarkData else {
+            locations[index].accessStatus = location.exists ? .valid : .lost
+            saveLocations()
+            return
+        }
+
+        stopSecurityScopedAccess(for: location.id)
+        var isStale = false
+        do {
+            let resolvedURL = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            guard resolvedURL.startAccessingSecurityScopedResource() else {
+                locations[index].accessStatus = .lost
+                saveLocations()
+                return
+            }
+
+            activeSecurityScopedURLs[location.id] = resolvedURL
+            locations[index].path = StorageLocationPathResolver.canonicalPath(resolvedURL.path)
+            locations[index].accessStatus = .valid
+
+            if isStale {
+                locations[index].bookmarkData = try resolvedURL.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            }
+            saveLocations()
+        } catch {
+            locations[index].accessStatus = .lost
+            saveLocations()
+            DebugLogger.log("Failed to refresh storage location bookmark: \(error)")
+        }
+    }
+
+    private func stopSecurityScopedAccess(for id: UUID) {
+        guard let url = activeSecurityScopedURLs.removeValue(forKey: id) else { return }
+        url.stopAccessingSecurityScopedResource()
+    }
+
+    private func stopAllSecurityScopedAccess() {
+        for url in activeSecurityScopedURLs.values {
+            url.stopAccessingSecurityScopedResource()
+        }
+        activeSecurityScopedURLs.removeAll()
     }
 
     private func discoverExistingSubfolders(
@@ -461,6 +464,17 @@ public class StorageLocationsManager: ObservableObject {
     private func saveLocations() {
         if let encoded = try? JSONEncoder().encode(locations) {
             userDefaults.set(encoded, forKey: storageKey)
+        }
+    }
+}
+
+public enum StorageLocationError: LocalizedError, Equatable {
+    case duplicateLocation
+
+    public var errorDescription: String? {
+        switch self {
+        case .duplicateLocation:
+            return "That folder is already a storage location."
         }
     }
 }
