@@ -11,6 +11,10 @@ import SwiftUI
     import SortyLib
 #endif
 
+extension Notification.Name {
+    static let requestPhysicalMainWindow = Notification.Name("SortyRequestPhysicalMainWindow")
+}
+
 @MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
@@ -328,6 +332,18 @@ struct SortyApp: App {
             .task {
                 configureGlobalsIfNeeded()
             }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .requestPhysicalMainWindow)
+            ) { _ in
+                let hasMainWindow = NSApplication.shared.windows.contains { window in
+                    window.canBecomeMain && (window.isVisible || window.isMiniaturized)
+                }
+                guard !hasMainWindow else { return }
+
+                appDelegate.presentRecoveryWindow(
+                    rootView: mainWindowContent(launchRequest: .constant(nil))
+                )
+            }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in
                     try? await automationOrganizer.configure(with: newConfig)
@@ -450,18 +466,6 @@ struct SortyApp: App {
             try? await automationOrganizer.configure(with: settingsViewModel.config)
             learningsManager.configure(with: settingsViewModel.config)
             menuBarController.configure(settings: settingsViewModel)
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(750))
-            let hasMainWindow = NSApplication.shared.windows.contains { window in
-                window.canBecomeMain && (window.isVisible || window.isMiniaturized)
-            }
-            guard !hasMainWindow else { return }
-
-            appDelegate.presentRecoveryWindow(
-                rootView: mainWindowContent(launchRequest: .constant(nil))
-            )
         }
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
