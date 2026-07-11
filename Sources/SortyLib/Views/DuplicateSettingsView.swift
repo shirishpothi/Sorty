@@ -82,15 +82,18 @@ struct DuplicateSettingsView: View {
                                     }
                                     .padding(.horizontal, SortyDesignSystem.Spacing.md)
                                     .padding(.vertical, SortyDesignSystem.Spacing.sm)
-                                    .systemLiquidGlassBackground(
-                                        cornerRadius: SortyDesignSystem.Radius.medium
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(
+                                        RoundedRectangle(
+                                            cornerRadius: SortyDesignSystem.Radius.medium
+                                        )
                                     )
                                     .overlay(
                                         RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
                                             .stroke(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.35) : SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
                                     )
                                 }
-                                .buttonStyle(.plain)
+                                .systemLiquidGlassButton()
                                 .accessibilityLabel(strategy.displayName)
                                 .accessibilityValue(isSelected ? "Selected" : "Not selected")
                             }
