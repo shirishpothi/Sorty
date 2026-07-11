@@ -428,6 +428,46 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testApplyRejectsUnsupportedCloudMetadataBeforeMovingFiles() async throws {
+        let source = tempDirectory.appendingPathComponent("document.txt")
+        try "document".write(to: source, atomically: true, encoding: .utf8)
+        let googleDriveRoot = tempDirectory
+            .appendingPathComponent("CloudStorage", isDirectory: true)
+            .appendingPathComponent("GoogleDrive-account", isDirectory: true)
+        try FileManager.default.createDirectory(at: googleDriveRoot, withIntermediateDirectories: true)
+        let file = FileItem(
+            path: source.path,
+            name: "document",
+            extension: "txt",
+            size: 8,
+            isDirectory: false
+        )
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(
+                    folderName: googleDriveRoot.path,
+                    files: [file],
+                    tags: ["Blue"]
+                )
+            ],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory)
+            XCTFail("Expected unsupported provider metadata to fail preflight")
+        } catch FileSystemError.preValidationFailed(let issues) {
+            XCTAssertTrue(issues.contains { $0.contains("does not support Finder tags or comments") })
+        } catch {
+            XCTFail("Expected preValidationFailed, got \(error)")
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: googleDriveRoot.appendingPathComponent("document.txt").path))
+    }
+
+    @MainActor
     func testApplyReportsProviderFailureInsteadOfFalseSuccess() async throws {
         let source = tempDirectory.appendingPathComponent("cloud-file.txt")
         try "cloud content".write(to: source, atomically: true, encoding: .utf8)

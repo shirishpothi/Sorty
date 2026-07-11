@@ -1979,6 +1979,20 @@ public actor FileSystemManager {
         if !destinationCheck.writable, let issue = destinationCheck.issue {
             issues.append(issue)
         }
+
+        let requestsFinderMetadata = !suggestion.tags.isEmpty
+            || suggestion.comment?.isEmpty == false
+            || suggestion.fileTagMappings.contains { mapping in
+                !mapping.tags.isEmpty || mapping.comment?.isEmpty == false
+            }
+        if requestsFinderMetadata {
+            let profile = StorageEnvironmentInspector.profile(for: folderURL)
+            if !profile.supportedFileSystemActions.contains(.finderTags) {
+                issues.append(
+                    "\(profile.provider.displayName) does not support Finder tags or comments through its mounted folder: \(folderURL.lastPathComponent)"
+                )
+            }
+        }
         
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }
