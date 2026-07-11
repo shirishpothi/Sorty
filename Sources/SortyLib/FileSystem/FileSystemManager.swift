@@ -1407,8 +1407,21 @@ public actor FileSystemManager {
                             finalSourcePath = uniqueURL.path
                         }
 
-                        // Move file back
-                        try fileManager.moveItem(atPath: destinationPath, toPath: finalSourcePath)
+                        // Move file back, preserving the remote/external copy until a
+                        // cross-volume restore has been fully staged and verified.
+                        let destinationURL = URL(fileURLWithPath: destinationPath)
+                        let finalSourceURL = URL(fileURLWithPath: finalSourcePath)
+                        if isCrossVolume(from: destinationURL, to: finalSourceURL) {
+                            let handler = crossVolumeProgressHandler
+                            try await copyWithProgress(
+                                from: destinationURL,
+                                to: finalSourceURL
+                            ) { progress in
+                                handler?(destinationURL.lastPathComponent, progress)
+                            }
+                        } else {
+                            try fileManager.moveItem(at: destinationURL, to: finalSourceURL)
+                        }
                         successCount += 1
 
                         // Mark parent folder for potential cleanup
@@ -1538,7 +1551,19 @@ public actor FileSystemManager {
                         finalSourcePath = uniqueURL.path
                     }
 
-                    try fileManager.moveItem(atPath: destinationPath, toPath: finalSourcePath)
+                    let destinationURL = URL(fileURLWithPath: destinationPath)
+                    let finalSourceURL = URL(fileURLWithPath: finalSourcePath)
+                    if isCrossVolume(from: destinationURL, to: finalSourceURL) {
+                        let handler = crossVolumeProgressHandler
+                        try await copyWithProgress(
+                            from: destinationURL,
+                            to: finalSourceURL
+                        ) { progress in
+                            handler?(destinationURL.lastPathComponent, progress)
+                        }
+                    } else {
+                        try fileManager.moveItem(at: destinationURL, to: finalSourceURL)
+                    }
                     successCount += 1
 
                     let parentFolder = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path

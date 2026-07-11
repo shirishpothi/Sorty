@@ -300,6 +300,16 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertTrue(progressEvents.contains { $0 >= 1.0 })
         XCTAssertTrue(operations.contains { $0.type == .renameFile && $0.destinationPath == destination.path })
 
+        let restoreResult = try await fileSystemManager.reverseOperations(operations)
+
+        XCTAssertEqual(restoreResult.successfulOperations, 2)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        let restoredContents = try FileManager.default.contentsOfDirectory(
+            atPath: source.deletingLastPathComponent().path
+        )
+        XCTAssertFalse(restoredContents.contains { $0.hasPrefix(".sorty-transfer-") })
+
         await fileSystemManager.setCrossVolumeProgressHandler(nil)
         await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
     }
