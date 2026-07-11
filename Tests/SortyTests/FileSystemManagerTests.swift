@@ -341,6 +341,38 @@ class FileSystemManagerTests: XCTestCase {
         await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
     }
 
+    @MainActor
+    func testApplyFailsBeforeCreatingFoldersWhenSourceDisappears() async throws {
+        let source = tempDirectory.appendingPathComponent("offline.txt")
+        try "cloud content".write(to: source, atomically: true, encoding: .utf8)
+        let file = FileItem(
+            path: source.path,
+            name: "offline",
+            extension: "txt",
+            size: 13,
+            isDirectory: false
+        )
+        let destinationFolder = tempDirectory.appendingPathComponent("Archive", isDirectory: true)
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Archive", files: [file])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+        try FileManager.default.removeItem(at: source)
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory)
+            XCTFail("Expected preflight to reject the missing source")
+        } catch let error as FileSystemError {
+            guard case .preValidationFailed(let issues) = error else {
+                return XCTFail("Expected preValidationFailed, got \(error)")
+            }
+            XCTAssertTrue(issues.contains { $0.contains("does not exist") })
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinationFolder.path))
+    }
+
 
     // MARK: - File Tagging Tests
     

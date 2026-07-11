@@ -910,6 +910,7 @@ public actor FileSystemManager {
                 let validationIssues = await preValidatePlan(plan, at: baseURL)
                 if !validationIssues.isEmpty {
                     DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
+                    throw FileSystemError.preValidationFailed(validationIssues)
                 }
             }
 
@@ -1775,6 +1776,11 @@ public actor FileSystemManager {
         } catch {
             issues.append(error.localizedDescription)
             return issues
+        }
+
+        let destinationCheck = checkDestinationWritable(at: folderURL)
+        if !destinationCheck.writable, let issue = destinationCheck.issue {
+            issues.append(issue)
         }
         
         for file in suggestion.files {
