@@ -25,7 +25,7 @@ extension View {
         if #available(macOS 26.0, *) {
             self
                 .buttonStyle(.glass)
-                .tint(.secondary)
+                .tint(nil)
         } else {
             self.buttonStyle(.onboardingPill(isSecondary: true, size: .small))
         }
