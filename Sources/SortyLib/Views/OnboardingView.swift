@@ -1689,14 +1689,14 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             {
                 window.setContentSize(targetSize)
             }
-            centerOnFullDisplay(window)
+            Self.centerOnFullDisplay(window)
 
             // SwiftUI can finalize the frame after the representable attaches.
             // Recenter once after that layout pass, but never on later updates,
             // so the user remains free to move the window.
             DispatchQueue.main.async { [weak window] in
                 guard let window else { return }
-                self.centerOnFullDisplay(window)
+                Self.centerOnFullDisplay(window)
             }
 
             // Start fully transparent and slowly fade the whole window in so the
@@ -1711,7 +1711,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             }
         }
 
-        private func centerOnFullDisplay(_ window: NSWindow) {
+        private static func centerOnFullDisplay(_ window: NSWindow) {
             guard let screen = window.screen ?? NSScreen.main else { return }
             let screenFrame = screen.frame
             let origin = NSPoint(
