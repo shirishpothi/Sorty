@@ -98,38 +98,44 @@ export function SiteNav() {
         </div>
       </nav>
 
-      {open && (
-        <div className="absolute top-20 w-full max-w-3xl rounded-3xl border border-border bg-background/80 p-2 backdrop-blur-xl md:hidden">
-          {LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              onClick={() => setOpen(false)}
-              className="block rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              {link.label}
-            </a>
-          ))}
+      <div
+        aria-hidden={!open}
+        className={cn(
+          'absolute top-20 w-full max-w-3xl origin-top rounded-3xl border border-border bg-background/80 p-2 backdrop-blur-xl transition-all duration-300 ease-out md:hidden',
+          open
+            ? 'visible translate-y-0 scale-100 opacity-100'
+            : 'invisible -translate-y-2 scale-[0.97] opacity-0',
+        )}
+      >
+        {LINKS.map((link) => (
           <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            key={link.href}
+            href={link.href}
+            onClick={() => setOpen(false)}
+            className="block rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <GithubIcon className="size-4" />
-            View source on GitHub
+            {link.label}
           </a>
-          <a
-            href={SPONSOR_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
-          >
-            <Heart className="support-heart-icon size-4" />
-            Donate to support Sorty
-          </a>
-        </div>
-      )}
+        ))}
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <GithubIcon className="size-4" />
+          View source on GitHub
+        </a>
+        <a
+          href={SPONSOR_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
+        >
+          <Heart className="support-heart-icon size-4" />
+          Donate to support Sorty
+        </a>
+      </div>
     </header>
   )
 }
