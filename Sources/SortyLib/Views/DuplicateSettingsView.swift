@@ -32,6 +32,7 @@ struct DuplicateSettingsView: View {
                         Image(systemName: "arrow.counterclockwise")
                     }
                     .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
                     .help("Reset to Defaults")
                     .accessibilityLabel("Reset to Defaults")
                     
@@ -39,6 +40,7 @@ struct DuplicateSettingsView: View {
                         saveAndDismiss()
                     }
                     .buttonStyle(.onboardingPill(size: .small))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
                     .keyboardShortcut(.return)
                 }
             }
