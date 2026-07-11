@@ -8,17 +8,9 @@
 
 A native macOS SwiftUI application that helps organize directory contents into relevant, semantically-named folders.
 
-<p align="center">
-  <img src="website/public/sorty-app.webp" alt="Sorty organization workspace" width="820" />
-</p>
-
-| <img src="website/public/sorty-apply.webp" alt="Sorty preview showing proposed file moves" width="400" /> | <img src="website/public/sorty-duplicates.webp" alt="Sorty duplicate file review" width="400" /> |
-| :---: | :---: |
-| *Preview every move before applying it* | *Review duplicate files clearly* |
-
-| <img src="website/public/sorty-settings.webp" alt="Sorty AI provider settings" width="400" /> | <img src="website/public/sorty-1.2.0-changelog.png" alt="Sorty latest release highlights" width="400" /> |
-| :---: | :---: |
-| *Choose your preferred AI provider* | *See what is new in the latest release* |
+| <img src="website/public/sorty-app.webp" alt="Sorty organization workspace" width="300" /> | <img src="website/public/sorty-apply.webp" alt="Sorty preview showing proposed file moves" width="300" /> | <img src="website/public/sorty-duplicates.webp" alt="Sorty duplicate file review" width="300" /> |
+| :---: | :---: | :---: |
+| *Organize your workspace* | *Preview every move before applying it* | *Review duplicate files clearly* |
 
 
 ## Features
