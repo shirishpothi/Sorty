@@ -1119,6 +1119,8 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private weak var hostWindow: NSWindow?
         private var backdropPanel: NSPanel?
         private var observers: [NSObjectProtocol] = []
+        private var pendingDismissal: DispatchWorkItem?
+        private var isHostClosing = false
 
         func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
@@ -1127,6 +1129,9 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             }
 
             removeObservers()
+            pendingDismissal?.cancel()
+            pendingDismissal = nil
+            isHostClosing = false
             hostWindow = window
 
             guard let window else {
@@ -1160,6 +1165,27 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didMiniaturizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hidePanelImmediately() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didDeminiaturizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.willCloseNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hostWillClose() }
                 }
             ]
 
@@ -1167,8 +1193,17 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         }
 
         func dismiss() {
+            dismiss(immediately: isHostClosing)
+        }
+
+        private func hostWillClose() {
+            isHostClosing = true
+            dismiss(immediately: true)
+        }
+
+        private func dismiss(immediately: Bool) {
             removeObservers()
-            dismissPanel()
+            dismissPanel(immediately: immediately)
             hostWindow = nil
         }
 
@@ -1203,7 +1238,10 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
         private func updatePanelFrame() {
             guard let window = hostWindow,
+                  window.isVisible,
+                  !window.isMiniaturized,
                   let screen = window.screen ?? NSScreen.main else {
+                hidePanelImmediately()
                 return
             }
 
@@ -1212,9 +1250,10 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             fadeInPanelIfNeeded()
         }
 
-        private func dismissPanel() {
+        private func dismissPanel(immediately: Bool = false) {
             guard let backdropPanel else { return }
-            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
+            pendingDismissal?.cancel()
+            let duration = immediately || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
@@ -1222,12 +1261,20 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                 backdropPanel.animator().alphaValue = 0
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak backdropPanel] in
+            let dismissal = DispatchWorkItem { [weak self, weak backdropPanel] in
                 guard let self, self.backdropPanel === backdropPanel else { return }
                 backdropPanel?.orderOut(nil)
                 backdropPanel?.close()
                 self.backdropPanel = nil
+                self.pendingDismissal = nil
             }
+            pendingDismissal = dismissal
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: dismissal)
+        }
+
+        private func hidePanelImmediately() {
+            backdropPanel?.orderOut(nil)
+            backdropPanel?.alphaValue = 0
         }
 
         private func fadeInPanelIfNeeded() {
@@ -1284,6 +1331,8 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private weak var hostWindow: NSWindow?
         private var glowPanel: NSPanel?
         private var observers: [NSObjectProtocol] = []
+        private var pendingDismissal: DispatchWorkItem?
+        private var isHostClosing = false
 
         func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
@@ -1292,6 +1341,9 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
 
             removeObservers()
+            pendingDismissal?.cancel()
+            pendingDismissal = nil
+            isHostClosing = false
             hostWindow = window
 
             guard let window else {
@@ -1318,16 +1370,45 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didMiniaturizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hidePanelImmediately() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didDeminiaturizeNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.showPanelIfPossible() }
+                },
+                center.addObserver(
+                    forName: NSWindow.willCloseNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hostWillClose() }
                 }
             ]
 
-            updatePanelFrame()
-            glowPanel?.orderFrontRegardless()
+            showPanelIfPossible()
         }
 
         func dismiss() {
+            dismiss(immediately: isHostClosing)
+        }
+
+        private func hostWillClose() {
+            isHostClosing = true
+            dismiss(immediately: true)
+        }
+
+        private func dismiss(immediately: Bool) {
             removeObservers()
-            dismissPanel()
+            dismissPanel(immediately: immediately)
             hostWindow = nil
         }
 
@@ -1356,13 +1437,30 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func updatePanelFrame() {
-            guard let screen = hostWindow?.screen ?? NSScreen.main else { return }
+            guard let window = hostWindow,
+                  window.isVisible,
+                  !window.isMiniaturized,
+                  let screen = window.screen ?? NSScreen.main else {
+                hidePanelImmediately()
+                return
+            }
             glowPanel?.setFrame(screen.frame, display: true)
         }
 
-        private func dismissPanel() {
+        private func showPanelIfPossible() {
+            guard let window = hostWindow, window.isVisible, !window.isMiniaturized else {
+                hidePanelImmediately()
+                return
+            }
+            updatePanelFrame()
+            glowPanel?.alphaValue = 1
+            glowPanel?.orderFrontRegardless()
+        }
+
+        private func dismissPanel(immediately: Bool = false) {
             guard let glowPanel else { return }
-            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
+            pendingDismissal?.cancel()
+            let duration = immediately || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
@@ -1370,12 +1468,20 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 glowPanel.animator().alphaValue = 0
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak glowPanel] in
+            let dismissal = DispatchWorkItem { [weak self, weak glowPanel] in
                 guard let self, self.glowPanel === glowPanel else { return }
                 glowPanel?.orderOut(nil)
                 glowPanel?.close()
                 self.glowPanel = nil
+                self.pendingDismissal = nil
             }
+            pendingDismissal = dismissal
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: dismissal)
+        }
+
+        private func hidePanelImmediately() {
+            glowPanel?.orderOut(nil)
+            glowPanel?.alphaValue = 0
         }
 
         private func removeObservers() {
