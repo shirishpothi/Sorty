@@ -100,8 +100,8 @@ export function Hero() {
           </a>
         </Reveal>
 
-        <div>
-          <h1 className="mt-6 text-balance bg-gradient-to-b from-foreground to-foreground/65 bg-clip-text text-5xl font-semibold leading-[0.95] tracking-tight text-transparent sm:text-7xl">
+        <Reveal delay={80}>
+          <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
             AI folder{' '}
             <span className="highlight-pill highlight-in inline-block rounded-2xl px-3 py-1">
               organization
@@ -119,7 +119,7 @@ export function Hero() {
             </span>{' '}
             Mac
           </h1>
-        </div>
+        </Reveal>
 
         <Reveal delay={160}>
           <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
