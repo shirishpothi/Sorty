@@ -286,6 +286,8 @@ struct StorageLocationCard: View {
                     Text(location.name)
                         .font(.headline)
                         .foregroundColor(location.isEnabled ? .primary : .secondary)
+
+                    StorageProviderBadge(provider: location.capabilityProfile.provider)
                 }
 
                 PrivacySensitivePathText(path: location.path)
@@ -478,8 +480,12 @@ struct StorageLocationConfigView: View {
                     FolderThumbnailView(url: location.url, size: CGSize(width: 28, height: 28))
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(location.name)
-                            .font(.headline)
+                        HStack(spacing: 8) {
+                            Text(location.name)
+                                .font(.headline)
+
+                            StorageProviderBadge(provider: location.capabilityProfile.provider)
+                        }
                         PrivacySensitivePathText(path: location.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -592,6 +598,76 @@ struct StorageLocationConfigView: View {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()
+    }
+}
+
+private struct StorageProviderBadge: View {
+    let provider: StorageProviderKind
+
+    var body: some View {
+        Label(label, systemImage: symbolName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.12), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(tint.opacity(0.22), lineWidth: 1)
+            }
+            .fixedSize()
+            .help(accessibilityDescription)
+            .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var label: String {
+        switch provider {
+        case .googleDrive: return "Cloud · Google Drive"
+        case .dropbox: return "Cloud · Dropbox"
+        case .oneDrive: return "Cloud · OneDrive"
+        case .box: return "Cloud · Box"
+        case .iCloudDrive: return "Cloud · iCloud"
+        case .fileProvider: return "Cloud"
+        case .externalVolume: return "External Drive"
+        case .local: return "Local"
+        }
+    }
+
+    private var symbolName: String {
+        switch provider {
+        case .googleDrive, .dropbox, .oneDrive, .box, .fileProvider:
+            return "externaldrive.fill.badge.icloud"
+        case .iCloudDrive:
+            return "icloud.fill"
+        case .externalVolume:
+            return "externaldrive.fill"
+        case .local:
+            return "internaldrive.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch provider {
+        case .googleDrive: return .blue
+        case .dropbox: return .indigo
+        case .oneDrive: return .cyan
+        case .box: return .purple
+        case .iCloudDrive: return .blue
+        case .fileProvider: return .teal
+        case .externalVolume: return .orange
+        case .local: return .secondary
+        }
+    }
+
+    private var accessibilityDescription: String {
+        switch provider {
+        case .externalVolume:
+            return "External drive storage location"
+        case .local:
+            return "Local storage location"
+        default:
+            return "Cloud storage location using \(provider.displayName)"
+        }
     }
 }
 
