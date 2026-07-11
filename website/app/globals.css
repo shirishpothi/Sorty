@@ -205,17 +205,6 @@
   filter: blur(0);
   transform: translateY(0) scale(1);
 }
-.hero-heading-reveal,
-.hero-heading-reveal.is-visible {
-  filter: none;
-}
-.hero-heading-reveal {
-  transition:
-    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;
