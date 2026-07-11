@@ -100,7 +100,7 @@ export function Hero() {
           </a>
         </Reveal>
 
-        <div>
+        <div className="hero-heading-fade">
           <h1 className="mt-6 text-balance bg-gradient-to-b from-foreground to-foreground/65 bg-clip-text text-5xl font-semibold leading-[0.95] tracking-tight text-transparent sm:text-7xl">
             AI folder{' '}
             <span className="highlight-pill highlight-in inline-block rounded-2xl px-3 py-1">
