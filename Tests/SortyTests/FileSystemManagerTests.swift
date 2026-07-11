@@ -373,6 +373,47 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destinationFolder.path))
     }
 
+    @MainActor
+    func testApplyAggregatesCrossVolumeCapacityBeforeMutation() async throws {
+        let firstSource = tempDirectory.appendingPathComponent("first.bin")
+        let secondSource = tempDirectory.appendingPathComponent("second.bin")
+        try Data(repeating: 1, count: 8).write(to: firstSource)
+        try Data(repeating: 2, count: 8).write(to: secondSource)
+        let files = [firstSource, secondSource].map { url in
+            FileItem(
+                path: url.path,
+                name: url.deletingPathExtension().lastPathComponent,
+                extension: url.pathExtension,
+                size: 8,
+                isDirectory: false
+            )
+        }
+        let destinationFolder = tempDirectory.appendingPathComponent("External", isDirectory: true)
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "External", files: files)],
+            unorganizedFiles: [],
+            notes: ""
+        )
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+        await fileSystemManager.setAvailableCapacityForTesting { _ in 12 }
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory)
+            XCTFail("Expected aggregated capacity preflight to fail")
+        } catch let error as FileSystemError {
+            guard case .preValidationFailed(let issues) = error else {
+                return XCTFail("Expected preValidationFailed, got \(error)")
+            }
+            XCTAssertTrue(issues.contains { $0.contains("Not enough free space") })
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinationFolder.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: firstSource.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondSource.path))
+        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
+        await fileSystemManager.setAvailableCapacityForTesting(nil)
+    }
+
 
     // MARK: - File Tagging Tests
     

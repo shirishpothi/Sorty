@@ -23,6 +23,7 @@ public actor FileSystemManager {
     private var crossVolumeProgressHandler: (@Sendable (String, Double) -> Void)?
     #if DEBUG
     private var crossVolumeDetectorOverride: (@Sendable (URL, URL) -> Bool)?
+    private var availableCapacityOverride: (@Sendable (URL) -> Int64?)?
     #endif
 
     private static let crossVolumeChunkSize: Int = 1_024 * 1_024 * 4 // 4 MB
@@ -35,6 +36,10 @@ public actor FileSystemManager {
     #if DEBUG
     func setCrossVolumeDetectorForTesting(_ detector: (@Sendable (URL, URL) -> Bool)?) {
         crossVolumeDetectorOverride = detector
+    }
+
+    func setAvailableCapacityForTesting(_ provider: (@Sendable (URL) -> Int64?)?) {
+        availableCapacityOverride = provider
     }
     #endif
 
@@ -1759,8 +1764,108 @@ public actor FileSystemManager {
             let suggestionIssues = await preValidateSuggestion(suggestion, parentURL: baseURL)
             issues.append(contentsOf: suggestionIssues)
         }
+
+        var capacityRequirements: [String: DestinationCapacityRequirement] = [:]
+        for suggestion in plan.suggestions {
+            collectDestinationCapacityRequirements(
+                for: suggestion,
+                parentURL: baseURL,
+                requirements: &capacityRequirements
+            )
+        }
+        for requirement in capacityRequirements.values {
+            guard let availableBytes = availableCapacity(at: requirement.destinationURL),
+                  availableBytes < requirement.requiredBytes else {
+                continue
+            }
+            issues.append(
+                "Not enough free space on \(requirement.volumeName): needs \(Self.formattedByteCount(requirement.requiredBytes)), but only \(Self.formattedByteCount(availableBytes)) is available"
+            )
+        }
         
         return issues
+    }
+
+    private struct DestinationCapacityRequirement {
+        let destinationURL: URL
+        let volumeName: String
+        var requiredBytes: Int64
+    }
+
+    private func collectDestinationCapacityRequirements(
+        for suggestion: FolderSuggestion,
+        parentURL: URL,
+        requirements: inout [String: DestinationCapacityRequirement]
+    ) {
+        guard let folderURL = try? resolveDestinationFolderURL(
+            folderName: suggestion.folderName,
+            parentURL: parentURL,
+            requestSecurityScope: false
+        ) else {
+            return
+        }
+
+        for file in suggestion.files {
+            guard let sourceURL = file.url,
+                  fileManager.fileExists(atPath: sourceURL.path),
+                  isCrossVolume(from: sourceURL, to: folderURL) else {
+                continue
+            }
+            let attributes = try? fileManager.attributesOfItem(atPath: sourceURL.path)
+            let size = (attributes?[.size] as? NSNumber)?.int64Value ?? max(file.size, 0)
+            let volume = destinationVolume(for: folderURL)
+            if var existing = requirements[volume.key] {
+                existing.requiredBytes += size
+                requirements[volume.key] = existing
+            } else {
+                requirements[volume.key] = DestinationCapacityRequirement(
+                    destinationURL: folderURL,
+                    volumeName: volume.name,
+                    requiredBytes: size
+                )
+            }
+        }
+
+        for subfolder in suggestion.subfolders {
+            collectDestinationCapacityRequirements(
+                for: subfolder,
+                parentURL: folderURL,
+                requirements: &requirements
+            )
+        }
+    }
+
+    private func destinationVolume(for url: URL) -> (key: String, name: String) {
+        var existingURL = url
+        while !fileManager.fileExists(atPath: existingURL.path), existingURL.path != "/" {
+            existingURL.deleteLastPathComponent()
+        }
+        let values = try? existingURL.resourceValues(forKeys: [.volumeURLKey, .volumeNameKey])
+        let volumeURL = values?.volume ?? existingURL
+        return (
+            key: volumeURL.standardizedFileURL.path,
+            name: values?.volumeName ?? volumeURL.lastPathComponent
+        )
+    }
+
+    private func availableCapacity(at url: URL) -> Int64? {
+        #if DEBUG
+        if let availableCapacityOverride {
+            return availableCapacityOverride(url)
+        }
+        #endif
+
+        var existingURL = url
+        while !fileManager.fileExists(atPath: existingURL.path), existingURL.path != "/" {
+            existingURL.deleteLastPathComponent()
+        }
+        return try? existingURL.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        ).volumeAvailableCapacityForImportantUsage
+    }
+
+    private static func formattedByteCount(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
     
     private func preValidateSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async -> [String] {
