@@ -1987,6 +1987,7 @@ struct ModelDirectoryRow: View {
                     .font(.caption.bold())
             }
             .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .accessibilityLabel("Remove \(directory.displayName)")
         }
         .padding(10)
