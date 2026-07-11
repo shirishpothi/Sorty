@@ -451,6 +451,15 @@ private final class OrganizationHistoryRepository {
 
 @MainActor
 public class OrganizationHistory: ObservableObject {
+    public struct ImportResult: Equatable, Sendable {
+        public let added: Int
+        public let updated: Int
+        public let unchanged: Int
+        public let omittedByRetentionLimit: Int
+
+        public var changed: Int { added + updated }
+    }
+
     @Published public private(set) var entries: [OrganizationHistoryEntry] = []
     private let repository: OrganizationHistoryRepository
     private let maxEntries = 100
@@ -493,21 +502,38 @@ public class OrganizationHistory: ObservableObject {
     }
 
     @discardableResult
-    public func importEntries(_ importedEntries: [OrganizationHistoryEntry]) -> Int {
-        guard !importedEntries.isEmpty else { return 0 }
+    public func importEntries(_ importedEntries: [OrganizationHistoryEntry]) -> ImportResult {
+        guard !importedEntries.isEmpty else {
+            return ImportResult(added: 0, updated: 0, unchanged: 0, omittedByRetentionLimit: 0)
+        }
 
         var mergedByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
-        var importedCount = 0
+        var added = 0
+        var updated = 0
+        var unchanged = 0
 
         for entry in importedEntries {
+            if let existing = mergedByID[entry.id] {
+                if existing == entry {
+                    unchanged += 1
+                    continue
+                }
+                updated += 1
+            } else {
+                added += 1
+            }
             mergedByID[entry.id] = entry
-            importedCount += 1
         }
 
         let sorted = mergedByID.values.sorted { $0.timestamp > $1.timestamp }
         entries = Array(sorted.prefix(maxEntries))
         saveHistory()
-        return importedCount
+        return ImportResult(
+            added: added,
+            updated: updated,
+            unchanged: unchanged,
+            omittedByRetentionLimit: max(0, sorted.count - maxEntries)
+        )
     }
     
     public var totalFilesOrganized: Int {

@@ -869,19 +869,30 @@ public class AppState: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
-            let data = try Data(contentsOf: url)
+            let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            guard resourceValues.isRegularFile == true else {
+                throw HistoryImportError.unsupportedFormat
+            }
+            guard (resourceValues.fileSize ?? 0) <= 25 * 1_024 * 1_024 else {
+                throw HistoryImportError.fileTooLarge
+            }
+            let data = try Data(contentsOf: url, options: .mappedIfSafe)
             let importedEntries = try decodeHistoryImportEntries(from: data)
             guard !importedEntries.isEmpty else {
                 throw HistoryImportError.noEntries
             }
 
-            let importedCount = historyStore.importEntries(importedEntries)
+            let result = historyStore.importEntries(importedEntries)
             currentView = .history
             HapticFeedbackManager.shared.success()
 
+            var details = ["Added \(result.added), updated \(result.updated), unchanged \(result.unchanged)."]
+            if result.omittedByRetentionLimit > 0 {
+                details.append("\(result.omittedByRetentionLimit) older entries were omitted because Sorty keeps the 100 most recent entries.")
+            }
             presentHistoryAlert(
                 title: "Import Complete",
-                message: "Imported \(importedCount) history entr\(importedCount == 1 ? "y" : "ies")."
+                message: details.joined(separator: " ")
             )
         } catch {
             DebugLogger.log("Failed to import history: \(error.localizedDescription)")
@@ -1083,12 +1094,24 @@ public class AppState: ObservableObject {
 
     private enum HistoryImportError: LocalizedError {
         case unsupportedFormat
+        case unsupportedSchema(Int)
+        case inconsistentArchive
+        case fileTooLarge
+        case tooManyEntries
         case noEntries
 
         var errorDescription: String? {
             switch self {
             case .unsupportedFormat:
                 return "This file isn't a supported Sorty history export."
+            case .unsupportedSchema(let version):
+                return "This history export uses schema version \(version), which this version of Sorty does not support."
+            case .inconsistentArchive:
+                return "This history export is incomplete or has been modified and cannot be imported safely."
+            case .fileTooLarge:
+                return "This history file is larger than the 25 MB import limit."
+            case .tooManyEntries:
+                return "This history file contains more than 10,000 entries and cannot be imported safely."
             case .noEntries:
                 return "This history file does not contain any entries."
             }
@@ -1098,6 +1121,8 @@ public class AppState: ObservableObject {
     private struct HistoryArchiveExport: Codable {
         let schemaVersion: Int
         let exportedAt: String
+        let appVersion: String?
+        let entryCount: Int?
         let entries: [OrganizationHistoryEntry]
     }
 
@@ -1141,17 +1166,31 @@ public class AppState: ObservableObject {
     }
 
     private func decodeHistoryImportEntries(from data: Data) throws -> [OrganizationHistoryEntry] {
+        guard data.count <= 25 * 1_024 * 1_024 else {
+            throw HistoryImportError.fileTooLarge
+        }
         let decoder = JSONDecoder()
 
         if let archive = try? decoder.decode(HistoryArchiveExport.self, from: data) {
+            guard (1...2).contains(archive.schemaVersion) else {
+                throw HistoryImportError.unsupportedSchema(archive.schemaVersion)
+            }
+            if let entryCount = archive.entryCount, entryCount != archive.entries.count {
+                throw HistoryImportError.inconsistentArchive
+            }
+            guard archive.entries.count <= 10_000 else {
+                throw HistoryImportError.tooManyEntries
+            }
             return archive.entries
         }
 
         if let entries = try? decoder.decode([OrganizationHistoryEntry].self, from: data) {
+            guard entries.count <= 10_000 else { throw HistoryImportError.tooManyEntries }
             return entries
         }
 
         if let legacyEntries = try? decoder.decode([LegacyHistoryExportEntry].self, from: data) {
+            guard legacyEntries.count <= 10_000 else { throw HistoryImportError.tooManyEntries }
             let dateFormatter = ISO8601DateFormatter()
             return legacyEntries.map { $0.toHistoryEntry(dateFormatter: dateFormatter) }
         }
@@ -1161,7 +1200,7 @@ public class AppState: ObservableObject {
 
     private func generateHistoryCSV(from entries: [OrganizationHistoryEntry]) -> String {
         var lines: [String] = []
-        lines.append("ID,Timestamp,Folder Path,Folder Name,Status,Source,Files Organized,Folders Created,Error Message")
+        lines.append("ID,Timestamp,Folder Path,Folder Name,Status,Source,Files Organized,Folders Created,Was Undone,Undo Restored,Undo Failed Files,Duplicates Deleted,Recovered Bytes,Duplicate Cleanup Mode,Plan Suggestions,Recorded Operations,Error Message")
 
         let dateFormatter = ISO8601DateFormatter()
 
@@ -1176,6 +1215,14 @@ public class AppState: ObservableObject {
                 entry.source.rawValue,
                 String(entry.filesOrganized),
                 String(entry.foldersCreated),
+                String(entry.isUndone),
+                entry.undoRestoredCount.map { String($0) } ?? "",
+                csvEscape(entry.undoFailedFiles?.joined(separator: " | ") ?? ""),
+                entry.duplicatesDeleted.map { String($0) } ?? "",
+                entry.recoveredSpace.map { String($0) } ?? "",
+                entry.duplicateCleanupMode?.rawValue ?? "",
+                entry.plan.map { String($0.suggestions.count) } ?? "",
+                entry.operations.map { String($0.count) } ?? "",
                 csvEscape(entry.errorMessage ?? "")
             ].joined(separator: ",")
             lines.append(row)
@@ -1186,8 +1233,10 @@ public class AppState: ObservableObject {
 
     private func generateHistoryJSON(from entries: [OrganizationHistoryEntry]) throws -> String {
         let payload = HistoryArchiveExport(
-            schemaVersion: 1,
+            schemaVersion: 2,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            entryCount: entries.count,
             entries: entries
         )
 

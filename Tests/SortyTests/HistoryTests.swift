@@ -160,4 +160,59 @@ class HistoryTests: XCTestCase {
 
         XCTAssertFalse(entry.hasApplicablePlan)
     }
+
+    @MainActor
+    func testImportReportsAddedUpdatedAndUnchangedEntries() {
+        let existingID = UUID()
+        let unchanged = OrganizationHistoryEntry(
+            id: existingID,
+            directoryPath: "/existing",
+            filesOrganized: 1,
+            foldersCreated: 1
+        )
+        history.addEntry(unchanged)
+
+        let updated = OrganizationHistoryEntry(
+            id: existingID,
+            directoryPath: "/existing",
+            filesOrganized: 2,
+            foldersCreated: 1
+        )
+        let added = OrganizationHistoryEntry(
+            directoryPath: "/imported",
+            filesOrganized: 3,
+            foldersCreated: 2
+        )
+
+        let firstResult = history.importEntries([unchanged])
+        XCTAssertEqual(firstResult.unchanged, 1)
+        XCTAssertEqual(firstResult.changed, 0)
+
+        let secondResult = history.importEntries([updated, added])
+        XCTAssertEqual(secondResult.added, 1)
+        XCTAssertEqual(secondResult.updated, 1)
+        XCTAssertEqual(secondResult.unchanged, 0)
+        XCTAssertEqual(history.entries.count, 2)
+        XCTAssertEqual(history.entries.first(where: { $0.id == existingID })?.filesOrganized, 2)
+    }
+
+    @MainActor
+    func testImportKeepsMostRecentEntriesAndReportsRetentionOmissions() {
+        let entries = (0..<105).map { index in
+            OrganizationHistoryEntry(
+                timestamp: Date(timeIntervalSince1970: TimeInterval(index)),
+                directoryPath: "/imported/\(index)",
+                filesOrganized: index,
+                foldersCreated: 0
+            )
+        }
+
+        let result = history.importEntries(entries)
+
+        XCTAssertEqual(history.entries.count, 100)
+        XCTAssertEqual(result.added, 105)
+        XCTAssertEqual(result.omittedByRetentionLimit, 5)
+        XCTAssertEqual(history.entries.first?.directoryPath, "/imported/104")
+        XCTAssertEqual(history.entries.last?.directoryPath, "/imported/5")
+    }
 }
