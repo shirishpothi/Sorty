@@ -1493,13 +1493,6 @@ struct LearningsView: View {
                         .accessibilityHidden(true)
                     Text("No reference directories")
                         .font(.subheadline.bold())
-                    Text(
-                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 340)
                     Button {
                         presentFileImporter(.modelDirectories)
                     } label: {
@@ -1977,6 +1970,7 @@ struct ModelDirectoryRow: View {
                         .font(.caption.bold())
                 }
                 .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .systemLiquidGlassBackground(cornerRadius: 999)
                 .accessibilityIdentifier("OpenModelDirectoryButton_\(directory.id)")
             }
 
@@ -1993,6 +1987,8 @@ struct ModelDirectoryRow: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .scaleEffect(0.8)
+            .systemLiquidGlassBackground(cornerRadius: 999)
+            .accessibilityLabel("Use \(directory.displayName) in previews")
             .accessibilityIdentifier("ModelDirectoryToggle_\(directory.id)")
 
             Button {
