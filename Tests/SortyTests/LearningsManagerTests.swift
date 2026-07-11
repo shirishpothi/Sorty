@@ -165,6 +165,29 @@ final class LearningsManagerTests: XCTestCase {
 
         XCTAssertTrue(manager.generatePromptContext().isEmpty, "Context should be empty when no consent is granted")
     }
+
+    func testPromptContextRespectsLearningStrengthAndPreservesRuleAttribution() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = (0..<6).map { index in
+            InferredRule(
+                id: "rule-\(index)",
+                pattern: ".*\\.\(index)$",
+                template: "Folder\(index)/{filename}",
+                priority: index * 10,
+                explanation: "Learned rule \(index)",
+                status: .active
+            )
+        }
+        manager.currentProfile = profile
+        manager.learningStrength = 0
+
+        let context = manager.generatePromptContext()
+
+        XCTAssertTrue(context.contains("[rule_id: rule-5]"))
+        XCTAssertTrue(context.contains("Learned rule 5"))
+        XCTAssertFalse(context.contains("Learned rule 4"))
+    }
     
     
     func testErrorStateClearing() async {

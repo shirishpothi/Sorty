@@ -1690,9 +1690,11 @@ public class LearningsManager: ObservableObject {
             .map { "Recent instruction (\(promptDateString($0.timestamp))): \($0.instruction)" }
         hardRules.append(contentsOf: recentInstructions)
 
-        let activeRules = filteredProfile.inferredRules
-            .filter { $0.isEnabled && $0.status == .active }
-            .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: nil) }
+        let activeRules = activeRules(
+            from: filteredProfile,
+            folderPath: folderPath,
+            personaId: nil
+        )
             .sorted {
                 if $0.successRate == $1.successRate {
                     return $0.supportCount > $1.supportCount
@@ -1702,7 +1704,7 @@ public class LearningsManager: ObservableObject {
             .prefix(4)
             .map { rule in
                 let successRate = Int(rule.successRate * 100)
-                return "Proven rule (\(successRate)% success): \(rule.explanation)"
+                return "Proven rule [rule_id: \(rule.id)] (\(successRate)% success): \(rule.explanation)"
             }
         hardRules.append(contentsOf: activeRules)
         hardRules = Array(hardRules.orderedDeduplicated().prefix(5))
@@ -2059,21 +2061,29 @@ public class LearningsManager: ObservableObject {
     /// Get active rules filtered by learning strength and optionally by scope
     public func getActiveRules(forFolder folderPath: String? = nil, forPersona personaId: UUID? = nil) -> [InferredRule] {
         guard let profile = currentProfile else { return [] }
-        
-        // Filter enabled rules that are active (not pending/rejected/cooldown)
-        var activeRules = profile.inferredRules.filter { rule in
-            rule.isEnabled && rule.status == .active
-        }
-        
-        // Filter by scope if provided
-        activeRules = activeRules.filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
-        
-        // Sort by priority
-        activeRules.sort { $0.priority > $1.priority }
-        
-        // Apply learning strength to limit number of rules
-        let maxRules = Int(Double(activeRules.count) * learningStrength) + 1
-        return Array(activeRules.prefix(maxRules))
+
+        return activeRules(from: profile, folderPath: folderPath, personaId: personaId)
+    }
+
+    private func activeRules(
+        from profile: LearningsProfile,
+        folderPath: String?,
+        personaId: UUID?
+    ) -> [InferredRule] {
+        let eligibleRules = profile.inferredRules
+            .filter { $0.isEnabled && $0.status == .active }
+            .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
+            .sorted { $0.priority > $1.priority }
+
+        guard !eligibleRules.isEmpty else { return [] }
+
+        // Keep one strongest rule at the minimum setting so Learnings remains useful,
+        // then progressively admit more rules as the user increases the strength.
+        let maxRules = min(
+            eligibleRules.count,
+            Int(Double(eligibleRules.count) * learningStrength) + 1
+        )
+        return Array(eligibleRules.prefix(maxRules))
     }
     
     // MARK: - Rule Suggestion Inbox

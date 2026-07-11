@@ -3085,9 +3085,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Record which files were moved by which inferred rules (for learning feedback)
     private func recordRuleApplications(for plan: OrganizationPlan, operations: [FileSystemManager.FileOperation], observer: ContinuousLearningObserver) {
         learningsManager?.loadProfileIfNeededForCollection()
-        guard let profile = learningsManager?.currentProfile else { return }
-        
-        let activeRules = profile.inferredRules.filter { $0.isEnabled }
+        let activeRules = learningsManager?.getActiveRules() ?? []
         guard !activeRules.isEmpty else { return }
         
         // Build a map of filename to ruleId from the plan suggestions
