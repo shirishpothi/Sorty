@@ -376,6 +376,8 @@ private final class HelpMenuHoverHapticsController: NSObject, NSMenuDelegate {
 
 @MainActor
 public class AppState: ObservableObject {
+    private static let requiredOnboardingVersion = "1.2.0"
+    private static let completedOnboardingVersionKey = "completedOnboardingVersion"
     public enum HistoryExportFormat {
         case csv
         case json
@@ -541,7 +543,8 @@ public class AppState: ObservableObject {
     public init(
         windowSessionID: UUID = UUID(),
         updateManager: SparkleUpdateManager = SparkleUpdateManager(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        currentVersion: String = BuildInfo.version
     ) {
         self.windowSessionID = windowSessionID
         self.updateManager = updateManager
@@ -551,16 +554,24 @@ public class AppState: ObservableObject {
         // can be written by a launch that never completed onboarding, so it
         // must not force-skip setup on the next run.
         let onboardingCompleted = userDefaults.bool(forKey: "hasCompletedOnboarding")
+        let completedOnboardingVersion = userDefaults.string(forKey: Self.completedOnboardingVersionKey)
         let requiresSetupRepair = userDefaults.bool(forKey: Self.requiresSetupRepairKey)
         let setupRepairMessage = userDefaults.string(forKey: Self.setupRepairMessageKey)
-        let currentVersion = BuildInfo.version
-        
-        self.hasCompletedOnboarding = onboardingCompleted
+
+        let mustRepeatOnboarding = currentVersion == Self.requiredOnboardingVersion
+            && completedOnboardingVersion != Self.requiredOnboardingVersion
+        self.hasCompletedOnboarding = onboardingCompleted && !mustRepeatOnboarding
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
         
         // Always store current version for future launches
         userDefaults.set(currentVersion, forKey: "lastLaunchedVersion")
+    }
+
+    public func recordOnboardingCompletion() {
+        hasCompletedOnboarding = true
+        let currentVersion = userDefaults.string(forKey: "lastLaunchedVersion") ?? BuildInfo.version
+        userDefaults.set(currentVersion, forKey: Self.completedOnboardingVersionKey)
     }
 
     public var hasResults: Bool {

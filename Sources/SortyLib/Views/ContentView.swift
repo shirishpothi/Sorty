@@ -28,7 +28,18 @@ public struct ContentView: View {
     public var body: some View {
         ZStack {
             if !appState.hasCompletedOnboarding {
-                OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
+                OnboardingView(
+                    hasCompletedOnboarding: Binding(
+                        get: { appState.hasCompletedOnboarding },
+                        set: { isComplete in
+                            if isComplete {
+                                appState.recordOnboardingCompletion()
+                            } else {
+                                appState.hasCompletedOnboarding = false
+                            }
+                        }
+                    )
+                )
                     .transition(.opacity)
             } else {
                 ZStack {

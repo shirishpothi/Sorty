@@ -80,7 +80,7 @@ class AppStateTests: XCTestCase {
         XCTAssertNotNil(userDefaults.string(forKey: versionKey), "Version should be stored after first launch")
     }
     
-    func testCompletedOnboardingPersistsAcrossUpdates() {
+    func testVersion120RequiresOnboardingOnceAfterUpdate() {
         let testSuiteName = "test.onboarding.updates.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: testSuiteName)!
         let onboardingKey = "hasCompletedOnboarding"
@@ -94,10 +94,14 @@ class AppStateTests: XCTestCase {
         userDefaults.set("0.9.0", forKey: versionKey)
         userDefaults.set(true, forKey: onboardingKey)
         
-        let state = AppState(userDefaults: userDefaults)
+        let state = AppState(userDefaults: userDefaults, currentVersion: "1.2.0")
 
-        XCTAssertTrue(state.hasCompletedOnboarding)
-        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
+        XCTAssertFalse(state.hasCompletedOnboarding)
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), "1.2.0")
+
+        state.recordOnboardingCompletion()
+        let relaunchedState = AppState(userDefaults: userDefaults, currentVersion: "1.2.0")
+        XCTAssertTrue(relaunchedState.hasCompletedOnboarding)
     }
 
     func testOnboardingShownWhenPreviousLaunchDidNotCompleteSetup() {

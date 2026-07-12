@@ -18,6 +18,10 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        ApplicationMover.offerToMoveToApplicationsIfNeeded()
+    }
+
     override init() {
         super.init()
         NotificationCenter.default.addObserver(
@@ -223,6 +227,59 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             guard !hasMainWindow else { return }
             presentRecoveryWindow(rootView: rootView())
         }
+    }
+}
+
+@MainActor
+private enum ApplicationMover {
+    private static let applicationsPath = "/Applications"
+
+    static func offerToMoveToApplicationsIfNeeded() {
+        #if DEBUG
+        return
+        #else
+        let sourceURL = Bundle.main.bundleURL.resolvingSymlinksInPath()
+        guard !sourceURL.path.hasPrefix(applicationsPath + "/") else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Move Sorty to Applications?"
+        alert.informativeText = "Sorty works best from the Applications folder. Move it there now and reopen it?"
+        alert.addButton(withTitle: "Move to Applications")
+        alert.addButton(withTitle: "Not Now")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        moveAndRelaunch(from: sourceURL)
+        #endif
+    }
+
+    private static func moveAndRelaunch(from sourceURL: URL) {
+        let destinationURL = URL(fileURLWithPath: applicationsPath, isDirectory: true)
+            .appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+        let script = """
+        set sourcePath to \(appleScriptString(sourceURL.path))
+        set destinationPath to \(appleScriptString(destinationURL.path))
+        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/cp -R " & quoted form of sourcePath & " " & quoted form of destinationPath with administrator privileges
+        do shell script "/usr/bin/open " & quoted form of destinationPath
+        """
+
+        var error: NSDictionary?
+        guard NSAppleScript(source: script)?.executeAndReturnError(&error) != nil else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Sorty couldn’t be moved"
+            alert.informativeText = error?[NSAppleScript.errorMessage] as? String
+                ?? "Move Sorty to Applications in Finder, then reopen it."
+            alert.runModal()
+            return
+        }
+
+        SortyAppDelegate.forceQuit = true
+        NSApplication.shared.terminate(nil)
+    }
+
+    private static func appleScriptString(_ value: String) -> String {
+        "\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 }
 

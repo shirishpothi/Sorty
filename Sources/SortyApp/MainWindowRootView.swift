@@ -190,8 +190,11 @@ struct MainWindowRootView: View {
                 }
                 scheduleSetupRepairReconciliation()
             }
-            .onChange(of: windowSession.appState.hasCompletedOnboarding) { _, _ in
+            .onChange(of: windowSession.appState.hasCompletedOnboarding) { wasComplete, isComplete in
                 scheduleSetupRepairReconciliation()
+                if !wasComplete && isComplete {
+                    presentWhatsNewIfNeeded()
+                }
             }
             .onChange(of: windowSession.appState.requiresSetupRepair) { _, _ in
                 scheduleSetupRepairReconciliation()

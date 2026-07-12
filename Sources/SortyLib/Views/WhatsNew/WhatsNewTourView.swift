@@ -49,6 +49,10 @@ public struct WhatsNewTourView: View {
                 title: "A new design system",
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
+            WhatsNewPage(
+                title: "Everything in Sorty 1.2.0",
+                description: "A major release focused on capability, clarity, and reliability."
+            ),
         ]
     }
 
@@ -64,7 +68,11 @@ public struct WhatsNewTourView: View {
 
     private func tourPage(_ page: WhatsNewPage) -> some View {
         VStack(spacing: 0) {
-            imageSection(page)
+            if currentPage == pages.count - 1 {
+                releaseSummary
+            } else {
+                imageSection(page)
+            }
 
             VStack(spacing: 6) {
                 pageIndicator
@@ -96,6 +104,86 @@ public struct WhatsNewTourView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
         }
+    }
+
+    private var releaseSummary: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Sorty 1.2.0")
+                    .font(.title2.bold())
+                    .foregroundStyle(.white)
+                Spacer()
+                topControls
+                    .padding(0)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    releaseSection(
+                        title: "New",
+                        symbol: "sparkles",
+                        color: .cyan,
+                        items: [
+                            "Cloud and external storage organization",
+                            "Finder integration diagnostics",
+                            "Sensitive action protection",
+                            "Privacy-safe paths",
+                        ]
+                    )
+                    releaseSection(
+                        title: "Improved",
+                        symbol: "arrow.up.right.circle.fill",
+                        color: .green,
+                        items: [
+                            "Focused organization experience",
+                            "Native Mac design",
+                            "Smarter organization decisions",
+                            "Cloud reliability",
+                            "Learnings and history portability",
+                            "Updates and downloads",
+                        ]
+                    )
+                    releaseSection(
+                        title: "Fixed",
+                        symbol: "wrench.and.screwdriver.fill",
+                        color: .orange,
+                        items: [
+                            "Fresh-download setup",
+                            "Finder extension recovery",
+                            "Storage safety",
+                            "Organization and history reliability",
+                            "Compatibility and lifecycle stability",
+                        ]
+                    )
+                }
+                .padding(.trailing, 12)
+            }
+        }
+        .padding(28)
+        .frame(width: 640, height: 400, alignment: .topLeading)
+        .background(Color(white: 0.10))
+    }
+
+    private func releaseSection(title: String, symbol: String, color: Color, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: symbol)
+                .font(.headline)
+                .foregroundStyle(color)
+
+            ForEach(items, id: \.self) { item in
+                HStack(alignment: .firstTextBaseline, spacing: 9) {
+                    Circle()
+                        .fill(Color.white.opacity(0.48))
+                        .frame(width: 4, height: 4)
+                        .accessibilityHidden(true)
+                    Text(item)
+                        .font(.callout)
+                        .foregroundStyle(Color.white.opacity(0.82))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func imageSection(_ page: WhatsNewPage) -> some View {

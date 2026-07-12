@@ -205,6 +205,7 @@ jobs:
           cmp \
             "Assets/AppIcon/AppIcon-Release.icns" \
             "releases/Sorty.app/Contents/Resources/AppIcon.icns"
+          test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
 
       - name: Package universal ZIP
         run: |
@@ -396,7 +397,7 @@ jobs:
             Download `Sorty.zip`, open it, and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
-            > xattr -cr /Applications/Sorty.app
+            > sudo xattr -cr /Applications/Sorty.app
             > ```
 
             ## CLI Tools

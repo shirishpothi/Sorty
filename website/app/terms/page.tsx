@@ -200,7 +200,7 @@ export default function TermsPage() {
           may display a security warning on first launch. To proceed, you may
           run{' '}
           <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[0.8em] text-foreground">
-            xattr -cr /Applications/Sorty.app
+            sudo xattr -cr /Applications/Sorty.app
           </code>{' '}
           or{' '}
           <a

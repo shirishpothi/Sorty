@@ -49,7 +49,7 @@ A native macOS SwiftUI application that helps organize directory contents into r
    > **Note**: Moving the app to `/Applications` is highly recommended. It ensures that security bookmarks for "Watched Folders" persist reliably across app restarts.
 3. **Important**: Since the app is not notarized (no Apple Developer certificate), you need to remove the quarantine attribute:
    ```bash
-   xattr -cr /Applications/Sorty.app
+   sudo xattr -cr /Applications/Sorty.app
    ```
 4. Double-click to launch.
 

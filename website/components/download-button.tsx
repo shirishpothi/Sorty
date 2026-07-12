@@ -7,7 +7,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
-const XATTR_COMMAND = 'xattr -cr /Applications/Sorty.app'
+const XATTR_COMMAND = 'sudo xattr -cr /Applications/Sorty.app'
 
 type CopyFeedback = 'idle' | 'copied' | 'failed'
 
