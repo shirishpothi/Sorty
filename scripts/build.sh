@@ -829,6 +829,24 @@ mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
 manage_build_cache
 
+# Assemble into a private bundle so rebuilding cannot overwrite the executable
+# of a background Sorty instance that is still running. The finished bundle is
+# published only after that instance has exited.
+FINAL_APP_PATH="${APP_PATH}"
+STAGED_APP_PATH="${RELEASE_DIR}/.${PROJECT_NAME}.app.build.$$"
+APP_PATH="${STAGED_APP_PATH}"
+
+cleanup_staged_app() {
+    rm -rf "${STAGED_APP_PATH}"
+}
+
+trap cleanup_staged_app EXIT
+rm -rf "${STAGED_APP_PATH}"
+
+if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${FINAL_APP_PATH}" ]; then
+    cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
+fi
+
 # Binary and App names from config if needed, or hardcoded for reliability
 BINARY_NAME="Sorty"
 SPM_BINARY_NAME="SortyApp"
@@ -1273,9 +1291,33 @@ else
     log_detail "ENABLE_ADHOC_SIGNING is set to false."
 fi
 
-# Close existing Sorty app instances unless an organization is active.
-# Do this after build/sign so active work is interrupted only at handoff time.
+# Close existing Sorty app instances unless an organization is active. The
+# staged bundle keeps the live app safe while the build runs; publishing is
+# refused if the process cannot exit before the final swap.
 terminate_running_sorty_if_safe
+
+if sorty_processes_are_running; then
+    log_failure "Sorty is still running; refusing to replace its live bundle. Finish the active organization and rerun the build."
+    exit 1
+fi
+
+PREVIOUS_APP_PATH="${FINAL_APP_PATH}.previous.$$"
+rm -rf "${PREVIOUS_APP_PATH}"
+if [ -e "${FINAL_APP_PATH}" ]; then
+    mv "${FINAL_APP_PATH}" "${PREVIOUS_APP_PATH}"
+fi
+
+if mv "${STAGED_APP_PATH}" "${FINAL_APP_PATH}"; then
+    rm -rf "${PREVIOUS_APP_PATH}"
+else
+    if [ -e "${PREVIOUS_APP_PATH}" ]; then
+        mv "${PREVIOUS_APP_PATH}" "${FINAL_APP_PATH}"
+    fi
+    log_failure "Could not publish the completed Sorty bundle."
+    exit 1
+fi
+
+APP_PATH="${FINAL_APP_PATH}"
 
 APP_SIZE=$(get_file_size "${APP_PATH}")
 TOTAL_DURATION=$(get_total_duration)
