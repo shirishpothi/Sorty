@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { LegalPage, LegalSection } from '@/components/legal-page'
+import { PageStructuredData } from '@/components/page-structured-data'
 import { sitePath } from '@/lib/site-paths'
+import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
@@ -11,8 +13,23 @@ export const metadata: Metadata = {
     title: 'Terms of Service — Sorty',
     description:
       'Sorty is free, open-source software under the GNU GPL v3.0, provided "as is". You are responsible for reviewing suggested changes before applying them.',
-    url: '/terms',
+    url: `${SITE_URL}/terms`,
     type: 'article',
+    images: [
+      {
+        url: OG_IMAGE_PATH,
+        width: 1102,
+        height: 754,
+        alt: 'Sorty app interface.',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Terms of Service — Sorty',
+    description:
+      'Sorty is free, open-source software under the GNU GPL v3.0, provided as is. Review suggested file changes before applying them.',
+    images: [OG_IMAGE_PATH],
   },
 }
 
@@ -46,6 +63,13 @@ export default function TermsPage() {
         </>
       }
     >
+      <PageStructuredData
+        name="Sorty Terms of Service"
+        description="Terms governing use of the Sorty macOS app and website."
+        path="/terms"
+        dateModified="2026-06-01"
+        breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Terms of Service', path: '/terms' }]}
+      />
       <LegalSection id="agreement" heading="1. Agreement to Terms">
         <p>
           These Terms of Service (&quot;Terms&quot;) govern your use of the Sorty

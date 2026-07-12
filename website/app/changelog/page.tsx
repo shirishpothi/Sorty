@@ -10,7 +10,9 @@ import { DiaGradient } from '@/components/dia-gradient'
 import { Reveal } from '@/components/reveal'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteNav } from '@/components/site-nav'
+import { PageStructuredData } from '@/components/page-structured-data'
 import { sitePath } from '@/lib/site-paths'
+import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 
 export const metadata: Metadata = {
   title: 'Changelog',
@@ -18,6 +20,28 @@ export const metadata: Metadata = {
     'See what changed in Sorty across the latest update and previous stable releases.',
   alternates: {
     canonical: '/changelog',
+  },
+  openGraph: {
+    type: 'website',
+    title: 'Sorty changelog — Latest releases and updates',
+    description:
+      'See what changed in Sorty across the latest update and previous stable releases.',
+    url: `${SITE_URL}/changelog`,
+    images: [
+      {
+        url: OG_IMAGE_PATH,
+        width: 1102,
+        height: 754,
+        alt: 'Sorty app interface.',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Sorty changelog — Latest releases and updates',
+    description:
+      'See what changed in Sorty across the latest update and previous stable releases.',
+    images: [OG_IMAGE_PATH],
   },
 }
 
@@ -244,6 +268,13 @@ const PREVIOUS_RELEASES = [
 export default function ChangelogPage() {
   return (
     <main className="relative min-h-screen overflow-x-clip">
+      <PageStructuredData
+        name="Sorty changelog"
+        description="Latest Sorty releases, improvements, and fixes."
+        path="/changelog"
+        dateModified="2026-07-11"
+        breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Changelog', path: '/changelog' }]}
+      />
       <SiteNav />
 
       <section className="relative isolate overflow-hidden px-4 pb-16 pt-32 sm:pb-24 sm:pt-40">

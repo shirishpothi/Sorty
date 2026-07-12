@@ -1,7 +1,11 @@
 import { FAQS } from '@/components/faq-data'
-
-const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
-const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
+import {
+  DOWNLOAD_URL,
+  GITHUB_URL,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_URL,
+} from '@/lib/site-metadata'
 
 /**
  * JSON-LD structured data for rich results: the software application itself,
@@ -14,7 +18,7 @@ export function StructuredData() {
       {
         '@type': 'Organization',
         '@id': `${SITE_URL}/#organization`,
-        name: 'Sorty',
+        name: SITE_NAME,
         url: SITE_URL,
         logo: `${SITE_URL}/sorty-icon-96.webp`,
         sameAs: [GITHUB_URL],
@@ -23,21 +27,28 @@ export function StructuredData() {
         '@type': 'WebSite',
         '@id': `${SITE_URL}/#website`,
         url: SITE_URL,
-        name: 'Sorty',
-        description: 'AI folder organization for your Mac.',
+        name: SITE_NAME,
+        description: SITE_DESCRIPTION,
         publisher: { '@id': `${SITE_URL}/#organization` },
         inLanguage: 'en-US',
       },
       {
         '@type': 'SoftwareApplication',
         '@id': `${SITE_URL}/#app`,
-        name: 'Sorty',
+        name: SITE_NAME,
         applicationCategory: 'UtilitiesApplication',
         operatingSystem: 'macOS 15+',
-        description:
-          'Sorty is a free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
+        description: SITE_DESCRIPTION,
         url: SITE_URL,
-        downloadUrl: `${GITHUB_URL}/releases/latest/download/Sorty.zip`,
+        downloadUrl: DOWNLOAD_URL,
+        releaseNotes: `${SITE_URL}/changelog`,
+        applicationSubCategory: 'File organization',
+        featureList: [
+          'AI folder organization',
+          'Preview and undo for file moves',
+          'Finder integration',
+          'Local AI model support',
+        ],
         softwareLicense: 'https://www.gnu.org/licenses/gpl-3.0.en.html',
         isAccessibleForFree: true,
         publisher: { '@id': `${SITE_URL}/#organization` },

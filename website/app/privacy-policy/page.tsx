@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { LegalPage, LegalSection } from '@/components/legal-page'
+import { PageStructuredData } from '@/components/page-structured-data'
 import { sitePath } from '@/lib/site-paths'
+import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -11,8 +13,23 @@ export const metadata: Metadata = {
     title: 'Privacy Policy — Sorty',
     description:
       'Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
-    url: '/privacy-policy',
+    url: `${SITE_URL}/privacy-policy`,
     type: 'article',
+    images: [
+      {
+        url: OG_IMAGE_PATH,
+        width: 1102,
+        height: 754,
+        alt: 'Sorty app interface.',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Privacy Policy — Sorty',
+    description:
+      'Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
+    images: [OG_IMAGE_PATH],
   },
 }
 
@@ -46,6 +63,13 @@ export default function PrivacyPolicyPage() {
         </>
       }
     >
+      <PageStructuredData
+        name="Sorty Privacy Policy"
+        description="How Sorty handles files, metadata, AI providers, and local storage."
+        path="/privacy-policy"
+        dateModified="2026-06-01"
+        breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Privacy Policy', path: '/privacy-policy' }]}
+      />
       <LegalSection id="overview" heading="1. Overview">
         <p>
           Sorty (&quot;the App&quot;) is a native macOS application published by

@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { sitePath } from '@/lib/site-paths'
+import {
+  GITHUB_URL,
+  OG_IMAGE_PATH,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_URL,
+} from '@/lib/site-metadata'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -9,24 +16,21 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
-const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Sorty — AI folder organization for your Mac',
-    template: '%s — Sorty',
+    default: `${SITE_NAME} — AI folder organization for your Mac`,
+    template: `%s — ${SITE_NAME}`,
   },
-  description:
-    'Sorty is a free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
-  applicationName: 'Sorty',
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
   generator: 'Next.js',
   authors: [{ name: 'The Sorty open-source project' }],
   creator: 'The Sorty open-source project',
   publisher: 'The Sorty open-source project',
   category: 'productivity',
   keywords: [
-    'Sorty',
+    SITE_NAME,
     'AI folder organizer',
     'Mac file organization',
     'macOS file organizer',
@@ -54,15 +58,14 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    siteName: 'Sorty',
-    title: 'Sorty — AI folder organization for your Mac',
-    description:
-      'A free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — AI folder organization for your Mac`,
+    description: SITE_DESCRIPTION,
     url: SITE_URL,
     locale: 'en_US',
     images: [
       {
-        url: '/sorty-app.webp',
+        url: OG_IMAGE_PATH,
         width: 1102,
         height: 754,
         alt: 'The Sorty app showing an AI-generated organization plan for a Downloads folder.',
@@ -71,10 +74,12 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Sorty — AI folder organization for your Mac',
-    description:
-      'A free and open source (GPL v3) Mac app that uses AI to organize your folders. Preview every change, undo anytime, and keep your files local.',
-    images: ['/sorty-app.webp'],
+    title: `${SITE_NAME} — AI folder organization for your Mac`,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_PATH],
+  },
+  other: {
+    'github:repository_url': GITHUB_URL,
   },
   icons: {
     shortcut: sitePath('/favicon.png'),

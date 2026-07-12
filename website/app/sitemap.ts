@@ -1,7 +1,5 @@
 import type { MetadataRoute } from 'next'
-
-const SITE_URL = 'https://sorty-organizer.github.io/Sorty'
-const LAST_MODIFIED = new Date('2026-07-10')
+import { LAST_MODIFIED, SITE_URL } from '@/lib/site-metadata'
 
 export const dynamic = 'force-static'
 
