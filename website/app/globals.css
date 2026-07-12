@@ -525,11 +525,53 @@
 .download-modal-panel {
   animation: download-modal-panel-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.copy-command-row.is-copied {
-  animation: copy-command-row-pulse 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+.copy-command-row {
+  position: relative;
+}
+.copy-command-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0 0 1px oklch(0.62 0.19 256 / 32%),
+    0 0 30px -8px oklch(0.62 0.19 256 / 70%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.copy-command-row.is-copied::after {
+  opacity: 1;
+}
+.copy-command-button {
+  --copy-glow: oklch(1 0 0 / 32%);
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.3s ease;
+}
+.copy-command-button:hover {
+  transform: translateY(-1px) scale(1.04) translateZ(0);
+  box-shadow: 0 0 18px -4px var(--copy-glow);
+}
+.copy-command-button:active {
+  transform: scale(0.95) translateZ(0);
+  transition-duration: 0.1s;
 }
 .copy-command-button.is-copied {
-  animation: copy-command-button-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  --copy-glow: oklch(0.62 0.19 256 / 85%);
+  box-shadow:
+    0 0 0 1px oklch(0.62 0.19 256 / 40%),
+    0 0 22px -4px var(--copy-glow);
+  animation: copy-command-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+.copy-command-button.is-failed {
+  --copy-glow: oklch(0.6 0.22 25 / 75%);
 }
 .copy-command-label {
   position: relative;
@@ -537,37 +579,36 @@
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
+  pointer-events: none;
   opacity: 0;
-  transform: translateY(0.35rem) scale(0.96);
+  transform: translateY(0.5rem) scale(0.92);
   transition:
-    opacity 0.18s ease,
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.15s ease,
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .copy-command-label.is-visible {
   opacity: 1;
   transform: translateY(0) scale(1);
-}
-.copy-command-label.is-copied {
-  animation: copy-command-label-focus-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 0.2s, 0.32s;
 }
 .copy-command-label.is-copied .copy-command-check {
-  animation: copy-command-check-focus-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: copy-command-check-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1) 0.05s backwards;
 }
 .copy-command-shine {
   position: absolute;
-  inset: -20% -40%;
+  inset: -30% -40%;
   pointer-events: none;
-  transform: translateX(-120%) skewX(-18deg);
+  transform: translateX(-130%) skewX(-18deg);
   background: linear-gradient(
     100deg,
-    transparent 24%,
-    oklch(1 0 0 / 45%) 48%,
-    transparent 72%
+    transparent 30%,
+    oklch(1 0 0 / 50%) 50%,
+    transparent 70%
   );
   opacity: 0;
 }
 .copy-command-button.is-copied .copy-command-shine {
-  animation: copy-command-shine 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: copy-command-shine 0.7s ease-out 0.1s;
 }
 .modal-action-highlight::before {
   content: "";
@@ -690,74 +731,42 @@
     transform: translateY(0) scale(1);
   }
 }
-@keyframes copy-command-row-pulse {
+@keyframes copy-command-pop {
   0% {
-    box-shadow:
-      0 0 0 0 oklch(0.62 0.19 256 / 0%),
-      0 0 0 0 oklch(0.62 0.19 256 / 0%);
+    transform: scale(0.92) translateZ(0);
   }
-  35% {
-    box-shadow:
-      0 0 0 1px oklch(0.62 0.19 256 / 30%),
-      0 0 30px -10px oklch(0.62 0.19 256 / 90%);
+  55% {
+    transform: scale(1.06) translateZ(0);
   }
   100% {
-    box-shadow:
-      0 0 0 1px oklch(0.62 0.19 256 / 24%),
-      0 0 26px -12px oklch(0.62 0.19 256 / 80%);
+    transform: scale(1) translateZ(0);
   }
 }
-@keyframes copy-command-button-pop {
+@keyframes copy-command-check-pop {
   0% {
-    transform: scale(0.985);
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
   }
-  64% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@keyframes copy-command-label-focus-pop {
-  0% {
-    opacity: 0.35;
-    transform: translateY(0.2rem) scale(0.94);
-  }
-  62% {
+  60% {
     opacity: 1;
-    transform: translateY(-0.04rem) scale(1.025);
+    transform: scale(1.15) rotate(3deg);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-@keyframes copy-command-check-focus-pop {
-  0% {
-    opacity: 0.2;
-    transform: scale(0.72) rotate(-8deg);
-  }
-  64% {
-    opacity: 1;
-    transform: scale(1.1) rotate(2deg);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0);
+    transform: scale(1) rotate(0deg);
   }
 }
 @keyframes copy-command-shine {
   0% {
     opacity: 0;
-    transform: translateX(-120%) skewX(-18deg);
+    transform: translateX(-130%) skewX(-18deg);
   }
-  20%,
-  62% {
+  25% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateX(120%) skewX(-18deg);
+    transform: translateX(130%) skewX(-18deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -792,16 +801,24 @@
   .download-modal-panel {
     animation: none;
   }
-  .copy-command-row.is-copied,
   .copy-command-button.is-copied,
-  .copy-command-label.is-copied,
   .copy-command-label.is-copied .copy-command-check,
   .copy-command-button.is-copied .copy-command-shine {
     animation: none;
   }
+  .copy-command-label.is-copied .copy-command-check {
+    opacity: 1;
+    transform: none;
+  }
+  .copy-command-row::after,
+  .copy-command-button,
   .copy-command-label,
   .modal-action-highlight::before {
     transition: none;
+  }
+  .copy-command-button:hover,
+  .copy-command-button:active {
+    transform: translateZ(0);
   }
 }
 

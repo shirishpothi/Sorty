@@ -262,8 +262,8 @@ export function DownloadButton({
               </div>
               <div
                 className={cn(
-                  'copy-command-row grid gap-2 rounded-xl border border-white/10 bg-background/70 p-2 transition-[border-color,box-shadow] duration-300 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
-                  copySucceeded && 'is-copied border-brand/45 shadow-[0_0_0_1px_oklch(0.62_0.19_256_/_24%),0_0_26px_-12px_oklch(0.62_0.19_256_/_80%)]',
+                  'copy-command-row grid gap-2 rounded-xl border border-white/10 bg-background/70 p-2 transition-colors duration-300 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
+                  copySucceeded && 'is-copied border-brand/45',
                   copyFailed && 'border-destructive/55',
                 )}
               >
@@ -274,10 +274,9 @@ export function DownloadButton({
                   type="button"
                   onClick={() => void copyCommand()}
                   className={cn(
-                    'copy-command-button modal-action-highlight relative grid h-8 min-w-[72px] shrink-0 place-items-center overflow-hidden rounded-lg px-2.5 text-xs font-medium transition-[transform,background-color,color,box-shadow] duration-300 hover:scale-[1.02] active:scale-[0.97]',
-                    copySucceeded &&
-                      'is-copied gap-1.5 bg-brand text-white shadow-lg shadow-brand/30',
-                    copyFailed && 'gap-1.5 bg-destructive text-white',
+                    'copy-command-button grid h-8 min-w-[72px] shrink-0 place-items-center rounded-lg px-2.5 text-xs font-medium',
+                    copySucceeded && 'is-copied gap-1.5 bg-brand text-white',
+                    copyFailed && 'is-failed gap-1.5 bg-destructive text-white',
                     copyFeedback === 'idle' &&
                       'gap-1.5 bg-foreground text-background',
                   )}
