@@ -369,7 +369,7 @@ struct AnalysisView: View {
 
     private var progressSection: some View {
         StreamingProgressBeam(
-            progress: organizer.progress,
+            measuredProgress: organizer.measuredWorkProgress,
             stage: organizer.organizationStage,
             elapsedSeconds: Int(organizer.elapsedTime),
             isEstablishingConnection: isEstablishingConnection,
@@ -1416,7 +1416,7 @@ private struct SubtleDotPulse: ViewModifier {
 
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
-    let progress: Double
+    let measuredProgress: MeasuredWorkProgress?
     let stage: String
     let elapsedSeconds: Int
     let isEstablishingConnection: Bool
@@ -1432,8 +1432,16 @@ private struct StreamingProgressBeam: View {
         matchesInsightsWidth ? Self.expandedWidth : Self.collapsedWidth
     }
 
-    private var clampedProgress: Double { max(0, min(1, progress)) }
-    private var percent: Int { Int((clampedProgress * 100).rounded()) }
+    private var percent: Int? {
+        measuredProgress.map { Int(($0.percentage * 100).rounded()) }
+    }
+
+    private var progressAccessibilityValue: String {
+        guard let measuredProgress, let percent else {
+            return "Stage \(displayedStage), progress is indeterminate"
+        }
+        return "\(percent) percent, \(measuredProgress.completed) of \(measuredProgress.total) complete, stage \(displayedStage)"
+    }
 
     private var displayedStage: String {
         let trimmed = stage.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1454,7 +1462,7 @@ private struct StreamingProgressBeam: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: matchesInsightsWidth)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Organization progress")
-        .accessibilityValue("\(percent) percent, stage \(displayedStage)")
+        .accessibilityValue(progressAccessibilityValue)
         .accessibilityIdentifier("AnalysisPercentageText")
     }
 
@@ -1470,11 +1478,18 @@ private struct StreamingProgressBeam: View {
                     .animation(.easeInOut(duration: 0.22), value: displayedStage)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("\(percent)%")
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.3), value: percent)
-                    .frame(width: 54, alignment: .trailing)
+                if let percent {
+                    Text("\(percent)%")
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.3), value: percent)
+                        .frame(width: 54, alignment: .trailing)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 54, alignment: .trailing)
+                        .accessibilityHidden(true)
+                }
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)

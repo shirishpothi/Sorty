@@ -318,6 +318,22 @@ public struct OrganizationProgress: Sendable {
     }
 }
 
+/// Progress backed by a concrete count of completed work items.
+public struct MeasuredWorkProgress: Equatable, Sendable {
+    public let completed: Int
+    public let total: Int
+
+    public var percentage: Double {
+        guard total > 0 else { return 0 }
+        return max(0, min(1, Double(completed) / Double(total)))
+    }
+
+    public init(completed: Int, total: Int) {
+        self.total = max(0, total)
+        self.completed = max(0, min(completed, self.total))
+    }
+}
+
 public struct VisionAnalysisSummary: Equatable, Sendable {
     public let analyzedCount: Int
     public let totalImageCount: Int
@@ -407,6 +423,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var isStreaming: Bool = false
     @Published public var liveInsightsEnabled: Bool = true
     @Published public var deepScanProgress: (current: Int, total: Int)?
+    @Published public private(set) var measuredWorkProgress: MeasuredWorkProgress?
     @Published public var visionAnalysisSummary: VisionAnalysisSummary?
     
     // Throttle timer for display content updates (prevents layout thrashing)
@@ -1523,6 +1540,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updateState(.organizing, stage: "Connecting to AI provider...", progress: 0.22)
         await MainActor.run {
             isStreaming = false
+            measuredWorkProgress = nil
         }
 
         startTimeoutTimer()
@@ -1606,21 +1624,30 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             } else {
                 selectedBatch = imageFiles
             }
-            let selectedImageURLs = selectedBatch.compactMap(\.url)
-            let preparationLabel = shouldLimitVisionImages && selectedBatch.count < imageFiles.count
-                ? "selected images"
-                : "images"
-            updateProgress(
-                0.22,
-                stage: "Sorty is preparing your \(preparationLabel) (0/\(selectedImageURLs.count))"
+            let selectedImageURLs = Array(Set(selectedBatch.compactMap(\.url)))
+            let totalImageCount = imageFiles.count
+            let isLimitedSelection = shouldLimitVisionImages && selectedBatch.count < imageFiles.count
+            let initialPreparationStage = isLimitedSelection
+                ? "Sorty is preparing images (0/\(selectedImageURLs.count) selected from \(totalImageCount))"
+                : "Sorty is preparing your images (0/\(selectedImageURLs.count))"
+            updateMeasuredProgress(
+                completed: 0,
+                total: selectedImageURLs.count,
+                estimatedOverallProgress: 0.22,
+                stage: initialPreparationStage
             )
 
             let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedImageURLs) { [weak self] completed, total in
                 guard let self else { return }
                 let phaseProgress = 0.22 + (Double(completed) / Double(max(total, 1))) * 0.08
-                await self.updateProgress(
-                    phaseProgress,
-                    stage: "Sorty is preparing your \(preparationLabel) (\(completed)/\(total))"
+                let stage = isLimitedSelection
+                    ? "Sorty is preparing images (\(completed)/\(total) selected from \(totalImageCount))"
+                    : "Sorty is preparing your images (\(completed)/\(total))"
+                await self.updateMeasuredProgress(
+                    completed: completed,
+                    total: total,
+                    estimatedOverallProgress: phaseProgress,
+                    stage: stage
                 )
             }
             var analyzedNames: [String] = []
@@ -1644,9 +1671,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             if !analyzedNames.isEmpty {
                 instructions += visionPromptInstructions(for: analyzedNames)
-                updateProgress(0.30, stage: "Sorty is analyzing \(analyzedNames.count) prepared images...")
+                clearMeasuredProgress(
+                    estimatedOverallProgress: 0.30,
+                    stage: "Sorty is analyzing \(analyzedNames.count) prepared images..."
+                )
             } else {
-                updateProgress(0.30, stage: "Continuing with file details...")
+                clearMeasuredProgress(
+                    estimatedOverallProgress: 0.30,
+                    stage: "Continuing with file details..."
+                )
             }
             DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(imageFiles.count), failed preprocess: \(failedCount))")
         } else if !imageFiles.isEmpty && visionEnabled && !modelSupportsVision {
@@ -2152,6 +2185,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         transition(to: .idle, force: true)
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
+        measuredWorkProgress = nil
         
         stopSteadyProgressTask()
     }
@@ -2192,6 +2226,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         transition(to: .error(error), force: true)
         errorMessage = displayMessage
+        measuredWorkProgress = nil
         
         // Show error notification
         NotificationManager.shared.showError(
@@ -2388,6 +2423,31 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         } else {
             self.progress = progress
+        }
+    }
+
+    @MainActor
+    private func updateMeasuredProgress(
+        completed: Int,
+        total: Int,
+        estimatedOverallProgress: Double,
+        stage: String
+    ) {
+        guard !isCancellationRequested else { return }
+        withBatchUpdates {
+            progress = estimatedOverallProgress
+            organizationStage = stage
+            measuredWorkProgress = MeasuredWorkProgress(completed: completed, total: total)
+        }
+    }
+
+    @MainActor
+    private func clearMeasuredProgress(estimatedOverallProgress: Double, stage: String) {
+        guard !isCancellationRequested else { return }
+        withBatchUpdates {
+            progress = estimatedOverallProgress
+            organizationStage = stage
+            measuredWorkProgress = nil
         }
     }
 
@@ -3720,6 +3780,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             scannedFileCount = 0
             scannedFiles = []
             detectedDuplicates = []
+            measuredWorkProgress = nil
             visionAnalysisSummary = nil
             isCancellationRequested = false
             userInitiatedAction = false

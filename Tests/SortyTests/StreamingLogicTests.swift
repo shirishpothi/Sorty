@@ -94,6 +94,12 @@ final class StreamingLogicTests: XCTestCase {
         
         XCTAssertLessThanOrEqual(organizer.progress, 0.82)
     }
+
+    func testMeasuredWorkProgressUsesConcreteCompletedCount() {
+        let progress = MeasuredWorkProgress(completed: 3, total: 12)
+
+        XCTAssertEqual(progress.percentage, 0.25)
+    }
     
     func testDidCompleteSetsStreamingFalse() async {
         organizer.didReceiveChunk("some content")
