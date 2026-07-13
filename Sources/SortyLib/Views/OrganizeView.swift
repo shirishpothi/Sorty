@@ -1041,6 +1041,7 @@ struct ReadyToOrganizeView: View {
                         }
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
+                        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .help("Add a folder that Sorty can organize with")
                         .accessibilityHint("Opens the folder picker to add an organization location")
 
