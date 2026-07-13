@@ -586,11 +586,6 @@ struct PromptBuilder {
         }
     }
     
-    // Legacy method for compatibility
-    static func buildAnalysisPrompt(files: [FileItem]) -> String {
-        return buildOrganizationPrompt(files: files, enableReasoning: false)
-    }
-    
     static func buildPromptForProvider(
         _ provider: AIProvider,
         files: [FileItem],

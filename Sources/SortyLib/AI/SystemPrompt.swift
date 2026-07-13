@@ -173,9 +173,6 @@ Before outputting, verify ALL of the following:
 """
     }
     
-    /// Legacy static prompt for backward compatibility
-    static let prompt = buildPrompt(maxTopLevelFolders: 10, mode: .organize, enableTagging: true)
-
     /// Returns streaming-friendly JSON ordering guidance for organization modes.
     private static func streamingOutputSection(for mode: OrganizationMode) -> String {
         guard mode != .renameOnly else { return "" }
