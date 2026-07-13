@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D713B0010000000000000001 /* ImproveInstructionsToolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D713A0010000000000000001 /* ImproveInstructionsToolTests.swift */; };
 		9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */; };
 		C836ED182D2842A2A579A019 /* LearningsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981E7344DFEC4943BA212BED /* LearningsView.swift */; };
 		85137445BF444F6A88D754C4 /* PersonaGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */; };
@@ -323,6 +324,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D713A0010000000000000001 /* ImproveInstructionsToolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImproveInstructionsToolTests.swift; sourceTree = "<group>"; };
 		AABBCC330000000000000001 /* Sorty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sorty.entitlements; sourceTree = "<group>"; };
 		D4A500100000000000000001 /* SortyWidgetSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/SortyWidgetSyncManager.swift; sourceTree = SOURCE_ROOT; };
 		D4A500100000000000000002 /* SortyShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/SortyShortcuts.swift; sourceTree = SOURCE_ROOT; };
@@ -1027,6 +1029,7 @@
 		2320034425A6F5C505152AE2 /* SortyTests */ = {
 			isa = PBXGroup;
 			children = (
+				D713A0010000000000000001 /* ImproveInstructionsToolTests.swift */,
 				EE1100010000000000000002 /* GoogleDriveIntegrationTests.swift */,
 				94E640E9F5531D468E67A0EC /* AIInsightExtractorTests.swift */,
 				B41C3F34679E0B27BE6BD9DD /* AppStateTests.swift */,
@@ -1276,6 +1279,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D713B0010000000000000001 /* ImproveInstructionsToolTests.swift in Sources */,
 				EE2200020000000000000002 /* GoogleDriveIntegrationTests.swift in Sources */,
 				59558C17C04E18C2E143EEDA /* AIInsightExtractorTests.swift in Sources */,
 				232608AB5B682D35BDDCAA8D /* AppStateTests.swift in Sources */,

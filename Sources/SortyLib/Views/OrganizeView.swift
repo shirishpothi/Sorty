@@ -706,6 +706,8 @@ struct ReadyToOrganizeView: View {
     @State private var showSavePromptDialog = false
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
+    @State private var showImprovePromptRequest = false
+    @State private var improvePromptRequestMessage = ""
     @State private var showSavedPromptsSheet = false
     @State private var showStorageLocationsInfo = false
     @State private var referenceableFiles: [InstructionFileReference] = []
@@ -1253,6 +1255,15 @@ struct ReadyToOrganizeView: View {
                     .disabled(isImprovingPrompt)
                     .help("Improve instructions with Sorty")
                     .accessibilityHint("Rewrites your prompt to be clearer and more specific")
+                    .popover(isPresented: $showImprovePromptRequest) {
+                        ImproveInstructionsRequestPopover(
+                            message: improvePromptRequestMessage,
+                            onDismiss: {
+                                showImprovePromptRequest = false
+                                isTextFieldFocused = true
+                            }
+                        )
+                    }
                 }
 
                 // Save prompt button
@@ -1368,14 +1379,21 @@ struct ReadyToOrganizeView: View {
 
         do {
             let client = try AIClientFactory.createClient(config: settingsViewModel.config)
-            let improved = try await client.generateText(
-                prompt: "Improve the following file \(mode.gerund) instructions to be clearer, more specific, and more actionable. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
-                systemPrompt: "You are a file workflow expert. You help users write better instructions for \(mode.gerund) files. Be concise and practical."
+            let outcome = try await ImproveInstructionsTool.run(
+                client: client,
+                originalInstructions: original,
+                workflow: mode.gerund
             )
-            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                organizer.customInstructions = trimmed
+
+            switch outcome {
+            case .replacement(let improved):
+                organizer.customInstructions = improved
+                showImprovePromptRequest = false
                 HapticFeedbackManager.shared.success()
+            case .needsUserInput(let message):
+                improvePromptRequestMessage = message
+                showImprovePromptRequest = true
+                HapticFeedbackManager.shared.selection()
             }
         } catch {
             HapticFeedbackManager.shared.error()
