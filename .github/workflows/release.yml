@@ -152,14 +152,18 @@ jobs:
           swift build --disable-sandbox -j "$CORES"
           swift test --disable-sandbox --list-tests | tee release_test_inventory.log
           # Release tests run serially because Trash and Keychain are process-global macOS services.
-          swift test --disable-sandbox --no-parallel --skip-build 2>&1 | tail -100
+          swift test --disable-sandbox --no-parallel --skip-build 2>&1 \
+            | tee release_test.log \
+            | tail -100
 
       - name: Upload release test inventory
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: release-test-inventory
-          path: release_test_inventory.log
+          path: |
+            release_test_inventory.log
+            release_test.log
           retention-days: 7
           if-no-files-found: ignore
 

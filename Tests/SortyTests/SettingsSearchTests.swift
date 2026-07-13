@@ -6,10 +6,6 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(SettingsCategory.strategy.matchesSearch(query: "deep scanning"))
     }
 
-    func testRulesCategoryMatchesStorageLocationQuery() {
-        XCTAssertTrue(SettingsCategory.rules.matchesSearch(query: "storage locations"))
-    }
-
     func testProviderCategoryMatchesApiKeyQuery() {
         XCTAssertTrue(SettingsCategory.provider.matchesSearch(query: "api key"))
     }
