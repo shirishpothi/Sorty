@@ -240,8 +240,8 @@ export function DownloadButton({
                   id={descriptionId}
                   className="mt-1 max-w-[36ch] text-sm leading-snug text-muted-foreground"
                 >
-                  Move Sorty.app to Applications after the zip opens, then run
-                  this Terminal command if macOS blocks the app.
+                  Open Sorty.zip, move Sorty.app to Applications, then run this
+                  Terminal command if macOS blocks the app.
                 </p>
               </div>
 
@@ -332,8 +332,9 @@ export function DownloadButton({
 
             <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                The command only removes the quarantine flag from the app you
-                placed in Applications.
+                Paste it into Terminal, press Return, enter your Mac password
+                (typing stays hidden), then open Sorty from Applications. It
+                only changes extended attributes on that Sorty.app copy.
               </p>
               <button
                 type="button"

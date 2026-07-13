@@ -50,9 +50,9 @@ const RELEASES = [
     version: 'Sorty 1.2.0',
     status: 'Latest release',
     date: 'July 11, 2026',
-    title: 'A faster, cleaner, more reliable Sorty',
+    title: 'Safer organization, honest progress, and a smoother install',
     summary:
-      'A rebuilt macOS experience with smarter Finder integration, smoother organization, stronger privacy controls, and a polished new design system.',
+      'The refreshed 1.2.0 build adds cloud and external storage, AI clarification, richer generation stats, measured progress, stronger Finder integration, and a reliable path from download or Sorty 1.1.2 to a working app.',
     image: '/sorty-1.2.0-changelog.png',
     imageAlt:
       'Sorty 1.2.0 promotional image showing the rebuilt macOS welcome screen and faster, cleaner, more reliable Sorty headline.',
@@ -60,17 +60,17 @@ const RELEASES = [
       {
         icon: Sparkles,
         title: 'New',
-        body: 'Cloud and external-storage organization, Finder integration diagnostics, sensitive-action protection, and privacy-safe path displays.',
+        body: 'Cloud and external-storage organization, AI clarification before Improve, expanded copyable generation stats, Finder diagnostics, sensitive-action protection, and privacy-safe paths.',
       },
       {
         icon: FolderGit2,
         title: 'Improved',
-        body: 'A more focused organization experience with stronger cloud reliability, smarter decisions, passive learnings, and refined native Mac design.',
+        body: 'Measured image-analysis progress, clearer live file movement, stronger OpenRouter and cloud reliability, refined storage controls, lower background rendering cost, and a smaller universal download.',
       },
       {
         icon: ShieldCheck,
         title: 'Fixed',
-        body: 'Fresh-download setup, Finder extension recovery, cross-volume storage safety, history portability, and macOS lifecycle stability.',
+        body: 'Fresh-download installation and launch, in-app updates from 1.1.2, Finder extension and volume actions, image-analysis feedback, cross-volume storage safety, and main-window recovery.',
       },
     ],
   },
