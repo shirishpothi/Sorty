@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct WhatsNewTourView: View {
     private let onFinish: () -> Void
-    private let imageTransitionAnimation = Animation.easeInOut(duration: 0.72)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
 
@@ -22,15 +22,22 @@ public struct WhatsNewTourView: View {
         .padding(.vertical, 16)
         .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
-        .animation(.easeOut(duration: 0.18), value: currentPage)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: currentPage)
         .onReceive(
             Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
         ) { _ in
-            guard page.imageNames.count > 1 else { return }
+            guard !reduceMotion, page.imageNames.count > 1 else { return }
             withAnimation(imageTransitionAnimation) {
                 workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
             }
         }
+        .onChange(of: currentPage) { _, _ in
+            workflowImageIndex = 0
+        }
+    }
+
+    private var imageTransitionAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.72)
     }
 
     private var page: WhatsNewPage {
@@ -67,8 +74,10 @@ public struct WhatsNewTourView: View {
     }
 
     private func tourPage(_ page: WhatsNewPage) -> some View {
-        VStack(spacing: 0) {
-            if currentPage == pages.count - 1 {
+        let isReleaseSummary = currentPage == pages.count - 1
+
+        return VStack(spacing: 0) {
+            if isReleaseSummary {
                 releaseSummary
             } else {
                 imageSection(page)
@@ -77,27 +86,31 @@ public struct WhatsNewTourView: View {
             VStack(spacing: 6) {
                 pageIndicator
 
-                Text(page.title)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !isReleaseSummary {
+                    Text(page.title)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
 
-                Text(page.description)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.70))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 28)
+                    Text(page.description)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.70))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 28)
+                }
 
                 actionButton
-                    .padding(.top, 12)
+                    .padding(.top, isReleaseSummary ? 8 : 12)
             }
-            .padding(.top, 8)
-            .padding(.bottom, 18)
+            .frame(maxHeight: .infinity)
+            .padding(.top, isReleaseSummary ? 12 : 8)
+            .padding(.bottom, 16)
         }
-        .frame(width: 640)
+        .frame(width: 640, height: 576, alignment: .top)
         .background(Color(white: 0.10))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
@@ -107,18 +120,33 @@ public struct WhatsNewTourView: View {
     }
 
     private var releaseSummary: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Sorty 1.2.0")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("WHAT'S NEW")
+                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .tracking(1.5)
+                        .foregroundStyle(Color.cyan.opacity(0.88))
+
+                    Text("Sorty 1.2.0")
+                        .font(.system(.title, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white)
+                        .accessibilityAddTraits(.isHeader)
+
+                    Text("A focused update for safer organization, clearer controls, and more reliable storage workflows.")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Spacer()
+
                 topControls
-                    .padding(0)
+                    .frame(width: 96)
             }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+            ScrollView(.vertical) {
+                HStack(alignment: .top, spacing: 12) {
                     releaseSection(
                         title: "New",
                         symbol: "sparkles",
@@ -156,34 +184,69 @@ public struct WhatsNewTourView: View {
                         ]
                     )
                 }
-                .padding(.trailing, 12)
             }
+            .scrollIndicators(.automatic)
         }
-        .padding(28)
-        .frame(width: 640, height: 400, alignment: .topLeading)
-        .background(Color(white: 0.10))
+        .padding(24)
+        .frame(width: 640, height: 448, alignment: .topLeading)
+        .background {
+            LinearGradient(
+                colors: [
+                    Color.cyan.opacity(0.08),
+                    Color(white: 0.10),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
 
-    private func releaseSection(title: String, symbol: String, color: Color, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: symbol)
-                .font(.headline)
-                .foregroundStyle(color)
+    private func releaseSection(
+        title: String,
+        symbol: String,
+        color: Color,
+        items: [String]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(.caption, design: .default, weight: .semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 28, height: 28)
+                    .background(color.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
 
-            ForEach(items, id: \.self) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 9) {
-                    Circle()
-                        .fill(Color.white.opacity(0.48))
-                        .frame(width: 4, height: 4)
-                        .accessibilityHidden(true)
-                    Text(item)
-                        .font(.callout)
-                        .foregroundStyle(Color.white.opacity(0.82))
-                        .fixedSize(horizontal: false, vertical: true)
+                Text(title)
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(items, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.system(.caption2, design: .default, weight: .bold))
+                            .foregroundStyle(color.opacity(0.86))
+                            .frame(width: 12, height: 16)
+                            .accessibilityHidden(true)
+
+                        Text(item)
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 284, alignment: .topLeading)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(color.opacity(0.18), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private func imageSection(_ page: WhatsNewPage) -> some View {
@@ -215,6 +278,7 @@ public struct WhatsNewTourView: View {
             .allowsHitTesting(false)
 
             topControls
+                .padding(12)
         }
         .frame(width: 640, height: 400)
         .animation(imageTransitionAnimation, value: workflowImageIndex)
@@ -355,32 +419,39 @@ public struct WhatsNewTourView: View {
         HStack {
             Button {
                 guard currentPage > 0 else { return }
+                HapticFeedbackManager.shared.selection()
                 currentPage -= 1
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white.opacity(0.14)))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .opacity(currentPage == 0 ? 0 : 1)
             .disabled(currentPage == 0)
+            .accessibilityLabel("Previous What's New page")
 
             Spacer()
 
-            Button(action: onFinish) {
+            Button {
+                HapticFeedbackManager.shared.light()
+                onFinish()
+            } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white.opacity(0.14)))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close What's New")
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
     }
 
     private var pageIndicator: some View {
@@ -399,17 +470,20 @@ public struct WhatsNewTourView: View {
     private var actionButton: some View {
         Button {
             if currentPage == pages.count - 1 {
+                HapticFeedbackManager.shared.success()
                 onFinish()
             } else {
+                HapticFeedbackManager.shared.selection()
                 currentPage += 1
             }
         } label: {
             Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
-                .frame(width: 200, height: 40)
+                .frame(width: 200, height: 44)
                 .background(Color.accentColor)
                 .clipShape(Capsule(style: .continuous))
+                .onboardingBeamBorder(variant: .featured, active: currentPage == pages.count - 1)
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.defaultAction)
