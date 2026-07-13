@@ -1628,8 +1628,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let totalImageCount = imageFiles.count
             let isLimitedSelection = shouldLimitVisionImages && selectedBatch.count < imageFiles.count
             let initialPreparationStage = isLimitedSelection
-                ? "Sorty is preparing images (0/\(selectedImageURLs.count) selected from \(totalImageCount))"
-                : "Sorty is preparing your images (0/\(selectedImageURLs.count))"
+                ? "Sorty is analyzing 0 of \(selectedImageURLs.count) selected images..."
+                : "Sorty is analyzing 0 images..."
             updateMeasuredProgress(
                 completed: 0,
                 total: selectedImageURLs.count,
@@ -1641,8 +1641,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 guard let self else { return }
                 let phaseProgress = 0.22 + (Double(completed) / Double(max(total, 1))) * 0.08
                 let stage = isLimitedSelection
-                    ? "Sorty is preparing images (\(completed)/\(total) selected from \(totalImageCount))"
-                    : "Sorty is preparing your images (\(completed)/\(total))"
+                    ? "Sorty is analyzing \(completed) of \(total) selected images..."
+                    : "Sorty is analyzing \(completed) \(completed == 1 ? "image" : "images")..."
                 await self.updateMeasuredProgress(
                     completed: completed,
                     total: total,

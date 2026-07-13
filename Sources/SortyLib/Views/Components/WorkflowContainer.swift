@@ -349,20 +349,10 @@ private struct EmptyStateIconSweep: ViewModifier, Animatable {
         // ends, so the highlight eases in and out smoothly rather than snapping.
         let envelope = sin(sweep * .pi)
         let glow = reduceMotion ? 0 : envelope * envelope
-        let overlayOpacity = reduceMotion ? 0.55 : Double(glow)
+        let overlayOpacity = Double(glow)
 
         return
             content
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.72),
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.78),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
             .overlay {
                 LinearGradient(
                     stops: [
@@ -391,16 +381,16 @@ private struct EmptyStateIconSweep: ViewModifier, Animatable {
                 .opacity(overlayOpacity)
                 .shadow(
                     color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                        reduceMotion ? 0.3 : 0.48 + glow * 0.32
+                        glow * 0.8
                     ),
-                    radius: reduceMotion ? 5 : 6 + glow * 7
+                    radius: glow * 13
                 )
             }
             .shadow(
                 color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                    reduceMotion ? 0.24 : 0.22 + glow * 0.3
+                    glow * 0.52
                 ),
-                radius: reduceMotion ? 5 : 5 + glow * 6
+                radius: glow * 11
             )
     }
 }
