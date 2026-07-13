@@ -2146,7 +2146,7 @@ struct HistoryDetailSheet: View {
                     // Raw AI Response (Stats for Nerds)
                     if settingsViewModel.config.showStatsForNerds,
                        let raw = currentEntry.rawAIResponse,
-                       !raw.isEmpty {
+                       !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         rawAIResponseSection(raw)
                     }
                     }

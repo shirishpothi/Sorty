@@ -55,6 +55,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
+        configureStructuredOrganizationOutput(in: &requestBody)
         
         // Use streaming if enabled
         if config.enableStreaming {
@@ -118,6 +119,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
+        configureStructuredOrganizationOutput(in: &requestBody)
         
         // Multimodal usually doesn't work well with streaming in some implementations, 
         // but we'll follow the config if possible.
@@ -130,6 +132,18 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
     static func orderedImageFilenames(from imageData: [String: Data]) -> [String] {
         imageData.keys.sorted()
+    }
+
+    /// OpenRouter's free route can select reasoning models. Keep their internal
+    /// planning out of the response and reserve the completion for Sorty's plan.
+    private func configureStructuredOrganizationOutput(in requestBody: inout [String: Any]) {
+        guard config.provider == .openRouter else { return }
+
+        requestBody["response_format"] = ["type": "json_object"]
+        requestBody["reasoning"] = [
+            "effort": "none",
+            "exclude": true
+        ]
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
