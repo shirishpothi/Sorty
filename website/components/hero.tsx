@@ -77,7 +77,13 @@ export function Hero() {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-30 bg-cover bg-center bg-no-repeat opacity-90"
-          style={{ backgroundImage: `url(${sitePath('/hero-local-background.png')})` }}
+          style={{
+            backgroundImage: `url(${sitePath('/hero-local-background.png')})`,
+            maskImage:
+              'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
+          }}
         />
       )}
       {/* layered ambient gradient backdrop */}
