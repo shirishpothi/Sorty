@@ -10,26 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### New
 
 - **Cloud and External Storage Organization** — Organize supported Google Drive, external-drive, and cross-volume destinations with provider-aware actions, capacity checks, and atomic transfers.
-- **Finder Integration Diagnostics** — See whether the correct Finder extension is registered and active, with heartbeat monitoring and automatic repair for stale installations.
+- **AI Clarification Before Improve** — Let Sorty ask a focused follow-up question when an instruction needs more detail before it rewrites the prompt.
+- **Expanded Generation Stats** — Inspect model, provider, token, timing, throughput, retry, file, data-volume, and estimated-cost details, then copy the full summary when troubleshooting.
+- **Finder Integration Diagnostics** — See whether the correct Finder extension is registered and active, with heartbeat monitoring and recovery for stale installations.
 - **Sensitive Action Protection** — Optionally require authentication before revealing secrets, changing network privacy settings, or deleting usage data.
 - **Privacy-Safe Paths** — Usernames are masked in file paths shown on privacy-sensitive screens and logs.
 
 ### Improved
 
-- **Focused Organization Experience** — Streamlined the app around organization, duplicates, exclusions, watched folders, history, and passive learnings while removing the experimental Workspace Health and honing flows.
-- **Native Mac Design** — Refined onboarding, organization, duplicate, settings, and support surfaces with native Liquid Glass controls, calmer spacing, clearer hierarchy, and smoother motion.
-- **Smarter Organization Decisions** — Improved prompts, image analysis, retries, storage destination normalization, and preference attribution for more reliable plans.
-- **Cloud Reliability** — Moved storage discovery off the main actor and strengthened cloud scanning, reference folders, file watching, rollback behavior, and unavailable-file reporting.
+- **Focused Organization Experience** — Streamlined the app around organization, duplicates, exclusions, watched folders, history, and passive learnings, with clearer Organize Only, Organize & Rename, and Rename Only flows.
+- **Measured Progress and Live Movement** — Image analysis now reports completed work, indeterminate stages no longer show invented percentages, and file movement stays visually prominent while organization is running.
+- **Native Mac Design** — Refined onboarding, What’s New, organization, duplicates, storage locations, watched folders, settings, and support with native Liquid Glass controls, larger click targets, calmer spacing, and smoother motion.
+- **Smarter Organization Decisions** — Improved prompts, image analysis, retries, OpenRouter compatibility, storage destination normalization, and preference attribution for more reliable plans.
+- **Cloud and Finder Reliability** — Moved storage discovery off the main actor and strengthened cloud scanning, Finder actions, volume handling, reference folders, file watching, rollback behavior, and unavailable-file reporting.
 - **Learnings and History Portability** — Hardened profile transfer and history import/export while keeping learnings passive and easier to understand.
-- **In-App Updates** — Made updating to the latest version more reliable.
+- **Performance and Download Size** — Reduced background rendering and unbounded image-cache growth, and removed obsolete bundled resources from the universal download.
+- **Updates and Downloads** — Standardized the universal archive as `Sorty.zip`, added guided installation from fresh downloads, and strengthened the Sparkle bridge from 1.1.2 to 1.2.0.
 
 ### Fixed
 
-- **Fresh-Download Setup** — A first launch that stops before setup finishes no longer causes the next launch to skip onboarding; completed onboarding still persists across updates.
-- **Finder Extension Recovery** — Fixed stale, duplicate, or mismatched Finder registrations and background-agent label collisions after upgrades.
+- **Fresh-Download Installation and Launch** — Sorty can move itself into Applications, clear quarantine during that move, reopen the installed copy, and recover a visible main window instead of appearing to launch silently.
+- **In-App Update Safety** — Fixed live bundle-replacement crashes and hardened the packaged-release smoke test so updates from 1.1.2 install the refreshed 1.2.0 build through Sparkle.
+- **Finder Extension Recovery** — Fixed stale, duplicate, or mismatched Finder registrations, background-agent label collisions, right-click action routing, and unsupported-volume handling after upgrades.
 - **Storage Safety** — Fixed partial cross-volume moves, insufficient-capacity handling, cloud metadata failures, and unavailable storage destinations so operations fail safely.
-- **Organization and History Reliability** — Fixed rename prompt leakage, completion handoff flashes, history CSV typing, and import/export edge cases.
-- **Compatibility and Lifecycle Stability** — Fixed macOS 15 compile blockers, onboarding window lifecycle issues, and several performance and background-automation edge cases.
+- **Analysis and Generation Feedback** — Fixed image-analysis results and progress reporting, generation handoff flashes, movement-stage timing, and copyable statistics so the UI reflects work Sorty has actually completed.
+- **AI, Organization, and History Reliability** — Fixed malformed OpenRouter JSON handling, Improve-popover crashes, rename prompt leakage, history CSV typing, and import/export edge cases.
+- **Compatibility and Lifecycle Stability** — Fixed macOS 15 compile blockers, onboarding window layering and accessibility behavior, main-window restoration, and several background-automation edge cases.
 
 ## [1.1.2] - 2026-03-01
 

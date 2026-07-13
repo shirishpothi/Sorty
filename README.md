@@ -51,10 +51,11 @@ A native macOS SwiftUI application that helps organize directory contents into r
    ```bash
    sudo xattr -cr /Applications/Sorty.app
    ```
-4. Double-click to launch.
+   Paste the command into Terminal, press Return, and enter your Mac password. Terminal does not show the password while you type it.
+4. Open Sorty from `/Applications`.
 
 > [!NOTE]
-> The `xattr -cr` command removes macOS's quarantine flag that blocks unsigned apps. This is safe for apps you trust and have downloaded from a known source.
+> The command changes extended attributes only on the `Sorty.app` copy in `/Applications`, clearing the quarantine metadata that can block an unsigned app. Use it only for a copy downloaded from this repository.
 
 #### Option 2: Build from Source
 

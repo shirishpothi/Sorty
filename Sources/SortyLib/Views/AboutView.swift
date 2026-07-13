@@ -197,8 +197,8 @@ private struct AboutAppIconEasterEgg: View {
                     image: carousel.currentImage,
                     size: iconSize,
                     cornerRadius: 22,
-                    sweepDuration: 4.8,
-                    repeats: true
+                    startDelay: 0.25,
+                    sweepDuration: 2.2
                 )
                 .id(carousel.iconID)
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 4)

@@ -770,7 +770,7 @@ struct SortyEnergyScanIcon: View {
     let size: CGFloat
     let cornerRadius: CGFloat
     var startDelay: TimeInterval = 0.8
-    var sweepDuration: TimeInterval = 2.6
+    var sweepDuration: TimeInterval = 2.8
     var repeats = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -778,7 +778,7 @@ struct SortyEnergyScanIcon: View {
     @State private var sweepFinished = false
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || sweepFinished)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || sweepFinished)) { context in
             EnergyScanIconFrame(
                 image: image,
                 size: size,
@@ -825,20 +825,17 @@ private struct EnergyScanIconFrame: View {
     let reduceMotion: Bool
 
     private var scanProgress: CGFloat {
-        CGFloat(min(max((phase - 0.10) / 0.70, 0), 1))
+        let linearProgress = CGFloat(min(max((phase - 0.08) / 0.84, 0), 1))
+        return linearProgress * linearProgress * (3 - 2 * linearProgress)
     }
 
     private var scanCenter: CGFloat {
-        -0.18 + scanProgress * 1.36
+        -0.24 + scanProgress * 1.48
     }
 
     private var scanStrength: CGFloat {
-        guard !reduceMotion, phase >= 0.10, phase <= 0.80 else {
-            return reduceMotion ? 0.18 : 0
-        }
-
-        let edgeFade = min(scanProgress / 0.12, (1 - scanProgress) / 0.14, 1)
-        return max(edgeFade, 0)
+        guard !reduceMotion, phase >= 0.08, phase <= 0.92 else { return 0 }
+        return CGFloat(sin(Double(scanProgress) * .pi))
     }
 
     private var iconShape: RoundedRectangle {
@@ -858,63 +855,36 @@ private struct EnergyScanIconFrame: View {
             ZStack {
                 icon
 
-                icon
-                    .colorMultiply(.white)
-                    .overlay {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: max(scanCenter - 0.28, 0)),
-                                .init(color: Color(red: 0.94, green: 0.10, blue: 1.00).opacity(0.92), location: max(scanCenter - 0.12, 0)),
-                                .init(color: Color(red: 1.00, green: 0.12, blue: 0.36), location: min(max(scanCenter, 0), 1)),
-                                .init(color: Color(red: 1.00, green: 0.38, blue: 0.12).opacity(0.88), location: min(scanCenter + 0.16, 1)),
-                                .init(color: .clear, location: min(scanCenter + 0.34, 1))
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        .blendMode(.plusLighter)
-                    }
-                    .mask(icon)
-                    .opacity(scanStrength)
-                    .blur(radius: 1.6)
-
-                icon
-                    .scaleEffect(
-                        x: 1 + scanStrength * 0.11,
-                        y: 1 - scanStrength * 0.10,
-                        anchor: UnitPoint(x: 0.5, y: min(max(scanCenter, 0), 1))
+                ZStack {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: Color(red: 0.84, green: 0.18, blue: 1.00).opacity(0.36), location: 0.20),
+                            .init(color: Color.white.opacity(0.90), location: 0.48),
+                            .init(color: Color(red: 1.00, green: 0.16, blue: 0.42).opacity(0.82), location: 0.60),
+                            .init(color: Color(red: 1.00, green: 0.48, blue: 0.14).opacity(0.32), location: 0.78),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .offset(y: scanStrength * (scanCenter - 0.5) * 14)
-                    .blur(radius: 5 + scanStrength * 4)
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: max(scanCenter - 0.22, 0)),
-                                .init(color: .white, location: max(scanCenter - 0.08, 0)),
-                                .init(color: .white, location: min(scanCenter + 0.16, 1)),
-                                .init(color: .clear, location: min(scanCenter + 0.34, 1))
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                    .opacity(scanStrength * 0.72)
+                    .frame(width: size * 1.7, height: size * 0.42)
+                    .rotationEffect(.degrees(-11))
+                    .offset(y: (scanCenter - 0.5) * size)
+                    .blur(radius: max(0.6, size * 0.006))
 
-                LinearGradient(
-                    colors: [
-                        .clear,
-                        Color(red: 0.98, green: 0.08, blue: 0.98),
-                        Color(red: 1.00, green: 0.10, blue: 0.30),
-                        Color(red: 1.00, green: 0.36, blue: 0.10),
-                        .clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: max(8, size * 0.055))
-                .blur(radius: size * 0.035)
-                .offset(y: (scanCenter - 0.5) * size)
-                .opacity(scanStrength)
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.86))
+                        .frame(width: size * 1.45, height: max(1.5, size * 0.012))
+                        .rotationEffect(.degrees(-11))
+                        .offset(y: (scanCenter - 0.5) * size)
+                        .blur(radius: max(0.5, size * 0.004))
+                        .opacity(0.72)
+                }
+                .frame(width: size, height: size)
+                .mask(icon)
+                .blendMode(.plusLighter)
+                .opacity(scanStrength * 0.88)
             }
             .clipShape(iconShape)
 
@@ -932,7 +902,7 @@ private struct EnergyScanIconFrame: View {
                     ),
                     lineWidth: max(1, size * 0.012)
                 )
-                .opacity(max(scanStrength * 0.9, reduceMotion ? 0.28 : 0.08))
+                .opacity(max(scanStrength * 0.48, 0.08))
         }
         .frame(width: size, height: size)
         .compositingGroup()
@@ -1053,7 +1023,7 @@ private struct OnboardingScreenEdgeGlow: View {
             let phase = context.date.timeIntervalSinceReferenceDate
                 .truncatingRemainder(dividingBy: 5.6) / 5.6
             let pulse = reduceMotion ? 0.35 : (1 - cos(phase * 2 * .pi)) / 2
-            let strength = 0.38 + pulse * 0.34
+            let strength = 0.30 + pulse * 0.26
 
             ZStack {
                 edgeGradient(startPoint: .top, endPoint: .bottom, strength: strength)
@@ -1062,7 +1032,7 @@ private struct OnboardingScreenEdgeGlow: View {
                 edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
             }
             .compositingGroup()
-            .blur(radius: 18 + pulse * 8)
+            .blur(radius: 14 + pulse * 6)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -1146,6 +1116,13 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             let center = NotificationCenter.default
             observers = [
                 center.addObserver(
+                    forName: NSWindow.didBecomeKeyNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
                     forName: NSWindow.didMoveNotification,
                     object: window,
                     queue: .main
@@ -1190,6 +1167,9 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             ]
 
             updatePanelFrame()
+            DispatchQueue.main.async { [weak self] in
+                self?.updatePanelFrame()
+            }
         }
 
         func dismiss() {
@@ -1229,7 +1209,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             ]
 
             let backdrop = NSVisualEffectView()
-            backdrop.material = .fullScreenUI
+            backdrop.material = .underWindowBackground
             backdrop.blendingMode = .behindWindow
             backdrop.state = .active
             panel.contentView = backdrop
@@ -1279,12 +1259,15 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
         private func fadeInPanelIfNeeded() {
             guard let backdropPanel, backdropPanel.alphaValue == 0 else { return }
+            guard !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency else {
+                return
+            }
             let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.9
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                backdropPanel.animator().alphaValue = 0.86
+                backdropPanel.animator().alphaValue = 0.52
             }
         }
 
@@ -1358,6 +1341,13 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             let center = NotificationCenter.default
             observers = [
                 center.addObserver(
+                    forName: NSWindow.didBecomeKeyNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.showPanelIfPossible() }
+                },
+                center.addObserver(
                     forName: NSWindow.didMoveNotification,
                     object: window,
                     queue: .main
@@ -1395,6 +1385,9 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             ]
 
             showPanelIfPossible()
+            DispatchQueue.main.async { [weak self] in
+                self?.showPanelIfPossible()
+            }
         }
 
         func dismiss() {
@@ -1425,7 +1418,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             panel.ignoresMouseEvents = true
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
-            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            panel.level = .normal
             panel.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
@@ -1454,7 +1447,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
             updatePanelFrame()
             glowPanel?.alphaValue = 1
-            glowPanel?.orderFrontRegardless()
+            glowPanel?.order(.below, relativeTo: window.windowNumber)
         }
 
         private func dismissPanel(immediately: Bool = false) {
@@ -1663,6 +1656,11 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 window.setContentSize(targetSize)
             }
             window.center()
+            if let screen = window.screen ?? NSScreen.main {
+                let centeredOrigin = window.frame.origin
+                let loweredY = max(screen.visibleFrame.minY + 24, centeredOrigin.y - 32)
+                window.setFrameOrigin(NSPoint(x: centeredOrigin.x, y: loweredY))
+            }
 
             // Start fully transparent and slowly fade the whole window in so the
             // onboarding materializes rather than popping into existence.

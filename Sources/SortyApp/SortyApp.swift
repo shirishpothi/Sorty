@@ -5,6 +5,7 @@
 //  Created on macOS
 //
 
+import Darwin
 import SwiftUI
 
 #if canImport(SortyLib)
@@ -18,7 +19,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationWillFinishLaunching(_ notification: Notification) {
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
     }
 
@@ -234,33 +235,87 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 private enum ApplicationMover {
     private static let applicationsPath = "/Applications"
 
-    static func offerToMoveToApplicationsIfNeeded() {
+    static let shouldLaunchMainUI: Bool = {
         #if DEBUG
-        return
+        true
         #else
-        let sourceURL = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        guard !sourceURL.path.hasPrefix(applicationsPath + "/") else { return }
+        isInApplicationsFolder(originalBundleURL())
+        #endif
+    }()
+
+    static func offerToMoveToApplicationsIfNeeded() {
+        guard !shouldLaunchMainUI else { return }
+
+        // Resolve Gatekeeper app translocation first: a quarantined copy in
+        // /Applications launches from a randomized /private/var/.../AppTranslocation
+        // path, which used to make this check fail (and re-prompt) forever.
+        let sourceURL = originalBundleURL()
 
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Move Sorty to Applications?"
-        alert.informativeText = "Sorty works best from the Applications folder. Move it there now and reopen it?"
+        alert.messageText = "Move Sorty to Applications"
+        alert.informativeText =
+            "Sorty needs to run from the Applications folder. Move it now, then Sorty will reopen automatically."
         alert.addButton(withTitle: "Move to Applications")
-        alert.addButton(withTitle: "Not Now")
+        alert.addButton(withTitle: "Quit")
 
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            quitImmediately()
+            return
+        }
         moveAndRelaunch(from: sourceURL)
-        #endif
+    }
+
+    private static func isInApplicationsFolder(_ url: URL) -> Bool {
+        let path = url.path
+        if path.hasPrefix(applicationsPath + "/") { return true }
+        let userApplicationsPath = FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications", isDirectory: true)
+            .path
+        return path.hasPrefix(userApplicationsPath + "/")
+    }
+
+    /// Returns the app's real on-disk location, resolving Gatekeeper app
+    /// translocation back to the original path when necessary.
+    private static func originalBundleURL() -> URL {
+        let bundleURL = Bundle.main.bundleURL.resolvingSymlinksInPath()
+        guard bundleURL.path.contains("/AppTranslocation/") else { return bundleURL }
+
+        guard
+            let handle = dlopen(
+                "/System/Library/Frameworks/Security.framework/Security",
+                RTLD_LAZY
+            )
+        else {
+            return bundleURL
+        }
+        defer { dlclose(handle) }
+
+        typealias CreateOriginalPath = @convention(c) (
+            CFURL,
+            UnsafeMutablePointer<Unmanaged<CFError>?>?
+        ) -> Unmanaged<CFURL>?
+        guard let symbol = dlsym(handle, "SecTranslocateCreateOriginalPathForURL") else {
+            return bundleURL
+        }
+        let createOriginalPath = unsafeBitCast(symbol, to: CreateOriginalPath.self)
+        guard let original = createOriginalPath(bundleURL as CFURL, nil)?.takeRetainedValue() else {
+            return bundleURL
+        }
+        return (original as URL).resolvingSymlinksInPath()
     }
 
     private static func moveAndRelaunch(from sourceURL: URL) {
         let destinationURL = URL(fileURLWithPath: applicationsPath, isDirectory: true)
             .appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+        // Copy, then strip quarantine so the new copy launches without
+        // Gatekeeper translocation (which would re-trigger this prompt).
         let script = """
         set sourcePath to \(appleScriptString(sourceURL.path))
         set destinationPath to \(appleScriptString(destinationURL.path))
-        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/cp -R " & quoted form of sourcePath & " " & quoted form of destinationPath with administrator privileges
-        do shell script "/usr/bin/open " & quoted form of destinationPath
+        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/cp -R " & quoted form of sourcePath & " " & quoted form of destinationPath & " && (/usr/bin/xattr -dr com.apple.quarantine " & quoted form of destinationPath & " || /usr/bin/true)" with administrator privileges
         """
 
         var error: NSDictionary?
@@ -271,9 +326,31 @@ private enum ApplicationMover {
             alert.informativeText = error?[NSAppleScript.errorMessage] as? String
                 ?? "Move Sorty to Applications in Finder, then reopen it."
             alert.runModal()
+            quitImmediately()
             return
         }
 
+        relaunch(at: destinationURL)
+        quitImmediately()
+    }
+
+    /// Waits for this instance to exit, then opens the moved copy. Opening
+    /// while the old instance is still running would just re-activate it.
+    private static func relaunch(at destinationURL: URL) {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let quotedPath =
+            "'" + destinationURL.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = [
+            "-c",
+            "while /bin/kill -0 \(pid) 2>/dev/null; do /bin/sleep 0.1; done; "
+                + "/usr/bin/open \(quotedPath)",
+        ]
+        try? process.run()
+    }
+
+    private static func quitImmediately() {
         SortyAppDelegate.forceQuit = true
         NSApplication.shared.terminate(nil)
     }
@@ -345,14 +422,18 @@ struct SortyApp: App {
     @SceneBuilder
     var body: some Scene {
         WindowGroup("Sorty", id: "main") {
-            mainWindowContent(launchRequest: .constant(nil))
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: .constant(nil))
+            }
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
         .defaultLaunchBehavior(.presented)
 
         WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
-            mainWindowContent(launchRequest: launchRequest)
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: launchRequest)
+            }
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
@@ -362,7 +443,10 @@ struct SortyApp: App {
 
         MenuBarExtra(
             isInserted: Binding(
-                get: { showMenuBarExtra || keepInBackground },
+                get: {
+                    ApplicationMover.shouldLaunchMainUI
+                        && (showMenuBarExtra || keepInBackground)
+                },
                 set: { showMenuBarExtra = $0 }
             )
         ) {
