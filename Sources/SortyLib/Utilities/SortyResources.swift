@@ -493,7 +493,6 @@ public enum SortyResources {
             candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Images/SortyMascotHead.png"))
         }
 
-        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/Sorty Mascot Head.png"))
         candidates.append(cwd.appendingPathComponent("Assets/AppIcon/SortyMascotHead.png"))
 
         return uniqueURLs(candidates)
