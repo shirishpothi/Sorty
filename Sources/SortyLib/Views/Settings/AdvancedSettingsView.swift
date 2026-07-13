@@ -99,7 +99,7 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.showStatsForNerds,
                         title: "Stats for Nerds",
-                        description: "Show detailed generation metrics"
+                        description: "Show live AI metrics — tokens, throughput, timing, and cost — in preview, results, and history"
                     )
                     
                     Divider()

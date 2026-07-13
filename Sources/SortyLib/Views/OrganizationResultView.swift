@@ -230,6 +230,7 @@ public struct NerdStatPill: View {
             Text(value)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.primary)
+                .contentTransition(.numericText())
             
             if let unit = unit {
                 Text(unit)
@@ -277,8 +278,10 @@ public struct NerdStatPillExpanded: View {
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text(value)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .contentTransition(.numericText())
                     
                     if let unit = unit {
                         Text(unit)

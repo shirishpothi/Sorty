@@ -5,6 +5,7 @@
 //  Stats display component with "Stats for Nerds" collapsible section
 //
 
+import AppKit
 import SwiftUI
 
 struct PreviewStatsView: View {
@@ -15,13 +16,15 @@ struct PreviewStatsView: View {
     let totalFiles: Int
     let stage: String
     
-    @State private var isExpanded = false
+    @AppStorage("statsForNerdsExpanded") private var isExpanded = false
+    @State private var isHovering = false
     
     var body: some View {
         VStack(spacing: 0) {
             if let stats = stats, showStatsForNerds {
                 // Collapsible stats row
                 Button {
+                    HapticFeedbackManager.shared.selection()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isExpanded.toggle()
                     }
@@ -51,6 +54,10 @@ struct PreviewStatsView: View {
 
                             NerdStatPill(icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
 
+                            if stats.tps > 0 {
+                                NerdStatPill(icon: "bolt.fill", value: String(format: "%.0f", stats.tps), unit: "tok/s", color: .orange)
+                            }
+
                             if stats.hasBillableCost {
                                 NerdStatPill(icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
                             }
@@ -73,9 +80,22 @@ struct PreviewStatsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                    )
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isHovering = hovering
+                    }
+                }
+                .help(isExpanded ? "Collapse detailed generation metrics" : "Expand for detailed generation metrics")
                 .accessibilityLabel("Stats for nerds. \(isExpanded ? "Collapse" : "Expand") for details")
+                .accessibilityIdentifier("statsForNerdsToggle")
                 
                 // Expanded detailed stats
                 if isExpanded {
@@ -100,7 +120,38 @@ struct PreviewStatsView: View {
                 .padding(.vertical, 8)
             }
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .contextMenu {
+            if let stats = stats {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(statsSummaryText(stats), forType: .string)
+                    HapticFeedbackManager.shared.success()
+                } label: {
+                    Label("Copy Stats", systemImage: "doc.on.clipboard")
+                }
+            }
+        }
+    }
+
+    private func statsSummaryText(_ stats: GenerationStats) -> String {
+        var lines: [String] = []
+        lines.append("Model: \(stats.model)")
+        if let provider = stats.provider { lines.append("Provider: \(provider)") }
+        lines.append("AI time: \(GenerationStats.formatDuration(stats.duration))")
+        lines.append("TTFT: \(GenerationStats.formatDuration(stats.ttft))")
+        lines.append("Throughput: \(String(format: "%.1f", stats.tps)) tok/s")
+        if let promptTokens = stats.promptTokens { lines.append("Prompt tokens: \(GenerationStats.formatCount(promptTokens))") }
+        lines.append("Response tokens: \(GenerationStats.formatCount(stats.responseTokens))")
+        if let totalContextTokens = stats.totalContextTokens { lines.append("Total context: \(GenerationStats.formatCount(totalContextTokens))") }
+        if let filesScanned = stats.filesScanned { lines.append("Files reviewed: \(GenerationStats.formatCount(filesScanned))") }
+        if let size = stats.formattedTotalFileSize { lines.append("Data volume: \(size)") }
+        if let scanDuration = stats.scanDuration { lines.append("Scan duration: \(GenerationStats.formatDuration(scanDuration))") }
+        if let retryCount = stats.retryCount, retryCount > 0 { lines.append("Retries: \(retryCount)") }
+        if stats.hasBillableCost { lines.append("Estimated cost: \(GenerationStats.formatCost(stats.computedCost))") }
+        return lines.joined(separator: "\n")
     }
     
     private func detailedStatsView(stats: GenerationStats) -> some View {
@@ -209,6 +260,26 @@ struct PreviewStatsView: View {
                     title: "Duplicates",
                     value: GenerationStats.formatCount(duplicatesFound),
                     unit: "files"
+                )
+            }
+
+            if let retryCount = stats.retryCount, retryCount > 0 {
+                NerdStatPillExpanded(
+                    icon: "arrow.clockwise",
+                    color: .orange,
+                    title: "Retries",
+                    value: GenerationStats.formatCount(retryCount),
+                    unit: nil
+                )
+            }
+
+            if stats.estimatedTimeSaved > 0 {
+                NerdStatPillExpanded(
+                    icon: "sparkles",
+                    color: .yellow,
+                    title: "Est. Time Saved",
+                    value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
+                    unit: nil
                 )
             }
 
