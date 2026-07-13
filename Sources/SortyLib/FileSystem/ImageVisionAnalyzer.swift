@@ -91,7 +91,7 @@ public final class ImageVisionAnalyzer: Sendable {
         let uniqueURLs = Array(Set(urls))
         let total = uniqueURLs.count
 
-        await withTaskGroup(of: (URL, Data?).self) { group in
+        return await withTaskGroup(of: (URL, Data?).self) { group in
             var iterator = uniqueURLs.makeIterator()
             for _ in 0..<min(maxConcurrentPreparations, total) {
                 guard let url = iterator.next() else { break }
