@@ -765,7 +765,7 @@ struct ReadyToOrganizeView: View {
     }
 
     var body: some View {
-        WorkflowContainer(currentStep: .configure, allowsScrolling: false) {
+        WorkflowContainer(currentStep: .configure) {
             // Compact header
             VStack(spacing: 16) {
                 iconSection
@@ -1037,18 +1037,14 @@ struct ReadyToOrganizeView: View {
                         .foregroundStyle(.secondary)
                     
                     if !storageLocationsManager.locations.isEmpty {
-                        ScrollView {
-                            VStack(spacing: 6) {
-                                ForEach(storageLocationsManager.locations) { location in
-                                    CompactStorageLocationRow(location: location)
-                                        .transition(storageLocationRowTransition)
-                                }
+                        LazyVStack(spacing: 6) {
+                            ForEach(storageLocationsManager.locations) { location in
+                                CompactStorageLocationRow(location: location)
+                                    .transition(storageLocationRowTransition)
                             }
-                            .frame(maxWidth: .infinity)
-                            .animation(storageLocationInsertionAnimation, value: storageLocationListIDs)
                         }
-                        .frame(maxHeight: 200)
-                        .scrollBounceBehavior(.basedOnSize)
+                        .frame(maxWidth: .infinity)
+                        .animation(storageLocationInsertionAnimation, value: storageLocationListIDs)
                     }
                     
                     HStack(alignment: .center, spacing: 14) {
