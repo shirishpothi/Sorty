@@ -65,6 +65,7 @@ public struct SortyStandardButtonStyle: ButtonStyle {
             .foregroundStyle(foregroundStyle(intent: resolvedIntent, accent: accent))
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
+            .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .background {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(backgroundStyle(accent: accent, isPressed: pressed))

@@ -557,7 +557,6 @@ struct WatchedFolderCard: View {
             }
             .buttonStyle(.sortyBordered)
             .controlSize(.small)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .help("Reveal in Finder")
             .accessibilityLabel("Reveal \(folder.name) in Finder")
 
@@ -570,7 +569,6 @@ struct WatchedFolderCard: View {
             }
             .buttonStyle(.sortyBordered)
             .controlSize(.small)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .help("Configure")
             .accessibilityLabel("Configure \(folder.name)")
 
@@ -586,7 +584,6 @@ struct WatchedFolderCard: View {
             }
             .buttonStyle(.sortyBordered)
             .controlSize(.small)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .help("Remove")
             .accessibilityLabel("Remove \(folder.name)")
         }
