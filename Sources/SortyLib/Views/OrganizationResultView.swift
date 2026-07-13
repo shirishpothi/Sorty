@@ -5,6 +5,7 @@
 //  Display for organization results and stats
 //
 
+import AppKit
 import SwiftUI
 
 struct OrganizationResultView: View {
@@ -209,19 +210,28 @@ struct GenerationStatsView: View {
 }
 
 public struct NerdStatPill: View {
+    public let title: String?
     public let icon: String
     public let value: String
     public let unit: String?
     public let color: Color
     
-    public init(icon: String, value: String, unit: String?, color: Color) {
+    public init(title: String? = nil, icon: String, value: String, unit: String?, color: Color) {
+        self.title = title
         self.icon = icon
         self.value = value
         self.unit = unit
         self.color = color
     }
     
+    private var copyText: String {
+        let displayValue = [value, unit].compactMap { $0 }.joined(separator: " ")
+        guard let title else { return displayValue }
+        return "\(title): \(displayValue)"
+    }
+
     public var body: some View {
+        Button(action: copyToPasteboard) {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 9))
@@ -244,6 +254,17 @@ public struct NerdStatPill: View {
             Capsule()
                 .fill(color.opacity(0.1))
         )
+        }
+        .buttonStyle(.plain)
+        .help("Copy \(copyText)")
+        .accessibilityLabel("Copy \(copyText)")
+        .accessibilityHint("Copies this statistic to the clipboard")
+    }
+
+    private func copyToPasteboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(copyText, forType: .string)
+        HapticFeedbackManager.shared.success()
     }
 }
 
@@ -261,8 +282,14 @@ public struct NerdStatPillExpanded: View {
         self.value = value
         self.unit = unit
     }
+
+    private var copyText: String {
+        let displayValue = [value, unit].compactMap { $0 }.joined(separator: " ")
+        return "\(title): \(displayValue)"
+    }
     
     public var body: some View {
+        Button(action: copyToPasteboard) {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
@@ -309,7 +336,17 @@ public struct NerdStatPillExpanded: View {
                         .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                 )
         )
-        .help(title)
+        }
+        .buttonStyle(.plain)
+        .help("Copy \(copyText)")
+        .accessibilityLabel("Copy \(copyText)")
+        .accessibilityHint("Copies this statistic to the clipboard")
+    }
+
+    private func copyToPasteboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(copyText, forType: .string)
+        HapticFeedbackManager.shared.success()
     }
 }
 

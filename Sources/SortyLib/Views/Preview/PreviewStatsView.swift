@@ -23,13 +23,9 @@ struct PreviewStatsView: View {
         VStack(spacing: 0) {
             if let stats = stats, showStatsForNerds {
                 // Collapsible stats row
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    Button(action: toggleExpandedStats) {
+                        HStack(spacing: 12) {
                         Image(systemName: "chart.bar.doc.horizontal")
                             .font(.system(size: 12))
                             .foregroundStyle(.purple)
@@ -38,64 +34,65 @@ struct PreviewStatsView: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                         
-                        Spacer()
-                        
-                        // Summary pills
-                        HStack(spacing: 12) {
-                            if let fileCount = stats.filesScanned ?? (totalFiles > 0 ? totalFiles : nil) {
-                                NerdStatPill(icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: .indigo)
-                            }
-
-                            if let totalContextTokens = stats.totalContextTokens {
-                                NerdStatPill(icon: "sum", value: GenerationStats.formatCount(totalContextTokens), unit: "ctx", color: .teal)
-                            } else {
-                                NerdStatPill(icon: "text.bubble", value: GenerationStats.formatCount(stats.responseTokens), unit: "resp", color: .teal)
-                            }
-
-                            NerdStatPill(icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
-
-                            if stats.tps > 0 {
-                                NerdStatPill(icon: "bolt.fill", value: String(format: "%.0f", stats.tps), unit: "tok/s", color: .orange)
-                            }
-
-                            if stats.hasBillableCost {
-                                NerdStatPill(icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
-                            }
-                            
-                            // Time remaining estimate
-                            if let estimatedTime = estimatedTimeRemaining, estimatedTime > 0 {
-                                NerdStatPill(
-                                    icon: "hourglass",
-                                    value: GenerationStats.formatDuration(estimatedTime),
-                                    unit: "left",
-                                    color: .purple
-                                )
-                            }
-                        }
-                        
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.tertiary)
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                    )
+                    .buttonStyle(.plain)
+                    .help(isExpanded ? "Collapse detailed generation metrics" : "Expand for detailed generation metrics")
+                    .accessibilityLabel("Stats for nerds. \(isExpanded ? "Collapse" : "Expand") for details")
+                    .accessibilityIdentifier("statsForNerdsToggle")
+
+                    Spacer(minLength: 0)
+
+                    // Summary pills
+                    HStack(spacing: 12) {
+                        if let fileCount = stats.filesScanned ?? (totalFiles > 0 ? totalFiles : nil) {
+                            NerdStatPill(title: "Files Reviewed", icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: .indigo)
+                        }
+
+                        if let totalContextTokens = stats.totalContextTokens {
+                            NerdStatPill(title: "Context", icon: "sum", value: GenerationStats.formatCount(totalContextTokens), unit: "ctx", color: .teal)
+                        } else {
+                            NerdStatPill(title: "Response", icon: "text.bubble", value: GenerationStats.formatCount(stats.responseTokens), unit: "resp", color: .teal)
+                        }
+
+                        NerdStatPill(title: "AI Time", icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
+
+                        if stats.tps > 0 {
+                            NerdStatPill(title: "Throughput", icon: "bolt.fill", value: String(format: "%.0f", stats.tps), unit: "tok/s", color: .orange)
+                        }
+
+                        if stats.hasBillableCost {
+                            NerdStatPill(title: "Estimated Cost", icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
+                        }
+                        
+                        // Time remaining estimate
+                        if let estimatedTime = estimatedTimeRemaining, estimatedTime > 0 {
+                            NerdStatPill(
+                                title: "Time Remaining",
+                                icon: "hourglass",
+                                value: GenerationStats.formatDuration(estimatedTime),
+                                unit: "left",
+                                color: .purple
+                            )
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                )
                 .onHover { hovering in
                     withAnimation(.easeInOut(duration: 0.15)) {
                         isHovering = hovering
                     }
                 }
-                .help(isExpanded ? "Collapse detailed generation metrics" : "Expand for detailed generation metrics")
-                .accessibilityLabel("Stats for nerds. \(isExpanded ? "Collapse" : "Expand") for details")
-                .accessibilityIdentifier("statsForNerdsToggle")
                 
                 // Expanded detailed stats
                 if isExpanded {
@@ -133,6 +130,13 @@ struct PreviewStatsView: View {
                     Label("Copy Stats", systemImage: "doc.on.clipboard")
                 }
             }
+        }
+    }
+
+    private func toggleExpandedStats() {
+        HapticFeedbackManager.shared.selection()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isExpanded.toggle()
         }
     }
 
