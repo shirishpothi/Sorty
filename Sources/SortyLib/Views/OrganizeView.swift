@@ -967,7 +967,7 @@ struct ReadyToOrganizeView: View {
                         showStorageLocations.toggle()
                     }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(alignment: .center, spacing: 6) {
                         Image(systemName: "externaldrive")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
@@ -985,17 +985,21 @@ struct ReadyToOrganizeView: View {
                             value: storageLocationTitle
                         )
                     }
+                    .frame(height: 28)
 
                     Spacer()
 
                     storageLocationSelectionSummary
+                        .frame(height: 28)
 
                     Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
+                        .frame(width: 16, height: 28)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                .contentShape(Rectangle())
                 .buttonStyle(.plain)
                 .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
                 .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
@@ -1009,6 +1013,7 @@ struct ReadyToOrganizeView: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 28)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
