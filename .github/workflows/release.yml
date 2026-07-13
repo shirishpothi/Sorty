@@ -223,12 +223,20 @@ jobs:
           cp "releases/Sorty.zip" "release-artifacts/"
           cp ".build/build_output.log" "release-artifacts/build_output_universal.log" 2>/dev/null || true
 
-          # Preserve Sparkle's sign_update so release can sign appcast.xml.
-          if [ -x ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
-            mkdir -p "release-artifacts/sparkle-tools"
-            cp ".build/artifacts/sparkle/Sparkle/bin/sign_update" \
-               "release-artifacts/sparkle-tools/sign_update"
+          # Preserve Sparkle's sign_update so the fresh release runner can sign appcasts.
+          SIGN_UPDATE_TOOL=$(find \
+            ".build/artifacts" \
+            ".build/DerivedData/SourcePackages/artifacts" \
+            -name sign_update \
+            -type f \
+            -not -path "*/old_dsa_scripts/*" \
+            2>/dev/null | head -1)
+          if [ -z "$SIGN_UPDATE_TOOL" ] || [ ! -x "$SIGN_UPDATE_TOOL" ]; then
+            echo "Sparkle sign_update was not produced by the universal build." >&2
+            exit 1
           fi
+          mkdir -p "release-artifacts/sparkle-tools"
+          cp "$SIGN_UPDATE_TOOL" "release-artifacts/sparkle-tools/sign_update"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
