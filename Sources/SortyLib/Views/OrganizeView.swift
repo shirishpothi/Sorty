@@ -586,6 +586,8 @@ struct DirectoryHeader: View {
     let mode: OrganizationMode
     let onBack: () -> Void
     let onClear: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHoveringPath = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -609,10 +611,41 @@ struct DirectoryHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                } label: {
+                    HStack(spacing: 5) {
+                        PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
+                            .lineLimit(1)
+
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 10)
+                            .opacity(isHoveringPath ? 1 : 0)
+                            .offset(
+                                x: reduceMotion || isHoveringPath ? 0 : -3,
+                                y: reduceMotion || isHoveringPath ? 0 : 3
+                            )
+                            .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: 20)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("Reveal \(url.lastPathComponent) in Finder")
+                .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder") // [VERIFY] confirm label matches intent
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    value: isHoveringPath
+                )
+                .onHover { hovering in
+                    isHoveringPath = hovering
+                }
             }
 
             Spacer()
