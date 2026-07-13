@@ -799,7 +799,7 @@ struct ReadyToOrganizeView: View {
             .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
 
             if mode != .renameOnly {
-                WorkflowCard {
+                WorkflowCard(verticalPadding: 10) {
                     storageLocationsContent
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -973,6 +973,14 @@ struct ReadyToOrganizeView: View {
                                     ? SortyDesignSystem.Colors.resolvedAccent
                                     : Color.secondary
                             )
+                            .frame(width: 22, height: 22)
+                            .background {
+                                Circle()
+                                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.32))
+                                    .frame(width: 18, height: 18)
+                                    .blur(radius: 5)
+                                    .opacity(selectedStorageLocationCount > 0 ? 1 : 0)
+                            }
 
                         ZStack(alignment: .leading) {
                             Text(storageLocationTitle)
@@ -1013,7 +1021,7 @@ struct ReadyToOrganizeView: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 28)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
@@ -1048,8 +1056,17 @@ struct ReadyToOrganizeView: View {
                             suggestedLocationName = nil
                             showingFolderPicker = true
                         } label: {
-                            Label("Add Custom Location", systemImage: "plus")
-                                .font(.caption)
+                            Label {
+                                Text("Add Custom Location")
+                            } icon: {
+                                Image(systemName: "plus")
+                                    .rotationEffect(.degrees(showingFolderPicker ? 45 : 0))
+                                    .animation(
+                                        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72),
+                                        value: showingFolderPicker
+                                    )
+                            }
+                            .font(.caption)
                         }
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
@@ -1933,11 +1950,7 @@ struct CompactStorageLocationRow: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: location.isEnabled ? "externaldrive.fill" : "externaldrive")
                     .font(.system(size: 14))
-                    .foregroundStyle(
-                        location.isEnabled
-                            ? SortyDesignSystem.Colors.resolvedAccent
-                            : Color.secondary
-                    )
+                    .foregroundStyle(Color.blue)
 
                 if needsAttention {
                     Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")

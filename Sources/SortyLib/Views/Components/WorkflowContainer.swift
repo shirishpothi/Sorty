@@ -421,15 +421,18 @@ struct WorkflowStepIndicator: View {
 struct WorkflowCard<Content: View>: View {
     let title: String?
     let icon: String?
+    let verticalPadding: CGFloat
     @ViewBuilder var content: Content
     
     init(
         title: String? = nil,
         icon: String? = nil,
+        verticalPadding: CGFloat = 16,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
+        self.verticalPadding = verticalPadding
         self.content = content()
     }
     
@@ -451,7 +454,8 @@ struct WorkflowCard<Content: View>: View {
             
             content
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, verticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14)
