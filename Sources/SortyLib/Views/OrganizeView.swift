@@ -1881,8 +1881,10 @@ struct SavedPromptsSheet: View {
 struct CompactStorageLocationRow: View {
     let location: StorageLocation
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingConfig = false
     @State private var showReauthorizePicker = false
+    @State private var isHoveringPath = false
 
     private var needsAttention: Bool {
         !location.exists || location.accessStatus == .lost
@@ -1918,11 +1920,35 @@ struct CompactStorageLocationRow: View {
                     .fontWeight(.medium)
                     .foregroundStyle(location.isEnabled ? .primary : .secondary)
                 
-                PrivacySensitivePathText(path: location.path)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: 4) {
+                    PrivacySensitivePathText(path: location.path)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .rotationEffect(.degrees(-45))
+                            .foregroundStyle(isHoveringPath ? Color.accentColor : Color.secondary.opacity(0.65))
+                            .offset(
+                                x: isHoveringPath && !reduceMotion ? 2 : 0,
+                                y: isHoveringPath && !reduceMotion ? -2 : 0
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Reveal \(location.name) in Finder")
+                    .accessibilityLabel("Reveal \(location.name) in Finder")
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.68),
+                        value: isHoveringPath
+                    )
+                }
+                .onHover { isHoveringPath = $0 }
             }
             
             Spacer()
@@ -1940,17 +1966,6 @@ struct CompactStorageLocationRow: View {
             }
 
             HStack(spacing: 6) {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .buttonStyle(.sortyBordered)
-                .controlSize(.mini)
-                .help("Reveal \(location.name) in Finder")
-                .accessibilityLabel("Reveal \(location.name) in Finder")
-
                 Button {
                     HapticFeedbackManager.shared.tap()
                     showingConfig = true
