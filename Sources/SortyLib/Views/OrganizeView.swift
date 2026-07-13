@@ -1241,7 +1241,7 @@ struct ReadyToOrganizeView: View {
             }
             .animation(.easeInOut(duration: 0.16), value: mention?.query)
 
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: 0) {
                 // Improve with AI button
                 if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
@@ -1249,6 +1249,9 @@ struct ReadyToOrganizeView: View {
                     } label: {
                         Label("Improve", systemImage: "wand.and.stars")
                             .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.teal)
@@ -1272,6 +1275,9 @@ struct ReadyToOrganizeView: View {
                     } label: {
                         Label("Save", systemImage: "bookmark")
                             .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
