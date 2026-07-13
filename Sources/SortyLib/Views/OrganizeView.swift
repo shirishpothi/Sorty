@@ -748,6 +748,22 @@ struct ReadyToOrganizeView: View {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .leading))
     }
 
+    private var storageLocationListIDs: [StorageLocation.ID] {
+        storageLocationsManager.locations.map(\.id)
+    }
+
+    private var storageLocationInsertionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.32, dampingFraction: 0.84)
+    }
+
+    private var storageLocationRowTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .configure, allowsScrolling: false) {
             // Compact header
@@ -848,7 +864,9 @@ struct ReadyToOrganizeView: View {
                 if let url = urls.first {
                     HapticFeedbackManager.shared.success()
                     do {
-                        try storageLocationsManager.addLocation(url: url, customName: suggestedLocationName)
+                        try withAnimation(storageLocationInsertionAnimation) {
+                            try storageLocationsManager.addLocation(url: url, customName: suggestedLocationName)
+                        }
                     } catch {
                         HapticFeedbackManager.shared.error()
                         addStorageLocationErrorMessage = error.localizedDescription
@@ -999,6 +1017,7 @@ struct ReadyToOrganizeView: View {
                         VStack(spacing: 6) {
                             ForEach(storageLocationsManager.locations.prefix(3)) { location in
                                 CompactStorageLocationRow(location: location)
+                                    .transition(storageLocationRowTransition)
                             }
                             
                             if storageLocationsManager.locations.count > 3 {
@@ -1008,6 +1027,7 @@ struct ReadyToOrganizeView: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
+                        .animation(storageLocationInsertionAnimation, value: storageLocationListIDs)
                     }
                     
                     HStack(alignment: .center, spacing: 14) {
