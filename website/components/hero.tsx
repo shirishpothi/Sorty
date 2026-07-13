@@ -11,7 +11,6 @@ import { sitePath } from '@/lib/site-paths'
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
-const IS_LOCAL_BUILD = process.env.NODE_ENV === 'development'
 
 const TRUST_ITEMS = [
   { icon: Monitor, label: 'macOS 15+' },
@@ -73,19 +72,17 @@ export function Hero() {
       id="top"
       className="page-section isolate relative overflow-hidden px-4 pt-28 pb-10 sm:pt-36"
     >
-      {IS_LOCAL_BUILD && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-30 bg-cover bg-center bg-no-repeat opacity-90"
-          style={{
-            backgroundImage: `url(${sitePath('/hero-local-background.png')})`,
-            maskImage:
-              'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
-            WebkitMaskImage:
-              'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
-          }}
-        />
-      )}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-30 bg-cover bg-center bg-no-repeat opacity-90"
+        style={{
+          backgroundImage: `url(${sitePath('/hero-local-background.png')})`,
+          maskImage:
+            'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, black 0%, black 68%, transparent 100%)',
+        }}
+      />
       {/* layered ambient gradient backdrop */}
       <div
         aria-hidden
