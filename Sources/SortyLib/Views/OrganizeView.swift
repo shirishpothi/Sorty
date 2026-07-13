@@ -594,7 +594,14 @@ struct DirectoryHeader: View {
             GlassyBackButton(action: onBack)
                 .padding(.trailing, 4)
 
-            FolderThumbnailView(url: url, size: CGSize(width: 32, height: 32))
+            Button(action: revealSelectedDirectory) {
+                FolderThumbnailView(url: url, size: CGSize(width: 32, height: 32))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Reveal \(url.lastPathComponent) in Finder")
+            .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder") // [VERIFY] confirm label matches intent
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
@@ -611,10 +618,7 @@ struct DirectoryHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
-                } label: {
+                Button(action: revealSelectedDirectory) {
                     HStack(spacing: 5) {
                         PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
                             .lineLimit(1)
@@ -661,6 +665,11 @@ struct DirectoryHeader: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(.bar)
+    }
+
+    private func revealSelectedDirectory() {
+        HapticFeedbackManager.shared.tap()
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
     }
 }
 
