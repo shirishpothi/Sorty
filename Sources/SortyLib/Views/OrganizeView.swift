@@ -1065,7 +1065,7 @@ struct ReadyToOrganizeView: View {
                     Image(systemName: "info.circle")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 44, height: 44, alignment: .leading)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
