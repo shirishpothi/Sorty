@@ -752,6 +752,10 @@ struct ReadyToOrganizeView: View {
         selectedStorageLocationCount == 1 ? "Storage Location" : "Storage Locations"
     }
 
+    private var storageLocationSelectionTint: Color {
+        unavailableSelectedStorageLocationCount > 0 ? .orange : .green
+    }
+
     private var storageLocationListIDs: [StorageLocation.ID] {
         storageLocationsManager.locations.map(\.id)
     }
@@ -981,30 +985,22 @@ struct ReadyToOrganizeView: View {
                             value: storageLocationTitle
                         )
                     }
-                    .contentShape(Rectangle())
-                }
-                .contentShape(Rectangle())
-                .buttonStyle(.plain)
-                .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
-                .accessibilityHint("Expand to manage local, cloud, and external organization locations")
 
-                Spacer()
+                    Spacer()
 
-                storageLocationSelectionSummary
+                    storageLocationSelectionSummary
 
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
-                        showStorageLocations.toggle()
-                    }
-                } label: {
                     Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
+                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
                 .buttonStyle(.plain)
                 .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
                 .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
+                .accessibilityHint("Expand to manage local, cloud, and external organization locations")
+                .accessibilityValue(showStorageLocations ? "Expanded" : "Collapsed")
 
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -1076,14 +1072,10 @@ struct ReadyToOrganizeView: View {
                     HStack(spacing: 8) {
                         Text("\(selectedStorageLocationCount) selected")
                             .font(.caption)
-                            .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
+                            .foregroundStyle(storageLocationSelectionTint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(
-                                (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
-                                    .opacity(0.1)
-                            )
-                            .clipShape(Capsule())
+                            .systemLiquidGlassBackground(cornerRadius: 999)
 
                         if unavailableSelectedStorageLocationCount > 0 {
                             Text("\(unavailableSelectedStorageLocationCount) unavailable")
