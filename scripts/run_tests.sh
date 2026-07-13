@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
         # Let's keep it strict for now conforming to user request
         echo "Unknown option: $1"
         echo "Usage: $0 [--ui] [--feature <name>] [--start-fresh]"
-        echo "Features: settings, exclusions, health, cli, duplicates, organize"
+        echo "Features: settings, exclusions, cli, duplicates, organize"
         exit 1
         ;;
     esac
@@ -61,9 +61,6 @@ if [ -n "$FEATURE_FILTER" ]; then
             ;;
         exclusions)
             TEST_FILTER="Exclusion"
-            ;;
-        health)
-            TEST_FILTER="WorkspaceHealth"
             ;;
         cli)
             TEST_FILTER="CLI"
