@@ -734,6 +734,20 @@ struct ReadyToOrganizeView: View {
         max(0, selectedStorageLocationCount - storageLocationsManager.enabledLocations.count)
     }
 
+    private var storageLocationSummaryID: String {
+        if selectedStorageLocationCount > 0 {
+            return "selected-\(selectedStorageLocationCount)-\(unavailableSelectedStorageLocationCount)"
+        }
+
+        return storageLocationsManager.locations.isEmpty ? "unconfigured" : "inactive"
+    }
+
+    private var storageLocationSummaryTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.94, anchor: .leading))
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .configure, allowsScrolling: false) {
             // Compact header
@@ -924,32 +938,44 @@ struct ReadyToOrganizeView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    if selectedStorageLocationCount > 0 {
-                        Text("\(selectedStorageLocationCount) selected")
-                            .font(.caption)
-                            .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
-                                    .opacity(0.1)
-                            )
-                            .clipShape(Capsule())
+                    ZStack(alignment: .leading) {
+                        Group {
+                            if selectedStorageLocationCount > 0 {
+                                HStack(spacing: 8) {
+                                    Text("\(selectedStorageLocationCount) selected")
+                                        .font(.caption)
+                                        .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
+                                                .opacity(0.1)
+                                        )
+                                        .clipShape(Capsule())
 
-                        if unavailableSelectedStorageLocationCount > 0 {
-                            Text("\(unavailableSelectedStorageLocationCount) unavailable")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
+                                    if unavailableSelectedStorageLocationCount > 0 {
+                                        Text("\(unavailableSelectedStorageLocationCount) unavailable")
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                            } else if !storageLocationsManager.locations.isEmpty {
+                                Text("No active locations")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("No locations configured")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    } else if !storageLocationsManager.locations.isEmpty {
-                        Text("No active locations")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No locations configured")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .id(storageLocationSummaryID)
+                        .transition(storageLocationSummaryTransition)
                     }
+                    .animation(
+                        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
+                        value: storageLocationSummaryID
+                    )
                     
                     Spacer()
                     
