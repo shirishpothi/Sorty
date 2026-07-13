@@ -14,7 +14,7 @@ const STEPS = [
   },
   {
     icon: Sparkles,
-    title: 'AI suggests a plan',
+    title: 'Sorty suggests a plan',
     body: 'A clear organization plan is generated with sensible folders, renames, and moves.',
   },
   {
