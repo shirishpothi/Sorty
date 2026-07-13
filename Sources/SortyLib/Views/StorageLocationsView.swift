@@ -148,7 +148,7 @@ private struct DescriptionExampleButton: View {
                 Text("\"\(text)\"")
             }
             .font(.caption2)
-            .foregroundStyle(isHovered ? Color.accentColor : .tertiary)
+            .foregroundStyle(isHovered ? Color.accentColor : Color.secondary.opacity(0.65))
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
             .background(isHovered ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
