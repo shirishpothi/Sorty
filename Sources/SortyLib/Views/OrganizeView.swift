@@ -707,7 +707,7 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
-    @State private var isMoreSettingsHovered = false
+    @State private var showStorageLocationsInfo = false
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
     @State private var referenceRefreshTask: Task<Void, Never>?
@@ -898,6 +898,10 @@ struct ReadyToOrganizeView: View {
         .onAppear {
             scheduleReferenceableFilesRefresh()
 
+            // Automatically restore folder access and refresh availability so
+            // the user never has to run a manual "Check Access" action.
+            storageLocationsManager.refreshAccessStatus()
+
             // Drive the staggered cascade only once. Each child element owns
             // its own `.animation(.smooth(...), value: hasAppeared)` modifier
             // with an explicit delay, so wrapping this flip in an additional
@@ -949,7 +953,8 @@ struct ReadyToOrganizeView: View {
     private var storageLocationsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Collapsible toggle header
-            Button {
+            HStack(spacing: 8) {
+                Button {
                 HapticFeedbackManager.shared.selection()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showStorageLocations.toggle()
@@ -996,7 +1001,7 @@ struct ReadyToOrganizeView: View {
                     )
                     
                     Spacer()
-                    
+
                     Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
@@ -1006,6 +1011,24 @@ struct ReadyToOrganizeView: View {
             .buttonStyle(.plain)
             .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
             .accessibilityHint("Expand to manage local, cloud, and external organization locations")
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showStorageLocationsInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
+                    StorageLocationsInfoPopover()
+                        .systemLiquidGlassPopover(cornerRadius: 12)
+                }
+                .help("How storage locations work")
+                .accessibilityLabel("About storage locations")
+                .accessibilityIdentifier("StorageLocationsInfoButton")
+            }
             
             if showStorageLocations {
                 VStack(alignment: .leading, spacing: 10) {
@@ -1014,20 +1037,18 @@ struct ReadyToOrganizeView: View {
                         .foregroundStyle(.secondary)
                     
                     if !storageLocationsManager.locations.isEmpty {
-                        VStack(spacing: 6) {
-                            ForEach(storageLocationsManager.locations.prefix(3)) { location in
-                                CompactStorageLocationRow(location: location)
-                                    .transition(storageLocationRowTransition)
+                        ScrollView {
+                            VStack(spacing: 6) {
+                                ForEach(storageLocationsManager.locations) { location in
+                                    CompactStorageLocationRow(location: location)
+                                        .transition(storageLocationRowTransition)
+                                }
                             }
-                            
-                            if storageLocationsManager.locations.count > 3 {
-                                Text("+ \(storageLocationsManager.locations.count - 3) more")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            .frame(maxWidth: .infinity)
+                            .animation(storageLocationInsertionAnimation, value: storageLocationListIDs)
                         }
-                        .frame(maxWidth: .infinity)
-                        .animation(storageLocationInsertionAnimation, value: storageLocationListIDs)
+                        .frame(maxHeight: 200)
+                        .scrollBounceBehavior(.basedOnSize)
                     }
                     
                     HStack(alignment: .center, spacing: 14) {
@@ -1045,41 +1066,6 @@ struct ReadyToOrganizeView: View {
                         .accessibilityHint("Opens the folder picker to add an organization location")
 
                         Spacer()
-
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            appState.currentView = .storageLocations
-                        } label: {
-                            HStack(spacing: 5) {
-                                Text("More in Settings")
-
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .frame(width: 10)
-                                    .opacity(isMoreSettingsHovered ? 1 : 0)
-                                    .offset(
-                                        x: reduceMotion || isMoreSettingsHovered ? 0 : -3,
-                                        y: reduceMotion || isMoreSettingsHovered ? 0 : 3
-                                    )
-                                    .scaleEffect(reduceMotion || isMoreSettingsHovered ? 1 : 0.75)
-                                    .accessibilityHidden(true)
-                            }
-                            .frame(minHeight: 30)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .animation(
-                            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
-                            value: isMoreSettingsHovered
-                        )
-                        .onHover { hovering in
-                            isMoreSettingsHovered = hovering
-                        }
-                        .help("Open Storage Locations")
-                        .accessibilityIdentifier("OpenStorageLocationsInSettingsButton")
-                        .accessibilityHint("Opens the Storage Locations page")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 2)
@@ -1899,13 +1885,37 @@ struct SavedPromptsSheet: View {
 struct CompactStorageLocationRow: View {
     let location: StorageLocation
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
-    
+    @State private var showingConfig = false
+    @State private var showReauthorizePicker = false
+
+    private var needsAttention: Bool {
+        !location.exists || location.accessStatus == .lost
+    }
+
+    private var statusHelp: String? {
+        if !location.exists { return "Folder not found" }
+        if location.accessStatus == .lost { return "Access to this folder was lost. Grant access again." }
+        if location.accessStatus == .stale { return "Access is being refreshed automatically" }
+        return nil
+    }
+
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "externaldrive.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(location.isEnabled ? .teal : .secondary)
-            
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "externaldrive.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(location.isEnabled ? .teal : .secondary)
+
+                if needsAttention {
+                    Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(!location.exists ? .red : .orange)
+                        .offset(x: 5, y: 4)
+                        .accessibilityHidden(true)
+                }
+            }
+            .help(statusHelp ?? "")
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(location.name)
                     .font(.caption)
@@ -1920,7 +1930,47 @@ struct CompactStorageLocationRow: View {
             }
             
             Spacer()
-            
+
+            if location.accessStatus == .lost {
+                Button("Grant Access") {
+                    HapticFeedbackManager.shared.tap()
+                    showReauthorizePicker = true
+                }
+                .font(.caption2)
+                .buttonStyle(.sortyBordered)
+                .controlSize(.mini)
+                .help("Re-select this folder to restore access")
+                .accessibilityLabel("Grant access to \(location.name)")
+            }
+
+            HStack(spacing: 6) {
+                Button("Open Folder", systemImage: "folder") {
+                    HapticFeedbackManager.shared.tap()
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.mini)
+                .help("Reveal \(location.name) in Finder")
+
+                Button("Customize", systemImage: "slider.horizontal.3") {
+                    HapticFeedbackManager.shared.tap()
+                    showingConfig = true
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.mini)
+                .help("Customize \(location.name)")
+
+                Button("Remove", systemImage: "trash", role: .destructive) {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        storageLocationsManager.removeLocation(location)
+                    }
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.mini)
+                .help("Remove \(location.name)")
+            }
+
             Toggle("", isOn: Binding(
                 get: { location.isEnabled },
                 set: { _ in
@@ -1931,13 +1981,66 @@ struct CompactStorageLocationRow: View {
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()
+            .accessibilityLabel("Enable \(location.name)")
+            .accessibilityValue(location.isEnabled ? "On" : "Off")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.secondary.opacity(0.05))
         )
+        .contextMenu {
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
+            }
+            Button("Customize...") {
+                showingConfig = true
+            }
+            Divider()
+            Button("Remove", role: .destructive) {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    storageLocationsManager.removeLocation(location)
+                }
+            }
+        }
+        .sheet(isPresented: $showingConfig) {
+            StorageLocationConfigView(location: location)
+                .modalBounce()
+        }
+        .fileImporter(
+            isPresented: $showReauthorizePicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                storageLocationsManager.reauthorizeLocation(location, with: url)
+            }
+        }
+    }
+}
+
+// MARK: - Storage Locations Info Popover
+
+struct StorageLocationsInfoPopover: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("How Storage Locations Work", systemImage: "externaldrive")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 10) {
+                InfoRow(icon: "arrow.right.circle", text: "Files can be moved TO enabled locations during organization")
+                InfoRow(icon: "xmark.circle", text: "Files already inside a location will NOT be reorganized")
+                InfoRow(icon: "brain", text: "Sorty matches files using each location's description — customize it to steer results")
+                InfoRow(icon: "externaldrive.fill.badge.icloud", text: "Local, cloud, and external drive folders are all supported")
+                InfoRow(icon: "checkmark.shield", text: "Folder access is checked automatically; Sorty asks only if it needs you to re-grant access")
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
     }
 }
 

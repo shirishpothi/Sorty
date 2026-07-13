@@ -181,20 +181,20 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertNil(session.appState.settingsFocusTarget)
     }
 
-    func testStorageSettingsSectionMapsToStorageFocusTarget() async {
+    func testStorageSettingsSectionKeepsTheReadyToOrganizePageAvailable() async {
         handle(.settings(section: "storage"))
 
         XCTAssertEqual(session.appState.currentView, .organize)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
-        XCTAssertEqual(session.appState.settingsFocusTarget, .rulesStorageLocations)
+        XCTAssertNil(session.appState.settingsFocusTarget)
     }
 
     func testUnknownSettingsSectionClearsSelectionAndFocusTarget() async {
         handle(.settings(section: "storage-locations"))
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
-        XCTAssertEqual(session.appState.settingsFocusTarget, .rulesStorageLocations)
+        XCTAssertNil(session.appState.settingsFocusTarget)
 
         handle(.settings(section: "totally-unknown-section"))
         await spinMainActor()

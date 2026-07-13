@@ -191,8 +191,6 @@ public struct ContentView: View {
             WatchedFoldersView()
         case .learnings:
             LearningsView()
-        case .storageLocations:
-            StorageLocationsView()
         }
     }
 

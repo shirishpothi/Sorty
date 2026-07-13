@@ -8,23 +8,10 @@
 import SwiftUI
 
 struct OrganizationRulesSettingsView: View {
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     
     var body: some View {
         VStack(spacing: 16) {
-            SettingsNavigationCard(
-                title: "Storage Locations",
-                description: "Add external destinations for files during organization",
-                icon: "externaldrive",
-                color: .purple
-            ) {
-                appState.navigatedFromSettings = true
-                appState.currentView = .storageLocations
-            }
-            .settingsFocusable(.rulesStorageLocations)
-            .animatedAppearance(delay: 0.05)
-            
             SettingsCard(title: "Organization Limits", icon: "folder.badge.questionmark", color: .purple) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -68,7 +55,7 @@ struct OrganizationRulesSettingsView: View {
                 }
             }
             .settingsFocusable(.rulesOrganizationLimits)
-            .animatedAppearance(delay: 0.1)
+            .animatedAppearance(delay: 0.05)
             
             SettingsCard(title: "Content Rules", icon: "checklist", color: .orange) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -80,7 +67,7 @@ struct OrganizationRulesSettingsView: View {
                 }
             }
             .settingsFocusable(.rulesContentRules)
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.1)
 
             SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
                 VStack(alignment: .leading, spacing: 8) {

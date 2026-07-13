@@ -200,7 +200,8 @@ public final class WindowSession: ObservableObject {
             }
 
         case .storage(let action, let path):
-            appState.currentView = .storageLocations
+            // Storage locations are managed inline on the Ready to Organize page.
+            appState.currentView = .organize
             if action == "add", let path {
                 let url = URL(fileURLWithPath: path)
                 try? storageLocationsManager.addLocation(url: url)
@@ -224,7 +225,7 @@ public final class WindowSession: ObservableObject {
             appState.settingsFocusTarget = nil
         case "storage", "storage-locations":
             appState.selectedSettingsSection = .rules
-            appState.settingsFocusTarget = .rulesStorageLocations
+            appState.settingsFocusTarget = nil
         default:
             let category = SettingsCategory.allCases.first {
                 $0.rawValue.lowercased().contains(section) ||

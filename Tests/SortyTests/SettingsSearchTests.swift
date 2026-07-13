@@ -65,7 +65,6 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testRulesFocusTargetMappingsForKnownSnippets() {
-        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Storage Locations")), .rulesStorageLocations)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Organization Limits")), .rulesOrganizationLimits)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Duplicate Handling")), .rulesContentRules)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Enable File Tagging")), .rulesContentRules)

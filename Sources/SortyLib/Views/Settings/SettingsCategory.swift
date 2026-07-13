@@ -33,7 +33,6 @@ public enum SettingsFocusTarget: String, Sendable {
     case strategyFastMode = "settings.strategy.fast-mode"
     case strategyVision = "settings.strategy.vision"
     case strategyRenaming = "settings.strategy.renaming"
-    case rulesStorageLocations = "settings.rules.storage-locations"
     case rulesOrganizationLimits = "settings.rules.organization-limits"
     case rulesContentRules = "settings.rules.content-rules"
     case rulesOrganizationStyle = "settings.rules.organization-style"
@@ -132,7 +131,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy:
             return ["strategy", "analysis", "fast mode", "deep scan", "deep scanning", "content analysis", "vision", "image analysis", "naming style", "rename", "renaming", "folder structure", "organization style"]
         case .rules:
-            return ["rules", "controls", "organization controls", "instructions", "storage locations", "destinations", "tagging", "pattern", "temperature", "creativity", "strictness"]
+            return ["rules", "controls", "organization controls", "instructions", "tagging", "pattern", "temperature", "creativity", "strictness"]
         case .tuning:
             return ["temperature", "creativity", "strictness", "parameters", "timeouts", "quality"]
         case .automation:
@@ -172,7 +171,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .rules:
             return [
-                SettingsFeatureSnippet(title: "Storage Locations", summary: "Route files into preferred external destinations."),
                 SettingsFeatureSnippet(title: "Organization Limits", summary: "Set max top-level folders to control output structure."),
                 SettingsFeatureSnippet(title: "Duplicate Handling", summary: "Use the duplicate detection dropdown in preview to control how duplicates are scanned.", keywords: ["duplicates", "duplicate detection"]),
                 SettingsFeatureSnippet(title: "Enable File Tagging", summary: "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"]),
@@ -289,8 +287,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .strategyVision
         case (.strategy, "Renaming"):
             return .strategyRenaming
-        case (.rules, "Storage Locations"):
-            return .rulesStorageLocations
         case (.rules, "Organization Limits"):
             return .rulesOrganizationLimits
         case (.rules, "Duplicate Handling"), (.rules, "Enable File Tagging"):

@@ -484,7 +484,6 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
-        case storageLocations
     }
 
     public enum AccreditationsEntryPoint: Sendable {

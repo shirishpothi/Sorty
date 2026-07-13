@@ -219,7 +219,7 @@ struct OrganizationCompleteView: View {
                         ) {
                             HapticFeedbackManager.shared.tap()
                             withAnimation(.pageTransition) {
-                                appState.currentView = .storageLocations
+                                appState.currentView = .organize
                             }
                         }
                         .frame(maxWidth: 560)
