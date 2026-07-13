@@ -240,9 +240,9 @@ private enum ApplicationMover {
             return true
         }
         #if DEBUG
-        true
+        return true
         #else
-        isInApplicationsFolder(originalBundleURL())
+        return isInApplicationsFolder(originalBundleURL())
         #endif
     }()
 
