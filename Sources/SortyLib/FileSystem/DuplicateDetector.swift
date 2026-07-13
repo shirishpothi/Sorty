@@ -336,11 +336,6 @@ public actor DuplicateDetector {
         }
     }
     
-    /// Compute SHA-256 hash for a file (DEPRECATED: Use HashUtility instead)
-    private func computeSHA256(for url: URL) -> String? {
-        HashUtility.computeSHA256(for: url)
-    }
-    
     /// Get total potential savings from all duplicate groups
     public func totalPotentialSavings(in groups: [DuplicateGroup]) -> Int64 {
         groups.reduce(0) { $0 + $1.potentialSavings }
@@ -532,11 +527,6 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = ""
         scanDuration = Date().timeIntervalSince(scanStartedAt)
         state = .completed(count: allGroups.count)
-    }
-    
-    /// Compute SHA-256 hash for a file (DEPRECATED: Use HashUtility instead)
-    private static func computeSHA256(for url: URL) -> String? {
-        HashUtility.computeSHA256(for: url)
     }
     
     public func clearResults() {
