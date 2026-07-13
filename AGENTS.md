@@ -5,9 +5,12 @@
 - For minor changes, do not run local verification such as `make now` or `make dev`; commit and push the narrow diff for Blacksmith to validate.
 - Quality gates run on Blacksmith by default; push changes and use GitHub/Blacksmith checks for build, tests, app bundle, prerelease, and release validation unless the user explicitly asks for local testing.
 - Local `make ci`, `make test`, and `make test-full` are diagnostics only and must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
+- Tests are valuable when they are focused. Avoid endless smoke tests, low-signal coverage, and regression tests whose only purpose is preserving behavior that has been deliberately deleted.
 - Prefer frequent small commits and pushes on `main` over large local-only batches. After each coherent change or fix, commit with a clear message and push so Blacksmith can validate the current branch early.
 - Use `[skip ci]` generously for minor documentation, copy, or local-only instruction changes because Blacksmith CI runs are expensive and limited.
 - If more work remains after a push, keep going in follow-up commits on the same branch instead of waiting for a perfect final batch.
+- Propose bold ideas when they can meaningfully improve the product or workflow; do not limit recommendations to conservative changes.
+- Be careful with destructive actions that the user did not explicitly request, and confirm the intended scope before taking them.
 - Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; use `make test-ui` only to confirm UI tests are currently disabled.
 - No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests when useful, and Blacksmith CI as the quality gate.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
