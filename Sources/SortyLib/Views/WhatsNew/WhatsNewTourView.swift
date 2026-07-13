@@ -4,6 +4,7 @@ import SwiftUI
 public struct WhatsNewTourView: View {
     private let onFinish: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     private let imageTransitionAnimation = Animation.easeInOut(duration: 0.72)
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
@@ -411,6 +412,30 @@ public struct WhatsNewTourView: View {
                 .frame(width: 156, height: 24)
         }
         .buttonStyle(.onboardingPill)
+        .overlay {
+            GeometryReader { proxy in
+                Rectangle()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.52), location: 0),
+                                .init(color: .white.opacity(0.18), location: 0.24),
+                                .init(color: .white.opacity(0.06), location: 0.46),
+                                .init(color: .clear, location: 0.78),
+                            ],
+                            center: UnitPoint(x: 0.5, y: -0.22),
+                            startRadius: 0,
+                            endRadius: max(proxy.size.width * 0.58, 1)
+                        )
+                    )
+                    .blur(radius: 4)
+            }
+            .clipShape(Capsule())
+            .blendMode(.screen)
+            .opacity(reduceTransparency ? 0 : 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .onboardingBeamBorder(
             variant: currentPage == pages.count - 1 ? .featured : .info,
             active: true,
