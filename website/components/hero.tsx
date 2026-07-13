@@ -71,7 +71,7 @@ export function Hero() {
   return (
     <section
       id="top"
-      className="page-section relative overflow-hidden px-4 pt-28 pb-10 sm:pt-36"
+      className="page-section isolate relative overflow-hidden px-4 pt-28 pb-10 sm:pt-36"
     >
       {IS_LOCAL_BUILD && (
         <div
