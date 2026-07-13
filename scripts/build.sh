@@ -1226,6 +1226,9 @@ if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     # NOTE: Do NOT remove Contents/Resources/AppIcons here. That directory ships the
     # About-window easter-egg icon variants (AppIcon-Debug/Release/Nightly.png).
+    # CI is normalized to the debug variant in AboutView, and its source PNG is
+    # byte-identical, so it has no distinct runtime use.
+    rm -f "${APP_PATH}/Contents/Resources/AppIcons/AppIcon-CI.png"
     touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else

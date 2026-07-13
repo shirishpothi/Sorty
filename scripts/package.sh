@@ -15,6 +15,29 @@ ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
 IAP_PATH="${APP_PATH}/Contents/Resources/InternetAccessPolicy.plist"
 BACKGROUND_AGENT_PLIST="${APP_PATH}/Contents/Library/LaunchAgents/com.sorty.app.background-agent.plist"
 BACKGROUND_AGENT_BUNDLE_PROGRAM="Contents/MacOS/Sorty"
+BUILD_VARIANT=$(/usr/libexec/PlistBuddy -c "Print :SortyBuildVariant" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true)
+MAIN_EXECUTABLE="${APP_PATH}/Contents/MacOS/Sorty"
+
+if [ "${BUILD_VARIANT}" = "debug" ]; then
+    log_failure "Refusing to package a debug build; rebuild with APP_ICON_VARIANT=release and BUILD_CONFIG=release"
+    exit 1
+fi
+
+if [ ! -f "${MAIN_EXECUTABLE}" ]; then
+    log_failure "Main executable is missing at ${MAIN_EXECUTABLE}"
+    exit 1
+fi
+
+# A stripped arm64 release executable is currently about 30 MB. Keep a
+# generous per-architecture ceiling so normal growth is allowed while an
+# accidentally unstripped build (about 71 MB per architecture) is rejected.
+EXECUTABLE_SIZE=$(stat -f %z "${MAIN_EXECUTABLE}")
+ARCH_COUNT=$(lipo -archs "${MAIN_EXECUTABLE}" 2>/dev/null | wc -w | tr -d ' ')
+MAX_EXECUTABLE_SIZE=$((45 * 1024 * 1024 * ARCH_COUNT))
+if [ "${EXECUTABLE_SIZE}" -gt "${MAX_EXECUTABLE_SIZE}" ]; then
+    log_failure "Main executable is unexpectedly large ($(get_file_size "${MAIN_EXECUTABLE}")); release symbols may not have been stripped"
+    exit 1
+fi
 
 # 1. Validate Internet Access Policy is bundled
 print_step 1 5 "Validating Internet Access Policy"

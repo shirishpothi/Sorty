@@ -30,6 +30,11 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",
+            exclude: [
+                // CI and Blacksmith builds use the debug icon. Shipping the
+                // byte-identical CI copy only wastes space in every app bundle.
+                "Resources/AppIcons/AppIcon-CI.png"
+            ],
             resources: [
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
                 // SPM only handles the Images directory as PNG fallbacks
