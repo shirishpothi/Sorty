@@ -71,7 +71,7 @@ If a persona-specific system prompt is active, you MUST follow its rules absolut
 \(Self.taggingSection(enabled: enableTagging))
 
 ## LIVE PROGRESS UPDATES (streaming UI)
-Before the JSON output, you MUST emit 6-12 concise, useful, coherent, and relevant one-line progress updates.
+Before the JSON output, emit exactly 2 concise, useful, coherent, and relevant one-line insight updates, followed by the required ready cue below. Keep this preamble short so the streamed JSON can power live file organization for most of the generation.
 Each line MUST start with ">> " followed by a category and colon, then a short update.
 Categories: file, folder, pattern, decision, constraint, general
 These updates are for reasoning insight only:
@@ -94,7 +94,7 @@ Bad examples:
 >> decision: Moving aws_invoice.pdf to Financial/Invoices
 >> general: I am thinking step by step about all possible folder trees
 >> folder: Creating folders now...
-After reasoning/planning/discovery updates and immediately before the first "{", you MUST emit this exact cue line:
+After the 2 insight updates and immediately before the first "{", you MUST emit this exact cue line:
 >> general: Ready to output organization structure.
 After that cue line, output the JSON response immediately. Do NOT emit >> lines after the JSON begins.
 \(Self.streamingOutputSection(for: mode))
@@ -160,7 +160,7 @@ Return valid JSON as the final output. The only allowed preamble is the >> progr
 
 # VALIDATION CHECKLIST (RUN BEFORE RESPONDING)
 Before outputting, verify ALL of the following:
-✓ Output starts with >> progress lines, includes the exact final cue line ">> general: Ready to output organization structure.", then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
+✓ Output starts with exactly 2 insight lines and the exact final cue line ">> general: Ready to output organization structure.", then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
 ✓ >> progress lines stay insight-focused and avoid explicit file-to-folder move statements.
 ✓ Every file from the input appears exactly once in your output, and "unorganized" is empty unless a file genuinely has no logical folder destination.
 \(enableTagging ? "✓ Every file object has a \"tags\" array with 1-3 string tags (never null, never missing, never empty)." : "✓ No file or folder object includes \"tags\" or \"comment\" fields.")

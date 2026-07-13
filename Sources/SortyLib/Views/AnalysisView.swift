@@ -165,6 +165,7 @@ final class AnalysisRefreshManager: ObservableObject {
 
 struct AnalysisView: View {
     var onReturnToStart: (() -> Void)?
+    var onLiveOrganizationStarted: (() -> Void)?
 
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
@@ -688,8 +689,12 @@ struct AnalysisView: View {
                 liveOrganizingSuggestions = []
                 hasOrganizeStreamEvents = false
             } else {
+                let didStartLiveOrganization = !hasOrganizeStreamEvents
                 liveOrganizingSuggestions = suggestions
                 hasOrganizeStreamEvents = true
+                if didStartLiveOrganization {
+                    onLiveOrganizationStarted?()
+                }
             }
         }
     }

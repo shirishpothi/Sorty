@@ -28,6 +28,11 @@ struct OrganizeView: View {
     @State private var returnsToDirectorySelection = false
     @State private var keepsReadyContentVisibleAfterReturn = false
     @State private var showsCompletionContent = false
+    @State private var liveOrganizationStartedAt: Date?
+    @State private var keepsLiveOrganizationVisible = false
+    @State private var readyPreviewHandoffTask: Task<Void, Never>?
+
+    private let minimumLiveOrganizationPresentation: TimeInterval = 3.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -317,11 +322,22 @@ struct OrganizeView: View {
                 )
             }
         case .scanning:
-            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
+            AnalysisView(
+                onReturnToStart: returnToStartAfterCancellation,
+                onLiveOrganizationStarted: noteLiveOrganizationStarted
+            )
         case .organizing:
-            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
+            AnalysisView(
+                onReturnToStart: returnToStartAfterCancellation,
+                onLiveOrganizationStarted: noteLiveOrganizationStarted
+            )
         case .ready:
-            if let plan = organizer.currentPlan {
+            if keepsLiveOrganizationVisible {
+                AnalysisView(
+                    onReturnToStart: returnToStartAfterCancellation,
+                    onLiveOrganizationStarted: noteLiveOrganizationStarted
+                )
+            } else if let plan = organizer.currentPlan {
                 PreviewView(
                     plan: plan,
                     baseURL: appState.selectedDirectory!,
@@ -331,7 +347,10 @@ struct OrganizeView: View {
                 PreviewHandoffView(mode: settingsViewModel.config.mode)
             }
         case .applying:
-            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
+            AnalysisView(
+                onReturnToStart: returnToStartAfterCancellation,
+                onLiveOrganizationStarted: noteLiveOrganizationStarted
+            )
         case .completed:
             completionHandoffContent
         case .error(let error):
@@ -449,6 +468,62 @@ struct OrganizeView: View {
                 break
             }
         }
+
+        switch newState {
+        case .ready:
+            scheduleReadyPreviewHandoff()
+        case .completed, .error, .idle:
+            resetLiveOrganizationPresentation()
+        default:
+            break
+        }
+
+        previousState = newState
+    }
+
+    private func noteLiveOrganizationStarted() {
+        guard !reduceMotion, liveOrganizationStartedAt == nil else { return }
+        liveOrganizationStartedAt = Date()
+        keepsLiveOrganizationVisible = true
+    }
+
+    private func scheduleReadyPreviewHandoff() {
+        guard !reduceMotion,
+              keepsLiveOrganizationVisible,
+              let liveOrganizationStartedAt else {
+            resetLiveOrganizationPresentation()
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(liveOrganizationStartedAt)
+        let remaining = minimumLiveOrganizationPresentation - elapsed
+        guard remaining > 0 else {
+            finishLiveOrganizationPresentation()
+            return
+        }
+
+        readyPreviewHandoffTask?.cancel()
+        readyPreviewHandoffTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled, organizer.state == .ready else { return }
+            finishLiveOrganizationPresentation()
+        }
+    }
+
+    private func finishLiveOrganizationPresentation() {
+        readyPreviewHandoffTask?.cancel()
+        readyPreviewHandoffTask = nil
+        liveOrganizationStartedAt = nil
+        withAnimation(.smooth(duration: 0.34)) {
+            keepsLiveOrganizationVisible = false
+        }
+    }
+
+    private func resetLiveOrganizationPresentation() {
+        readyPreviewHandoffTask?.cancel()
+        readyPreviewHandoffTask = nil
+        liveOrganizationStartedAt = nil
+        keepsLiveOrganizationVisible = false
     }
 
     private func beginCompletionHandoff() {
@@ -480,6 +555,7 @@ struct OrganizeView: View {
         }
 
         HapticFeedbackManager.shared.tap()
+        resetLiveOrganizationPresentation()
         keepsReadyContentVisibleAfterReturn = false
 
         // Apply default steering prompt if no custom instructions provided

@@ -26,7 +26,11 @@ struct OrganizingFlightStageView: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
-    @State private var cardOffset: CGSize = .zero
+    @State private var flightProgress: CGFloat = 0
+    @State private var flightDestination: CGSize = .zero
+    @State private var tuckOffset: CGSize = .zero
+    @State private var cardRotation: Double = 0
+    @State private var cardLift: CGFloat = 0
     @State private var cardScale: CGFloat = 0.85
     @State private var cardOpacity: Double = 0
     @State private var bumpedIndex: Int?
@@ -82,9 +86,20 @@ struct OrganizingFlightStageView: View {
                     }
 
                     fileCard
-                        .offset(cardOffset)
+                        .modifier(FolderDropFlightEffect(
+                            progress: flightProgress,
+                            destination: flightDestination
+                        ))
+                        .offset(tuckOffset)
+                        .rotationEffect(.degrees(cardRotation))
                         .scaleEffect(cardScale)
                         .opacity(cardOpacity)
+                        .shadow(
+                            color: Color.black.opacity(0.10 * Double(cardLift)),
+                            radius: 8 * cardLift,
+                            x: 0,
+                            y: 5 * cardLift
+                        )
                         .allowsHitTesting(false)
                 }
                 .frame(width: stageWidth, height: stageHeight)
@@ -267,6 +282,11 @@ struct OrganizingFlightStageView: View {
         flightTask?.cancel()
         flightTask = nil
         cardOpacity = 0
+        flightProgress = 0
+        flightDestination = .zero
+        tuckOffset = .zero
+        cardRotation = 0
+        cardLift = 0
         bumpedIndex = nil
         haloIndex = nil
         renameStrikeProgress = 0
@@ -274,20 +294,25 @@ struct OrganizingFlightStageView: View {
     }
 
     private func runFlight(toIndex index: Int) async {
-        // Phase 1: fade into place without introducing vertical motion.
-        cardOffset = .zero
+        // Phase 1: lift the file like a drag has just begun.
+        flightProgress = 0
+        flightDestination = .zero
+        tuckOffset = .zero
+        cardRotation = 0
+        cardLift = 0
         cardScale = 0.97
         cardOpacity = 0
         haloIndex = nil
 
-        withAnimation(.easeInOut(duration: 0.16)) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
             cardOpacity = 1
-            cardScale = 1.0
+            cardScale = 1.035
+            cardLift = 1
         }
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 170_000_000)
         if Task.isCancelled { return }
 
-        // Phase 2: glide toward the destination folder along an arc.
+        // Phase 2: carry the lifted file toward its folder along a shallow arc.
         let destX = centerOffset(for: index)
         let landingY = folderTopOffset() - 8
 
@@ -314,17 +339,23 @@ struct OrganizingFlightStageView: View {
             haloIndex = index
         }
 
-        withAnimation(.timingCurve(0.34, 0.04, 0.2, 1.0, duration: 0.46)) {
-            cardOffset = CGSize(width: destX, height: landingY)
+        flightDestination = CGSize(width: destX, height: landingY)
+        let direction = max(-1, min(1, destX / max(1, stageWidth / 2)))
+        withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.62)) {
+            flightProgress = 1
+            cardScale = 1
+            cardRotation = Double(direction) * 1.6
         }
-        try? await Task.sleep(nanoseconds: 360_000_000)
+        try? await Task.sleep(nanoseconds: 560_000_000)
         if Task.isCancelled { return }
 
         // Phase 3: the file tucks into the folder, the folder bumps.
-        withAnimation(.timingCurve(0.42, 0.0, 0.28, 1.0, duration: 0.18)) {
-            cardOffset = CGSize(width: destX, height: landingY + 18)
-            cardScale = 0.3
+        withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+            tuckOffset = CGSize(width: 0, height: 20)
+            cardScale = 0.28
             cardOpacity = 0
+            cardRotation = 0
+            cardLift = 0
         }
         bumpedIndex = index
         bumpTrigger &+= 1
@@ -411,6 +442,26 @@ struct OrganizingFlightStageView: View {
         let longestName = [originalName, suggestedName ?? ""]
             .max(by: { measuredWidth(of: $0) < measuredWidth(of: $1) }) ?? originalName
         return min(300, max(116, measuredWidth(of: longestName) + cardSize.width + 33))
+    }
+}
+
+private struct FolderDropFlightEffect: GeometryEffect {
+    var progress: CGFloat
+    let destination: CGSize
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let t = max(0, min(1, progress))
+        let inverse = 1 - t
+        let horizontalProgress = t * t * (3 - 2 * t)
+        let arcHeight = min(36, max(22, abs(destination.width) * 0.12))
+        let x = destination.width * horizontalProgress
+        let y = (2 * inverse * t * -arcHeight) + (t * t * destination.height)
+        return ProjectionTransform(CGAffineTransform(translationX: x, y: y))
     }
 }
 

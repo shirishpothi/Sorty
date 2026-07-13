@@ -472,7 +472,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var receivedProgressLines: Bool = false
     private var jsonStartedInStream: Bool = false
     private var progressLineCount: Int = 0
-    private let progressLineLimit = 12
+    private let progressLineLimit = 3
     
     // MARK: - AI Insights Cache
     
@@ -860,7 +860,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 if let existingIndex = self.insightHistory.firstIndex(where: { $0.id == insight.id }) {
                     self.insightHistory.remove(at: existingIndex)
                 }
-                if self.insightHistory.count >= 12 {
+                if self.insightHistory.count >= self.progressLineLimit {
                     self.insightHistory.removeFirst()
                 }
                 self.insightHistory.append(insight)
@@ -1171,7 +1171,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 if let existingIndex = self.insightHistory.firstIndex(where: { $0.id == insight.id }) {
                     self.insightHistory.remove(at: existingIndex)
                 }
-                if self.insightHistory.count >= 5 {
+                if self.insightHistory.count >= self.progressLineLimit {
                     self.insightHistory.removeFirst()
                 }
                 self.insightHistory.append(insight)
