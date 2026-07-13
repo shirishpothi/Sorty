@@ -24,7 +24,7 @@ export const FAQS = [
     a: 'Yes. Sorty works with any folder you can grant access to, including external drives and synced folders from iCloud Drive and Dropbox.',
   },
   {
-    q: 'What happens if I cancel midway?',
-    a: 'Applying changes is atomic and resumable. If you stop midway, only the moves already confirmed are kept, and you can undo the entire run from History.',
+    q: 'What does the GPL v3 license mean for me?',
+    a: 'You can use, study, modify, and share Sorty freely, and the license does not affect your files. If you distribute Sorty or a modified version, you must provide the source code under the GPL v3 and keep the license notices intact.',
   },
 ]
