@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Smarter Organization Decisions** — Improved prompts, image analysis, retries, storage destination normalization, and preference attribution for more reliable plans.
 - **Cloud Reliability** — Moved storage discovery off the main actor and strengthened cloud scanning, reference folders, file watching, rollback behavior, and unavailable-file reporting.
 - **Learnings and History Portability** — Hardened profile transfer and history import/export while keeping learnings passive and easier to understand.
-- **Updates and Downloads** — Standardized the universal archive as `Sorty.zip` and strengthened the signed Sparkle migration so stable, transition, and nightly users can reach the current release in app.
+- **In-App Updates** — Made updating to the latest version more reliable.
 
 ### Fixed
 
