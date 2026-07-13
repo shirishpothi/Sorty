@@ -1920,35 +1920,41 @@ struct CompactStorageLocationRow: View {
                     .fontWeight(.medium)
                     .foregroundStyle(location.isEnabled ? .primary : .secondary)
                 
-                HStack(spacing: 4) {
-                    PrivacySensitivePathText(path: location.path)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
+                } label: {
+                    HStack(spacing: 5) {
+                        PrivacySensitivePathText(path: location.path, revealOnClick: false)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
 
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.bold))
-                            .rotationEffect(.degrees(-45))
-                            .foregroundStyle(isHoveringPath ? Color.accentColor : Color.secondary.opacity(0.65))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 10)
+                            .opacity(isHoveringPath ? 1 : 0)
                             .offset(
-                                x: isHoveringPath && !reduceMotion ? 2 : 0,
-                                y: isHoveringPath && !reduceMotion ? -2 : 0
+                                x: reduceMotion || isHoveringPath ? 0 : -3,
+                                y: reduceMotion || isHoveringPath ? 0 : 3
                             )
+                            .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
+                            .accessibilityHidden(true)
                     }
-                    .buttonStyle(.plain)
-                    .help("Reveal \(location.name) in Finder")
-                    .accessibilityLabel("Reveal \(location.name) in Finder")
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.68),
-                        value: isHoveringPath
-                    )
+                    .frame(minHeight: 20)
+                    .contentShape(Rectangle())
                 }
-                .onHover { isHoveringPath = $0 }
+                .buttonStyle(.plain)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .help("Reveal \(location.name) in Finder")
+                .accessibilityLabel("Reveal \(location.name) in Finder")
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    value: isHoveringPath
+                )
+                .onHover { hovering in
+                    isHoveringPath = hovering
+                }
             }
             
             Spacer()
