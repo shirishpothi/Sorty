@@ -297,6 +297,34 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                                     endPoint: .trailing
                                 )
                             )
+
+                        GeometryReader { proxy in
+                            Ellipse()
+                                .fill(
+                                    RadialGradient(
+                                        stops: [
+                                            .init(color: .white.opacity(0.82), location: 0),
+                                            .init(color: .white.opacity(0.28), location: 0.38),
+                                            .init(color: .clear, location: 0.74),
+                                        ],
+                                        center: .center,
+                                        startRadius: 0,
+                                        endRadius: max(proxy.size.width * 0.34, 1)
+                                    )
+                                )
+                                .frame(
+                                    width: proxy.size.width * 0.68,
+                                    height: proxy.size.height * 0.72
+                                )
+                                .position(
+                                    x: proxy.size.width / 2,
+                                    y: proxy.size.height * 0.08
+                                )
+                        }
+                        .clipShape(Capsule())
+                        .blendMode(.screen)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                         
                         Capsule()
                             .strokeBorder(

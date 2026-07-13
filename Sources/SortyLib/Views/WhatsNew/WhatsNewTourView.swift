@@ -3,9 +3,11 @@ import SwiftUI
 
 public struct WhatsNewTourView: View {
     private let onFinish: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let imageTransitionAnimation = Animation.easeInOut(duration: 0.72)
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
+    @State private var isActionHovering = false
 
     public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
@@ -405,13 +407,25 @@ public struct WhatsNewTourView: View {
             }
         } label: {
             Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 200, height: 40)
-                .background(Color.accentColor)
-                .clipShape(Capsule(style: .continuous))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .frame(width: 156, height: 24)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.onboardingPill)
+        .onboardingBeamBorder(
+            variant: currentPage == pages.count - 1 ? .featured : .info,
+            active: true,
+            isIntensified: isActionHovering,
+            includesInteriorGlow: isActionHovering
+        )
+        .contentShape(Capsule())
+        .scaleEffect(isActionHovering ? 1.03 : 1)
+        .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.84), value: isActionHovering)
+        .onHover { hovering in
+            if hovering && !isActionHovering {
+                HapticFeedbackManager.shared.selection()
+            }
+            isActionHovering = hovering
+        }
         .keyboardShortcut(.defaultAction)
     }
 }
