@@ -213,6 +213,52 @@ extension View {
     func animatedEmptyStateIcon() -> some View {
         modifier(AnimatedEmptyStateIconModifier())
     }
+
+    func milestoneEmptyStateSliver(trigger: Int) -> some View {
+        modifier(MilestoneEmptyStateSliverModifier(trigger: trigger))
+    }
+}
+
+private struct MilestoneEmptyStateSliverModifier: ViewModifier {
+    let trigger: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepProgress: CGFloat = 1
+    @State private var sweepTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(
+                EmptyStateIconSweep(
+                    progress: reduceMotion ? 0.5 : sweepProgress,
+                    reduceMotion: reduceMotion
+                )
+            )
+            .onAppear {
+                guard trigger > 0 else { return }
+                runSweep()
+            }
+            .onChange(of: trigger) { oldTrigger, newTrigger in
+                guard newTrigger > oldTrigger else { return }
+                runSweep()
+            }
+            .onDisappear {
+                sweepTask?.cancel()
+            }
+    }
+
+    private func runSweep() {
+        guard !reduceMotion else { return }
+        sweepTask?.cancel()
+        sweepProgress = 0
+        sweepTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 1.25)) {
+                sweepProgress = 1
+            }
+        }
+    }
 }
 
 /// Standardized empty-state hero icon used across the History, Duplicates,

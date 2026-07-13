@@ -371,6 +371,7 @@ struct AnalysisView: View {
     private var progressSection: some View {
         StreamingProgressBeam(
             measuredProgress: organizer.measuredWorkProgress,
+            overallProgress: organizer.progress,
             stage: organizer.organizationStage,
             elapsedSeconds: Int(organizer.elapsedTime),
             isEstablishingConnection: isEstablishingConnection,
@@ -738,6 +739,7 @@ private enum OrganizingStreamSuggestions {
         let filesByName = fileLookup(from: files)
         var suggestionsByFolder: [String: FolderSuggestion] = [:]
         var orderedFolderNames: [String] = []
+        var assignedFileIDs: Set<UUID> = []
 
         for index in folderMatches.indices {
             let folderMatch = folderMatches[index]
@@ -746,8 +748,9 @@ private enum OrganizingStreamSuggestions {
             let folderNameRange = folderMatch.range(at: 1)
             guard folderNameRange.location != NSNotFound else { continue }
 
-            let folderName = decodeJSONString(nsText.substring(with: folderNameRange))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let folderName = displayFolderName(
+                decodeJSONString(nsText.substring(with: folderNameRange))
+            )
             guard !folderName.isEmpty, folderName != "." else { continue }
 
             let segmentStart = folderMatch.range.location + folderMatch.range.length
@@ -770,7 +773,9 @@ private enum OrganizingStreamSuggestions {
 
             var suggestion = suggestionsByFolder[folderName] ?? FolderSuggestion(folderName: folderName)
             let existingIDs = Set(suggestion.files.map(\.id))
-            let newEntries = parsedEntries.filter { !existingIDs.contains($0.file.id) }
+            let newEntries = parsedEntries.filter {
+                !existingIDs.contains($0.file.id) && assignedFileIDs.insert($0.file.id).inserted
+            }
             let remainingSlots = max(0, maxFilesPerFolder - suggestion.files.count)
             for entry in newEntries.prefix(remainingSlots) {
                 suggestion.files.append(entry.file)
@@ -880,6 +885,17 @@ private enum OrganizingStreamSuggestions {
 
         let lastPathComponent = URL(fileURLWithPath: trimmed).lastPathComponent
         return lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func displayFolderName(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("/") || trimmed.contains("\\") else { return trimmed }
+
+        return trimmed
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .last
+            .map(String.init) ?? trimmed
     }
 
     private static func decodeJSONString(_ value: String) -> String {
@@ -1422,6 +1438,7 @@ private struct SubtleDotPulse: ViewModifier {
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
     let measuredProgress: MeasuredWorkProgress?
+    let overallProgress: Double
     let stage: String
     let elapsedSeconds: Int
     let isEstablishingConnection: Bool
@@ -1437,13 +1454,17 @@ private struct StreamingProgressBeam: View {
         matchesInsightsWidth ? Self.expandedWidth : Self.collapsedWidth
     }
 
-    private var percent: Int? {
-        measuredProgress.map { Int(($0.percentage * 100).rounded()) }
+    private var percent: Int {
+        Int((min(max(overallProgress, 0), 1) * 100).rounded())
+    }
+
+    private var milestone: Int {
+        min(percent / 25, 4)
     }
 
     private var progressAccessibilityValue: String {
-        guard let measuredProgress, let percent else {
-            return "Stage \(displayedStage), progress is indeterminate"
+        guard let measuredProgress else {
+            return "\(percent) percent complete, stage \(displayedStage)"
         }
         return "\(percent) percent, \(measuredProgress.completed) of \(measuredProgress.total) complete, stage \(displayedStage)"
     }
@@ -1483,18 +1504,12 @@ private struct StreamingProgressBeam: View {
                     .animation(.easeInOut(duration: 0.22), value: displayedStage)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                if let percent {
-                    Text("\(percent)%")
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.3), value: percent)
-                        .frame(width: 54, alignment: .trailing)
-                } else {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: 54, alignment: .trailing)
-                        .accessibilityHidden(true)
-                }
+                Text("\(percent)%")
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.3), value: percent)
+                    .milestoneEmptyStateSliver(trigger: milestone)
+                    .frame(width: 54, alignment: .trailing)
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)

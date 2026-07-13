@@ -1673,7 +1673,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions += visionPromptInstructions(for: analyzedNames)
                 clearMeasuredProgress(
                     estimatedOverallProgress: 0.30,
-                    stage: "Sorty is analyzing \(analyzedNames.count) prepared images..."
+                    stage: "Sorty is analyzing \(analyzedNames.count) images..."
                 )
             } else {
                 clearMeasuredProgress(

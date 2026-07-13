@@ -44,7 +44,7 @@ struct OrganizingFlightStageView: View {
     @State private var currentCardWidth: CGFloat = 188
     @State private var displayedSuggestions: [FolderSuggestion] = []
     @State private var flightTask: Task<Void, Never>?
-    @State private var flightStep = 0
+    @State private var shownFlightFileIDs: Set<UUID> = []
 
     private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
@@ -412,9 +412,10 @@ struct OrganizingFlightStageView: View {
                 FlightCandidate(folderIndex: index, file: $0.file, renameMapping: $0.renameMapping)
             }
         }
-        guard !candidates.isEmpty else { return nil }
-        let candidate = candidates[flightStep % candidates.count]
-        flightStep &+= 1
+        guard let candidate = candidates.first(where: {
+            !shownFlightFileIDs.contains($0.file.id)
+        }) else { return nil }
+        shownFlightFileIDs.insert(candidate.file.id)
         return candidate
     }
 
