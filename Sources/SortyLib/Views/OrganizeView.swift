@@ -1940,31 +1940,40 @@ struct CompactStorageLocationRow: View {
             }
 
             HStack(spacing: 6) {
-                Button("Open Folder", systemImage: "folder") {
+                Button {
                     HapticFeedbackManager.shared.tap()
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
+                } label: {
+                    Image(systemName: "folder")
                 }
                 .buttonStyle(.sortyBordered)
                 .controlSize(.mini)
                 .help("Reveal \(location.name) in Finder")
+                .accessibilityLabel("Reveal \(location.name) in Finder")
 
-                Button("Customize", systemImage: "slider.horizontal.3") {
+                Button {
                     HapticFeedbackManager.shared.tap()
                     showingConfig = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
                 }
                 .buttonStyle(.sortyBordered)
                 .controlSize(.mini)
                 .help("Customize \(location.name)")
+                .accessibilityLabel("Customize \(location.name)")
 
-                Button("Remove", systemImage: "trash", role: .destructive) {
+                Button(role: .destructive) {
                     HapticFeedbackManager.shared.tap()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         storageLocationsManager.removeLocation(location)
                     }
+                } label: {
+                    Image(systemName: "trash")
                 }
                 .buttonStyle(.sortyBordered)
                 .controlSize(.mini)
                 .help("Remove \(location.name)")
+                .accessibilityLabel("Remove \(location.name)")
             }
 
             Toggle("", isOn: Binding(

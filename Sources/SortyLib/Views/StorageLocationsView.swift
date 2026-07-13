@@ -17,13 +17,11 @@ struct StorageLocationConfigView: View {
     
     @State private var name: String
     @State private var description: String
-    @State private var isEnabled: Bool
 
     init(location: StorageLocation) {
         self.location = location
         _name = State(initialValue: location.name)
         _description = State(initialValue: location.description ?? "")
-        _isEnabled = State(initialValue: location.isEnabled)
     }
 
     var body: some View {
@@ -98,47 +96,27 @@ struct StorageLocationConfigView: View {
                                 Text("Examples:")
                                     .font(.caption2.bold())
                                     .foregroundStyle(.secondary)
-                                Text("\"Archive for completed projects older than 6 months\"")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                Text("\"Storage for large media files and raw footage\"")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                Text("\"Backup location for important documents\"")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                DescriptionExampleButton(
+                                    text: "Archive for completed projects older than 6 months",
+                                    description: $description
+                                )
+                                DescriptionExampleButton(
+                                    text: "Storage for large media files and raw footage",
+                                    description: $description
+                                )
+                                DescriptionExampleButton(
+                                    text: "Backup location for important documents",
+                                    description: $description
+                                )
                             }
                             .padding(.top, 4)
-                        }
-                    }
-                    
-                    // Status Section
-                    ConfigSection(title: "Status", icon: "checkmark.circle", color: .green) {
-                        Toggle(isOn: $isEnabled) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Enabled")
-                                    .font(.subheadline)
-                                Text("When enabled, Sorty can suggest moving files to this location")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                    }
-                    
-                    // Info Section
-                    ConfigSection(title: "How It Works", icon: "questionmark.circle", color: .orange) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            InfoRow(icon: "arrow.right.circle", text: "Files can be moved TO this location")
-                            InfoRow(icon: "xmark.circle", text: "Files already here will NOT be reorganized")
-                            InfoRow(icon: "brain", text: "Sorty uses the description to match appropriate files")
                         }
                     }
                 }
                 .padding(20)
             }
         }
-        .frame(width: 450, height: 520)
+        .frame(width: 450, height: 460)
         .background(Color(NSColor.windowBackgroundColor))
     }
 
@@ -146,12 +124,40 @@ struct StorageLocationConfigView: View {
         var updated = location
         updated.name = name.isEmpty ? location.url.lastPathComponent : name
         updated.description = description.isEmpty ? nil : description
-        updated.isEnabled = isEnabled
         
         withAnimation {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()
+    }
+}
+
+private struct DescriptionExampleButton: View {
+    let text: String
+    @Binding var description: String
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.selection()
+            description = text
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.turn.down.right")
+                    .accessibilityHidden(true)
+                Text("\"\(text)\"")
+            }
+            .font(.caption2)
+            .foregroundStyle(isHovered ? Color.accentColor : .tertiary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(isHovered ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help("Use this description")
+        .accessibilityLabel("Use example description: \(text)")
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -164,7 +170,6 @@ private struct StorageProviderBadge: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(tint.opacity(0.08), in: Capsule())
             .systemLiquidGlassBackground(cornerRadius: 999)
             .fixedSize()
             .help(accessibilityDescription)
