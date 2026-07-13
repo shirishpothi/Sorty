@@ -1299,6 +1299,7 @@ struct ReadyToOrganizeView: View {
                         }
                         .padding(16)
                         .frame(width: 280)
+                        .foregroundStyle(.primary)
                         .systemLiquidGlassPopover(cornerRadius: 12)
                     }
                 }

@@ -73,7 +73,6 @@ extension View {
                         .fill(.clear)
                         .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
                 }
-                .presentationBackground(.clear)
                 .presentationCornerRadius(cornerRadius)
         } else {
             self.presentationCornerRadius(cornerRadius)
