@@ -1255,14 +1255,12 @@ struct ReadyToOrganizeView: View {
                     .disabled(isImprovingPrompt)
                     .help("Improve instructions with Sorty")
                     .accessibilityHint("Rewrites your prompt to be clearer and more specific")
-                    .popover(isPresented: $showImprovePromptRequest) {
-                        ImproveInstructionsRequestPopover(
-                            message: improvePromptRequestMessage,
-                            onDismiss: {
-                                showImprovePromptRequest = false
-                                isTextFieldFocused = true
-                            }
-                        )
+                    .alert("Sorty needs more detail", isPresented: $showImprovePromptRequest) {
+                        Button("Edit Instructions") {
+                            isTextFieldFocused = true
+                        }
+                    } message: {
+                        Text("\(improvePromptRequestMessage)\n\nEdit the instructions above, then click Improve again.")
                     }
                 }
 
