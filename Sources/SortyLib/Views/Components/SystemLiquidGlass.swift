@@ -31,6 +31,29 @@ extension View {
         }
     }
 
+    /// Uses the native circular Liquid Glass button style on macOS 26 while
+    /// preserving the existing subtle circle treatment on older systems.
+    @ViewBuilder
+    func systemLiquidGlassCircularButton() -> some View {
+        if #available(macOS 26.0, *) {
+            self
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(nil)
+        } else {
+            self.buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    func systemLiquidGlassCircularButtonLabel() -> some View {
+        if #available(macOS 26.0, *) {
+            self
+        } else {
+            self.background(Circle().fill(Color.white.opacity(0.14)))
+        }
+    }
+
     /// Liquid glass that shows through to content behind the window.
     /// Falls back to a plain behind-window material before macOS 26.
     @ViewBuilder
