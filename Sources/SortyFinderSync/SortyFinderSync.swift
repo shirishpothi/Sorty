@@ -1,8 +1,11 @@
 import Cocoa
 import FinderSync
+import OSLog
 
 final class SortyFinderSync: FIFinderSync {
+    private static let logger = Logger(subsystem: "com.sorty.app.SortyFinderSync", category: "FinderSync")
     private static let heartbeatNotificationName = Notification.Name("SortyFinderSyncHeartbeat")
+    private static let directorySelectedNotificationName = Notification.Name("SortyDirectorySelected")
     private static let heartbeatMinimumInterval: TimeInterval = 30
     private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
@@ -13,17 +16,27 @@ final class SortyFinderSync: FIFinderSync {
     override init() {
         super.init()
 
-        let finderSync = FIFinderSyncController.default()
+        refreshMonitoredDirectories()
 
-        if let mountedVolumes = FileManager.default.mountedVolumeURLs(
-            includingResourceValuesForKeys: nil,
-            options: .skipHiddenVolumes
-        ) {
-            finderSync.directoryURLs = Set(mountedVolumes)
-        }
+        let workspaceNotifications = NSWorkspace.shared.notificationCenter
+        workspaceNotifications.addObserver(
+            self,
+            selector: #selector(mountedVolumesDidChange(_:)),
+            name: NSWorkspace.didMountNotification,
+            object: nil
+        )
+        workspaceNotifications.addObserver(
+            self,
+            selector: #selector(mountedVolumesDidChange(_:)),
+            name: NSWorkspace.didUnmountNotification,
+            object: nil
+        )
 
-        finderSync.directoryURLs.insert(FileManager.default.homeDirectoryForCurrentUser)
         Self.reportHeartbeat(event: "launch")
+    }
+
+    deinit {
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
@@ -72,10 +85,10 @@ final class SortyFinderSync: FIFinderSync {
             watchItem.target = self
             menu.addItem(watchItem)
         @unknown default:
-            break
+            return nil
         }
 
-        return menu
+        return menu.items.isEmpty ? nil : menu
     }
 
     @objc private func organizeAction(_ sender: AnyObject?) {
@@ -84,7 +97,7 @@ final class SortyFinderSync: FIFinderSync {
         guard let url = Self.selectedDirectoryURL() else { return }
         guard let organizeURL = Self.urlForOrganizing(path: url.path) else { return }
 
-        NSWorkspace.shared.open(organizeURL)
+        Self.open(organizeURL, directoryURL: url, event: "action.organize")
     }
 
     @objc private func watchAction(_ sender: AnyObject?) {
@@ -93,23 +106,76 @@ final class SortyFinderSync: FIFinderSync {
         guard let url = Self.selectedDirectoryURL() else { return }
         guard let watchURL = Self.urlForWatching(path: url.path) else { return }
 
-        NSWorkspace.shared.open(watchURL)
+        Self.open(watchURL, directoryURL: url, event: "action.watch")
     }
 
     private static func selectedDirectoryURL() -> URL? {
         let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
         let targetURL = FIFinderSyncController.default().targetedURL()
 
-        guard let rawURL = selectedURLs.first ?? targetURL else { return nil }
-        return normalizedDirectoryURL(for: rawURL)
+        if selectedURLs.count == 1,
+           let selectedURL = selectedURLs.first,
+           let directoryURL = normalizedDirectoryURL(for: selectedURL) {
+            return directoryURL
+        }
+
+        // Finder can report several unrelated selections. The targeted container
+        // is the only unambiguous folder in that case; using the first item can
+        // silently organize a different directory than the menu the user opened.
+        if let targetURL,
+           let directoryURL = normalizedDirectoryURL(for: targetURL) {
+            return directoryURL
+        }
+
+        let parentDirectories = Set(selectedURLs.compactMap { url -> URL? in
+            guard url.isFileURL else { return nil }
+            return url.deletingLastPathComponent().standardizedFileURL
+        })
+        return parentDirectories.count == 1 ? parentDirectories.first : nil
     }
 
-    private static func normalizedDirectoryURL(for url: URL) -> URL {
+    private static func normalizedDirectoryURL(for url: URL) -> URL? {
+        guard url.isFileURL else { return nil }
+
+        let standardizedURL = url.standardizedFileURL
         if let values = try? url.resourceValues(forKeys: [.isDirectoryKey]),
            values.isDirectory == false {
-            return url.deletingLastPathComponent()
+            return standardizedURL.deletingLastPathComponent()
         }
-        return url
+        return standardizedURL
+    }
+
+    @objc private func mountedVolumesDidChange(_ notification: Notification) {
+        _ = notification
+        refreshMonitoredDirectories()
+        Self.reportHeartbeat(event: "volumes.changed")
+    }
+
+    private func refreshMonitoredDirectories() {
+        var directoryURLs = Set(
+            FileManager.default.mountedVolumeURLs(
+                includingResourceValuesForKeys: nil,
+                options: .skipHiddenVolumes
+            ) ?? []
+        )
+        directoryURLs.insert(FileManager.default.homeDirectoryForCurrentUser)
+        FIFinderSyncController.default().directoryURLs = directoryURLs
+    }
+
+    private static func open(_ actionURL: URL, directoryURL: URL, event: String) {
+        reportHeartbeat(event: event)
+        guard !NSWorkspace.shared.open(actionURL) else { return }
+
+        // A stale Launch Services URL-scheme registration should not turn the
+        // Finder command into a silent no-op when Sorty is already running.
+        if event == "action.organize" {
+            DistributedNotificationCenter.default().post(
+                name: directorySelectedNotificationName,
+                object: nil,
+                userInfo: ["path": directoryURL.path]
+            )
+        }
+        logger.error("Could not open Sorty action URL for path: \(directoryURL.path, privacy: .private)")
     }
 
     private static func urlForOrganizing(path: String) -> URL? {
