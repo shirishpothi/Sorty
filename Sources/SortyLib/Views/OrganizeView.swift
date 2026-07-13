@@ -748,6 +748,10 @@ struct ReadyToOrganizeView: View {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .leading))
     }
 
+    private var storageLocationTitle: String {
+        selectedStorageLocationCount == 1 ? "Storage Location" : "Storage Locations"
+    }
+
     private var storageLocationListIDs: [StorageLocation.ID] {
         storageLocationsManager.locations.map(\.id)
     }
@@ -793,7 +797,7 @@ struct ReadyToOrganizeView: View {
             .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
 
             if mode != .renameOnly {
-                WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
+                WorkflowCard {
                     storageLocationsContent
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -952,65 +956,55 @@ struct ReadyToOrganizeView: View {
 
     private var storageLocationsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Collapsible toggle header
             HStack(spacing: 8) {
                 Button {
-                HapticFeedbackManager.shared.selection()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showStorageLocations.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    ZStack(alignment: .leading) {
-                        Group {
-                            if selectedStorageLocationCount > 0 {
-                                HStack(spacing: 8) {
-                                    Text("\(selectedStorageLocationCount) selected")
-                                        .font(.caption)
-                                        .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(
-                                            (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
-                                                .opacity(0.1)
-                                        )
-                                        .clipShape(Capsule())
-
-                                    if unavailableSelectedStorageLocationCount > 0 {
-                                        Text("\(unavailableSelectedStorageLocationCount) unavailable")
-                                            .font(.caption)
-                                            .foregroundStyle(.orange)
-                                    }
-                                }
-                            } else if !storageLocationsManager.locations.isEmpty {
-                                Text("No active locations")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("No locations configured")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .id(storageLocationSummaryID)
-                        .transition(storageLocationSummaryTransition)
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                        showStorageLocations.toggle()
                     }
-                    .animation(
-                        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
-                        value: storageLocationSummaryID
-                    )
-                    
-                    Spacer()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "externaldrive")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
 
+                        ZStack(alignment: .leading) {
+                            Text(storageLocationTitle)
+                                .id(storageLocationTitle)
+                                .transition(storageLocationSummaryTransition)
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .animation(
+                            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
+                            value: storageLocationTitle
+                        )
+                    }
+                    .contentShape(Rectangle())
+                }
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
+                .accessibilityHint("Expand to manage local, cloud, and external organization locations")
+
+                Spacer()
+
+                storageLocationSelectionSummary
+
+                Button {
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                        showStorageLocations.toggle()
+                    }
+                } label: {
                     Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
-            .accessibilityHint("Expand to manage local, cloud, and external organization locations")
+                .buttonStyle(.plain)
+                .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
+                .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
 
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -1072,6 +1066,49 @@ struct ReadyToOrganizeView: View {
                 ))
             }
         }
+    }
+
+    @ViewBuilder
+    private var storageLocationSelectionSummary: some View {
+        ZStack(alignment: .trailing) {
+            Group {
+                if selectedStorageLocationCount > 0 {
+                    HStack(spacing: 8) {
+                        Text("\(selectedStorageLocationCount) selected")
+                            .font(.caption)
+                            .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
+                                    .opacity(0.1)
+                            )
+                            .clipShape(Capsule())
+
+                        if unavailableSelectedStorageLocationCount > 0 {
+                            Text("\(unavailableSelectedStorageLocationCount) unavailable")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                } else if !storageLocationsManager.locations.isEmpty {
+                    Text("No active locations")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No locations configured")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .id(storageLocationSummaryID)
+            .transition(storageLocationSummaryTransition)
+        }
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
+            value: storageLocationSummaryID
+        )
+        .accessibilityElement(children: .combine)
     }
     
     @ViewBuilder
@@ -1938,6 +1975,7 @@ struct CompactStorageLocationRow: View {
                                 y: reduceMotion || isHoveringPath ? 0 : 3
                             )
                             .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
+                            .foregroundStyle(Color.accentColor)
                             .accessibilityHidden(true)
                     }
                     .frame(minHeight: 20)
