@@ -11,7 +11,7 @@ const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="rounded-3xl border border-border bg-card/40 backdrop-blur-md transition-colors hover:border-primary/30">
+    <div className="rounded-3xl border border-border bg-card/60 transition-colors hover:border-primary/30">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -28,8 +28,8 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       </button>
       <div
         className={cn(
-          'grid transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-          open ? 'grid-rows-[1fr] opacity-100 blur-0' : 'grid-rows-[0fr] opacity-0 blur-sm',
+          'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
       >
         <div className="overflow-hidden">
