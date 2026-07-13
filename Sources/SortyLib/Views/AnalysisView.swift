@@ -14,16 +14,21 @@ import UniformTypeIdentifiers
 
 @MainActor
 enum AnalysisIconProvider {
-    private static var cache: [String: NSImage] = [:]
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 160
+        cache.totalCostLimit = 4 * 1024 * 1024
+        return cache
+    }()
 
     static func icon(for contentType: UTType) -> NSImage {
         let key = "type:\(contentType.identifier)"
-        if let image = cache[key] {
+        if let image = cache.object(forKey: key as NSString) {
             return image
         }
-        let image = NSWorkspace.shared.icon(for: contentType)
+        let image = NSWorkspace.shared.icon(for: contentType).copy() as! NSImage
         image.size = NSSize(width: 32, height: 32)
-        cache[key] = image
+        cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
         return image
     }
 
@@ -37,13 +42,18 @@ enum AnalysisIconProvider {
         }
 
         let key = "ext:\(normalizedExtension)"
-        if let image = cache[key] {
+        if let image = cache.object(forKey: key as NSString) {
             return image
         }
-        let image = NSWorkspace.shared.icon(forFileType: normalizedExtension)
+        let image = NSWorkspace.shared.icon(forFileType: normalizedExtension).copy() as! NSImage
         image.size = NSSize(width: 32, height: 32)
-        cache[key] = image
+        cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
         return image
+    }
+
+    private static func imageCost(_ image: NSImage) -> Int {
+        let pixels = max(1, Int(image.size.width * 2 * image.size.height * 2))
+        return pixels * 4
     }
 }
 
@@ -1446,12 +1456,18 @@ private struct StreamingProgressBeam: View {
     /// When true, the card expands to align with the live insights island below it.
     var matchesInsightsWidth: Bool = false
 
+    @Environment(\.controlActiveState) private var controlActiveState
+
     /// Compact width used when the banner stands alone (removes empty space).
     private static let collapsedWidth: CGFloat = 440
     /// Width of the live insights island the banner expands to meet.
     private static let expandedWidth: CGFloat = 550
     private var targetWidth: CGFloat {
         matchesInsightsWidth ? Self.expandedWidth : Self.collapsedWidth
+    }
+
+    private var isAnimationActive: Bool {
+        controlActiveState != .inactive
     }
 
     private var percent: Int {
@@ -1535,7 +1551,7 @@ private struct StreamingProgressBeam: View {
             .medium,
             palette: .colorful,
             theme: .dark,
-            active: true,
+            active: isAnimationActive,
             cornerRadius: 16,
             strength: 1.0
         )
@@ -1593,11 +1609,18 @@ private struct ReferenceBeamFallback: View {
     let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var shouldAnimate: Bool {
+        active && !reduceMotion && controlActiveState != .inactive
+    }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+        ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = reduceMotion ? 0 : time / 1.96
+            let phase = shouldAnimate ? time / 1.96 : 0
             ZStack {
                 if includesInteriorGlow {
                     beamInteriorGlow(phase: phase)

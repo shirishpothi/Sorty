@@ -69,11 +69,14 @@ public struct OCRResult: Sendable {
 public actor VisionAnalyzer {
     private let maxTextLength = 2000
     private let minimumConfidence: Float = 0.3
+    private let maximumCachedResultCount = 256
+    private let cacheTrimThreshold = 288
     private var recognitionLanguages: [String] = ["en-US"]
 
     private struct OCRCacheEntry {
         let modificationDate: Date
         let fileSize: Int
+        let cachedAt: Date
         let result: OCRResult
     }
 
@@ -388,9 +391,28 @@ public actor VisionAnalyzer {
             let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let modDate = values.contentModificationDate ?? .distantPast
             let fileSize = values.fileSize ?? 0
-            ocrCache[url.path] = OCRCacheEntry(modificationDate: modDate, fileSize: fileSize, result: result)
+            ocrCache[url.path] = OCRCacheEntry(
+                modificationDate: modDate,
+                fileSize: fileSize,
+                cachedAt: Date(),
+                result: result
+            )
+            trimCacheIfNeeded()
         } catch {
             DebugLogger.log("VisionAnalyzer: failed to cache OCR result for \(url.lastPathComponent): \(error.localizedDescription)")
+        }
+    }
+
+    private func trimCacheIfNeeded() {
+        guard ocrCache.count > cacheTrimThreshold else { return }
+
+        let overflow = ocrCache.count - maximumCachedResultCount
+        let oldestKeys = ocrCache
+            .sorted { $0.value.cachedAt < $1.value.cachedAt }
+            .prefix(overflow)
+            .map(\.key)
+        for key in oldestKeys {
+            ocrCache.removeValue(forKey: key)
         }
     }
 }

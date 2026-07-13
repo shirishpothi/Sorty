@@ -1718,6 +1718,12 @@ struct ScanProgressViewNew: View {
     let progress: Double
     var isPreparing: Bool = false
 
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var isAnimationActive: Bool {
+        controlActiveState != .inactive
+    }
+
     private var clampedProgress: Double {
         max(0, min(1, progress))
     }
@@ -1822,7 +1828,7 @@ struct ScanProgressViewNew: View {
             .medium,
             palette: .colorful,
             theme: .dark,
-            active: true,
+            active: isAnimationActive,
             cornerRadius: 16,
             strength: 1.0
         )
@@ -1858,11 +1864,18 @@ private struct ScanProgressReferenceBeamFallback: View {
     let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var shouldAnimate: Bool {
+        active && !reduceMotion && controlActiveState != .inactive
+    }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+        ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = reduceMotion ? 0 : time / 1.96
+            let phase = shouldAnimate ? time / 1.96 : 0
             ZStack {
                 if includesInteriorGlow {
                     beamInteriorGlow(phase: phase)
