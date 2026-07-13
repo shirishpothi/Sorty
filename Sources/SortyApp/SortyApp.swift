@@ -236,6 +236,9 @@ private enum ApplicationMover {
     private static let applicationsPath = "/Applications"
 
     static let shouldLaunchMainUI: Bool = {
+        if ProcessInfo.processInfo.arguments.contains("--release-launch-smoke-test") {
+            return true
+        }
         #if DEBUG
         true
         #else
