@@ -767,9 +767,7 @@ struct ReadyToOrganizeView: View {
     }
 
     private var storageLocationRowTransition: AnyTransition {
-        reduceMotion
-            ? .opacity
-            : .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+        .opacity
     }
 
     var body: some View {
@@ -963,14 +961,18 @@ struct ReadyToOrganizeView: View {
             HStack(spacing: 8) {
                 Button {
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                         showStorageLocations.toggle()
                     }
                 } label: {
-                    HStack(alignment: .center, spacing: 6) {
-                        Image(systemName: "externaldrive")
+                    HStack(spacing: 6) {
+                        Image(systemName: selectedStorageLocationCount > 0 ? "externaldrive.fill" : "externaldrive")
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(
+                                selectedStorageLocationCount > 0
+                                    ? SortyDesignSystem.Colors.resolvedAccent
+                                    : Color.secondary
+                            )
 
                         ZStack(alignment: .leading) {
                             Text(storageLocationTitle)
@@ -984,22 +986,20 @@ struct ReadyToOrganizeView: View {
                             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
                             value: storageLocationTitle
                         )
+
+                        Spacer(minLength: 8)
+
+                        storageLocationSelectionSummary
+
+                        Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 16)
+                            .accessibilityHidden(true)
                     }
-                    .frame(height: 28)
-
-                    Spacer()
-
-                    storageLocationSelectionSummary
-                        .frame(height: 28)
-
-                    Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 16, height: 28)
-                        .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                .contentShape(Rectangle())
                 .buttonStyle(.plain)
                 .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
                 .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
@@ -1032,7 +1032,7 @@ struct ReadyToOrganizeView: View {
                         .foregroundStyle(.secondary)
                     
                     if !storageLocationsManager.locations.isEmpty {
-                        LazyVStack(spacing: 6) {
+                        VStack(spacing: 6) {
                             ForEach(storageLocationsManager.locations) { location in
                                 CompactStorageLocationRow(location: location)
                                     .transition(storageLocationRowTransition)
@@ -1061,10 +1061,7 @@ struct ReadyToOrganizeView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 2)
                 }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)),
-                    removal: .opacity
-                ))
+                .transition(.opacity)
             }
         }
     }
@@ -1934,9 +1931,13 @@ struct CompactStorageLocationRow: View {
     var body: some View {
         HStack(spacing: 10) {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "externaldrive.fill")
+                Image(systemName: location.isEnabled ? "externaldrive.fill" : "externaldrive")
                     .font(.system(size: 14))
-                    .foregroundStyle(location.isEnabled ? .teal : .secondary)
+                    .foregroundStyle(
+                        location.isEnabled
+                            ? SortyDesignSystem.Colors.resolvedAccent
+                            : Color.secondary
+                    )
 
                 if needsAttention {
                     Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")
