@@ -361,9 +361,9 @@ public struct WhatsNewTourView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(width: 30, height: 30)
-                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .systemLiquidGlassCircularButtonLabel()
             }
-            .buttonStyle(.plain)
+            .systemLiquidGlassCircularButton()
             .opacity(currentPage == 0 ? 0 : 1)
             .disabled(currentPage == 0)
 
@@ -374,9 +374,9 @@ public struct WhatsNewTourView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(width: 30, height: 30)
-                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .systemLiquidGlassCircularButtonLabel()
             }
-            .buttonStyle(.plain)
+            .systemLiquidGlassCircularButton()
             .accessibilityLabel("Close What's New")
         }
         .padding(.horizontal, 12)
