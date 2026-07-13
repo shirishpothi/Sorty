@@ -1186,8 +1186,8 @@ fi
 # APP_ICON_VARIANT accepts:
 # - release/prod/production -> AppIcon-Release.icns
 # - nightly/preview         -> AppIcon-Nightly.icns for nightly builds
-# - debug/dev/local         -> AppIcon-Debug.icns for local builds
-# - anything else           -> AppIcon-CI.icns for CI builds
+# - debug/dev/local/ci      -> AppIcon-Debug.icns for development and CI builds
+# - anything else           -> AppIcon-Debug.icns as a safe development fallback
 RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-ci}"
 APP_ICON_VARIANT_NORMALIZED="$(echo "${RAW_APP_ICON_VARIANT}" | tr '[:upper:]' '[:lower:]')"
 
@@ -1200,13 +1200,13 @@ case "${APP_ICON_VARIANT_NORMALIZED}" in
         APP_ICON_VARIANT_KEY="nightly"
         ICON_VARIANT_SUFFIX="Nightly"
         ;;
-    debug|dev|local)
+    debug|dev|local|ci|blacksmith)
         APP_ICON_VARIANT_KEY="debug"
         ICON_VARIANT_SUFFIX="Debug"
         ;;
     *)
-        APP_ICON_VARIANT_KEY="ci"
-        ICON_VARIANT_SUFFIX="CI"
+        APP_ICON_VARIANT_KEY="debug"
+        ICON_VARIANT_SUFFIX="Debug"
         ;;
 esac
 
@@ -1225,7 +1225,7 @@ fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     # NOTE: Do NOT remove Contents/Resources/AppIcons here. That directory ships the
-    # About-window easter-egg icon variants (AppIcon-Debug/Release/CI/Nightly.png).
+    # About-window easter-egg icon variants (AppIcon-Debug/Release/Nightly.png).
     touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else

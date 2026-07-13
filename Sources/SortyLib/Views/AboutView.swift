@@ -341,7 +341,6 @@ private final class AboutIconCarousel: ObservableObject {
 private enum AboutAppIconVariant: String, CaseIterable {
     case debug = "Debug"
     case release = "Release"
-    case ci = "CI"
     case nightly = "Nightly"
 
     /// Build channel recorded by scripts/build.sh in Info.plist (SortyBuildVariant).
@@ -393,12 +392,10 @@ private enum AboutAppIconVariant: String, CaseIterable {
             .lowercased()
 
         switch normalized {
-        case "debug", "dev", "local":
+        case "debug", "dev", "local", "ci", "blacksmith":
             return .debug
         case "release", "prod", "production":
             return .release
-        case "ci", "blacksmith":
-            return .ci
         case "nightly", "preview":
             return .nightly
         default:
