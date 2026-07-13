@@ -65,6 +65,28 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         XCTAssertNotNil(result[urls[2]])
     }
 
+    func testPrepareImagesForVisionReportsCompletedAttempts() async throws {
+        let urls = [
+            tempDirectory.appendingPathComponent("a.png"),
+            tempDirectory.appendingPathComponent("b.png"),
+            tempDirectory.appendingPathComponent("corrupted.png")
+        ]
+        try createPNG(at: urls[0], width: 120, height: 120)
+        try createPNG(at: urls[1], width: 200, height: 100)
+        try Data("not-an-image".utf8).write(to: urls[2])
+        let progress = VisionPreparationProgressRecorder()
+
+        let analyzer = ImageVisionAnalyzer()
+        let result = await analyzer.prepareImagesForVision(urls: urls) { completed, total in
+            await progress.record(completed: completed, total: total)
+        }
+
+        XCTAssertEqual(result.count, 2)
+        let updates = await progress.updates
+        XCTAssertEqual(updates.map(\.completed), [1, 2, 3])
+        XCTAssertEqual(updates.map(\.total), [3, 3, 3])
+    }
+
     func testPrepareImageForVisionHandlesMissingAndCorruptedFile() async throws {
         let analyzer = ImageVisionAnalyzer()
 
@@ -233,4 +255,12 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         return (width, height)
     }
 
+}
+
+private actor VisionPreparationProgressRecorder {
+    private(set) var updates: [(completed: Int, total: Int)] = []
+
+    func record(completed: Int, total: Int) {
+        updates.append((completed, total))
+    }
 }

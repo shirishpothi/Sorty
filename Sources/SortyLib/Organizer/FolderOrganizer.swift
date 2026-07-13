@@ -1606,9 +1606,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             } else {
                 selectedBatch = imageFiles
             }
-            updateProgress(0.25, stage: "Sorty is analyzing your images (\(selectedBatch.count)/\(imageFiles.count))")
+            let selectedImageURLs = selectedBatch.compactMap(\.url)
+            let preparationLabel = shouldLimitVisionImages && selectedBatch.count < imageFiles.count
+                ? "selected images"
+                : "images"
+            updateProgress(
+                0.22,
+                stage: "Sorty is preparing your \(preparationLabel) (0/\(selectedImageURLs.count))"
+            )
 
-            let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedBatch.compactMap { $0.url })
+            let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedImageURLs) { [weak self] completed, total in
+                guard let self else { return }
+                let phaseProgress = 0.22 + (Double(completed) / Double(max(total, 1))) * 0.08
+                await self.updateProgress(
+                    phaseProgress,
+                    stage: "Sorty is preparing your \(preparationLabel) (\(completed)/\(total))"
+                )
+            }
             var analyzedNames: [String] = []
             for file in selectedBatch {
                 guard let fileURL = file.url else { continue }
@@ -1630,6 +1644,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             if !analyzedNames.isEmpty {
                 instructions += visionPromptInstructions(for: analyzedNames)
+                updateProgress(0.30, stage: "Sorty is analyzing \(analyzedNames.count) prepared images...")
+            } else {
+                updateProgress(0.30, stage: "Continuing with file details...")
             }
             DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(imageFiles.count), failed preprocess: \(failedCount))")
         } else if !imageFiles.isEmpty && visionEnabled && !modelSupportsVision {
