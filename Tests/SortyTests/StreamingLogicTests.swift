@@ -111,6 +111,13 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertFalse(organizer.isStreaming)
     }
 
+    func testDidCompleteStoresFinalPayloadSynchronously() {
+        organizer.didComplete(content: "{\"folders\":[]}")
+
+        XCTAssertEqual(organizer.streamingContent, "{\"folders\":[]}")
+        XCTAssertFalse(organizer.isStreaming)
+    }
+
     func testChunkAfterCompletedStreamStartsFreshSession() async {
         organizer.didReceiveChunk("first stream")
         try? await Task.sleep(nanoseconds: 100_000_000)

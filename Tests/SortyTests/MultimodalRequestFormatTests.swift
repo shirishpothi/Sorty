@@ -70,6 +70,77 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(imageURL["detail"] as? String, "high")
     }
 
+    func testOpenRouterRequiresJSONCapableProviderRouting() async throws {
+        let config = AIConfig(
+            provider: .openRouter,
+            apiURL: "https://openrouter.ai/api/v1",
+            apiKey: "test-key",
+            model: "openrouter/free",
+            enableStreaming: false
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let responseBody = """
+            {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Documents\\",\\"files\\":[\\"report.pdf\\"]}],\\"unorganized\\":[]}"}}]}
+            """
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(responseBody.utf8))
+        }
+
+        _ = try await client.analyze(files: files)
+
+        let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        let json = try request.jsonBody()
+        let responseFormat = try XCTUnwrap(json["response_format"] as? [String: Any])
+        XCTAssertEqual(responseFormat["type"] as? String, "json_object")
+
+        let provider = try XCTUnwrap(json["provider"] as? [String: Any])
+        XCTAssertEqual(provider["require_parameters"] as? Bool, true)
+    }
+
+    func testOpenRouterRetriesMidStreamProviderFailureWithResponseHealing() async throws {
+        let config = AIConfig(
+            provider: .openRouter,
+            apiURL: "https://openrouter.ai/api/v1",
+            apiKey: "test-key",
+            model: "openrouter/free",
+            enableStreaming: true
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let requestJSON = try request.jsonBody()
+            let responseBody: String
+            if requestJSON["stream"] as? Bool == true {
+                responseBody = """
+                data: {"error":{"code":502,"message":"Provider disconnected","metadata":{"error_type":"provider_unavailable"}},"choices":[{"delta":{"content":""},"finish_reason":"error"}]}
+
+                data: [DONE]
+
+                """
+            } else {
+                responseBody = """
+                {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Documents\\",\\"files\\":[\\"report.pdf\\"]}],\\"unorganized\\":[]}"}}]}
+                """
+            }
+
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(responseBody.utf8))
+        }
+
+        let plan = try await client.analyze(files: files)
+
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Documents")
+        let fallbackRequest = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        let fallbackJSON = try fallbackRequest.jsonBody()
+        let plugins = try XCTUnwrap(fallbackJSON["plugins"] as? [[String: Any]])
+        XCTAssertEqual(plugins.first?["id"] as? String, "response-healing")
+        XCTAssertNil(fallbackJSON["stream"])
+    }
+
     func testAnthropicClientBuildsBase64ImageParts() async throws {
         let config = AIConfig(
             provider: .anthropic,
@@ -166,7 +237,8 @@ private final class MockHTTPURLProtocol: URLProtocol {
         guard let host = request.url?.host else { return false }
         return host == "api.openai.com" ||
             host == "api.anthropic.com" ||
-            host == "api.githubcopilot.com"
+            host == "api.githubcopilot.com" ||
+            host == "openrouter.ai"
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {

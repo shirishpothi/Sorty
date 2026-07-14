@@ -140,6 +140,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         guard config.provider == .openRouter else { return }
 
         requestBody["response_format"] = ["type": "json_object"]
+        requestBody["provider"] = ["require_parameters": true]
         requestBody["reasoning"] = [
             "effort": "none",
             "exclude": true
@@ -239,6 +240,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                   !content.isEmpty else {
                 throw AIClientError.invalidResponseFormat
             }
+
+            await MainActor.run {
+                streamingDelegate?.didComplete(content: content)
+            }
             
             // Calculate stats
             // For non-streaming, TTFT is essentially the total duration as we wait for the full response
@@ -257,7 +262,14 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 promptTokens: promptTokens
             )
             
-            var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
+            let parsedPlan: OrganizationPlan
+            do {
+                parsedPlan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
+            } catch {
+                throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+            }
+
+            var plan = parsedPlan
             plan.generationStats = stats
             return plan
         } catch let error as AIClientError {
@@ -312,10 +324,33 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
                 // Parse the JSON chunk
                 guard let jsonData = jsonString.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                      let parsedChunk = Self.parseStreamChunk(from: json) else {
+                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
                     continue
                 }
+
+                if let streamError = Self.streamError(from: json) {
+                    if config.provider == .openRouter, Self.isTransientStreamError(streamError.statusCode) {
+                        return try await retryOpenRouterWithoutStreaming(
+                            url: url,
+                            requestBody: requestBody,
+                            files: files,
+                            promptTokens: promptTokens
+                        )
+                    }
+                    throw AIClientError.apiError(
+                        statusCode: streamError.statusCode,
+                        message: streamError.message
+                    )
+                }
+
+                if let finishError = Self.finishReasonError(from: json) {
+                    throw AIClientError.apiError(
+                        statusCode: finishError.statusCode,
+                        message: finishError.message
+                    )
+                }
+
+                guard let parsedChunk = Self.parseStreamChunk(from: json) else { continue }
 
                 let hasVisibleChunk = parsedChunk.visibleChunk?.isEmpty == false
                 let hasCompletionChunk = parsedChunk.completionChunk?.isEmpty == false
@@ -366,6 +401,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 // Try partial extraction before giving up
                 if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
                     plan = partialPlan
+                } else if config.provider == .openRouter {
+                    return try await retryOpenRouterWithoutStreaming(
+                        url: url,
+                        requestBody: requestBody,
+                        files: files,
+                        promptTokens: promptTokens
+                    )
                 } else {
                     let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
                     await MainActor.run {
@@ -396,6 +438,27 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let visibleChunk: String?
     }
 
+    private struct StreamError {
+        let statusCode: Int
+        let message: String
+    }
+
+    private func retryOpenRouterWithoutStreaming(
+        url: URL,
+        requestBody: [String: Any],
+        files: [FileItem],
+        promptTokens: Int?
+    ) async throws -> OrganizationPlan {
+        var fallbackBody = requestBody
+        fallbackBody["plugins"] = [["id": "response-healing"]]
+        return try await analyzeNonStreaming(
+            url: url,
+            requestBody: fallbackBody,
+            files: files,
+            promptTokens: promptTokens
+        )
+    }
+
     private static func sseDataPayload(from line: String) -> String? {
         guard line.hasPrefix("data:") else { return nil }
         let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
@@ -419,6 +482,76 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         }
 
         return StreamChunk(completionChunk: completionChunk, visibleChunk: visibleChunk)
+    }
+
+    private static func streamError(from json: [String: Any]) -> StreamError? {
+        let firstChoice = (json["choices"] as? [[String: Any]])?.first
+        guard let payload = (json["error"] as? [String: Any]) ??
+            (firstChoice?["error"] as? [String: Any]) else {
+            return nil
+        }
+
+        let metadata = payload["metadata"] as? [String: Any]
+        let errorType = metadata?["error_type"] as? String
+        let statusCode: Int
+        if let number = payload["code"] as? NSNumber {
+            statusCode = number.intValue
+        } else if let string = payload["code"] as? String, let parsed = Int(string) {
+            statusCode = parsed
+        } else {
+            switch errorType {
+            case "rate_limit_exceeded":
+                statusCode = 429
+            case "provider_overloaded":
+                statusCode = 503
+            case "timeout":
+                statusCode = 504
+            default:
+                statusCode = 502
+            }
+        }
+
+        let message = (payload["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedMessage = if let message, !message.isEmpty {
+            message
+        } else {
+            "The AI provider stopped the response before it completed."
+        }
+        return StreamError(
+            statusCode: statusCode,
+            message: resolvedMessage
+        )
+    }
+
+    private static func finishReasonError(from json: [String: Any]) -> StreamError? {
+        guard let firstChoice = (json["choices"] as? [[String: Any]])?.first,
+              let finishReason = firstChoice["finish_reason"] as? String else {
+            return nil
+        }
+
+        switch finishReason {
+        case "length":
+            return StreamError(
+                statusCode: 413,
+                message: "The model reached its output limit before finishing the organization plan. Try fewer files or a model with a larger output limit."
+            )
+        case "content_filter":
+            return StreamError(
+                statusCode: 422,
+                message: "The model stopped because its content filter rejected part of the response."
+            )
+        case "error":
+            return StreamError(
+                statusCode: 502,
+                message: "The AI provider stopped the response before it completed."
+            )
+        default:
+            return nil
+        }
+    }
+
+    private static func isTransientStreamError(_ statusCode: Int) -> Bool {
+        [429, 500, 502, 503, 504].contains(statusCode)
     }
 
     private static func extractReasoningChunk(from delta: [String: Any]?) -> String? {

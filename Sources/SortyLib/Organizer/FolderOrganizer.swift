@@ -773,53 +773,51 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         startTimeoutTimer()
     }
 
-    public nonisolated func didReceiveChunk(_ chunk: String) {
-        Task { @MainActor in
-            guard !self.isCancellationRequested else { return }
+    public func didReceiveChunk(_ chunk: String) {
+        guard !isCancellationRequested else { return }
 
-            // If a prior stream already completed, treat this as a brand-new stream session.
-            if !self.isStreaming, !self.streamingContent.isEmpty {
-                self.clearStreamingDisplayState()
-            }
+        // If a prior stream already completed, treat this as a brand-new stream session.
+        if !isStreaming, !streamingContent.isEmpty {
+            clearStreamingDisplayState()
+        }
             
-            let isFirstChunk = self.streamingContent.isEmpty
-            self.streamingContent += chunk
-            self.lastChunkTime = Date()
+        let isFirstChunk = streamingContent.isEmpty
+        streamingContent += chunk
+        lastChunkTime = Date()
 
-            if isFirstChunk {
-                // Batch all initial state updates together
-                self.withBatchUpdates {
-                    self.isStreaming = true
-                    self.organizationStage = self.analysisStageDescription
-                    self.progress = 0.30
-                    if self.liveInsightsEnabled {
-                        self.syncDisplayContentImmediately()
-                    }
+        if isFirstChunk {
+            // Batch all initial state updates together
+            withBatchUpdates {
+                isStreaming = true
+                organizationStage = analysisStageDescription
+                progress = 0.30
+                if liveInsightsEnabled {
+                    syncDisplayContentImmediately()
                 }
-                
-                // Start steady progress task for smooth animation
-                self.startSteadyProgressTask()
             }
 
-            if self.liveInsightsEnabled {
-                // Try to extract progress lines from the stream before JSON starts
-                if !self.jsonStartedInStream {
-                    self.processProgressLines(from: chunk)
-                }
-                
-                // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
-                self.scheduleDisplayUpdate(for: self.streamingContent)
-                
-                // Fall back to regex extractor only if no progress lines were received
-                if !self.receivedProgressLines {
-                    self.extractInsightsIfNeeded()
-                }
-            } else {
-                let now = Date()
-                if now.timeIntervalSince(self.lastDisplayUpdate) >= self.displayUpdateInterval {
-                    self.lastDisplayUpdate = now
-                    self.updateProgressFromStreamLength(self.streamingContent.count)
-                }
+            // Start steady progress task for smooth animation
+            startSteadyProgressTask()
+        }
+
+        if liveInsightsEnabled {
+            // Try to extract progress lines from the stream before JSON starts
+            if !jsonStartedInStream {
+                processProgressLines(from: chunk)
+            }
+
+            // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
+            scheduleDisplayUpdate(for: streamingContent)
+
+            // Fall back to regex extractor only if no progress lines were received
+            if !receivedProgressLines {
+                extractInsightsIfNeeded()
+            }
+        } else {
+            let now = Date()
+            if now.timeIntervalSince(lastDisplayUpdate) >= displayUpdateInterval {
+                lastDisplayUpdate = now
+                updateProgressFromStreamLength(streamingContent.count)
             }
         }
     }
@@ -1256,32 +1254,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             .mapValues { $0.map { $0.path } }
     }
     
-    public nonisolated func didComplete(content: String) {
-        Task { @MainActor in
-            if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                // Prefer the provider's finalized completion payload so history stores full output.
-                self.streamingContent = content
-                if self.liveInsightsEnabled {
-                    self.syncDisplayContentImmediately()
-                }
+    public func didComplete(content: String) {
+        if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Prefer the provider's finalized completion payload so history stores full output.
+            streamingContent = content
+            if liveInsightsEnabled {
+                syncDisplayContentImmediately()
             }
-            self.isStreaming = false
-            self.organizationStage = self.aiConfig?.mode == .renameOnly ? "Building rename preview..." : "Building organization plan..."
-            self.stopTimeoutTimer()
-            self.stopSteadyProgressTask()
         }
+        isStreaming = false
+        organizationStage = aiConfig?.mode == .renameOnly ? "Building rename preview..." : "Building organization plan..."
+        stopTimeoutTimer()
+        stopSteadyProgressTask()
     }
 
-    public nonisolated func didFail(error: Error) {
-        Task { @MainActor in
-            self.isStreaming = false
-            self.errorMessage = self.userFacingErrorMessage(for: error)
-            self.stopTimeoutTimer()
-            self.stopSteadyProgressTask()
-            
-            // Request user attention for streaming failure
-            NotificationManager.shared.requestAttention()
-        }
+    public func didFail(error: Error) {
+        isStreaming = false
+        errorMessage = userFacingErrorMessage(for: error)
+        stopTimeoutTimer()
+        stopSteadyProgressTask()
+
+        // Request user attention for streaming failure
+        NotificationManager.shared.requestAttention()
     }
 
     // MARK: - Timeout Timer
