@@ -25,6 +25,38 @@ final class PromptBuilderTests: XCTestCase {
         }
         super.tearDown()
     }
+
+    func testSystemPromptUsesOneJSONOnlyContract() {
+        let prompt = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            maxTopLevelFolders: 8,
+            mode: .organizeAndRename,
+            enableTagging: true
+        )
+
+        XCTAssertTrue(prompt.contains("The first non-whitespace character MUST be \"{\""))
+        XCTAssertTrue(prompt.contains("Return exactly one valid JSON object"))
+        XCTAssertFalse(prompt.contains(">>"))
+        XCTAssertFalse(prompt.contains("```"))
+        XCTAssertFalse(prompt.contains("..."), "Schema examples must themselves be valid JSON.")
+    }
+
+    func testCompactSystemPromptsDoNotRequestNarrationBeforeJSON() {
+        let config = AIConfig(mode: .organize)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
+            XCTAssertTrue(prompt.contains("exactly one JSON object"))
+            XCTAssertFalse(prompt.contains(">>"))
+            XCTAssertFalse(prompt.contains("Before JSON"))
+        }
+    }
     
     // MARK: - Empty Input
     

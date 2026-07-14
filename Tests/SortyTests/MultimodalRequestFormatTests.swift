@@ -1,5 +1,5 @@
-import XCTest
 import Foundation
+import XCTest
 @testable import SortyLib
 
 final class MultimodalRequestFormatTests: XCTestCase {
@@ -70,7 +70,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(imageURL["detail"] as? String, "high")
     }
 
-    func testOpenRouterRequiresJSONCapableProviderRouting() async throws {
+    func testOpenRouterRequestsJSONWithoutEliminatingFreeRouteProviders() async throws {
         let config = AIConfig(
             provider: .openRouter,
             apiURL: "https://openrouter.ai/api/v1",
@@ -96,8 +96,9 @@ final class MultimodalRequestFormatTests: XCTestCase {
         let responseFormat = try XCTUnwrap(json["response_format"] as? [String: Any])
         XCTAssertEqual(responseFormat["type"] as? String, "json_object")
 
-        let provider = try XCTUnwrap(json["provider"] as? [String: Any])
-        XCTAssertEqual(provider["require_parameters"] as? Bool, true)
+        XCTAssertNil(json["provider"])
+        let plugins = try XCTUnwrap(json["plugins"] as? [[String: Any]])
+        XCTAssertEqual(plugins.first?["id"] as? String, "response-healing")
     }
 
     func testOpenRouterRetriesMidStreamProviderFailureWithResponseHealing() async throws {
@@ -139,6 +140,124 @@ final class MultimodalRequestFormatTests: XCTestCase {
         let plugins = try XCTUnwrap(fallbackJSON["plugins"] as? [[String: Any]])
         XCTAssertEqual(plugins.first?["id"] as? String, "response-healing")
         XCTAssertNil(fallbackJSON["stream"])
+    }
+
+    func testOpenRouterRetriesWithoutOptionalParametersWhenFreeRouteRejectsThem() async throws {
+        let config = AIConfig(
+            provider: .openRouter,
+            apiURL: "https://openrouter.ai/api/v1",
+            apiKey: "test-key",
+            model: "openrouter/free",
+            temperature: 0.7,
+            enableStreaming: false
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let requestJSON = try request.jsonBody()
+            if requestJSON["response_format"] != nil {
+                let errorBody = """
+                {"error":{"message":"No endpoints found that can handle requested parameters"}}
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+                return (response, Data(errorBody.utf8))
+            }
+
+            let responseBody = """
+            {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Documents\\",\\"files\\":[\\"report.pdf\\"]}],\\"unorganized\\":[]}"}}]}
+            """
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(responseBody.utf8))
+        }
+
+        let plan = try await client.analyze(files: files)
+
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Documents")
+        let requests = MockHTTPURLProtocol.capturedRequests()
+        XCTAssertEqual(requests.count, 2)
+        let fallbackJSON = try requests[1].jsonBody()
+        XCTAssertNil(fallbackJSON["response_format"])
+        XCTAssertNil(fallbackJSON["reasoning"])
+        XCTAssertNil(fallbackJSON["plugins"])
+        XCTAssertNil(fallbackJSON["provider"])
+        XCTAssertEqual(fallbackJSON["temperature"] as? Double, 0.2)
+    }
+
+    func testOpenRouterRetriesEmptyCompletionWithPortableJSONRequest() async throws {
+        let config = AIConfig(
+            provider: .openRouter,
+            apiURL: "https://openrouter.ai/api/v1",
+            apiKey: "test-key",
+            model: "openrouter/free",
+            enableStreaming: false
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let requestJSON = try request.jsonBody()
+            let responseBody: String
+            if requestJSON["response_format"] != nil {
+                responseBody = """
+                {"choices":[{"message":{"content":null},"finish_reason":"stop"}]}
+                """
+            } else {
+                responseBody = """
+                {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Documents\\",\\"files\\":[\\"report.pdf\\"]}],\\"unorganized\\":[]}"}}]}
+                """
+            }
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(responseBody.utf8))
+        }
+
+        let plan = try await client.analyze(files: files)
+
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Documents")
+        XCTAssertEqual(MockHTTPURLProtocol.capturedRequests().count, 2)
+    }
+
+    func testOpenRouterRetriesTextOnlyWhenFreeRouteRejectsImageInput() async throws {
+        let config = AIConfig(
+            provider: .openRouter,
+            apiURL: "https://openrouter.ai/api/v1",
+            apiKey: "test-key",
+            model: "openrouter/free",
+            enableStreaming: false
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/photo.jpg", name: "photo", extension: "jpg")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let requestJSON = try request.jsonBody()
+            let messages = try XCTUnwrap(requestJSON["messages"] as? [[String: Any]])
+            let userContent = try XCTUnwrap(messages.last?["content"])
+            if userContent is [[String: Any]] {
+                let errorBody = """
+                {"error":{"message":"No endpoints found that support image input"}}
+                """
+                let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+                return (response, Data(errorBody.utf8))
+            }
+
+            let responseBody = """
+            {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Images\\",\\"files\\":[\\"photo.jpg\\"]}],\\"unorganized\\":[]}"}}]}
+            """
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(responseBody.utf8))
+        }
+
+        let plan = try await client.analyzeWithImages(
+            files: files,
+            imageData: ["photo.jpg": Data([0x01, 0x02])]
+        )
+
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Images")
+        let requests = MockHTTPURLProtocol.capturedRequests()
+        XCTAssertEqual(requests.count, 2)
+        let fallbackJSON = try requests[1].jsonBody()
+        let fallbackMessages = try XCTUnwrap(fallbackJSON["messages"] as? [[String: Any]])
+        XCTAssertTrue(fallbackMessages.last?["content"] is String)
     }
 
     func testAnthropicClientBuildsBase64ImageParts() async throws {
@@ -224,6 +343,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
 private final class MockHTTPURLProtocol: URLProtocol {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
     nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var requests: [URLRequest] = []
     private static let lock = NSLock()
 
     static func reset() {
@@ -231,6 +351,13 @@ private final class MockHTTPURLProtocol: URLProtocol {
         defer { lock.unlock() }
         requestHandler = nil
         lastRequest = nil
+        requests = []
+    }
+
+    static func capturedRequests() -> [URLRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -248,6 +375,7 @@ private final class MockHTTPURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         Self.lastRequest = request
+        Self.requests.append(request)
         let handler = Self.requestHandler
         Self.lock.unlock()
 

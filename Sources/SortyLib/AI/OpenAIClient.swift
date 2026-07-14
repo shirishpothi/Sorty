@@ -56,12 +56,18 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             requestBody["max_tokens"] = maxTokens
         }
         configureStructuredOrganizationOutput(in: &requestBody)
-        
-        // Use streaming if enabled
-        if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
-        } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
+
+        do {
+            return try await performOrganizationRequest(
+                url: url,
+                requestBody: requestBody,
+                files: files,
+                promptTokens: estimatedPromptTokens,
+                isMultimodal: false
+            )
+        } catch {
+            await notifyStreamingFailure(error)
+            throw error
         }
     }
     
@@ -120,13 +126,30 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             requestBody["max_tokens"] = maxTokens
         }
         configureStructuredOrganizationOutput(in: &requestBody)
-        
-        // Multimodal usually doesn't work well with streaming in some implementations, 
-        // but we'll follow the config if possible.
-        if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
-        } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
+
+        do {
+            return try await performOrganizationRequest(
+                url: url,
+                requestBody: requestBody,
+                files: files,
+                promptTokens: estimatedPromptTokens,
+                isMultimodal: true
+            )
+        } catch where config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
+            LogManager.shared.log(
+                "OpenRouter could not complete the multimodal request; retrying once with file metadata only.",
+                level: .warning,
+                category: "OpenAIClient"
+            )
+            return try await analyze(
+                files: files,
+                customInstructions: customInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+        } catch {
+            await notifyStreamingFailure(error)
+            throw error
         }
     }
 
@@ -140,11 +163,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         guard config.provider == .openRouter else { return }
 
         requestBody["response_format"] = ["type": "json_object"]
-        requestBody["provider"] = ["require_parameters": true]
         requestBody["reasoning"] = [
             "effort": "none",
             "exclude": true
         ]
+        if !config.enableStreaming {
+            requestBody["plugins"] = [["id": "response-healing"]]
+        }
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
@@ -211,6 +236,50 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         }
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
     }
+
+    private func performOrganizationRequest(
+        url: URL,
+        requestBody: [String: Any],
+        files: [FileItem],
+        promptTokens: Int?,
+        isMultimodal: Bool
+    ) async throws -> OrganizationPlan {
+        do {
+            if config.enableStreaming {
+                return try await analyzeWithStreaming(
+                    url: url,
+                    requestBody: requestBody,
+                    files: files,
+                    promptTokens: promptTokens
+                )
+            }
+            return try await analyzeNonStreaming(
+                url: url,
+                requestBody: requestBody,
+                files: files,
+                promptTokens: promptTokens
+            )
+        } catch {
+            guard config.provider == .openRouter,
+                  !isMultimodal || !Self.isOpenRouterVisionRoutingError(error),
+                  Self.shouldRetryOpenRouterPortably(error) else {
+                throw error
+            }
+
+            return try await retryOpenRouterWithPortableJSONRequest(
+                url: url,
+                requestBody: requestBody,
+                files: files,
+                promptTokens: promptTokens
+            )
+        }
+    }
+
+    private func notifyStreamingFailure(_ error: Error) async {
+        await MainActor.run {
+            streamingDelegate?.didFail(error: error)
+        }
+    }
     
     // MARK: - Non-Streaming Implementation
     
@@ -230,19 +299,19 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
             _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
             
-            let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            
+            guard let jsonResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw AIClientError.jsonDecodingError(
+                    context: "The provider returned a JSON value that was not a chat-completion object."
+                )
+            }
 
-            
-            guard let choices = jsonResponse?["choices"] as? [[String: Any]],
+            guard let choices = jsonResponse["choices"] as? [[String: Any]],
                   let firstChoice = choices.first,
                   let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
                   !content.isEmpty else {
-                throw AIClientError.invalidResponseFormat
-            }
-
-            await MainActor.run {
-                streamingDelegate?.didComplete(content: content)
+                throw AIClientError.jsonDecodingError(
+                    context: Self.missingCompletionContext(from: jsonResponse)
+                )
             }
             
             // Calculate stats
@@ -271,6 +340,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
             var plan = parsedPlan
             plan.generationStats = stats
+            await MainActor.run {
+                streamingDelegate?.didComplete(content: content)
+            }
             return plan
         } catch let error as AIClientError {
             throw error
@@ -388,12 +460,6 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 promptTokens: promptTokens
             )
             
-            // Notify completion
-            let finalContent = accumulatedContent
-            await MainActor.run {
-                streamingDelegate?.didComplete(content: finalContent)
-            }
-            
             var plan: OrganizationPlan
             do {
                 plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
@@ -410,25 +476,20 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                     )
                 } else {
                     let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
-                    await MainActor.run {
-                        streamingDelegate?.didFail(error: clientError)
-                    }
                     throw clientError
                 }
             }
             plan.generationStats = stats
+            let finalContent = accumulatedContent
+            await MainActor.run {
+                streamingDelegate?.didComplete(content: finalContent)
+            }
             return plan
             
         } catch let error as AIClientError {
-            await MainActor.run {
-                streamingDelegate?.didFail(error: error)
-            }
             throw error
         } catch {
             let clientError = AIClientError.networkError(error)
-            await MainActor.run {
-                streamingDelegate?.didFail(error: clientError)
-            }
             throw clientError
         }
     }
@@ -459,6 +520,91 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         )
     }
 
+    private func retryOpenRouterWithPortableJSONRequest(
+        url: URL,
+        requestBody: [String: Any],
+        files: [FileItem],
+        promptTokens: Int?
+    ) async throws -> OrganizationPlan {
+        var fallbackBody = requestBody
+        fallbackBody.removeValue(forKey: "provider")
+        fallbackBody.removeValue(forKey: "response_format")
+        fallbackBody.removeValue(forKey: "reasoning")
+        fallbackBody.removeValue(forKey: "plugins")
+        fallbackBody.removeValue(forKey: "stream")
+        if let temperature = fallbackBody["temperature"] as? Double {
+            fallbackBody["temperature"] = min(temperature, 0.2)
+        }
+
+        LogManager.shared.log(
+            "Retrying OpenRouter once without optional routing parameters.",
+            level: .warning,
+            category: "OpenAIClient"
+        )
+        return try await analyzeNonStreaming(
+            url: url,
+            requestBody: fallbackBody,
+            files: files,
+            promptTokens: promptTokens
+        )
+    }
+
+    private static func shouldRetryOpenRouterPortably(_ error: Error) -> Bool {
+        guard let clientError = error as? AIClientError else { return false }
+        switch clientError {
+        case .invalidResponseFormat, .jsonDecodingError:
+            return true
+        case .apiError(let statusCode, let message):
+            let normalized = message.lowercased()
+            let parameterMismatch = normalized.contains("no endpoints") ||
+                normalized.contains("requested parameters") ||
+                normalized.contains("unsupported parameter") ||
+                normalized.contains("response_format") ||
+                normalized.contains("reasoning")
+            return parameterMismatch || [400, 404, 422, 503].contains(statusCode)
+        default:
+            return false
+        }
+    }
+
+    private static func isOpenRouterVisionRoutingError(_ error: Error) -> Bool {
+        guard case let AIClientError.apiError(statusCode, message) = error,
+              [400, 404, 422, 503].contains(statusCode) else {
+            return false
+        }
+        let normalized = message.lowercased()
+        return normalized.contains("vision") ||
+            (normalized.contains("image") && (
+                normalized.contains("input") ||
+                normalized.contains("support") ||
+                normalized.contains("endpoint") ||
+                normalized.contains("modal")
+            ))
+    }
+
+    private static func shouldRetryOpenRouterWithoutImages(_ error: Error) -> Bool {
+        if isOpenRouterVisionRoutingError(error) {
+            return true
+        }
+        guard let clientError = error as? AIClientError else { return false }
+        switch clientError {
+        case .invalidResponseFormat, .jsonDecodingError:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func missingCompletionContext(from response: [String: Any]) -> String {
+        let responseKeys = response.keys.sorted().joined(separator: ", ")
+        let choices = response["choices"] as? [[String: Any]]
+        let firstChoice = choices?.first
+        let choiceKeys = firstChoice?.keys.sorted().joined(separator: ", ") ?? "none"
+        let messageKeys = (firstChoice?["message"] as? [String: Any])?.keys.sorted().joined(separator: ", ") ?? "none"
+        let finishReason = firstChoice?["finish_reason"] as? String ?? "missing"
+        return "HTTP 200 contained no completion text (response keys: [\(responseKeys)]; choices: \(choices?.count ?? 0); choice keys: [\(choiceKeys)]; message keys: [\(messageKeys)]; finish reason: \(finishReason))."
+    }
+
     private static func sseDataPayload(from line: String) -> String? {
         guard line.hasPrefix("data:") else { return nil }
         let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
@@ -471,11 +617,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             return nil
         }
 
-        let delta = firstChoice["delta"] as? [String: Any]
         let completionChunk = AIRequestSupport.extractChatDeltaText(from: firstChoice)
 
-        let reasoningChunk = extractReasoningChunk(from: delta)
-        let visibleChunk = reasoningChunk ?? completionChunk
+        let visibleChunk = completionChunk
 
         if completionChunk == nil && visibleChunk == nil {
             return nil
@@ -554,23 +698,4 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         [429, 500, 502, 503, 504].contains(statusCode)
     }
 
-    private static func extractReasoningChunk(from delta: [String: Any]?) -> String? {
-        guard let delta else { return nil }
-
-        let keys = ["reasoning", "reasoning_content", "thinking", "analysis"]
-        for key in keys {
-            if let chunk = AIRequestSupport.extractText(from: delta[key]), !chunk.isEmpty {
-                return chunk
-            }
-        }
-
-        if let details = delta["reasoning_details"] {
-            let combined = AIRequestSupport.extractText(from: details)
-            if let combined, !combined.isEmpty {
-                return combined
-            }
-        }
-
-        return nil
-    }
 }

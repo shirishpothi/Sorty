@@ -52,22 +52,7 @@ struct PromptBuilder {
             
             The reasoning should be 3-5 sentences minimum per folder. Shallow, one-sentence explanations are NOT acceptable.
             
-            Example of GOOD reasoning:
-            "These invoice PDFs share a consistent naming pattern with vendor prefixes (AWS_, GCP_, Azure_) and date suffixes. They're grouped under 'Cloud Services/Invoices' rather than just 'Documents' because the user clearly manages multiple cloud accounts and would benefit from having all billing-related files for infrastructure costs in one location. I considered grouping by date but the vendor-based organization provides faster lookup when reconciling specific provider bills."
-            
-            The JSON structure becomes:
-            {
-              "folders": [
-                {
-                  "name": "folder_name",
-                  "files": [...],
-                  "description": "brief purpose description",
-                  "reasoning": "Detailed 3-5 sentence explanation as described above",
-                  "subfolders": [...]
-                }
-              ],
-              ...
-            }
+            Keep this explanation inside each folder's JSON "reasoning" value. Do not emit reasoning before or after the JSON object.
             """
         }
         
@@ -428,7 +413,7 @@ struct PromptBuilder {
             filePayload = "\"files\":[\"filename\"]"
         }
         return """
-        Return JSON. Preferred compact format:
+        Return exactly one JSON object with no markdown, prose, progress lines, or reasoning outside JSON. Preferred compact format:
         {"folder_assignments":[{"name":"","file_ids":[1,2]\(reasoning)}],"notes":""}
         Legacy format is also accepted:
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
@@ -448,7 +433,7 @@ struct PromptBuilder {
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
-        base += " Before JSON, emit at most 2 short progress lines starting with '>> category: text' (categories: file, folder, pattern, decision, constraint, general). Then start JSON immediately."
+        base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
     }
 
@@ -553,9 +538,7 @@ struct PromptBuilder {
         \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
-        Before JSON, emit at most 2 short progress lines: ">> category: text" (categories: file, folder, pattern, decision, constraint, general). Then start JSON immediately.
-        
-        Return JSON:
+        Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
         {"folder_assignments":[{"name":"","file_ids":[1,2]\(enableReasoning ? ",\"reasoning\":\"\"" : "")}],"notes":""}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
