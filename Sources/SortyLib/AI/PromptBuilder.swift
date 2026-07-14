@@ -60,10 +60,10 @@ struct PromptBuilder {
               "folders": [
                 {
                   "name": "folder_name",
+                  "files": [...],
                   "description": "brief purpose description",
                   "reasoning": "Detailed 3-5 sentence explanation as described above",
-                  "subfolders": [...],
-                  "files": [...]
+                  "subfolders": [...]
                 }
               ],
               ...
@@ -104,8 +104,8 @@ struct PromptBuilder {
             prompt += """
             ## LIVE ORGANIZATION PREVIEW
             Sorty shows file moves as your JSON streams in. To keep that preview accurate and immediate:
-            - Emit folder objects with "name" before "files", then list files in that folder as soon as the destination is decided.
-            - Put "files" before "subfolders" inside each folder object so direct moves can appear immediately.
+            - Emit folder objects with "name", then "files" immediately, so file moves start as soon as the destination is decided.
+            - Put descriptions, reasoning, tags, comments, and "subfolders" after "files" so metadata cannot delay direct moves.
             - Do not add artificial delays or non-JSON file-move narration; the app animates the real streamed JSON tokens.
 
             """
@@ -429,9 +429,9 @@ struct PromptBuilder {
         }
         return """
         Return JSON. Preferred compact format:
-        {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
+        {"folder_assignments":[{"name":"","file_ids":[1,2]\(reasoning)}],"notes":""}
         Legacy format is also accepted:
-        {"folders":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")\(filePayload),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         Prefer assigning every file to a folder. Use unorganized only as a rare last resort when no logical destination exists.
         """
     }
@@ -556,9 +556,9 @@ struct PromptBuilder {
         Before JSON, emit at most 2 short progress lines: ">> category: text" (categories: file, folder, pattern, decision, constraint, general). Then start JSON immediately.
         
         Return JSON:
-        {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
+        {"folder_assignments":[{"name":"","file_ids":[1,2]\(enableReasoning ? ",\"reasoning\":\"\"" : "")}],"notes":""}
         or legacy:
-        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """
         
         return prompt

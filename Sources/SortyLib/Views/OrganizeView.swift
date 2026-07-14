@@ -32,7 +32,7 @@ struct OrganizeView: View {
     @State private var keepsLiveOrganizationVisible = false
     @State private var readyPreviewHandoffTask: Task<Void, Never>?
 
-    private let minimumLiveOrganizationPresentation: TimeInterval = 3.0
+    private let minimumLiveOrganizationPresentation: TimeInterval = 6.0
 
     var body: some View {
         VStack(spacing: 0) {

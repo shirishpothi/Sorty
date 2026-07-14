@@ -180,14 +180,14 @@ Before outputting, verify ALL of the following:
         return """
 
         For the live organization UI, the JSON stream itself powers file movement:
-        - Emit each folder object with this key order: "name", "description", optional folder metadata, "files", then "subfolders".
+        - Emit each folder object with this key order: "name", "files", "description", optional folder metadata, then "subfolders".
         - Once a destination folder name is chosen, emit its file objects immediately and one by one in that folder's "files" array.
         - Prefer finishing one folder's direct "files" list before nesting subfolders so Sorty can animate concrete moves early.
         - Do NOT emit synthetic file-move progress lines after JSON starts, and do NOT pause to make movement animations visible.
         - The app will animate file moves from the streamed JSON tokens as they arrive.
 
         Good streamed shape:
-        {"name":"Cloud Invoices","description":"Vendor invoice PDFs","files":[{"filename":"AWS_Jan.pdf"}],"subfolders":[]}
+        {"name":"Cloud Invoices","files":[{"filename":"AWS_Jan.pdf"}],"description":"Vendor invoice PDFs","subfolders":[]}
         """
     }
 
@@ -237,11 +237,11 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": "FolderName",
+                  "files": [{"filename": "file.ext", "tags": ["Tag1", "Tag2"], "comment": "Brief description"}],
                   "description": "Purpose",
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "files": [{"filename": "file.ext", "tags": ["Tag1", "Tag2"], "comment": "Brief description"}],
                   "subfolders": [...]
                 }
               ],
@@ -255,9 +255,9 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": "FolderName",
+                  "files": [{"filename": "file.ext"}],
                   "description": "Purpose",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "files": [{"filename": "file.ext"}],
                   "subfolders": [...]
                 }
               ],
@@ -271,10 +271,10 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": ".",
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}],
                   "description": "Root folder (rename only)",
                   "tags": ["Blue"],
-                  "comment": "All files remain in place",
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}]
+                  "comment": "All files remain in place"
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -287,8 +287,8 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": ".",
-                  "description": "Root folder (rename only)",
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}]
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}],
+                  "description": "Root folder (rename only)"
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -301,11 +301,11 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": "FolderName",
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}],
                   "description": "Purpose",
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}],
                   "subfolders": [...]
                 }
               ],
@@ -319,9 +319,9 @@ Before outputting, verify ALL of the following:
               "folders": [
                 {
                   "name": "FolderName",
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}],
                   "description": "Purpose",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}],
                   "subfolders": [...]
                 }
               ],

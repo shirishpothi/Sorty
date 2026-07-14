@@ -294,6 +294,10 @@ struct OrganizingFlightStageView: View {
     }
 
     private func runFlight(toIndex index: Int) async {
+        let destX = centerOffset(for: index)
+        let landingY = folderTopOffset() - 8
+        let direction = max(-1, min(1, destX / max(1, stageWidth / 2)))
+
         // Phase 1: lift the file like a drag has just begun.
         flightProgress = 0
         flightDestination = .zero
@@ -306,15 +310,14 @@ struct OrganizingFlightStageView: View {
 
         withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
             cardOpacity = 1
-            cardScale = 1.035
-            cardLift = 1
+            cardScale = 1.075
+            cardLift = 1.35
+            cardRotation = Double(direction) * -3.2
         }
-        try? await Task.sleep(nanoseconds: 170_000_000)
+        try? await Task.sleep(nanoseconds: 210_000_000)
         if Task.isCancelled { return }
 
-        // Phase 2: carry the lifted file toward its folder along a shallow arc.
-        let destX = centerOffset(for: index)
-        let landingY = folderTopOffset() - 8
+        // Phase 2: carry the lifted file toward its folder along a visible arc.
 
         if currentRenamedFileName != nil {
             withAnimation(.easeInOut(duration: 0.16)) {
@@ -340,13 +343,12 @@ struct OrganizingFlightStageView: View {
         }
 
         flightDestination = CGSize(width: destX, height: landingY)
-        let direction = max(-1, min(1, destX / max(1, stageWidth / 2)))
-        withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.62)) {
+        withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.74)) {
             flightProgress = 1
             cardScale = 1
-            cardRotation = Double(direction) * 1.6
+            cardRotation = Double(direction) * 4.8
         }
-        try? await Task.sleep(nanoseconds: 560_000_000)
+        try? await Task.sleep(nanoseconds: 680_000_000)
         if Task.isCancelled { return }
 
         // Phase 3: the file tucks into the folder, the folder bumps.
@@ -459,7 +461,7 @@ private struct FolderDropFlightEffect: GeometryEffect {
         let t = max(0, min(1, progress))
         let inverse = 1 - t
         let horizontalProgress = t * t * (3 - 2 * t)
-        let arcHeight = min(36, max(22, abs(destination.width) * 0.12))
+        let arcHeight = min(54, max(34, abs(destination.width) * 0.18))
         let x = destination.width * horizontalProgress
         let y = (2 * inverse * t * -arcHeight) + (t * t * destination.height)
         return ProjectionTransform(CGAffineTransform(translationX: x, y: y))

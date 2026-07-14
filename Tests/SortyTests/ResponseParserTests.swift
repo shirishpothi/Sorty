@@ -613,4 +613,65 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan?.suggestions.first?.folderName, "Media")
         XCTAssertEqual(plan?.suggestions.first?.files.count, 2)
     }
+
+    func testMalformedFolderDoesNotDiscardValidFolders() throws {
+        let response = """
+        {
+          "folders": [
+            {
+              "description": "Missing the required folder name",
+              "files": ["broken.txt"]
+            },
+            {
+              "name": "Documents",
+              "files": ["report.pdf"]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/broken.txt", name: "broken", extension: "txt", size: 50, isDirectory: false),
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Documents")
+        XCTAssertEqual(plan.suggestions.first?.files, [files[1]])
+        XCTAssertEqual(plan.unorganizedFiles, [files[0]])
+    }
+
+    func testEmptyFolderDecodeThrowsSoFallbackCanRun() {
+        let response = #"{"folders":[],"notes":"No usable folder assignments"}"#
+
+        XCTAssertThrowsError(
+            try ResponseParser.parseResponse(response, originalFiles: [])
+        ) { error in
+            guard case ParserError.missingRequiredFields = error else {
+                return XCTFail("Expected missingRequiredFields, got \(error)")
+            }
+        }
+    }
+
+    func testPartialExtractionKeepsFilesAfterNestedTagArrays() {
+        let response = """
+        {"folders":[{"name":"Tagged Documents","files":[
+          {"filename":"invoice.pdf","tags":["Finance","2026"]},
+          {"filename":"report.pdf","tags":["Work","Review"]}
+        ]}]
+        """
+
+        let files = [
+            FileItem(path: "/path/invoice.pdf", name: "invoice", extension: "pdf", size: 100, isDirectory: false),
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 200, isDirectory: false)
+        ]
+
+        let plan = ResponseParser.extractPartialResults(response, originalFiles: files)
+        XCTAssertEqual(plan?.suggestions.count, 1)
+        XCTAssertEqual(plan?.suggestions.first?.folderName, "Tagged Documents")
+        XCTAssertEqual(plan?.suggestions.first?.files.count, 2)
+        XCTAssertEqual(plan?.suggestions.first?.tags(for: files[0]), ["Finance", "2026"])
+        XCTAssertEqual(plan?.suggestions.first?.tags(for: files[1]), ["Work", "Review"])
+    }
 }

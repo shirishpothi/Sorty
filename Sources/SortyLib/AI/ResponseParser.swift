@@ -11,6 +11,24 @@ import Foundation
 struct ResponseParser {
     // MARK: - Response Models
 
+    private struct LossyArray<Element: Decodable>: Decodable {
+        let elements: [Element]
+
+        init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            var decoded: [Element] = []
+
+            while !container.isAtEnd {
+                let elementDecoder = try container.superDecoder()
+                if let element = try? Element(from: elementDecoder) {
+                    decoded.append(element)
+                }
+            }
+
+            elements = decoded
+        }
+    }
+
     struct AIResponse: Decodable {
         let folders: [FolderResponse]
         let folderAssignments: [FolderResponse]?
@@ -26,8 +44,11 @@ struct ResponseParser {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            folders = try container.decodeIfPresent([FolderResponse].self, forKey: .folders) ?? []
-            folderAssignments = try container.decodeIfPresent([FolderResponse].self, forKey: .folderAssignments)
+            folders = try container.decodeIfPresent(LossyArray<FolderResponse>.self, forKey: .folders)?.elements ?? []
+            folderAssignments = try container.decodeIfPresent(
+                LossyArray<FolderResponse>.self,
+                forKey: .folderAssignments
+            )?.elements
             unorganized = try container.decodeIfPresent([UnorganizedFileResponse].self, forKey: .unorganized)
             unorganizedIDs = try container.decodeIfPresent([Int].self, forKey: .unorganizedIDs)
             notes = try container.decodeIfPresent(String.self, forKey: .notes)
@@ -54,7 +75,10 @@ struct ResponseParser {
             name = try container.decode(String.self, forKey: .name)
             description = try container.decodeIfPresent(String.self, forKey: .description)
             reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
-            subfolders = try container.decodeIfPresent([FolderResponse].self, forKey: .subfolders)
+            subfolders = try container.decodeIfPresent(
+                LossyArray<FolderResponse>.self,
+                forKey: .subfolders
+            )?.elements
             tags = try container.decodeIfPresent([String].self, forKey: .tags)
             comment = try container.decodeIfPresent(String.self, forKey: .comment)
             semanticTags = try container.decodeIfPresent([String].self, forKey: .semanticTags)
@@ -292,6 +316,10 @@ struct ResponseParser {
                         reasoning: "Generated from ultra-compact format"
                     )
                 }
+
+                guard !suggestions.isEmpty else {
+                    throw ParserError.missingRequiredFields
+                }
                 
                 // Identify unorganized files
                 let organizedIds = Set(suggestions.flatMap { $0.files }.map { $0.id })
@@ -322,6 +350,12 @@ struct ResponseParser {
 
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
         let folderPayload = response.folders.isEmpty ? (response.folderAssignments ?? []) : response.folders
+
+        let hasExplicitUnorganizedFiles = !(response.unorganized ?? []).isEmpty ||
+            !(response.unorganizedIDs ?? []).isEmpty
+        guard !folderPayload.isEmpty || hasExplicitUnorganizedFiles else {
+            throw ParserError.missingRequiredFields
+        }
 
         // Convert response to OrganizationPlan
         let suggestions = folderPayload.map { folder in
@@ -687,95 +721,51 @@ struct ResponseParser {
         originalFiles: [FileItem],
         mode: OrganizationMode = .organize
     ) -> OrganizationPlan? {
-        _ = mode
         // Try to extract folder names and file assignments even from malformed JSON
         var suggestions: [FolderSuggestion] = []
         var assignedFiles: Set<UUID> = []
-        let workingJSON = sanitizeJSONPayload(stripProgressPreamble(jsonString))
+        let workingJSON = stripProgressPreamble(jsonString)
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
 
-        // Simple regex-based extraction as fallback
-        let folderPattern = #"\"name\"\s*:\s*\"([^\"]+)\""#
-        let filesPattern = #"\"files\"\s*:\s*\[([^\]]+)\]"#
-
-        if let folderRegex = try? NSRegularExpression(pattern: folderPattern),
-           let filesRegex = try? NSRegularExpression(pattern: filesPattern) {
-
-            let range = NSRange(workingJSON.startIndex..., in: workingJSON)
-            let folderMatches = folderRegex.matches(in: workingJSON, range: range)
-            let filesMatches = filesRegex.matches(in: workingJSON, range: range)
-
-            for (index, folderMatch) in folderMatches.enumerated() {
-                if let folderRange = Range(folderMatch.range(at: 1), in: workingJSON) {
-                    let folderName = String(workingJSON[folderRange])
-
-                    var folderFiles: [FileItem] = []
-
-                    // Try to find corresponding files
-                    if index < filesMatches.count {
-                        if let filesRange = Range(filesMatches[index].range(at: 1), in: workingJSON) {
-                            let filesContent = String(workingJSON[filesRange])
-
-                            // Extract quoted strings
-                            let fileNamePattern = #"\"([^\"]+)\""#
-                            if let fileNameRegex = try? NSRegularExpression(pattern: fileNamePattern) {
-                                let fileNameMatches = fileNameRegex.matches(in: filesContent, range: NSRange(filesContent.startIndex..., in: filesContent))
-
-                                for fileNameMatch in fileNameMatches {
-                                    if let nameRange = Range(fileNameMatch.range(at: 1), in: filesContent) {
-                                        let fileName = String(filesContent[nameRange])
-                                        if let file = findFile(named: fileName, in: originalFiles),
-                                           !assignedFiles.contains(file.id) {
-                                            folderFiles.append(file)
-                                            assignedFiles.insert(file.id)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if !folderFiles.isEmpty {
-                        suggestions.append(FolderSuggestion(
-                            folderName: folderName,
-                            files: folderFiles,
-                            reasoning: "Extracted from partial response"
-                        ))
-                    }
+        for segment in folderObjectSegments(in: workingJSON) {
+            if let data = sanitizeJSONPayload(segment).data(using: .utf8),
+               let folder = try? JSONDecoder().decode(FolderResponse.self, from: data) {
+                let suggestion = convertFolderResponse(
+                    folder,
+                    originalFiles: originalFiles,
+                    fileIdIndex: fileIdIndex,
+                    mode: mode
+                )
+                let suggestionFileIDs = collectAssignedFileIDs(from: [suggestion])
+                if suggestionFileIDs.contains(where: { !assignedFiles.contains($0) }) {
+                    assignedFiles.formUnion(suggestionFileIDs)
+                    suggestions.append(suggestion)
                 }
+                continue
             }
-        }
 
-        // Compact file ID extraction fallback for truncated compact responses.
-        let compactPattern = #"\"name\"\s*:\s*\"([^\"]+)\"[\s\S]{0,260}?\"file_ids\"\s*:\s*\[([0-9,\s]+)"#
-        if let compactRegex = try? NSRegularExpression(pattern: compactPattern) {
-            let range = NSRange(workingJSON.startIndex..., in: workingJSON)
-            let compactMatches = compactRegex.matches(in: workingJSON, range: range)
+            guard let folderName = stringValue(forKey: "name", in: segment) else { continue }
+            let fileNames = fileNames(in: segment)
+            let fileIDs = integerValues(forKey: "file_ids", in: segment)
+            var folderFiles: [FileItem] = []
 
-            for compactMatch in compactMatches {
-                guard let folderRange = Range(compactMatch.range(at: 1), in: workingJSON),
-                      let idsRange = Range(compactMatch.range(at: 2), in: workingJSON) else { continue }
+            for fileName in fileNames {
+                guard let file = findFile(named: fileName, in: originalFiles),
+                      assignedFiles.insert(file.id).inserted else { continue }
+                folderFiles.append(file)
+            }
+            for id in fileIDs {
+                guard let file = fileIdIndex[id],
+                      assignedFiles.insert(file.id).inserted else { continue }
+                folderFiles.append(file)
+            }
 
-                let folderName = String(workingJSON[folderRange])
-                let rawIDs = String(workingJSON[idsRange])
-                var folderFiles: [FileItem] = []
-
-                for token in rawIDs.split(separator: ",") {
-                    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let id = Int(trimmed),
-                          let file = fileIdIndex[id],
-                          !assignedFiles.contains(file.id) else { continue }
-                    folderFiles.append(file)
-                    assignedFiles.insert(file.id)
-                }
-
-                if !folderFiles.isEmpty {
-                    suggestions.append(FolderSuggestion(
-                        folderName: folderName,
-                        files: folderFiles,
-                        reasoning: "Extracted from partial compact response"
-                    ))
-                }
+            if !folderFiles.isEmpty {
+                suggestions.append(FolderSuggestion(
+                    folderName: folderName,
+                    files: folderFiles,
+                    reasoning: "Extracted from partial response"
+                ))
             }
         }
 
@@ -791,6 +781,241 @@ struct ResponseParser {
             timestamp: Date(),
             version: 1
         )
+    }
+
+    private static func folderObjectSegments(in text: String) -> [String] {
+        ["folders", "folder_assignments"].flatMap { key in
+            objectSegments(inArrayForKey: key, text: text)
+        }
+    }
+
+    private static func objectSegments(inArrayForKey key: String, text: String) -> [String] {
+        var segments: [String] = []
+        var searchStart = text.startIndex
+        let marker = "\"\(key)\""
+
+        while searchStart < text.endIndex,
+              let keyRange = text.range(of: marker, range: searchStart..<text.endIndex),
+              let arrayStart = arrayStart(after: keyRange.upperBound, in: text) {
+            var index = text.index(after: arrayStart)
+            var objectStart: String.Index?
+            var objectDepth = 0
+            var arrayDepth = 1
+            var isInsideString = false
+            var isEscaping = false
+
+            while index < text.endIndex, arrayDepth > 0 {
+                let character = text[index]
+
+                if isInsideString {
+                    if isEscaping {
+                        isEscaping = false
+                    } else if character == "\\" {
+                        isEscaping = true
+                    } else if character == "\"" {
+                        isInsideString = false
+                    }
+                    index = text.index(after: index)
+                    continue
+                }
+
+                switch character {
+                case "\"":
+                    isInsideString = true
+                case "[":
+                    arrayDepth += 1
+                case "]":
+                    arrayDepth -= 1
+                case "{":
+                    if objectDepth == 0 {
+                        objectStart = index
+                    }
+                    objectDepth += 1
+                case "}":
+                    if objectDepth > 0 {
+                        objectDepth -= 1
+                        if objectDepth == 0, let objectStart {
+                            segments.append(String(text[objectStart...index]))
+                        }
+                    }
+                default:
+                    break
+                }
+
+                index = text.index(after: index)
+            }
+
+            if objectDepth > 0, let objectStart {
+                segments.append(String(text[objectStart...]))
+            }
+
+            if index > keyRange.upperBound {
+                searchStart = index
+            } else {
+                searchStart = keyRange.upperBound
+            }
+        }
+
+        return segments
+    }
+
+    private static func arrayStart(after start: String.Index, in text: String) -> String.Index? {
+        guard let colon = text[start...].firstIndex(of: ":") else { return nil }
+        var index = text.index(after: colon)
+        while index < text.endIndex, text[index].isWhitespace {
+            index = text.index(after: index)
+        }
+        return index < text.endIndex, text[index] == "[" ? index : nil
+    }
+
+    private static func stringValue(forKey key: String, in object: String) -> String? {
+        if let data = sanitizeJSONPayload(object).data(using: .utf8),
+           let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let value = dictionary[key] as? String {
+            return value
+        }
+
+        let pattern = "\\\"\(NSRegularExpression.escapedPattern(for: key))\\\"\\s*:\\s*\\\"([^\\\"]+)\\\""
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: object, range: NSRange(object.startIndex..., in: object)),
+              let valueRange = Range(match.range(at: 1), in: object) else { return nil }
+        return String(object[valueRange])
+    }
+
+    private static func fileNames(in object: String) -> [String] {
+        if let payload = arrayPayload(forKey: "files", in: object),
+           let data = payload.data(using: .utf8),
+           let values = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+            return values.compactMap { value in
+                if let filename = value as? String {
+                    return filename
+                }
+                return (value as? [String: Any])?["filename"] as? String
+            }
+        }
+
+        guard let remainder = arrayRemainder(forKey: "files", in: object) else { return [] }
+        return partialFileNames(in: remainder)
+    }
+
+    private static func partialFileNames(in arrayRemainder: String) -> [String] {
+        let filenamePattern = #"\"filename\"\s*:\s*\"([^\"]+)\""#
+        if let regex = try? NSRegularExpression(pattern: filenamePattern) {
+            let matches = regex.matches(
+                in: arrayRemainder,
+                range: NSRange(arrayRemainder.startIndex..., in: arrayRemainder)
+            )
+            let filenames = matches.compactMap { match -> String? in
+                guard let range = Range(match.range(at: 1), in: arrayRemainder) else { return nil }
+                return String(arrayRemainder[range])
+            }
+            if !filenames.isEmpty {
+                return filenames
+            }
+        }
+
+        var values: [String] = []
+        var index = arrayRemainder.startIndex
+        var arrayDepth = 0
+        var objectDepth = 0
+        var stringStart: String.Index?
+        var isEscaping = false
+
+        while index < arrayRemainder.endIndex {
+            let character = arrayRemainder[index]
+            if let start = stringStart {
+                if isEscaping {
+                    isEscaping = false
+                } else if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    if arrayDepth == 1, objectDepth == 0 {
+                        values.append(String(arrayRemainder[start..<index]))
+                    }
+                    stringStart = nil
+                }
+            } else {
+                switch character {
+                case "\"":
+                    stringStart = arrayRemainder.index(after: index)
+                case "[":
+                    arrayDepth += 1
+                case "]":
+                    arrayDepth -= 1
+                case "{":
+                    objectDepth += 1
+                case "}":
+                    objectDepth = max(0, objectDepth - 1)
+                default:
+                    break
+                }
+            }
+            index = arrayRemainder.index(after: index)
+        }
+
+        return values
+    }
+
+    private static func integerValues(forKey key: String, in object: String) -> [Int] {
+        if let payload = arrayPayload(forKey: key, in: object),
+           let data = payload.data(using: .utf8),
+           let values = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+            return values.compactMap { ($0 as? NSNumber)?.intValue }
+        }
+
+        guard let remainder = arrayRemainder(forKey: key, in: object),
+              let regex = try? NSRegularExpression(pattern: #"\d+"#) else { return [] }
+        return regex.matches(in: remainder, range: NSRange(remainder.startIndex..., in: remainder)).compactMap { match in
+            guard let range = Range(match.range, in: remainder) else { return nil }
+            return Int(remainder[range])
+        }
+    }
+
+    private static func arrayRemainder(forKey key: String, in object: String) -> String? {
+        let marker = "\"\(key)\""
+        guard let keyRange = object.range(of: marker),
+              let start = arrayStart(after: keyRange.upperBound, in: object) else { return nil }
+        return String(object[start...])
+    }
+
+    private static func arrayPayload(forKey key: String, in object: String) -> String? {
+        let marker = "\"\(key)\""
+        guard let keyRange = object.range(of: marker),
+              let start = arrayStart(after: keyRange.upperBound, in: object) else { return nil }
+
+        var index = start
+        var depth = 0
+        var isInsideString = false
+        var isEscaping = false
+
+        while index < object.endIndex {
+            let character = object[index]
+
+            if isInsideString {
+                if isEscaping {
+                    isEscaping = false
+                } else if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    isInsideString = false
+                }
+            } else {
+                if character == "\"" {
+                    isInsideString = true
+                } else if character == "[" {
+                    depth += 1
+                } else if character == "]" {
+                    depth -= 1
+                    if depth == 0 {
+                        return String(object[start...index])
+                    }
+                }
+            }
+
+            index = object.index(after: index)
+        }
+
+        return nil
     }
 }
 
