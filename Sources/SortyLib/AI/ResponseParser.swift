@@ -865,7 +865,7 @@ struct ResponseParser {
         while index < text.endIndex, text[index].isWhitespace {
             index = text.index(after: index)
         }
-        return index < text.endIndex, text[index] == "[" ? index : nil
+        return index < text.endIndex && text[index] == "[" ? index : nil
     }
 
     private static func stringValue(forKey key: String, in object: String) -> String? {
