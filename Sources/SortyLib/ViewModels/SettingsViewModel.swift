@@ -8,10 +8,24 @@
 import Foundation
 import Combine
 
+struct SettingsCredentialStore: Sendable {
+    let load: @Sendable (String) async -> String?
+    let save: @Sendable (String, String) async -> Bool
+    let delete: @Sendable (String) async -> Bool
+
+    static let keychain = SettingsCredentialStore(
+        load: { await KeychainManager.getAsync(key: $0) },
+        save: { await KeychainManager.saveAsync(key: $0, value: $1) },
+        delete: { await KeychainManager.deleteAsync(key: $0) }
+    )
+}
+
 @MainActor
 public class SettingsViewModel: ObservableObject {
     @Published public var config: AIConfig = .default {
         didSet {
+            guard !isApplyingConfigMutation else { return }
+
             let oldKey = oldValue.apiKey
             let newKey = config.apiKey
             let oldProvider = oldValue.provider
@@ -29,13 +43,13 @@ public class SettingsViewModel: ObservableObject {
                 if oldAuthMethod == .apiKey,
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
-                    _ = KeychainManager.save(key: newProvider.keychainKey, value: oldKey)
+                    persistCredential(oldKey, for: newProvider)
                 }
 
                 if newAuthMethod == .apiKey {
-                    config.apiKey = KeychainManager.get(key: newProvider.keychainKey)
+                    hydrateStoredCredential(for: newProvider, authMethod: newAuthMethod)
                 } else {
-                    config.apiKey = nil
+                    setInMemoryAPIKey(nil)
                 }
             }
 
@@ -66,27 +80,23 @@ public class SettingsViewModel: ObservableObject {
                    oldAuthMethod == .apiKey,
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
-                    _ = KeychainManager.save(key: oldProvider.keychainKey, value: oldKey)
+                    persistCredential(oldKey, for: oldProvider)
                 }
 
                 // Load the new provider's API key from its keychain slot
                 // Skip for GitHub Copilot — auth is handled by GitHubCopilotAuthManager, not apiKey
-                if newProvider == .githubCopilot {
-                    config.apiKey = nil
-                } else if newAuthMethod == .apiKey {
-                    config.apiKey = KeychainManager.get(key: newProvider.keychainKey)
-                } else {
-                    config.apiKey = nil
-                }
-
-                // Update API URL and requiresAPIKey for the new provider
+                isApplyingConfigMutation = true
+                config.apiKey = nil
                 config.apiURL = newProvider.defaultAPIURL
                 config.requiresAPIKey = newProvider.typicallyRequiresAPIKey
                 config.visionDetailLevel = VisionDetailLevel.defaultFor(provider: newProvider)
-
-                // Restore previously selected model for this provider, or fall back to default
                 config.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel
+                isApplyingConfigMutation = false
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
+
+                if newProvider != .githubCopilot, newAuthMethod == .apiKey {
+                    hydrateStoredCredential(for: newProvider, authMethod: newAuthMethod)
+                }
 
                 // Invalidate sessions for new provider URL
                 AISessionManager.shared.invalidateAll()
@@ -109,14 +119,11 @@ public class SettingsViewModel: ObservableObject {
                       !newKey.isEmpty {
                 // Same provider, API key changed — save immediately to Keychain
                 // so ModelCatalog reads the fresh key (fixes Gemini model list race)
-                _ = KeychainManager.save(key: newProvider.keychainKey, value: newKey)
-
-                // Now refresh models (key is already in Keychain)
-                updateAvailableModels(force: true)
-
-                // Prewarm connection
-                Task {
-                    await AISessionManager.shared.prewarm(provider: newProvider, config: config)
+                Task { [weak self, credentialStore] in
+                    _ = await credentialStore.save(newProvider.keychainKey, newKey)
+                    guard let self, self.config.provider == newProvider else { return }
+                    self.updateAvailableModels(force: true)
+                    await AISessionManager.shared.prewarm(provider: newProvider, config: self.config)
                 }
             }
         }
@@ -127,21 +134,40 @@ public class SettingsViewModel: ObservableObject {
     @Published public var availableModels: [String] = []
     @Published public var isLoadingModels: Bool = false
     
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
+    private let credentialStore: SettingsCredentialStore
     private let configKey = "aiConfig"
     private let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
     private let providerHealthCheckModeForUITestsKey = "uitestProviderHealthCheckMode"
     private let providerHealthCheckFailedOnceForUITestsKey = "uitestProviderHealthCheckFailedOnce"
     private var saveTask: Task<Void, Never>?
+    private var credentialTask: Task<Void, Never>?
+    private var isApplyingConfigMutation = false
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
         "lastSelectedModel_\(provider.rawValue)"
     }
     
     public init() {
+        userDefaults = .standard
+        credentialStore = .keychain
         loadConfig()
         checkAppleModelAvailability()
         setupNotificationObservers()
+    }
+
+    init(
+        userDefaults: UserDefaults,
+        credentialStore: SettingsCredentialStore,
+        observesNotifications: Bool = true
+    ) {
+        self.userDefaults = userDefaults
+        self.credentialStore = credentialStore
+        loadConfig()
+        checkAppleModelAvailability()
+        if observesNotifications {
+            setupNotificationObservers()
+        }
     }
     
     private func setupNotificationObservers() {
@@ -153,29 +179,54 @@ public class SettingsViewModel: ObservableObject {
     private func loadConfig() {
         if let data = userDefaults.data(forKey: configKey),
            var decoded = try? JSONDecoder().decode(AIConfig.self, from: data) {
-
-            // 1. Check for legacy generic key
-            if let oldApiKey = KeychainManager.get(key: "apiKey") {
-                // Migrate to provider-specific key if it doesn't exist yet
-                let providerKey = decoded.provider.keychainKey
-                if KeychainManager.get(key: providerKey) == nil {
-                    _ = KeychainManager.save(key: providerKey, value: oldApiKey)
-                }
-                // Optional: Cleanup old key after transition period
-            }
-            
-            // 2. Load API key from provider-specific Keychain key
-            if !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
-               decoded.authMethod(for: decoded.provider) == .apiKey,
-               let apiKey = KeychainManager.get(key: decoded.provider.keychainKey) {
-                decoded.apiKey = apiKey
-            } else {
-                decoded.apiKey = nil
-            }
+            decoded.apiKey = nil
 
             decoded.enableSmartRename = true
-            
+            isApplyingConfigMutation = true
             config = decoded
+            isApplyingConfigMutation = false
+        }
+
+        let provider = config.provider
+        let authMethod = config.authMethod(for: provider)
+        guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
+              provider != .githubCopilot,
+              authMethod == .apiKey else { return }
+        hydrateStoredCredential(for: provider, authMethod: authMethod, migratesLegacyKey: true)
+    }
+
+    private func setInMemoryAPIKey(_ apiKey: String?) {
+        isApplyingConfigMutation = true
+        config.apiKey = apiKey
+        isApplyingConfigMutation = false
+    }
+
+    private func persistCredential(_ apiKey: String, for provider: AIProvider) {
+        Task { [credentialStore] in
+            _ = await credentialStore.save(provider.keychainKey, apiKey)
+        }
+    }
+
+    private func hydrateStoredCredential(
+        for provider: AIProvider,
+        authMethod: ProviderAuthMethod,
+        migratesLegacyKey: Bool = false
+    ) {
+        credentialTask?.cancel()
+        credentialTask = Task { [weak self, credentialStore] in
+            if migratesLegacyKey,
+               let oldAPIKey = await credentialStore.load("apiKey"),
+               await credentialStore.load(provider.keychainKey) == nil {
+                _ = await credentialStore.save(provider.keychainKey, oldAPIKey)
+            }
+
+            guard !Task.isCancelled else { return }
+            let apiKey = await credentialStore.load(provider.keychainKey)
+            guard !Task.isCancelled,
+                  let self,
+                  self.config.provider == provider,
+                  self.config.authMethod(for: provider) == authMethod else { return }
+            self.setInMemoryAPIKey(apiKey)
         }
     }
     
@@ -221,9 +272,9 @@ public class SettingsViewModel: ObservableObject {
         if provider != .githubCopilot, config.authMethod(for: provider) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
-                _ = KeychainManager.save(key: providerKey, value: apiKey)
+                _ = await credentialStore.save(providerKey, apiKey)
             } else {
-                _ = KeychainManager.delete(key: providerKey)
+                _ = await credentialStore.delete(providerKey)
             }
         }
         

@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import Combine
 import AppKit
+import Combine
 
 enum GitHubAuthError: Error {
     case invalidURL
@@ -106,6 +106,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
     private let session = URLSession.shared
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<String, Error>?
+    private var authenticationCheckTask: Task<Void, Never>?
     private let defaults = UserDefaults.standard
     private let persistedAuthStateKey = "github_copilot_persisted_auth_state"
     private let persistedUsernameKey = "github_copilot_persisted_username"
@@ -141,20 +142,25 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     public func checkAuthenticationStatus() {
+        authenticationCheckTask?.cancel()
+        authenticationCheckTask = Task { [weak self] in
+            await self?.refreshAuthenticationStatus()
+        }
+    }
+
+    private func refreshAuthenticationStatus() async {
         let hadPersistedSignedInState = defaults.bool(forKey: persistedAuthStateKey)
 
-        let hasAccessToken = {
-            guard let token = KeychainManager.get(key: "github_access_token") else { return false }
-            return !token.isEmpty
-        }()
+        let accessToken = await KeychainManager.getAsync(key: "github_access_token")
+        let hasAccessToken = !(accessToken?.isEmpty ?? true)
         var hasValidCachedCopilotToken = Self.hasValidCachedCopilotToken(
-            cachedToken: KeychainManager.get(key: "github_copilot_token"),
+            cachedToken: await KeychainManager.getAsync(key: "github_copilot_token"),
             expiry: UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date
         )
 
         // A Copilot token without an underlying GitHub access token is not recoverable.
         if !hasAccessToken && hasValidCachedCopilotToken {
-            invalidateCachedCopilotToken()
+            await invalidateCachedCopilotTokenNow()
             hasValidCachedCopilotToken = false
         }
 
@@ -245,7 +251,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
                 do {
                     let token = try await requestAccessToken(deviceCode: deviceCode)
                     // Success!
-                    guard KeychainManager.save(key: "github_access_token", value: token) else {
+                    guard await KeychainManager.saveAsync(key: "github_access_token", value: token) else {
                         self.authError = "Authentication succeeded but token could not be saved. Please check Keychain access and try again."
                         self.isPolling = false
                         return
@@ -314,7 +320,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     func fetchUserProfile() async {
-        guard let token = KeychainManager.get(key: "github_access_token") else { return }
+        guard let token = await KeychainManager.getAsync(key: "github_access_token") else { return }
         
         let url = URL(string: "https://api.github.com/user")!
         guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
@@ -354,7 +360,9 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     func signOut() {
-        _ = KeychainManager.delete(key: "github_access_token")
+        Task {
+            _ = await KeychainManager.deleteAsync(key: "github_access_token")
+        }
         invalidateCachedCopilotToken()
         self.isAuthenticated = false
         self.username = nil
@@ -365,13 +373,20 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
 
     func invalidateCachedCopilotToken() {
-        _ = KeychainManager.delete(key: "github_copilot_token")
         UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
+        Task {
+            _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
+        }
+    }
+
+    private func invalidateCachedCopilotTokenNow() async {
+        UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
+        _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
     }
 
     @discardableResult
     func refreshCopilotTokenAfterCacheInvalidation() async throws -> String {
-        invalidateCachedCopilotToken()
+        await invalidateCachedCopilotTokenNow()
         return try await getCopilotToken(forceRefresh: true)
     }
     
@@ -383,12 +398,10 @@ public class GitHubCopilotAuthManager: ObservableObject {
         }
 
         // Copilot token refresh requires the underlying GitHub access token.
-        let hasAccessToken = {
-            guard let token = KeychainManager.get(key: "github_access_token") else { return false }
-            return !token.isEmpty
-        }()
+        let accessToken = await KeychainManager.getAsync(key: "github_access_token")
+        let hasAccessToken = !(accessToken?.isEmpty ?? true)
         guard hasAccessToken else {
-            invalidateCachedCopilotToken()
+            await invalidateCachedCopilotTokenNow()
             isAuthenticated = false
             username = nil
             persistAuthState(authenticated: false)
@@ -397,7 +410,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
 
         if !forceRefresh {
             // Return cached token if valid
-            let cachedToken = KeychainManager.get(key: "github_copilot_token")
+            let cachedToken = await KeychainManager.getAsync(key: "github_copilot_token")
             let cachedExpiry = UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date
             if Self.hasValidCachedCopilotToken(
                 cachedToken: cachedToken,
@@ -429,7 +442,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
 
         // Create a new refresh task
         let task = Task<String, Error> {
-            guard let accessToken = KeychainManager.get(key: "github_access_token") else {
+            guard let accessToken = await KeychainManager.getAsync(key: "github_access_token") else {
                 await MainActor.run {
                     signOut()
                 }
@@ -479,7 +492,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
             let tokenResponse = try JSONDecoder().decode(CopilotTokenResponse.self, from: data)
             
             // Cache it
-            _ = KeychainManager.save(key: "github_copilot_token", value: tokenResponse.token)
+            _ = await KeychainManager.saveAsync(key: "github_copilot_token", value: tokenResponse.token)
             let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
             UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
             

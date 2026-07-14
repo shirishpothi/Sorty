@@ -74,6 +74,15 @@ struct KeychainManager {
 
         return false
     }
+
+    /// Security.framework can block while macOS unlocks or searches a keychain.
+    /// Keep those calls away from the main actor so app and settings construction
+    /// can never stall the first window.
+    static func saveAsync(key: String, value: String) async -> Bool {
+        await Task.detached(priority: .userInitiated) {
+            save(key: key, value: value)
+        }.value
+    }
     
     static func get(key: String) -> String? {
         if let value = readValue(key: key, service: primaryService) {
@@ -87,6 +96,12 @@ struct KeychainManager {
         }
 
         return nil
+    }
+
+    static func getAsync(key: String) async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            get(key: key)
+        }.value
     }
 
     static func delete(key: String) -> Bool {
@@ -107,6 +122,12 @@ struct KeychainManager {
         return success
     }
 
+    static func deleteAsync(key: String) async -> Bool {
+        await Task.detached(priority: .userInitiated) {
+            delete(key: key)
+        }.value
+    }
+
     static func deleteAll() -> Bool {
         var success = true
 
@@ -122,6 +143,12 @@ struct KeychainManager {
         }
 
         return success
+    }
+
+    static func deleteAllAsync() async -> Bool {
+        await Task.detached(priority: .userInitiated) {
+            deleteAll()
+        }.value
     }
 
     private static func readValue(key: String, service: String) -> String? {
@@ -156,6 +183,5 @@ struct KeychainManager {
         }
     }
 }
-
 
 
