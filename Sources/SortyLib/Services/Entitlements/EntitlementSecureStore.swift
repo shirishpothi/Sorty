@@ -214,4 +214,3 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         rootDirectory.appendingPathComponent("license-cache.enc")
     }
 }
-

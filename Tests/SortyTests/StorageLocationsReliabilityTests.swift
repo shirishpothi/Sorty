@@ -345,7 +345,9 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testStoragePromptContextIncludesValidPathList() async {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(
+            entitlementSnapshotProvider: { EntitlementCatalog.shared.snapshot(for: .bundleUnlocked) }
+        )
         manager.clearAll()
         defer { manager.clearAll() }
 

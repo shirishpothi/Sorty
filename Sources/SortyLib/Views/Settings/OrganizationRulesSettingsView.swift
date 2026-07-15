@@ -9,11 +9,16 @@ import SwiftUI
 
 struct OrganizationRulesSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var entitlementManager: EntitlementManager
     
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "Organization Limits", icon: "folder.badge.questionmark", color: .purple) {
-                VStack(alignment: .leading, spacing: 8) {
+                ProLockedSettingsContent(
+                    isLocked: entitlementManager.snapshot.isFreeTier,
+                    message: "Custom organization limits are available with a paid unlock."
+                ) {
+                    VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Max Top-Level Folders")
                             .font(.subheadline)
@@ -51,26 +56,35 @@ struct OrganizationRulesSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)
-
+                    }
                 }
             }
             .settingsFocusable(.rulesOrganizationLimits)
             .animatedAppearance(delay: 0.05)
             
             SettingsCard(title: "Content Rules", icon: "checklist", color: .orange) {
-                VStack(alignment: .leading, spacing: 12) {
+                ProLockedSettingsContent(
+                    isLocked: !entitlementManager.isEnabled(.fileTagging),
+                    message: "Finder tagging is available with its feature unlock or Sorty Pro."
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
                         isOn: $viewModel.config.enableFileTagging,
                         title: "Enable File Tagging",
                         description: "Allow Sorty to suggest and apply Finder tags to files"
                     )
+                    }
                 }
             }
             .settingsFocusable(.rulesContentRules)
             .animatedAppearance(delay: 0.1)
 
             SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
-                VStack(alignment: .leading, spacing: 8) {
+                ProLockedSettingsContent(
+                    isLocked: !entitlementManager.allowsParameterTuning,
+                    message: "Temperature tuning is available with a paid unlock."
+                ) {
+                    VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Temperature")
                             .font(.subheadline)
@@ -97,13 +111,19 @@ struct OrganizationRulesSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    }
                 }
             }
             .animatedAppearance(delay: 0.2)
 
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
-                PersonaPickerView()
+                ProLockedSettingsContent(
+                    isLocked: entitlementManager.snapshot.isFreeTier,
+                    message: "Organization style personas are available with a paid unlock."
+                ) {
+                    PersonaPickerView()
+                }
             }
             .settingsFocusable(.rulesOrganizationStyle)
             .animatedAppearance(delay: 0.25)
@@ -115,5 +135,6 @@ struct OrganizationRulesSettingsView: View {
     OrganizationRulesSettingsView()
         .environmentObject(AppState())
         .environmentObject(SettingsViewModel())
+        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 400)
 }

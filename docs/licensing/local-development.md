@@ -93,6 +93,16 @@ Useful checks:
 - `Release This Mac` should hit `/v1/deactivate`.
 - With the service offline, Sorty should fall back to the encrypted cached snapshot during the grace window.
 
+You can verify the complete local service protocol without real Gumroad credentials:
+
+```bash
+cd services/gumroad-license-service
+npm test
+npm run test:roundtrip
+```
+
+The round-trip command uses environment-based service configuration, an isolated loopback server, ephemeral signing keys, and a temporary seat store. It exercises activation, refresh, signed payload verification, seat rejection, release, and reactivation.
+
 ## 6. Reset local overrides
 
 If you want to clear the debug-only app overrides:
@@ -105,4 +115,3 @@ defaults delete com.sorty.app sortyLicenseValidationHours
 defaults delete com.sorty.app sortyLicenseGraceHours
 defaults delete com.sorty.app sortyLicenseSeatLimit
 ```
-

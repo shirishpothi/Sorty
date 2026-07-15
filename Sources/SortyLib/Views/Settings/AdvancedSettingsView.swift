@@ -10,6 +10,7 @@ import SwiftUI
 struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
+    @EnvironmentObject var entitlementManager: EntitlementManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
@@ -96,11 +97,16 @@ struct AdvancedSettingsView: View {
             
             SettingsCard(title: "Developer", icon: "hammer", color: .gray) {
                 VStack(spacing: 12) {
-                    SettingsToggle(
-                        isOn: $viewModel.config.showStatsForNerds,
-                        title: "Stats for Nerds",
-                        description: "Show live AI metrics — tokens, throughput, timing, and cost — in preview, results, and history"
-                    )
+                    ProLockedSettingsContent(
+                        isLocked: !entitlementManager.allowsDeveloperStats,
+                        message: "Developer stats are available with a paid unlock."
+                    ) {
+                        SettingsToggle(
+                            isOn: $viewModel.config.showStatsForNerds,
+                            title: "Stats for Nerds",
+                            description: "Show live AI metrics — tokens, throughput, timing, and cost — in preview, results, and history"
+                        )
+                    }
                     
                     Divider()
                     
@@ -232,5 +238,7 @@ private struct TimeoutSliderRow: View {
     AdvancedSettingsView()
         .environmentObject(SettingsViewModel())
         .environmentObject(AutomationManager())
+        .environmentObject(AppState())
+        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 500)
 }

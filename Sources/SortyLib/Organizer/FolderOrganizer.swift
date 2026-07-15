@@ -153,6 +153,7 @@ public enum OrganizationError: LocalizedError, Equatable {
     case fileMoveFailed(String)
     case cancelled
     case revertAlreadyInProgress(String)
+    case localOrganizationQuotaReached(limit: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -168,6 +169,8 @@ public enum OrganizationError: LocalizedError, Equatable {
             return "Operation was cancelled."
         case .revertAlreadyInProgress(let path):
             return "A revert is already in progress for \(path)."
+        case .localOrganizationQuotaReached(let limit):
+            return "Free access includes \(limit) local organizations. Open Licensing to continue."
         }
     }
 }
@@ -417,6 +420,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Streaming support
     /// Internal backing storage for streaming content (not @Published to avoid high-frequency redraws)
     public var streamingContent: String = ""
+    private var entitledRawAIResponse: String? {
+        guard EntitlementRuntime.currentSnapshot.isEnabled(.rawHistoryOutput),
+              !streamingContent.isEmpty else {
+            return nil
+        }
+        return streamingContent
+    }
     @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
     @Published public var truncatedDisplayStreamingContent: String = "" // UI-ready preview text (pre-computed off render path)
     @Published public var organizationStage: String = ""
@@ -653,22 +663,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     #endif
 
     public func configure(with config: AIConfig) async throws {
+        let entitlementSnapshot = EntitlementRuntime.currentSnapshot
+        let gatedConfig = entitlementSnapshot.sanitized(config)
+
         do {
-            var client = try AIClientFactory.createClient(config: config)
+            var client = try AIClientFactory.createClient(config: config, entitlements: entitlementSnapshot)
 
             // Set up streaming delegate
             client.streamingDelegate = self
 
             self.aiClient = client
-            self.aiConfig = config
-            await scanner.setOCRLanguages(config.ocrLanguages)
+            self.aiConfig = gatedConfig
+            await scanner.setOCRLanguages(gatedConfig.ocrLanguages)
             
             await MainActor.run {
                 self.isAIConfigured = true
             }
         } catch {
             self.aiClient = nil
-            self.aiConfig = config
+            self.aiConfig = gatedConfig
             await MainActor.run {
                 self.isAIConfigured = false
             }
@@ -1318,6 +1331,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
 
+        let snapshot = EntitlementRuntime.currentSnapshot
+        if snapshot.state != .unknown,
+           let limit = snapshot.maxLocalOrganizations,
+           history.manualOrganizationSessionCount >= limit {
+            throw OrganizationError.localOrganizationQuotaReached(limit: limit)
+        }
+
         // Cancel any existing task first
         cancelInternal()
         try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature)
@@ -1474,7 +1494,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let filesFound = try await scanner.scanDirectory(
             at: directory,
-            deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
+            deepScan: EntitlementRuntime.currentSnapshot.isEnabled(.deepScan)
+                && (aiConfig?.enableDeepScan ?? false)
+                && (aiConfig?.provider.supportsDeepScan ?? true)
         )
         scannedFileCount = filesFound.count
         setScannedFiles(filesFound)
@@ -1503,6 +1525,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     private func duplicateDetectionPhase(files: [FileItem]) async throws -> ([FileItem], String) {
+        guard EntitlementRuntime.currentSnapshot.isEnabled(.duplicateDetection) else {
+            detectedDuplicates = []
+            return (files, "")
+        }
         guard aiConfig?.detectDuplicates ?? false else {
             detectedDuplicates = []
             return (files, "")
@@ -2150,7 +2176,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     success: false,
                     status: .cancelled,
                     errorMessage: "User cancelled the operation",
-                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                    rawAIResponse: entitledRawAIResponse,
                     source: source
                 )
                 history.addEntry(cancelledEntry)
@@ -2200,7 +2226,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             success: false,
             status: .failed,
             errorMessage: displayMessage,
-            rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+            rawAIResponse: entitledRawAIResponse,
             source: source
         )
         history.addEntry(failedEntry)
@@ -2900,6 +2926,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.noCurrentPlan
         }
 
+        let taggingEnabled = enableTagging && EntitlementRuntime.currentSnapshot.isEnabled(.fileTagging)
+
         // Reset cancellation flag for new apply operation
         isCancellationRequested = false
 
@@ -2938,7 +2966,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 planToApply,
                 at: baseURL, 
                 dryRun: dryRun, 
-                enableTagging: enableTagging,
+                enableTagging: taggingEnabled,
                 strictExclusions: aiConfig?.strictExclusions ?? true,
                 exclusionManager: exclusionRules,
                 progress: { [weak self] percent, message in
@@ -2966,7 +2994,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 plan: planToApply,
                 success: true,
                 status: .completed,
-                rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                rawAIResponse: entitledRawAIResponse,
                 operations: operations,
                 source: source
             )
@@ -3031,7 +3059,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 success: false,
                 status: partialOperations == nil ? .failed : .partiallyUndone,
                 errorMessage: error.localizedDescription,
-                rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                rawAIResponse: entitledRawAIResponse,
                 operations: partialOperations,
                 source: source
             )
@@ -3437,7 +3465,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     success: false,
                     status: .skipped,
                     errorMessage: isRenameOnly ? "User requested different filename suggestions" : "User requested different organization",
-                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+                    rawAIResponse: entitledRawAIResponse
                 )
                 history.addEntry(skippedEntry)
             }
@@ -3521,7 +3549,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     success: false,
                     status: .failed,
                     errorMessage: error.localizedDescription,
-                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+                    rawAIResponse: entitledRawAIResponse
                 )
                 history.addEntry(failedEntry)
             }

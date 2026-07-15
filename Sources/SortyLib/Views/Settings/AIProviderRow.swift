@@ -10,6 +10,8 @@ import SwiftUI
 struct AIProviderRow: View {
     let provider: AIProvider
     let isSelected: Bool
+    let isLocked: Bool
+    let lockLabel: String
     let action: () -> Void
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -17,39 +19,57 @@ struct AIProviderRow: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .center, spacing: 8) {
-                ProviderLogoView(provider: provider, size: 17)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
-                    )
+            ZStack(alignment: .trailing) {
+                HStack(alignment: .center, spacing: 8) {
+                    ProviderLogoView(provider: provider, size: 17)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
+                        )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(provider.selectorTitle)
-                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(provider.selectorTitle)
+                            .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-                    Text(provider.selectorDescription)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        Text(provider.selectorDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
+                        .accessibilityHidden(true)
                 }
+                .saturation(isLocked ? 0.15 : 1)
+                .blur(radius: isLocked ? 2.6 : 0)
+                .opacity(isLocked ? 0.68 : 1)
 
-                Spacer(minLength: 4)
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
-                    .accessibilityHidden(true)
+                if isLocked {
+                    Label(lockLabel, systemImage: "lock.fill")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .foregroundStyle(.primary)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(nsColor: .windowBackgroundColor))
+                        )
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered && !isLocked ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
             )
             .contentShape(Rectangle())
             .overlay(
@@ -58,15 +78,16 @@ struct AIProviderRow: View {
             )
         }
         .buttonStyle(.plain)
+        .disabled(isLocked)
         .minimumHitTarget()
         .onHover { hovering in
-            isHovered = hovering
+            isHovered = isLocked ? false : hovering
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects \(provider.displayName) as the AI provider")
-        .help("Use \(provider.displayName)")
+        .accessibilityValue(isLocked ? "Locked" : (isSelected ? "Selected" : "Not selected"))
+        .accessibilityHint(isLocked ? "Requires an upgrade" : "Selects \(provider.displayName) as the AI provider")
+        .help(isLocked ? "Upgrade to use \(provider.displayName)" : "Use \(provider.displayName)")
     }
 }
 

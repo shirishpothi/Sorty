@@ -340,6 +340,8 @@ struct SettingsView: View {
             AdvancedSettingsView().environmentObject(viewModel)
         case .troubleshooting:
             TroubleshootingSettingsView().environmentObject(viewModel)
+        case .licensing:
+            LicensingSettingsView()
         case .help:
             HelpSettingsView().environmentObject(appState)
         case .experimental:

@@ -8,28 +8,44 @@
 import Foundation
 
 public struct AIClientFactory {
-    public static func createClient(config: AIConfig) throws -> AIClientProtocol {
-        switch config.provider {
+    public static func createClient(
+        config: AIConfig,
+        entitlements: EntitlementSnapshot = EntitlementRuntime.currentSnapshot
+    ) throws -> AIClientProtocol {
+        let provider = config.provider
+        let authMethod = config.authMethod(for: provider)
+
+        guard entitlements.isProviderSelectable(provider),
+              entitlements.isProviderAllowed(provider, authMethod: authMethod) else {
+            throw AIClientError.apiError(
+                statusCode: 403,
+                message: entitlements.providerRestrictionMessage(for: provider, authMethod: authMethod)
+            )
+        }
+
+        let gatedConfig = entitlements.sanitized(config)
+
+        switch gatedConfig.provider {
         case .openAI:
-            if ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
-                return CodexSubscriptionClient(config: config)
+            if ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: gatedConfig) == .accountSignIn {
+                return CodexSubscriptionClient(config: gatedConfig)
             }
-            return OpenAIClient(config: config)
+            return OpenAIClient(config: gatedConfig)
 
         case .groq, .openAICompatible, .openRouter, .ollama, .gemini:
-            return OpenAIClient(config: config)
+            return OpenAIClient(config: gatedConfig)
             
         case .githubCopilot:
-            return GitHubCopilotClient(config: config)
+            return GitHubCopilotClient(config: gatedConfig)
             
         case .anthropic:
-            return AnthropicClient(config: config)
+            return AnthropicClient(config: gatedConfig)
             
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
             if #available(macOS 26.0, *) {
                 if AppleFoundationModelClient.isAvailable() {
-                    return AppleFoundationModelClient(config: config)
+                    return AppleFoundationModelClient(config: gatedConfig)
                 }
             }
             #endif

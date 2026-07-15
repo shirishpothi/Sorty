@@ -1692,6 +1692,7 @@ struct HistoryDetailSheet: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
+    @EnvironmentObject var entitlementManager: EntitlementManager
 
     private var currentEntry: OrganizationHistoryEntry {
         organizer.history.entries.first { $0.id == entry.id } ?? entry
@@ -2144,7 +2145,8 @@ struct HistoryDetailSheet: View {
                     }
 
                     // Raw AI Response (Stats for Nerds)
-                    if settingsViewModel.config.showStatsForNerds,
+                    if entitlementManager.isEnabled(.rawHistoryOutput),
+                       settingsViewModel.config.showStatsForNerds,
                        let raw = currentEntry.rawAIResponse,
                        !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         rawAIResponseSection(raw)

@@ -75,12 +75,14 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
 @MainActor
 public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var folders: [WatchedFolder] = []
+    @Published public private(set) var limitMessage: String?
     private let userDefaults = UserDefaults.standard
     private let storageKey = "watchedFolders"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     
     public init() {
         loadFolders()
+        applyEntitlementPolicy(EntitlementRuntime.currentSnapshot)
         setupNotificationObservers()
     }
     
@@ -90,25 +92,44 @@ public class WatchedFoldersManager: ObservableObject {
         }
     }
     
-    public func addFolder(_ folder: WatchedFolder) {
+    public var maxAllowedFolders: Int {
+        EntitlementRuntime.currentSnapshot.maxWatchedFolders
+    }
+
+    public var isAtFolderLimit: Bool {
+        maxAllowedFolders != .max && folders.count >= maxAllowedFolders
+    }
+
+    @discardableResult
+    public func addFolder(_ folder: WatchedFolder) -> Bool {
         // Avoid duplicates
         let normalizedPath = Self.normalizedPath(folder.path)
-        guard !folders.contains(where: { Self.normalizedPath($0.path) == normalizedPath }) else { return }
+        guard !folders.contains(where: { Self.normalizedPath($0.path) == normalizedPath }) else { return false }
+        guard !isAtFolderLimit else {
+            limitMessage = ProductCapability.multipleWatchedFolders.unlockSummary
+            return false
+        }
         var normalizedFolder = folder
         normalizedFolder.autoOrganize = normalizedFolder.isEnabled
-        folders.append(normalizedFolder)
+        folders.append(sanitized(normalizedFolder, snapshot: EntitlementRuntime.currentSnapshot))
+        limitMessage = nil
         saveFolders()
+        return true
     }
 
     public func clearAll() {
         stopAllSecurityScopedAccess()
         folders.removeAll()
+        limitMessage = nil
         userDefaults.removeObject(forKey: storageKey)
     }
     
     public func removeFolder(_ folder: WatchedFolder) {
         stopSecurityScopedAccess(for: folder.id)
         folders.removeAll { $0.id == folder.id }
+        if maxAllowedFolders == .max || folders.count < maxAllowedFolders {
+            limitMessage = nil
+        }
         saveFolders()
     }
     
@@ -116,9 +137,39 @@ public class WatchedFoldersManager: ObservableObject {
         if let index = folders.firstIndex(where: { $0.id == folder.id }) {
             var normalizedFolder = folder
             normalizedFolder.autoOrganize = normalizedFolder.isEnabled
-            folders[index] = normalizedFolder
+            folders[index] = sanitized(normalizedFolder, snapshot: EntitlementRuntime.currentSnapshot)
             saveFolders()
         }
+    }
+
+    public func clearLimitMessage() {
+        limitMessage = nil
+    }
+
+    public func applyEntitlementPolicy(_ snapshot: EntitlementSnapshot) {
+        guard snapshot.state != .unknown else { return }
+
+        var enabledSlotsUsed = 0
+        let sanitizedFolders = folders.map { folder in
+            var updated = sanitized(folder, snapshot: snapshot)
+            if updated.isEnabled {
+                enabledSlotsUsed += 1
+                if snapshot.maxWatchedFolders != .max,
+                   enabledSlotsUsed > snapshot.maxWatchedFolders {
+                    updated.isEnabled = false
+                    updated.autoOrganize = false
+                }
+            }
+            return updated
+        }
+
+        limitMessage = snapshot.maxWatchedFolders != .max && folders.count > snapshot.maxWatchedFolders
+            ? ProductCapability.multipleWatchedFolders.unlockSummary
+            : nil
+
+        guard sanitizedFolders != folders else { return }
+        folders = sanitizedFolders
+        saveFolders()
     }
     
     public func toggleEnabled(for folder: WatchedFolder) {
@@ -216,6 +267,8 @@ public class WatchedFoldersManager: ObservableObject {
             folders = updatedFolders
             saveFolders()
         }
+
+        applyEntitlementPolicy(EntitlementRuntime.currentSnapshot)
     }
     
     /// Re-authorizes a watched folder by creating a new security-scoped bookmark from a freshly-picked URL
@@ -275,6 +328,18 @@ public class WatchedFoldersManager: ObservableObject {
             }
             saveFolders()
         }
+    }
+
+    private func sanitized(_ folder: WatchedFolder, snapshot: EntitlementSnapshot) -> WatchedFolder {
+        var sanitizedFolder = folder
+        if !snapshot.allowsParameterTuning {
+            sanitizedFolder.temperature = EntitlementSnapshot.defaultLockedTemperature
+        }
+        if !snapshot.allowsAutomationSeparateModelSelection {
+            sanitizedFolder.modelOverride = nil
+            sanitizedFolder.providerOverride = nil
+        }
+        return sanitizedFolder
     }
     
     private func saveFolders() {

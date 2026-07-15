@@ -100,15 +100,17 @@ openssl ecparam -name prime256v1 -genkey -noout -out sorty-license-private.pem
 openssl ec -in sorty-license-private.pem -pubout -out sorty-license-public.pem
 ```
 
-Ship `sorty-license-public.pem` to the app via `SORTY_LICENSE_PUBLIC_KEY_PEM` or the `sortyLicensePublicKeyPEM` user-defaults override.
+Ship `sorty-license-public.pem` in release builds through the private build settings described below. Environment and user-default overrides are intentionally limited to debug builds.
 
 ## Connecting the macOS app
 
-Sorty now reads license-service configuration in this order:
+Debug builds read license-service configuration in this order:
 
 1. runtime environment variables such as `SORTY_LICENSE_SERVICE_URL`
 2. debug-only `defaults write com.sorty.app ...` overrides
 3. bundled `Info.plist` values wired from `BuildConfig.xcconfig`
+
+Release builds ignore mutable environment and user-default trust-anchor overrides and read only the bundled `Info.plist` values.
 
 For local development, the easiest wiring path is:
 
@@ -142,6 +144,8 @@ node server.mjs
 
 ```bash
 cd services/gumroad-license-service
-node --test server.test.mjs
+npm test
+npm run test:roundtrip
 ```
 
+The round-trip check launches the real HTTP service on loopback with ephemeral P-256 keys and an isolated seat store, then exercises activation, refresh, signature verification, seat enforcement, and deactivation without using production credentials.

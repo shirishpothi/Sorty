@@ -372,6 +372,7 @@ struct SortyApp: App {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = true
 
+    @StateObject private var entitlementManager = EntitlementManager.shared
     @StateObject private var settingsViewModel: SettingsViewModel
     @StateObject private var personaManager = PersonaManager()
     @StateObject private var customPersonaStore = CustomPersonaStore()
@@ -457,6 +458,7 @@ struct SortyApp: App {
                 .tint(SortyDesignSystem.Colors.resolvedAccent)
                 .accentColor(SortyDesignSystem.Colors.resolvedAccent)
                 .environmentObject(watchedFoldersManager)
+                .environmentObject(entitlementManager)
                 .environmentObject(loginItemManager)
                 .environmentObject(notificationSettings)
                 .environmentObject(menuBarController)
@@ -486,6 +488,8 @@ struct SortyApp: App {
                 }
             }
             .task {
+                await entitlementManager.bootstrapIfNeeded()
+                applyEntitlementSnapshot(entitlementManager.snapshot)
                 configureGlobalsIfNeeded()
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
@@ -493,6 +497,9 @@ struct SortyApp: App {
                     try? await automationOrganizer.configure(with: newConfig)
                     learningsManager.configure(with: newConfig)
                 }
+            }
+            .onChange(of: entitlementManager.snapshot) { _, snapshot in
+                applyEntitlementSnapshot(snapshot)
             }
             .onChange(of: hideDockIcon) { _, newValue in
                 appDelegate.updateActivationPolicy(hideDockIcon: newValue)
@@ -543,6 +550,7 @@ struct SortyApp: App {
         .tint(SortyDesignSystem.Colors.resolvedAccent)
         .accentColor(SortyDesignSystem.Colors.resolvedAccent)
         .environmentObject(settingsViewModel)
+        .environmentObject(entitlementManager)
         .environmentObject(personaManager)
         .environmentObject(customPersonaStore)
         .environmentObject(watchedFoldersManager)
@@ -617,6 +625,34 @@ struct SortyApp: App {
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
             }
+        }
+    }
+
+    @MainActor
+    private func applyEntitlementSnapshot(_ snapshot: EntitlementSnapshot) {
+        settingsViewModel.applyEntitlementSnapshot(snapshot)
+        watchedFoldersManager.applyEntitlementPolicy(snapshot)
+        storageLocationsManager.applyEntitlementPolicy(snapshot)
+
+        if snapshot.state != .unknown {
+            if !snapshot.allowsLaunchAtLoginAutomation {
+                launchAtLogin = false
+            }
+            if !snapshot.allowsBackgroundAutomation {
+                keepInBackground = false
+                hideDockIcon = false
+            }
+            if !snapshot.allowsFinderIntegration {
+                finderIntegrationEnabled = false
+            }
+            if !snapshot.allowsQuitWarnings {
+                UserDefaults.standard.set(false, forKey: "confirmQuitWhileOrganizing")
+            }
+        }
+
+        Task { @MainActor in
+            try? await automationOrganizer.configure(with: settingsViewModel.config)
+            learningsManager.configure(with: settingsViewModel.config)
         }
     }
 

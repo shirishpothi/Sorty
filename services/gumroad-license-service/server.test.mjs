@@ -11,6 +11,7 @@ import {
   loadConfiguration,
   loadStore,
   maskLicenseKey,
+  normalizePurchaseState,
   signPayload,
   stableStringify
 } from './server.mjs';
@@ -77,6 +78,30 @@ test('configuration defaults to loopback and normalizes escaped signing keys', (
 test('short license keys are never reflected in errors', () => {
   assert.equal(maskLicenseKey('short'), '****');
   assert.equal(maskLicenseKey('long-license-key'), 'long...-key');
+});
+
+test('cancelled subscriptions are expired after their cancellation timestamp', () => {
+  const normalized = normalizePurchaseState({
+    purchase: {
+      subscription_cancelled_at: '2026-01-01T00:00:00.000Z'
+    }
+  });
+
+  assert.equal(normalized.status, 'expired');
+});
+
+test('successful HTTP responses without a verified purchase cannot activate', async () => {
+  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'sorty-license-service-'));
+  const service = createService(configuration(path.join(tempDirectory, 'store.json')), {
+    fetchImpl: fakeFetch({ prod_deep: { success: false } })
+  });
+
+  const result = await service.route('POST', '/v1/activate', {
+    licenseKeys: ['invalid-key'],
+    device: { deviceID: 'device-1', deviceName: 'Mac 1', appVersion: '1.0' }
+  });
+
+  assert.equal(result.statusCode, 404);
 });
 
 test('signPayload returns an ES256 envelope', () => {

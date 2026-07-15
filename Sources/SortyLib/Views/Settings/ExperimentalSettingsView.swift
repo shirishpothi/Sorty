@@ -8,14 +8,23 @@
 import SwiftUI
 
 struct ExperimentalSettingsView: View {
+    @EnvironmentObject private var entitlementManager: EntitlementManager
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("These optional features are intentionally hidden from the main workflow. Use the toggles below to enable or disable them.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            ForEach(experimentalFlags) { flag in
-                ExperimentalFlagRow(flag: flag)
+            ProLockedSettingsContent(
+                isLocked: !entitlementManager.allowsExperimentalSettings,
+                message: "Experimental settings are available with a paid unlock."
+            ) {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(experimentalFlags) { flag in
+                        ExperimentalFlagRow(flag: flag)
+                    }
+                }
             }
         }
     }
@@ -111,5 +120,7 @@ struct ExperimentalFlagRow: View {
 
 #Preview {
     ExperimentalSettingsView()
+        .environmentObject(AppState())
+        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 600)
 }

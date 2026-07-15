@@ -70,6 +70,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     case notifications = "Notifications"
     case advanced = "Advanced"
     case troubleshooting = "Troubleshooting"
+    case licensing = "Licensing & Access"
     case help = "Help & Support"
     case experimental = "Experimental"
     
@@ -81,7 +82,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .aiAndOrganization
         case .automation, .deeplinks, .finder, .notifications:
             return .features
-        case .advanced, .troubleshooting, .help, .experimental:
+        case .advanced, .troubleshooting, .licensing, .help, .experimental:
             return .system
         }
     }
@@ -102,6 +103,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .notifications: return "bell"
         case .advanced: return "gearshape.2"
         case .troubleshooting: return "wrench.and.screwdriver"
+        case .licensing: return "checkmark.seal"
         case .help: return "questionmark.circle"
         case .experimental: return "flask"
         }
@@ -119,6 +121,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .notifications: return .pink
         case .advanced: return .gray
         case .troubleshooting: return .red
+        case .licensing: return .mint
         case .help: return .teal
         case .experimental: return .indigo
         }
@@ -146,6 +149,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "logs", "error logs", "red logs"]
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
+        case .licensing:
+            return ["license", "licensing", "upgrade", "restore", "activation", "access", "seat", "gumroad", "pro"]
         case .help:
             return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "issue details", "bug report", "diagnostics"]
         case .experimental:
@@ -228,6 +233,12 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Cache", summary: "Clear cached data and recover from stale state."),
                 SettingsFeatureSnippet(title: "Learnings Data", summary: "Inspect or reset learning signals and history."),
                 SettingsFeatureSnippet(title: "Reset Sorty", summary: "Perform a full reset of app configuration.")
+            ]
+        case .licensing:
+            return [
+                SettingsFeatureSnippet(title: "Activate License", summary: "Activate a purchase key on this Mac.", keywords: ["gumroad", "license key"]),
+                SettingsFeatureSnippet(title: "Restore Access", summary: "Refresh signed access or restore purchases already stored in Keychain."),
+                SettingsFeatureSnippet(title: "Release Device", summary: "Release this Mac's device seat before moving a license.", keywords: ["deactivate", "seat"])
             ]
         case .help:
             return [

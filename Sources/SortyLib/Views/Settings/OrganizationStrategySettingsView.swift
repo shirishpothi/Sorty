@@ -9,6 +9,7 @@ import SwiftUI
 
 struct OrganizationStrategySettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var entitlementManager: EntitlementManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var namingGenerator = NamingInstructionsGenerator()
     @StateObject private var presetManager = NamingPresetManager.shared
@@ -23,7 +24,11 @@ struct OrganizationStrategySettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard(title: "Scanning Options", icon: "doc.text.magnifyingglass", color: .blue) {
-                VStack(alignment: .leading, spacing: 12) {
+                ProLockedSettingsContent(
+                    isLocked: !entitlementManager.isEnabled(.deepScan),
+                    message: "Deep Scan is available with its feature unlock or Sorty Pro."
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         SettingsToggle(
                             isOn: Binding(
@@ -49,6 +54,7 @@ struct OrganizationStrategySettingsView: View {
                                 .padding(.leading, 32)
                         }
                     }
+                    }
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -61,7 +67,11 @@ struct OrganizationStrategySettingsView: View {
 
             // Vision AI Section
             SettingsCard(title: "AI Vision", icon: "eye", color: .teal) {
-                VStack(alignment: .leading, spacing: 12) {
+                ProLockedSettingsContent(
+                    isLocked: entitlementManager.snapshot.isFreeTier,
+                    message: "AI Vision is available with a paid unlock."
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
@@ -80,13 +90,18 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    }
                 }
             }
             .animatedAppearance(delay: 0.1)
 
             // Renaming Section
             SettingsCard(title: "Renaming", icon: "textformat", color: .indigo) {
-                VStack(alignment: .leading, spacing: 12) {
+                ProLockedSettingsContent(
+                    isLocked: entitlementManager.snapshot.isFreeTier,
+                    message: "Advanced renaming is available with a paid unlock."
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         Picker("Template", selection: Binding(
                             get: { viewModel.config.selectedNamingPresetId },
@@ -341,6 +356,7 @@ struct OrganizationStrategySettingsView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
+                    }
                 }
             }
             .settingsFocusable(.strategyRenaming)
@@ -470,5 +486,7 @@ private struct EditPresetSheet: View {
 #Preview {
     OrganizationStrategySettingsView()
         .environmentObject(SettingsViewModel())
+        .environmentObject(AppState())
+        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 600)
 }

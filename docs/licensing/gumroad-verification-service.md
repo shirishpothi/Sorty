@@ -121,4 +121,3 @@ That prevents drift between:
 - rotate signing keys with explicit `keyID` versioning
 - monitor Gumroad verification failures and seat-conflict rates
 - keep commercial-license operations and Gumroad SKU mapping under admin-only control
-

@@ -116,8 +116,12 @@ export async function verifyLicenseWithGumroad({ gumroadApiURL, productId, licen
   }
 
   const payload = await response.json();
-  const purchase = payload.purchase ?? payload;
-  if (!purchase) {
+  if (payload.success === false || !payload.purchase) {
+    return null;
+  }
+
+  const purchase = payload.purchase;
+  if (purchase.product_id && String(purchase.product_id) !== String(productId)) {
     return null;
   }
 
@@ -152,14 +156,16 @@ export function normalizePurchaseState(verifiedLicense) {
   const purchase = verifiedLicense.purchase;
   const refunded = Boolean(purchase.refunded || purchase.disputed || purchase.chargebacked);
   const endedAt = purchase.subscription_ended_at ? new Date(purchase.subscription_ended_at) : null;
+  const cancelledAt = purchase.subscription_cancelled_at ? new Date(purchase.subscription_cancelled_at) : null;
   const failedAt = purchase.subscription_failed_at ? new Date(purchase.subscription_failed_at) : null;
   const now = new Date();
   const expiredSubscription = endedAt instanceof Date && !Number.isNaN(endedAt.valueOf()) && endedAt <= now;
+  const cancelledSubscription = cancelledAt instanceof Date && !Number.isNaN(cancelledAt.valueOf()) && cancelledAt <= now;
   const failedSubscription = failedAt instanceof Date && !Number.isNaN(failedAt.valueOf()) && failedAt <= now;
 
   return {
     ...verifiedLicense,
-    status: refunded || expiredSubscription || failedSubscription ? 'expired' : 'active',
+    status: refunded || expiredSubscription || cancelledSubscription || failedSubscription ? 'expired' : 'active',
     purchaseDate: purchase.created_at ? new Date(purchase.created_at) : null
   };
 }
