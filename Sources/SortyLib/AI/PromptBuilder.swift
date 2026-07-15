@@ -429,7 +429,7 @@ struct PromptBuilder {
         if mode == .renameOnly || mode == .organizeAndRename {
             base += " Rename only when there is a material clarity improvement; keep already-good names unchanged."
         }
-        base += " Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
+        base += " Nest folders at most 3 levels deep; folder names must not contain '/'. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
@@ -746,7 +746,7 @@ struct PromptBuilder {
         if truncated {
             context += ", ... and \(existingFolders.count - 30) more"
         }
-        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable."
+        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable. Reusing an existing folder never permits exceeding the 3-level depth limit: the final structure, including any existing path segments you reuse, must stay within 3 levels."
         
         return context
     }

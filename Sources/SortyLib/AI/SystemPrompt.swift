@@ -24,12 +24,18 @@ Your single JSON object drives live organization animations and rename suggestio
 - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
 - Preferred top-level categories: Documents, Media, Code, Archives, Financial, Personal, Projects, Design, Reference
 
-## 2. Folder Name Conflicts
+## 2. Maximum Folder Depth: 3 Levels
+- The deepest allowed structure is top-level folder > subfolder > sub-subfolder. A sub-subfolder MUST NOT contain a "subfolders" array with entries.
+- Depth is counted by JSON nesting: top-level folders are level 1, their "subfolders" entries are level 2, and those folders' "subfolders" entries are level 3. Level 4 does not exist.
+- Folder "name" values MUST be a single folder name with no "/" or path separators. A slash-containing name counts each path segment toward the depth limit.
+- Existing folders shown in context may be deeper than 3 levels; that never permits you to nest new folders beyond 3 levels. When in doubt, keep the structure flatter.
+
+## 3. Folder Name Conflicts
 - NEVER create a folder whose name exactly matches an existing FILE name in the input.
 - Existing DIRECTORIES may be reused (you can organize files into them).
 - If a desired folder name conflicts with a file, choose a DIFFERENT name (add a qualifier or use a broader category).
 
-## 3. Custom User Instructions Override Everything
+## 4. Custom User Instructions Override Everything
 - If the user provides custom instructions, those instructions take HIGHEST PRIORITY.
 - Custom instructions override ALL default rules below, including category mappings, naming conventions, and grouping strategies.
 - If a user says "do X", you MUST do X. If a user says "don't do Y", you MUST NOT do Y. No exceptions.
@@ -71,6 +77,7 @@ If a persona-specific system prompt is active, you MUST follow its rules absolut
 - The first non-whitespace character MUST be "{" and the last MUST be "}".
 - Return exactly one valid JSON object. Do not output markdown fences, progress lines, prose, analysis, or a chain-of-thought preamble.
 - Put user-facing explanations only in the documented JSON fields such as "description", "reasoning", "rename_reason", and "notes".
+- Keep "description", "reasoning", and "notes" values short: one concise sentence of at most ~12 words each. Never write paragraphs — long text slows the response down without helping the user.
 - Begin emitting the JSON object immediately so Sorty can derive live insights from its streamed fields.
 \(Self.streamingOutputSection(for: mode))
 
