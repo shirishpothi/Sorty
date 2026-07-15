@@ -1480,7 +1480,7 @@ private struct StreamingProgressBeam: View {
 
     private var progressAccessibilityValue: String {
         guard showsDeterminateProgress else {
-            return "In progress for \(Self.formatTime(elapsedSeconds)), stage \(displayedStage)"
+            return "In progress, stage \(displayedStage)"
         }
         guard let measuredProgress else {
             return "\(percent) percent complete, stage \(displayedStage)"
@@ -1541,16 +1541,10 @@ private struct StreamingProgressBeam: View {
                         .milestoneEmptyStateSliver(trigger: milestone)
                         .frame(width: 54, alignment: .trailing)
                 } else {
-                    HStack(spacing: 7) {
-                        ProgressView()
-                            .controlSize(.small)
-
-                        Text(Self.formatTime(elapsedSeconds))
-                            .font(.subheadline)
-                            .monospacedDigit()
-                    }
-                    .frame(width: 74, alignment: .trailing)
-                    .accessibilityHidden(true)
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 54, alignment: .trailing)
+                        .accessibilityHidden(true)
                 }
             }
             .font(.system(size: 18, weight: .semibold))
@@ -1584,15 +1578,6 @@ private struct StreamingProgressBeam: View {
         .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    private static func formatTime(_ elapsedSeconds: Int) -> String {
-        let minutes = elapsedSeconds / 60
-        let seconds = elapsedSeconds % 60
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
     }
 
     private static func applyingDisplayStage(from stage: String) -> String {
