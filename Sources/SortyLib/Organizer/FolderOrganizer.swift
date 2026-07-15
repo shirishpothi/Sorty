@@ -455,10 +455,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             options: []
         )
     
-    // Steady progress animation during streaming
-    private let steadyProgressTimer = SteadyProgressTimer()
-    private var lastChunkTime: Date = .distantPast
-    
     // AI reasoning insights - extracted from streaming content
     @Published public var currentInsight: String = ""
     @Published public var insightHistory: [AIInsight] = []
@@ -783,7 +779,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
         let isFirstChunk = streamingContent.isEmpty
         streamingContent += chunk
-        lastChunkTime = Date()
 
         if isFirstChunk {
             // Batch all initial state updates together
@@ -795,9 +790,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     syncDisplayContentImmediately()
                 }
             }
-
-            // Start steady progress task for smooth animation
-            startSteadyProgressTask()
         }
 
         if liveInsightsEnabled {
@@ -1101,24 +1093,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return destination.isEmpty ? nil : destination
     }
 
-    /// Starts a background task that ensures progress keeps moving even during pauses
-    private func startSteadyProgressTask() {
-        steadyProgressTimer.start(interval: .milliseconds(500)) { [weak self] in
-            guard let self = self, !self.isCancellationRequested, self.isStreaming else { return }
-            guard self.progress < 0.82 else { return }
-
-            let timeSinceLastChunk = Date().timeIntervalSince(self.lastChunkTime)
-            if timeSinceLastChunk > 1.0 {
-                self.progress = min(0.82, self.progress + 0.005)
-            }
-        }
-    }
-    
-    /// Stops the steady progress task
-    private func stopSteadyProgressTask() {
-        steadyProgressTimer.stop()
-    }
-    
     /// Extract meaningful insights from the streaming AI response
     /// This is throttled and uses caching to avoid performance impact
     private func extractInsightsIfNeeded(force: Bool = false) {
@@ -1265,14 +1239,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isStreaming = false
         organizationStage = aiConfig?.mode == .renameOnly ? "Building rename preview..." : "Building organization plan..."
         stopTimeoutTimer()
-        stopSteadyProgressTask()
     }
 
     public func didFail(error: Error) {
         isStreaming = false
         errorMessage = userFacingErrorMessage(for: error)
         stopTimeoutTimer()
-        stopSteadyProgressTask()
 
         // Request user attention for streaming failure
         NotificationManager.shared.requestAttention()
@@ -2091,7 +2063,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         suppressCancellationReset = true
         cancelInternal()
         isStreaming = false
-        stopSteadyProgressTask()
     }
 
     private func cancelInternal() {
@@ -2117,7 +2088,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
         stopTimeoutTimer()
-        stopSteadyProgressTask()
 
         _ = await taskToCancel?.result
         suppressCancellationReset = false
@@ -2180,8 +2150,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
         measuredWorkProgress = nil
-        
-        stopSteadyProgressTask()
     }
 
     private func resetToIdleUnlessCancellationResetIsSuppressed(source: OrganizationEntrySource = .manual) {
@@ -3789,8 +3757,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightsCache = nil
         }
         
-        // Stop background tasks (outside batch as it's not a @Published property)
-        stopSteadyProgressTask()
     }
     private func recordPlanRules(_ plan: OrganizationPlan, observer: ContinuousLearningObserver) {
         // Recursively record rules
