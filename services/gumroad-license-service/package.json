@@ -1,0 +1,12 @@
+{
+  "name": "sorty-gumroad-license-service",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Minimal Gumroad verification service for Sorty licenses",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test server.test.mjs"
+  }
+}
+

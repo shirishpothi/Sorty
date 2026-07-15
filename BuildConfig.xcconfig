@@ -75,6 +75,16 @@ SDKROOT = macosx
 // Valid architectures
 VALID_ARCHS = x86_64 arm64
 
+// MARK: - Licensing Build Settings
+// Release builds consume these immutable bundle values. Keep the signing private key server-side.
+// PEM values may use literal \\n escapes; Sorty normalizes them when reading Info.plist.
+SORTY_LICENSE_SERVICE_URL =
+SORTY_LICENSE_PUBLIC_KEY_PEM =
+SORTY_LICENSE_PUBLIC_KEY_ID = sorty-license-key-v1
+SORTY_LICENSE_VALIDATION_HOURS = 24
+SORTY_LICENSE_GRACE_HOURS = 168
+SORTY_LICENSE_SEAT_LIMIT = 3
+
 // MARK: - Build Performance Diagnostics
 // Uncomment to profile build times (significantly slows builds)
 // OTHER_SWIFT_FLAGS = -Xfrontend -warn-long-function-bodies=100 -Xfrontend -warn-long-expression-type-checking=100
