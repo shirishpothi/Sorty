@@ -3774,7 +3774,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             visionAnalysisSummary = nil
             isCancellationRequested = false
             userInitiatedAction = false
-            lastChunkTime = .distantPast
             
             // Clear AI insights and cache
             insightExtractionTask?.cancel()
