@@ -95,6 +95,16 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertLessThanOrEqual(organizer.progress, 0.82)
     }
 
+    func testStreamingProgressDoesNotAdvanceWithoutNewContent() async {
+        organizer.didReceiveChunk("first chunk")
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        let progressAfterChunk = organizer.progress
+
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        XCTAssertEqual(organizer.progress, progressAfterChunk)
+    }
+
     func testMeasuredWorkProgressUsesConcreteCompletedCount() {
         let progress = MeasuredWorkProgress(completed: 3, total: 12)
 

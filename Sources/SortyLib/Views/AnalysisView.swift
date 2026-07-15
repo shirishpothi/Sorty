@@ -1479,10 +1479,23 @@ private struct StreamingProgressBeam: View {
     }
 
     private var progressAccessibilityValue: String {
+        guard showsDeterminateProgress else {
+            return "In progress for \(Self.formatTime(elapsedSeconds)), stage \(displayedStage)"
+        }
         guard let measuredProgress else {
             return "\(percent) percent complete, stage \(displayedStage)"
         }
         return "\(percent) percent, \(measuredProgress.completed) of \(measuredProgress.total) complete, stage \(displayedStage)"
+    }
+
+    private var showsDeterminateProgress: Bool {
+        if measuredProgress != nil { return true }
+        switch state {
+        case .ready, .applying, .completed:
+            return true
+        case .idle, .scanning, .organizing, .error:
+            return false
+        }
     }
 
     private var displayedStage: String {
@@ -1520,12 +1533,25 @@ private struct StreamingProgressBeam: View {
                     .animation(.easeInOut(duration: 0.22), value: displayedStage)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("\(percent)%")
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.3), value: percent)
-                    .milestoneEmptyStateSliver(trigger: milestone)
-                    .frame(width: 54, alignment: .trailing)
+                if showsDeterminateProgress {
+                    Text("\(percent)%")
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.3), value: percent)
+                        .milestoneEmptyStateSliver(trigger: milestone)
+                        .frame(width: 54, alignment: .trailing)
+                } else {
+                    HStack(spacing: 7) {
+                        ProgressView()
+                            .controlSize(.small)
+
+                        Text(Self.formatTime(elapsedSeconds))
+                            .font(.subheadline)
+                            .monospacedDigit()
+                    }
+                    .frame(width: 74, alignment: .trailing)
+                    .accessibilityHidden(true)
+                }
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)
