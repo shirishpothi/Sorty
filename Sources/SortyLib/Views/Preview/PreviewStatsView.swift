@@ -111,7 +111,7 @@ struct PreviewStatsView: View {
                         Label(GenerationStats.formatDuration(estimatedTime) + " remaining", systemImage: "hourglass")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                            .numericTextTransition(value: estimatedTime)
+                            .numericTextTransition(animationValue: estimatedTime)
                     }
                 }
                 .padding(.horizontal, 16)

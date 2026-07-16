@@ -22,7 +22,7 @@ struct OrganizationRulesSettingsView: View {
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
                             .numericTextTransition(
-                                value: Double(viewModel.config.maxTopLevelFolders)
+                                animationValue: viewModel.config.maxTopLevelFolders
                             )
                     }
                     
@@ -79,7 +79,9 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericTextTransition(value: viewModel.config.temperature)
+                            .numericTextTransition(
+                                animationValue: viewModel.config.temperature
+                            )
                     }
 
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)

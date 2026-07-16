@@ -21,7 +21,9 @@ struct ParameterTuningSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .numericTextTransition(value: viewModel.config.temperature)
+                            .numericTextTransition(
+                                animationValue: viewModel.config.temperature
+                            )
                     }
                     
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
