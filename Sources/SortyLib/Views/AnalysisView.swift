@@ -1447,6 +1447,17 @@ private struct SubtleDotPulse: ViewModifier {
     }
 }
 
+private struct StageBlurTransitionModifier: ViewModifier {
+    let radius: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: radius)
+            .opacity(opacity)
+    }
+}
+
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
     let measuredProgress: MeasuredWorkProgress?
@@ -1514,7 +1525,17 @@ private struct StreamingProgressBeam: View {
     }
 
     private var stageTransition: AnyTransition {
-        reduceMotion || reduceTransparency ? .opacity : .blurReplace
+        guard !reduceMotion, !reduceTransparency else { return .opacity }
+        return .asymmetric(
+            insertion: .modifier(
+                active: StageBlurTransitionModifier(radius: 6, opacity: 0),
+                identity: StageBlurTransitionModifier(radius: 0, opacity: 1)
+            ),
+            removal: .modifier(
+                active: StageBlurTransitionModifier(radius: 4, opacity: 0),
+                identity: StageBlurTransitionModifier(radius: 0, opacity: 1)
+            )
+        )
     }
 
     private var stageAnimation: Animation {
