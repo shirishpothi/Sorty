@@ -449,7 +449,7 @@ struct CanvasToolbar: View {
                 Text("\(Int(viewModel.scale * 100))%")
                     .font(.caption)
                     .monospacedDigit()
-                    .numericTextTransition(value: viewModel.scale)
+                    .numericTextTransition(animationValue: viewModel.scale)
                     .frame(width: 50)
 
                 Button {

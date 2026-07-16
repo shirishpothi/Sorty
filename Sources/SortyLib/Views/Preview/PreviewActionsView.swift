@@ -249,7 +249,7 @@ struct PreviewProgressView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .monospacedDigit()
-                        .numericTextTransition(value: estimatedTime)
+                        .numericTextTransition(animationValue: estimatedTime)
                         .help("Estimated time remaining")
                 }
                 
@@ -257,7 +257,7 @@ struct PreviewProgressView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .numericTextTransition(value: progress)
+                    .numericTextTransition(animationValue: progress)
                     .help("Organization progress")
                 
                 // Prominent Cancel Button during operation
