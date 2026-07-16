@@ -1942,6 +1942,10 @@ struct ModelDirectoryRow: View {
                     )
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .numericTextTransition(
+                        animationValue: statusText,
+                        animation: .easeInOut(duration: 0.28)
+                    )
             }
 
             Spacer()

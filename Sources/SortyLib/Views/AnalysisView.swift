@@ -1281,6 +1281,10 @@ private struct RenameNamePill: View {
             .foregroundStyle(isPrimary ? Color.purple : Color.secondary)
             .lineLimit(1)
             .strikethrough(isStruck, color: .secondary)
+            .numericTextTransition(
+                animationValue: text,
+                animation: .easeInOut(duration: 0.28)
+            )
             .textShimmer(isLoading: isShimmering, phaseOffset: 0.12, intensity: 1.18)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -1724,6 +1728,10 @@ private struct AIReasoningStatus: View {
                         Text(organizationStage)
                             .font(.headline)
                             .foregroundStyle(.primary)
+                            .numericTextTransition(
+                                animationValue: organizationStage,
+                                animation: .easeInOut(duration: 0.28)
+                            )
                             .textShimmer(isLoading: true, phaseOffset: 0.34, intensity: 1.65)
 
                         LoadingDotsView(dotCount: 3, dotSize: 5, color: .primary)
@@ -1733,6 +1741,10 @@ private struct AIReasoningStatus: View {
                     Text(organizationStage)
                         .font(.headline)
                         .foregroundStyle(.primary)
+                        .numericTextTransition(
+                            animationValue: organizationStage,
+                            animation: .easeInOut(duration: 0.28)
+                        )
                         .textShimmer(isLoading: isAnalyzingStage, phaseOffset: 0.08, intensity: 1.55)
                 }
 
@@ -1740,6 +1752,10 @@ private struct AIReasoningStatus: View {
                     Text(isRenameOnly ? renameStatusMessage : funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(
+                            animationValue: isRenameOnly ? renameStatusMessage : funnyMessage,
+                            animation: .easeInOut(duration: 0.28)
+                        )
                         .textShimmer(isLoading: true, phaseOffset: 0.62, intensity: 1.65)
                         .opacity(funnyMessageOpacity)
                         .offset(y: funnyMessageOpacity > 0.5 ? 0 : 1)
@@ -1836,6 +1852,10 @@ private struct InsightHistorySection: View {
                         .font(.callout)
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
+                        .numericTextTransition(
+                            animationValue: headerTitle,
+                            animation: .easeInOut(duration: 0.28)
+                        )
 
                     if isStreaming {
                         Image(systemName: "waveform")
@@ -2168,6 +2188,10 @@ private struct InsightHistorySection: View {
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
+                .numericTextTransition(
+                    animationValue: displayInsight,
+                    animation: .easeInOut(duration: 0.28)
+                )
 
             Spacer()
 
