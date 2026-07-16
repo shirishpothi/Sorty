@@ -1,66 +1,166 @@
 import SwiftUI
 
-/// A compact orbit of glass bubbles for indeterminate progress surfaces.
+/// The recovered Minsang Glass Loader, scaled for compact progress surfaces.
 struct MinsangGlassLoader: View {
     let textChangeTrigger: String
     var size: CGFloat = 54
     var isActive = true
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase = LoaderPhase.base
+    @State private var hasPresented = false
+    @State private var nextAlternatePhase = LoaderPhase.dual
 
-    private static let bubbleCount = 6
+    private static let circleFraction: Float = 0.32
+    private static let dotFraction: Float = 0.08
+    private static let dotCount: Float = 6
+    private static let moverSpeed: Float = 1.6
+    private static let ringSpeed: Float = 0.45
+    private static let threshold: Float = 1.38
+    private static let refraction: Float = 14
+    private static let dispersion: Float = 0
+    private static let distortion: Float = 4
+    private static let distortionSpread: Float = 1
+    private static let border: Float = 0.5
+
+    /// The recovered mover speed is expressed in radians per second.
+    private static let fullTurnDuration = (2 * Double.pi) / Double(moverSpeed)
 
     private var shouldAnimate: Bool {
         isActive && !reduceMotion
     }
 
     var body: some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)
-        ) { timeline in
-            Canvas { context, canvasSize in
-                let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                let minimumLength = min(canvasSize.width, canvasSize.height)
-                let canvasCenter = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
-                let lineWidth = max(minimumLength * 0.018, 0.9)
-
-                for index in 0 ..< Self.bubbleCount {
-                    let indexPhase = Double(index) * (2 * Double.pi / Double(Self.bubbleCount))
-                    let angle = time * 1.25 + indexPhase
-                    let pulse = (sin(time * 2.1 + Double(index) * 0.8) + 1) / 2
-                    let drift = CGFloat(sin(time * 1.7 + Double(index) * 1.15)) * minimumLength * 0.02
-                    let orbitRadius = minimumLength * 0.27 + drift
-                    let diameter = minimumLength * CGFloat(0.105 + 0.035 * pulse)
-                    let bubbleCenter = CGPoint(
-                        x: canvasCenter.x + CGFloat(cos(angle)) * orbitRadius,
-                        y: canvasCenter.y + CGFloat(sin(angle)) * orbitRadius
-                    )
-                    let bubbleRect = CGRect(
-                        x: bubbleCenter.x - diameter / 2,
-                        y: bubbleCenter.y - diameter / 2,
-                        width: diameter,
-                        height: diameter
-                    )
-                    let bubble = Path(ellipseIn: bubbleRect)
-
-                    context.fill(
-                        bubble,
-                        with: .color(Color.primary.opacity(0.04 + 0.03 * pulse))
-                    )
-                    context.stroke(
-                        bubble,
-                        with: .color(Color.primary.opacity(0.30 + 0.22 * pulse)),
-                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                    )
-                    context.stroke(
-                        bubble.trimmedPath(from: 0.56, to: 0.80),
-                        with: .color(Color.primary.opacity(0.72)),
-                        style: StrokeStyle(lineWidth: lineWidth * 0.8, lineCap: .round)
-                    )
-                }
+        Group {
+            if let shaderLibrary = Self.shaderLibrary {
+                glassLoader(shaderLibrary: shaderLibrary)
+            } else {
+                CometLoader(size: size, lineWidth: 2, color: .secondary)
             }
         }
         .frame(width: size, height: size)
+        .task(id: textChangeTrigger) {
+            guard hasPresented else {
+                hasPresented = true
+                return
+            }
+            guard shouldAnimate else {
+                phase = .base
+                return
+            }
+
+            phase = nextAlternatePhase
+            nextAlternatePhase = nextAlternatePhase == .dual ? .merge : .dual
+
+            do {
+                try await Task.sleep(for: .seconds(Self.fullTurnDuration))
+                phase = .base
+            } catch {
+                // A newer text change owns the next full-turn phase.
+            }
+        }
+        .onChange(of: reduceMotion) { _, isReduced in
+            if isReduced {
+                phase = .base
+            }
+        }
         .accessibilityHidden(true)
+    }
+
+    private func glassLoader(shaderLibrary: ShaderLibrary) -> some View {
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)
+        ) { timeline in
+            GeometryReader { proxy in
+                let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
+                let bubbles = Color.black
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .layerEffect(
+                        inkShader(
+                            library: shaderLibrary,
+                            time: time,
+                            size: proxy.size
+                        ),
+                        maxSampleOffset: CGSize(width: 48, height: 48)
+                    )
+
+                if colorScheme == .dark {
+                    bubbles.blendMode(.screen)
+                } else {
+                    bubbles
+                        .colorInvert()
+                        .blendMode(.multiply)
+                }
+            }
+        }
+    }
+
+    private func inkShader(
+        library: ShaderLibrary,
+        time: TimeInterval,
+        size: CGSize
+    ) -> Shader {
+        ShaderFunction(library: library, name: "ink")
+            .dynamicallyCall(withArguments: [
+                .float(time.truncatingRemainder(dividingBy: 100)),
+                .float2(size),
+                .float(Self.circleFraction),
+                .float(Self.dotFraction),
+                .float(Self.dotCount),
+                .float(Self.moverSpeed),
+                .float(Self.ringSpeed),
+                .float(Self.threshold),
+                .float(Self.refraction),
+                .float(Self.dispersion),
+                .float(Self.distortion),
+                .float(Self.distortionSpread),
+                .float(Self.border),
+                .float(Float(phase.rawValue)),
+            ])
+    }
+
+    private static let shaderLibrary: ShaderLibrary? = {
+        guard let url = resourceURL(
+            named: "MinsangGlassLoader",
+            extension: "metallib",
+            subdirectory: "Shaders"
+        ) else {
+            return nil
+        }
+        return ShaderLibrary(url: url)
+    }()
+
+    /// Resolves a copied resource across bundle layouts. A stale nested
+    /// `Sorty_SortyLib.bundle` inside an installed app can win the
+    /// `SortyResources.bundle` lookup while the shipped resources live
+    /// flattened in the app's `Contents/Resources`, so always fall back
+    /// to `Bundle.main`.
+    private static func resourceURL(
+        named name: String,
+        extension ext: String,
+        subdirectory: String
+    ) -> URL? {
+        for bundle in [SortyResources.bundle, Bundle.main] {
+            if let url = bundle.url(
+                forResource: name,
+                withExtension: ext,
+                subdirectory: subdirectory
+            ) {
+                return url
+            }
+            if let url = bundle.url(forResource: name, withExtension: ext) {
+                return url
+            }
+        }
+        return nil
+    }
+}
+
+private extension MinsangGlassLoader {
+    enum LoaderPhase: Int {
+        case base
+        case dual
+        case merge
     }
 }
