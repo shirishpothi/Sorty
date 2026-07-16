@@ -145,6 +145,23 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(organizer.streamingContent, "retry stream")
         XCTAssertLessThan(organizer.progress, 0.5)
     }
+
+    func testCancelClearsStreamingPresentationState() {
+        organizer.didReceiveChunk(
+            #"{"folders":[{"name":"Archives","files":[{"filename":"old.zip"}]}]}"#
+        )
+
+        XCTAssertFalse(organizer.streamingContent.isEmpty)
+        XCTAssertFalse(organizer.displayStreamingContent.isEmpty)
+
+        organizer.cancel()
+
+        XCTAssertEqual(organizer.state, .idle)
+        XCTAssertTrue(organizer.streamingContent.isEmpty)
+        XCTAssertTrue(organizer.displayStreamingContent.isEmpty)
+        XCTAssertTrue(organizer.truncatedDisplayStreamingContent.isEmpty)
+        XCTAssertFalse(organizer.isStreaming)
+    }
     
     // MARK: - Insight Extraction via Streaming
     

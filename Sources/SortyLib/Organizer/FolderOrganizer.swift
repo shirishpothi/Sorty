@@ -1300,9 +1300,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         customPrompt: String?,
         temperature: Double?
     ) async throws {
-        isCancellationRequested = false
-        userInitiatedAction = true
-        visionAnalysisSummary = nil
+        withBatchUpdates {
+            clearStreamingDisplayState()
+            isStreaming = false
+            showTimeoutMessage = false
+            currentInsight = ""
+            insightHistory = []
+            insightsCache = nil
+            isCancellationRequested = false
+            userInitiatedAction = true
+            visionAnalysisSummary = nil
+        }
 
         currentTask = Task {
             try await performOrganization(
@@ -2146,6 +2154,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
+        clearStreamingDisplayState()
+        currentInsight = ""
+        insightHistory = []
+        insightsCache = nil
         transition(to: .idle, force: true)
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false

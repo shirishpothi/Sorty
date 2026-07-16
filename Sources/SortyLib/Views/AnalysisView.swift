@@ -694,7 +694,9 @@ struct AnalysisView: View {
                 files: organizer.scannedFiles
             )
             if suggestions.isEmpty {
-                if hasOrganizeStreamEvents && (organizer.isStreaming || organizer.state == .organizing) {
+                if hasOrganizeStreamEvents,
+                   !streamText.isEmpty,
+                   organizer.isStreaming || organizer.state == .organizing {
                     return
                 }
                 liveOrganizingSuggestions = []
