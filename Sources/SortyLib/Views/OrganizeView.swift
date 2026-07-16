@@ -921,7 +921,7 @@ struct ReadyToOrganizeView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.liquidMetalPrimary(isPaused: isConnecting))
+            .buttonStyle(.metalFxPrimary(isPaused: isConnecting, usesSubtleIdleBeam: true))
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
