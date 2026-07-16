@@ -1223,14 +1223,34 @@ if [ ! -f "${ICON_SRC}" ]; then
     done
 fi
 if [ -f "${ICON_SRC}" ]; then
-    cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
+    # Launch Services caches icons by bundle and resource name. Stable updates used
+    # to overwrite AppIcon.icns in place, which could leave an older padded icon in
+    # Finder and the Dock even though the bundle contained the corrected artwork.
+    # Give distributed builds a build-specific resource name so every update forces
+    # macOS to resolve the freshly packaged icon. Keep the generic name for local
+    # debug builds so direct Xcode and scripted development builds stay aligned.
+    ICON_RESOURCE_BASENAME="AppIcon"
+    if [ "${APP_ICON_VARIANT_KEY}" != "debug" ]; then
+        ICON_RESOURCE_BASENAME="AppIcon-${ICON_VARIANT_SUFFIX}-${BUILD_NUM}"
+    fi
+    ICON_DEST="${APP_PATH}/Contents/Resources/${ICON_RESOURCE_BASENAME}.icns"
+
+    find "${APP_PATH}/Contents/Resources" -maxdepth 1 \
+        -type f -name 'AppIcon-*-*.icns' -delete
+    cp "${ICON_SRC}" "${ICON_DEST}"
+    if [ "${ICON_RESOURCE_BASENAME}" != "AppIcon" ]; then
+        rm -f "${APP_PATH}/Contents/Resources/AppIcon.icns"
+    fi
+
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string ${ICON_RESOURCE_BASENAME}" "${APP_PATH}/Contents/Info.plist"
     # NOTE: Do NOT remove Contents/Resources/AppIcons here. That directory ships the
     # About-window easter-egg icon variants (AppIcon-Debug/Release/Nightly.png).
     # CI is normalized to the debug variant in AboutView, and its source PNG is
     # byte-identical, so it has no distinct runtime use.
     rm -f "${APP_PATH}/Contents/Resources/AppIcons/AppIcon-CI.png"
-    touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${APP_PATH}/Contents/Resources/AppIcon.icns"
-    log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
+    touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${ICON_DEST}"
+    log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant (${ICON_RESOURCE_BASENAME}.icns)"
 else
     log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
 fi

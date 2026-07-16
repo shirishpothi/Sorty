@@ -304,12 +304,15 @@ phase_app_bundle() {
         fi
     fi
     
-    # Check AppIcon
-    if [ -f "${APP_PATH}/Contents/Resources/AppIcon.icns" ] || \
-       [ -d "${APP_PATH}/Contents/Resources/Assets.car" ]; then
-        check_pass "App icon present"
+    # Check the icon named by CFBundleIconFile. Distributed builds use a
+    # build-specific filename so Launch Services cannot reuse stale icon artwork.
+    APP_ICON_RESOURCE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true)
+    APP_ICON_RESOURCE="${APP_ICON_RESOURCE%.icns}"
+    if [ -n "${APP_ICON_RESOURCE}" ] && \
+       [ -f "${APP_PATH}/Contents/Resources/${APP_ICON_RESOURCE}.icns" ]; then
+        check_pass "App icon present (${APP_ICON_RESOURCE}.icns)"
     else
-        check_warn "App icon" "AppIcon.icns not found in Resources"
+        check_warn "App icon" "CFBundleIconFile does not resolve to a bundled .icns resource"
     fi
 
     # Check bundled Internet Access Policy

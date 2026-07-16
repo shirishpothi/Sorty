@@ -206,9 +206,12 @@ jobs:
           XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
 
+          ICON_RESOURCE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' releases/Sorty.app/Contents/Info.plist)
+          test "$ICON_RESOURCE" = "AppIcon-Release-${{ needs.prepare-release.outputs.build_num }}"
           cmp \
             "Assets/AppIcon/AppIcon-Release.icns" \
-            "releases/Sorty.app/Contents/Resources/AppIcon.icns"
+            "releases/Sorty.app/Contents/Resources/${ICON_RESOURCE}.icns"
+          test ! -e "releases/Sorty.app/Contents/Resources/AppIcon.icns"
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
 
       - name: Package universal ZIP
