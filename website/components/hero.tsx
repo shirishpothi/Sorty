@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
-import { Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
+import { Code2, Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -16,6 +16,7 @@ const TRUST_ITEMS = [
   { icon: Monitor, label: 'macOS 15+' },
   { icon: Cpu, label: 'Apple Silicon & Intel' },
   { icon: UserX, label: 'No account required' },
+  { icon: Code2, label: 'Free & open source' },
 ]
 
 export function Hero() {

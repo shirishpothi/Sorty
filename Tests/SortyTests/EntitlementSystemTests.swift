@@ -2,6 +2,23 @@ import XCTest
 @testable import SortyLib
 
 final class EntitlementSystemTests: XCTestCase {
+    @MainActor
+    func testDormantLicensingRolloutLeavesEveryCapabilityAvailable() throws {
+        let manager = EntitlementManager(
+            userDefaults: UserDefaults(suiteName: UUID().uuidString)!,
+            secureStore: EntitlementSecureStore(
+                rootDirectory: try makeTemporaryDirectory(),
+                secretStore: InMemoryEntitlementSecretStore()
+            )
+        )
+
+        XCTAssertFalse(LicensingRollout.isEnabled)
+        XCTAssertEqual(manager.state, .bundleUnlocked)
+        XCTAssertEqual(manager.snapshot.enabledCapabilities, Set(ProductCapability.allCases))
+        XCTAssertEqual(manager.snapshot.unlockedEntitlements, Set(ProductEntitlement.allCases))
+        XCTAssertFalse(manager.snapshot.isFreeTier)
+    }
+
     func testProductionGumroadConfigurationIsPinnedToSortyProduct() {
         let configuration = LicenseServiceConfiguration.current()
 
@@ -23,7 +40,8 @@ final class EntitlementSystemTests: XCTestCase {
             secureStore: EntitlementSecureStore(
                 rootDirectory: try makeTemporaryDirectory(),
                 secretStore: InMemoryEntitlementSecretStore()
-            )
+            ),
+            licensingEnabled: true
         )
 
         await manager.bootstrapIfNeeded()
@@ -306,6 +324,7 @@ final class EntitlementSystemTests: XCTestCase {
             serviceClient: MockLicenseServiceClient { _, _ in
                 throw LicenseServiceError.serviceUnavailable
             },
+            licensingEnabled: true,
             now: { now }
         )
     }

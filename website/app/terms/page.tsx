@@ -7,12 +7,12 @@ import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description:
-    'Terms for the GPL-licensed Sorty source, free-core app, Sorty Pro licenses, and third-party services.',
+    'Sorty is free, open-source software under the GNU GPL v3.0, provided "as is". You are responsible for your files and for reviewing suggested changes before applying them.',
   alternates: { canonical: '/terms' },
   openGraph: {
     title: 'Terms of Service — Sorty',
     description:
-      'Terms for the GPL-licensed Sorty source, free-core app, Sorty Pro licenses, and third-party services.',
+      'Sorty is free, open-source software under the GNU GPL v3.0, provided "as is". You are responsible for reviewing suggested changes before applying them.',
     url: `${SITE_URL}/terms`,
     type: 'article',
     images: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Terms of Service — Sorty',
     description:
-      'Terms for the GPL-licensed Sorty source, free-core app, Sorty Pro licenses, and third-party services.',
+      'Sorty is free, open-source software under the GNU GPL v3.0, provided as is. Review suggested file changes before applying them.',
     images: [OG_IMAGE_PATH],
   },
 }
@@ -51,14 +51,15 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      updated="July 16, 2026"
+      updated="June 2026"
       toc={TOC}
       summary={
         <>
-          Sorty&apos;s source code is licensed under the GNU GPL v3.0. The official
-          pre-built app includes a free core and optional Sorty Pro capabilities
-          activated with a Gumroad license key. The App is provided &quot;as
-          is,&quot; without warranty of any kind.
+          Sorty is free, open-source software licensed under the GNU GPL v3.0.
+          You may use, modify, and redistribute it under that license. The App
+          is provided &quot;as is,&quot; without warranty of any kind. You are
+          responsible for your files and for reviewing suggested changes before
+          applying them.
         </>
       }
     >
@@ -66,7 +67,7 @@ export default function TermsPage() {
         name="Sorty Terms of Service"
         description="Terms governing use of the Sorty macOS app and website."
         path="/terms"
-        dateModified="2026-07-16"
+        dateModified="2026-06-01"
         breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Terms of Service', path: '/terms' }]}
       />
       <LegalSection id="agreement" heading="1. Agreement to Terms">
@@ -86,7 +87,7 @@ export default function TermsPage() {
 
       <LegalSection id="license" heading="2. License & Open Source">
         <p>
-          Sorty&apos;s source code is open-source software licensed under the{' '}
+          Sorty is free and open-source software licensed under the{' '}
           <a
             href="https://www.gnu.org/licenses/gpl-3.0.en.html"
             target="_blank"
@@ -118,12 +119,6 @@ export default function TermsPage() {
             GitHub
           </a>
           .
-        </p>
-        <p>
-          Official pre-built releases include a free core tier and optional
-          Sorty Pro capabilities. Sorty Pro activation requires a valid license
-          key for the Sorty product on Gumroad. Checkout, receipts, refunds, and
-          payment data are handled by Gumroad under Gumroad&apos;s own terms.
         </p>
       </LegalSection>
 
@@ -295,16 +290,7 @@ export default function TermsPage() {
           >
             Sparkle update framework
           </a>
-          , your chosen AI providers,{' '}
-          <a
-            href="https://gumroad.com/terms"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary underline-offset-4 hover:underline"
-          >
-            Gumroad licensing
-          </a>
-          , and{' '}
+          , your chosen AI providers, and{' '}
           <a
             href="https://github.com/sorty-organizer/Sorty/releases"
             target="_blank"

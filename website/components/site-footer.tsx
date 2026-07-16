@@ -13,7 +13,6 @@ const COLUMNS = [
     links: [
       { label: 'Features', href: sitePath('/#features') },
       { label: 'Privacy', href: sitePath('/privacy-policy') },
-      { label: 'Pricing', href: sitePath('/#pricing') },
     ],
   },
   {

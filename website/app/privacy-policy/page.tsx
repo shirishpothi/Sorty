@@ -7,12 +7,12 @@ import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description:
-    'How Sorty handles files, AI requests, local storage, and direct Gumroad license verification.',
+    'How Sorty handles files, AI requests, local storage, and privacy. No telemetry, no accounts, no data collection.',
   alternates: { canonical: '/privacy-policy' },
   openGraph: {
     title: 'Privacy Policy — Sorty',
     description:
-      'Sorty has no file-processing backend or accounts. Files never reach us, and license keys are verified directly with Gumroad.',
+      'Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
     url: `${SITE_URL}/privacy-policy`,
     type: 'article',
     images: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Privacy Policy — Sorty',
     description:
-      'Sorty has no file-processing backend or accounts. Files never reach us, and license keys are verified directly with Gumroad.',
+      'Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
     images: [OG_IMAGE_PATH],
   },
 }
@@ -51,7 +51,7 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      updated="July 16, 2026"
+      updated="June 2026"
       toc={TOC}
       summary={
         <>
@@ -59,8 +59,7 @@ export default function PrivacyPolicyPage() {
           files stay on your Mac. When you use a cloud AI provider, only file
           names and metadata are sent for analysis — never file contents unless
           you explicitly enable Deep Scan. Your Learnings profile is encrypted
-          with AES-256 and protected by Touch ID or Face ID. Sorty Pro license
-          keys are verified directly with Gumroad and stored in Keychain.
+          with AES-256 and protected by Touch ID or Face ID.
         </>
       }
     >
@@ -68,7 +67,7 @@ export default function PrivacyPolicyPage() {
         name="Sorty Privacy Policy"
         description="How Sorty handles files, metadata, AI providers, and local storage."
         path="/privacy-policy"
-        dateModified="2026-07-16"
+        dateModified="2026-06-01"
         breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Privacy Policy', path: '/privacy-policy' }]}
       />
       <LegalSection id="overview" heading="1. Overview">
@@ -89,10 +88,9 @@ export default function PrivacyPolicyPage() {
         <p>
           Sorty is built privacy-first. The App runs entirely on your device,
           within the macOS App Sandbox, and is designed so that the smallest
-          amount of information necessary leaves your computer. Network requests
-          go to the cloud AI provider you choose, GitHub for updates, or Gumroad
-          when you activate or refresh a Sorty Pro license. We do not operate any
-          servers that process your files or personal data.
+          amount of information necessary leaves your computer — and only when
+          you choose a cloud-based AI provider. We do not operate any servers
+          that process your files or personal data.
         </p>
       </LegalSection>
 
@@ -101,12 +99,6 @@ export default function PrivacyPolicyPage() {
           We do not collect, transmit, or store any telemetry, usage analytics,
           crash reports, or personal data. There is no Sorty account, and we
           have no database of user information.
-        </p>
-        <p>
-          When you activate Sorty Pro, the App sends the Sorty product ID and
-          license key directly to Gumroad. Gumroad&apos;s response may include the
-          purchaser email and purchase status; Sorty stores that response only
-          on your Mac and does not send it to the developers.
         </p>
         <p>The following is handled locally on your device only:</p>
         <ul className="list-disc space-y-1.5 pl-5">
@@ -217,11 +209,6 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>API keys are stored in the macOS Keychain.</li>
           <li>
-            Your Gumroad license key is stored in the macOS Keychain. The last
-            verified entitlement, including any purchaser email returned by
-            Gumroad, is stored in an AES-GCM encrypted local cache.
-          </li>
-          <li>
             Privacy Mode (enabled by default) blurs sensitive handles until you
             hover and hides API keys behind a manual reveal toggle — useful for
             screensharing or streaming.
@@ -245,11 +232,6 @@ export default function PrivacyPolicyPage() {
             requests.
           </li>
           <li>
-            If you activate Sorty Pro, the App verifies the stored key directly
-            with Gumroad at activation and about once every 24 hours. The last
-            successful verification remains usable offline for seven days.
-          </li>
-          <li>
             You can disable automatic update checks in Settings → Updates →
             Manual only.
           </li>
@@ -266,7 +248,7 @@ export default function PrivacyPolicyPage() {
             User-selected file access (read/write) for folders you explicitly
             grant.
           </li>
-          <li>Network access for AI providers, Gumroad license checks, and updates.</li>
+          <li>Network access for AI provider APIs and update checks.</li>
           <li>No system-level access outside the sandbox.</li>
         </ul>
         <p>
@@ -296,17 +278,6 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong className="text-foreground">AI providers</strong> — each has
             its own security and privacy policy (see above).
-          </li>
-          <li>
-            <a
-              href="https://gumroad.com/privacy"
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              <strong>Gumroad</strong>
-            </a>{' '}
-            — processes checkout and verifies Sorty Pro license keys directly.
           </li>
           <li>
             <a
@@ -348,8 +319,7 @@ export default function PrivacyPolicyPage() {
         <p>
           Sorty is a general-purpose developer and productivity tool and is not
           directed at children under 16. We do not knowingly collect personal
-          data from anyone. Gumroad&apos;s own terms and privacy policy govern any
-          checkout or license information submitted to Gumroad.
+          data from anyone. The App collects no personal data regardless of age.
         </p>
       </LegalSection>
 
@@ -368,11 +338,6 @@ export default function PrivacyPolicyPage() {
             <strong className="text-foreground">Reset everything</strong> —
             &quot;Reset All Settings&quot; returns you to the onboarding
             experience.
-          </li>
-          <li>
-            <strong className="text-foreground">Remove your license</strong> —
-            use Settings → Licensing &amp; Access → Remove License to clear the
-            Keychain entry and encrypted license cache from this Mac.
           </li>
           <li>
             <strong className="text-foreground">Use on-device AI</strong> —
