@@ -1447,17 +1447,6 @@ private struct SubtleDotPulse: ViewModifier {
     }
 }
 
-private struct StageBlurTransitionModifier: ViewModifier {
-    let radius: CGFloat
-    let opacity: Double
-
-    func body(content: Content) -> some View {
-        content
-            .blur(radius: radius)
-            .opacity(opacity)
-    }
-}
-
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
     let measuredProgress: MeasuredWorkProgress?
@@ -1469,8 +1458,6 @@ private struct StreamingProgressBeam: View {
     /// When true, the card expands to align with the live insights island below it.
     var matchesInsightsWidth: Bool = false
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
     /// Compact width used when the banner stands alone (removes empty space).
@@ -1524,24 +1511,6 @@ private struct StreamingProgressBeam: View {
         return trimmed
     }
 
-    private var stageTransition: AnyTransition {
-        guard !reduceMotion, !reduceTransparency else { return .opacity }
-        return .asymmetric(
-            insertion: .modifier(
-                active: StageBlurTransitionModifier(radius: 6, opacity: 0),
-                identity: StageBlurTransitionModifier(radius: 0, opacity: 1)
-            ),
-            removal: .modifier(
-                active: StageBlurTransitionModifier(radius: 4, opacity: 0),
-                identity: StageBlurTransitionModifier(radius: 0, opacity: 1)
-            )
-        )
-    }
-
-    private var stageAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.28)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             progressCard
@@ -1559,15 +1528,14 @@ private struct StreamingProgressBeam: View {
     private var progressCard: some View {
         ZStack {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                ZStack(alignment: .leading) {
-                    Text(displayedStage)
-                        .id(displayedStage)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .transition(stageTransition)
-                }
-                .animation(stageAnimation, value: displayedStage)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(displayedStage)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .numericTextTransition(
+                        animationValue: displayedStage,
+                        animation: .easeInOut(duration: 0.28)
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if showsDeterminateProgress {
                     Text("\(percent)%")
