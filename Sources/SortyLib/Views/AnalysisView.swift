@@ -2578,18 +2578,6 @@ struct InsightPill: View {
     }
 
     private var resolvedFinderIcon: NSImage? {
-        if let filePath = insight.filePath {
-            let fileURL = URL(fileURLWithPath: filePath)
-            if fileURL.hasDirectoryPath {
-                return AnalysisIconProvider.icon(for: .folder)
-            }
-            let ext = fileURL.pathExtension
-            if !ext.isEmpty {
-                return AnalysisIconProvider.icon(forFileExtension: ext)
-            }
-            return AnalysisIconProvider.icon(for: .data)
-        }
-
         if insight.category == .folder {
             return AnalysisIconProvider.icon(for: .folder)
         }
@@ -2624,9 +2612,21 @@ struct InsightPill: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if let finderIcon = resolvedFinderIcon {
+            if let filePath = insight.filePath {
+                let fileURL = URL(fileURLWithPath: filePath)
+                if fileURL.hasDirectoryPath {
+                    FolderThumbnailView(url: fileURL, size: CGSize(width: 14, height: 14))
+                        .frame(width: 14, height: 14)
+                        .accessibilityHidden(true)
+                } else {
+                    FileThumbnailView(url: fileURL, size: CGSize(width: 14, height: 14))
+                        .frame(width: 14, height: 14)
+                        .accessibilityHidden(true)
+                }
+            } else if let finderIcon = resolvedFinderIcon {
                 AppKitImageView(image: finderIcon, size: CGSize(width: 14, height: 14))
                     .frame(width: 14, height: 14)
+                    .accessibilityHidden(true)
             } else {
                 Circle()
                     .fill(categoryColor.opacity(0.3))
@@ -2635,6 +2635,7 @@ struct InsightPill: View {
                     )
                     .frame(width: 8, height: 8)
                     .padding(.horizontal, 3)
+                    .accessibilityHidden(true)
             }
 
             Text(displayText)
