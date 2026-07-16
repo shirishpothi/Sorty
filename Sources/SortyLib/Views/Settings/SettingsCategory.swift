@@ -150,7 +150,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .licensing:
-            return ["license", "licensing", "upgrade", "restore", "activation", "access", "seat", "gumroad", "pro"]
+            return ["license", "licensing", "upgrade", "restore", "activation", "access", "gumroad", "pro"]
         case .help:
             return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "issue details", "bug report", "diagnostics"]
         case .experimental:
@@ -238,7 +238,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 SettingsFeatureSnippet(title: "Activate License", summary: "Activate a purchase key on this Mac.", keywords: ["gumroad", "license key"]),
                 SettingsFeatureSnippet(title: "Restore Access", summary: "Refresh signed access or restore purchases already stored in Keychain."),
-                SettingsFeatureSnippet(title: "Release Device", summary: "Release this Mac's device seat before moving a license.", keywords: ["deactivate", "seat"])
+                SettingsFeatureSnippet(title: "Remove License", summary: "Remove the stored license key and return this Mac to the free tier.", keywords: ["deactivate", "keychain"])
             ]
         case .help:
             return [

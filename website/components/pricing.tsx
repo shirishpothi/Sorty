@@ -1,20 +1,20 @@
-import { Code2, Cpu, FolderOpen, Hammer, Heart, Infinity, UsersRound } from 'lucide-react'
+import { Code2, Cpu, FolderOpen, Hammer, KeyRound, Layers3, UsersRound } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
-const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
+const GUMROAD_URL = 'https://shirishpothi.gumroad.com/l/Sorty'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 
 const INCLUDED = [
   {
-    icon: Infinity,
-    text: 'Every feature, forever — no paid tiers',
+    icon: Layers3,
+    text: 'Free core includes 5 local organization runs',
   },
   {
     icon: FolderOpen,
-    text: 'Unlimited folders and organization runs',
+    text: '1 watched folder and 1 storage location included',
   },
   {
     icon: Cpu,
@@ -25,8 +25,12 @@ const INCLUDED = [
     text: 'Full source code under the GPL v3',
   },
   {
+    icon: KeyRound,
+    text: 'One Gumroad key unlocks the complete Sorty Pro bundle',
+  },
+  {
     icon: UsersRound,
-    text: 'Community support on GitHub',
+    text: 'Keys stay in Keychain with 7 days of offline access',
   },
 ]
 
@@ -40,11 +44,11 @@ export function Pricing() {
         <Reveal className="text-center">
           <p className="text-sm font-medium text-primary">Pricing &amp; availability</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            Free and open source. Genuinely.
+            Start free. Unlock Sorty Pro when you need more.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Sorty is released under the GPL v3. No subscription, no activation code,
-            no catch. If it saves you time, donations help keep the project moving.
+            Download the free core with no account or subscription. A one-time
+            Gumroad license unlocks every advanced capability in Sorty Pro.
           </p>
         </Reveal>
 
@@ -56,11 +60,11 @@ export function Pricing() {
             />
             <div className="flex flex-col items-start gap-1">
               <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
-                GPL v3 · macOS 15+
+                Free core · One-time Pro license
               </span>
               <div className="mt-5 flex items-end gap-2">
-                <span className="text-5xl font-semibold tracking-tight">$0</span>
-                <span className="pb-1.5 text-muted-foreground">forever</span>
+                <span className="text-5xl font-semibold tracking-tight">$0+</span>
+                <span className="pb-1.5 text-muted-foreground">one time</span>
               </div>
             </div>
 
@@ -89,6 +93,15 @@ export function Pricing() {
                 Download for Mac
               </DownloadButton>
               <a
+                href={GUMROAD_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+              >
+                <KeyRound className="size-4" />
+                Get Sorty Pro
+              </a>
+              <a
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noreferrer"
@@ -100,20 +113,11 @@ export function Pricing() {
                 </span>
                 Build from source
               </a>
-              <a
-                href={SPONSOR_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
-              >
-                <Heart className="support-heart-icon size-4" />
-                Donate
-              </a>
             </div>
 
             <p className="mt-5 text-center text-xs text-muted-foreground">
               Apple Silicon &amp; Intel · Works with iCloud Drive, Dropbox, and
-              external drives · Donations are optional
+              external drives · Pro keys are verified directly with Gumroad
             </p>
           </div>
         </Reveal>

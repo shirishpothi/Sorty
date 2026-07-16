@@ -1,5 +1,9 @@
 export const FAQS = [
   {
+    q: 'Is Sorty free?',
+    a: 'Yes. The free core includes 5 local organization runs, 1 watched folder, 1 storage location, and supported free AI providers. A one-time Gumroad license key unlocks the complete Sorty Pro capability set.',
+  },
+  {
     q: 'Does Sorty delete my files?',
     a: 'No. Sorty only moves and renames files into folders — it never deletes anything. Nothing happens until you review the plan and click apply.',
   },

@@ -8,8 +8,8 @@ struct LicensingSettingsView: View {
     @State private var isHoveringActivate = false
     @State private var isHoveringRefresh = false
     @State private var isHoveringRestore = false
-    @State private var isHoveringDeactivate = false
-    @State private var isShowingDeactivateConfirmation = false
+    @State private var isHoveringRemove = false
+    @State private var isShowingRemoveConfirmation = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -28,53 +28,37 @@ struct LicensingSettingsView: View {
                 .animatedAppearance(delay: 0.14)
         }
         .confirmationDialog(
-            "Release this license from this Mac?",
-            isPresented: $isShowingDeactivateConfirmation,
+            "Remove the Sorty license from this Mac?",
+            isPresented: $isShowingRemoveConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Release This Mac", role: .destructive, action: deactivateThisDevice)
+            Button("Remove License", role: .destructive, action: removeLicense)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Sorty will remove the locally stored license keys and release this device seat. You can activate again later with the license key.")
+            Text("Sorty will remove the license key and encrypted verification cache stored on this Mac. You can activate again later with the same Gumroad license key.")
         }
     }
 
     private var statusCard: some View {
         SettingsCard(title: "License Status", icon: "checkmark.seal", color: .mint) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(statusHeadline)
-                                .font(.headline)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(statusHeadline)
+                            .font(.headline)
 
-                            Text(statusBadge)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(statusColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .systemLiquidGlassBackground(cornerRadius: 999)
-                        }
-
-                        Text(statusSummary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Text(statusBadge)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(statusColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .systemLiquidGlassBackground(cornerRadius: 999)
                     }
 
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Label("Device \(entitlementManager.maskedDeviceID)", systemImage: "desktopcomputer")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if let seatState = entitlementManager.seatState {
-                            Text("Seat \(seatState.activeSeatCount)/\(seatState.seatLimit)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(statusColor)
-                        }
-                    }
+                    Text(statusSummary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let validatedAt = entitlementManager.validatedAt
@@ -114,91 +98,102 @@ struct LicensingSettingsView: View {
     private var activationCard: some View {
         SettingsCard(title: "Activation", icon: "key.horizontal", color: .orange) {
             VStack(alignment: .leading, spacing: 14) {
-                if entitlementManager.isServiceConfigured {
-                    SettingsSecureField(
-                        title: "Gumroad license key",
-                        text: $licenseKey
-                    )
-
-                    HStack(spacing: 10) {
-                        actionButton(
-                            title: entitlementManager.isSyncing && entitlementManager.syncReason == .activate ? "Activating..." : "Activate Key",
-                            systemImage: "checkmark.circle.fill",
-                            isHovered: $isHoveringActivate,
-                            tint: .orange
-                        ) {
-                            Task {
-                                let succeeded = await entitlementManager.activate(licenseKey: licenseKey)
-                                if succeeded {
-                                    HapticFeedbackManager.shared.success()
-                                    licenseKey = ""
-                                } else {
-                                    HapticFeedbackManager.shared.error()
-                                }
-                            }
-                        }
-                        .disabled(entitlementManager.isSyncing || licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                        actionButton(
-                            title: entitlementManager.isSyncing && entitlementManager.syncReason == .refresh ? "Refreshing..." : "Refresh Access",
-                            systemImage: "arrow.clockwise",
-                            isHovered: $isHoveringRefresh,
-                            tint: .blue
-                        ) {
-                            Task {
-                                let succeeded = await entitlementManager.refreshEntitlements(force: true)
-                                succeeded ? HapticFeedbackManager.shared.success() : HapticFeedbackManager.shared.error()
-                            }
-                        }
-                        .disabled(entitlementManager.isSyncing || !entitlementManager.hasStoredPurchases)
-
-                        actionButton(
-                            title: entitlementManager.isSyncing && entitlementManager.syncReason == .restore ? "Restoring..." : "Restore on This Mac",
-                            systemImage: "arrow.uturn.backward.circle",
-                            isHovered: $isHoveringRestore,
-                            tint: .green
-                        ) {
-                            Task {
-                                let succeeded = await entitlementManager.restorePurchases()
-                                succeeded ? HapticFeedbackManager.shared.success() : HapticFeedbackManager.shared.error()
-                            }
-                        }
-                        .disabled(entitlementManager.isSyncing || !entitlementManager.hasStoredPurchases)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Get Sorty Pro on Gumroad")
+                            .font(.subheadline.weight(.semibold))
+                        Text("After checkout, copy the license key from your Gumroad receipt and paste it below.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
-                    Divider()
+                    Spacer()
 
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Moving seats between devices")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Release this Mac before switching to another machine. Sorty keeps the last signed entitlement locally and will only downgrade after the grace window expires.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer()
-
-                        actionButton(
-                            title: "Release This Mac",
-                            systemImage: "rectangle.portrait.and.arrow.right",
-                            isHovered: $isHoveringDeactivate,
-                            tint: .red
-                        ) {
-                            isShowingDeactivateConfirmation = true
-                        }
-                        .disabled(entitlementManager.isSyncing)
+                    Link(destination: entitlementManager.purchaseURL) {
+                        Label("Get a License Key", systemImage: "cart")
+                            .font(.subheadline.weight(.semibold))
                     }
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("License verification is not configured in this build.", systemImage: "wrench.adjustable")
-                            .font(.subheadline.weight(.medium))
-                        Text("Set `SORTY_LICENSE_SERVICE_URL` and `SORTY_LICENSE_PUBLIC_KEY_PEM` for local testing, or ship the `SortyLicense...` build settings in Info.plist for release builds.")
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .accessibilityHint("Opens the Sorty product page on Gumroad")
+                }
+
+                Divider()
+
+                SettingsSecureField(
+                    title: "Gumroad license key",
+                    text: $licenseKey
+                )
+
+                HStack(spacing: 10) {
+                    actionButton(
+                        title: entitlementManager.isSyncing && entitlementManager.syncReason == .activate ? "Activating..." : "Activate Key",
+                        systemImage: "checkmark.circle.fill",
+                        isHovered: $isHoveringActivate,
+                        tint: .orange
+                    ) {
+                        Task {
+                            let succeeded = await entitlementManager.activate(licenseKey: licenseKey)
+                            if succeeded {
+                                HapticFeedbackManager.shared.success()
+                                licenseKey = ""
+                            } else {
+                                HapticFeedbackManager.shared.error()
+                            }
+                        }
+                    }
+                    .disabled(entitlementManager.isSyncing || licenseKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    actionButton(
+                        title: entitlementManager.isSyncing && entitlementManager.syncReason == .refresh ? "Refreshing..." : "Refresh Access",
+                        systemImage: "arrow.clockwise",
+                        isHovered: $isHoveringRefresh,
+                        tint: .blue
+                    ) {
+                        Task {
+                            let succeeded = await entitlementManager.refreshEntitlements(force: true)
+                            succeeded ? HapticFeedbackManager.shared.success() : HapticFeedbackManager.shared.error()
+                        }
+                    }
+                    .disabled(entitlementManager.isSyncing || !entitlementManager.hasStoredPurchases)
+
+                    actionButton(
+                        title: entitlementManager.isSyncing && entitlementManager.syncReason == .restore ? "Restoring..." : "Restore on This Mac",
+                        systemImage: "arrow.uturn.backward.circle",
+                        isHovered: $isHoveringRestore,
+                        tint: .green
+                    ) {
+                        Task {
+                            let succeeded = await entitlementManager.restorePurchases()
+                            succeeded ? HapticFeedbackManager.shared.success() : HapticFeedbackManager.shared.error()
+                        }
+                    }
+                    .disabled(entitlementManager.isSyncing || !entitlementManager.hasStoredPurchases)
+                }
+
+                Divider()
+
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("License storage")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Sorty stores the key in Keychain and an encrypted verification cache on this Mac. Removing it returns this installation to the free tier.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+
+                    Spacer()
+
+                    actionButton(
+                        title: "Remove License",
+                        systemImage: "trash",
+                        isHovered: $isHoveringRemove,
+                        tint: .red
+                    ) {
+                        isShowingRemoveConfirmation = true
+                    }
+                    .disabled(entitlementManager.isSyncing || !entitlementManager.hasStoredPurchases)
                 }
             }
         }
@@ -272,8 +267,8 @@ struct LicensingSettingsView: View {
                 )
                 policyRow(
                     icon: "checkmark.shield",
-                    title: "Good-faith secure verification",
-                    description: "Sorty verifies Gumroad purchases through a minimal signing service, validates the signed payload locally, and stores the last known good access state in encrypted local storage."
+                    title: "Direct Gumroad verification",
+                    description: "Sorty sends the product ID and license key directly to Gumroad over HTTPS, then keeps the key in Keychain and the last verified access state in encrypted local storage for seven days of offline use."
                 )
             }
         }
@@ -343,9 +338,9 @@ struct LicensingSettingsView: View {
         }
     }
 
-    private func deactivateThisDevice() {
+    private func removeLicense() {
         Task {
-            let succeeded = await entitlementManager.deactivateThisDevice()
+            let succeeded = await entitlementManager.removeLicense()
             succeeded ? HapticFeedbackManager.shared.success() : HapticFeedbackManager.shared.error()
         }
     }
@@ -406,7 +401,7 @@ struct LicensingSettingsView: View {
         case .free:
             return "No paid licenses are currently active on this Mac. Free tier includes 5 local organizations, 1 watched folder, 1 storage location, and the supported providers."
         case .partiallyUnlocked(let entitlements):
-            return "This Mac has \(entitlements.count) paid \(entitlements.count == 1 ? "unlock" : "unlocks") active. Feature gates update immediately from the signed entitlement snapshot."
+            return "This Mac has \(entitlements.count) paid \(entitlements.count == 1 ? "unlock" : "unlocks") active. Feature gates update immediately after Gumroad verification."
         case .bundleUnlocked:
             return "The full Sorty Pro bundle is active on this Mac. All paid capabilities and the premium provider pack are unlocked."
         case .grace(_, let expiresAt):
