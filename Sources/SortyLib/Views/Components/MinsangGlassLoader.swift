@@ -6,6 +6,7 @@ struct MinsangGlassLoader: View {
     var size: CGFloat = 54
     var isActive = true
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = LoaderPhase.base
     @State private var hasPresented = false
@@ -18,7 +19,7 @@ struct MinsangGlassLoader: View {
     private static let ringSpeed: Float = 0.45
     private static let threshold: Float = 1.38
     private static let refraction: Float = 14
-    private static let dispersion: Float = 3
+    private static let dispersion: Float = 0
     private static let distortion: Float = 4
     private static let distortionSpread: Float = 1
     private static let border: Float = 0.5
@@ -73,15 +74,15 @@ struct MinsangGlassLoader: View {
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                Circle()
+                let loader = Circle()
                     .trim(from: 0.06, to: 0.86)
                     .stroke(
                         AngularGradient(
                             colors: [
-                                Color.secondary.opacity(0.24),
-                                Color.primary.opacity(0.82),
-                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.95),
-                                Color.secondary.opacity(0.24),
+                                Color.white.opacity(0.22),
+                                Color.white.opacity(0.82),
+                                Color.white,
+                                Color.white.opacity(0.22),
                             ],
                             center: .center
                         ),
@@ -101,6 +102,14 @@ struct MinsangGlassLoader: View {
                         ),
                         maxSampleOffset: CGSize(width: 48, height: 48)
                     )
+
+                if colorScheme == .dark {
+                    loader.blendMode(.screen)
+                } else {
+                    loader
+                        .colorInvert()
+                        .blendMode(.multiply)
+                }
             }
         }
     }
