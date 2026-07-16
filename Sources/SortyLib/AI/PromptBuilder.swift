@@ -97,8 +97,10 @@ struct PromptBuilder {
 
             prompt += """
             ## ORGANIZATION COMPLETENESS
+            Actively assign files to practical destination folders whenever a move would materially improve findability. Do not default to a no-op merely because the current layout is passable, filenames are ambiguous, or several structures could work.
             Prefer placing every file into a logical folder. Use `unorganized` only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder.
             If a file is merely ambiguous, choose the best broad folder such as Documents, Media, Archives, Reference, or a nearby project/category folder instead of leaving it unorganized.
+            Return a no-op plan only when the files are already sensibly organized, no move would materially improve the structure, or moving them would violate user instructions, exclusions, or filesystem safety. Never use a no-op to avoid making a reasonable organization decision.
 
             """
         }
@@ -421,6 +423,7 @@ struct PromptBuilder {
         Legacy format is also accepted:
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
+        \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
         Prefer assigning every file to a folder. Use unorganized only as a rare last resort when no logical destination exists.
         """
     }
@@ -432,6 +435,9 @@ struct PromptBuilder {
         }
         if mode == .renameOnly || mode == .organizeAndRename {
             base += " Actively suggest clearer filenames when the available evidence supports a material improvement; keep already-good or uncertain names unchanged. Return renames through rename_suggestions even when assigning files with file_ids."
+        }
+        if mode != .renameOnly {
+            base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
         base += " Nest folders at most 3 levels deep; folder names must not contain '/'. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
@@ -539,6 +545,8 @@ struct PromptBuilder {
         - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
+        \(mode == .renameOnly ? "" : "- Actively create folder assignments when moving files would materially improve findability; do not default to leaving files in place because the current layout is merely passable or categorization is uncertain.")
+        \(mode == .renameOnly ? "" : "- Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
         - Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists.
         - If a file is ambiguous, place it in the best broad folder instead of leaving it unorganized.
         - Prefer using file_ids in compact responses when IDs are provided.

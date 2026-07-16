@@ -47,6 +47,8 @@ If a persona-specific system prompt is active, you MUST follow its rules absolut
 
 # INTELLIGENT GROUPING STRATEGIES
 
+\(Self.organizationActionSection(for: mode))
+
 ## Semantic Grouping
 - Prefer organizing every file into a logical folder. Use "unorganized" only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder, which should be rare.
 - Treat filenames as one clue, not the source of truth. Prefer reliable content metadata, document titles, extracted text, Finder comments/tags, timestamps, file type, and folder context when they disagree with vague or camera/generated filenames.
@@ -152,6 +154,18 @@ The returned JSON object must satisfy all of the following:
 ✓ All filenames in output match the input filenames exactly (unless renaming is enabled).
 ✓ Custom user instructions have been followed — re-read them and confirm compliance.
 """
+    }
+
+    /// Tells organization modes to make useful moves without forcing churn in an already-good folder.
+    private static func organizationActionSection(for mode: OrganizationMode) -> String {
+        guard mode != .renameOnly else { return "" }
+
+        return """
+        ## Action Threshold
+        - Actively propose folder moves whenever grouping related files, separating distinct categories, or reusing a suitable existing folder would materially improve findability.
+        - Do not leave files in place merely because the current layout is passable, filenames are ambiguous, or more than one reasonable structure exists. Choose the safest useful structure supported by the available evidence.
+        - A no-op plan is valid only when the files are already sensibly organized, no move would materially improve the structure, or moving them would violate user instructions, exclusions, or filesystem safety. Never use a no-op to avoid making a reasonable organization decision.
+        """
     }
     
     /// Returns streaming-friendly JSON ordering guidance for organization modes.

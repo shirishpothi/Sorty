@@ -105,14 +105,37 @@ final class RenamePromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Do not omit rename_suggestions merely because you used file_ids"))
     }
 
-    func testOrganizeModesPreferFolderAssignmentsOverUnorganized() {
+    func testOrganizeModesActivelyCreateUsefulFolderAssignments() {
         let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
 
         let prompt = PromptBuilder.buildOrganizationPrompt(files: [file], mode: .organize)
 
+        XCTAssertTrue(prompt.contains("Actively assign files to practical destination folders"))
         XCTAssertTrue(prompt.contains("Prefer placing every file into a logical folder"))
         XCTAssertTrue(prompt.contains("Use `unorganized` only as a last resort"))
         XCTAssertTrue(prompt.contains("If a file is merely ambiguous, choose the best broad folder"))
+        XCTAssertTrue(prompt.contains("Never use a no-op to avoid making a reasonable organization decision"))
+    }
+
+    func testEveryCompactOrganizePromptRequiresUsefulMovesButAllowsLegitimateNoOp() {
+        let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
+        let files = [file]
+
+        for mode in [OrganizationMode.organize, .organizeAndRename] {
+            let config = AIConfig(mode: mode)
+            for level in [
+                PromptBuilder.CompactionLevel.standard,
+                .ultra,
+                .summary,
+                .micro
+            ] {
+                let prompts = PromptBuilder.promptPair(for: level, config: config, files: files)
+                let combined = prompts.system + "\n" + prompts.user
+                XCTAssertTrue(combined.contains("Actively create folder assignments"))
+                XCTAssertTrue(combined.contains("never use a no-op"))
+                XCTAssertTrue(combined.contains("already sensibly organized"))
+            }
+        }
     }
 
     func testOrganizePromptRejectsRenameFieldsEvenWhenInstructionsAskForRename() {
