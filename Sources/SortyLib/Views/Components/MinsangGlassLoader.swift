@@ -6,7 +6,6 @@ struct MinsangGlassLoader: View {
     var size: CGFloat = 54
     var isActive = true
 
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = LoaderPhase.base
     @State private var hasPresented = false
@@ -74,7 +73,7 @@ struct MinsangGlassLoader: View {
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                let loader = Circle()
+                let source = Circle()
                     .trim(from: 0.06, to: 0.86)
                     .stroke(
                         AngularGradient(
@@ -94,6 +93,7 @@ struct MinsangGlassLoader: View {
                     .padding(max(min(proxy.size.width, proxy.size.height) * 0.12, 4))
                     .rotationEffect(.radians(time * Double(Self.ringSpeed)))
                     .frame(width: proxy.size.width, height: proxy.size.height)
+                let distorted = source
                     .layerEffect(
                         inkShader(
                             library: shaderLibrary,
@@ -103,13 +103,16 @@ struct MinsangGlassLoader: View {
                         maxSampleOffset: CGSize(width: 48, height: 48)
                     )
 
-                if colorScheme == .dark {
-                    loader.blendMode(.screen)
-                } else {
-                    loader
-                        .colorInvert()
-                        .blendMode(.multiply)
-                }
+                Color.primary.opacity(0.82)
+                    .mask {
+                        ZStack {
+                            source
+                            distorted.blendMode(.difference)
+                        }
+                        .compositingGroup()
+                        .luminanceToAlpha()
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
             }
         }
     }
