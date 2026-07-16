@@ -485,6 +485,12 @@ struct OrganizeView: View {
         guard !reduceMotion, liveOrganizationStartedAt == nil else { return }
         liveOrganizationStartedAt = Date()
         keepsLiveOrganizationVisible = true
+
+        // The throttled stream update can arrive after the organizer reaches
+        // ready, so schedule the handoff here as well as in handleStateChange.
+        if organizer.state == .ready {
+            scheduleReadyPreviewHandoff()
+        }
     }
 
     private func scheduleReadyPreviewHandoff() {
