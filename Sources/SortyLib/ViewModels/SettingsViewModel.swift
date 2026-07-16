@@ -94,7 +94,9 @@ public class SettingsViewModel: ObservableObject {
                 isApplyingConfigMutation = false
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
-                if newProvider != .githubCopilot, newAuthMethod == .apiKey {
+                if newProvider != .githubCopilot,
+                   newProvider.typicallyRequiresAPIKey,
+                   newAuthMethod == .apiKey {
                     hydrateStoredCredential(for: newProvider, authMethod: newAuthMethod)
                 }
 
@@ -114,6 +116,7 @@ public class SettingsViewModel: ObservableObject {
                     await AISessionManager.shared.prewarm(provider: newProvider, config: config)
                 }
             } else if oldKey != newKey,
+                      newProvider.typicallyRequiresAPIKey,
                       newAuthMethod == .apiKey,
                       let newKey = newKey,
                       !newKey.isEmpty {
@@ -191,6 +194,7 @@ public class SettingsViewModel: ObservableObject {
         let authMethod = config.authMethod(for: provider)
         guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
               provider != .githubCopilot,
+              provider.typicallyRequiresAPIKey,
               authMethod == .apiKey else { return }
         hydrateStoredCredential(for: provider, authMethod: authMethod, migratesLegacyKey: true)
     }
@@ -269,7 +273,9 @@ public class SettingsViewModel: ObservableObject {
         ])
         
         // Save API key to provider-specific Keychain key
-        if provider != .githubCopilot, config.authMethod(for: provider) == .apiKey {
+        if provider != .githubCopilot,
+           provider.typicallyRequiresAPIKey,
+           config.authMethod(for: provider) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
                 _ = await credentialStore.save(providerKey, apiKey)
