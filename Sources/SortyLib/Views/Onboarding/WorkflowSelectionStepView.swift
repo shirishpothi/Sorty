@@ -64,9 +64,6 @@ public struct WorkflowSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .padding(.leading, 72)
             .padding(.trailing, 24)
-            // Match the shared step skeleton: center inside the region above
-            // the bottom navigation rail.
-            .padding(.bottom, 88)
             
             // Right side - persona selection
             VStack(spacing: 8) {
@@ -108,25 +105,15 @@ public struct WorkflowSelectionStepView: View {
                 .frame(maxWidth: 420)
                     
                 if !customPersonaStore.customPersonas.isEmpty {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        ForEach(customPersonaStore.customPersonas.prefix(2)) { persona in
-                            OnboardingCustomPersonaCard(
-                                persona: persona,
-                                isSelected: personaManager.selectedCustomPersonaId == persona.id,
-                                compact: true,
-                                onDelete: {
-                                    customPersonaStore.deletePersona(id: persona.id)
-                                    if personaManager.selectedCustomPersonaId == persona.id {
-                                        personaManager.selectedCustomPersonaId = nil
-                                    }
-                                }
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    personaManager.selectCustomPersona(persona.id)
-                                    isCreatingCustom = false
-                                }
+                    Group {
+                        if customPersonaStore.customPersonas.count > 2 {
+                            ScrollView(.vertical) {
+                                customPersonaGrid
                             }
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .scrollIndicators(.visible)
+                            .frame(height: 104)
+                        } else {
+                            customPersonaGrid
                         }
                     }
                     .frame(maxWidth: 420)
@@ -145,7 +132,6 @@ public struct WorkflowSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
             .padding(.trailing, 72)
-            .padding(.bottom, 88)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -176,6 +162,30 @@ public struct WorkflowSelectionStepView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workflow Selection Step")
+    }
+
+    private var customPersonaGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(customPersonaStore.customPersonas) { persona in
+                OnboardingCustomPersonaCard(
+                    persona: persona,
+                    isSelected: personaManager.selectedCustomPersonaId == persona.id,
+                    compact: true,
+                    onDelete: {
+                        customPersonaStore.deletePersona(id: persona.id)
+                        if personaManager.selectedCustomPersonaId == persona.id {
+                            personaManager.selectedCustomPersonaId = nil
+                        }
+                    }
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        personaManager.selectCustomPersona(persona.id)
+                        isCreatingCustom = false
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
     }
     
     @ViewBuilder
