@@ -20,7 +20,22 @@ defaults write com.sorty.app <key> -bool false
 | File Tagging | `fileTaggingEnabled` | `true` | Finder file tagging during organization (may not work in sandboxed envs) |
 | Batch Organization | `batchOrganizationEnabled` | `false` | Multi-folder batch organization in the sidebar |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
+| Shaders | `shadersEnabled` | `false` | Recovered shader gallery in the Help menu |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
+
+### Shaders
+Quit Sorty before changing the value, then reopen it so the Help menu is rebuilt.
+
+```bash
+# Show the Shaders window entry in the Help menu
+defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool true
+
+# Hide it again
+defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool false
+
+# Restore the hidden-by-default state
+defaults -container com.sorty.app delete com.sorty.app shadersEnabled
+```
 
 ### Support the Developer
 Quit Sorty before changing the value, then reopen it. The `-container` option writes to the same sandboxed preferences domain that Sorty reads; omitting it writes a separate host preference that the app does not reliably see.
