@@ -605,7 +605,7 @@ private struct OnboardingIntroView: View {
                     .opacity(iconOpacity)
 
                     Text("Welcome to Sorty")
-                        .font(.system(size: 38, weight: .medium, design: .serif))
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary.opacity(0.88))
                         .opacity(textOpacity)
                         .offset(y: textOffset)
