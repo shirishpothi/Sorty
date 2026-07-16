@@ -240,7 +240,7 @@ public struct NerdStatPill: View {
             Text(value)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.primary)
-                .contentTransition(.numericText())
+                .numericTextTransition(animationValue: value)
             
             if let unit = unit {
                 Text(unit)
@@ -308,7 +308,7 @@ public struct NerdStatPillExpanded: View {
                         .monospacedDigit()
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                        .contentTransition(.numericText())
+                        .numericTextTransition(animationValue: value)
                     
                     if let unit = unit {
                         Text(unit)
@@ -379,6 +379,7 @@ struct NerdStatCard: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .numericTextTransition(animationValue: value)
                     
                     if let unit = unit {
                         Text(unit)

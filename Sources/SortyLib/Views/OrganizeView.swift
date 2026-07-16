@@ -1209,6 +1209,7 @@ struct ReadyToOrganizeView: View {
                         Text("\(selectedStorageLocationCount) selected")
                             .font(.caption)
                             .foregroundStyle(storageLocationSelectionTint)
+                            .numericTextTransition(animationValue: selectedStorageLocationCount)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .systemLiquidGlassBackground(cornerRadius: 999)
@@ -1217,6 +1218,9 @@ struct ReadyToOrganizeView: View {
                             Text("\(unavailableSelectedStorageLocationCount) unavailable")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
+                                .numericTextTransition(
+                                    animationValue: unavailableSelectedStorageLocationCount
+                                )
                         }
                     }
                 } else if !storageLocationsManager.locations.isEmpty {

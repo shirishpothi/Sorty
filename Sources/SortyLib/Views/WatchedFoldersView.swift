@@ -176,6 +176,7 @@ struct WatchedFoldersView: View {
 
                         Text("\(activeCount) active")
                             .foregroundStyle(activeCount > 0 ? .green : .secondary)
+                            .numericTextTransition(animationValue: activeCount)
                     }
                     .font(.caption)
                 }

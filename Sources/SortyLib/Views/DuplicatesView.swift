@@ -634,6 +634,7 @@ private struct DuplicatesResultsSidebarHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .numericTextTransition(animationValue: summaryText)
             }
 
             if showsStats {
@@ -648,6 +649,7 @@ private struct DuplicatesResultsSidebarHeader: View {
                 .font(.caption)
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
+                .numericTextTransition(animationValue: manager.unreadableFileCount)
             }
 
             if manager.semanticGroupCount > 0 {
@@ -704,6 +706,7 @@ private struct DuplicatesNerdStatsStrip: View {
                 .fontWeight(.semibold)
                 .monospacedDigit()
                 .foregroundStyle(.primary)
+                .numericTextTransition(animationValue: value)
         }
         .font(.caption2)
     }
@@ -745,6 +748,7 @@ struct DuplicateGroupRow: View {
 
                 HStack(spacing: 4) {
                     Text("\(group.files.count) copies")
+                        .numericTextTransition(animationValue: group.files.count)
                     Text("•")
                     Text(
                         "Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))"
@@ -814,6 +818,7 @@ struct UnifiedDuplicateGroupRow: View {
 
                     Text("•")
                     Text("\(group.files.count) \(group.isExact ? "copies" : "matches")")
+                        .numericTextTransition(animationValue: group.files.count)
                     Text("•")
                     Text(
                         ByteCountFormatter.string(
@@ -873,6 +878,7 @@ struct DuplicateGroupDetailView: View {
                     Text("\(group.files.count) identical files found")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: group.files.count)
                 }
                 .layoutPriority(1)
 
@@ -1307,6 +1313,7 @@ private struct DuplicateMetricTile: View {
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
+                .numericTextTransition(animationValue: value)
 
             Text(label)
                 .font(.caption2)
@@ -1526,6 +1533,7 @@ struct DuplicatesSummaryCardMini: View {
                     HStack(spacing: 4) {
                         Text("\(manager.totalDuplicates)")
                             .font(.subheadline.bold())
+                            .numericTextTransition(animationValue: manager.totalDuplicates)
                         Text("exact")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1545,6 +1553,11 @@ struct DuplicatesSummaryCardMini: View {
                         )
                         .font(.subheadline.bold())
                         .foregroundStyle(.blue)
+                        .numericTextTransition(
+                            animationValue: manager.semanticGroups.reduce(0) {
+                                $0 + max(0, $1.files.count - 1)
+                            }
+                        )
                         Text("similar")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1559,6 +1572,9 @@ struct DuplicatesSummaryCardMini: View {
                     Text(manager.formattedSavingsIncludingSemantic)
                         .font(.subheadline.bold())
                         .foregroundStyle(.green)
+                        .numericTextTransition(
+                            animationValue: manager.formattedSavingsIncludingSemantic
+                        )
                     Text("recoverable")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1779,8 +1795,10 @@ struct ScanProgressViewNew: View {
                         if !isPreparing {
                             Text("\(percent)%")
                                 .monospacedDigit()
-                                .contentTransition(.numericText())
-                                .animation(.easeInOut(duration: 0.3), value: percent)
+                                .numericTextTransition(
+                                    animationValue: percent,
+                                    animation: .easeInOut(duration: 0.3)
+                                )
                         }
                     }
                     .font(.system(size: 18, weight: .semibold))

@@ -999,6 +999,11 @@ struct FlatFolderRowView: View {
                 Text("(\(store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .numericTextTransition(
+                        animationValue: store.getCachedFileCount(for: suggestion.id) {
+                            suggestion.totalFileCount
+                        }
+                    )
 
                 if isStorageDestination {
                     storageLocationDropdown
@@ -1571,6 +1576,7 @@ struct FlatUnorganizedHeaderView: View {
             Text("\(fileCount) files")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .numericTextTransition(animationValue: fileCount)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)

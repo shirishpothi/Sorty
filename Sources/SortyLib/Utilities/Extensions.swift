@@ -18,6 +18,37 @@ private struct MinimumHitTargetModifier: ViewModifier {
     }
 }
 
+private enum NumericTextTransitionStyle {
+    case automatic
+    case value(Double)
+}
+
+private struct NumericTextTransitionModifier<Value: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let style: NumericTextTransitionStyle
+    let animationValue: Value
+    let animation: Animation
+
+    private var transition: ContentTransition {
+        switch style {
+        case .automatic:
+            .numericText()
+        case .value(let value):
+            .numericText(value: value)
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .contentTransition(reduceMotion ? .opacity : transition)
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.12) : animation,
+                value: animationValue
+            )
+    }
+}
+
 extension KeyEquivalent {
     static let cancelAction = KeyEquivalent("\u{1b}") // Escape
     static let defaultAction = KeyEquivalent("\r") // Return
@@ -58,5 +89,31 @@ extension Date {
 extension View {
     func minimumHitTarget(_ size: CGFloat = 40) -> some View {
         modifier(MinimumHitTargetModifier(size: size))
+    }
+
+    func numericTextTransition<Value: Equatable>(
+        animationValue: Value,
+        animation: Animation = .spring(response: 0.28, dampingFraction: 0.78)
+    ) -> some View {
+        modifier(
+            NumericTextTransitionModifier(
+                style: .automatic,
+                animationValue: animationValue,
+                animation: animation
+            )
+        )
+    }
+
+    func numericTextTransition(
+        value: Double,
+        animation: Animation = .spring(response: 0.28, dampingFraction: 0.78)
+    ) -> some View {
+        modifier(
+            NumericTextTransitionModifier(
+                style: .value(value),
+                animationValue: value,
+                animation: animation
+            )
+        )
     }
 }

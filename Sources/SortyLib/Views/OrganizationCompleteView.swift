@@ -684,7 +684,7 @@ private struct SummaryStatItem: View {
                 Text(value)
                     .font(.title2.bold())
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    .numericTextTransition(animationValue: value)
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)

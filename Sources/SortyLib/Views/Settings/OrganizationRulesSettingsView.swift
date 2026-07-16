@@ -21,8 +21,9 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.maxTopLevelFolders)")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: Double(viewModel.config.maxTopLevelFolders)))
-                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.maxTopLevelFolders)
+                            .numericTextTransition(
+                                value: Double(viewModel.config.maxTopLevelFolders)
+                            )
                     }
                     
                     NoTickSlider(
@@ -78,8 +79,7 @@ struct OrganizationRulesSettingsView: View {
                         Text("\(viewModel.config.temperature, specifier: "%.2f")")
                             .font(.subheadline.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: viewModel.config.temperature))
-                            .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.config.temperature)
+                            .numericTextTransition(value: viewModel.config.temperature)
                     }
 
                     NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)

@@ -1047,6 +1047,7 @@ struct LearningsView: View {
             Text(value)
                 .font(.caption.bold())
                 .foregroundStyle(color)
+                .numericTextTransition(animationValue: value)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1439,7 +1440,9 @@ struct LearningsView: View {
                         .padding(.vertical, 5)
                         .systemLiquidGlassBackground(cornerRadius: 999)
                         .clipShape(Capsule())
-                        .contentTransition(.numericText())
+                        .numericTextTransition(
+                            animationValue: manager.modelDirectories.filter(\.isEnabled).count
+                        )
                     Button {
                         presentFileImporter(.modelDirectories)
                     } label: {
@@ -1678,11 +1681,13 @@ private struct LearningInsightRow: View {
                         Text("\(rule.successCount) applied")
                             .font(.caption2)
                             .foregroundColor(.green)
+                            .numericTextTransition(animationValue: rule.successCount)
                     }
                     if rule.failureCount > 0 {
                         Text("\(rule.failureCount) corrected")
                             .font(.caption2)
                             .foregroundColor(.orange)
+                            .numericTextTransition(animationValue: rule.failureCount)
                     }
                     if case .folder = rule.scope {
                         Text(rule.scope.displayName)

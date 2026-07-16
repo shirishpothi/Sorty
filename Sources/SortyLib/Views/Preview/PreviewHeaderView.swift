@@ -173,11 +173,15 @@ struct PreviewHeaderView: View {
             Text("\(totalFiles) files • \(totalFolders) folders")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .numericTextTransition(
+                    animationValue: "\(totalFiles)-\(totalFolders)"
+                )
 
             if renameCount > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "wand.and.stars")
                     Text("\(renameCount) renames")
+                        .numericTextTransition(animationValue: renameCount)
                 }
                 .font(.caption)
                 .fontWeight(.medium)

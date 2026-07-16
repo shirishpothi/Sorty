@@ -42,6 +42,7 @@ struct TimelineView: View {
                 Text("\(filteredEntries.count) snapshots")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .numericTextTransition(animationValue: filteredEntries.count)
             }
             
             if filteredEntries.isEmpty {

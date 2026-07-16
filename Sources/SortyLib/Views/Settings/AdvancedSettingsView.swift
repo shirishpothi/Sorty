@@ -162,8 +162,7 @@ private struct TimeoutSliderRow: View {
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())
                     .foregroundColor(.secondary)
-                    .contentTransition(.numericText(value: value))
-                    .animation(.spring(response: 0.28, dampingFraction: 0.78), value: value)
+                    .numericTextTransition(value: value)
             }
             
             HStack(spacing: 8) {
@@ -189,7 +188,7 @@ private struct TimeoutSliderRow: View {
                         Text("\(Int(effectiveMax))s")
                             .font(.caption.monospacedDigit())
                             .foregroundColor(.secondary)
-                            .contentTransition(.numericText(value: effectiveMax))
+                            .numericTextTransition(value: effectiveMax)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))

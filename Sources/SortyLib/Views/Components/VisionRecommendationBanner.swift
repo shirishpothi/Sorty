@@ -71,6 +71,7 @@ struct VisionRecommendationBanner: View {
                     Text("📸 \(imageCount) images detected")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .numericTextTransition(animationValue: imageCount)
                     
                     if state.recommendedAction == .enableVision {
                         Text("Enable Sorty Vision for content-aware organization")
