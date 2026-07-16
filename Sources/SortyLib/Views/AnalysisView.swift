@@ -1551,10 +1551,12 @@ private struct StreamingProgressBeam: View {
                         .milestoneEmptyStateSliver(trigger: milestone)
                         .frame(width: 54, alignment: .trailing)
                 } else {
-                    ProgressView()
-                        .controlSize(.small)
+                    MinsangGlassLoader(
+                        textChangeTrigger: displayedStage,
+                        size: 28,
+                        isActive: isAnimationActive
+                    )
                         .frame(width: 54, alignment: .trailing)
-                        .accessibilityHidden(true)
                 }
             }
             .font(.system(size: 18, weight: .semibold))
