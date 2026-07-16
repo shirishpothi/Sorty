@@ -1,4 +1,8 @@
+'use client'
+
+import { BorderBeam } from 'border-beam'
 import { FolderOpen, ScanSearch, Sparkles, ListChecks, Check } from 'lucide-react'
+import { useState } from 'react'
 import { Reveal } from '@/components/reveal'
 
 const STEPS = [
@@ -30,6 +34,8 @@ const STEPS = [
 ]
 
 export function HowItWorks() {
+  const [hoveredStep, setHoveredStep] = useState<number | null>(null)
+
   return (
     <section
       id="how-it-works"
@@ -69,12 +75,27 @@ export function HowItWorks() {
                 </span>
               </div>
 
-              <div className="flex-1 rounded-3xl border border-border bg-card/40 p-5 backdrop-blur-md transition-colors hover:border-primary/40 sm:p-6">
-                <h3 className="text-lg font-medium">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {step.body}
-                </p>
-              </div>
+              <BorderBeam
+                size="md"
+                colorVariant="mono"
+                theme="dark"
+                strength={0.9}
+                duration={2.4}
+                active={hoveredStep === i}
+                borderRadius={24}
+                className="min-w-0 flex-1"
+                onMouseEnter={() => setHoveredStep(i)}
+                onMouseLeave={() =>
+                  setHoveredStep((current) => (current === i ? null : current))
+                }
+              >
+                <div className="h-full rounded-3xl border border-border bg-card/40 p-5 backdrop-blur-md transition-colors hover:border-white/25 sm:p-6">
+                  <h3 className="text-lg font-medium">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {step.body}
+                  </p>
+                </div>
+              </BorderBeam>
             </Reveal>
           ))}
         </ol>
