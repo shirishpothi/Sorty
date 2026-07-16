@@ -157,10 +157,18 @@ struct OrganizingFlightStageView: View {
                         Text(currentFileName)
                             .foregroundStyle(Color.primary.opacity(0.72))
                             .opacity(1 - Double(renameStrikeProgress))
+                            .numericTextTransition(
+                                animationValue: currentFileName,
+                                animation: .easeInOut(duration: 0.28)
+                            )
 
                         Text(currentFileName)
                             .foregroundStyle(Color.red.opacity(0.82))
                             .opacity(Double(renameStrikeProgress))
+                            .numericTextTransition(
+                                animationValue: currentFileName,
+                                animation: .easeInOut(duration: 0.28)
+                            )
                             .overlay {
                                 Rectangle()
                                     .fill(Color.red.opacity(0.78))
@@ -178,12 +186,20 @@ struct OrganizingFlightStageView: View {
                         .foregroundStyle(.green)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .numericTextTransition(
+                            animationValue: currentRenamedFileName,
+                            animation: .easeInOut(duration: 0.28)
+                        )
                         .opacity(Double(renameProgress))
                         .blur(radius: (1 - renameProgress) * 2.5)
                 }
             } else {
                 Text(currentFileName)
                     .foregroundStyle(.primary.opacity(0.72))
+                    .numericTextTransition(
+                        animationValue: currentFileName,
+                        animation: .easeInOut(duration: 0.28)
+                    )
             }
         }
         .font(.caption.weight(.semibold))
@@ -231,6 +247,10 @@ struct OrganizingFlightStageView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .numericTextTransition(
+                    animationValue: suggestion.folderName,
+                    animation: .easeInOut(duration: 0.28)
+                )
                 .frame(maxWidth: bucketSize.width + 24)
         }
     }
