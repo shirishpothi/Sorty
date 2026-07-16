@@ -1531,7 +1531,7 @@ private struct StreamingProgressBeam: View {
 
     private var progressCard: some View {
         ZStack {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
                 Text(displayedStage)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -1553,7 +1553,7 @@ private struct StreamingProgressBeam: View {
                 } else {
                     MinsangGlassLoader(
                         textChangeTrigger: displayedStage,
-                        size: 28,
+                        size: 54,
                         isActive: isAnimationActive
                     )
                         .frame(width: 54, alignment: .trailing)

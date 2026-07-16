@@ -1,9 +1,10 @@
+import AppKit
 import SwiftUI
 
 /// The recovered Minsang Glass Loader, scaled for compact progress surfaces.
 struct MinsangGlassLoader: View {
     let textChangeTrigger: String
-    var size: CGFloat = 28
+    var size: CGFloat = 54
     var isActive = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,8 +33,9 @@ struct MinsangGlassLoader: View {
 
     var body: some View {
         Group {
-            if let shaderLibrary = Self.shaderLibrary {
-                glassLoader(shaderLibrary: shaderLibrary)
+            if let shaderLibrary = Self.shaderLibrary,
+               let sampleImage = Self.sampleImage {
+                glassLoader(shaderLibrary: shaderLibrary, sampleImage: sampleImage)
             } else {
                 CometLoader(size: size, lineWidth: 2, color: .secondary)
             }
@@ -67,34 +69,25 @@ struct MinsangGlassLoader: View {
         .accessibilityHidden(true)
     }
 
-    private func glassLoader(shaderLibrary: ShaderLibrary) -> some View {
+    private func glassLoader(
+        shaderLibrary: ShaderLibrary,
+        sampleImage: NSImage
+    ) -> some View {
         SwiftUI.TimelineView(
             .animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                Circle()
-                    .fill(
-                        AngularGradient(
-                            colors: [
-                                Color.accentColor.opacity(0.82),
-                                Color.primary.opacity(0.72),
-                                Color.pink.opacity(0.72),
-                                Color.accentColor.opacity(0.82),
-                            ],
-                            center: .center
-                        )
-                    )
+                Image(nsImage: sampleImage)
+                    .resizable()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
                     .layerEffect(
                         inkShader(
                             library: shaderLibrary,
                             time: time,
                             size: proxy.size
                         ),
-                        maxSampleOffset: CGSize(
-                            width: proxy.size.width * 48 / 380,
-                            height: proxy.size.height * 48 / 380
-                        )
+                        maxSampleOffset: CGSize(width: 48, height: 48)
                     )
             }
         }
@@ -134,6 +127,11 @@ struct MinsangGlassLoader: View {
         }
         return ShaderLibrary(url: url)
     }()
+
+    private static let sampleImage = SortyResources.image(
+        named: "MinsangGlassLoaderSample",
+        withExtension: "jpg"
+    )
 }
 
 private extension MinsangGlassLoader {
