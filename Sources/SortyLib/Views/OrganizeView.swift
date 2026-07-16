@@ -72,10 +72,7 @@ struct OrganizeView: View {
                 .animation(directoryHeaderModeAnimation, value: settingsViewModel.config.mode)
             }
 
-            // Main content area with animated transitions. We use a critically
-            // damped spring so the cross-fade feels lively without overshooting
-            // — overshoot was previously translating subviews enough to expose
-            // the window background as a white gap along the bottom edge.
+            // Main content area with animated transitions.
             ZStack {
                 WorkflowGradientBackground()
                     .opacity(persistentWorkflowGradientOpacity)
@@ -105,9 +102,7 @@ struct OrganizeView: View {
                             .transition(.identity)
                     }
                 }
-
             }
-            .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
         .navigationTitle(settingsViewModel.config.mode.workflowTitle)
         .accessibilityElement(children: .contain)
@@ -360,7 +355,7 @@ struct OrganizeView: View {
     }
 
     private var returnToStartExitAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.10) : .easeInOut(duration: 0.22)
+        .easeOut(duration: reduceMotion ? 0.08 : 0.14)
     }
 
     private func returnToStartAfterCancellation() {
@@ -375,24 +370,13 @@ struct OrganizeView: View {
         }
         returnsToDirectorySelection = isReturningFromCompletion
         isShowingReturnToStartContent = true
-        withAnimation(returnToStartExitAnimation) {
-            isReturningToStart = true
-        }
         if !isReturningFromCompletion {
             organizer.prepareForReturnToStartTransition()
         }
 
-        Task { @MainActor in
-            // Settle the underlying organizer state behind the overlay
-            // (which is fully opaque by now) so swapping in the fresh
-            // ReadyToOrganizeView underneath is invisible.
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(60) : .milliseconds(200))
-
-            // Apply every late state mutation in a single transaction with
-            // animations disabled. Splitting these across multiple updates
-            // produced an intermediate render where the overlay had been
-            // removed but the underlying stateContent was still at opacity
-            // 0 (or vice versa), which the user perceived as a flicker.
+        withAnimation(returnToStartExitAnimation, completionCriteria: .logicallyComplete) {
+            isReturningToStart = true
+        } completion: {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -417,14 +401,9 @@ struct OrganizeView: View {
 
         returnsToDirectorySelection = true
         isShowingReturnToStartContent = true
-        withAnimation(returnToStartExitAnimation) {
+        withAnimation(returnToStartExitAnimation, completionCriteria: .logicallyComplete) {
             isReturningToStart = true
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(60) : .milliseconds(200))
-            guard !Task.isCancelled else { return }
-
+        } completion: {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
