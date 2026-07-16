@@ -607,6 +607,20 @@ class AppStateTests: XCTestCase {
         XCTAssertNotNil(appState.updateManager)
     }
 
+    func testVersionHistoryLinkTargetsInstalledReleaseSection() {
+        XCTAssertEqual(
+            SparkleVersionHistoryLink.url(for: "1.2.0").absoluteString,
+            "https://sorty-organizer.github.io/Sorty/changelog/#version-1-2-0"
+        )
+    }
+
+    func testVersionHistoryLinkFallsBackToChangelog() {
+        XCTAssertEqual(
+            SparkleVersionHistoryLink.url(for: nil).absoluteString,
+            "https://sorty-organizer.github.io/Sorty/changelog/"
+        )
+    }
+
     func testMultipleAppStatesKeepIndependentSelections() {
         let stateA = AppState()
         let stateB = AppState()

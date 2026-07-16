@@ -265,6 +265,17 @@ const PREVIOUS_RELEASES = [
   },
 ]
 
+function versionAnchor(version: string) {
+  const versionNumber = version.replace(/^Sorty\s+/i, '')
+  const versionSlug = versionNumber
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join('-')
+
+  return `version-${versionSlug}`
+}
+
 export default function ChangelogPage() {
   return (
     <main className="relative min-h-screen overflow-x-clip">
@@ -318,7 +329,10 @@ export default function ChangelogPage() {
                   <Sparkles className="size-4 text-primary md:size-5" />
                 </span>
 
-                <article className="overflow-hidden rounded-3xl border border-border bg-card/40 shadow-2xl shadow-black/30 backdrop-blur-xl">
+                <article
+                  id={versionAnchor(release.version)}
+                  className="scroll-mt-28 overflow-hidden rounded-3xl border border-border bg-card/40 shadow-2xl shadow-black/30 backdrop-blur-xl"
+                >
                   <div className="grid gap-0 lg:grid-cols-[0.88fr_1.12fr]">
                     <div className="flex flex-col justify-between border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
                       <div>
@@ -402,7 +416,10 @@ export default function ChangelogPage() {
             <div className="mt-8 space-y-5">
               {PREVIOUS_RELEASES.map((release, index) => (
                 <Reveal key={release.version} delay={Math.min(index * 45, 180)}>
-                  <article className="rounded-3xl border border-border bg-card/40 p-6 shadow-lg shadow-black/10 backdrop-blur-xl sm:p-8">
+                  <article
+                    id={versionAnchor(release.version)}
+                    className="scroll-mt-28 rounded-3xl border border-border bg-card/40 p-6 shadow-lg shadow-black/10 backdrop-blur-xl sm:p-8"
+                  >
                     <header className="flex flex-col gap-1 border-b border-border pb-5 sm:flex-row sm:items-baseline sm:justify-between">
                       <h3 className="text-2xl font-semibold tracking-tight">
                         {release.version}

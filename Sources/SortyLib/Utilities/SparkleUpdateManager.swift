@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import SwiftUI
 import Combine
 
@@ -17,6 +18,24 @@ public enum SparkleUpdateFeed {
     public static let nightlyUpdatesEnabledKey = "nightlyUpdatesEnabled"
     public static let stableAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml"
     public static let nightlyAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml"
+}
+
+enum SparkleVersionHistoryLink {
+    private static let changelogURL = URL(
+        string: "https://sorty-organizer.github.io/Sorty/changelog/"
+    )!
+
+    static func url(for version: String?) -> URL {
+        guard let version else { return changelogURL }
+
+        let versionSlug = version
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined(separator: "-")
+
+        guard !versionSlug.isEmpty else { return changelogURL }
+        return URL(string: "\(changelogURL.absoluteString)#version-\(versionSlug)") ?? changelogURL
+    }
 }
 
 @MainActor
@@ -316,6 +335,17 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
 // MARK: - User Driver Delegate
 
 private class SparkleUserDriverDelegate: NSObject, SPUStandardUserDriverDelegate {
+    func standardUserDriverShowVersionHistory(for _: SUAppcastItem) {
+        let installedVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+        let versionHistoryURL = SparkleVersionHistoryLink.url(for: installedVersion)
+
+        Task { @MainActor in
+            NSWorkspace.shared.open(versionHistoryURL)
+        }
+    }
+
     func standardUserDriverShouldHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) -> Bool {
         return true // Let Sparkle handle the UI
     }
