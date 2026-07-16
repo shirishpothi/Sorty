@@ -131,6 +131,7 @@ struct PersonaEditorView: View {
                                 Text("\(promptModifier.count) characters")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                                    .numericTextTransition(animationValue: promptModifier.count)
                             }
                         }
                         .padding(.vertical, 8)

@@ -84,6 +84,7 @@ public struct PermissionsStepView: View {
                     Text("\(grantedPermissionCount) of \(PermissionType.allCases.count) granted")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(grantedPermissionCount == PermissionType.allCases.count ? .green : .secondary)
+                        .numericTextTransition(animationValue: grantedPermissionCount)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))

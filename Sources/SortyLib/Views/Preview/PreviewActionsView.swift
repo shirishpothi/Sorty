@@ -67,6 +67,7 @@ struct PreviewActionsView: View {
                 Text("\(editsCapturedCount)")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.green)
+                    .numericTextTransition(animationValue: editsCapturedCount)
                 Text(editsCapturedCount == 1 ? "edit" : "edits")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -248,6 +249,7 @@ struct PreviewProgressView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .monospacedDigit()
+                        .numericTextTransition(value: estimatedTime)
                         .help("Estimated time remaining")
                 }
                 
@@ -255,6 +257,7 @@ struct PreviewProgressView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    .numericTextTransition(value: progress)
                     .help("Organization progress")
                 
                 // Prominent Cancel Button during operation

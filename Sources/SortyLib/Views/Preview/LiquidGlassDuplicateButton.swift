@@ -131,6 +131,7 @@ struct LiquidGlassDuplicateButton: View {
                     .font(.caption2)
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
+                    .numericTextTransition(animationValue: duplicateInfo.duplicateCount)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(accentColor))

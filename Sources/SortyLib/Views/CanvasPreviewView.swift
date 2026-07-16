@@ -449,6 +449,7 @@ struct CanvasToolbar: View {
                 Text("\(Int(viewModel.scale * 100))%")
                     .font(.caption)
                     .monospacedDigit()
+                    .numericTextTransition(value: viewModel.scale)
                     .frame(width: 50)
 
                 Button {
@@ -661,6 +662,7 @@ struct FolderNodeView: View {
                     Text("\(suggestion.totalFileCount) files")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .numericTextTransition(animationValue: suggestion.totalFileCount)
                 }
                 .padding()
             }

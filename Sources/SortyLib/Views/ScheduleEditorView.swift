@@ -172,11 +172,13 @@ struct ScheduleEditorView: View {
                                 .contentTransition(.symbolEffect(.replace))
                             Text(previewNextRun, style: .date)
                                 .font(.subheadline)
+                                .numericTextTransition(animationValue: previewNextRun)
                             Text("at")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Text(previewNextRun, style: .time)
                                 .font(.subheadline)
+                                .numericTextTransition(animationValue: previewNextRun)
                         }
                     }
 

@@ -279,6 +279,7 @@ struct HistoryView: View {
                 Text("\(totalManualFilteredCount)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .numericTextTransition(animationValue: totalManualFilteredCount)
             }
 
             ForEach(Array(manualEntries.enumerated()), id: \.element.id) { index, entry in
@@ -329,6 +330,7 @@ struct HistoryView: View {
                         Text("\(totalWatchedFilteredCount)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: totalWatchedFilteredCount)
                         Image(systemName: showWatchedAutomations ? "chevron.up" : "chevron.down")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -575,6 +577,7 @@ struct HistoryHeader: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .numericTextTransition(animationValue: manager.history.totalSessions)
                 .accessibilityLabel("\(manager.history.totalSessions) runs recorded")
 
             Spacer()
@@ -752,7 +755,7 @@ private struct HistoryStatItem: View {
             Text(value)
                 .font(.title3.weight(.bold))
                 .monospacedDigit()
-                .contentTransition(.numericText())
+                .numericTextTransition(animationValue: value)
 
             Text(title)
                 .font(.caption.weight(.medium))
@@ -2738,7 +2741,7 @@ struct DetailStatView: View {
                     .accessibilityHidden(true)
                 Text(value)
                     .font(.headline)
-                    .contentTransition(.numericText())
+                    .numericTextTransition(animationValue: value)
             }
             Text(title)
                 .font(.caption)

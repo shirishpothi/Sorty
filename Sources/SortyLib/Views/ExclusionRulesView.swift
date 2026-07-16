@@ -198,15 +198,21 @@ struct ExclusionRulesView: View {
                     HStack(spacing: 8) {
                         Text("\(rulesManager.enabledRulesCount) active")
                             .foregroundStyle(.green)
+                            .numericTextTransition(
+                                animationValue: rulesManager.enabledRulesCount
+                            )
                         Text("•")
                             .foregroundStyle(.secondary)
                         Text(
                             "\(rulesManager.rules.count - rulesManager.enabledRulesCount) disabled"
                         )
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(
+                            animationValue: rulesManager.rules.count
+                                - rulesManager.enabledRulesCount
+                        )
                     }
                     .font(.caption)
-                    .contentTransition(.numericText())
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -593,6 +599,7 @@ struct RuleGroupCard: View {
                     Text("\(rules.count)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: rules.count)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.1))

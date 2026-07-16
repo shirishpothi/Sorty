@@ -123,6 +123,7 @@ public struct MenuBarView: View {
                     Text("\(activeWatchedCount) folder\(activeWatchedCount == 1 ? "" : "s") active")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: activeWatchedCount)
                 } else {
                     Text("No watched folders active")
                         .font(.caption)
@@ -190,6 +191,7 @@ public struct MenuBarView: View {
                 Text("+ \(watchedFoldersManager.folders.count - 5) more...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .numericTextTransition(animationValue: watchedFoldersManager.folders.count)
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
             }

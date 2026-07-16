@@ -1572,8 +1572,10 @@ private struct StreamingProgressBeam: View {
                 if showsDeterminateProgress {
                     Text("\(percent)%")
                         .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.3), value: percent)
+                        .numericTextTransition(
+                            animationValue: percent,
+                            animation: .easeInOut(duration: 0.3)
+                        )
                         .milestoneEmptyStateSliver(trigger: milestone)
                         .frame(width: 54, alignment: .trailing)
                 } else {
@@ -1882,6 +1884,7 @@ private struct InsightHistorySection: View {
                             .font(.caption2)
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
+                            .numericTextTransition(animationValue: insightCount)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
