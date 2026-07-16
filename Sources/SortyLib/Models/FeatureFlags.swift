@@ -119,14 +119,19 @@ public enum FeatureFlags {
     ///
     /// Hidden by default. Enable via Terminal:
     /// ```
-    /// defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool true
+    /// defaults write com.sorty.app.feature-flags shadersEnabled -bool true
     /// ```
     /// Hide it again:
     /// ```
-    /// defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool false
+    /// defaults write com.sorty.app.feature-flags shadersEnabled -bool false
     /// ```
     public static var shadersEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "shadersEnabled")
+        if let override = UserDefaults(suiteName: "com.sorty.app.feature-flags")?
+            .object(forKey: "shadersEnabled") as? Bool
+        {
+            return override
+        }
+        return UserDefaults.standard.bool(forKey: "shadersEnabled")
     }
 
     /// Controls whether subscription-based auth methods are available for supported AI providers.

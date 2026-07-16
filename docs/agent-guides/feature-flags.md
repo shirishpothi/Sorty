@@ -28,13 +28,13 @@ Quit Sorty before changing the value, then reopen it so the Help menu is rebuilt
 
 ```bash
 # Show the Shaders window entry in the Help menu
-defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool true
+defaults write com.sorty.app.feature-flags shadersEnabled -bool true
 
 # Hide it again
-defaults -container com.sorty.app write com.sorty.app shadersEnabled -bool false
+defaults write com.sorty.app.feature-flags shadersEnabled -bool false
 
 # Restore the hidden-by-default state
-defaults -container com.sorty.app delete com.sorty.app shadersEnabled
+defaults delete com.sorty.app.feature-flags shadersEnabled
 ```
 
 ### Support the Developer
