@@ -305,11 +305,12 @@ struct ModelSelectionPopover: View {
 
         return Button {
             guard !isLocked else { return }
+            guard provider != selectedProvider else { return }
             HapticFeedbackManager.shared.selection()
             withAnimation(
                 reduceMotion
-                    ? .easeOut(duration: 0.12)
-                    : .spring(response: 0.35, dampingFraction: 0.5)
+                    ? nil
+                    : .spring(response: 0.3, dampingFraction: 0.82)
             ) {
                 selectedProvider = provider
                 showCustomInput = false
@@ -459,7 +460,6 @@ struct ModelSelectionPopover: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 8)
-                .animation(modelListAnimation, value: modelsForSelectedProvider)
             }
         }
         .frame(maxWidth: .infinity)
@@ -730,12 +730,6 @@ struct ModelSelectionPopover: View {
             return catalogModels.map { $0.id }
         }
         return provider.recommendedModels
-    }
-
-    private var modelListAnimation: Animation {
-        reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.35, dampingFraction: 0.5)
     }
 
     private var modelRowTransition: AnyTransition {
