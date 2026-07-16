@@ -155,9 +155,12 @@ public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
     /// Returns the prompt context for AI to understand this storage location
     public var promptContext: String {
         let canonicalPath = StorageLocationPathResolver.canonicalPath(path)
-        var context = "- \(name) (\(canonicalPath))"
+        var context = "- \(name)"
+        context += "\n  Exact path: \(canonicalPath)"
         if let desc = description, !desc.isEmpty {
-            context += ": \(desc)"
+            context += "\n  Purpose: \(desc)"
+        } else {
+            context += "\n  Purpose: Infer conservatively from the location name and its known subfolders."
         }
         return context + "\n" + capabilityProfile.promptContext
     }
@@ -499,6 +502,10 @@ public class StorageLocationsManager: ObservableObject {
         The following local, cloud, and external directories are approved organization locations.
         Treat them as first-class sources and destinations. Apply the user's instructions and each
         location's stated purpose consistently, regardless of where the location is stored.
+        For every file, actively compare the source folder with these locations before choosing a
+        destination. An enabled writable location is permission to use it when its name, purpose, or
+        existing subfolders are a better semantic match; the user does not need to explicitly request
+        storage in the current instruction. Do not use a location merely because it is available.
         
         """
         
@@ -528,13 +535,14 @@ public class StorageLocationsManager: ObservableObject {
         2. ONLY use the storage roots listed above. Any absolute path outside those roots will be rejected.
         3. FIRST check KNOWN_STORAGE_SUBFOLDERS. When an existing subfolder matches the file's purpose, use its EXACT absolute path as the folder "name" in JSON.
         4. Never use relative placeholders such as "storage", "storage location", "archive", "Spreadsheets", or any other relative name as folder names when targeting storage.
-        5. Match files to storage locations based on each location's stated purpose/description.
-        6. Files that don't fit another organization location should be organized within the source directory using relative paths.
+        5. Match files to organization locations based on their name, stated purpose/description, and known subfolders.
+        6. Prefer a well-matched organization location over creating a parallel local category in the source directory. When no organization location is a defensible match, organize within the source directory using relative paths.
         7. Files and folders may move into, out of, or within these locations when the plan calls for it.
-        8. Use zero or more organization locations according to the user's request and the content being organized.
+        8. Consider all enabled locations on every plan. Use zero or more according to the content and the user's request; explicit mention of storage is not required.
         9. Use the FULL absolute path as the folder "name" in JSON (e.g. "name": "/Users/me/Archive/Documents").
            Do NOT split the path into a nested folder hierarchy. Do NOT use PascalCase variants of folder names.
         10. Existing and new subfolders may be used in any location just as they can in the source directory.
+        11. A read-only location may be used as a source but never as a destination. Only propose actions listed as available filesystem actions.
         
         REQUIRED JSON FORMAT when routing files to storage:
         {"folders":[{"name":"\(examplePath)","files":[{"filename":"example.xlsx"}]}]}

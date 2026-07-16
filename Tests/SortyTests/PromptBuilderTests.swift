@@ -41,6 +41,20 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertFalse(prompt.contains("..."), "Schema examples must themselves be valid JSON.")
     }
 
+    func testSystemPromptAllowsApprovedAbsoluteStoragePaths() {
+        let prompt = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            maxTopLevelFolders: 8,
+            mode: .organize,
+            enableTagging: true
+        )
+
+        XCTAssertTrue(prompt.contains("when the user prompt provides `VALID_STORAGE_PATHS`"))
+        XCTAssertTrue(prompt.contains("one complete folder \"name\" value"))
+        XCTAssertTrue(prompt.contains("copy their spelling and capitalization exactly"))
+        XCTAssertFalse(prompt.contains("Folder \"name\" values MUST be a single folder name with no \"/\""))
+    }
+
     func testCompactSystemPromptsDoNotRequestNarrationBeforeJSON() {
         let config = AIConfig(mode: .organize)
         let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]

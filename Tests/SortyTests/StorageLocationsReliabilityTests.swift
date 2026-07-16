@@ -364,6 +364,33 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         XCTAssertTrue(context?.contains("VALID_STORAGE_PATHS") == true)
         XCTAssertTrue(context?.contains(archive.path) == true)
         XCTAssertTrue(context?.contains(projects.path) == true)
+        XCTAssertTrue(context?.contains("actively compare the source folder with these locations") == true)
+        XCTAssertTrue(context?.contains("explicit mention of storage is not required") == true)
+        XCTAssertTrue(context?.contains("read-only location may be used as a source but never as a destination") == true)
+    }
+
+    @MainActor
+    func testStoragePromptExplainsPurposeAndExactDestinationPath() async {
+        let manager = StorageLocationsManager(
+            entitlementSnapshotProvider: { EntitlementCatalog.shared.snapshot(for: .bundleUnlocked) }
+        )
+        manager.clearAll()
+        defer { manager.clearAll() }
+
+        let archive = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        try? FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        manager.addLocation(
+            StorageLocation(
+                path: archive.path,
+                name: "Long-term Archive",
+                description: "Completed projects and records that are no longer active"
+            )
+        )
+
+        let context = await manager.generatePromptContext()
+        XCTAssertTrue(context?.contains("Exact path: \(archive.path)") == true)
+        XCTAssertTrue(context?.contains("Purpose: Completed projects and records that are no longer active") == true)
+        XCTAssertTrue(context?.contains("Prefer a well-matched organization location over creating a parallel local category") == true)
     }
 
     @MainActor

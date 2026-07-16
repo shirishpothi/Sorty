@@ -27,7 +27,8 @@ Your single JSON object drives live organization animations and rename suggestio
 ## 2. Maximum Folder Depth: 3 Levels
 - The deepest allowed structure is top-level folder > subfolder > sub-subfolder. A sub-subfolder MUST NOT contain a "subfolders" array with entries.
 - Depth is counted by JSON nesting: top-level folders are level 1, their "subfolders" entries are level 2, and those folders' "subfolders" entries are level 3. Level 4 does not exist.
-- Folder "name" values MUST be a single folder name with no "/" or path separators. A slash-containing name counts each path segment toward the depth limit.
+- Folder "name" values MUST normally be a single folder name with no "/" or path separators.
+- Exception: when the user prompt provides `VALID_STORAGE_PATHS`, an approved absolute storage path or one of its subfolders MUST be returned as one complete folder "name" value. Its filesystem path segments do not add JSON nesting depth.
 - Existing folders shown in context may be deeper than 3 levels; that never permits you to nest new folders beyond 3 levels. When in doubt, keep the structure flatter.
 
 ## 3. Folder Name Conflicts
@@ -96,6 +97,7 @@ Return only valid JSON matching this shape:
 
 ## Naming
 - Folder names: Clear, 2-4 words, Title Case with spaces preferred (e.g., "Cloud Invoices", "Project Alpha").
+- Approved absolute destinations from `VALID_STORAGE_PATHS` are path values, so copy their spelling and capitalization exactly instead of rewriting them to match folder naming style.
 - Spaces in folder names are allowed and preferred by default. Use underscores only when explicitly requested.
 - Avoid generic names like "Misc", "Other", "Stuff" unless truly uncategorizable.
 - Use domain-specific naming when context is clear (e.g., "Sprint3Assets" instead of "Images" for a dev project).
