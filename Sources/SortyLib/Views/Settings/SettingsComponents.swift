@@ -182,6 +182,8 @@ struct SettingsTextField: View {
 }
 
 struct SettingsSecureField: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let title: String
     @Binding var text: String
     var isOptional: Bool = false
@@ -203,26 +205,46 @@ struct SettingsSecureField: View {
                 
                 if FeatureFlags.privacyModeEnabled {
                     Button {
-                        isShowingText.toggle()
+                        withAnimation(visibilityAnimation) {
+                            isShowingText.toggle()
+                        }
                         HapticFeedbackManager.shared.tap()
                     } label: {
                         Image(systemName: isShowingText ? "eye.slash" : "eye")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .contentTransition(
+                                reduceMotion ? .opacity : .symbolEffect(.replace)
+                            )
                     }
                     .buttonStyle(.plain)
-                    .help(isShowingText ? "Hide API Key" : "Show API Key")
+                    .help(visibilityButtonLabel)
+                    .accessibilityLabel(visibilityButtonLabel)
                 }
             }
             
-            if isShowingText && FeatureFlags.privacyModeEnabled {
-                TextField("", text: $text)
-                    .textFieldStyle(.roundedBorder)
-            } else {
-                SecureField("", text: $text)
-                    .textFieldStyle(.roundedBorder)
+            ZStack {
+                if isShowingText && FeatureFlags.privacyModeEnabled {
+                    TextField("", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .transition(.opacity)
+                } else {
+                    SecureField("", text: $text)
+                        .textFieldStyle(.roundedBorder)
+                        .transition(.opacity)
+                }
             }
         }
+    }
+
+    private var visibilityAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.14)
+            : .spring(response: 0.34, dampingFraction: 0.78)
+    }
+
+    private var visibilityButtonLabel: String {
+        isShowingText ? "Hide \(title)" : "Show \(title)"
     }
 }
 
