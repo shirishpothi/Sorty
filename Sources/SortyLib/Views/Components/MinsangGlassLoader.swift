@@ -73,7 +73,25 @@ struct MinsangGlassLoader: View {
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                Color.clear
+                Circle()
+                    .trim(from: 0.06, to: 0.86)
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color.secondary.opacity(0.24),
+                                Color.primary.opacity(0.82),
+                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.95),
+                                Color.secondary.opacity(0.24),
+                            ],
+                            center: .center
+                        ),
+                        style: StrokeStyle(
+                            lineWidth: max(min(proxy.size.width, proxy.size.height) * 0.06, 2),
+                            lineCap: .round
+                        )
+                    )
+                    .padding(max(min(proxy.size.width, proxy.size.height) * 0.12, 4))
+                    .rotationEffect(.radians(time * Double(Self.ringSpeed)))
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .layerEffect(
                         inkShader(
