@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The recovered Minsang Glass Loader, scaled for compact progress surfaces.
@@ -33,9 +32,8 @@ struct MinsangGlassLoader: View {
 
     var body: some View {
         Group {
-            if let shaderLibrary = Self.shaderLibrary,
-               let sampleImage = Self.sampleImage {
-                glassLoader(shaderLibrary: shaderLibrary, sampleImage: sampleImage)
+            if let shaderLibrary = Self.shaderLibrary {
+                glassLoader(shaderLibrary: shaderLibrary)
             } else {
                 CometLoader(size: size, lineWidth: 2, color: .secondary)
             }
@@ -69,17 +67,13 @@ struct MinsangGlassLoader: View {
         .accessibilityHidden(true)
     }
 
-    private func glassLoader(
-        shaderLibrary: ShaderLibrary,
-        sampleImage: NSImage
-    ) -> some View {
+    private func glassLoader(shaderLibrary: ShaderLibrary) -> some View {
         SwiftUI.TimelineView(
             .animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
-                Image(nsImage: sampleImage)
-                    .resizable()
+                Color.clear
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .layerEffect(
                         inkShader(
@@ -118,9 +112,9 @@ struct MinsangGlassLoader: View {
     }
 
     private static let shaderLibrary: ShaderLibrary? = {
-        guard let url = SortyResources.bundle.url(
-            forResource: "MinsangGlassLoader",
-            withExtension: "metallib",
+        guard let url = resourceURL(
+            named: "MinsangGlassLoader",
+            extension: "metallib",
             subdirectory: "Shaders"
         ) else {
             return nil
@@ -128,10 +122,30 @@ struct MinsangGlassLoader: View {
         return ShaderLibrary(url: url)
     }()
 
-    private static let sampleImage = SortyResources.image(
-        named: "MinsangGlassLoaderSample",
-        withExtension: "jpg"
-    )
+    /// Resolves a copied resource across bundle layouts. A stale nested
+    /// `Sorty_SortyLib.bundle` inside an installed app can win the
+    /// `SortyResources.bundle` lookup while the shipped resources live
+    /// flattened in the app's `Contents/Resources`, so always fall back
+    /// to `Bundle.main`.
+    private static func resourceURL(
+        named name: String,
+        extension ext: String,
+        subdirectory: String
+    ) -> URL? {
+        for bundle in [SortyResources.bundle, Bundle.main] {
+            if let url = bundle.url(
+                forResource: name,
+                withExtension: ext,
+                subdirectory: subdirectory
+            ) {
+                return url
+            }
+            if let url = bundle.url(forResource: name, withExtension: ext) {
+                return url
+            }
+        }
+        return nil
+    }
 }
 
 private extension MinsangGlassLoader {
