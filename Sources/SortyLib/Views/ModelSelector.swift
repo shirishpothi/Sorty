@@ -783,6 +783,7 @@ private struct ModelSelectionPopoverGlassModifier: ViewModifier {
 }
 
 private struct ModelSelectionOverlayModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
@@ -811,6 +812,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                 .onTapGesture {
                                     isPresented = false
                                 }
+                                .transition(.opacity)
 
                             ModelSelectionPopover(
                                 isPresented: $isPresented,
@@ -824,12 +826,31 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                             )
                             .shadow(color: .black.opacity(0.22), radius: 28, y: 14)
                             .offset(x: resolvedX(for: frame, popoverSize: popoverSize, in: proxy.size), y: resolvedY(for: frame, popoverSize: popoverSize, in: proxy.size))
-                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
+                            .transition(popoverTransition)
                         }
                         .zIndex(1000)
                     }
                 }
+                .animation(presentationAnimation, value: isPresented)
             }
+    }
+
+    private var presentationAnimation: Animation {
+        if reduceMotion {
+            return .easeOut(duration: 0.12)
+        }
+
+        return .spring(response: 0.42, dampingFraction: 0.86)
+    }
+
+    private var popoverTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+
+        return .opacity
+            .combined(with: .scale(scale: 0.965, anchor: .topTrailing))
+            .combined(with: .offset(y: 6))
     }
 
     private func resolvedPopoverSize(in containerSize: CGSize) -> CGSize {
