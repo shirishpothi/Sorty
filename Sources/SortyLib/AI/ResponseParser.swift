@@ -68,6 +68,7 @@ struct ResponseParser {
         let confidence: Double?
         let ruleId: String?
         let fileIDs: [Int]?
+        let renameSuggestions: [RenameSuggestionResponse]?
 
         // Support both array of strings and array of FileEntry objects
         init(from decoder: Decoder) throws {
@@ -85,6 +86,10 @@ struct ResponseParser {
             confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
             ruleId = try container.decodeIfPresent(String.self, forKey: .ruleId)
             fileIDs = try container.decodeIfPresent([Int].self, forKey: .fileIDs)
+            renameSuggestions = try container.decodeIfPresent(
+                LossyArray<RenameSuggestionResponse>.self,
+                forKey: .renameSuggestions
+            )?.elements
 
             // Try to decode files as FileEntry array first
             if let fileEntries = try? container.decode([FileEntry].self, forKey: .files) {
@@ -104,6 +109,21 @@ struct ResponseParser {
             case confidence
             case ruleId = "rule_id"
             case fileIDs = "file_ids"
+            case renameSuggestions = "rename_suggestions"
+        }
+    }
+
+    struct RenameSuggestionResponse: Decodable {
+        let fileID: Int
+        let suggestedName: String?
+        let renameReason: String?
+        let renameConfidence: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case fileID = "file_id"
+            case suggestedName = "suggested_name"
+            case renameReason = "rename_reason"
+            case renameConfidence = "rename_confidence"
         }
     }
 
@@ -481,6 +501,11 @@ struct ResponseParser {
         var renameMappings: [FileRenameMapping] = []
         var seenFileIds: Set<UUID> = []
 
+        func storeRenameMapping(_ mapping: FileRenameMapping) {
+            renameMappings.removeAll { $0.originalFile.id == mapping.originalFile.id }
+            renameMappings.append(mapping)
+        }
+
         if let fileIDs = folder.fileIDs {
             for id in fileIDs {
                 guard let file = fileIdIndex[id], !seenFileIds.contains(file.id) else { continue }
@@ -496,30 +521,14 @@ struct ResponseParser {
                 }
 
                 // Parse-level safeguard: strip all rename fields in organize-only mode.
-                if mode != .organize {
-                    let clampedConfidence = fileEntry.renameConfidence.map { min(max($0, 0.0), 1.0) }
-                    if let confidence = clampedConfidence, confidence < FileRenameMapping.lowConfidenceThreshold {
-                        let mapping = FileRenameMapping(
-                            originalFile: file,
-                            suggestedName: nil,
-                            renameReason: "AI unsure (confidence: \(String(format: "%.2f", confidence)))",
-                            renameConfidence: confidence
-                        )
-                        renameMappings.append(mapping)
-                        continue
-                    }
-
-                    let suggestedName = fileEntry.suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    let renameReason = fileEntry.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    if !suggestedName.isEmpty || !renameReason.isEmpty || clampedConfidence != nil {
-                        let mapping = FileRenameMapping(
-                            originalFile: file,
-                            suggestedName: suggestedName.isEmpty ? nil : suggestedName,
-                            renameReason: renameReason.isEmpty ? nil : renameReason,
-                            renameConfidence: clampedConfidence
-                        )
-                        renameMappings.append(mapping)
-                    }
+                if mode != .organize,
+                   let mapping = makeRenameMapping(
+                       for: file,
+                       suggestedName: fileEntry.suggestedName,
+                       renameReason: fileEntry.renameReason,
+                       renameConfidence: fileEntry.renameConfidence
+                   ) {
+                    storeRenameMapping(mapping)
                 }
 
                 // Add tags if present
@@ -527,6 +536,23 @@ struct ResponseParser {
                     // We'll collect these into a temporary list and add to FolderSuggestion logic below
                     // NOTE: FolderSuggestion doesn't have a mutable 'addTag' during init easily without
                     // accumulating them first. Let's create the FileTagMapping here.
+                }
+            }
+        }
+
+        if mode != .organize {
+            for rename in folder.renameSuggestions ?? [] {
+                guard let file = fileIdIndex[rename.fileID] else { continue }
+                if seenFileIds.insert(file.id).inserted {
+                    files.append(file)
+                }
+                if let mapping = makeRenameMapping(
+                    for: file,
+                    suggestedName: rename.suggestedName,
+                    renameReason: rename.renameReason,
+                    renameConfidence: rename.renameConfidence
+                ) {
+                    storeRenameMapping(mapping)
                 }
             }
         }
@@ -560,6 +586,37 @@ struct ResponseParser {
             semanticTags: folder.semanticTags ?? [],
             confidenceScore: folder.confidence,
             ruleId: folder.ruleId
+        )
+    }
+
+    private static func makeRenameMapping(
+        for file: FileItem,
+        suggestedName: String?,
+        renameReason: String?,
+        renameConfidence: Double?
+    ) -> FileRenameMapping? {
+        let clampedConfidence = renameConfidence.map { min(max($0, 0.0), 1.0) }
+        if let confidence = clampedConfidence,
+           confidence < FileRenameMapping.lowConfidenceThreshold {
+            return FileRenameMapping(
+                originalFile: file,
+                suggestedName: nil,
+                renameReason: "AI unsure (confidence: \(String(format: "%.2f", confidence)))",
+                renameConfidence: confidence
+            )
+        }
+
+        let cleanedName = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let cleanedReason = renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !cleanedName.isEmpty || !cleanedReason.isEmpty || clampedConfidence != nil else {
+            return nil
+        }
+
+        return FileRenameMapping(
+            originalFile: file,
+            suggestedName: cleanedName.isEmpty ? nil : cleanedName,
+            renameReason: cleanedReason.isEmpty ? nil : cleanedReason,
+            renameConfidence: clampedConfidence
         )
     }
 

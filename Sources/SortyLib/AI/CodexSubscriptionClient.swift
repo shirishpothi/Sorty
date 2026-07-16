@@ -405,6 +405,25 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 "file_ids": [
                     "type": ["array", "null"],
                     "items": ["type": "integer"]
+                ],
+                "rename_suggestions": [
+                    "type": ["array", "null"],
+                    "items": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": [
+                            "file_id": ["type": "integer"],
+                            "suggested_name": ["type": ["string", "null"]],
+                            "rename_reason": ["type": ["string", "null"]],
+                            "rename_confidence": ["type": ["number", "null"]]
+                        ],
+                        "required": [
+                            "file_id",
+                            "suggested_name",
+                            "rename_reason",
+                            "rename_confidence"
+                        ]
+                    ]
                 ]
             ],
             "required": [
@@ -418,7 +437,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 "semantic_tags",
                 "confidence",
                 "rule_id",
-                "file_ids"
+                "file_ids",
+                "rename_suggestions"
             ]
         ]
     }

@@ -572,6 +572,7 @@ public actor AIInsightExtractor {
             "our", "their", "its", "type", "value", "key", "data",
             "text", "content", "description", "folder", "folders",
             "files", "filename", "suggested_name", "rename_reason",
+            "rename_suggestions", "file_id",
             "tags", "comment", "semantic_tags", "confidence", "rule_id",
             "file_ids", "folder_assignments", "unorganized", "notes",
             "reasoning", "subfolders", "true", "false", "null"

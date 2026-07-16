@@ -407,16 +407,20 @@ struct PromptBuilder {
     private static func compactResponseContract(mode: OrganizationMode, enableReasoning: Bool) -> String {
         let reasoning = enableReasoning ? ",\"reasoning\":\"\"" : ""
         let filePayload: String
+        let preferredPayload: String
         if mode == .renameOnly || mode == .organizeAndRename {
             filePayload = "\"files\":[{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}]"
+            preferredPayload = "\"file_ids\":[1,2],\"rename_suggestions\":[{\"file_id\":1,\"suggested_name\":\"Clear Name.ext\",\"rename_reason\":\"Concrete evidence for the clearer name\",\"rename_confidence\":0.9}]"
         } else {
             filePayload = "\"files\":[\"filename\"]"
+            preferredPayload = "\"file_ids\":[1,2]"
         }
         return """
         Return exactly one JSON object with no markdown, prose, progress lines, or reasoning outside JSON. Preferred compact format:
-        {"folder_assignments":[{"name":"","file_ids":[1,2]\(reasoning)}],"notes":""}
+        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning)}],"notes":""}
         Legacy format is also accepted:
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         Prefer assigning every file to a folder. Use unorganized only as a rare last resort when no logical destination exists.
         """
     }
@@ -427,7 +431,7 @@ struct PromptBuilder {
             base += " Keep all files in '.' and only suggest better names."
         }
         if mode == .renameOnly || mode == .organizeAndRename {
-            base += " Rename only when there is a material clarity improvement; keep already-good names unchanged."
+            base += " Actively suggest clearer filenames when the available evidence supports a material improvement; keep already-good or uncertain names unchanged. Return renames through rename_suggestions even when assigning files with file_ids."
         }
         base += " Nest folders at most 3 levels deep; folder names must not contain '/'. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
@@ -514,11 +518,18 @@ struct PromptBuilder {
     /// Compact system prompt for Apple Intelligence
     static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, maxTopLevelFolders: Int = 10, enableTagging: Bool = true) -> String {
         var prompt = "You are a file management assistant. "
+        let compactFolderPayload: String
         
         if mode == .renameOnly {
             prompt += "Analyze files and suggest better filenames. Keep files in the '.' folder.\n\n"
         } else {
             prompt += "Analyze files and suggest folders.\n\n"
+        }
+
+        if mode == .renameOnly || mode == .organizeAndRename {
+            compactFolderPayload = "\"name\":\"\",\"file_ids\":[1,2],\"rename_suggestions\":[{\"file_id\":1,\"suggested_name\":\"Clear Name.ext\",\"rename_reason\":\"Concrete evidence for the clearer name\",\"rename_confidence\":0.9}]"
+        } else {
+            compactFolderPayload = "\"name\":\"\",\"file_ids\":[1,2]"
         }
         
         prompt += """
@@ -536,10 +547,11 @@ struct PromptBuilder {
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Prefer better filenames; keep originals only when they are already clear, stable/protected, or user-excluded." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Generic camera, screenshot, scan, download, or default app names should usually receive suggested_name when evidence supports it." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- In compact responses, return evidence-backed renames in rename_suggestions using the matching file_id; file_ids alone cannot rename a file." : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
-        {"folder_assignments":[{"name":"","file_ids":[1,2]\(enableReasoning ? ",\"reasoning\":\"\"" : "")}],"notes":""}
+        {"folder_assignments":[{\(compactFolderPayload)\(enableReasoning ? ",\"reasoning\":\"\"" : "")}],"notes":""}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """

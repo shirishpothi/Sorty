@@ -488,6 +488,34 @@ class ResponseParserTests: XCTestCase {
         XCTAssertTrue(suggestion.files.contains(where: { $0.displayName == "report.pdf" }))
     }
 
+    func testCompactFileIDAssignmentsCarryRenameSuggestions() throws {
+        let json = """
+        {
+          "folder_assignments": [
+            {
+              "name": "Documents",
+              "file_ids": [1],
+              "rename_suggestions": [
+                {
+                  "file_id": 1,
+                  "suggested_name": "Acme Service Agreement.pdf",
+                  "rename_reason": "Document title and client name appear in the scanned text",
+                  "rename_confidence": 0.94
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        let file = FileItem(path: "/path/scan0007.pdf", name: "scan0007", extension: "pdf", size: 300, isDirectory: false)
+        let plan = try ResponseParser.parseResponse(json, originalFiles: [file], mode: .organizeAndRename)
+
+        let mapping = try XCTUnwrap(plan.suggestions.first?.renameMapping(for: file))
+        XCTAssertEqual(mapping.suggestedName, "Acme Service Agreement.pdf")
+        XCTAssertEqual(mapping.renameConfidence, 0.94)
+    }
+
     func testCompactAndLegacyFileMappingTogether() throws {
         let json = """
         {

@@ -95,6 +95,16 @@ final class RenamePromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("generic camera, screenshot, scan, download, or default app names"))
     }
 
+    func testCompactRenameContractCanCarryRenamesByFileID() {
+        let file = FileItem(path: "/tmp/IMG_0042.jpg", name: "IMG_0042", extension: "jpg", size: 1024, isDirectory: false)
+
+        let prompt = PromptBuilder.buildCompactPrompt(files: [file], mode: .organizeAndRename)
+
+        XCTAssertTrue(prompt.contains("\"rename_suggestions\""))
+        XCTAssertTrue(prompt.contains("\"file_id\":1"))
+        XCTAssertTrue(prompt.contains("Do not omit rename_suggestions merely because you used file_ids"))
+    }
+
     func testOrganizeModesPreferFolderAssignmentsOverUnorganized() {
         let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
 
