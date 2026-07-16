@@ -61,6 +61,18 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(config.authMethod(for: .anthropic), .accountSignIn)
     }
 
+    func testChangingProviderClearsInMemoryAPIKey() {
+        var config = AIConfig(
+            provider: .openRouter,
+            apiKey: "openrouter-secret",
+            model: AIProvider.openRouter.defaultModel
+        )
+
+        config.provider = .ollama
+
+        XCTAssertNil(config.apiKey)
+    }
+
     func testAIConfigAuthMethodsAreCodable() throws {
         var config = AIConfig.default
         config.setAuthMethod(.accountSignIn, for: .openAI)

@@ -549,7 +549,13 @@ public enum VisionBatchStrategy: String, Codable, CaseIterable, Sendable {
 }
 
 public struct AIConfig: Codable, Sendable, Equatable {
-    public var provider: AIProvider
+    public var provider: AIProvider {
+        didSet {
+            if provider != oldValue {
+                apiKey = nil
+            }
+        }
+    }
     public var apiURL: String?
     public var apiKey: String?
     public var model: String
