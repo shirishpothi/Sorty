@@ -390,6 +390,7 @@ struct AIProviderSettingsView: View {
                             .font(.caption)
                             .underline()
                     }
+                    .trackHoveredURL(url)
                 }
             } else {
                 Text(viewModel.config.provider.apiKeyHelpText)
