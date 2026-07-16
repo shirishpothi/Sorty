@@ -1678,6 +1678,8 @@ struct HistoryDetailSheet: View {
     let onDismiss: () -> Void
 
     @State private var showRawAIResponse = false
+    @State private var displayedRawAIResponse = ""
+    @State private var rawAIResponseStreamTask: Task<Void, Never>?
     @State private var showRedoModelPicker = false
     @State private var undoneOperationIDs: Set<UUID> = []
     @State private var failedOperationIDs: Set<UUID> = []
@@ -1696,6 +1698,7 @@ struct HistoryDetailSheet: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var entitlementManager: EntitlementManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var currentEntry: OrganizationHistoryEntry {
         organizer.history.entries.first { $0.id == entry.id } ?? entry
@@ -2265,9 +2268,7 @@ struct HistoryDetailSheet: View {
 
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showRawAIResponse.toggle()
-                }
+                toggleRawAIResponse(displayRaw)
                 HapticFeedbackManager.shared.tap()
             } label: {
                 HStack(spacing: 8) {
@@ -2295,12 +2296,28 @@ struct HistoryDetailSheet: View {
                         .accessibilityIdentifier("CopyRawJSONButton")
                     }
 
-                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        Text(displayRaw)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    ScrollViewReader { proxy in
+                        ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(displayedRawAIResponse)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                    .numericTextTransition(
+                                        animationValue: displayedRawAIResponse,
+                                        animation: .linear(duration: 0.08)
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Color.clear
+                                    .frame(width: 1, height: 1)
+                                    .id("RawAIResponseStreamBottom")
+                            }
+                        }
+                        .onChange(of: displayedRawAIResponse) { _, _ in
+                            guard showRawAIResponse, !reduceMotion else { return }
+                            proxy.scrollTo("RawAIResponseStreamBottom", anchor: .bottomLeading)
+                        }
                     }
                     .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
                     .padding()
@@ -2308,9 +2325,77 @@ struct HistoryDetailSheet: View {
                     .cornerRadius(8)
                     .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "Raw AI response hidden in Privacy Mode" : "Raw AI response data")
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .opacity.combined(with: .move(edge: .top))
+                )
             }
         }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            guard shouldReduceMotion, showRawAIResponse else { return }
+            stopRawAIResponseStream()
+            displayedRawAIResponse = displayRaw
+        }
+        .onDisappear {
+            stopRawAIResponseStream()
+        }
+    }
+
+    private func toggleRawAIResponse(_ raw: String) {
+        stopRawAIResponseStream()
+
+        if showRawAIResponse {
+            withAnimation(rawAIResponseDisclosureAnimation) {
+                showRawAIResponse = false
+            }
+            return
+        }
+
+        displayedRawAIResponse = reduceMotion ? raw : ""
+        withAnimation(rawAIResponseDisclosureAnimation) {
+            showRawAIResponse = true
+        }
+
+        guard !reduceMotion else { return }
+        startRawAIResponseStream(raw)
+    }
+
+    private var rawAIResponseDisclosureAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.3, dampingFraction: 0.8)
+    }
+
+    private func startRawAIResponseStream(_ raw: String) {
+        let characters = Array(raw)
+        let chunkSize = max(1, (characters.count + 139) / 140)
+
+        rawAIResponseStreamTask = Task { @MainActor in
+            var visibleCharacterCount = 0
+
+            while visibleCharacterCount < characters.count {
+                guard !Task.isCancelled else { return }
+
+                visibleCharacterCount = min(
+                    visibleCharacterCount + chunkSize,
+                    characters.count
+                )
+                displayedRawAIResponse = String(characters.prefix(visibleCharacterCount))
+
+                guard visibleCharacterCount < characters.count else { return }
+                do {
+                    try await Task.sleep(for: .milliseconds(24))
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    private func stopRawAIResponseStream() {
+        rawAIResponseStreamTask?.cancel()
+        rawAIResponseStreamTask = nil
     }
 
     private func handleUndo() {
