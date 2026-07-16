@@ -1458,6 +1458,8 @@ private struct StreamingProgressBeam: View {
     /// When true, the card expands to align with the live insights island below it.
     var matchesInsightsWidth: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
     /// Compact width used when the banner stands alone (removes empty space).
@@ -1511,6 +1513,14 @@ private struct StreamingProgressBeam: View {
         return trimmed
     }
 
+    private var stageTransition: AnyTransition {
+        reduceMotion || reduceTransparency ? .opacity : .blurReplace
+    }
+
+    private var stageAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.28)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             progressCard
@@ -1528,12 +1538,15 @@ private struct StreamingProgressBeam: View {
     private var progressCard: some View {
         ZStack {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(displayedStage)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.22), value: displayedStage)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ZStack(alignment: .leading) {
+                    Text(displayedStage)
+                        .id(displayedStage)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .transition(stageTransition)
+                }
+                .animation(stageAnimation, value: displayedStage)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if showsDeterminateProgress {
                     Text("\(percent)%")

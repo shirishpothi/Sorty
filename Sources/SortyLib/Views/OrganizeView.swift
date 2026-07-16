@@ -321,12 +321,7 @@ struct OrganizeView: View {
                         || appState.hasPresentedReadyToOrganize
                 )
             }
-        case .scanning:
-            AnalysisView(
-                onReturnToStart: returnToStartAfterCancellation,
-                onLiveOrganizationStarted: noteLiveOrganizationStarted
-            )
-        case .organizing:
+        case .scanning, .organizing, .applying:
             AnalysisView(
                 onReturnToStart: returnToStartAfterCancellation,
                 onLiveOrganizationStarted: noteLiveOrganizationStarted
@@ -346,11 +341,6 @@ struct OrganizeView: View {
             } else {
                 PreviewHandoffView(mode: settingsViewModel.config.mode)
             }
-        case .applying:
-            AnalysisView(
-                onReturnToStart: returnToStartAfterCancellation,
-                onLiveOrganizationStarted: noteLiveOrganizationStarted
-            )
         case .completed:
             completionHandoffContent
         case .error(let error):
