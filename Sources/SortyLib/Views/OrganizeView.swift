@@ -831,7 +831,9 @@ struct ReadyToOrganizeView: View {
 
     private var storageLocationSummaryID: String {
         if selectedStorageLocationCount > 0 {
-            return "selected-\(selectedStorageLocationCount)-\(unavailableSelectedStorageLocationCount)"
+            return unavailableSelectedStorageLocationCount > 0
+                ? "selected-unavailable"
+                : "selected-available"
         }
 
         return storageLocationsManager.locations.isEmpty ? "unconfigured" : "inactive"
@@ -1077,18 +1079,14 @@ struct ReadyToOrganizeView: View {
                                     .opacity(selectedStorageLocationCount > 0 ? 1 : 0)
                             }
 
-                        ZStack(alignment: .leading) {
-                            Text(storageLocationTitle)
-                                .id(storageLocationTitle)
-                                .transition(storageLocationSummaryTransition)
-                        }
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .animation(
-                            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
-                            value: storageLocationTitle
-                        )
+                        Text(storageLocationTitle)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                            .numericTextTransition(
+                                animationValue: storageLocationTitle,
+                                animation: .easeInOut(duration: 0.28)
+                            )
 
                         Spacer(minLength: 8)
 
