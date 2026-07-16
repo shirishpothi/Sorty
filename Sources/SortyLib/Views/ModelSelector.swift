@@ -91,6 +91,8 @@ extension View {
 struct ModelSelectionPopover: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var entitlementManager: EntitlementManager
+    @AccessibilityFocusState private var isSearchAccessibilityFocused: Bool
+    @FocusState private var isSearchFocused: Bool
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
@@ -202,9 +204,11 @@ struct ModelSelectionPopover: View {
         .onAppear {
             selectedProvider = currentProvider
             selectedModel = currentModel
-            Task {
-                await modelCatalog.refresh(provider: currentProvider)
-            }
+        }
+        .task {
+            isSearchFocused = true
+            isSearchAccessibilityFocused = true
+            await modelCatalog.refresh(provider: currentProvider)
         }
     }
 
@@ -237,6 +241,8 @@ struct ModelSelectionPopover: View {
             TextField("Search providers or models...", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .focused($isSearchFocused)
+                .accessibilityFocused($isSearchAccessibilityFocused)
             
             if !searchText.isEmpty {
                 Button {
