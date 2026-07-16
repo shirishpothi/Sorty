@@ -340,10 +340,24 @@ struct AIProviderSettingsView: View {
         let provider = nextConfig.provider
         nextConfig.setAuthMethod(method, for: provider)
         nextConfig.apiKey = method == .apiKey ? KeychainManager.get(key: provider.keychainKey) : nil
-        viewModel.config = nextConfig
+        withAnimation(authenticationTransitionAnimation) {
+            viewModel.config = nextConfig
+        }
         viewModel.updateAvailableModels(force: true)
         openAIAuth.checkAuthenticationStatus()
         HapticFeedbackManager.shared.selection()
+    }
+
+    private var authenticationTransitionAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.16)
+            : .spring(response: 0.4, dampingFraction: 0.82)
+    }
+
+    private var authenticationPanelTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
     }
 
     @ViewBuilder
@@ -360,8 +374,10 @@ struct AIProviderSettingsView: View {
                 switch viewModel.config.authMethod(for: .openAI) {
                 case .apiKey, .manualSessionToken:
                     apiKeySection
+                        .transition(authenticationPanelTransition)
                 case .accountSignIn:
                     codexSubscriptionSection
+                        .transition(authenticationPanelTransition)
                 }
             }
         } else {
