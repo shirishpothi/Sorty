@@ -3,7 +3,6 @@ import { Hero } from '@/components/hero'
 import { HowItWorks } from '@/components/how-it-works'
 import { Features } from '@/components/features'
 import { Privacy } from '@/components/privacy'
-import { Pricing } from '@/components/pricing'
 import { Faq } from '@/components/faq'
 import { SiteFooter } from '@/components/site-footer'
 import { StructuredData } from '@/components/structured-data'
@@ -17,7 +16,6 @@ export default function Page() {
       <HowItWorks />
       <Features />
       <Privacy />
-      <Pricing />
       <Faq />
       <SiteFooter />
     </main>

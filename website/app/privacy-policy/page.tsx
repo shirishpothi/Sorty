@@ -7,7 +7,7 @@ import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description:
-    'How Sorty handles your data. Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
+    'How Sorty handles files, AI requests, local storage, and privacy. No telemetry, no accounts, no data collection.',
   alternates: { canonical: '/privacy-policy' },
   openGraph: {
     title: 'Privacy Policy — Sorty',
