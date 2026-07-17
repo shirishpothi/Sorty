@@ -6,11 +6,11 @@ Optimized workflows for rapid iteration on Sorty.
 
 | Goal | Command | Typical Time |
 |------|---------|-------------|
-| Build + launch (no tests) | `make now` | ~7s incremental |
-| Build only (no tests) | `make dev` | ~7s incremental |
-| Local diagnostic build + tests | `make build` | ~30-60s |
-| Harness mode (targeted view) | `make harness` | ~7s incremental |
-| Profile slow files | `make build-profile` | ~30s |
+| Build + launch (no tests) | `make now` | ~3-5s no-op; changed files vary |
+| Build only (no tests) | `make dev` | ~3-5s no-op; changed files vary |
+| Local diagnostic build + tests | `make build` | test-suite dependent |
+| Harness mode (targeted view) | `make harness` | ~3-5s no-op |
+| Profile slow expressions | `make build-profile` | ~90s clean diagnostic build |
 | Inspect build cache | `make cache-status` | <1s |
 | Force cache pruning | `make cache-prune` | varies |
 | Benchmark all builds | `make benchmark` | ~5-10min |
@@ -47,24 +47,26 @@ make harness-organize
 
 These are already configured — no action needed:
 
-- **Index store disabled** for debug builds (`BuildConfig.xcconfig`, `Makefile`)
+- **Index store disabled** for local SwiftPM debug builds (`Makefile`)
 - **Parallel compilation** using all CPU cores (`-j $(CORES)`)
 - **Batch mode** for debug builds (SPM manages incremental compilation internally)
 - **Test target** depends only on `SortyLib` (not the executable target)
 - **Concurrency checking** set to `minimal` to reduce type-check overhead
 - **FinderSync extension cached** — only rebuilds when source files change (~33s saved on incremental builds)
-- **View bodies split** into smaller computed properties to reduce type-checker complexity (MainWindowRootView.body went from 9.9s → 0.2s)
-- **Cache fingerprints**: toolchain, package, project, and build-script inputs are checked before every scripted build so stale compiled outputs are cleared without a full dependency reset.
+- **Expensive SwiftUI expressions split into dedicated view types** so the compiler solves smaller generic graphs.
+- **Compatibility fingerprints** reset compiled outputs only when the Swift/Xcode toolchain changes. SwiftPM and Xcode handle package, project, plist, entitlement, and script changes incrementally.
+- **Content-addressed asset catalog cache** reuses `Assets.car` when the catalog, SDK, and `actool` are unchanged.
 - **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.
 
 ## Cache Hygiene
 
 The scripted build path uses `scripts/build_cache.sh` before compiling:
 
-- Clears compiled outputs when the Swift/Xcode toolchain, package inputs, project settings, entitlements, or build scripts change.
-- Clears SwiftPM dependency caches only when package inputs change, or when the cache remains oversized after compiled outputs are removed.
+- Clears compiled outputs only when the Swift/Xcode toolchain is incompatible.
+- Preserves package checkouts and binary artifacts by default; incomplete Sparkle artifacts are still detected and repaired.
+- Prunes stale logs, asset-catalog entries, inactive configurations, and inactive Finder/Xcode outputs before considering opt-in dependency removal.
 - Keeps pruning cheap for the fast loop by using `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400` by default.
-- Uses `BUILD_CACHE_MAX_SIZE_MB=8192`, `BUILD_CACHE_TARGET_SIZE_MB=6144`, and `BUILD_CACHE_STALE_DAYS=7` unless overridden.
+- Uses `BUILD_CACHE_MAX_SIZE_MB=8192`, `BUILD_CACHE_TARGET_SIZE_MB=6144`, and `BUILD_CACHE_STALE_DAYS=30` unless overridden.
 
 Useful commands:
 
@@ -78,15 +80,12 @@ Useful overrides:
 ```bash
 BUILD_CACHE_PRUNE_INTERVAL_SECONDS=0 make now
 BUILD_CACHE_MAX_SIZE_MB=4096 BUILD_CACHE_TARGET_SIZE_MB=3072 make cache-prune
-BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE=false make now
+BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED=true make cache-prune
 ```
 
 ### Type-Checker Performance
 
-Large SwiftUI view `body` properties with many chained modifiers cause exponential type-checking time. When adding view modifiers:
-- Break chains of >15 modifiers into separate `some View` computed properties
-- Each `some View` return type creates a type-erasure boundary for the compiler
-- Group related modifiers: environment injection, lifecycle, notifications
+Large SwiftUI result-builder expressions and modifier chains can dominate type checking. Extract semantically distinct sections into small dedicated `View` types with explicit inputs. In particular, move arithmetic and animation chains out of `ForEach` closures into a row view instead of merely moving the same expression into another computed `some View` property.
 
 ## Benchmarking
 
@@ -113,11 +112,11 @@ The benchmark script measures:
 make build-profile
 ```
 
-This builds with `-warn-long-function-bodies=100 -warn-long-expression-type-checking=100` and reports any files/expressions exceeding 100ms compile time. Refactor those into smaller composable units.
+This runs an isolated clean build with Swift frontend debug-time diagnostics, deduplicates batched compiler entries, prints the slowest project function bodies and expressions, then removes the temporary build and diagnostic log. It never invalidates the normal development cache.
 
 ## Future: Modularization
 
-SortyLib is a monolithic target (199 files, ~85K lines). Clean builds take ~160s because all files compile sequentially within the target. Splitting into smaller targets would enable parallel target compilation:
+SortyLib is a monolithic target (more than 220 Swift files). Splitting stable non-UI layers into smaller targets would reduce the invalidation surface and allow more target-level parallelism, but target boundaries should follow dependency analysis rather than file count alone:
 
 - **SortyCore** — Models/, Utilities/, Services/
 - **SortyAI** — AI/ (depends on SortyCore)

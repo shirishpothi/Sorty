@@ -12,10 +12,11 @@ PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
 SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 
-# Swift build flags for optimization
-SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
-SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+# Package.swift owns compiler and linker settings so builds and tests share one
+# incremental compilation signature instead of invalidating each other.
+SWIFT_DEBUG_FLAGS := --disable-sandbox
+SWIFT_RELEASE_FLAGS := --disable-sandbox
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
@@ -54,17 +55,17 @@ debug:
 # Fastest development build - parallel, no tests, debug mode
 dev:
 	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 
 # runs the complete test suite with parallel execution
 test:
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox
 
 # Quick test run - excludes slow UI/integration tests
 test-fast:
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --disable-sandbox --filter SortyTests
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
@@ -77,10 +78,8 @@ test-ui:
 
 # Profile build times to identify slow-compiling files
 build-profile:
-	@echo "🔍 Profiling build times..."
-	@echo "Building with diagnostics to identify slow type-checking..."
-	@swift build $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) -Xswiftc -Xfrontend -Xswiftc -warn-long-function-bodies=100 -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep -E "(warning:|error:)" || true
-	@echo "✅ Profile complete. Look for 'warning: expression took too long to type-check' messages above."
+	@chmod +x scripts/profile_build.sh
+	@./scripts/profile_build.sh
 
 cache-status:
 	@$(BUILD_SCRIPT_ENV) ./scripts/build_cache.sh status
@@ -91,11 +90,11 @@ cache-prune:
 # runs basic syntax checks and builds (skips tests)
 quick:
 	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 # Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
@@ -146,7 +145,7 @@ release:
 friend-zip:
 	@echo "📦 Creating friend-test ZIP in Downloads..."
 	@chmod +x scripts/build.sh scripts/package.sh
-	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@ZIP_NAME_OVERRIDE="Sorty-friend-test.zip" ./scripts/package.sh
 	@mkdir -p "$(HOME)/Downloads"
 	@cp -f "releases/Sorty-friend-test.zip" "$(HOME)/Downloads/Sorty-friend-test.zip"
@@ -204,17 +203,17 @@ benchmark-save:
 # Preview harness — launches a targeted view for rapid iteration
 harness:
 	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
 
 harness-settings:
 	@echo "🔬 Harness → Settings..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=settings open releases/Sorty.app
 
 harness-organize:
 	@echo "🔬 Harness → Organize..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
 
 help:

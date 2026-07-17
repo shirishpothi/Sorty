@@ -223,7 +223,7 @@
 		CC220002000000000000A013 /* LiquidGlassDuplicateButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */; };
 		CC220002000000000000A014 /* LiquidGlassLearningsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */; };
 		CC220002000000000000A015 /* ExperimentalSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A015 /* ExperimentalSettingsView.swift */; };
-		CC220002000000000000A016 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A016 /* Assets.xcassets */; };
+		CC220002000000000000A016 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A019 /* Assets.xcassets */; };
 		CC220002000000000000A017 /* InternetAccessPolicy.plist in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A017 /* InternetAccessPolicy.plist */; };
 		CC220002000000000000A018 /* AppIcons in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A018 /* AppIcons */; };
 		EC166F2A25CE1F1430F1FBD9 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = 488B75F6213B19AC5840050B /* SortyLib */; };
@@ -552,7 +552,7 @@
 		CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassDuplicateButton.swift; sourceTree = "<group>"; };
 		CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassLearningsButton.swift; sourceTree = "<group>"; };
 		CC110001000000000000A015 /* ExperimentalSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentalSettingsView.swift; sourceTree = "<group>"; };
-		CC110001000000000000A016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		CC110001000000000000A019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		CC110001000000000000A017 /* InternetAccessPolicy.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = InternetAccessPolicy.plist; sourceTree = "<group>"; };
 		CC110001000000000000A018 /* AppIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources/SortyLib/Resources/AppIcons; sourceTree = SOURCE_ROOT; };
 
@@ -909,7 +909,7 @@
 			isa = PBXGroup;
 			children = (
 				99999999AAAA000000000001 /* AppIcon.icns */,
-				CC110001000000000000A016 /* Assets.xcassets */,
+				CC110001000000000000A019 /* Assets.xcassets */,
 				CC110001000000000000A018 /* AppIcons */,
 				CC110001000000000000A017 /* InternetAccessPolicy.plist */,
 			);

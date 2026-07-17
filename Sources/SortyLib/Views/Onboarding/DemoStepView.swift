@@ -7,6 +7,154 @@
 
 import SwiftUI
 
+private struct DemoCompletionView: View {
+    let plan: OrganizationPlan?
+    @Binding var showPreviewTree: Bool
+    let onComplete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 28) {
+            DemoCompletionCelebration(isVisible: showPreviewTree)
+
+            VStack(spacing: 8) {
+                Text("Organization Complete!")
+                    .font(.title2.bold())
+
+                Text("See how Sorty transformed chaos into order")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            DemoCompletionStats(plan: plan)
+            DemoCompletionHighlights()
+
+            Button(action: onComplete) {
+                HStack(spacing: 8) {
+                    Text("Get Started")
+                    Image(systemName: "arrow.right")
+                }
+            }
+            .buttonStyle(.onboardingPill)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
+                showPreviewTree = true
+            }
+        }
+    }
+}
+
+private struct DemoCompletionCelebration: View {
+    let isVisible: Bool
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { index in
+                DemoCompletionRipple(index: index, isVisible: isVisible)
+            }
+
+            Circle()
+                .fill(Color.green.opacity(0.1))
+                .frame(width: 100, height: 100)
+
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.green)
+                .symbolEffect(.bounce, value: isVisible)
+        }
+    }
+}
+
+private struct DemoCompletionRipple: View {
+    let index: Int
+    let isVisible: Bool
+
+    private var diameter: CGFloat { CGFloat(100 + index * 20) }
+    private var strokeOpacity: Double { 0.3 - Double(index) * 0.1 }
+    private var delay: Double { Double(index) * 0.2 }
+
+    var body: some View {
+        Circle()
+            .stroke(Color.green.opacity(strokeOpacity), lineWidth: 2)
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(isVisible ? 1.1 : 0.9)
+            .opacity(isVisible ? 0 : 1)
+            .animation(
+                .easeOut(duration: 1.2)
+                    .repeatCount(3, autoreverses: false)
+                    .delay(delay),
+                value: isVisible
+            )
+    }
+}
+
+private struct DemoCompletionStats: View {
+    let plan: OrganizationPlan?
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 24) {
+                cards
+            }
+
+            VStack(spacing: 14) {
+                cards
+            }
+        }
+        .frame(maxWidth: 420)
+    }
+
+    @ViewBuilder
+    private var cards: some View {
+        if let plan {
+            DemoStatCard(
+                icon: "doc.fill",
+                value: "\(plan.totalFiles)",
+                label: "files organized",
+                color: .blue
+            )
+
+            DemoStatCard(
+                icon: "folder.fill",
+                value: "\(plan.totalFolders)",
+                label: "folders created",
+                color: .orange
+            )
+        } else {
+            DemoStatCard(icon: "doc.fill", value: "10", label: "files organized", color: .blue)
+            DemoStatCard(icon: "folder.fill", value: "4", label: "folders created", color: .orange)
+            DemoStatCard(icon: "bolt.fill", value: "<1s", label: "time taken", color: .purple)
+        }
+    }
+}
+
+private struct DemoCompletionHighlights: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "brain.head.profile")
+                    .foregroundStyle(.purple)
+                Text("Sorty-Powered Organization")
+                    .font(.subheadline.bold())
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                DemoHighlightRow(icon: "photo.stack", text: "Grouped photos by type", color: .blue)
+                DemoHighlightRow(icon: "doc.text", text: "Organized documents intelligently", color: .green)
+                DemoHighlightRow(icon: "dollarsign.circle", text: "Separated financial files", color: .orange)
+                DemoHighlightRow(icon: "arrow.uturn.backward.circle", text: "100% reversible with one click", color: .purple)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: 340)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.purple.opacity(0.05))
+                .stroke(Color.purple.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
 public struct DemoStepView: View {
     let onComplete: () -> Void
     
@@ -360,90 +508,11 @@ public struct DemoStepView: View {
     
     @ViewBuilder
     private var completeView: some View {
-        VStack(spacing: 28) {
-            ZStack {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .stroke(Color.green.opacity(0.3 - Double(i) * 0.1), lineWidth: 2)
-                        .frame(width: CGFloat(100 + i * 20), height: CGFloat(100 + i * 20))
-                        .scaleEffect(showPreviewTree ? 1.1 : 0.9)
-                        .opacity(showPreviewTree ? 0 : 1)
-                        .animation(
-                            .easeOut(duration: 1.2)
-                            .repeatCount(3, autoreverses: false)
-                            .delay(Double(i) * 0.2),
-                            value: showPreviewTree
-                        )
-                }
-                
-                Circle()
-                    .fill(Color.green.opacity(0.1))
-                    .frame(width: 100, height: 100)
-                
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.green)
-                    .symbolEffect(.bounce, value: showPreviewTree)
-            }
-            
-            VStack(spacing: 8) {
-                Text("Organization Complete!")
-                    .font(.title2.bold())
-                
-                Text("See how Sorty transformed chaos into order")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 24) {
-                    completionStatCards
-                }
-
-                VStack(spacing: 14) {
-                    completionStatCards
-                }
-            }
-            .frame(maxWidth: 420)
-            
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "brain.head.profile")
-                        .foregroundStyle(.purple)
-                    Text("Sorty-Powered Organization")
-                        .font(.subheadline.bold())
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    DemoHighlightRow(icon: "photo.stack", text: "Grouped photos by type", color: .blue)
-                    DemoHighlightRow(icon: "doc.text", text: "Organized documents intelligently", color: .green)
-                    DemoHighlightRow(icon: "dollarsign.circle", text: "Separated financial files", color: .orange)
-                    DemoHighlightRow(icon: "arrow.uturn.backward.circle", text: "100% reversible with one click", color: .purple)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: 340)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.purple.opacity(0.05))
-                    .stroke(Color.purple.opacity(0.1), lineWidth: 1)
-            )
-            
-            Button {
-                onComplete()
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Get Started")
-                    Image(systemName: "arrow.right")
-                }
-            }
-            .buttonStyle(.onboardingPill)
-        }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
-                showPreviewTree = true
-            }
-        }
+        DemoCompletionView(
+            plan: organizer.currentPlan,
+            showPreviewTree: $showPreviewTree,
+            onComplete: onComplete
+        )
     }
     
     private var leftPanelDescription: String {
@@ -459,46 +528,6 @@ public struct DemoStepView: View {
         }
     }
 
-    @ViewBuilder
-    private var completionStatCards: some View {
-        if let plan = organizer.currentPlan {
-            DemoStatCard(
-                icon: "doc.fill",
-                value: "\(plan.totalFiles)",
-                label: "files organized",
-                color: .blue
-            )
-
-            DemoStatCard(
-                icon: "folder.fill",
-                value: "\(plan.totalFolders)",
-                label: "folders created",
-                color: .orange
-            )
-        } else {
-            DemoStatCard(
-                icon: "doc.fill",
-                value: "10",
-                label: "files organized",
-                color: .blue
-            )
-
-            DemoStatCard(
-                icon: "folder.fill",
-                value: "4",
-                label: "folders created",
-                color: .orange
-            )
-
-            DemoStatCard(
-                icon: "bolt.fill",
-                value: "<1s",
-                label: "time taken",
-                color: .purple
-            )
-        }
-    }
-    
     private var statusText: String {
         switch organizer.state {
         case .scanning: return "Analyzing Your Files"

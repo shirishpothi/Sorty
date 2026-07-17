@@ -68,14 +68,6 @@ struct HUDNotificationCard: View {
     @State private var progressRemaining: CGFloat = 1.0
     
     private let autoDismissSeconds: Double = 4.0
-    private let actionColumns = [
-        GridItem(.adaptive(minimum: 136, maximum: 210), spacing: 8, alignment: .leading)
-    ]
-
-    private var inlineAction: HUDNotificationAction? {
-        notification.actions.count == 1 ? notification.actions.first : nil
-    }
-
     private var queuedSummary: String {
         queuedCount == 1 ? "1 more" : "\(queuedCount) more"
     }
@@ -88,100 +80,22 @@ struct HUDNotificationCard: View {
                 .padding(.vertical, 10)
 
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Image(systemName: notification.icon)
-                        .font(.title3)
-                        .foregroundStyle(notification.iconColor)
-                        .frame(width: 28, height: 28)
-                        .systemLiquidGlassBackground(cornerRadius: 14)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(notification.title)
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-
-                        Text(notification.message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if let inlineAction {
-                        Button(role: inlineAction.role) {
-                            inlineAction.action()
-                        } label: {
-                            HUDNotificationActionLabel(action: inlineAction, fillsWidth: false)
-                        }
-                        .buttonStyle(.plain)
-                        .fixedSize(horizontal: true, vertical: false)
-                    }
-
-                    if isHovered && !notification.isPersistent {
-                        Button {
-                            onDismiss()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.opacity)
-                    }
-                }
+                HUDNotificationHeader(
+                    notification: notification,
+                    isHovered: isHovered,
+                    onDismiss: onDismiss
+                )
 
                 if notification.actions.count > 1 {
-                    LazyVGrid(columns: actionColumns, alignment: .leading, spacing: 8) {
-                        ForEach(notification.actions) { action in
-                            Button(role: action.role) {
-                                action.action()
-                            } label: {
-                                HUDNotificationActionLabel(action: action, fillsWidth: true)
-                            }
-                            .buttonStyle(.plain)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                    HUDNotificationActionGrid(actions: notification.actions)
                 }
 
                 if queuedCount > 0 {
-                    Divider()
-                        .opacity(0.5)
-
-                    HStack(spacing: 8) {
-                        Label(queuedSummary, systemImage: "rectangle.stack")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-
-                        Spacer(minLength: 8)
-
-                        Button {
-                            onShowNext()
-                        } label: {
-                            Label("Next", systemImage: "arrow.right")
-                                .labelStyle(.iconOnly)
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 28, height: 28)
-                        .systemLiquidGlassBackground(cornerRadius: 8)
-                        .accessibilityLabel("Show next HUD notification")
-
-                        Button {
-                            onDismissAll()
-                        } label: {
-                            Label("Clear all", systemImage: "xmark.circle")
-                                .labelStyle(.iconOnly)
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 28, height: 28)
-                        .systemLiquidGlassBackground(cornerRadius: 8)
-                        .accessibilityLabel("Clear all HUD notifications")
-                    }
+                    HUDNotificationQueueControls(
+                        summary: queuedSummary,
+                        onShowNext: onShowNext,
+                        onDismissAll: onDismissAll
+                    )
                 }
             }
             .padding(.trailing, 12)
@@ -201,15 +115,10 @@ struct HUDNotificationCard: View {
         )
         .overlay(alignment: .bottom) {
             if !notification.isPersistent {
-                GeometryReader { geo in
-                    Capsule()
-                        .fill(notification.iconColor.opacity(0.4))
-                        .frame(width: geo.size.width * progressRemaining, height: 2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(height: 2)
-                .padding(.horizontal, 6)
-                .padding(.bottom, 3)
+                HUDNotificationProgress(
+                    color: notification.iconColor,
+                    remaining: progressRemaining
+                )
             }
         }
         .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
@@ -248,6 +157,139 @@ struct HUDNotificationCard: View {
             return "Tap to open"
         }
         return notification.isPersistent ? "" : "Tap to dismiss"
+    }
+}
+
+private struct HUDNotificationHeader: View {
+    let notification: HUDNotification
+    let isHovered: Bool
+    let onDismiss: () -> Void
+
+    private var inlineAction: HUDNotificationAction? {
+        notification.actions.count == 1 ? notification.actions.first : nil
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: notification.icon)
+                .font(.title3)
+                .foregroundStyle(notification.iconColor)
+                .frame(width: 28, height: 28)
+                .systemLiquidGlassBackground(cornerRadius: 14)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(notification.title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Text(notification.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let inlineAction {
+                Button(role: inlineAction.role) {
+                    inlineAction.action()
+                } label: {
+                    HUDNotificationActionLabel(action: inlineAction, fillsWidth: false)
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+            }
+
+            if isHovered && !notification.isPersistent {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+    }
+}
+
+private struct HUDNotificationActionGrid: View {
+    let actions: [HUDNotificationAction]
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 136, maximum: 210), spacing: 8, alignment: .leading)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            ForEach(actions) { action in
+                Button(role: action.role) {
+                    action.action()
+                } label: {
+                    HUDNotificationActionLabel(action: action, fillsWidth: true)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+private struct HUDNotificationQueueControls: View {
+    let summary: String
+    let onShowNext: () -> Void
+    let onDismissAll: () -> Void
+
+    var body: some View {
+        Divider()
+            .opacity(0.5)
+
+        HStack(spacing: 8) {
+            Label(summary, systemImage: "rectangle.stack")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            queueButton("Next", systemImage: "arrow.right", accessibilityLabel: "Show next HUD notification", action: onShowNext)
+            queueButton("Clear all", systemImage: "xmark.circle", accessibilityLabel: "Clear all HUD notifications", action: onDismissAll)
+        }
+    }
+
+    private func queueButton(
+        _ title: String,
+        systemImage: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(.plain)
+        .frame(width: 28, height: 28)
+        .systemLiquidGlassBackground(cornerRadius: 8)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct HUDNotificationProgress: View {
+    let color: Color
+    let remaining: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            Capsule()
+                .fill(color.opacity(0.4))
+                .frame(width: geometry.size.width * remaining, height: 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 2)
+        .padding(.horizontal, 6)
+        .padding(.bottom, 3)
     }
 }
 

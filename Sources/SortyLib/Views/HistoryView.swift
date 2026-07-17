@@ -777,6 +777,271 @@ private struct HistoryStatItem: View {
 
 // MARK: - History Session Card
 
+private enum HistoryCardActionState: Equatable {
+    case idle
+    case undoing
+    case redoing
+
+    var isUndoing: Bool { self == .undoing }
+    var isRedoing: Bool { self == .redoing }
+    var isBusy: Bool { self != .idle }
+}
+
+private struct HistorySessionCardHeader: View {
+    let entry: OrganizationHistoryEntry
+    let modelBadgeText: String?
+    let statusColor: Color
+    let isExpanded: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            FolderThumbnailView(url: URL(fileURLWithPath: entry.directoryPath), size: CGSize(width: 32, height: 32))
+                .frame(width: 32)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                HistorySessionSummary(entry: entry, statusColor: statusColor)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                if let modelBadgeText {
+                    Text(modelBadgeText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
+                        .accessibilityLabel("Model: \(modelBadgeText)")
+                } else {
+                    Text(" ")
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                }
+
+                Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct HistorySessionSummary: View {
+    let entry: OrganizationHistoryEntry
+    let statusColor: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if entry.status == .completed {
+                Label("\(entry.filesOrganized) files", systemImage: "doc")
+                Label("\(entry.foldersCreated) folders", systemImage: "folder")
+            } else if entry.status == .duplicatesCleanup {
+                Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
+                if let recovered = entry.recoveredSpace {
+                    Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
+                }
+            } else if entry.status == .partiallyUndone {
+                Text("Partially Undone")
+                    .foregroundStyle(statusColor)
+            } else {
+                Text(entry.status.rawValue.capitalized)
+                    .foregroundStyle(statusColor)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+private struct HistorySessionExpandedContent: View {
+    let entry: OrganizationHistoryEntry
+    let hasStorageMoves: Bool
+    let operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int)
+    let hasOperationsData: Bool
+    let isProcessing: Bool
+    let actionState: HistoryCardActionState
+    let isModelPickerAnchorActive: Bool
+    let canProvideFeedback: Bool
+    @Binding var feedbackGiven: LearningsManager.SessionOutcome?
+    @Binding var showFeedbackConfirmation: Bool
+    let onSelect: () -> Void
+    let onApplyPlan: () -> Void
+    let onUndo: () -> Void
+    let onRedo: () -> Void
+    let onOpenModelPicker: () -> Void
+    let onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder")
+                    .foregroundStyle(.secondary)
+                PrivacySensitivePathText(path: entry.directoryPath)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
+
+            if hasStorageMoves {
+                HStack(spacing: 8) {
+                    Image(systemName: "externaldrive")
+                        .foregroundStyle(.orange)
+                    Text("Includes moves to storage locations")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("This organization included moves to external storage locations")
+            }
+
+            if hasOperationsData && entry.status == .completed {
+                OperationsBreakdownBar(
+                    moves: operationsBreakdown.moves,
+                    renames: operationsBreakdown.renames,
+                    folderCreates: operationsBreakdown.folderCreates
+                )
+            }
+
+            HistorySessionActions(
+                entry: entry,
+                isProcessing: isProcessing,
+                actionState: actionState,
+                isModelPickerAnchorActive: isModelPickerAnchorActive,
+                canProvideFeedback: canProvideFeedback,
+                feedbackGiven: $feedbackGiven,
+                showFeedbackConfirmation: $showFeedbackConfirmation,
+                onSelect: onSelect,
+                onApplyPlan: onApplyPlan,
+                onUndo: onUndo,
+                onRedo: onRedo,
+                onOpenModelPicker: onOpenModelPicker,
+                onFeedback: onFeedback
+            )
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.02))
+    }
+}
+
+private struct HistorySessionActions: View {
+    let entry: OrganizationHistoryEntry
+    let isProcessing: Bool
+    let actionState: HistoryCardActionState
+    let isModelPickerAnchorActive: Bool
+    let canProvideFeedback: Bool
+    @Binding var feedbackGiven: LearningsManager.SessionOutcome?
+    @Binding var showFeedbackConfirmation: Bool
+    let onSelect: () -> Void
+    let onApplyPlan: () -> Void
+    let onUndo: () -> Void
+    let onRedo: () -> Void
+    let onOpenModelPicker: () -> Void
+    let onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onSelect) {
+                Label("View Details", systemImage: "info.circle")
+            }
+            .buttonStyle(.sortyBordered)
+            .controlSize(.small)
+            .accessibilityLabel("View session details")
+            .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
+
+            if entry.hasApplicablePlan {
+                Button(action: onApplyPlan) {
+                    Label("Apply Plan", systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.sortyProminent)
+                .controlSize(.small)
+                .accessibilityLabel("Apply this generated organization plan")
+                .accessibilityIdentifier("ApplyPlanButton-\(entry.id.uuidString)")
+            } else if entry.success && entry.status != .duplicatesCleanup {
+                undoOrRedoButton
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    onOpenModelPicker()
+                } label: {
+                    Label("Try Different Model", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.small)
+                .accessibilityLabel("Try organization with a different AI model")
+                .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
+                .background {
+                    if isModelPickerAnchorActive {
+                        Color.clear.modelSelectorTriggerBounds()
+                    }
+                }
+            }
+
+            Spacer()
+
+            if canProvideFeedback && entry.status == .completed && !entry.isUndone, let onFeedback {
+                QuickFeedbackButtons(
+                    feedbackGiven: $feedbackGiven,
+                    showConfirmation: $showFeedbackConfirmation,
+                    onFeedback: onFeedback
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var undoOrRedoButton: some View {
+        Group {
+            if entry.isUndone {
+                Button(action: onRedo) {
+                    Label(
+                        actionState.isRedoing ? "Redoing…" : "Redo",
+                        systemImage: actionState.isRedoing ? "arrow.triangle.2.circlepath" : "arrow.uturn.forward"
+                    )
+                }
+                .buttonStyle(.onboardingPill)
+                .accessibilityLabel("Redo organization")
+                .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
+            } else {
+                Button(action: onUndo) {
+                    Label(
+                        actionState.isUndoing ? "Undoing…" : "Undo",
+                        systemImage: actionState.isUndoing ? "arrow.triangle.2.circlepath" : "arrow.uturn.backward"
+                    )
+                }
+                .buttonStyle(.sortyBordered)
+                .accessibilityLabel("Undo organization")
+                .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
+            }
+        }
+        .controlSize(.small)
+        .contentTransition(.symbolEffect(.replace))
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .disabled(isProcessing || actionState.isBusy)
+    }
+}
+
 struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
@@ -793,19 +1058,9 @@ struct HistorySessionCard: View {
     @State private var isHovered = false
     @State private var feedbackGiven: LearningsManager.SessionOutcome?
     @State private var showFeedbackConfirmation = false
-    @State private var actionState: HistoryActionState = .idle
+    @State private var actionState: HistoryCardActionState = .idle
     @State private var swipeOffset: CGFloat = 0
     @State private var hasCrossedSwipeThreshold = false
-
-    private enum HistoryActionState: Equatable {
-        case idle
-        case undoing
-        case redoing
-
-        var isUndoing: Bool { self == .undoing }
-        var isRedoing: Bool { self == .redoing }
-        var isBusy: Bool { self != .idle }
-    }
 
     // MARK: - Operations Breakdown
 
@@ -879,79 +1134,12 @@ struct HistorySessionCard: View {
                 }
                 HapticFeedbackManager.shared.tap()
             } label: {
-                HStack(spacing: 12) {
-                    // Status Icon
-                    FolderThumbnailView(url: URL(fileURLWithPath: entry.directoryPath), size: CGSize(width: 32, height: 32))
-                        .frame(width: 32)
-                        .accessibilityHidden(true)
-
-                    // Main Info
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
-                            .font(.headline)
-                            .lineLimit(1)
-
-                        HStack(spacing: 12) {
-                            if entry.status == .completed {
-                                Label("\(entry.filesOrganized) files", systemImage: "doc")
-                                Label("\(entry.foldersCreated) folders", systemImage: "folder")
-                            } else if entry.status == .duplicatesCleanup {
-                                Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
-                                if let recovered = entry.recoveredSpace {
-                                    Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
-                                }
-                            } else if entry.status == .partiallyUndone {
-                                Text("Partially Undone")
-                                    .foregroundStyle(statusColor)
-                            } else {
-                                Text(entry.status.rawValue.capitalized)
-                                    .foregroundStyle(statusColor)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    // Model Badge + Timestamp Column
-                    VStack(alignment: .trailing, spacing: 2) {
-                        // Model & Cost Badge (compact)
-                        if let badge = modelBadgeText {
-                            Text(badge)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.1))
-                                .clipShape(Capsule())
-                                .accessibilityLabel("Model: \(badge)")
-                        } else {
-                            Text(" ")
-                                .font(.caption2.weight(.medium))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .opacity(0)
-                                .accessibilityHidden(true)
-                        }
-
-                        // Timestamp
-                        Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption)
-                        Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-
-                    // Expand Chevron
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .contentShape(Rectangle())
+                HistorySessionCardHeader(
+                    entry: entry,
+                    modelBadgeText: modelBadgeText,
+                    statusColor: statusColor,
+                    isExpanded: isExpanded
+                )
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
@@ -965,133 +1153,24 @@ struct HistorySessionCard: View {
                 Divider()
                     .padding(.horizontal, 16)
 
-                VStack(alignment: .leading, spacing: 12) {
-                    // Full Path
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder")
-                            .foregroundStyle(.secondary)
-                        PrivacySensitivePathText(path: entry.directoryPath)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
-
-                    if hasStorageMoves {
-                        HStack(spacing: 8) {
-                            Image(systemName: "externaldrive")
-                                .foregroundStyle(.orange)
-                            Text("Includes moves to storage locations")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("This organization included moves to external storage locations")
-                    }
-
-                    // Operations Breakdown Bar
-                    if hasOperationsData && entry.status == .completed {
-                        OperationsBreakdownBar(
-                            moves: operationsBreakdown.moves,
-                            renames: operationsBreakdown.renames,
-                            folderCreates: operationsBreakdown.folderCreates
-                        )
-                    }
-
-                    // Actions
-                    HStack(spacing: 12) {
-                        Button {
-                            onSelect()
-                        } label: {
-                            Label("View Details", systemImage: "info.circle")
-                        }
-                        .buttonStyle(.sortyBordered)
-                        .controlSize(.small)
-                        .accessibilityLabel("View session details")
-                        .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
-
-                        if entry.hasApplicablePlan {
-                            Button {
-                                onRedo()
-                            } label: {
-                                Label("Apply Plan", systemImage: "checkmark.circle")
-                            }
-                            .buttonStyle(.sortyProminent)
-                            .controlSize(.small)
-                            .accessibilityLabel("Apply this generated organization plan")
-                            .accessibilityIdentifier("ApplyPlanButton-\(entry.id.uuidString)")
-                        } else if entry.success && entry.status != .duplicatesCleanup {
-                            if entry.isUndone {
-                                Button {
-                                    beginRedo()
-                                } label: {
-                                    if actionState.isRedoing {
-                                        Label("Redoing…", systemImage: "arrow.triangle.2.circlepath")
-                                    } else {
-                                        Label("Redo", systemImage: "arrow.uturn.forward")
-                                    }
-                                }
-                                .buttonStyle(.onboardingPill)
-                                .controlSize(.small)
-                                .accessibilityLabel("Redo organization")
-                                .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
-                                .contentTransition(.symbolEffect(.replace))
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                                .disabled(isProcessing || actionState.isBusy)
-                            } else {
-                                Button {
-                                    beginUndo()
-                                } label: {
-                                    if actionState.isUndoing {
-                                        Label("Undoing…", systemImage: "arrow.triangle.2.circlepath")
-                                    } else {
-                                        Label("Undo", systemImage: "arrow.uturn.backward")
-                                    }
-                                }
-                                .buttonStyle(.sortyBordered)
-                                .controlSize(.small)
-                                .accessibilityLabel("Undo organization")
-                                .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
-                                .contentTransition(.symbolEffect(.replace))
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                                .disabled(isProcessing || actionState.isBusy)
-                            }
-
-                            // Try with different model button
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                onOpenModelPicker()
-                            } label: {
-                                Label("Try Different Model", systemImage: "wand.and.stars")
-                            }
-                            .buttonStyle(.sortyBordered)
-                            .controlSize(.small)
-                            .accessibilityLabel("Try organization with a different AI model")
-                            .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
-                            .background {
-                                if isModelPickerAnchorActive {
-                                    Color.clear.modelSelectorTriggerBounds()
-                                }
-                            }
-                        }
-
-                        Spacer()
-
-                        // Quick Feedback Buttons
-                        if canProvideFeedback && entry.status == .completed && !entry.isUndone && onFeedback != nil {
-                            QuickFeedbackButtons(
-                                feedbackGiven: $feedbackGiven,
-                                showConfirmation: $showFeedbackConfirmation,
-                                onFeedback: { outcome in
-                                    onFeedback?(outcome)
-                                }
-                            )
-                        }
-                    }
-                }
-                .padding(16)
-                .background(Color.black.opacity(0.02))
+                HistorySessionExpandedContent(
+                    entry: entry,
+                    hasStorageMoves: hasStorageMoves,
+                    operationsBreakdown: operationsBreakdown,
+                    hasOperationsData: hasOperationsData,
+                    isProcessing: isProcessing,
+                    actionState: actionState,
+                    isModelPickerAnchorActive: isModelPickerAnchorActive,
+                    canProvideFeedback: canProvideFeedback,
+                    feedbackGiven: $feedbackGiven,
+                    showFeedbackConfirmation: $showFeedbackConfirmation,
+                    onSelect: onSelect,
+                    onApplyPlan: onRedo,
+                    onUndo: beginUndo,
+                    onRedo: beginRedo,
+                    onOpenModelPicker: onOpenModelPicker,
+                    onFeedback: onFeedback
+                )
             }
         }
         .background(swipeActionBackground)

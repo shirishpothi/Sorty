@@ -30,11 +30,6 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",
-            exclude: [
-                // CI and Blacksmith builds use the debug icon. Shipping the
-                // byte-identical CI copy only wastes space in every app bundle.
-                "Resources/AppIcons/AppIcon-CI.png"
-            ],
             resources: [
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
                 // SPM only handles the Images directory as PNG fallbacks
@@ -60,7 +55,8 @@ let package = Package(
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 // Release: Full optimization with whole-module
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
-                // Suppress warnings to reduce compile output
+                // Batched builds otherwise repeat the same diagnostics for many
+                // primary files, producing megabytes of low-value output.
                 .unsafeFlags(["-suppress-warnings"]),
                 // Swift 6 strict concurrency - minimal checking to reduce type-check cost
                 .unsafeFlags(["-strict-concurrency=minimal"]),

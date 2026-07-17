@@ -119,6 +119,205 @@ private struct CompletionGlowRing: View {
     }
 }
 
+private struct CompletionCelebrationBackdrop: View {
+    let revealScale: CGFloat
+    let revealOpacity: Double
+    let showParticles: Bool
+    let exitTriggered: Bool
+
+    var body: some View {
+        ZStack {
+            if !exitTriggered {
+                CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+
+            if showParticles {
+                ZStack {
+                    ForEach(0..<7, id: \.self) { index in
+                        FloatingParticle(
+                            delay: Double(index) * 0.4,
+                            size: CGFloat.random(in: 3...6),
+                            xPosition: CGFloat.random(in: -200...200)
+                        )
+                    }
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+        }
+    }
+}
+
+private struct CompletionHero: View {
+    let hasAppeared: Bool
+    let showGlowRing: Bool
+    let exitTriggered: Bool
+    let contentDismissed: Bool
+
+    var body: some View {
+        ZStack {
+            CompletionRippleField(
+                hasAppeared: hasAppeared,
+                showGlowRing: showGlowRing,
+                exitTriggered: exitTriggered
+            )
+            CompletionCheckmarkIcon(hasAppeared: hasAppeared)
+        }
+        .opacity(hasAppeared ? 1 : 0)
+        .scaleEffect(hasAppeared ? 1 : 0.3)
+        .animation(.spring(response: 0.9, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+        .scaleEffect(contentDismissed ? 0.8 : 1.0)
+        .opacity(contentDismissed ? 0 : 1)
+    }
+}
+
+private struct CompletionRippleField: View {
+    let hasAppeared: Bool
+    let showGlowRing: Bool
+    let exitTriggered: Bool
+
+    var body: some View {
+        ZStack {
+            if !exitTriggered {
+                CompletionGlowRing(isActive: showGlowRing)
+                    .transition(.opacity)
+
+                ForEach(0..<3, id: \.self) { index in
+                    CompletionRipple(index: index, hasAppeared: hasAppeared)
+                }
+            }
+        }
+    }
+}
+
+private struct CompletionRipple: View {
+    let index: Int
+    let hasAppeared: Bool
+
+    private var diameter: CGFloat { CGFloat(140 + index * 30) }
+    private var strokeOpacity: Double { 0.18 - Double(index) * 0.04 }
+    private var delay: Double { Double(index) * 0.3 }
+
+    var body: some View {
+        Circle()
+            .stroke(CompletionPalette.softRose.opacity(strokeOpacity), lineWidth: 2)
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(hasAppeared ? 1.2 : 0.8)
+            .opacity(hasAppeared ? 0 : 1)
+            .animation(
+                .easeOut(duration: 1.5)
+                    .repeatForever(autoreverses: false)
+                    .delay(delay),
+                value: hasAppeared
+            )
+    }
+}
+
+private struct CompletionCheckmarkIcon: View {
+    let hasAppeared: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(CompletionPalette.shadowRose.opacity(0.30))
+                .frame(width: 118, height: 118)
+
+            Circle()
+                .fill(CompletionPalette.softRose)
+                .frame(width: 72, height: 72)
+
+            Image(systemName: "checkmark")
+                .font(.system(size: 42, weight: .bold, design: .rounded))
+                .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
+                .symbolEffect(.bounce, value: hasAppeared)
+        }
+    }
+}
+
+private struct CompletionCopy: View {
+    let hasAppeared: Bool
+    let contentDismissed: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("Ready to Organize")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
+                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.2), value: hasAppeared)
+
+            Text("Drop in a folder, preview the plan, and undo anything you change.")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 420)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 15)
+                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.4), value: hasAppeared)
+        }
+        .opacity(contentDismissed ? 0 : 1)
+        .offset(y: contentDismissed ? 30 : 0)
+    }
+}
+
+private struct CompletionTipsGrid: View {
+    let tipsAppeared: Bool
+    let contentDismissed: Bool
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
+            GridRow {
+                quickTip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.55)
+                quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
+            }
+
+            GridRow {
+                quickTip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.75)
+                quickTip(icon: "gearshape", text: "Tune settings", delay: 0.85)
+            }
+        }
+        .opacity(contentDismissed ? 0 : 1)
+        .offset(y: contentDismissed ? 40 : 0)
+    }
+
+    private func quickTip(icon: String, text: String, delay: Double) -> some View {
+        QuickTipRow(icon: icon, text: text)
+            .frame(width: 190, alignment: .leading)
+            .opacity(tipsAppeared ? 1 : 0)
+            .offset(y: tipsAppeared ? 0 : 12)
+            .animation(.spring(response: 0.6, dampingFraction: 0.85).delay(delay), value: tipsAppeared)
+    }
+}
+
+private struct CompletionPrimaryAction: View {
+    let tipsAppeared: Bool
+    let contentDismissed: Bool
+    let isChecking: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text("Start Using Sorty")
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .buttonStyle(.onboardingPill(size: .large))
+        .onboardingBeamBorder(variant: .featured, active: !isChecking)
+        .keyboardShortcut(.defaultAction)
+        .disabled(isChecking)
+        .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
+        .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
+        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.05), value: tipsAppeared)
+        .padding(.top, 6)
+        .accessibilityIdentifier("OnboardingCompleteButton")
+    }
+}
+
 // MARK: - Completion Step View
 
 public struct CompletionStepView: View {
@@ -163,133 +362,28 @@ public struct CompletionStepView: View {
             CompletionContrastBackdrop()
                 .allowsHitTesting(false)
 
-            // Removed (not just faded) on exit: its repeat-forever color drift
-            // would otherwise keep animating through the hand-off to the main
-            // window and steal frames from the cross-fade.
-            if !exitTriggered {
-                CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-
-            if showParticles {
-                ZStack {
-                    ForEach(0..<7, id: \.self) { i in
-                        FloatingParticle(
-                            delay: Double(i) * 0.4,
-                            size: CGFloat.random(in: 3...6),
-                            xPosition: CGFloat.random(in: -200...200)
-                        )
-                    }
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            CompletionCelebrationBackdrop(
+                revealScale: revealScale,
+                revealOpacity: revealOpacity,
+                showParticles: showParticles,
+                exitTriggered: exitTriggered
+            )
 
             VStack(spacing: 24) {
-                ZStack {
-                    // The pulsing ring and ripple circles run repeat-forever
-                    // animations; drop them from the hierarchy on exit so they
-                    // stop costing frames during the hand-off.
-                    if !exitTriggered {
-                        CompletionGlowRing(isActive: showGlowRing)
-                            .transition(.opacity)
-
-                        ForEach(0..<3, id: \.self) { index in
-                            Circle()
-                                .stroke(
-                                    CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04),
-                                    lineWidth: 2
-                                )
-                                .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
-                                .scaleEffect(hasAppeared ? 1.2 : 0.8)
-                                .opacity(hasAppeared ? 0 : 1)
-                                .animation(
-                                    .easeOut(duration: 1.5)
-                                        .repeatForever(autoreverses: false)
-                                        .delay(Double(index) * 0.3),
-                                    value: hasAppeared
-                                )
-                        }
-                    }
-
-                    Circle()
-                        .fill(CompletionPalette.shadowRose.opacity(0.30))
-                        .frame(width: 118, height: 118)
-
-                    Circle()
-                        .fill(CompletionPalette.softRose)
-                        .frame(width: 72, height: 72)
-
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
-                        .symbolEffect(.bounce, value: hasAppeared)
-                }
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.3)
-                .animation(.spring(response: 0.9, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
-                // Exit: scale down and fade
-                .scaleEffect(contentDismissed ? 0.8 : 1.0)
-                .opacity(contentDismissed ? 0 : 1)
-                VStack(spacing: 10) {
-                    Text("Ready to Organize")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 20)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.2), value: hasAppeared)
-
-                    Text("Drop in a folder, preview the plan, and undo anything you change.")
-                        .font(.system(size: 17, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 420)
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 15)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.4), value: hasAppeared)
-                }
-                .opacity(contentDismissed ? 0 : 1)
-                .offset(y: contentDismissed ? 30 : 0)
-
-                // Fixed equal-width cells keep the 2×2 block symmetric: with
-                // content-sized columns the two column widths differed, which
-                // made the centered block read as misaligned. Tips rise in
-                // with a short, uniform stagger instead of sliding sideways —
-                // the horizontal slide made the leading edges look ragged
-                // while the cascade played.
-                Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
-                    GridRow {
-                        quickTip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.55)
-                        quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
-                    }
-
-                    GridRow {
-                        quickTip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.75)
-                        quickTip(icon: "gearshape", text: "Tune settings", delay: 0.85)
-                    }
-                }
-                .opacity(contentDismissed ? 0 : 1)
-                .offset(y: contentDismissed ? 40 : 0)
-
-                Button {
-                    verifyAndFinish()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Start Using Sorty")
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                .buttonStyle(.onboardingPill(size: .large))
-                .onboardingBeamBorder(variant: .featured, active: readinessState != .checking)
-                .keyboardShortcut(.defaultAction)
-                .disabled(readinessState == .checking)
-                .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
-                .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
-                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.05), value: tipsAppeared)
-                .padding(.top, 6)
-                .accessibilityIdentifier("OnboardingCompleteButton")
+                CompletionHero(
+                    hasAppeared: hasAppeared,
+                    showGlowRing: showGlowRing,
+                    exitTriggered: exitTriggered,
+                    contentDismissed: contentDismissed
+                )
+                CompletionCopy(hasAppeared: hasAppeared, contentDismissed: contentDismissed)
+                CompletionTipsGrid(tipsAppeared: tipsAppeared, contentDismissed: contentDismissed)
+                CompletionPrimaryAction(
+                    tipsAppeared: tipsAppeared,
+                    contentDismissed: contentDismissed,
+                    isChecking: readinessState == .checking,
+                    action: verifyAndFinish
+                )
 
                 if case .failed(let message) = readinessState {
                     completionFailureCard(message: message)
@@ -311,16 +405,6 @@ public struct CompletionStepView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Completion Step")
-    }
-
-    /// One cell of the 2×2 tips grid. The fixed width keeps both columns
-    /// identical so the centered block stays symmetric.
-    private func quickTip(icon: String, text: String, delay: Double) -> some View {
-        QuickTipRow(icon: icon, text: text)
-            .frame(width: 190, alignment: .leading)
-            .opacity(tipsAppeared ? 1 : 0)
-            .offset(y: tipsAppeared ? 0 : 12)
-            .animation(.spring(response: 0.6, dampingFraction: 0.85).delay(delay), value: tipsAppeared)
     }
 
     // MARK: - Reveal Sequence
