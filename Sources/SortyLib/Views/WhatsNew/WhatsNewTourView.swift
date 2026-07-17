@@ -8,6 +8,12 @@ public struct WhatsNewTourView: View {
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
     @State private var isActionHovering = false
+    @State private var interactionMonitor: Any?
+    @State private var isPointerInside = false
+    @State private var swipeAccumulatedTranslation: CGFloat = 0
+    @State private var hasTriggeredSwipeForGesture = false
+
+    private let swipeThreshold: CGFloat = 42
 
     public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
@@ -35,6 +41,19 @@ public struct WhatsNewTourView: View {
         }
         .onChange(of: currentPage) { _, _ in
             workflowImageIndex = 0
+        }
+        .contentShape(Rectangle())
+        .onHover { isInside in
+            isPointerInside = isInside
+            if !isInside {
+                resetSwipeTracking()
+            }
+        }
+        .onAppear {
+            installInteractionMonitorIfNeeded()
+        }
+        .onDisappear {
+            removeInteractionMonitor()
         }
     }
 
@@ -422,10 +441,7 @@ public struct WhatsNewTourView: View {
 
     private var topControls: some View {
         HStack {
-            Button {
-                guard currentPage > 0 else { return }
-                currentPage -= 1
-            } label: {
+            Button(action: navigateToPreviousPage) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
@@ -475,7 +491,7 @@ public struct WhatsNewTourView: View {
             if currentPage == pages.count - 1 {
                 onFinish()
             } else {
-                currentPage += 1
+                navigateToNextPage()
             }
         } label: {
             Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
@@ -531,6 +547,115 @@ public struct WhatsNewTourView: View {
             isActionHovering = hovering
         }
         .keyboardShortcut(.defaultAction)
+    }
+
+    private func navigateToPreviousPage() {
+        guard currentPage > 0 else { return }
+        HapticFeedbackManager.shared.selection()
+        currentPage -= 1
+    }
+
+    private func navigateToNextPage() {
+        guard currentPage < pages.count - 1 else { return }
+        HapticFeedbackManager.shared.selection()
+        currentPage += 1
+    }
+
+    private func installInteractionMonitorIfNeeded() {
+        guard interactionMonitor == nil else { return }
+
+        interactionMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: .keyDown.union(.scrollWheel)
+        ) { event in
+            switch event.type {
+            case .keyDown:
+                return handleKeyDownEvent(event)
+            case .scrollWheel:
+                return handleSwipeEvent(event)
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeInteractionMonitor() {
+        if let monitor = interactionMonitor {
+            NSEvent.removeMonitor(monitor)
+            interactionMonitor = nil
+        }
+        isPointerInside = false
+        resetSwipeTracking()
+    }
+
+    private func handleKeyDownEvent(_ event: NSEvent) -> NSEvent? {
+        let navigationModifiers: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+        guard event.modifierFlags.intersection(navigationModifiers).isEmpty else { return event }
+
+        switch event.specialKey {
+        case .leftArrow:
+            navigateToPreviousPage()
+            return nil
+        case .rightArrow:
+            navigateToNextPage()
+            return nil
+        default:
+            return event
+        }
+    }
+
+    private func handleSwipeEvent(_ event: NSEvent) -> NSEvent? {
+        guard isPointerInside else { return event }
+
+        let deltaX =
+            event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 8
+        let deltaY =
+            event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 8
+
+        guard abs(deltaX) > abs(deltaY) else { return event }
+
+        if event.phase == .began {
+            resetSwipeTracking()
+        }
+
+        if event.momentumPhase != [] {
+            if event.momentumPhase == .ended {
+                resetSwipeTracking()
+            }
+            return nil
+        }
+
+        guard !hasTriggeredSwipeForGesture else {
+            if event.phase == .ended || event.phase == .cancelled {
+                resetSwipeTracking()
+            }
+            return nil
+        }
+
+        let physicalDeltaX = event.isDirectionInvertedFromDevice ? deltaX : -deltaX
+        swipeAccumulatedTranslation += physicalDeltaX
+
+        if swipeAccumulatedTranslation <= -swipeThreshold {
+            hasTriggeredSwipeForGesture = true
+            navigateToNextPage()
+            return nil
+        }
+
+        if swipeAccumulatedTranslation >= swipeThreshold {
+            hasTriggeredSwipeForGesture = true
+            navigateToPreviousPage()
+            return nil
+        }
+
+        if event.phase == .ended || event.phase == .cancelled {
+            resetSwipeTracking()
+        }
+
+        return nil
+    }
+
+    private func resetSwipeTracking() {
+        swipeAccumulatedTranslation = 0
+        hasTriggeredSwipeForGesture = false
     }
 }
 
