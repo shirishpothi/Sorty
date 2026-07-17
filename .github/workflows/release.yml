@@ -254,10 +254,25 @@ jobs:
           xcode-version: 'latest-stable'
 
       - name: Download universal artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-universal
-          path: artifacts/universal
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for ATTEMPT in 1 2 3 4 5; do
+            ATTEMPT_DIR="artifact-download-${ATTEMPT}"
+            if gh run download "$GITHUB_RUN_ID" \
+              --name release-universal \
+              --dir "$ATTEMPT_DIR"; then
+              mkdir -p artifacts
+              mv "$ATTEMPT_DIR" artifacts/universal
+              exit 0
+            fi
+
+            if [ "$ATTEMPT" -eq 5 ]; then
+              echo "Unable to download release-universal after ${ATTEMPT} attempts." >&2
+              exit 1
+            fi
+            sleep $((ATTEMPT * 10))
+          done
 
       - name: Prepare universal release assets
         run: |
