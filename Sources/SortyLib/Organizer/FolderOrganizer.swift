@@ -2490,9 +2490,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var operationConfig = aiConfig ?? defaultClient.config
         operationConfig.mode = mode
-        if mode != .organize {
-            operationConfig.enableSmartRename = true
-        }
+        operationConfig.enableSmartRename = mode != .organize
 
         let client: AIClientProtocol
         if let providerOverride, let modelOverride {
@@ -2663,12 +2661,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
             let maxTopLevelFolders = mode == .renameOnly ? 100 : operationConfig.maxTopLevelFolders
             var planAfterValidation = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            planAfterValidation = OrganizationModePlanEnforcer.enforce(
+                planAfterValidation,
+                mode: mode,
+                baseURL: directory
+            )
             do {
                 try validator.validate(
                     planAfterValidation,
                     at: directory,
                     allowedStorageLocations: allowedLocations,
-                    maxTopLevelFolders: maxTopLevelFolders
+                    maxTopLevelFolders: maxTopLevelFolders,
+                    mode: mode
                 )
             } catch let validationError as ValidationError {
                 if let retryPlan = await retryWithValidationEnhancement(
@@ -2683,7 +2687,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     maxTopLevelFolders: maxTopLevelFolders,
                     allowedStorageLocations: allowedLocations
                 ) {
-                    planAfterValidation = retryPlan
+                    planAfterValidation = OrganizationModePlanEnforcer.enforce(
+                        retryPlan,
+                        mode: mode,
+                        baseURL: directory
+                    )
                 } else {
                     throw validationError
                 }
@@ -2954,29 +2962,35 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         try checkCancellation()
 
         // Re-validate at apply time to protect all entry points, including regenerated previews.
-        var operationConfig = aiConfig
+        var operationConfig = aiConfig ?? aiClient?.config
         if let modeOverride {
             operationConfig?.mode = modeOverride
-            if modeOverride != .organize {
-                operationConfig?.enableSmartRename = true
-            }
+            operationConfig?.enableSmartRename = modeOverride != .organize
         }
+
+        let operationMode = modeOverride ?? operationConfig?.mode ?? .organize
 
         let maxFolders = operationConfig?.mode == .renameOnly
             ? 100
             : (operationConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
-        let planToApply = normalizeRenameSuggestions(
+        let normalizedRenamePlan = normalizeRenameSuggestions(
             in: applyRenameRuleConfiguration(to: normalizedPlan, config: operationConfig),
             config: operationConfig
+        )
+        let planToApply = OrganizationModePlanEnforcer.enforce(
+            normalizedRenamePlan,
+            mode: operationMode,
+            baseURL: baseURL
         )
         self.currentPlan = planToApply
         try validator.validate(
             planToApply,
             at: baseURL,
             allowedStorageLocations: allowedLocations,
-            maxTopLevelFolders: maxFolders
+            maxTopLevelFolders: maxFolders,
+            mode: operationMode
         )
 
         let activity = ProcessInfo.processInfo.beginActivity(

@@ -339,4 +339,109 @@ final class FolderSuggestionTests: XCTestCase {
         XCTAssertEqual(high.renameConfidence, 1.0)
         XCTAssertFalse(high.isLowConfidence)
     }
+
+    func testOrganizeModePlanEnforcerStripsAllRenameIntent() {
+        var file = FileItem(
+            path: "/test/file.txt",
+            name: "file",
+            extension: "txt",
+            suggestedFilename: "legacy-name.txt"
+        )
+        file.suggestedFilename = "legacy-name.txt"
+        let mapping = FileRenameMapping(originalFile: file, suggestedName: "renamed.txt")
+        let nested = FolderSuggestion(
+            folderName: "Nested",
+            files: [file],
+            fileRenameMappings: [mapping]
+        )
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Documents", subfolders: [nested])]
+        )
+
+        let enforced = OrganizationModePlanEnforcer.enforce(
+            plan,
+            mode: .organize,
+            baseURL: URL(fileURLWithPath: "/test")
+        )
+
+        let enforcedNested = enforced.suggestions[0].subfolders[0]
+        XCTAssertTrue(enforcedNested.fileRenameMappings.isEmpty)
+        XCTAssertNil(enforcedNested.files[0].suggestedFilename)
+    }
+
+    func testRenameOnlyPlanEnforcerKeepsFilesInTheirSourceFolders() {
+        let rootFile = FileItem(path: "/test/root.pdf", name: "root", extension: "pdf")
+        let nestedFile = FileItem(path: "/test/Receipts/scan.pdf", name: "scan", extension: "pdf")
+        let rootRename = FileRenameMapping(originalFile: rootFile, suggestedName: "report.pdf")
+        let nestedRename = FileRenameMapping(originalFile: nestedFile, suggestedName: "receipt.pdf")
+        let unsafeModelGrouping = FolderSuggestion(
+            folderName: "AI Invented Destination",
+            files: [rootFile, nestedFile],
+            fileRenameMappings: [rootRename, nestedRename]
+        )
+        let plan = OrganizationPlan(suggestions: [unsafeModelGrouping])
+
+        let enforced = OrganizationModePlanEnforcer.enforce(
+            plan,
+            mode: .renameOnly,
+            baseURL: URL(fileURLWithPath: "/test")
+        )
+
+        XCTAssertEqual(Set(enforced.suggestions.map(\.folderName)), Set(["", "Receipts"]))
+        XCTAssertEqual(
+            enforced.suggestions.first(where: { $0.folderName.isEmpty })?.files,
+            [rootFile]
+        )
+        XCTAssertEqual(
+            enforced.suggestions.first(where: { $0.folderName == "Receipts" })?.files,
+            [nestedFile]
+        )
+        XCTAssertEqual(enforced.suggestions.reduce(0) { $0 + $1.renameCount }, 2)
+    }
+
+    func testRenameOnlyPlanEnforcerRejectsFilesOutsideWatchedRoot() {
+        let outsideFile = FileItem(path: "/private/outside.txt", name: "outside", extension: "txt")
+        let mapping = FileRenameMapping(originalFile: outsideFile, suggestedName: "renamed.txt")
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(folderName: "Unsafe", files: [outsideFile], fileRenameMappings: [mapping])
+        ])
+
+        let enforced = OrganizationModePlanEnforcer.enforce(
+            plan,
+            mode: .renameOnly,
+            baseURL: URL(fileURLWithPath: "/test")
+        )
+
+        XCTAssertTrue(enforced.suggestions.isEmpty)
+        XCTAssertEqual(enforced.unorganizedFiles, [outsideFile])
+    }
+
+    func testRenameOnlyValidationAllowsExistingDeepSourceFolders() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let nestedURL = rootURL.appendingPathComponent("A/B/C/D", isDirectory: true)
+        let fileURL = nestedURL.appendingPathComponent("scan.pdf")
+        try FileManager.default.createDirectory(at: nestedURL, withIntermediateDirectories: true)
+        _ = FileManager.default.createFile(atPath: fileURL.path, contents: Data("test".utf8))
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let file = FileItem(path: fileURL.path, name: "scan", extension: "pdf")
+        let mapping = FileRenameMapping(originalFile: file, suggestedName: "receipt.pdf")
+        let modelPlan = OrganizationPlan(suggestions: [
+            FolderSuggestion(folderName: "Made Up", files: [file], fileRenameMappings: [mapping])
+        ])
+        let enforced = OrganizationModePlanEnforcer.enforce(
+            modelPlan,
+            mode: .renameOnly,
+            baseURL: rootURL
+        )
+
+        XCTAssertNoThrow(
+            try FileOrganizationValidator.validate(
+                enforced,
+                at: rootURL,
+                mode: .renameOnly
+            )
+        )
+    }
 }

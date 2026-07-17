@@ -8,7 +8,13 @@
 import Foundation
 
 struct FileOrganizationValidator {
-    static func validate(_ plan: OrganizationPlan, at baseURL: URL, allowedStorageLocations: [StorageLocation] = [], maxTopLevelFolders: Int = 10) throws {
+    static func validate(
+        _ plan: OrganizationPlan,
+        at baseURL: URL,
+        allowedStorageLocations: [StorageLocation] = [],
+        maxTopLevelFolders: Int = 10,
+        mode: OrganizationMode = .organize
+    ) throws {
         let fileManager = FileManager.default
         
         // Check if base directory exists
@@ -16,16 +22,16 @@ struct FileOrganizationValidator {
             throw ValidationError.baseDirectoryNotFound
         }
         
-        // Check folder count limit
-        if plan.suggestions.count > maxTopLevelFolders {
-            throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
+        if mode != .renameOnly {
+            // These limits protect AI-created destinations. Rename-only destinations
+            // are derived from existing source folders by OrganizationModePlanEnforcer.
+            if plan.suggestions.count > maxTopLevelFolders {
+                throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
+            }
+
+            try validateDestinations(plan, at: baseURL, allowedLocations: allowedStorageLocations)
+            try checkConflicts(plan, at: baseURL)
         }
-        
-        // Check for storage location and depth validity
-        try validateDestinations(plan, at: baseURL, allowedLocations: allowedStorageLocations)
-        
-        // Check for path conflicts
-        try checkConflicts(plan, at: baseURL)
         
         // Validate file existence
         try validateFileExistence(plan)

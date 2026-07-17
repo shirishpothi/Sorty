@@ -55,6 +55,123 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Enforces workflow-mode safety at the filesystem boundary instead of relying on AI output.
+enum OrganizationModePlanEnforcer {
+    static func enforce(
+        _ plan: OrganizationPlan,
+        mode: OrganizationMode,
+        baseURL: URL
+    ) -> OrganizationPlan {
+        switch mode {
+        case .organize:
+            return removingRenameSuggestions(from: plan)
+        case .organizeAndRename:
+            return plan
+        case .renameOnly:
+            return keepingFilesInPlace(in: plan, baseURL: baseURL)
+        }
+    }
+
+    private static func removingRenameSuggestions(from plan: OrganizationPlan) -> OrganizationPlan {
+        var updated = plan
+        updated.suggestions = updated.suggestions.map(removingRenameSuggestions)
+        return updated
+    }
+
+    private static func removingRenameSuggestions(from suggestion: FolderSuggestion) -> FolderSuggestion {
+        var updated = suggestion
+        updated.files = updated.files.map { file in
+            var updatedFile = file
+            updatedFile.suggestedFilename = nil
+            return updatedFile
+        }
+        updated.fileRenameMappings = []
+        updated.subfolders = updated.subfolders.map(removingRenameSuggestions)
+        return updated
+    }
+
+    private struct RenameOnlyGroup {
+        var files: [FileItem] = []
+        var renameMappings: [FileRenameMapping] = []
+        var tagMappings: [FileTagMapping] = []
+    }
+
+    private static func keepingFilesInPlace(
+        in plan: OrganizationPlan,
+        baseURL: URL
+    ) -> OrganizationPlan {
+        let canonicalBasePath = canonicalPath(baseURL)
+        var groups: [String: RenameOnlyGroup] = [:]
+        var rejectedFiles: [FileItem] = []
+
+        func collect(_ suggestion: FolderSuggestion) {
+            for file in suggestion.files {
+                guard let fileURL = file.url else {
+                    rejectedFiles.append(file)
+                    continue
+                }
+
+                let parentPath = canonicalPath(fileURL.deletingLastPathComponent())
+                guard isPath(parentPath, within: canonicalBasePath) else {
+                    rejectedFiles.append(file)
+                    continue
+                }
+
+                let relativeParent = relativePath(of: parentPath, within: canonicalBasePath)
+                var group = groups[relativeParent, default: RenameOnlyGroup()]
+                if !group.files.contains(where: { $0.id == file.id }) {
+                    group.files.append(file)
+                }
+                if let mapping = suggestion.fileRenameMappings.first(where: { $0.originalFile.id == file.id }) {
+                    group.renameMappings.removeAll { $0.originalFile.id == file.id }
+                    group.renameMappings.append(mapping)
+                }
+                if let mapping = suggestion.fileTagMappings.first(where: { $0.originalFile.id == file.id }) {
+                    group.tagMappings.removeAll { $0.originalFile.id == file.id }
+                    group.tagMappings.append(mapping)
+                }
+                groups[relativeParent] = group
+            }
+
+            suggestion.subfolders.forEach(collect)
+        }
+
+        plan.suggestions.forEach(collect)
+
+        var updated = plan
+        updated.suggestions = groups.keys.sorted().map { relativeParent in
+            let group = groups[relativeParent] ?? RenameOnlyGroup()
+            return FolderSuggestion(
+                folderName: relativeParent,
+                description: "Keep files in their current folder",
+                files: group.files,
+                reasoning: "Rename in place",
+                fileRenameMappings: group.renameMappings,
+                fileTagMappings: group.tagMappings
+            )
+        }
+
+        var unorganizedIDs = Set(updated.unorganizedFiles.map(\.id))
+        for file in rejectedFiles where unorganizedIDs.insert(file.id).inserted {
+            updated.unorganizedFiles.append(file)
+        }
+        return updated
+    }
+
+    private static func canonicalPath(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
+    private static func isPath(_ path: String, within rootPath: String) -> Bool {
+        path == rootPath || path.hasPrefix(rootPath + "/")
+    }
+
+    private static func relativePath(of path: String, within rootPath: String) -> String {
+        guard path != rootPath else { return "" }
+        return String(path.dropFirst(rootPath.count + 1))
+    }
+}
+
 
 public struct GenerationStats: Codable, Sendable, Hashable {
     public let duration: TimeInterval

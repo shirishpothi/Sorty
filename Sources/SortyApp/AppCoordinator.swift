@@ -15,6 +15,23 @@ import SortyLib
 
 @MainActor
 class AppCoordinator: ObservableObject, FolderWatcherDelegate {
+    private struct PendingWatchBatch {
+        var folder: WatchedFolder
+        var files: Set<String>
+        var resolvedURL: URL
+        var stabilityRetryAttempt: Int
+        var operationRetryAttempt: Int
+        var nextAttemptAt: Date
+    }
+
+    private struct PersistedPendingWatchBatch: Codable {
+        var folderID: UUID
+        var files: Set<String>
+        var stabilityRetryAttempt: Int
+        var operationRetryAttempt: Int
+        var nextAttemptAt: Date
+    }
+
     let folderWatcher = FolderWatcher()
     let organizer: FolderOrganizer
     let watchedFoldersManager: WatchedFoldersManager
@@ -23,13 +40,23 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let learningsFSMonitor: LearningsFSMonitor
     private let notificationManager = NotificationManager.shared
     private var watchedFoldersSubscription: AnyCancellable?
-    private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
+    private var organizerConfigurationSubscription: AnyCancellable?
+    private var pendingFiles: [UUID: PendingWatchBatch] = [:]
+    private var activeWatchBatches: [UUID: PendingWatchBatch] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var manualOrganizationFolders: [UUID: WatchedFolder] = [:]
     private var autoOrganizeTasks: [UUID: Task<Void, Never>] = [:]
     private var autoOrganizeTaskIDs: [UUID: UUID] = [:]
     private var retryTask: Task<Void, Never>?
     private let candidateStabilityDelay: TimeInterval = 1.5
+    private let retryBaseDelay: TimeInterval = 3
+    private let maximumStabilityRetryDelay: TimeInterval = 60
+    private let maximumOperationRetryCount = 2
+    private lazy var pendingWorkURL: URL? = {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sorty", isDirectory: true)
+            .appendingPathComponent("WatcherPendingWork.json")
+    }()
     nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
@@ -52,7 +79,18 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             .dropFirst()
             .sink { [weak self] folders in
                 self?.folderWatcher.syncWithFolders(folders)
+                self?.reconcilePendingWork(with: folders)
             }
+        restorePendingWatchWork()
+        self.organizerConfigurationSubscription = organizer.$isAIConfigured
+            .dropFirst()
+            .filter { $0 }
+            .sink { [weak self] _ in
+                self?.resumePendingWorkAfterConfiguration()
+            }
+        if organizer.aiClient != nil {
+            resumePendingWorkAfterConfiguration()
+        }
         
         setupNotifications()
         requestNotificationPermission()
@@ -125,13 +163,16 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                         URL(fileURLWithPath: $0.path).standardizedFileURL.path == completedPath
                     }) {
                         self.pendingFiles.removeValue(forKey: watchedFolder.id)
+                        self.persistOutstandingWatchWork()
                         self.ignoredWatchEventsUntil[watchedFolder.id] = Date().addingTimeInterval(2.0)
                         self.folderWatcher.refreshSnapshot(for: watchedFolder)
                     }
                 }
 
-                let stats = self.extractBatchStats(from: entry)
-                self.notificationManager.showBatchSummary(stats: stats)
+                if entry.source != .watchedFolder {
+                    let stats = self.extractBatchStats(from: entry)
+                    self.notificationManager.showBatchSummary(stats: stats)
+                }
                 
                 // Start FSMonitor for learning from user corrections
                 let folderURL = URL(fileURLWithPath: entry.directoryPath)
@@ -400,7 +441,10 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     /// Extract detailed batch statistics from an organization history entry
-    private func extractBatchStats(from entry: OrganizationHistoryEntry) -> BatchSummaryStats {
+    private func extractBatchStats(
+        from entry: OrganizationHistoryEntry,
+        duration: TimeInterval = 0
+    ) -> BatchSummaryStats {
         let folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
         let folderPath = entry.directoryPath
         
@@ -440,10 +484,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Check if undo is possible (has operations to undo)
         let canUndo = (entry.operations?.isEmpty == false)
         
-        // Calculate duration (approximate - from entry timestamp to now, or 0 if we can't determine)
-        // Note: For a more accurate duration, we'd need to track start time separately
-        let duration: TimeInterval = 0
-        
         return BatchSummaryStats(
             filesMoved: filesMoved,
             foldersCreated: foldersCreated,
@@ -463,7 +503,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data) {
-        var updatedFolder = folder
+        guard var updatedFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }) else {
+            return
+        }
         updatedFolder.bookmarkData = newBookmarkData
         // Also ensure status is valid
         updatedFolder.accessStatus = .valid
@@ -472,7 +514,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
-        guard !newFiles.isEmpty else { return }
+        let routedFiles = filesOwnedByWatchedFolder(
+            folder,
+            candidates: newFiles,
+            resolvedURL: resolvedURL
+        )
+        guard !routedFiles.isEmpty else { return }
 
         guard !isManualOrganizationActive(for: folder.id) else {
             print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
@@ -488,20 +535,22 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
         
         if isOrganizerBusyForAutomation() {
-            print("Coordinator: Organizer busy, queueing \(newFiles.count) files for \(folder.name)")
-            mergePendingFiles(folder: folder, files: newFiles, resolvedURL: resolvedURL)
+            print("Coordinator: Organizer busy, queueing \(routedFiles.count) files for \(folder.name)")
+            mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
             scheduleRetry()
             return
         }
         
-        startAutoOrganize(folder: folder, files: newFiles, resolvedURL: resolvedURL)
+        startAutoOrganize(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
     }
 
     @discardableResult
     private func startAutoOrganize(
         folder: WatchedFolder,
         files: Set<String>,
-        resolvedURL: URL
+        resolvedURL: URL,
+        stabilityRetryAttempt: Int = 0,
+        operationRetryAttempt: Int = 0
     ) -> Task<Void, Never> {
         if let existingTask = autoOrganizeTasks[folder.id] {
             mergePendingFiles(folder: folder, files: files, resolvedURL: resolvedURL)
@@ -510,26 +559,59 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         let taskID = UUID()
         autoOrganizeTaskIDs[folder.id] = taskID
+        activeWatchBatches[folder.id] = PendingWatchBatch(
+            folder: folder,
+            files: files,
+            resolvedURL: resolvedURL,
+            stabilityRetryAttempt: stabilityRetryAttempt,
+            operationRetryAttempt: operationRetryAttempt,
+            nextAttemptAt: Date()
+        )
+        persistOutstandingWatchWork()
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.autoOrganize(folder: folder, files: files, resolvedURL: resolvedURL)
+            await self.autoOrganize(
+                folder: folder,
+                files: files,
+                resolvedURL: resolvedURL,
+                stabilityRetryAttempt: stabilityRetryAttempt,
+                operationRetryAttempt: operationRetryAttempt
+            )
             if self.autoOrganizeTaskIDs[folder.id] == taskID {
                 self.autoOrganizeTasks.removeValue(forKey: folder.id)
                 self.autoOrganizeTaskIDs.removeValue(forKey: folder.id)
+                self.activeWatchBatches.removeValue(forKey: folder.id)
+                self.persistOutstandingWatchWork()
             }
             if !Task.isCancelled, !self.isOrganizerBusyForAutomation(), !self.pendingFiles.isEmpty {
-                await self.processPendingFiles()
+                self.processPendingFiles()
             }
         }
         autoOrganizeTasks[folder.id] = task
         return task
     }
     
-    private func autoOrganize(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) async {
-        guard !isManualOrganizationActive(for: folder.id) else { return }
+    private func autoOrganize(
+        folder: WatchedFolder,
+        files: Set<String>,
+        resolvedURL: URL,
+        stabilityRetryAttempt: Int,
+        operationRetryAttempt: Int
+    ) async {
+        guard !isManualOrganizationActive(for: folder.id),
+              let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+              currentFolder.isEnabled else { return }
 
         guard organizer.aiClient != nil else {
             print("Coordinator: Cannot auto-organize \(folder.name) - provider not configured")
+            mergePendingFiles(
+                folder: currentFolder,
+                files: files,
+                resolvedURL: resolvedURL,
+                stabilityRetryAttempt: stabilityRetryAttempt,
+                operationRetryAttempt: operationRetryAttempt,
+                nextAttemptAt: .distantFuture
+            )
             notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no provider configured", isCritical: false)
             return
         }
@@ -540,11 +622,22 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             stabilityDelay: candidateStabilityDelay
         )
 
-        guard !Task.isCancelled, !isManualOrganizationActive(for: folder.id) else { return }
+        guard !Task.isCancelled,
+              !isManualOrganizationActive(for: folder.id),
+              let executionFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+              executionFolder.isEnabled else { return }
 
         if !candidateAudit.unsettled.isEmpty {
             print("Coordinator: Deferring \(candidateAudit.unsettled.count) unsettled files for \(folder.name)")
-            mergePendingFiles(folder: folder, files: candidateAudit.unsettled, resolvedURL: resolvedURL)
+            let nextRetryAttempt = stabilityRetryAttempt + 1
+            mergePendingFiles(
+                folder: executionFolder,
+                files: candidateAudit.unsettled,
+                resolvedURL: resolvedURL,
+                stabilityRetryAttempt: nextRetryAttempt,
+                operationRetryAttempt: operationRetryAttempt,
+                nextAttemptAt: Date().addingTimeInterval(stabilityRetryDelay(for: nextRetryAttempt))
+            )
             scheduleRetry()
         }
 
@@ -554,25 +647,36 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             }
             return
         }
-        
-        let startTime = Date()
-        defer {
-            folderWatcher.refreshSnapshot(for: folder)
+
+        guard !isOrganizerStateBusy else {
+            mergePendingFiles(
+                folder: executionFolder,
+                files: candidateAudit.stable,
+                resolvedURL: resolvedURL,
+                stabilityRetryAttempt: stabilityRetryAttempt,
+                operationRetryAttempt: operationRetryAttempt,
+                nextAttemptAt: Date().addingTimeInterval(retryBaseDelay)
+            )
+            scheduleRetry()
+            return
         }
         
+        let startTime = Date()
+        let existingHistoryEntryIDs = Set(organizer.history.entries.map(\.id))
+        
         do {
-            watchedFoldersManager.markTriggered(folder)
+            watchedFoldersManager.markTriggered(executionFolder)
             
             print("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
             
             try await organizer.organizeIncremental(
                 directory: resolvedURL,
                 specificFiles: Array(candidateAudit.stable),
-                customPrompt: folder.customPrompt,
-                temperature: folder.temperature,
-                providerOverride: folder.providerOverride,
-                modelOverride: folder.modelOverride,
-                mode: folder.effectiveOrganizationMode,
+                customPrompt: executionFolder.customPrompt,
+                temperature: executionFolder.temperature,
+                providerOverride: executionFolder.providerOverride,
+                modelOverride: executionFolder.modelOverride,
+                mode: executionFolder.effectiveOrganizationMode,
                 historySource: .watchedFolder
             )
 
@@ -582,46 +686,233 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             }
 
             organizer.state = .idle
+            folderWatcher.refreshSnapshot(for: executionFolder)
             
             let duration = Date().timeIntervalSince(startTime)
             print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
-            let renameCount = organizer.currentPlan?.suggestions.reduce(0) {
-                $0 + $1.renameCount
-            } ?? 0
-
-            let stats = BatchSummaryStats(
-                filesMoved: folder.effectiveOrganizationMode == .renameOnly
-                    ? 0 : candidateAudit.stable.count,
-                foldersCreated: 0,
-                filesRenamed: renameCount,
-                duration: duration,
-                folderName: folder.name,
-                folderPath: resolvedURL.path,
-                canUndo: true
-            )
+            if let historyEntry = organizer.history.entries.first(where: {
+                $0.source == .watchedFolder && !existingHistoryEntryIDs.contains($0.id)
+            }) {
+                let stats = extractBatchStats(from: historyEntry, duration: duration)
+                notificationManager.showBatchSummary(stats: stats, isAutomated: true)
+            }
             
-            notificationManager.showBatchSummary(stats: stats, isAutomated: true)
-            
+        } catch is CancellationError {
+            organizer.state = .idle
         } catch {
             print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
-            notificationManager.showError(
-                message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)",
-                folderPath: resolvedURL.path,
-                isCritical: false,
-                isAutomated: true
-            )
             organizer.state = .idle
+            folderWatcher.refreshSnapshot(for: executionFolder)
+
+            if operationRetryAttempt < maximumOperationRetryCount {
+                let nextRetryAttempt = operationRetryAttempt + 1
+                mergePendingFiles(
+                    folder: executionFolder,
+                    files: candidateAudit.stable,
+                    resolvedURL: resolvedURL,
+                    stabilityRetryAttempt: stabilityRetryAttempt,
+                    operationRetryAttempt: nextRetryAttempt,
+                    nextAttemptAt: Date().addingTimeInterval(stabilityRetryDelay(for: nextRetryAttempt))
+                )
+                scheduleRetry()
+            } else {
+                mergePendingFiles(
+                    folder: executionFolder,
+                    files: candidateAudit.stable,
+                    resolvedURL: resolvedURL,
+                    stabilityRetryAttempt: stabilityRetryAttempt,
+                    operationRetryAttempt: operationRetryAttempt,
+                    nextAttemptAt: .distantFuture
+                )
+                notificationManager.showError(
+                    message: "Failed to organize \"\(folder.name)\" after retrying: \(error.localizedDescription)",
+                    folderPath: resolvedURL.path,
+                    isCritical: false,
+                    isAutomated: true
+                )
+            }
         }
     }
 
-    private func mergePendingFiles(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) {
+    private func mergePendingFiles(
+        folder: WatchedFolder,
+        files: Set<String>,
+        resolvedURL: URL,
+        stabilityRetryAttempt: Int = 0,
+        operationRetryAttempt: Int = 0,
+        nextAttemptAt: Date = Date()
+    ) {
         guard !files.isEmpty else { return }
 
         if var existing = pendingFiles[folder.id] {
             existing.files.formUnion(files)
+            existing.folder = folder
+            existing.resolvedURL = resolvedURL
+            existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, stabilityRetryAttempt)
+            existing.operationRetryAttempt = min(existing.operationRetryAttempt, operationRetryAttempt)
+            existing.nextAttemptAt = min(existing.nextAttemptAt, nextAttemptAt)
             pendingFiles[folder.id] = existing
         } else {
-            pendingFiles[folder.id] = (folder: folder, files: files, resolvedURL: resolvedURL)
+            pendingFiles[folder.id] = PendingWatchBatch(
+                folder: folder,
+                files: files,
+                resolvedURL: resolvedURL,
+                stabilityRetryAttempt: stabilityRetryAttempt,
+                operationRetryAttempt: operationRetryAttempt,
+                nextAttemptAt: nextAttemptAt
+            )
+        }
+        persistOutstandingWatchWork()
+    }
+
+    private func filesOwnedByWatchedFolder(
+        _ folder: WatchedFolder,
+        candidates: Set<String>,
+        resolvedURL: URL
+    ) -> Set<String> {
+        let ownerRoots = watchedFoldersManager.folders.filter(\.isEnabled).map { watchedFolder in
+            let rootURL = watchedFolder.id == folder.id ? resolvedURL : watchedFolder.url
+            return (id: watchedFolder.id, path: canonicalPath(rootURL))
+        }
+        return Set(candidates.filter { relativePath in
+            let candidateURL = resolvedURL.appendingPathComponent(relativePath).standardizedFileURL
+            let candidatePath = canonicalPath(candidateURL)
+            let owners = ownerRoots.filter { candidatePath == $0.path || candidatePath.hasPrefix($0.path + "/") }
+            let mostSpecificOwner = owners.max { $0.path.count < $1.path.count }
+            return mostSpecificOwner?.id == folder.id
+        })
+    }
+
+    private var isOrganizerStateBusy: Bool {
+        switch organizer.state {
+        case .scanning, .organizing, .applying:
+            return true
+        case .idle, .ready, .completed, .error:
+            return false
+        }
+    }
+
+    private func stabilityRetryDelay(for retryAttempt: Int) -> TimeInterval {
+        min(retryBaseDelay * pow(2, Double(max(retryAttempt - 1, 0))), maximumStabilityRetryDelay)
+    }
+
+    private func reconcilePendingWork(with folders: [WatchedFolder]) {
+        let enabledFolders = Dictionary(uniqueKeysWithValues: folders.filter(\.isEnabled).map { ($0.id, $0) })
+        var changed = false
+
+        for folderID in Array(pendingFiles.keys) where enabledFolders[folderID] == nil {
+            pendingFiles.removeValue(forKey: folderID)
+            changed = true
+        }
+
+        for (folderID, task) in Array(autoOrganizeTasks) where enabledFolders[folderID] == nil {
+            task.cancel()
+            autoOrganizeTasks.removeValue(forKey: folderID)
+            autoOrganizeTaskIDs.removeValue(forKey: folderID)
+            activeWatchBatches.removeValue(forKey: folderID)
+            organizer.cancel(source: .watchedFolder)
+            changed = true
+        }
+
+        for (folderID, folder) in enabledFolders {
+            if var pending = pendingFiles[folderID] {
+                pending.folder = folder
+                pending.resolvedURL = folder.url
+                pendingFiles[folderID] = pending
+                changed = true
+            }
+        }
+
+        if changed {
+            persistOutstandingWatchWork()
+        }
+        scheduleRetry()
+    }
+
+    private func resumePendingWorkAfterConfiguration() {
+        let now = Date()
+        for folderID in Array(pendingFiles.keys) {
+            pendingFiles[folderID]?.nextAttemptAt = now
+            pendingFiles[folderID]?.operationRetryAttempt = 0
+        }
+        persistOutstandingWatchWork()
+        scheduleRetry()
+    }
+
+    private func restorePendingWatchWork() {
+        guard let pendingWorkURL,
+              let data = try? Data(contentsOf: pendingWorkURL),
+              let batches = try? JSONDecoder().decode([PersistedPendingWatchBatch].self, from: data) else {
+            return
+        }
+
+        let enabledFolders = Dictionary(
+            uniqueKeysWithValues: watchedFoldersManager.folders.filter(\.isEnabled).map { ($0.id, $0) }
+        )
+        for batch in batches {
+            guard let currentFolder = enabledFolders[batch.folderID] else { continue }
+            let restored = PendingWatchBatch(
+                folder: currentFolder,
+                files: batch.files,
+                resolvedURL: currentFolder.url,
+                stabilityRetryAttempt: batch.stabilityRetryAttempt,
+                operationRetryAttempt: 0,
+                nextAttemptAt: Date()
+            )
+            if var existing = pendingFiles[currentFolder.id] {
+                existing.files.formUnion(restored.files)
+                existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, restored.stabilityRetryAttempt)
+                existing.operationRetryAttempt = min(existing.operationRetryAttempt, restored.operationRetryAttempt)
+                existing.nextAttemptAt = min(existing.nextAttemptAt, restored.nextAttemptAt)
+                pendingFiles[currentFolder.id] = existing
+            } else {
+                pendingFiles[currentFolder.id] = restored
+            }
+        }
+        persistOutstandingWatchWork()
+    }
+
+    private func persistOutstandingWatchWork() {
+        guard let pendingWorkURL else { return }
+
+        var outstanding = pendingFiles
+        for (folderID, active) in activeWatchBatches {
+            if var existing = outstanding[folderID] {
+                existing.files.formUnion(active.files)
+                existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, active.stabilityRetryAttempt)
+                existing.operationRetryAttempt = min(existing.operationRetryAttempt, active.operationRetryAttempt)
+                existing.nextAttemptAt = min(existing.nextAttemptAt, active.nextAttemptAt)
+                outstanding[folderID] = existing
+            } else {
+                outstanding[folderID] = active
+            }
+        }
+
+        do {
+            if outstanding.isEmpty {
+                if FileManager.default.fileExists(atPath: pendingWorkURL.path) {
+                    try FileManager.default.removeItem(at: pendingWorkURL)
+                }
+                return
+            }
+
+            try FileManager.default.createDirectory(
+                at: pendingWorkURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let persisted = outstanding.map { folderID, batch in
+                PersistedPendingWatchBatch(
+                    folderID: folderID,
+                    files: batch.files,
+                    stabilityRetryAttempt: batch.stabilityRetryAttempt,
+                    operationRetryAttempt: batch.operationRetryAttempt,
+                    nextAttemptAt: batch.nextAttemptAt
+                )
+            }
+            let data = try JSONEncoder().encode(persisted)
+            try data.write(to: pendingWorkURL, options: .atomic)
+        } catch {
+            print("Coordinator: Failed to persist watched-folder pending work: \(error)")
         }
     }
 
@@ -658,7 +949,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     ) async -> CandidateAudit {
         let firstSnapshot = await snapshotCandidates(files: files, rootURL: rootURL)
         let delayNanoseconds = UInt64(stabilityDelay * 1_000_000_000)
-        try? await Task.sleep(nanoseconds: delayNanoseconds)
+        do {
+            try await Task.sleep(nanoseconds: delayNanoseconds)
+        } catch {
+            return CandidateAudit(stable: [], unsettled: files, gone: [])
+        }
         let secondSnapshot = await snapshotCandidates(files: files, rootURL: rootURL)
 
         var stable = Set<String>()
@@ -766,32 +1061,56 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         )
     }
     
-    private func processPendingFiles() async {
-        let pendingBatch = pendingFiles
-        pendingFiles.removeAll()
-
-        for (folderID, pending) in pendingBatch {
-            guard !isManualOrganizationActive(for: pending.folder.id) else { continue }
-            let currentFolder = watchedFoldersManager.folders.first { $0.id == folderID } ?? pending.folder
-            let task = startAutoOrganize(
-                folder: currentFolder,
-                files: pending.files,
-                resolvedURL: pending.resolvedURL
-            )
-            await task.value
+    private func processPendingFiles() {
+        guard organizer.aiClient != nil, !isOrganizerBusyForAutomation() else {
+            scheduleRetry()
+            return
         }
+
+        let now = Date()
+        guard let (folderID, pending) = pendingFiles
+            .filter({ $0.value.nextAttemptAt <= now })
+            .min(by: { $0.value.nextAttemptAt < $1.value.nextAttemptAt }) else {
+            scheduleRetry()
+            return
+        }
+
+        pendingFiles.removeValue(forKey: folderID)
+        guard !isManualOrganizationActive(for: folderID),
+              let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folderID }),
+              currentFolder.isEnabled else {
+            persistOutstandingWatchWork()
+            scheduleRetry()
+            return
+        }
+
+        startAutoOrganize(
+            folder: currentFolder,
+            files: pending.files,
+            resolvedURL: currentFolder.url,
+            stabilityRetryAttempt: pending.stabilityRetryAttempt,
+            operationRetryAttempt: pending.operationRetryAttempt
+        )
     }
     
     private func scheduleRetry() {
         retryTask?.cancel()
+        retryTask = nil
+        guard organizer.aiClient != nil,
+              let earliestAttempt = pendingFiles.values.map(\.nextAttemptAt).min(),
+              earliestAttempt != .distantFuture else { return }
+
+        let stateDelay = isOrganizerBusyForAutomation() ? retryBaseDelay : 0
+        let delay = max(max(earliestAttempt.timeIntervalSinceNow, stateDelay), 0.05)
+        let delayNanoseconds = UInt64(delay * 1_000_000_000)
         retryTask = Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            if !isOrganizerBusyForAutomation() && !pendingFiles.isEmpty {
-                await processPendingFiles()
-            } else if !pendingFiles.isEmpty {
-                scheduleRetry()
+            do {
+                try await Task.sleep(nanoseconds: delayNanoseconds)
+            } catch {
+                return
             }
+            guard !Task.isCancelled else { return }
+            processPendingFiles()
         }
     }
 
@@ -820,6 +1139,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         manualOrganizationFolders[sessionID] = folder
         pendingFiles.removeValue(forKey: folder.id)
+        activeWatchBatches.removeValue(forKey: folder.id)
+        persistOutstandingWatchWork()
         ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         folderWatcher.pause(folder)
 
@@ -836,6 +1157,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         guard !isManualOrganizationActive(for: folder.id) else { return }
 
         pendingFiles.removeValue(forKey: folder.id)
+        persistOutstandingWatchWork()
         ignoredWatchEventsUntil[folder.id] = Date().addingTimeInterval(2.0)
         if let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
            currentFolder.isEnabled {
