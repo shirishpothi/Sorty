@@ -5,10 +5,12 @@
 //  Reusable copy button that shows a checkmark animation after copying
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 public struct CopyButtonWithAnimation: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let content: String
     var label: String?
     var copyIcon: String = "doc.on.doc"
@@ -29,13 +31,13 @@ public struct CopyButtonWithAnimation: View {
             copyToClipboard()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: showCheckmark ? "checkmark.circle.fill" : copyIcon)
+                Image(systemName: showCheckmark ? "checkmark" : copyIcon)
                     .font(.system(size: iconSize))
                     .foregroundStyle(showCheckmark ? .green : .secondary)
                     .contentTransition(.symbolEffect(.replace))
                 
                 if let label {
-                    Text(showCheckmark ? "Copied" : label)
+                    Text(label)
                         .font(.caption)
                         .foregroundStyle(showCheckmark ? .green : .secondary)
                 }
@@ -43,24 +45,28 @@ public struct CopyButtonWithAnimation: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label ?? "Copy")
+        .accessibilityValue(showCheckmark ? "Copied" : "")
         .accessibilityIdentifier("CopyButtonWithAnimation")
+        .onDisappear {
+            resetTask?.cancel()
+        }
     }
     
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(content, forType: .string)
         
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
+        HapticFeedbackManager.shared.tap()
         
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
             showCheckmark = true
         }
         
         resetTask?.cancel()
         resetTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
                 showCheckmark = false
             }
         }
