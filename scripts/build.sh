@@ -22,10 +22,9 @@ AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
 BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
 BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-8192}"
 BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-6144}"
-BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-7}"
+BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-30}"
 BUILD_CACHE_PRUNE_INTERVAL_SECONDS="${BUILD_CACHE_PRUNE_INTERVAL_SECONDS:-86400}"
-BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE="${BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE:-true}"
-BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED="${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED:-true}"
+BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED="${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED:-false}"
 
 # shellcheck source=scripts/build_cache.sh
 source "${SCRIPT_DIR}/build_cache.sh"
@@ -581,6 +580,26 @@ compile_asset_catalog() {
         return
     fi
 
+    local asset_cache_root="${BUILD_CACHE_STATE_DIR}/assets"
+    local asset_cache_key
+    asset_cache_key="$({
+        xcrun --find actool 2>/dev/null || true
+        xcrun actool --version 2>/dev/null || true
+        xcrun --sdk macosx --show-sdk-version 2>/dev/null || true
+        while IFS= read -r asset_file; do
+            printf '%s ' "${asset_file#${xcassets_path}/}"
+            shasum -a 256 "${asset_file}" | awk '{print $1}'
+        done < <(find "${xcassets_path}" -type f | LC_ALL=C sort)
+    } | build_cache_hash_stream)"
+    local cached_assets="${asset_cache_root}/${asset_cache_key}/Assets.car"
+
+    if [ -f "${cached_assets}" ]; then
+        cp "${cached_assets}" "${resources_dir}/Assets.car"
+        rm -rf "${xcassets_path}"
+        log_detail "Asset catalog unchanged, using content-addressed cache"
+        return
+    fi
+
     log_detail "Compiling Assets.xcassets with actool..."
     if xcrun actool "${xcassets_path}" \
         --compile "${resources_dir}" \
@@ -591,6 +610,10 @@ compile_asset_catalog() {
         --output-partial-info-plist /dev/null >/dev/null 2>&1; then
         # Remove the raw xcassets directory now that it's compiled
         rm -rf "${xcassets_path}"
+        if [ -f "${resources_dir}/Assets.car" ]; then
+            mkdir -p "$(dirname "${cached_assets}")"
+            cp "${resources_dir}/Assets.car" "${cached_assets}"
+        fi
         log_detail "Asset catalog compiled to Assets.car"
     else
         log_warning "actool compilation failed, falling back to raw xcassets"
@@ -760,12 +783,15 @@ bundle_finder_extension() {
     local appex_name="SortyFinderSync.appex"
     local xcode_config="Release"
     local arch_setting="ONLY_ACTIVE_ARCH=NO"
-    if [ "$build_config" = "debug" ]; then
+    if [ "$build_config" = "debug" ] && [ "$(wc -w <<< "${BUILD_ARCHS}")" -eq 1 ]; then
         xcode_config="Debug"
         arch_setting="ONLY_ACTIVE_ARCH=YES"
+    elif [ "$build_config" = "debug" ]; then
+        xcode_config="Debug"
     fi
 
-    local derived_data="${BUILD_DIR}/FinderSyncDerivedData"
+    local finder_arch_key="${BUILD_ARCHS// /-}"
+    local derived_data="${BUILD_DIR}/FinderSyncDerivedData/${finder_arch_key}"
     local cached_appex="${derived_data}/Build/Products/${xcode_config}/${appex_name}"
 
     # Skip rebuild if cached appex is newer than all source files
@@ -808,7 +834,8 @@ bundle_finder_extension() {
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \
         ENABLE_APP_SANDBOX=NO \
-        ${arch_setting} \
+        ARCHS="${BUILD_ARCHS}" \
+        "${arch_setting}" \
         build; then
 
         local built_appex
@@ -839,7 +866,7 @@ BUILD_NUM=$(get_build_number)
 # Build method: "spm" (default for local) or "xcodebuild" (for CI releases)
 BUILD_METHOD="${BUILD_METHOD:-spm}"
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
-BUILD_ARCHS="${BUILD_ARCHS:-arm64 x86_64}"
+BUILD_ARCHS="${BUILD_ARCHS:-$(uname -m)}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
 ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-false}"
@@ -915,7 +942,9 @@ trap cleanup_staged_app EXIT
 rm -rf "${STAGED_APP_PATH}"
 
 if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${FINAL_APP_PATH}" ]; then
-    cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
+    if ! cp -cR "${FINAL_APP_PATH}" "${STAGED_APP_PATH}" 2>/dev/null; then
+        cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
+    fi
 fi
 
 # Binary and App names from config if needed, or hardcoded for reliability
@@ -1068,7 +1097,11 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
 
     # Embed Finder Sync extension
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
-        bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+        if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
+            log_detail "Using SortyFinderSync.appex produced by the app target"
+        else
+            bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+        fi
     else
         rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
@@ -1129,6 +1162,10 @@ else
     # Use swift build (SPM) for local development
     # BUILD_FLAGS can be set from Makefile for parallel compilation
     BUILD_FLAGS_EXTRA="${BUILD_FLAGS:-}"
+    case " ${BUILD_FLAGS_EXTRA} " in
+        *" --disable-sandbox "*) ;;
+        *) BUILD_FLAGS_EXTRA="${BUILD_FLAGS_EXTRA} --disable-sandbox" ;;
+    esac
     log_detail "Build flags: ${BUILD_FLAGS_EXTRA}"
     BUILD_FLAGS_ARRAY=()
     if [ -n "${BUILD_FLAGS_EXTRA}" ]; then

@@ -53,6 +53,12 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
+      - name: Compute toolchain cache key
+        id: toolchain
+        run: |
+          TOOLCHAIN_KEY=$({ xcodebuild -version; swift --version; xcrun --sdk macosx --show-sdk-version; } | shasum -a 256 | awk '{print $1}')
+          echo "key=${TOOLCHAIN_KEY}" >> "$GITHUB_OUTPUT"
+
       # Cache SPM dependencies
       - name: Cache SPM
         uses: actions/cache@v4
@@ -60,9 +66,9 @@ jobs:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-v2-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-v2-
+            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-
 
       - name: Configure test Keychain
         run: |
@@ -88,6 +94,8 @@ jobs:
           SKIP_GIT_INJECT: "true"
           BUILD_CONFIG: "debug"
           APP_ICON_VARIANT: "ci"
+          ENABLE_ADHOC_SIGNING: "false"
+          ENABLE_SPARKLE_SIGNING: "false"
         run: |
           chmod +x scripts/build.sh
           ./scripts/build.sh
