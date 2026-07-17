@@ -239,6 +239,8 @@ private struct GitHubMarkIcon: View {
 }
 
 struct DeeplinkSettingsView: View {
+    @State private var isShowingEncodingInfo = false
+
     private var groups: [DeeplinkGroup] {
         var organizationEntries = [
             DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
@@ -302,9 +304,32 @@ struct DeeplinkSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Deeplink Library", systemImage: "link.badge.plus")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Label("Deeplink Library", systemImage: "link.badge.plus")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        isShowingEncodingInfo.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $isShowingEncodingInfo, arrowEdge: .bottom) {
+                        Text("URL-encode path and prompt values when generating links programmatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+                    .help("About generating deeplinks")
+                    .accessibilityLabel("Deeplink encoding information")
+                }
 
                 Text("Copy `sorty://` URLs for Shortcuts, Raycast, AppleScript, shell scripts, and other launchers.")
                     .font(.subheadline)
@@ -315,10 +340,6 @@ struct DeeplinkSettingsView: View {
                 ForEach(groups) { group in
                     DeeplinkGroupSection(group: group)
                 }
-
-                Label("URL-encode path and prompt values when generating links programmatically.", systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
