@@ -7,9 +7,9 @@
 //  Debug builds: always visible as a "REBUILD" button that triggers `make now`.
 //
 
-import SwiftUI
 import AppKit
 import Combine
+import SwiftUI
 
 /// An orange traffic-light style control that appears in the title bar right
 /// after the standard window buttons.
@@ -31,7 +31,7 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.updateVisibility(for: updateManager.updateState)
+        context.coordinator.update(for: updateManager.updateState)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -63,16 +63,17 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
             }
 
             self.buttonView = button
-            updateVisibility(for: updateManager.updateState)
+            update(for: updateManager.updateState)
         }
 
-        func updateVisibility(for state: SparkleUpdateManager.UpdateState) {
+        func update(for state: SparkleUpdateManager.UpdateState) {
             guard let buttonView else { return }
+            buttonView.update(for: state)
             #if DEBUG
             buttonView.isHidden = false
             #else
             switch state {
-            case .available:
+            case .available, .downloading, .readyToInstall, .installing:
                 buttonView.isHidden = false
             default:
                 buttonView.isHidden = true
@@ -102,10 +103,11 @@ final class UpdateButtonNSView: NSView {
     private var isHovered = false
     private var isPressed = false
     private var isWindowFocused = false
-    private var isRebuilding = false
+    private var isBusy = false
+    private var updateState: SparkleUpdateManager.UpdateState = .idle
     private var trackingArea: NSTrackingArea?
     private var windowFocusObservations: [NSObjectProtocol] = []
-    private var rebuildStateCancellable: AnyCancellable?
+    private var stateCancellable: AnyCancellable?
 
     private let buttonDiameter: CGFloat = 14
     private let collapsedPillWidth: CGFloat = 14
@@ -132,23 +134,34 @@ final class UpdateButtonNSView: NSView {
 
     #if DEBUG
     private let idleLabelText = "REBUILD"
-    private let rebuildingLabelText = "BUILDING"
+    private let busyLabelText = "BUILDING"
     #else
     private let idleLabelText = "UPDATE"
-    private let rebuildingLabelText = "UPDATING"
+    private let busyLabelText = "DOWNLOADING"
     #endif
 
     private var labelText: String {
-        isRebuilding ? rebuildingLabelText : idleLabelText
+        #if DEBUG
+        isBusy ? busyLabelText : idleLabelText
+        #else
+        switch updateState {
+        case .downloading:
+            return busyLabelText
+        case .readyToInstall:
+            return "INSTALL"
+        case .installing:
+            return "INSTALLING"
+        default:
+            return idleLabelText
+        }
+        #endif
     }
 
-    private lazy var expandedPillWidth: CGFloat = {
-        let idleTextWidth = (idleLabelText as NSString).size(withAttributes: [.font: labelFont]).width
-        let rebuildingTextWidth = (rebuildingLabelText as NSString).size(withAttributes: [.font: labelFont]).width
-        let measuredTextWidth = max(idleTextWidth, rebuildingTextWidth)
+    private var expandedPillWidth: CGFloat {
+        let measuredTextWidth = (labelText as NSString).size(withAttributes: [.font: labelFont]).width
         let iconWidth: CGFloat = 7
         return ceil(horizontalPadding + iconWidth + iconToTextSpacing + measuredTextWidth + horizontalPadding)
-    }()
+    }
 
     init(updateManager: SparkleUpdateManager) {
         self.updateManager = updateManager
@@ -156,7 +169,7 @@ final class UpdateButtonNSView: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
         setupLayers()
-        setupRebuildObservation()
+        setupStateObservation()
 
         let widthConstraint = widthAnchor.constraint(equalToConstant: collapsedPillWidth)
         self.widthConstraint = widthConstraint
@@ -230,6 +243,9 @@ final class UpdateButtonNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         setAccessibilityIdentifier("trafficLight.updateButton")
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        updateAccessibilityDescription()
         observeWindowFocusIfNeeded()
     }
 
@@ -288,24 +304,44 @@ final class UpdateButtonNSView: NSView {
         applyVisualState(animated: animated)
     }
 
-    private func setupRebuildObservation() {
+    private func setupStateObservation() {
         #if DEBUG
-        setRebuildState(DevRebuilder.shared.isRebuilding, animated: false)
-        rebuildStateCancellable = DevRebuilder.shared.$isRebuilding
+        setBusyState(DevRebuilder.shared.isRebuilding, animated: false)
+        stateCancellable = DevRebuilder.shared.$isRebuilding
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] rebuilding in
-                self?.setRebuildState(rebuilding, animated: true)
+                self?.setBusyState(rebuilding, animated: true)
+            }
+        #else
+        update(for: updateManager?.updateState ?? .idle)
+        stateCancellable = updateManager?.$updateState
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] state in
+                self?.update(for: state)
             }
         #endif
     }
 
-    private func setRebuildState(_ rebuilding: Bool, animated: Bool) {
-        guard isRebuilding != rebuilding else { return }
-        isRebuilding = rebuilding
+    func update(for state: SparkleUpdateManager.UpdateState) {
+        #if !DEBUG
+        guard updateState != state else { return }
+        updateState = state
+        setBusyState(state == .downloading || state == .installing, animated: true)
+        textLayer.string = labelText
+        setExpanded(isBusy || isHovered, animated: true)
+        updateAccessibilityDescription()
+        needsLayout = true
+        #endif
+    }
+
+    private func setBusyState(_ busy: Bool, animated: Bool) {
+        guard isBusy != busy else { return }
+        isBusy = busy
 
         textLayer.string = labelText
-        if rebuilding {
+        if busy {
             startBusyAnimation()
             setExpanded(true, animated: animated)
         } else {
@@ -445,7 +481,7 @@ final class UpdateButtonNSView: NSView {
         let spinnerColor: NSColor
         let textColor: NSColor
 
-        if isRebuilding {
+        if isBusy {
             fillColor = hoverFillColor
             borderColor = hoverBorderColor
             highlightColor = hoverHighlightColor
@@ -495,17 +531,23 @@ final class UpdateButtonNSView: NSView {
     }
 
     private func triggerPrimaryAction() {
-        guard !isRebuilding else {
-            HapticFeedbackManager.shared.selection()
-            return
-        }
-
         HapticFeedbackManager.shared.alignment()
         Task { @MainActor in
             #if DEBUG
+            guard !isBusy else {
+                HapticFeedbackManager.shared.selection()
+                return
+            }
             DevRebuilder.shared.rebuild()
             #else
-            updateManager?.checkForUpdates()
+            switch updateState {
+            case .available:
+                updateManager?.installAvailableUpdate()
+            case .downloading, .readyToInstall, .installing:
+                updateManager?.showUpdateInFocus()
+            default:
+                updateManager?.checkForUpdates()
+            }
             #endif
         }
     }
@@ -513,10 +555,12 @@ final class UpdateButtonNSView: NSView {
     // MARK: Click Handling
 
     override func mouseDown(with event: NSEvent) {
-        guard !isRebuilding else {
+        #if DEBUG
+        guard !isBusy else {
             HapticFeedbackManager.shared.selection()
             return
         }
+        #endif
 
         isPressed = true
         applyVisualState(animated: false)
@@ -549,7 +593,7 @@ final class UpdateButtonNSView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
-        if isPressed || isRebuilding { return }
+        if isPressed || isBusy { return }
         isHovered = false
         setExpanded(false, animated: true)
         applyVisualState(animated: true)
@@ -563,6 +607,30 @@ final class UpdateButtonNSView: NSView {
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        triggerPrimaryAction()
+        return true
+    }
+
+    private func updateAccessibilityDescription() {
+        #if DEBUG
+        setAccessibilityLabel(isBusy ? "Sorty is rebuilding" : "Rebuild Sorty")
+        #else
+        switch updateState {
+        case .available(let version, _):
+            setAccessibilityLabel("Download Sorty \(version)")
+        case .downloading:
+            setAccessibilityLabel("Sorty update is downloading")
+        case .readyToInstall:
+            setAccessibilityLabel("Sorty update is ready to install and relaunch")
+        case .installing:
+            setAccessibilityLabel("Sorty update is installing")
+        default:
+            setAccessibilityLabel("Update Sorty")
+        }
+        #endif
     }
 }
 
