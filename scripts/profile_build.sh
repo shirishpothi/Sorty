@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
 PROFILE_TOP_COUNT="${PROFILE_TOP_COUNT:-25}"
+PROFILE_MIN_MS="${PROFILE_MIN_MS:-50}"
 PROFILE_JOBS="${PROFILE_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 PROFILE_SCRATCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sorty-build-profile.XXXXXX")"
 PROFILE_LOG="${PROFILE_SCRATCH_DIR}/debug-time.log"
@@ -32,11 +33,13 @@ swift build \
 
 echo
 echo "Slowest unique Sorty function bodies and expressions:"
-awk -F '\t' \
+awk -F '\t' -v minimum="${PROFILE_MIN_MS}" \
     '$1 ~ /^[0-9]+\.[0-9]+ms$/ && $2 ~ /\/Sources\// {
         milliseconds=$1
         sub(/ms$/, "", milliseconds)
-        print milliseconds "\t" $2 "\t" $3
+        if (milliseconds + 0 >= minimum) {
+            print milliseconds "\t" $2 "\t" $3
+        }
     }' "${PROFILE_LOG}" \
     | sort -u \
     | sort -nr \

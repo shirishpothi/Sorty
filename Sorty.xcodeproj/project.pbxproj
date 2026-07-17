@@ -392,6 +392,9 @@
 		3353FC3D2F0124320097CD23 /* DirectorySelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectorySelectionView.swift; sourceTree = "<group>"; };
 		3353FC3E2F0124320097CD23 /* ExclusionRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionRulesView.swift; sourceTree = "<group>"; };
 		3353FC3F2F0124320097CD23 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		B17D51000000000000000001 /* HistoryDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailSections.swift; sourceTree = "<group>"; };
+		B17D51000000000000000002 /* PreviewRowComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRowComponents.swift; sourceTree = "<group>"; };
+		B17D51000000000000000003 /* ReadyToOrganizeComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyToOrganizeComponents.swift; sourceTree = "<group>"; };
 		3353FC402F0124320097CD23 /* OrganizationResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationResultView.swift; sourceTree = "<group>"; };
 		3353FC412F0124320097CD23 /* OrganizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizeView.swift; sourceTree = "<group>"; };
 		3353FC422F0124320097CD23 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
@@ -817,6 +820,9 @@
 				3353FC3E2F0124320097CD23 /* ExclusionRulesView.swift */,
 				3353FCBD2F0124320097CD23 /* FileDropDelegate.swift */,
 				3353FC3F2F0124320097CD23 /* HistoryView.swift */,
+				B17D51000000000000000001 /* HistoryDetailSections.swift */,
+				B17D51000000000000000002 /* PreviewRowComponents.swift */,
+				B17D51000000000000000003 /* ReadyToOrganizeComponents.swift */,
 				3353FCBE2F0124320097CD23 /* LiquidDropdown.swift */,
 				3353FCBF2F0124320097CD23 /* MenuBarDropZone.swift */,
 				3353FC402F0124320097CD23 /* OrganizationResultView.swift */,

@@ -75,56 +75,93 @@ private struct ParticleMorphCanvas: View {
 
     var body: some View {
         Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
-            let side = min(size.width, size.height)
-            let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
-            let morph = CGFloat(progress)
-            let scatterEnvelope = CGFloat(sin(.pi * progress))
+            drawParticles(in: &context, size: size)
+        }
+    }
 
-            for index in MascotHeartParticleTargets.mascot.indices {
-                let mascot = MascotHeartParticleTargets.mascot[index]
-                let heart = MascotHeartParticleTargets.heart[index]
-                let seed = Self.seed(for: index)
-                let angle = Double(seed * 2 * .pi + morph * .pi)
-                let scatter = scatterEnvelope * (0.012 + seed * 0.016)
+    private func drawParticles(in context: inout GraphicsContext, size: CGSize) {
+        let side = min(size.width, size.height)
+        let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
+        let morph = CGFloat(progress)
+        let scatterEnvelope = CGFloat(sin(.pi * progress))
 
-                var x = mascot.point.x + (heart.x - mascot.point.x) * morph
-                var y = mascot.point.y + (heart.y - mascot.point.y) * morph
-                x += CGFloat(cos(angle)) * scatter
-                y += CGFloat(sin(angle)) * scatter
-                x = 0.5 + (x - 0.5) * heartbeatScale
-                y = 0.5 + (y - 0.5) * heartbeatScale
+        for index in MascotHeartParticleTargets.mascot.indices {
+            let mascot = MascotHeartParticleTargets.mascot[index]
+            let heart = MascotHeartParticleTargets.heart[index]
+            let seed = Self.seed(for: index)
+            let rect = particleRect(
+                mascot: mascot,
+                heart: heart,
+                seed: seed,
+                morph: morph,
+                scatterEnvelope: scatterEnvelope,
+                origin: origin,
+                side: side
+            )
+            drawParticle(
+                in: &context,
+                rect: rect,
+                mascot: mascot,
+                heart: heart,
+                seed: seed
+            )
+        }
+    }
 
-                let diameter = 1.15 + seed * 1.15
-                let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
-                let rect = CGRect(
-                    x: center.x - diameter / 2,
-                    y: center.y - diameter / 2,
-                    width: diameter,
-                    height: diameter
-                )
+    private func particleRect(
+        mascot: MascotParticle,
+        heart: CGPoint,
+        seed: CGFloat,
+        morph: CGFloat,
+        scatterEnvelope: CGFloat,
+        origin: CGPoint,
+        side: CGFloat
+    ) -> CGRect {
+        let angle = Double(seed * 2 * .pi + morph * .pi)
+        let scatter = scatterEnvelope * (0.012 + seed * 0.016)
+        var x = mascot.point.x + (heart.x - mascot.point.x) * morph
+        var y = mascot.point.y + (heart.y - mascot.point.y) * morph
+        x += CGFloat(cos(angle)) * scatter
+        y += CGFloat(sin(angle)) * scatter
+        x = 0.5 + (x - 0.5) * heartbeatScale
+        y = 0.5 + (y - 0.5) * heartbeatScale
 
-                let shadowRect = rect.offsetBy(dx: 0, dy: 1.2)
-                context.fill(
-                    Path(ellipseIn: shadowRect),
-                    with: .color(.black.opacity(0.08 + Double(seed) * 0.08))
-                )
+        let diameter = 1.15 + seed * 1.15
+        let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
+        return CGRect(
+            x: center.x - diameter / 2,
+            y: center.y - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+    }
 
-                let mascotOpacity = max(0, 1 - progress * 1.35)
-                if mascotOpacity > 0 {
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(mascotColor(for: mascot.role, seed: seed).opacity(mascotOpacity))
-                    )
-                }
+    private func drawParticle(
+        in context: inout GraphicsContext,
+        rect: CGRect,
+        mascot: MascotParticle,
+        heart: CGPoint,
+        seed: CGFloat
+    ) {
+        context.fill(
+            Path(ellipseIn: rect.offsetBy(dx: 0, dy: 1.2)),
+            with: .color(.black.opacity(0.08 + Double(seed) * 0.08))
+        )
 
-                let heartOpacity = max(0, (progress - 0.18) / 0.82)
-                if heartOpacity > 0 {
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(heartColor(at: heart, seed: seed).opacity(heartOpacity))
-                    )
-                }
-            }
+        let mascotOpacity = max(0, 1 - progress * 1.35)
+        if mascotOpacity > 0 {
+            context.fill(
+                Path(ellipseIn: rect),
+                with: .color(mascotColor(for: mascot.role, seed: seed).opacity(mascotOpacity))
+            )
+        }
+
+        let heartOpacity = max(0, (progress - 0.18) / 0.82)
+        if heartOpacity > 0 {
+            context.fill(
+                Path(ellipseIn: rect),
+                with: .color(heartColor(at: heart, seed: seed).opacity(heartOpacity))
+            )
         }
     }
 

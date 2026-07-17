@@ -868,25 +868,28 @@ struct ReadyToOrganizeView: View {
         .opacity
     }
 
+    private var addStorageLocationErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { addStorageLocationErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    addStorageLocationErrorMessage = nil
+                }
+            }
+        )
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .configure) {
             // Compact header
             VStack(spacing: 16) {
                 iconSection
-                VStack(spacing: 6) {
-                    Text("Ready to \(mode.actionVerb)")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text(mode.description)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+                ReadyToOrganizeTitle(mode: mode)
             }
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.96)
             .offset(y: hasAppeared ? 0 : 8)
-            .animation(.smooth(duration: 0.45).delay(0.04), value: hasAppeared)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.45).delay(0.04), value: hasAppeared)
 
             // Instructions card
             WorkflowCard(title: "Instructions", icon: "text.bubble") {
@@ -894,7 +897,7 @@ struct ReadyToOrganizeView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.45).delay(0.10), value: hasAppeared)
 
             if mode != .renameOnly {
                 WorkflowCard(verticalPadding: 10) {
@@ -902,96 +905,40 @@ struct ReadyToOrganizeView: View {
                 }
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 10)
-                .animation(.smooth(duration: 0.45).delay(0.16), value: hasAppeared)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.45).delay(0.16), value: hasAppeared)
             }
 
-            // Start button - full width
-            Button {
-                runStartCTAAnimation()
-            } label: {
-                HStack(spacing: 8) {
-                    if isConnecting {
-                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                            .frame(width: 12, height: 12)
-                        Text("Connecting...")
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 12))
-                        Text("Start \(mode.actionVerb)")
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.metalFxPrimary(isPaused: isConnecting, usesSubtleIdleBeam: true))
-            .controlSize(.large)
-            .keyboardShortcut(.return, modifiers: [])
-            .disabled(isConnecting)
-            .scaleEffect(
-                x: 1 + startCTACompression * 0.025,
-                y: 1 - startCTACompression * 0.045,
-                anchor: .center
+            ReadyToOrganizeStartButton(
+                mode: mode,
+                isConnecting: isConnecting,
+                hasAppeared: hasAppeared,
+                reduceMotion: reduceMotion,
+                compression: startCTACompression,
+                onStart: runStartCTAAnimation
             )
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.smooth(duration: 0.45).delay(0.22), value: hasAppeared)
-            .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start \(mode.gerund) files using your current settings")
-            .accessibilityIdentifier("StartOrganizationButton")
-            .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start \(mode.gerund)")
-            .accessibilityHint(isConnecting ? "Please wait until connection completes" : "Press Enter to start")
-            .accessibilityValue(isConnecting ? "Connecting" : "Ready")
-            .accessibilityAddTraits(.isButton)
 
-            // Keyboard shortcut hint
-            HStack(spacing: 4) {
-                Text("⏎")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                Text(isConnecting ? "Waiting..." : mode.actionVerb)
-                    .font(.caption2)
-            }
-            .foregroundStyle(.quaternary)
-            .opacity(hasAppeared ? 1 : 0)
-            .animation(.smooth(duration: 0.45).delay(0.28), value: hasAppeared)
+            ReadyToOrganizeKeyboardHint(
+                actionVerb: mode.actionVerb,
+                isConnecting: isConnecting,
+                hasAppeared: hasAppeared,
+                reduceMotion: reduceMotion
+            )
 
             // Connection status indicator
             connectionStatusView
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.smooth(duration: 0.45).delay(0.32), value: hasAppeared)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.45).delay(0.32), value: hasAppeared)
         }
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    HapticFeedbackManager.shared.success()
-                    do {
-                        try withAnimation(storageLocationInsertionAnimation) {
-                            try storageLocationsManager.addLocation(url: url, customName: suggestedLocationName)
-                        }
-                    } catch {
-                        HapticFeedbackManager.shared.error()
-                        addStorageLocationErrorMessage = error.localizedDescription
-                    }
-                }
-            case .failure(let error):
-                HapticFeedbackManager.shared.error()
-                addStorageLocationErrorMessage = error.localizedDescription
-            }
-            suggestedLocationName = nil
+            handleFolderImport(result)
         }
         .alert(
             "Couldn't Add Storage Location",
-            isPresented: Binding(
-                get: { addStorageLocationErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        addStorageLocationErrorMessage = nil
-                    }
-                }
-            )
+            isPresented: addStorageLocationErrorIsPresented
         ) {
             Button("OK", role: .cancel) {
                 addStorageLocationErrorMessage = nil
@@ -999,39 +946,58 @@ struct ReadyToOrganizeView: View {
         } message: {
             Text(addStorageLocationErrorMessage ?? "Please try selecting the folder again.")
         }
-        .onAppear {
-            scheduleReferenceableFilesRefresh()
-
-            // Automatically restore folder access and refresh availability so
-            // the user never has to run a manual "Check Access" action.
-            storageLocationsManager.refreshAccessStatus()
-
-            // Drive the staggered cascade only once. Each child element owns
-            // its own `.animation(.smooth(...), value: hasAppeared)` modifier
-            // with an explicit delay, so wrapping this flip in an additional
-            // `withAnimation { ... }` was layering a default animation on top
-            // of those curves and producing the flicker the user reported on
-            // the main organize page.
-            guard !hasAppeared else { return }
-            guard !appState.hasPresentedReadyToOrganize else {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    hasAppeared = true
-                }
-                return
-            }
-
-            appState.hasPresentedReadyToOrganize = true
-            hasAppeared = true
-        }
+        .onAppear(perform: prepareForDisplay)
         .onChange(of: appState.selectedDirectory) { _, _ in
             scheduleReferenceableFilesRefresh()
         }
-        .onDisappear {
-            referenceRefreshTask?.cancel()
-            referenceRefreshTask = nil
+        .onDisappear(perform: stopReferenceRefresh)
+    }
+
+    private func handleFolderImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                HapticFeedbackManager.shared.success()
+                do {
+                    try withAnimation(storageLocationInsertionAnimation) {
+                        try storageLocationsManager.addLocation(
+                            url: url,
+                            customName: suggestedLocationName
+                        )
+                    }
+                } catch {
+                    HapticFeedbackManager.shared.error()
+                    addStorageLocationErrorMessage = error.localizedDescription
+                }
+            }
+        case .failure(let error):
+            HapticFeedbackManager.shared.error()
+            addStorageLocationErrorMessage = error.localizedDescription
         }
+        suggestedLocationName = nil
+    }
+
+    private func prepareForDisplay() {
+        scheduleReferenceableFilesRefresh()
+        storageLocationsManager.refreshAccessStatus()
+
+        guard !hasAppeared else { return }
+        guard !appState.hasPresentedReadyToOrganize else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                hasAppeared = true
+            }
+            return
+        }
+
+        appState.hasPresentedReadyToOrganize = true
+        hasAppeared = true
+    }
+
+    private func stopReferenceRefresh() {
+        referenceRefreshTask?.cancel()
+        referenceRefreshTask = nil
     }
 
     private func runStartCTAAnimation() {

@@ -231,92 +231,23 @@ struct PreviewProgressView: View {
     let estimatedTimeRemaining: TimeInterval?
     let onCancel: () -> Void
     
-    @State private var showCancelTooltip = false
-    
     private var progressPercentText: String {
         "\(Int(progress * 100))%"
     }
     
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                ApplyProgressBar(progress: progress, height: 12)
-                    .frame(maxWidth: .infinity)
-                
-                // Time estimate
-                if let estimatedTime = estimatedTimeRemaining, estimatedTime > 0 {
-                    Text(formatTime(estimatedTime))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
-                        .numericTextTransition(animationValue: estimatedTime)
-                        .help("Estimated time remaining")
-                }
-                
-                Text(progressPercentText)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .numericTextTransition(animationValue: progress)
-                    .help("Organization progress")
-                
-                // Prominent Cancel Button during operation
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    onCancel()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "xmark.octagon.fill")
-                            .font(.system(size: 12))
-                        Text("Stop")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.red.opacity(0.1))
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                    .contentShape(Capsule(style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)
-                .keyboardShortcut(".", modifiers: .command)
-                .accessibilityIdentifier("CancelOrganizationProgressButton")
-                .accessibilityLabel("Stop organization")
-                .accessibilityHint("Press Command+Period to stop the organization")
-            }
-            
-            HStack {
-                HStack(spacing: 6) {
-                    Text(stage)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    if showsAILoadingIndicator {
-                        LoadingDotsView(dotCount: 3, dotSize: 4, color: .secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                // Keyboard shortcut hint
-                HStack(spacing: 2) {
-                    Text("⌘")
-                        .font(.caption2)
-                    Text(".")
-                        .font(.caption2)
-                    Text("to stop")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-            }
+            PreviewProgressControls(
+                progress: progress,
+                progressPercentText: progressPercentText,
+                estimatedTimeText: estimatedTimeText,
+                onCancel: cancel
+            )
+
+            PreviewProgressStatus(
+                stage: stage,
+                showsAILoadingIndicator: showsAILoadingIndicator
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -324,6 +255,11 @@ struct PreviewProgressView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Organization in progress")
         .accessibilityValue("\(progressPercentText) complete. \(stage)")
+    }
+
+    private var estimatedTimeText: String? {
+        guard let estimatedTimeRemaining, estimatedTimeRemaining > 0 else { return nil }
+        return formatTime(estimatedTimeRemaining)
     }
 
     private var showsAILoadingIndicator: Bool {
@@ -341,6 +277,93 @@ struct PreviewProgressView: View {
             let minutes = Int(interval / 60)
             let seconds = Int(interval.truncatingRemainder(dividingBy: 60))
             return "\(minutes)m \(seconds)s"
+        }
+    }
+
+    private func cancel() {
+        HapticFeedbackManager.shared.tap()
+        onCancel()
+    }
+}
+
+private struct PreviewProgressControls: View {
+    let progress: Double
+    let progressPercentText: String
+    let estimatedTimeText: String?
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ApplyProgressBar(progress: progress, height: 12)
+                .frame(maxWidth: .infinity)
+
+            if let estimatedTimeText {
+                Text(estimatedTimeText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                    .numericTextTransition(animationValue: estimatedTimeText)
+                    .help("Estimated time remaining")
+            }
+
+            Text(progressPercentText)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .numericTextTransition(animationValue: progress)
+                .help("Organization progress")
+
+            Button(action: onCancel) {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.octagon.fill")
+                        .font(.caption)
+                    Text("Stop")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundColor(.red)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.red.opacity(0.1))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .contentShape(Capsule(style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+            .keyboardShortcut(".", modifiers: .command)
+            .accessibilityIdentifier("CancelOrganizationProgressButton")
+            .accessibilityLabel("Stop organization")
+            .accessibilityHint("Press Command+Period to stop the organization")
+        }
+    }
+}
+
+private struct PreviewProgressStatus: View {
+    let stage: String
+    let showsAILoadingIndicator: Bool
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Text(stage)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if showsAILoadingIndicator {
+                    LoadingDotsView(dotCount: 3, dotSize: 4, color: .secondary)
+                }
+            }
+
+            Spacer()
+
+            Text("⌘. to stop")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }

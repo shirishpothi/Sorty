@@ -2490,23 +2490,12 @@ struct InlineNotice: View {
 
     var body: some View {
         VStack(alignment: isCentered ? .center : .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                if isCentered { Spacer(minLength: 0) }
-
-                Image(systemName: effectiveIcon)
-                    .font(.caption)
-                    .foregroundStyle(severity.color)
-
-                Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-
-                if !isCentered {
-                    Spacer(minLength: 0)
-                } else {
-                    Spacer(minLength: 0)
-                }
-            }
+            InlineNoticeHeader(
+                icon: effectiveIcon,
+                title: title,
+                color: severity.color,
+                isCentered: isCentered
+            )
 
             if let message = message {
                 Text(message)
@@ -2519,36 +2508,11 @@ struct InlineNotice: View {
             }
 
             if !actions.isEmpty {
-                HStack(spacing: 8) {
-                    if isCentered { Spacer(minLength: 0) }
-
-                    ForEach(actions.indices, id: \.self) { index in
-                        let action = actions[index]
-                        Button {
-                            action.action()
-                        } label: {
-                            HStack(spacing: 4) {
-                                if let systemImage = action.systemImage {
-                                    Image(systemName: systemImage)
-                                        .font(.caption2)
-                                }
-                                Text(action.title)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(severity.color)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(severity.color.opacity(0.12))
-                        )
-                    }
-
-                    if isCentered { Spacer(minLength: 0) }
-                }
+                InlineNoticeActions(
+                    actions: actions,
+                    color: severity.color,
+                    isCentered: isCentered
+                )
                 .padding(.leading, isCentered ? 0 : 20)
             }
         }
@@ -2566,6 +2530,81 @@ struct InlineNotice: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityHint(message ?? "")
+    }
+}
+
+private struct InlineNoticeHeader: View {
+    let icon: String
+    let title: String
+    let color: Color
+    let isCentered: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if isCentered {
+                Spacer(minLength: 0)
+            }
+
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(color)
+                .accessibilityHidden(true)
+
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct InlineNoticeActions: View {
+    let actions: [InlineNoticeAction]
+    let color: Color
+    let isCentered: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isCentered {
+                Spacer(minLength: 0)
+            }
+
+            ForEach(actions.indices, id: \.self) { index in
+                InlineNoticeActionButton(action: actions[index], color: color)
+            }
+
+            if isCentered {
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+private struct InlineNoticeActionButton: View {
+    let action: InlineNoticeAction
+    let color: Color
+
+    var body: some View {
+        Button(action: action.action) {
+            HStack(spacing: 4) {
+                if let systemImage = action.systemImage {
+                    Image(systemName: systemImage)
+                        .font(.caption2)
+                }
+                Text(action.title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(color.opacity(0.12))
+        )
     }
 }
 

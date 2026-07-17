@@ -733,43 +733,7 @@ public struct ProviderSelectionStepView: View {
 
     @ViewBuilder
     private var providerReadinessView: some View {
-        let status = providerSetupStatus
-
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: status.isReady ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(status.isReady ? .green : .orange)
-                .font(.system(size: 16))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(status.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                Text(status.message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let recoverySuggestion = status.recoverySuggestion {
-                    Text(recoverySuggestion)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(status.isReady ? Color.green.opacity(0.08) : Color.orange.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(status.isReady ? Color.green.opacity(0.18) : Color.orange.opacity(0.18), lineWidth: 1)
-        )
-        .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
+        ProviderReadinessStatusView(status: providerSetupStatus)
     }
 
     private var canTestConnection: Bool {
@@ -1027,6 +991,54 @@ public struct ProviderSelectionStepView: View {
                 }
             }
         }
+    }
+}
+
+private struct ProviderReadinessStatusView: View {
+    let status: ProviderSetupStatus
+
+    private var statusColor: Color {
+        status.isReady ? .green : .orange
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: status.isReady ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(statusColor)
+                .font(.body)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(status.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(status.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let recoverySuggestion = status.recoverySuggestion {
+                    Text(recoverySuggestion)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(statusColor.opacity(status.isReady ? 0.08 : 0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(statusColor.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
     }
 }
 

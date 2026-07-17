@@ -667,45 +667,46 @@ public class MenuBarHelper: NSObject {
     }
     
     private func setupMenu() {
-        menu = NSMenu()
-        
-        let organizeItem = NSMenuItem(
+        let menu = NSMenu()
+        menu.addItem(makeMenuItem(
             title: "Organize Current Folder",
             action: #selector(organizeCurrentFolder),
             keyEquivalent: "o"
-        )
-        organizeItem.target = self
-        menu?.addItem(organizeItem)
-        
-        let selectItem = NSMenuItem(
+        ))
+        menu.addItem(makeMenuItem(
             title: "Organize...",
             action: #selector(selectAndOrganize),
             keyEquivalent: "O"
-        )
-        selectItem.target = self
-        menu?.addItem(selectItem)
-        
-        menu?.addItem(NSMenuItem.separator())
-        
-        let quickPanelItem = NSMenuItem(
+        ))
+        menu.addItem(.separator())
+        menu.addItem(makeMenuItem(
             title: "Quick Organize Panel",
             action: #selector(showQuickPanel),
             keyEquivalent: "q"
-        )
-        quickPanelItem.target = self
-        menu?.addItem(quickPanelItem)
-        
-        menu?.addItem(NSMenuItem.separator())
-        
-        let openAppItem = NSMenuItem(
+        ))
+        menu.addItem(.separator())
+        menu.addItem(makeMenuItem(
             title: "Open Sorty",
             action: #selector(openMainApp),
             keyEquivalent: ""
-        )
-        openAppItem.target = self
-        menu?.addItem(openAppItem)
-        
+        ))
+
+        self.menu = menu
         statusItem?.menu = menu
+    }
+
+    private func makeMenuItem(
+        title: String,
+        action: Selector,
+        keyEquivalent: String
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: title,
+            action: action,
+            keyEquivalent: keyEquivalent
+        )
+        item.target = self
+        return item
     }
     
     @objc private func organizeCurrentFolder() {

@@ -19,7 +19,7 @@ struct FlattenedRow: Identifiable, Equatable {
     let depth: Int
     let type: RowType
     let isExpanded: Bool
-    
+
     enum RowType: Equatable {
         case folder(FolderSuggestion)
         case file(FileItem, parentFolderID: UUID)
@@ -928,6 +928,7 @@ struct FlatFolderRowView: View {
     let onPlanChanged: () -> Void
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isDropTarget = false
     @State private var showStorageLocationPicker = false
@@ -975,35 +976,31 @@ struct FlatFolderRowView: View {
         return usedStorageURL?.path ?? suggestion.folderName
     }
 
+    private var fileCount: Int {
+        store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
+    }
+
+    private var storageLocationPickerErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { storageLocationPickerErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    storageLocationPickerErrorMessage = nil
+                }
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(width: 20)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isExpanded)
-                
-                CompactFolderThumbnail(
-                    url: nil,
+                FlatFolderRowHeaderContent(
                     folderName: suggestion.folderName,
-                    size: 16,
-                    fileCount: store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
+                    fileCount: fileCount,
+                    isExpanded: isExpanded,
+                    isDropTarget: isDropTarget,
+                    reduceMotion: reduceMotion
                 )
-                .opacity(isDropTarget ? 0.7 : 1.0)
-                
-                Text(suggestion.folderName.hasPrefix("/") ? URL(fileURLWithPath: suggestion.folderName).lastPathComponent : suggestion.folderName)
-                    .fontWeight(.medium)
-                
-                Text("(\(store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }) files)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .numericTextTransition(
-                        animationValue: store.getCachedFileCount(for: suggestion.id) {
-                            suggestion.totalFileCount
-                        }
-                    )
 
                 if isStorageDestination {
                     storageLocationDropdown
@@ -1027,35 +1024,19 @@ struct FlatFolderRowView: View {
             .padding(.leading, CGFloat(depth * 16))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    store.toggleFolder(id: rowID)
-                }
-            }
+            .onTapGesture(perform: toggleExpanded)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
                     .strokeBorder(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.55) : Color.clear, lineWidth: 1.5)
             )
             .contextMenu {
-                Button(role: .destructive) {
-                    store.revertFolderOrganization(folderID: suggestion.id)
-                    onPlanChanged()
-                } label: {
-                    Label("Revert Organization", systemImage: "arrow.uturn.backward")
-                }
-
-                if isStorageDestination {
-                    Divider()
-
-                    Button("Change Storage Location…") {
-                        showStorageLocationPicker = true
-                    }
-
-                    Button("Show in Finder") {
-                        revealStorageLocationInFinder()
-                    }
-                }
+                FlatFolderRowContextMenu(
+                    isStorageDestination: isStorageDestination,
+                    onRevert: revertOrganization,
+                    onChangeStorage: showStoragePicker,
+                    onReveal: revealStorageLocationInFinder
+                )
             }
             .onDrop(of: [.text], delegate: OptimizedFileDropDelegate(
                 targetFolderID: suggestion.id,
@@ -1069,30 +1050,11 @@ struct FlatFolderRowView: View {
                 allowedContentTypes: [.folder],
                 allowsMultipleSelection: false
             ) { result in
-                switch result {
-                case .success(let urls):
-                    guard let selectedURL = urls.first else { return }
-                    do {
-                        try storageLocationsManager.addLocation(url: selectedURL, customName: nil)
-                    } catch {
-                        DebugLogger.log("Could not add selected storage location during preview destination change: \(error)")
-                    }
-                    store.updateFolderDestination(folderID: suggestion.id, newDestinationPath: selectedURL.path)
-                    onPlanChanged()
-                case .failure(let error):
-                    storageLocationPickerErrorMessage = error.localizedDescription
-                }
+                handleStorageLocationImport(result)
             }
             .alert(
                 "Couldn't Change Storage Location",
-                isPresented: Binding(
-                    get: { storageLocationPickerErrorMessage != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            storageLocationPickerErrorMessage = nil
-                        }
-                    }
-                )
+                isPresented: storageLocationPickerErrorIsPresented
             ) {
                 Button("OK", role: .cancel) {
                     storageLocationPickerErrorMessage = nil
@@ -1151,6 +1113,40 @@ struct FlatFolderRowView: View {
         guard let usedStorageURL else { return }
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: usedStorageURL.path)
     }
+
+    private func toggleExpanded() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+            store.toggleFolder(id: rowID)
+        }
+    }
+
+    private func revertOrganization() {
+        store.revertFolderOrganization(folderID: suggestion.id)
+        onPlanChanged()
+    }
+
+    private func showStoragePicker() {
+        showStorageLocationPicker = true
+    }
+
+    private func handleStorageLocationImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let selectedURL = urls.first else { return }
+            do {
+                try storageLocationsManager.addLocation(url: selectedURL, customName: nil)
+            } catch {
+                DebugLogger.log("Could not add selected storage location during preview destination change: \(error)")
+            }
+            store.updateFolderDestination(
+                folderID: suggestion.id,
+                newDestinationPath: selectedURL.path
+            )
+            onPlanChanged()
+        case .failure(let error):
+            storageLocationPickerErrorMessage = error.localizedDescription
+        }
+    }
 }
 
 // MARK: - Flat File Row View
@@ -1203,167 +1199,48 @@ struct FlatFileRowView: View {
         let trimmed = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
-    
+
+    private var rowContent: FlatFileRowContent {
+        FlatFileRowContent(
+            file: file,
+            renameMapping: renameMapping,
+            renameHelpText: renameMapping.map(renameHelpText),
+            fileTags: fileTags,
+            fileComment: fileComment,
+            duplicateInfo: duplicateInfo,
+            parentSuggestion: parentSuggestion,
+            unchangedReason: unchangedReason,
+            handoffDirectory: appState.selectedDirectory,
+            learningsManager: learningsManager,
+            isEditingName: $isEditingName,
+            editedName: $editedName,
+            isRegeneratingName: $isRegeneratingName,
+            highlightedFileID: $store.highlightedFileID,
+            isFocused: $isFocused,
+            onSave: saveRename,
+            onCancel: cancelRename,
+            onStartEditing: startEditing,
+            onRegenerate: regenerateSuggestedName,
+            onReject: rejectRename
+        )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
-                
-                if isEditingName {
-                    TextField("New name", text: $editedName)
-                        .textFieldStyle(.plain)
-                        .focused($isFocused)
-                        .onSubmit {
-                            saveRename()
-                        }
-                        .onExitCommand {
-                            cancelRename()
-                        }
-                        .font(.body)
-                } else {
-                    if let mapping = renameMapping, mapping.hasRename {
-                        RenameNameChangeView(
-                            originalName: file.displayName,
-                            suggestedName: mapping.suggestedName ?? "",
-                            helpText: renameHelpText(mapping),
-                            isRegenerating: isRegeneratingName
-                        )
-                    } else {
-                        Text(file.displayName)
-                            .lineLimit(1)
-                            .foregroundColor(.primary)
-                    }
-                }
-                
-                Spacer()
-                
-                if let mapping = renameMapping, mapping.hasRename {
-                    Image(systemName: "wand.and.stars")
-                        .font(.caption)
-                        .foregroundColor(.purple)
-                        .help(mapping.renameReason ?? "Sorty suggested rename")
-
-                    RenameActionGlassCluster(
-                        isRegenerating: isRegeneratingName,
-                        onEdit: {
-                            startEditing(initialValue: mapping.suggestedName ?? "")
-                        },
-                        onRegenerate: {
-                            regenerateSuggestedName()
-                        },
-                        onReject: {
-                            store.rejectRename(fileID: file.id, folderID: parentFolderID)
-                            onPlanChanged()
-                        }
-                    )
-                }
-
-                if let unchangedReason {
-                    RenameReasoningPopoverButton(reason: unchangedReason)
-                }
-
-                if !fileTags.isEmpty {
-                    TagDotsView(tags: fileTags)
-                }
-
-                if let comment = fileComment, !comment.isEmpty {
-                    CommentBubbleButton(comment: comment)
-                }
-
-                if let parentSuggestion {
-                    LiquidGlassLearningsButton(
-                        file: file,
-                        suggestion: parentSuggestion,
-                        learningsManager: learningsManager
-                    )
-                }
-
-                if let dupInfo = duplicateInfo {
-                    LiquidGlassDuplicateButton(
-                        duplicateInfo: dupInfo,
-                        handoffDirectory: appState.selectedDirectory,
-                        highlightedFileID: $store.highlightedFileID
-                    )
-                }
-
-                Text(file.formattedSize)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.6))
-            }
-            
-        }
-        .padding(.leading, CGFloat(depth * 16))
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : (isDragging ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear))
+        FlatFileRowSurface(
+            content: rowContent,
+            depth: depth,
+            isHighlighted: isHighlighted,
+            isEditingName: isEditingName,
+            isDragging: $isDragging,
+            hasRename: renameMapping?.hasRename == true,
+            onOpen: openFile,
+            onReveal: revealInFinder,
+            onRegenerate: regenerateSuggestedName,
+            onRejectRename: rejectRename,
+            onRevertOrganization: revertOrganization,
+            onBeginDrag: beginDrag,
+            onDisappear: resetInteractionState
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : (isEditingName ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear), lineWidth: 1)
-        )
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button {
-                NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
-            } label: {
-                Label("Open", systemImage: "arrow.up.right.square")
-            }
-            
-            Button {
-                NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-            
-            Divider()
-            
-            if let mapping = renameMapping, mapping.hasRename {
-                Button {
-                    regenerateSuggestedName()
-                } label: {
-                    Label("Regenerate Name", systemImage: "arrow.triangle.2.circlepath")
-                }
-
-                Button(role: .destructive) {
-                    store.rejectRename(fileID: file.id, folderID: parentFolderID)
-                    onPlanChanged()
-                } label: {
-                    Label("Revert Name", systemImage: "arrow.uturn.backward")
-                }
-            }
-            
-            Button(role: .destructive) {
-                store.moveFileToUnorganized(fileID: file.id)
-                onPlanChanged()
-            } label: {
-                Label("Revert Organization", systemImage: "questionmark.folder")
-            }
-        }
-        .onTapGesture(count: 2) {
-            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
-        }
-        .opacity(isDragging ? 0.5 : 1.0)
-        .onDrag {
-            isDragging = true
-            dragDropManager.startDrag(file)
-            return NSItemProvider(object: file.id.uuidString as NSString)
-        }
-        .onDrop(of: [.text], isTargeted: nil) { _ in
-            isDragging = false
-            return false
-        }
-        .onDisappear {
-            isDragging = false
-            isEditingName = false
-        }
     }
     
     private func fileIcon(for file: FileItem) -> String {
@@ -1384,6 +1261,35 @@ struct FlatFileRowView: View {
         editedName = initialValue
         isEditingName = true
         isFocused = true
+    }
+
+    private func openFile() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+    }
+
+    private func rejectRename() {
+        store.rejectRename(fileID: file.id, folderID: parentFolderID)
+        onPlanChanged()
+    }
+
+    private func revertOrganization() {
+        store.moveFileToUnorganized(fileID: file.id)
+        onPlanChanged()
+    }
+
+    private func beginDrag() -> NSItemProvider {
+        isDragging = true
+        dragDropManager.startDrag(file)
+        return NSItemProvider(object: file.id.uuidString as NSString)
+    }
+
+    private func resetInteractionState() {
+        isDragging = false
+        isEditingName = false
     }
     
     private func saveRename() {
@@ -1503,53 +1409,6 @@ struct FlatFileRowView: View {
     private func renameHelpText(_ mapping: FileRenameMapping) -> String {
         let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return reason.isEmpty ? "Sorty suggested rename" : reason
-    }
-}
-
-private struct RenameActionGlassCluster: View {
-    let isRegenerating: Bool
-    let onEdit: () -> Void
-    let onRegenerate: () -> Void
-    let onReject: () -> Void
-
-    var body: some View {
-        HStack(spacing: 2) {
-            RenameGlassIconButton(systemImage: "pencil", help: "Edit suggested name", action: onEdit)
-            Button(action: onRegenerate) {
-                if isRegenerating {
-                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 16, height: 16)
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(isRegenerating)
-            .help("Regenerate name with the selected AI model")
-
-            RenameGlassIconButton(systemImage: "xmark.circle", help: "Keep original name", action: onReject)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .systemLiquidGlassBackground(cornerRadius: 10)
-    }
-}
-
-private struct RenameGlassIconButton: View {
-    let systemImage: String
-    let help: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 16, height: 16)
-        }
-        .buttonStyle(.plain)
-        .help(help)
     }
 }
 

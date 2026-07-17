@@ -1785,305 +1785,25 @@ struct HistoryDetailSheet: View {
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                    // Header Info
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
-                                    .font(.title.bold())
-                                Text(entry.timestamp.formatted(date: .complete, time: .shortened))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            StatusBadge(status: entry.status)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue), \(entry.timestamp.formatted())")
-
-                        // Full Path
-                        Label {
-                            PrivacySensitivePathText(path: entry.directoryPath)
-                        } icon: {
-                            Image(systemName: "folder")
-                        }
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(6)
-                        .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
-                    }
+                    HistoryDetailHeaderSection(entry: entry)
 
                     Divider()
 
-                    // Stats Section
-                    if entry.success || entry.status == .duplicatesCleanup {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Session Statistics")
-                                .font(.headline)
-                                .accessibilityAddTraits(.isHeader)
+                    HistorySessionStatisticsSection(
+                        entry: entry,
+                        showsDetailedStats: settingsViewModel.config.showStatsForNerds
+                    )
 
-                            HStack(spacing: 20) {
-                                if entry.status == .duplicatesCleanup {
-                                    DetailStatView(
-                                        title: "Duplicates Deleted",
-                                        value: "\(entry.duplicatesDeleted ?? 0)",
-                                        icon: "trash.fill",
-                                        color: .red
-                                    )
-                                    if let recovered = entry.recoveredSpace {
-                                        DetailStatView(
-                                            title: "Space Recovered",
-                                            value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
-                                            icon: "externaldrive.fill",
-                                            color: .green
-                                        )
-                                    }
-                                } else {
-                                    DetailStatView(
-                                        title: "Files Organized",
-                                        value: "\(entry.filesOrganized)",
-                                        icon: "doc.fill",
-                                        color: .blue
-                                    )
-                                    DetailStatView(
-                                        title: "Folders Created",
-                                        value: "\(entry.foldersCreated)",
-                                        icon: "folder.fill",
-                                        color: .accentColor
-                                    )
-                                    if let plan = entry.plan {
-                                        DetailStatView(
-                                            title: "Plan Version",
-                                            value: "v\(plan.version)",
-                                            icon: "number",
-                                            color: .gray
-                                        )
-                                    }
-                                }
-                            }
+                    HistoryDetailErrorSection(entry: entry)
 
-                            // Nerd Stats Grid (if available)
-                            if settingsViewModel.config.showStatsForNerds,
-                               let stats = entry.plan?.generationStats {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Stats for Nerds")
-                                        .font(.headline)
-                                        .padding(.top, 4)
-
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 8)], spacing: 8) {
-                                            NerdStatCard(
-                                                icon: "clock.fill",
-                                                iconColor: .blue,
-                                                title: "AI Time",
-                                                value: GenerationStats.formatDuration(stats.duration),
-                                                unit: nil,
-                                                description: "Model response time"
-                                            )
-
-                                            NerdStatCard(
-                                                icon: "bolt.fill",
-                                                iconColor: .orange,
-                                                title: "Throughput",
-                                                value: String(format: "%.1f", stats.tps),
-                                                unit: "tok/s",
-                                                description: "Response throughput"
-                                            )
-
-                                            NerdStatCard(
-                                                icon: "timer",
-                                                iconColor: .green,
-                                                title: "TTFT",
-                                                value: GenerationStats.formatDuration(stats.ttft),
-                                                unit: nil,
-                                                description: "Time to first token"
-                                            )
-
-                                            NerdStatCard(
-                                                icon: "text.bubble",
-                                                iconColor: .accentColor,
-                                                title: "Response",
-                                                value: GenerationStats.formatCount(stats.responseTokens),
-                                                unit: "tok",
-                                                description: "Estimated output tokens"
-                                            )
-
-                                            if let promptTokens = stats.promptTokens {
-                                                NerdStatCard(
-                                                    icon: "text.alignleft",
-                                                    iconColor: .indigo,
-                                                    title: "Prompt",
-                                                    value: GenerationStats.formatCount(promptTokens),
-                                                    unit: "tok",
-                                                    description: "Estimated input tokens"
-                                                )
-                                            }
-
-                                            if let totalContextTokens = stats.totalContextTokens {
-                                                NerdStatCard(
-                                                    icon: "sum",
-                                                    iconColor: .mint,
-                                                    title: "Context",
-                                                    value: GenerationStats.formatCount(totalContextTokens),
-                                                    unit: "tok",
-                                                    description: "Prompt plus response"
-                                                )
-                                            }
-
-                                            if let scanned = stats.filesScanned {
-                                                NerdStatCard(
-                                                    icon: "doc.text.magnifyingglass",
-                                                    iconColor: .green,
-                                                    title: "Files",
-                                                    value: GenerationStats.formatCount(scanned),
-                                                    unit: "files",
-                                                    description: "Items reviewed by Sorty"
-                                                )
-                                            }
-
-                                            if let size = stats.formattedTotalFileSize {
-                                                NerdStatCard(
-                                                    icon: "internaldrive",
-                                                    iconColor: .cyan,
-                                                    title: "Volume",
-                                                    value: size,
-                                                    unit: nil,
-                                                    description: "Data footprint"
-                                                )
-                                            }
-
-                                            if stats.hasBillableCost {
-                                                NerdStatCard(
-                                                    icon: "dollarsign.circle",
-                                                    iconColor: .yellow,
-                                                    title: "Cost",
-                                                    value: GenerationStats.formatCost(stats.computedCost),
-                                                    unit: nil,
-                                                    description: "Estimated API spend"
-                                                )
-                                            }
-
-                                            if let dups = stats.duplicatesFound, dups > 0 {
-                                                NerdStatCard(
-                                                    icon: "doc.on.doc",
-                                                    iconColor: .red,
-                                                    title: "Duplicates",
-                                                    value: GenerationStats.formatCount(dups),
-                                                    unit: nil,
-                                                    description: "Content matches"
-                                                )
-                                            }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Error Section
-                    if !entry.success, let error = entry.errorMessage {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Error", systemImage: "exclamationmark.triangle.fill")
-                                .font(.headline)
-                                .foregroundStyle(.red)
-                                .accessibilityAddTraits(.isHeader)
-
-                            Text(error)
-                                .font(.callout)
-                                .foregroundColor(.red)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.red.opacity(0.05))
-                                .cornerRadius(8)
-                                .accessibilityLabel("Error: \(error)")
-                        }
-                    }
-
-                    // Actions Section
-                    if entry.success || entry.status == .duplicatesCleanup || entry.hasApplicablePlan {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Actions")
-                                .font(.headline)
-                                .accessibilityAddTraits(.isHeader)
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                if entry.status == .duplicatesCleanup {
-                                    if let restorables = entry.restorableItems,
-                                       restorables.contains(where: DuplicateRestorationManager.shared.canRestore) {
-                                        Button {
-                                            handleRestoreDuplicates()
-                                        } label: {
-                                            Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
-                                                .frame(minWidth: 150)
-                                        }
-                                        .buttonStyle(.onboardingPill)
-                                        .controlSize(.large)
-                                        .accessibilityLabel("Restore deleted files")
-                                        .accessibilityIdentifier("RestoreDuplicatesButton")
-                                    }
-                                } else if entry.hasApplicablePlan {
-                                    Button {
-                                        handleRedo()
-                                    } label: {
-                                        Label("Apply Generated Plan", systemImage: "checkmark.circle")
-                                            .frame(minWidth: 170)
-                                    }
-                                    .buttonStyle(.onboardingPill)
-                                    .controlSize(.large)
-                                    .accessibilityLabel("Apply this generated organization plan")
-                                    .accessibilityIdentifier("ApplyGeneratedPlanButton")
-                                } else if entry.isUndone {
-                                    Button {
-                                        handleRedo()
-                                    } label: {
-                                        Label("Re-Apply Organization", systemImage: "arrow.clockwise")
-                                            .frame(minWidth: 150)
-                                    }
-                                    .buttonStyle(.onboardingPill)
-                                    .controlSize(.large)
-                                    .accessibilityLabel("Re-apply this organization")
-                                    .accessibilityIdentifier("RedoSessionButton")
-                                } else {
-                                    Button {
-                                        handleRestore()
-                                    } label: {
-                                        Label("Restore to State", systemImage: "clock.arrow.circlepath")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.onboardingPill)
-                                    .controlSize(.large)
-                                    .accessibilityLabel("Restore folder to this state")
-                                    .accessibilityIdentifier("RestoreStateButton")
-
-                                    HStack(spacing: 12) {
-                                        Button {
-                                            handleUndo()
-                                        } label: {
-                                            Label("Undo Changes", systemImage: "arrow.uturn.backward")
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                        .buttonStyle(.sortyBordered)
-                                        .controlSize(.large)
-                                        .accessibilityLabel("Undo these changes")
-                                        .accessibilityIdentifier("UndoSessionButton")
-
-                                        Button {
-                                            HapticFeedbackManager.shared.tap()
-                                            showRedoModelPicker = true
-                                        } label: {
-                                            Label("Try Different Model", systemImage: "wand.and.stars")
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                        .buttonStyle(.sortyBordered)
-                                        .controlSize(.large)
-                                        .accessibilityLabel("Try organization with a different AI model")
-                                        .accessibilityIdentifier("TryModelSessionButton")
-                                        .modelSelectorTriggerBounds()
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    HistoryDetailActionsSection(
+                        entry: entry,
+                        onRestoreDuplicates: handleRestoreDuplicates,
+                        onApplyOrRedo: handleRedo,
+                        onRestore: handleRestore,
+                        onUndo: handleUndo,
+                        onTryDifferentModel: showDifferentModelPicker
+                    )
 
                     // Timeline Section
                     if entry.success {
@@ -2112,119 +1832,20 @@ struct HistoryDetailSheet: View {
                         )
                     }
 
-                    // Organization Details
-                    if let plan = entry.plan {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Organization Details")
-                                .font(.headline)
-                                .accessibilityAddTraits(.isHeader)
+                    HistoryPlanDetailsSection(
+                        entry: entry,
+                        highlightedFileID: $highlightedFileID
+                    )
 
-                            ForEach(plan.suggestions) { suggestion in
-                                FolderHistoryDetailRow(
-                                    suggestion: suggestion,
-                                    rootDirectory: URL(fileURLWithPath: entry.directoryPath),
-                                    highlightedFileID: $highlightedFileID
-                                )
-                            }
+                    HistoryFileOperationsSection(
+                        entry: currentEntry,
+                        undoneOperationIDs: undoneOperationIDs,
+                        failedOperationIDs: failedOperationIDs,
+                        undoingOperationID: undoingOperationID,
+                        onUndo: handleUndoSingleOperation
+                    )
 
-                            if !plan.unorganizedFiles.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Unorganized Files")
-                                        .font(.subheadline.bold())
-                                        .foregroundColor(.orange)
-
-                                    LazyVStack(alignment: .leading, spacing: 6) {
-                                        ForEach(plan.unorganizedFiles) { fileItem in
-                                            HStack {
-                                                FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
-                                                Text(fileItem.displayName)
-                                                Spacer()
-
-                                                if let hash = fileItem.sha256Hash, !hash.isEmpty {
-                                                    let others = plan.unorganizedFiles.filter { $0.id != fileItem.id && $0.sha256Hash == hash }
-                                                    if !others.isEmpty {
-                                                        LiquidGlassDuplicateButton(
-                                                            duplicateInfo: DuplicateInfo(file: fileItem, duplicates: others),
-                                                            handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
-                                                            highlightedFileID: $highlightedFileID
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            .font(.caption)
-                                            .padding(8)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .fill(highlightedFileID == fileItem.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
-                                            )
-                                            .accessibilityElement(children: .combine)
-                                            .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
-                                        }
-                                    }
-                                }
-                                .padding()
-                                .background(Color.orange.opacity(0.05))
-                                .cornerRadius(8)
-                            }
-                        }
-                    }
-
-                    // Individual File Operations (only non-tag operations, since tags are shown in Organization Details)
-                    if let operations = currentEntry.operations, !operations.isEmpty {
-                        let fileOps = operations.filter { $0.type == .moveFile || $0.type == .renameFile }
-                        if !fileOps.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Text("File Operations")
-                                        .font(.headline)
-                                        .accessibilityAddTraits(.isHeader)
-                                    Spacer()
-                                    Text("\(fileOps.count) operation\(fileOps.count == 1 ? "" : "s")")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                LazyVStack(spacing: 6) {
-                                    ForEach(fileOps, id: \.id) { op in
-                                        OperationRowView(
-                                            operation: op,
-                                            isUndone: undoneOperationIDs.contains(op.id),
-                                            isFailed: failedOperationIDs.contains(op.id),
-                                            isUndoing: undoingOperationID == op.id,
-                                            isEntryUndone: currentEntry.isUndone,
-                                            onUndo: { handleUndoSingleOperation(op) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Restorable Items for Duplicates
-                    if let restorables = entry.restorableItems, !restorables.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Deleted Files")
-                                .font(.headline)
-                                .accessibilityAddTraits(.isHeader)
-
-                            ForEach(restorables) { item in
-                                HStack {
-                                    FileThumbnailView(url: URL(fileURLWithPath: item.deletedPath), size: CGSize(width: 20, height: 20))
-                                    Text(URL(fileURLWithPath: item.deletedPath).lastPathComponent)
-                                    Spacer()
-                                    Text("Original: \(URL(fileURLWithPath: item.originalPath).lastPathComponent)")
-                                        .foregroundStyle(.tertiary)
-                                        .font(.caption2)
-                                }
-                                .font(.caption)
-                                .padding(8)
-                                .background(Color.secondary.opacity(0.05))
-                                .cornerRadius(6)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel("Deleted: \(URL(fileURLWithPath: item.deletedPath).lastPathComponent), original: \(URL(fileURLWithPath: item.originalPath).lastPathComponent)")
-                            }
-                        }
-                    }
+                    HistoryRestorableItemsSection(entry: entry)
 
                     // Raw AI Response (Stats for Nerds)
                     if settingsViewModel.config.showStatsForNerds,
@@ -2237,11 +1858,11 @@ struct HistoryDetailSheet: View {
                 }
                 .onChange(of: highlightedFileID) { _, highlightedFileID in
                     guard let highlightedFileID else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                         scrollProxy.scrollTo(highlightedFileID, anchor: .center)
                     }
                     DispatchQueue.main.async {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                             scrollProxy.scrollTo(highlightedFileID, anchor: .center)
                         }
                     }
@@ -2475,6 +2096,11 @@ struct HistoryDetailSheet: View {
     private func handleRestore() {
         HapticFeedbackManager.shared.tap()
         showRestoreConfirmation = true
+    }
+
+    private func showDifferentModelPicker() {
+        HapticFeedbackManager.shared.tap()
+        showRedoModelPicker = true
     }
 
     private func executeRestore() {
@@ -2935,6 +2561,7 @@ struct FolderHistoryDetailRow: View {
     var rootDirectory: URL? = nil
     @Binding var highlightedFileID: UUID?
     @EnvironmentObject var learningsManager: LearningsManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
     @State private var isHovered = false
     @State private var showStoragePopover = false
@@ -2992,19 +2619,21 @@ struct FolderHistoryDetailRow: View {
     private func expandForHighlightedFileIfNeeded(_ fileID: UUID?) {
         guard let fileID, !isExpanded else { return }
         guard subtreeContainsFile(fileID, in: suggestion) else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
             isExpanded = true
+        }
+    }
+
+    private func toggleExpanded() {
+        HapticFeedbackManager.shared.tap()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+            isExpanded.toggle()
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isExpanded.toggle()
-                }
-            } label: {
+            Button(action: toggleExpanded) {
                 HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
@@ -3017,7 +2646,7 @@ struct FolderHistoryDetailRow: View {
                         size: 18
                     )
                     .scaleEffect(isHovered ? 1.1 : 1.0)
-                    .animation(.subtleBounce, value: isHovered)
+                    .animation(reduceMotion ? nil : .subtleBounce, value: isHovered)
                     .accessibilityHidden(true)
 
                     PrivacySensitivePathText(path: suggestion.folderName)
@@ -3059,54 +2688,20 @@ struct FolderHistoryDetailRow: View {
                     let shouldAnimate = suggestion.files.count <= 40
                     LazyVStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(suggestion.files.prefix(visibleFileCount).enumerated()), id: \.element.id) { index, fileItem in
-                            HStack(spacing: 8) {
-                                FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
-                                Text(fileItem.displayName)
-
-                                if let tags = fileTags(for: fileItem), !tags.isEmpty {
-                                    TagDotsView(tags: tags)
-                                }
-
-                                if let comment = fileComment(for: fileItem), !comment.isEmpty {
-                                    CommentBubbleButton(comment: comment)
-                                }
-
-                                LiquidGlassLearningsButton(
-                                    file: fileItem,
-                                    suggestion: suggestion,
-                                    learningsManager: learningsManager
-                                )
-
-                                if let dupInfo = fileDuplicateInfo(for: fileItem) {
-                                    LiquidGlassDuplicateButton(
-                                        duplicateInfo: dupInfo,
-                                        handoffDirectory: rootDirectory,
-                                        highlightedFileID: $highlightedFileID
-                                    )
-                                }
-
-                                Spacer()
-                                Text(fileItem.formattedSize)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .font(.caption)
-                            .padding(.leading, 12)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(highlightedFileID == fileItem.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
+                            FolderHistoryFileRow(
+                                file: fileItem,
+                                suggestion: suggestion,
+                                tags: fileTags(for: fileItem),
+                                comment: fileComment(for: fileItem),
+                                duplicateInfo: fileDuplicateInfo(for: fileItem),
+                                rootDirectory: rootDirectory,
+                                learningsManager: learningsManager,
+                                highlightedFileID: $highlightedFileID,
+                                isExpanded: isExpanded,
+                                animationDelay: shouldAnimate && !reduceMotion
+                                    ? Double(index) * 0.02
+                                    : nil
                             )
-                            .opacity(isExpanded ? 1 : 0)
-                            .offset(y: isExpanded ? 0 : -5)
-                            .animation(
-                                shouldAnimate
-                                    ? .spring(response: 0.3, dampingFraction: 0.7).delay(Double(index) * 0.02)
-                                    : .none,
-                                value: isExpanded
-                            )
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(fileItem.displayName), \(fileItem.formattedSize)")
                         }
 
                         if suggestion.files.count > visibleFileCount {
@@ -3135,10 +2730,14 @@ struct FolderHistoryDetailRow: View {
                 }
                 .padding(.leading, 12)
                 .padding(.vertical, 4)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .top)),
-                    removal: .opacity
-                ))
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .top)),
+                            removal: .opacity
+                        )
+                )
             }
         }
         .padding(12)
@@ -3181,6 +2780,77 @@ struct FolderHistoryDetailRow: View {
             )
             .systemLiquidGlassPopover(cornerRadius: 12)
         }
+    }
+}
+
+private struct FolderHistoryFileRow: View {
+    let file: FileItem
+    let suggestion: FolderSuggestion
+    let tags: [String]?
+    let comment: String?
+    let duplicateInfo: DuplicateInfo?
+    let rootDirectory: URL?
+    let learningsManager: LearningsManager
+    @Binding var highlightedFileID: UUID?
+    let isExpanded: Bool
+    let animationDelay: Double?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            FileThumbnailView(
+                url: URL(fileURLWithPath: file.path),
+                size: CGSize(width: 20, height: 20)
+            )
+            Text(file.displayName)
+
+            if let tags, !tags.isEmpty {
+                TagDotsView(tags: tags)
+            }
+
+            if let comment, !comment.isEmpty {
+                CommentBubbleButton(comment: comment)
+            }
+
+            LiquidGlassLearningsButton(
+                file: file,
+                suggestion: suggestion,
+                learningsManager: learningsManager
+            )
+
+            if let duplicateInfo {
+                LiquidGlassDuplicateButton(
+                    duplicateInfo: duplicateInfo,
+                    handoffDirectory: rootDirectory,
+                    highlightedFileID: $highlightedFileID
+                )
+            }
+
+            Spacer()
+            Text(file.formattedSize)
+                .foregroundStyle(.tertiary)
+        }
+        .font(.caption)
+        .padding(.leading, 12)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    highlightedFileID == file.id
+                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
+                        : Color.clear
+                )
+        )
+        .opacity(isExpanded ? 1 : 0)
+        .offset(y: isExpanded ? 0 : -5)
+        .animation(
+            animationDelay.map {
+                Animation.spring(response: 0.3, dampingFraction: 0.7).delay($0)
+            },
+            value: isExpanded
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(file.displayName), \(file.formattedSize)")
     }
 }
 
