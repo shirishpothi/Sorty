@@ -258,9 +258,9 @@ private enum ApplicationMover {
         alert.alertStyle = .informational
         alert.messageText = "Move Sorty to Applications"
         alert.informativeText =
-            "Sorty needs to run from the Applications folder. Move it now, then Sorty will reopen automatically."
+            "To install updates and keep Finder features working reliably, Sorty must run from the Applications folder. macOS requires an administrator password to move the app into this protected folder; Sorty will replace any older copy, remove this copy from its current location, and reopen."
         alert.addButton(withTitle: "Move to Applications")
-        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Quit Sorty")
 
         NSApplication.shared.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else {
@@ -313,12 +313,13 @@ private enum ApplicationMover {
     private static func moveAndRelaunch(from sourceURL: URL) {
         let destinationURL = URL(fileURLWithPath: applicationsPath, isDirectory: true)
             .appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
-        // Copy, then strip quarantine so the new copy launches without
+        // Move instead of copying so the downloaded app is not left behind,
+        // then strip quarantine so the installed app launches without
         // Gatekeeper translocation (which would re-trigger this prompt).
         let script = """
         set sourcePath to \(appleScriptString(sourceURL.path))
         set destinationPath to \(appleScriptString(destinationURL.path))
-        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/cp -R " & quoted form of sourcePath & " " & quoted form of destinationPath & " && (/usr/bin/xattr -dr com.apple.quarantine " & quoted form of destinationPath & " || /usr/bin/true)" with administrator privileges
+        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/mv " & quoted form of sourcePath & " " & quoted form of destinationPath & " && (/usr/bin/xattr -dr com.apple.quarantine " & quoted form of destinationPath & " || /usr/bin/true)" with administrator privileges
         """
 
         var error: NSDictionary?

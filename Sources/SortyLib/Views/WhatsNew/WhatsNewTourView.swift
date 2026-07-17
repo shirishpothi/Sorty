@@ -568,18 +568,9 @@ private enum WhatsNewImageLoader {
     static func image(named name: String) -> NSImage? {
         let resourceName = (name as NSString).deletingPathExtension
         let resourceExtension = (name as NSString).pathExtension
-
-        if let url = Bundle.module.url(forResource: resourceName, withExtension: resourceExtension),
-           let image = NSImage(contentsOf: url) {
-            return image
-        }
-
-        if let url = Bundle.module.url(forResource: name, withExtension: nil),
-           let image = NSImage(contentsOf: url) {
-            return image
-        }
-
-        return NSImage(named: name)
+        let fileExtension = resourceExtension.isEmpty ? "png" : resourceExtension
+        return SortyResources.image(named: resourceName, withExtension: fileExtension)
+            ?? NSImage(named: name)
     }
 }
 
