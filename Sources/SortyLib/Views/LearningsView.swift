@@ -1328,6 +1328,7 @@ struct LearningsView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .systemLiquidGlassBackground(cornerRadius: 999)
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
