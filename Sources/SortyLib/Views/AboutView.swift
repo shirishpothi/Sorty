@@ -25,7 +25,7 @@ struct AboutView: View {
     }
     
     var body: some View {
-        VStack(spacing: 15) {
+        VStack(spacing: 12) {
             // App Icon
             AboutAppIconEasterEgg()
             
@@ -39,7 +39,7 @@ struct AboutView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
-            Spacer().frame(height: 4)
+            Spacer().frame(height: 2)
             
             // Version Info - Centered
             VStack(spacing: 4) {
@@ -77,10 +77,10 @@ struct AboutView: View {
                 }
             }
             
-            Spacer().frame(height: 6)
+            Spacer().frame(height: 4)
             
             // Buttons
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 if FeatureFlags.supportDeveloperEnabled {
                     Button {
                         HapticFeedbackManager.shared.tap()
@@ -105,7 +105,7 @@ struct AboutView: View {
                     }
                 }
 
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button("Docs") {
                         HapticFeedbackManager.shared.tap()
                         NSWorkspace.shared.open(docsURL)
@@ -150,17 +150,17 @@ struct AboutView: View {
                 }
             }
             
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 6)
 
             Text("© 2026 Shirish Pothi")
                 .font(.caption)
                 .foregroundColor(.secondary.opacity(0.6))
                 .padding(.top, 2)
         }
-        .padding(.horizontal, 30)
-        .padding(.top, 28)
-        .padding(.bottom, 24)
-        .frame(width: 430, height: 540)
+        .padding(.horizontal, 28)
+        .padding(.top, 24)
+        .padding(.bottom, 20)
+        .frame(width: 420, height: 510)
         .modifier(AboutGlassBackground())
         .windowLinkHoverPillHost()
     }
