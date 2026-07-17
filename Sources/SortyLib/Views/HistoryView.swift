@@ -2301,14 +2301,14 @@ struct HistoryDetailSheet: View {
                                         topLeading: .identity,
                                         bottomTrailing: reduceMotion
                                             ? .identity
-                                            : .animated(.easeOut(duration: 0.42))
-                                                .threshold(.visible(0.12)),
+                                            : .interactive(timingCurve: .easeInOut)
+                                                .threshold(.visible(0.18)),
                                         axis: .vertical
                                     ) { content, phase in
                                         content
                                             .opacity(phase == .bottomTrailing ? 0 : 1)
-                                            .blur(radius: phase == .bottomTrailing ? 3 : 0)
-                                            .offset(y: phase == .bottomTrailing ? 8 : 0)
+                                            .blur(radius: phase == .bottomTrailing ? 1.5 : 0)
+                                            .offset(y: phase == .bottomTrailing ? 6 : 0)
                                     }
                             }
                         }
