@@ -533,6 +533,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 temperature: folder.temperature,
                 providerOverride: folder.providerOverride,
                 modelOverride: folder.modelOverride,
+                mode: folder.effectiveOrganizationMode,
                 historySource: .watchedFolder
             )
 
@@ -540,10 +541,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             
             let duration = Date().timeIntervalSince(startTime)
             print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
-            
+            let renameCount = organizer.currentPlan?.suggestions.reduce(0) {
+                $0 + $1.renameCount
+            } ?? 0
+
             let stats = BatchSummaryStats(
-                filesMoved: candidateAudit.stable.count,
+                filesMoved: folder.effectiveOrganizationMode == .renameOnly
+                    ? 0 : candidateAudit.stable.count,
                 foldersCreated: 0,
+                filesRenamed: renameCount,
                 duration: duration,
                 folderName: folder.name,
                 folderPath: resolvedURL.path,

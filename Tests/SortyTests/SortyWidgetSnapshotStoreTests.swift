@@ -2,6 +2,27 @@ import XCTest
 @testable import SortyLib
 
 final class SortyWidgetSnapshotStoreTests: XCTestCase {
+    func testWatchedFolderActionModeDefaultsAndRoundTrips() throws {
+        let defaultFolder = WatchedFolder(path: "/Users/test/Downloads")
+        XCTAssertEqual(defaultFolder.effectiveOrganizationMode, .organize)
+
+        let renameFolder = WatchedFolder(
+            path: "/Users/test/Scans",
+            organizationMode: .renameOnly
+        )
+        let encoded = try JSONEncoder().encode(renameFolder)
+        let decoded = try JSONDecoder().decode(WatchedFolder.self, from: encoded)
+        XCTAssertEqual(decoded.effectiveOrganizationMode, .renameOnly)
+
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "organizationMode")
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+        let legacyFolder = try JSONDecoder().decode(WatchedFolder.self, from: legacyData)
+        XCTAssertEqual(legacyFolder.effectiveOrganizationMode, .organize)
+    }
+
     func testMakeSnapshotSummarizesRecentActivity() {
         let newerEntry = OrganizationHistoryEntry(
             timestamp: Date(timeIntervalSince1970: 200),

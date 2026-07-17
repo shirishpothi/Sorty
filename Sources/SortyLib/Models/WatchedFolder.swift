@@ -33,6 +33,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var accessStatus: FolderAccessStatus = .unknown
     public var modelOverride: String?           // nil = use global automation model
     public var providerOverride: AIProvider?    // nil = use global automation provider
+    /// Optional for backwards-compatible decoding of watched folders saved before action modes existed.
+    public var organizationMode: OrganizationMode?
     
     public init(
         id: UUID = UUID(),
@@ -46,7 +48,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         temperature: Double? = nil,
         bookmarkData: Data? = nil,
         modelOverride: String? = nil,
-        providerOverride: AIProvider? = nil
+        providerOverride: AIProvider? = nil,
+        organizationMode: OrganizationMode = .organize
     ) {
         self.id = id
         self.path = path
@@ -60,6 +63,11 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         self.bookmarkData = bookmarkData
         self.modelOverride = modelOverride
         self.providerOverride = providerOverride
+        self.organizationMode = organizationMode
+    }
+
+    public var effectiveOrganizationMode: OrganizationMode {
+        organizationMode ?? .organize
     }
     
     public var url: URL {

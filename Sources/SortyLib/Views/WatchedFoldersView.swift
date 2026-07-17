@@ -399,7 +399,7 @@ struct WatchedFolderCard: View {
     private var organizingBadge: some View {
         HStack(spacing: 4) {
             SortyGradientCircularLoader(size: 10, lineWidth: 2)
-            Text("Organizing...")
+            Text("Running...")
                 .font(.caption2)
         }
         .foregroundColor(.blue)
@@ -471,6 +471,17 @@ struct WatchedFolderCard: View {
         }
     }
 
+    private var organizationModeStat: some View {
+        HStack(spacing: 4) {
+            Image(systemName: folder.effectiveOrganizationMode.iconName)
+                .font(.caption2)
+                .contentTransition(.symbolEffect(.replace))
+            Text(folder.effectiveOrganizationMode.displayName)
+                .font(.caption2)
+        }
+        .foregroundStyle(.blue)
+    }
+
     private var missingFolderStatus: some View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -528,6 +539,7 @@ struct WatchedFolderCard: View {
     private var statsRow: some View {
         HStack(spacing: 12) {
             lastTriggeredStat
+            organizationModeStat
             modelOverrideStat
             healthStatusView
         }
@@ -697,6 +709,7 @@ struct WatchedFolderConfigView: View {
     @State private var useCustomModel: Bool
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
+    @State private var selectedMode: OrganizationMode
     @State private var showModelPicker = false
 
     init(folder: WatchedFolder) {
@@ -705,6 +718,7 @@ struct WatchedFolderConfigView: View {
         _useCustomModel = State(initialValue: folder.modelOverride != nil)
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
         _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
+        _selectedMode = State(initialValue: folder.effectiveOrganizationMode)
     }
 
     var body: some View {
@@ -742,6 +756,32 @@ struct WatchedFolderConfigView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
+                    ConfigSection(title: "Action", icon: "slider.horizontal.3", color: .blue) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 4) {
+                                ForEach(OrganizationMode.allCases, id: \.self) { mode in
+                                    OrganizationModeSegment(
+                                        mode: mode,
+                                        isSelected: selectedMode == mode
+                                    ) {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            selectedMode = mode
+                                        }
+                                        HapticFeedbackManager.shared.selection()
+                                    }
+                                }
+                            }
+                            .padding(4)
+                            .systemLiquidGlassBackground(cornerRadius: 999)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Watched folder action")
+
+                            Text(selectedMode.description)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
                     // Actions Section
                     ConfigSection(title: "Actions", icon: "play", color: .blue) {
                         Button {
@@ -791,7 +831,7 @@ struct WatchedFolderConfigView: View {
                                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                                 )
 
-                            Text("e.g., \"Group by project name\" or \"Keep invoices separate\"")
+                            Text(selectedMode.instructionPlaceholder)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -845,7 +885,7 @@ struct WatchedFolderConfigView: View {
                     if let lastTriggered = folder.lastTriggered {
                         ConfigSection(title: "Statistics", icon: "chart.bar", color: .gray) {
                             HStack {
-                                Text("Last organized")
+                                Text("Last run")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                 Spacer()
@@ -908,6 +948,7 @@ struct WatchedFolderConfigView: View {
 
     private var currentFolderConfiguration: WatchedFolder {
         var updated = folder
+        updated.organizationMode = selectedMode
         updated.customPrompt =
             customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? nil : customPrompt

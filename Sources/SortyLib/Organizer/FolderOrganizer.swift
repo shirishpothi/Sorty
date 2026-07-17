@@ -1903,8 +1903,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
     }
 
-    private func applyRenameRuleConfiguration(to plan: OrganizationPlan) -> OrganizationPlan {
-        guard let config = aiConfig else { return plan }
+    private func applyRenameRuleConfiguration(
+        to plan: OrganizationPlan,
+        config suppliedConfig: AIConfig? = nil
+    ) -> OrganizationPlan {
+        guard let config = suppliedConfig ?? aiConfig else { return plan }
         guard config.mode == .renameOnly || config.mode == .organizeAndRename else { return plan }
         guard !config.renameRules.isEmpty else { return plan }
 
@@ -1915,8 +1918,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return updatedPlan
     }
 
-    private func normalizeRenameSuggestions(in plan: OrganizationPlan) -> OrganizationPlan {
-        guard let config = aiConfig else { return plan }
+    private func normalizeRenameSuggestions(
+        in plan: OrganizationPlan,
+        config suppliedConfig: AIConfig? = nil
+    ) -> OrganizationPlan {
+        guard let config = suppliedConfig ?? aiConfig else { return plan }
         guard config.mode == .renameOnly || config.mode == .organizeAndRename else { return plan }
 
         var updatedPlan = plan
@@ -2055,11 +2061,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Cancellation
 
     /// Cancel any ongoing operation - RELIABLE cancellation
-    public func cancel() {
+    public func cancel(source: OrganizationEntrySource = .manual) {
         DebugLogger.log("Cancel requested by user")
         AISessionManager.shared.clearErrors()
         cancelInternal()
-        resetToIdle()
+        resetToIdle(source: source)
     }
 
     /// Stop live work immediately while a caller owns the visual return-to-start transition.
@@ -2434,6 +2440,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double? = nil,
         providerOverride: AIProvider? = nil,
         modelOverride: String? = nil,
+        mode: OrganizationMode = .organize,
         historySource: OrganizationEntrySource = .manual
     ) async throws {
         guard !isOperationInProgress() else {
@@ -2452,6 +2459,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: temperature,
                 providerOverride: providerOverride,
                 modelOverride: modelOverride,
+                mode: mode,
                 historySource: historySource
             )
         }
@@ -2471,24 +2479,38 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double?,
         providerOverride: AIProvider? = nil,
         modelOverride: String? = nil,
+        mode: OrganizationMode,
         historySource: OrganizationEntrySource = .manual
     ) async throws {
-        // Use override client if specified, otherwise use default
+        // Build a client for this run so watched-folder action choices never mutate
+        // or inherit the main Organize page's selected mode.
+        guard let defaultClient = aiClient else {
+            throw OrganizationError.clientNotConfigured
+        }
+
+        var operationConfig = aiConfig ?? defaultClient.config
+        operationConfig.mode = mode
+        if mode != .organize {
+            operationConfig.enableSmartRename = true
+        }
+
         let client: AIClientProtocol
-        if let providerOverride = providerOverride, let modelOverride = modelOverride {
-            var overrideConfig = self.aiConfig ?? AIConfig.default
-            overrideConfig.provider = providerOverride
-            overrideConfig.model = modelOverride
-            if let apiKey = KeychainManager.get(key: providerOverride.keychainKey) {
-                overrideConfig.apiKey = apiKey
+        if let providerOverride, let modelOverride {
+            operationConfig.provider = providerOverride
+            operationConfig.model = modelOverride
+            operationConfig.requiresAPIKey = providerOverride.typicallyRequiresAPIKey
+            operationConfig.apiKey = nil
+            if providerOverride.typicallyRequiresAPIKey,
+               let apiKey = KeychainManager.get(key: providerOverride.keychainKey) {
+                operationConfig.apiKey = apiKey
             }
-            overrideConfig.apiURL = providerOverride.defaultAPIURL
-            client = try AIClientFactory.createClient(config: overrideConfig)
-        } else {
-            guard let defaultClient = aiClient else {
-                throw OrganizationError.clientNotConfigured
-            }
+            operationConfig.apiURL = providerOverride.defaultAPIURL
+            client = try AIClientFactory.createClient(config: operationConfig)
+        } else if defaultClient.config.mode == operationConfig.mode,
+                  defaultClient.config.enableSmartRename == operationConfig.enableSmartRename {
             client = defaultClient
+        } else {
+            client = try AIClientFactory.createClient(config: operationConfig)
         }
 
         currentDirectory = directory
@@ -2565,33 +2587,61 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 .map { $0.lastPathComponent }
                 .filter { !$0.hasPrefix(".") }
 
-            let contextPrompt = """
-            The following folders already exist: \(existingFolders.joined(separator: ", ")).
-            
-            RULES for Organization:
-            1. You MUST prioritize placing files into these existing folders if they are relevant.
-            2. Do NOT create new folders unless the file is completely unrelated to any existing folder.
-            3. If a file does not fit well into any existing folder, you may leave it in the root (do not move it).
-            4. This is a "Smart Drop" operation: we want to maintain the existing structure, not reinvent it.
-            """
+            let existingFolderList = existingFolders.joined(separator: ", ")
+            let contextPrompt: String
+            switch mode {
+            case .organize:
+                contextPrompt = """
+                The following folders already exist: \(existingFolderList).
+
+                RULES for Organization:
+                1. You MUST prioritize placing files into these existing folders if they are relevant.
+                2. Do NOT create new folders unless the file is completely unrelated to any existing folder.
+                3. If a file does not fit well into any existing folder, you may leave it in the root (do not move it).
+                4. This is a "Smart Drop" operation: maintain the existing structure and keep every original filename.
+                """
+            case .organizeAndRename:
+                contextPrompt = """
+                The following folders already exist: \(existingFolderList).
+
+                RULES for Organization and Renaming:
+                1. Prioritize placing files into these existing folders when they are relevant.
+                2. Do not create new folders unless a file is unrelated to the existing structure.
+                3. Improve unclear filenames when the available evidence supports a better name.
+                4. Preserve clear filenames and maintain the existing structure instead of reinventing it.
+                """
+            case .renameOnly:
+                contextPrompt = """
+                RULES for Renaming:
+                1. Keep every file in its current folder.
+                2. Improve unclear filenames only when the available evidence supports a better name.
+                3. Preserve filenames that are already clear and useful.
+                """
+            }
 
             let prompt = (customPrompt ?? customInstructions) + "\n\n" + contextPrompt
             
             // Add Learnings context
             var finalPrompt = prompt
-            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            if mode != .renameOnly,
+               let learnedContext = learningsManager?.generatePromptContext(),
+               !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
             }
 
-            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            if mode != .renameOnly,
+               let modelDirContext = learningsManager?.generateModelDirectoryContext(),
+               !modelDirContext.isEmpty {
                 finalPrompt += "\n\n" + modelDirContext
             }
             
             // Add Storage Locations context
-            if let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            if mode != .renameOnly,
+               let storageContext = await storageLocationsManager?.generatePromptContext(),
+               !storageContext.isEmpty {
                 finalPrompt += "\n\n" + storageContext
             }
-            finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
+            finalPrompt += exclusionInstructions(forRenameOnly: mode == .renameOnly)
             
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
@@ -2603,12 +2653,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 isStreaming = false
-                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: plan))
+                currentPlan = normalizeRenameSuggestions(
+                    in: applyRenameRuleConfiguration(to: plan, config: operationConfig),
+                    config: operationConfig
+                )
             }
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
+            let maxTopLevelFolders = mode == .renameOnly ? 100 : operationConfig.maxTopLevelFolders
             var planAfterValidation = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
                 try validator.validate(
@@ -2648,11 +2701,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             await MainActor.run {
-                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
+                currentPlan = normalizeRenameSuggestions(
+                    in: applyRenameRuleConfiguration(to: validatedPlan, config: operationConfig),
+                    config: operationConfig
+                )
             }
 
             // Auto-apply for incremental
-            try await apply(at: directory, dryRun: false, enableTagging: true, source: historySource)
+            try await apply(
+                at: directory,
+                dryRun: false,
+                enableTagging: operationConfig.enableFileTagging,
+                source: historySource,
+                modeOverride: mode
+            )
 
         } catch {
             stopTimeoutTimer()
@@ -2875,7 +2937,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Apply Organization
 
-    public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true, source: OrganizationEntrySource = .manual) async throws {
+    public func apply(
+        at baseURL: URL,
+        dryRun: Bool = false,
+        enableTagging: Bool = true,
+        source: OrganizationEntrySource = .manual,
+        modeOverride: OrganizationMode? = nil
+    ) async throws {
         guard let currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
@@ -2886,10 +2954,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         try checkCancellation()
 
         // Re-validate at apply time to protect all entry points, including regenerated previews.
-        let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
+        var operationConfig = aiConfig
+        if let modeOverride {
+            operationConfig?.mode = modeOverride
+            if modeOverride != .organize {
+                operationConfig?.enableSmartRename = true
+            }
+        }
+
+        let maxFolders = operationConfig?.mode == .renameOnly
+            ? 100
+            : (operationConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
-        let planToApply = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: normalizedPlan))
+        let planToApply = normalizeRenameSuggestions(
+            in: applyRenameRuleConfiguration(to: normalizedPlan, config: operationConfig),
+            config: operationConfig
+        )
         self.currentPlan = planToApply
         try validator.validate(
             planToApply,
