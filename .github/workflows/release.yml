@@ -405,10 +405,6 @@ jobs:
             > ```
             > Paste the command into Terminal, press Return, enter your Mac password (typing stays hidden), then open Sorty from **Applications**.
 
-            ## CLI Tools
-            Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
-
-            `Sorty.zip` is a universal build for Apple silicon and Intel Macs. GitHub provides the source code archives automatically.
           prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
 
       - name: Verify published release
