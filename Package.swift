@@ -51,6 +51,7 @@ let package = Package(
                 .process("Resources/Final Onboarding.wav")
             ],
             swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug)),
                 // Debug: Fast incremental build (SPM manages incremental builds internally)
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 // Release: Full optimization with whole-module
@@ -71,6 +72,7 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Sources/SortyApp",
             swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug)),
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],

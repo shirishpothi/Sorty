@@ -15,9 +15,11 @@ BUILD_LOG_DIR="${BUILD_LOG_DIR:-${WORKSPACE_BUILD_DIR}/logs}"
 BUILD_TAIL_LINES="${BUILD_TAIL_LINES:-40}"
 AUTO_CLOSE_SORTY_ON_BUILD="${AUTO_CLOSE_SORTY_ON_BUILD:-true}"
 SORTY_QUIT_WAIT_SECONDS="${SORTY_QUIT_WAIT_SECONDS:-6}"
+SORTY_QUIT_REQUEST_TIMEOUT_SECONDS="${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS:-3}"
 KEYCHAIN_UNLOCK_TIMEOUT_SECONDS="${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS:-43200}"
 AUTO_UNLOCK_SIGNING_KEYCHAIN="${AUTO_UNLOCK_SIGNING_KEYCHAIN:-true}"
 BUILD_AUTO_CLOSE_REQUEST_KEY="buildAutoCloseRequest"
+BUILD_AUTO_CLOSE_REQUEST_ACTIVE=false
 AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
 BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
 BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-8192}"
@@ -41,8 +43,10 @@ set_build_auto_close_request() {
     local enabled="$1"
     if is_truthy "${enabled}"; then
         defaults write "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" -bool true >/dev/null 2>&1 || true
+        BUILD_AUTO_CLOSE_REQUEST_ACTIVE=true
     else
         defaults delete "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" >/dev/null 2>&1 || true
+        BUILD_AUTO_CLOSE_REQUEST_ACTIVE=false
     fi
 }
 
@@ -62,7 +66,12 @@ wait_for_sorty_exit() {
 
 request_sorty_quit() {
     if command -v osascript >/dev/null 2>&1; then
-        osascript -e 'tell application id "com.sorty.app" to quit' >/dev/null 2>&1 || true
+        if ! osascript \
+            -e "with timeout of ${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS} seconds" \
+            -e 'tell application id "com.sorty.app" to quit' \
+            -e 'end timeout' >/dev/null 2>&1; then
+            log_warning "Sorty did not acknowledge the quit request within ${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS}s."
+        fi
     else
         pkill -TERM -x "Sorty" >/dev/null 2>&1 || true
     fi
@@ -406,6 +415,99 @@ normalize_app_executable_linkage() {
 
     if otool -L "${executable_path}" | grep -F "${sparkle_rpath_load}" >/dev/null; then
         run_quiet install_name_tool -change "${sparkle_rpath_load}" "${sparkle_embedded_load}" "${executable_path}"
+    fi
+}
+
+# --- Bundle input fingerprint -------------------------------------------------
+# Assembling and re-signing the app bundle costs several seconds even when
+# nothing changed. Fingerprint every input that feeds the published bundle
+# (built binary, plists, entitlements, resources, icon, extension sources,
+# versions, and assembly flags) using content hashes. The large SwiftPM
+# executable is generated output, so key it with inode, size, and nanosecond
+# timestamps instead of rereading 77MB on every no-op build. When the fingerprint
+# matches the stamp written after the last successful publish, the whole
+# assemble/sign/publish pipeline is skipped and the existing bundle is reused.
+
+bundle_fingerprint_generated_files() {
+    local path
+    for path in "$@"; do
+        if [ -f "${path}" ]; then
+            stat -f '%N inode=%i size=%z mtime=%Fm ctime=%Fc' "${path}"
+        else
+            printf '%s missing-generated-file\n' "${path}"
+        fi
+    done
+}
+
+bundle_fingerprint_files() {
+    local path
+    for path in "$@"; do
+        if [ -f "${path}" ]; then
+            shasum -a 256 "${path}"
+        else
+            printf '%s missing\n' "${path}"
+        fi
+    done
+}
+
+bundle_fingerprint_tree() {
+    local root
+    for root in "$@"; do
+        if [ -d "${root}" ]; then
+            find -s -H "${root}" -type f ! -name '.DS_Store' -exec shasum -a 256 {} + 2>/dev/null
+        else
+            printf '%s missing-tree\n' "${root}"
+        fi
+    done
+}
+
+compute_bundle_fingerprint() {
+    {
+        printf 'fingerprint-schema=1\n'
+        printf 'version=%s build=%s\n' "${VERSION}" "${BUILD_NUM}"
+        printf 'commit=%s\n' "$(git -C "${PROJECT_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        printf 'config=%s method=%s archs=%s icon=%s\n' \
+            "${BUILD_CONFIG}" "${BUILD_METHOD}" "${BUILD_ARCHS}" "${APP_ICON_VARIANT:-ci}"
+        printf 'flags=cli:%s,finder:%s,adhoc:%s,sparkle:%s identity=%s\n' \
+            "${ENABLE_CLI_BUNDLE}" "${ENABLE_FINDER_EXTENSION}" \
+            "${ENABLE_ADHOC_SIGNING}" "${ENABLE_SPARKLE_SIGNING}" "${SIGNING_IDENTITY}"
+        bundle_fingerprint_generated_files "${BIN_PATH}/${SPM_BINARY_NAME}"
+        bundle_fingerprint_files \
+            "${PROJECT_DIR}/Info.plist" \
+            "${PROJECT_DIR}/Sorty.entitlements" \
+            "${PROJECT_DIR}/SortyFinderSync/Info.plist" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements" \
+            "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" \
+            "${PROJECT_DIR}/Package.swift" \
+            "${PROJECT_DIR}/Package.resolved" \
+            "${PROJECT_DIR}/scripts/build.sh" \
+            "${PROJECT_DIR}/scripts/utils.sh"
+        bundle_fingerprint_tree \
+            "${PROJECT_DIR}/Resources" \
+            "${PROJECT_DIR}/Sources/SortyLib/Resources" \
+            "${PROJECT_DIR}/Sources/SortyFinderSync" \
+            "${PROJECT_DIR}/Assets/AppIcon" \
+            "${BIN_PATH}/Sorty_SortyLib.bundle"
+        # Dependency resource bundles staged next to the binary (for example,
+        # Beam_Beam.bundle) can change without changing Sorty's own resource
+        # bundle, so include their content rather than only their paths.
+        while IFS= read -r dependency_bundle; do
+            bundle_fingerprint_tree "${dependency_bundle}"
+        done < <(
+            find -H "${BIN_PATH}" -maxdepth 1 -name '*.bundle' \
+                ! -name 'Sorty_SortyLib.bundle' -type d 2>/dev/null | LC_ALL=C sort
+        )
+    } | build_cache_hash_stream
+}
+
+stage_preserved_bundle() {
+    # Clone the published bundle into staging so unchanged files (Sparkle,
+    # resources) do not need to be re-copied. Deferred until assembly actually
+    # runs so the unchanged-bundle fast path never pays for the 100MB clone.
+    if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${FINAL_APP_PATH}" ] && [ ! -d "${STAGED_APP_PATH}" ]; then
+        if ! cp -cR "${FINAL_APP_PATH}" "${STAGED_APP_PATH}" 2>/dev/null; then
+            cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
+        fi
     fi
 }
 
@@ -933,19 +1035,24 @@ APP_PATH="${STAGED_APP_PATH}"
 
 cleanup_staged_app() {
     local exit_status=$?
+    if is_truthy "${BUILD_AUTO_CLOSE_REQUEST_ACTIVE}"; then
+        set_build_auto_close_request false
+    fi
     rm -rf "${STAGED_APP_PATH}"
     restore_interactive_build_presentation true
     return "${exit_status}"
 }
 
 trap cleanup_staged_app EXIT
+# Interrupted builds may leave the auto-close preference behind. Clear it before
+# beginning new work so a later manual quit is never bypassed.
+set_build_auto_close_request false
 rm -rf "${STAGED_APP_PATH}"
 
-if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${FINAL_APP_PATH}" ]; then
-    if ! cp -cR "${FINAL_APP_PATH}" "${STAGED_APP_PATH}" 2>/dev/null; then
-        cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
-    fi
-fi
+# The preserved-bundle clone is deferred to stage_preserved_bundle so the
+# unchanged-bundle fast path can skip it entirely.
+BUNDLE_STAMP_FILE="${RELEASE_DIR}/.sorty-bundle-fingerprint"
+BUNDLE_FINGERPRINT=""
 
 # Binary and App names from config if needed, or hardcoded for reliability
 BINARY_NAME="Sorty"
@@ -1040,6 +1147,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     fi
     
     # Copy to release directory
+    stage_preserved_bundle
     mkdir -p "${APP_PATH}"
     rsync -a --delete "${BUILT_APP}/" "${APP_PATH}/"
     
@@ -1180,8 +1288,31 @@ else
     BUILD_DURATION=$(get_step_duration "build")
     log_success "Compilation succeeded (${BUILD_DURATION})"
 
+    # Fast path: when every bundle input is unchanged since the
+    # last successful publish, skip assembly, signing, and publishing. The
+    # existing bundle (including its valid signature) is reused as-is, and a
+    # running Sorty instance never needs to be closed.
+    BUNDLE_FINGERPRINT="$(compute_bundle_fingerprint)"
+    if [ "$(cat "${BUNDLE_STAMP_FILE}" 2>/dev/null)" = "${BUNDLE_FINGERPRINT}" ] &&
+        [ -n "${BUNDLE_FINGERPRINT}" ] &&
+        [ -x "${FINAL_APP_PATH}/Contents/MacOS/${BINARY_NAME}" ] &&
+        [ -f "${FINAL_APP_PATH}/Contents/Info.plist" ] &&
+        codesign --verify --deep --strict "${FINAL_APP_PATH}" >/dev/null 2>&1; then
+        print_step 3 $TOTAL_STEPS "Assembling App Bundle"
+        log_success "Bundle inputs unchanged; reusing published app"
+        print_step 4 $TOTAL_STEPS "Signing"
+        log_success "Existing signature preserved"
+        APP_PATH="${FINAL_APP_PATH}"
+        APP_SIZE=$(get_file_size "${APP_PATH}")
+        TOTAL_DURATION=$(get_total_duration)
+        restore_interactive_build_presentation false
+        print_build_complete_summary
+        exit 0
+    fi
+
     print_step 3 $TOTAL_STEPS "Assembling App Bundle"
     start_step_timer "assemble"
+    stage_preserved_bundle
 
     # Build structure
     MACOS_DIR="${APP_PATH}/Contents/MacOS"
@@ -1466,6 +1597,14 @@ fi
 
 if mv "${STAGED_APP_PATH}" "${FINAL_APP_PATH}"; then
     rm -rf "${PREVIOUS_APP_PATH}"
+    # Record the bundle input fingerprint so the next build can skip
+    # assembly/signing when nothing changed. xcodebuild publishes without a
+    # fingerprint, so clear any stale SPM stamp instead.
+    if [ -n "${BUNDLE_FINGERPRINT}" ]; then
+        printf '%s\n' "${BUNDLE_FINGERPRINT}" > "${BUNDLE_STAMP_FILE}"
+    else
+        rm -f "${BUNDLE_STAMP_FILE}"
+    fi
 else
     if [ -e "${PREVIOUS_APP_PATH}" ]; then
         mv "${PREVIOUS_APP_PATH}" "${FINAL_APP_PATH}"
