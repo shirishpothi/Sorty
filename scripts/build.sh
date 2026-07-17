@@ -1418,8 +1418,34 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     SIGN_DURATION=$(get_step_duration "sign")
     log_success "App signed (${SIGN_DURATION})"
 else
-    print_step 4 $TOTAL_STEPS "Skipping Code Signing"
-    log_detail "ENABLE_ADHOC_SIGNING is set to false."
+    print_step 4 $TOTAL_STEPS "Repairing Local Signature"
+    start_step_timer "sign"
+
+    # SwiftPM linker-signs executables, but install_name_tool invalidates that
+    # signature when the app bundle's Sparkle linkage is normalized. Even fast
+    # local builds therefore need a cheap ad-hoc reseal or macOS kills the app
+    # at launch with CODESIGNING / Invalid Page. Sign only the modified bundles;
+    # leave the already-valid Sparkle components untouched.
+    FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+    ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
+
+    if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
+        if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
+            run_quiet codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
+        else
+            run_quiet codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
+        fi
+    fi
+
+    if [ -f "${ENTITLEMENTS_FILE}" ]; then
+        run_quiet codesign --force --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}"
+    else
+        run_quiet codesign --force --sign - "${APP_PATH}"
+    fi
+    run_quiet codesign --verify --deep --strict "${APP_PATH}"
+
+    SIGN_DURATION=$(get_step_duration "sign")
+    log_success "Local signature repaired (${SIGN_DURATION})"
 fi
 
 # Close existing Sorty app instances unless an organization is active. The
