@@ -369,9 +369,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testStoragePromptExplainsPurposeAndExactDestinationPath() async {
-        let manager = StorageLocationsManager(
-            entitlementSnapshotProvider: { EntitlementCatalog.shared.snapshot(for: .bundleUnlocked) }
-        )
+        let manager = StorageLocationsManager()
         manager.clearAll()
         defer { manager.clearAll() }
 
