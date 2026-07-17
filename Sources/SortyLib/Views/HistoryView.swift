@@ -1678,7 +1678,7 @@ struct HistoryDetailSheet: View {
     let onDismiss: () -> Void
 
     @State private var showRawAIResponse = false
-    @State private var displayedRawAIResponse = ""
+    @State private var rawAIResponseContentVisible = false
     @State private var showRedoModelPicker = false
     @State private var undoneOperationIDs: Set<UUID> = []
     @State private var failedOperationIDs: Set<UUID> = []
@@ -2265,7 +2265,7 @@ struct HistoryDetailSheet: View {
 
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                toggleRawAIResponse(displayRaw)
+                toggleRawAIResponse()
                 HapticFeedbackManager.shared.tap()
             } label: {
                 HStack(spacing: 8) {
@@ -2294,52 +2294,55 @@ struct HistoryDetailSheet: View {
                     }
 
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        Text(displayedRawAIResponse)
+                        Text(displayRaw)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
-                            .numericTextTransition(
-                                animationValue: displayedRawAIResponse,
-                                animation: .easeInOut(duration: 0.28)
-                            )
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .task(id: displayRaw) {
-                                guard displayedRawAIResponse != displayRaw else { return }
-                                if !reduceMotion {
-                                    await Task.yield()
-                                }
-                                guard !Task.isCancelled else { return }
-                                displayedRawAIResponse = displayRaw
-                            }
+                            .opacity(rawAIResponseContentVisible ? 1 : 0)
+                            .blur(radius: rawAIResponseContentVisible || reduceMotion ? 0 : 4)
+                            .offset(y: rawAIResponseContentVisible || reduceMotion ? 0 : 8)
                     }
+                    .defaultScrollAnchor(.topLeading)
                     .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
                     .padding()
                     .background(Color.black.opacity(0.05))
                     .cornerRadius(8)
                     .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "Raw AI response hidden in Privacy Mode" : "Raw AI response data")
+                    .task(id: showRawAIResponse) {
+                        guard showRawAIResponse else { return }
+                        if !reduceMotion {
+                            try? await Task.sleep(for: .milliseconds(180))
+                        }
+                        guard !Task.isCancelled else { return }
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.46)) {
+                            rawAIResponseContentVisible = true
+                        }
+                    }
                 }
                 .transition(
                     reduceMotion
                         ? .opacity
-                        : .opacity.combined(with: .move(edge: .top))
+                        : .opacity.combined(with: .scale(scale: 0.985, anchor: .top))
                 )
             }
         }
         .onChange(of: reduceMotion) { _, shouldReduceMotion in
             guard shouldReduceMotion, showRawAIResponse else { return }
-            displayedRawAIResponse = displayRaw
+            rawAIResponseContentVisible = true
         }
     }
 
-    private func toggleRawAIResponse(_ raw: String) {
+    private func toggleRawAIResponse() {
         if showRawAIResponse {
             withAnimation(rawAIResponseDisclosureAnimation) {
+                rawAIResponseContentVisible = false
                 showRawAIResponse = false
             }
             return
         }
 
-        displayedRawAIResponse = reduceMotion ? raw : ""
+        rawAIResponseContentVisible = reduceMotion
         withAnimation(rawAIResponseDisclosureAnimation) {
             showRawAIResponse = true
         }
@@ -2348,7 +2351,7 @@ struct HistoryDetailSheet: View {
     private var rawAIResponseDisclosureAnimation: Animation {
         reduceMotion
             ? .easeOut(duration: 0.12)
-            : .spring(response: 0.3, dampingFraction: 0.8)
+            : .spring(response: 0.52, dampingFraction: 0.86)
     }
 
     private func handleUndo() {
