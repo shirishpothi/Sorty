@@ -306,10 +306,6 @@ print_build_start_summary() {
 }
 
 print_build_complete_summary() {
-    if ! is_truthy "${SORTY_VERBOSE}" && [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then
-        printf '\033[2J\033[H'
-    fi
-
     echo ""
     print_divider "═" 50
     echo ""
@@ -325,6 +321,60 @@ print_build_complete_summary() {
         printf "    %-13s : %s\n" "Tests" "${TEST_DURATION}"
     fi
     echo ""
+}
+
+INTERACTIVE_BUILD_PRESENTATION_ACTIVE=false
+INTERACTIVE_BUILD_TRANSCRIPT=""
+INTERACTIVE_BUILD_TEE_PID=""
+
+begin_interactive_build_presentation() {
+    if is_truthy "${SORTY_VERBOSE}" || [ ! -t 1 ] || [ "${TERM:-dumb}" = "dumb" ]; then
+        return
+    fi
+
+    if ! INTERACTIVE_BUILD_TRANSCRIPT=$(mktemp "${TMPDIR:-/tmp}/sorty-build-output.XXXXXX"); then
+        return
+    fi
+
+    exec 3>&1 4>&2
+    printf '\033[?1049h' >&3
+    INTERACTIVE_BUILD_PRESENTATION_ACTIVE=true
+}
+
+capture_interactive_build_progress() {
+    if [ "${INTERACTIVE_BUILD_PRESENTATION_ACTIVE}" != "true" ]; then
+        return
+    fi
+
+    exec > >(tee "${INTERACTIVE_BUILD_TRANSCRIPT}" >&3) 2>&1
+    INTERACTIVE_BUILD_TEE_PID=$!
+}
+
+restore_interactive_build_presentation() {
+    local include_start_summary="${1:-true}"
+
+    if [ "${INTERACTIVE_BUILD_PRESENTATION_ACTIVE}" != "true" ]; then
+        return
+    fi
+
+    if [ -n "${INTERACTIVE_BUILD_TEE_PID}" ]; then
+        exec 1>&3 2>&4
+        wait "${INTERACTIVE_BUILD_TEE_PID}" || true
+    fi
+
+    printf '\033[?1049l' >&3
+    if [ "${include_start_summary}" = "true" ]; then
+        print_build_start_summary >&3
+    fi
+    if [ -s "${INTERACTIVE_BUILD_TRANSCRIPT}" ]; then
+        cat "${INTERACTIVE_BUILD_TRANSCRIPT}" >&3
+    fi
+
+    rm -f "${INTERACTIVE_BUILD_TRANSCRIPT}"
+    exec 3>&- 4>&-
+    INTERACTIVE_BUILD_PRESENTATION_ACTIVE=false
+    INTERACTIVE_BUILD_TRANSCRIPT=""
+    INTERACTIVE_BUILD_TEE_PID=""
 }
 
 run_quiet() {
@@ -809,6 +859,9 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "tr
     configure_keychain_session_for_signing
 fi
 
+begin_interactive_build_presentation
+trap 'restore_interactive_build_presentation true' EXIT
+
 if is_truthy "${SORTY_VERBOSE}"; then
     print_header "${PROJECT_NAME} Build" 50
     print_summary "Build Configuration" \
@@ -828,6 +881,7 @@ if is_truthy "${SORTY_VERBOSE}"; then
 else
     print_build_start_summary
 fi
+capture_interactive_build_progress
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
     log_detail "xcodebuild flags: ${XCODE_EXTRA_FLAGS}"
@@ -846,7 +900,10 @@ STAGED_APP_PATH="${RELEASE_DIR}/.${PROJECT_NAME}.app.build.$$"
 APP_PATH="${STAGED_APP_PATH}"
 
 cleanup_staged_app() {
+    local exit_status=$?
     rm -rf "${STAGED_APP_PATH}"
+    restore_interactive_build_presentation true
+    return "${exit_status}"
 }
 
 trap cleanup_staged_app EXIT
@@ -1354,4 +1411,5 @@ APP_PATH="${FINAL_APP_PATH}"
 APP_SIZE=$(get_file_size "${APP_PATH}")
 TOTAL_DURATION=$(get_total_duration)
 
+restore_interactive_build_presentation false
 print_build_complete_summary
