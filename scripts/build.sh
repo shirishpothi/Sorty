@@ -326,6 +326,7 @@ print_build_complete_summary() {
 INTERACTIVE_BUILD_PRESENTATION_ACTIVE=false
 INTERACTIVE_BUILD_TRANSCRIPT=""
 INTERACTIVE_BUILD_TEE_PID=""
+INTERACTIVE_BUILD_START_LINE_COUNT=11
 
 begin_interactive_build_presentation() {
     if is_truthy "${SORTY_VERBOSE}" || [ ! -t 1 ] || [ "${TERM:-dumb}" = "dumb" ]; then
@@ -337,7 +338,6 @@ begin_interactive_build_presentation() {
     fi
 
     exec 3>&1 4>&2
-    printf '\033[?1049h' >&3
     INTERACTIVE_BUILD_PRESENTATION_ACTIVE=true
 }
 
@@ -351,7 +351,9 @@ capture_interactive_build_progress() {
 }
 
 restore_interactive_build_presentation() {
-    local include_start_summary="${1:-true}"
+    local preserve_start_summary="${1:-true}"
+    local progress_line_count=0
+    local rendered_line_count=0
 
     if [ "${INTERACTIVE_BUILD_PRESENTATION_ACTIVE}" != "true" ]; then
         return
@@ -362,12 +364,15 @@ restore_interactive_build_presentation() {
         wait "${INTERACTIVE_BUILD_TEE_PID}" || true
     fi
 
-    printf '\033[?1049l' >&3
-    if [ "${include_start_summary}" = "true" ]; then
-        print_build_start_summary >&3
-    fi
-    if [ -s "${INTERACTIVE_BUILD_TRANSCRIPT}" ]; then
-        cat "${INTERACTIVE_BUILD_TRANSCRIPT}" >&3
+    if [ "${preserve_start_summary}" != "true" ]; then
+        if [ -s "${INTERACTIVE_BUILD_TRANSCRIPT}" ]; then
+            progress_line_count=$(wc -l < "${INTERACTIVE_BUILD_TRANSCRIPT}" | tr -d ' ')
+        fi
+        rendered_line_count=$((INTERACTIVE_BUILD_START_LINE_COUNT + progress_line_count))
+        printf '\033[%dA\r\033[J' "${rendered_line_count}" >&3
+        if [ -s "${INTERACTIVE_BUILD_TRANSCRIPT}" ]; then
+            cat "${INTERACTIVE_BUILD_TRANSCRIPT}" >&3
+        fi
     fi
 
     rm -f "${INTERACTIVE_BUILD_TRANSCRIPT}"
