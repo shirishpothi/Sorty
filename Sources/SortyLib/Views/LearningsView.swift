@@ -317,13 +317,9 @@ struct LearningsView: View {
                 withdrawConsent()
             }
         } message: {
-            if pendingControlAction == .withdrawConsent {
-                Text("Withdrawing consent...")
-            } else {
-                Text(
-                    "Learning will stop but your existing data will be preserved. You can re-enable learning later."
-                )
-            }
+            Text(
+                "Sorty will stop learning from your organization activity. Your existing learning data and preferences will stay saved, and you can turn learning back on at any time."
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
