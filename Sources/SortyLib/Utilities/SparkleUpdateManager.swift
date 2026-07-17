@@ -128,9 +128,6 @@ public class SparkleUpdateManager: ObservableObject {
     private var hasRequestedLaunchCheck = false
 
     public init() {
-        // Nightly updates are retired, so migrate previous opt-ins back to the stable feed.
-        UserDefaults.standard.removeObject(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey)
-
         // Restore last check date
         if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
             self.lastCheckDate = savedDate

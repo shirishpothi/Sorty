@@ -2,77 +2,114 @@
 //  ExperimentalSettingsView.swift
 //  Sorty
 //
-//  Empty state for experimental features
+//  Experimental features section showing disabled feature flags with enablement guidance
 //
 
 import SwiftUI
 
 struct ExperimentalSettingsView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hasAppeared = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("These optional features are intentionally hidden from the main workflow. Use the toggles below to enable or disable them.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            ForEach(experimentalFlags) { flag in
+                ExperimentalFlagRow(flag: flag)
+            }
+        }
+    }
+
+    private var experimentalFlags: [ExperimentalFlag] {
+        [
+            ExperimentalFlag(
+                name: "Nightly Updates",
+                description: "Check the nightly Sparkle feed for the latest main-branch builds. Nightlies can include unfinished changes.",
+                defaultsKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey,
+                defaultValue: false,
+                restartMessage: "Use Check for Updates after switching channels."
+            )
+        ]
+    }
+}
+
+struct ExperimentalFlag: Identifiable {
+    let id = UUID()
+    let name: String
+    let description: String
+    let defaultsKey: String
+    let defaultValue: Bool
+    let restartMessage: String
+
+    init(
+        name: String,
+        description: String,
+        defaultsKey: String,
+        defaultValue: Bool,
+        restartMessage: String = "Relaunch Sorty to ensure all views pick up this change."
+    ) {
+        self.name = name
+        self.description = description
+        self.defaultsKey = defaultsKey
+        self.defaultValue = defaultValue
+        self.restartMessage = restartMessage
+    }
+
+    func currentValue() -> Bool {
+        if UserDefaults.standard.object(forKey: defaultsKey) == nil {
+            return defaultValue
+        }
+        return UserDefaults.standard.bool(forKey: defaultsKey)
+    }
+}
+
+struct ExperimentalFlagRow: View {
+    let flag: ExperimentalFlag
+    @State private var isEnabled: Bool
+
+    init(flag: ExperimentalFlag) {
+        self.flag = flag
+        _isEnabled = State(initialValue: flag.currentValue())
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image("ExperimentalEmptyState")
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: 92, height: 92)
-                .accessibilityIgnoresInvertColors()
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(
-                    reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
-                    value: hasAppeared
-                )
-                .accessibilityHidden(true)
+        SettingsCard(title: flag.name, icon: isEnabled ? "checkmark.circle.fill" : "circle.dashed", color: isEnabled ? .green : .secondary) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(flag.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-            Text("The lab is quiet")
-                .font(.subheadline.bold())
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 8)
-                .animation(
-                    reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
-                    value: hasAppeared
-                )
+                Toggle("Enable in Sorty", isOn: featureEnabledBinding)
+                    .toggleStyle(.switch)
 
-            Text("Sorty has no experimental features available right now.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(
-                    reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
-                    value: hasAppeared
-                )
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No experimental features are available right now.")
-        .task {
-            guard !hasAppeared else { return }
-            if !reduceMotion {
-                try? await Task.sleep(for: .milliseconds(100))
+                Text(flag.restartMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-            guard !Task.isCancelled else { return }
-            hasAppeared = true
         }
+        .onAppear {
+            isEnabled = flag.currentValue()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ExperimentalFlag-\(flag.name)")
+    }
+
+    private var featureEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { isEnabled },
+            set: { newValue in
+                UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
+
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isEnabled = newValue
+                }
+                HapticFeedbackManager.shared.selection()
+            }
+        )
     }
 }
 
 #Preview {
     ExperimentalSettingsView()
-        .frame(width: 500, height: 320)
-        .padding(24)
+        .frame(width: 500, height: 600)
 }

@@ -149,7 +149,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .help:
             return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "issue details", "bug report", "diagnostics"]
         case .experimental:
-            return ["experimental", "labs", "beta", "feature flags"]
+            return ["experimental", "labs", "beta", "feature flags", "defaults", "nightly updates", "crash risk"]
         }
     }
 
@@ -235,7 +235,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Copy Issue Details", summary: "Copy app, build, macOS, and device details for GitHub issue reports.", keywords: ["support data", "diagnostics", "bug report"])
             ]
         case .experimental:
-            return []
+            return [
+                SettingsFeatureSnippet(title: "Nightly Updates", summary: "Try fresh builds from the nightly feed with higher crash risk.", keywords: ["experimental", "beta", "defaults"])
+            ]
         }
     }
 
