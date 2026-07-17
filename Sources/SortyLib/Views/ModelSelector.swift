@@ -90,7 +90,6 @@ extension View {
 
 struct ModelSelectionPopover: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var entitlementManager: EntitlementManager
     @AccessibilityFocusState private var isSearchAccessibilityFocused: Bool
     @FocusState private var isSearchFocused: Bool
     @Binding var isPresented: Bool
@@ -135,15 +134,15 @@ struct ModelSelectionPopover: View {
         self.onSelect = onSelect
     }
     
-    private var visibleProviders: [AIProvider] {
-        entitlementManager.visibleProviders
+    private var availableProviders: [AIProvider] {
+        AIProvider.userSelectableProviders.filter { $0.isAvailable }
     }
     
     private var filteredProviders: [AIProvider] {
         if searchText.isEmpty {
-            return visibleProviders
+            return availableProviders
         }
-        return visibleProviders.filter { provider in
+        return availableProviders.filter { provider in
             provider.displayName.localizedCaseInsensitiveContains(searchText) ||
             getModelsForProvider(provider).contains { $0.localizedCaseInsensitiveContains(searchText) }
         }
@@ -307,10 +306,7 @@ struct ModelSelectionPopover: View {
     }
     
     private func providerRow(_ provider: AIProvider) -> some View {
-        let isLocked = !entitlementManager.isProviderSelectable(provider)
-
-        return Button {
-            guard !isLocked else { return }
+        Button {
             guard provider != selectedProvider else { return }
             HapticFeedbackManager.shared.selection()
             withAnimation(
@@ -325,38 +321,26 @@ struct ModelSelectionPopover: View {
                 await modelCatalog.refresh(provider: provider)
             }
         } label: {
-            ZStack(alignment: .trailing) {
-                HStack(spacing: 8) {
-                    ProviderLogoView(provider: provider, size: 12)
-                        .foregroundColor(selectedProvider == provider ? .white : .accentColor)
-                        .frame(width: 16)
-
-                    Text(provider.displayName)
-                        .font(.system(size: 12))
-                        .foregroundColor(selectedProvider == provider ? .white : .primary)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    if provider == currentProvider {
-                        Circle()
-                            .fill(selectedProvider == provider ? Color.white.opacity(0.8) : Color.green)
-                            .frame(width: 6, height: 6)
-                    }
-
-                    if modelCatalog.isFetching[provider] ?? false {
-                        SortyGradientCircularLoader(size: 9, lineWidth: 1.8)
-                    }
+            HStack(spacing: 8) {
+                ProviderLogoView(provider: provider, size: 12)
+                    .foregroundColor(selectedProvider == provider ? .white : .accentColor)
+                    .frame(width: 16)
+                
+                Text(provider.displayName)
+                    .font(.system(size: 12))
+                    .foregroundColor(selectedProvider == provider ? .white : .primary)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                if provider == currentProvider {
+                    Circle()
+                        .fill(selectedProvider == provider ? Color.white.opacity(0.8) : Color.green)
+                        .frame(width: 6, height: 6)
                 }
-                .saturation(isLocked ? 0.1 : 1)
-                .blur(radius: isLocked ? 2.2 : 0)
-                .opacity(isLocked ? 0.62 : 1)
-
-                if isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                
+                if modelCatalog.isFetching[provider] ?? false {
+                    SortyGradientCircularLoader(size: 9, lineWidth: 1.8)
                 }
             }
             .padding(.horizontal, 10)
@@ -368,10 +352,6 @@ struct ModelSelectionPopover: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isLocked)
-        .accessibilityValue(isLocked ? "Locked" : (selectedProvider == provider ? "Selected" : "Not selected"))
-        .accessibilityHint(isLocked ? "Requires an upgrade" : "Shows models from \(provider.displayName)")
-        .help(isLocked ? "Upgrade to use \(provider.displayName)" : "Show \(provider.displayName) models")
     }
     
     private var modelList: some View {
@@ -660,10 +640,6 @@ struct ModelSelectionPopover: View {
             }
             
             Spacer()
-
-            if entitlementManager.visibleProviders.contains(where: { !entitlementManager.isProviderSelectable($0) }) {
-                OpenLicensingButton(title: "Upgrade")
-            }
             
             Button("Cancel") {
                 isPresented = false

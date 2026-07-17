@@ -64,6 +64,18 @@
 	<string>AccentColor</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SortyLicenseGraceHours</key>
+	<string>$(SORTY_LICENSE_GRACE_HOURS)</string>
+	<key>SortyLicensePublicKeyID</key>
+	<string>$(SORTY_LICENSE_PUBLIC_KEY_ID)</string>
+	<key>SortyLicensePublicKeyPEM</key>
+	<string>$(SORTY_LICENSE_PUBLIC_KEY_PEM)</string>
+	<key>SortyLicenseSeatLimit</key>
+	<string>$(SORTY_LICENSE_SEAT_LIMIT)</string>
+	<key>SortyLicenseServiceURL</key>
+	<string>$(SORTY_LICENSE_SERVICE_URL)</string>
+	<key>SortyLicenseValidationHours</key>
+	<string>$(SORTY_LICENSE_VALIDATION_HOURS)</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>

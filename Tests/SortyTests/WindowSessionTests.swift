@@ -148,22 +148,10 @@ final class WindowSessionTests: XCTestCase {
     }
 
     func testLearningsClearDeeplinkRequiresDeletionConfirmation() {
-        EntitlementRuntime.update(EntitlementCatalog.shared.snapshot(for: .bundleUnlocked))
-        defer { EntitlementRuntime.update(EntitlementCatalog.shared.snapshot(for: .free)) }
-
         handle(.learnings(action: .clear, project: nil))
 
         XCTAssertEqual(session.appState.currentView, .learnings)
         XCTAssertTrue(session.appState.showDeleteUsageDataConfirmation)
-    }
-
-    func testLockedLearningsDeeplinkDoesNotRunDestructiveAction() {
-        EntitlementRuntime.update(EntitlementCatalog.shared.snapshot(for: .free))
-
-        handle(.learnings(action: .clear, project: nil))
-
-        XCTAssertEqual(session.appState.currentView, .learnings)
-        XCTAssertFalse(session.appState.showDeleteUsageDataConfirmation)
     }
 
     func testSettingsSectionSelectionIsAppliedAfterYield() async {

@@ -17,14 +17,9 @@ struct FinderIntegrationSettingsView: View {
     @State private var finderSyncMessage: String?
     @State private var isShowingAutomationPermissionInfo = false
     @EnvironmentObject var automationManager: AutomationManager
-    @EnvironmentObject var entitlementManager: EntitlementManager
     
     var body: some View {
-        ProLockedSettingsContent(
-            isLocked: !entitlementManager.allowsFinderIntegration,
-            message: "Finder integration is available with a paid unlock."
-        ) {
-            VStack(spacing: 14) {
+        VStack(spacing: 14) {
             SettingsCard(title: "Finder Integration", icon: "folder.badge.gearshape", color: .cyan) {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 12) {
@@ -189,7 +184,6 @@ struct FinderIntegrationSettingsView: View {
                 .animatedAppearance(delay: 0.1)
                 .transition(.opacity)
             }
-            }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: shouldShowTroubleshooting)
         .task {
@@ -276,7 +270,6 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private func refreshIntegrationStatus() async {
-        guard entitlementManager.allowsFinderIntegration else { return }
         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
         let status = await ExtensionCommunication.getIntegrationStatusAsync()
         isOrganizeActionInstalled = status.quickActionInstalled
@@ -288,8 +281,5 @@ struct FinderIntegrationSettingsView: View {
 
 #Preview {
     FinderIntegrationSettingsView()
-        .environmentObject(AppState())
-        .environmentObject(AutomationManager())
-        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 400)
 }

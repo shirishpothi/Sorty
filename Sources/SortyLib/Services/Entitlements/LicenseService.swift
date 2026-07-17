@@ -1,43 +1,145 @@
 import Foundation
+import CryptoKit
 
 public struct LicenseServiceConfiguration: Equatable, Sendable {
-    public static let sortyProductID = "w0WiZtzKwIjM7_xdOTSi2g=="
-    public static let sortyPurchaseURL = URL(string: "https://shirishpothi.gumroad.com/l/Sorty")!
-    public static let gumroadVerificationURL = URL(string: "https://api.gumroad.com/v2/licenses/verify")!
+    public static let serviceURLDefaultsKey = "sortyLicenseServiceURL"
+    public static let publicKeyPEMDefaultsKey = "sortyLicensePublicKeyPEM"
+    public static let keyIDDefaultsKey = "sortyLicensePublicKeyID"
+    public static let validationHoursDefaultsKey = "sortyLicenseValidationHours"
+    public static let graceHoursDefaultsKey = "sortyLicenseGraceHours"
+    public static let seatLimitDefaultsKey = "sortyLicenseSeatLimit"
+    public static let serviceURLInfoPlistKey = "SortyLicenseServiceURL"
+    public static let publicKeyPEMInfoPlistKey = "SortyLicensePublicKeyPEM"
+    public static let keyIDInfoPlistKey = "SortyLicensePublicKeyID"
+    public static let validationHoursInfoPlistKey = "SortyLicenseValidationHours"
+    public static let graceHoursInfoPlistKey = "SortyLicenseGraceHours"
+    public static let seatLimitInfoPlistKey = "SortyLicenseSeatLimit"
 
-    public let productID: String
-    public let purchaseURL: URL
-    public let verificationURL: URL
+    public let baseURL: URL?
+    public let publicKeyPEM: String
+    public let keyID: String
     public let validationInterval: TimeInterval
     public let gracePeriod: TimeInterval
+    public let seatLimit: Int
 
     public init(
-        productID: String,
-        purchaseURL: URL,
-        verificationURL: URL = LicenseServiceConfiguration.gumroadVerificationURL,
+        baseURL: URL?,
+        publicKeyPEM: String,
+        keyID: String,
         validationInterval: TimeInterval,
-        gracePeriod: TimeInterval
+        gracePeriod: TimeInterval,
+        seatLimit: Int
     ) {
-        self.productID = productID
-        self.purchaseURL = purchaseURL
-        self.verificationURL = verificationURL
+        self.baseURL = baseURL
+        self.publicKeyPEM = publicKeyPEM
+        self.keyID = keyID
         self.validationInterval = validationInterval
         self.gracePeriod = gracePeriod
+        self.seatLimit = seatLimit
     }
 
     public var isConfigured: Bool {
-        !productID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && purchaseURL.scheme == "https"
-            && verificationURL.scheme == "https"
+        baseURL != nil && !publicKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    public static func current() -> LicenseServiceConfiguration {
-        LicenseServiceConfiguration(
-            productID: sortyProductID,
-            purchaseURL: sortyPurchaseURL,
-            validationInterval: 24 * 60 * 60,
-            gracePeriod: 7 * 24 * 60 * 60
+    public static func current(
+        userDefaults: UserDefaults = .standard,
+        processInfo: ProcessInfo = .processInfo,
+        bundle: Bundle = .main,
+        environment: [String: String]? = nil
+    ) -> LicenseServiceConfiguration {
+        func cleaned(_ value: String?) -> String? {
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            guard trimmed != "$(inherited)",
+                  !(trimmed.hasPrefix("$(") && trimmed.hasSuffix(")")) else {
+                return nil
+            }
+            return trimmed
+        }
+
+        func env(_ key: String) -> String? {
+            guard Self.allowsEnvironmentOverridesInCurrentBuild else { return nil }
+            return cleaned(environment?[key] ?? processInfo.environment[key])
+        }
+
+        func defaults(_ key: String) -> String? {
+            guard Self.allowsUserDefaultsOverridesInCurrentBuild else { return nil }
+            return cleaned(userDefaults.string(forKey: key))
+        }
+
+        func bundleValue(_ key: String) -> String? {
+            if let stringValue = bundle.object(forInfoDictionaryKey: key) as? String {
+                return cleaned(stringValue)
+            }
+            if let numericValue = bundle.object(forInfoDictionaryKey: key) as? NSNumber {
+                return cleaned(numericValue.stringValue)
+            }
+            return nil
+        }
+
+        func normalizedPEM(_ value: String?) -> String {
+            guard let value = cleaned(value) else { return "" }
+            return value.replacingOccurrences(of: "\\n", with: "\n")
+        }
+
+        let urlString = env("SORTY_LICENSE_SERVICE_URL")
+            ?? defaults(serviceURLDefaultsKey)
+            ?? bundleValue(serviceURLInfoPlistKey)
+        let publicKeyPEM = normalizedPEM(
+            env("SORTY_LICENSE_PUBLIC_KEY_PEM")
+                ?? defaults(publicKeyPEMDefaultsKey)
+                ?? bundleValue(publicKeyPEMInfoPlistKey)
         )
+        let keyID = env("SORTY_LICENSE_PUBLIC_KEY_ID")
+            ?? defaults(keyIDDefaultsKey)
+            ?? bundleValue(keyIDInfoPlistKey)
+            ?? "sorty-license-key-v1"
+
+        let validationHours = Double(
+            env("SORTY_LICENSE_VALIDATION_HOURS")
+                ?? defaults(validationHoursDefaultsKey)
+                ?? bundleValue(validationHoursInfoPlistKey)
+                ?? ""
+        ) ?? 24
+        let graceHours = Double(
+            env("SORTY_LICENSE_GRACE_HOURS")
+                ?? defaults(graceHoursDefaultsKey)
+                ?? bundleValue(graceHoursInfoPlistKey)
+                ?? ""
+        ) ?? 168
+        let seatLimit = Int(
+            env("SORTY_LICENSE_SEAT_LIMIT")
+                ?? defaults(seatLimitDefaultsKey)
+                ?? bundleValue(seatLimitInfoPlistKey)
+                ?? ""
+        ) ?? 3
+
+        return LicenseServiceConfiguration(
+            baseURL: urlString.flatMap(URL.init(string:)),
+            publicKeyPEM: publicKeyPEM,
+            keyID: keyID,
+            validationInterval: validationHours * 3600,
+            gracePeriod: graceHours * 3600,
+            seatLimit: seatLimit
+        )
+    }
+
+    private static var allowsUserDefaultsOverridesInCurrentBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    private static var allowsEnvironmentOverridesInCurrentBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
     }
 }
 
@@ -51,6 +153,40 @@ public enum LicenseValidationStatus: String, Codable, Sendable {
     case active
     case revoked
     case expired
+}
+
+public struct LicenseDeviceIdentity: Codable, Equatable, Sendable {
+    public let deviceID: String
+    public let deviceName: String
+    public let appVersion: String
+
+    public init(deviceID: String, deviceName: String, appVersion: String) {
+        self.deviceID = deviceID
+        self.deviceName = deviceName
+        self.appVersion = appVersion
+    }
+}
+
+public struct LicenseSeatState: Codable, Equatable, Sendable {
+    public let currentDeviceID: String
+    public let currentDeviceName: String
+    public let currentDeviceRegisteredAt: Date?
+    public let activeSeatCount: Int
+    public let seatLimit: Int
+
+    public init(
+        currentDeviceID: String,
+        currentDeviceName: String,
+        currentDeviceRegisteredAt: Date?,
+        activeSeatCount: Int,
+        seatLimit: Int
+    ) {
+        self.currentDeviceID = currentDeviceID
+        self.currentDeviceName = currentDeviceName
+        self.currentDeviceRegisteredAt = currentDeviceRegisteredAt
+        self.activeSeatCount = activeSeatCount
+        self.seatLimit = seatLimit
+    }
 }
 
 public struct ActivatedLicenseRecord: Codable, Equatable, Sendable, Identifiable {
@@ -91,6 +227,7 @@ public struct LicenseEntitlementPayload: Codable, Equatable, Sendable {
     public let entitlements: [ProductEntitlement]
     public let customerEmail: String?
     public let warningMessage: String?
+    public let seatState: LicenseSeatState
     public let activeLicenses: [ActivatedLicenseRecord]
 
     public init(
@@ -103,6 +240,7 @@ public struct LicenseEntitlementPayload: Codable, Equatable, Sendable {
         entitlements: [ProductEntitlement],
         customerEmail: String?,
         warningMessage: String?,
+        seatState: LicenseSeatState,
         activeLicenses: [ActivatedLicenseRecord]
     ) {
         self.status = status
@@ -114,6 +252,7 @@ public struct LicenseEntitlementPayload: Codable, Equatable, Sendable {
         self.entitlements = entitlements
         self.customerEmail = customerEmail
         self.warningMessage = warningMessage
+        self.seatState = seatState
         self.activeLicenses = activeLicenses
     }
 
@@ -122,29 +261,84 @@ public struct LicenseEntitlementPayload: Codable, Equatable, Sendable {
     }
 }
 
+public struct SignedEntitlementEnvelope: Codable, Equatable, Sendable {
+    public let algorithm: String
+    public let keyID: String
+    public let payload: String
+    public let signature: String
+
+    public init(algorithm: String, keyID: String, payload: String, signature: String) {
+        self.algorithm = algorithm
+        self.keyID = keyID
+        self.payload = payload
+        self.signature = signature
+    }
+}
+
+public struct LicenseEntitlementEnvelopeResponse: Codable, Sendable {
+    public let envelope: SignedEntitlementEnvelope
+
+    public init(envelope: SignedEntitlementEnvelope) {
+        self.envelope = envelope
+    }
+}
+
+public struct LicenseActivationRequest: Codable, Sendable {
+    public let licenseKeys: [String]
+    public let device: LicenseDeviceIdentity
+    public let reason: LicenseValidationReason
+
+    public init(licenseKeys: [String], device: LicenseDeviceIdentity, reason: LicenseValidationReason) {
+        self.licenseKeys = licenseKeys
+        self.device = device
+        self.reason = reason
+    }
+}
+
+public struct LicenseDeactivationRequest: Codable, Sendable {
+    public let licenseKeys: [String]
+    public let deviceID: String
+
+    public init(licenseKeys: [String], deviceID: String) {
+        self.licenseKeys = licenseKeys
+        self.deviceID = deviceID
+    }
+}
+
+public struct LicenseServiceErrorPayload: Codable, Sendable {
+    public let error: String
+    public let code: String?
+    public let detail: String?
+
+    public init(error: String, code: String?, detail: String?) {
+        self.error = error
+        self.code = code
+        self.detail = detail
+    }
+}
+
 public enum LicenseServiceError: LocalizedError, Equatable {
     case serviceUnavailable
     case invalidConfiguration(String)
     case invalidResponse
     case decodingFailed
-    case rejected(String)
-    case wrongProduct
-    case inactivePurchase
+    case signatureVerificationFailed(String)
+    case server(statusCode: Int, message: String)
 
     public var errorDescription: String? {
         switch self {
         case .serviceUnavailable:
-            return "Gumroad license verification is unavailable. Try again in a moment."
+            return "Sorty's license verification service is not configured in this build yet."
         case .invalidConfiguration(let message):
             return message
-        case .invalidResponse, .decodingFailed:
-            return "Gumroad returned an unreadable license response. Try again."
-        case .rejected(let message):
+        case .invalidResponse:
+            return "The license verification service returned an invalid response."
+        case .decodingFailed:
+            return "Sorty couldn't decode the license response from the verification service."
+        case .signatureVerificationFailed(let message):
             return message
-        case .wrongProduct:
-            return "This license key belongs to a different Gumroad product."
-        case .inactivePurchase:
-            return "This Gumroad purchase is no longer active."
+        case .server(_, let message):
+            return message
         }
     }
 }
@@ -152,99 +346,78 @@ public enum LicenseServiceError: LocalizedError, Equatable {
 public protocol LicenseServiceClientProtocol: Sendable {
     func requestEntitlements(
         licenseKeys: [String],
+        device: LicenseDeviceIdentity,
         reason: LicenseValidationReason
-    ) async throws -> LicenseEntitlementPayload
+    ) async throws -> SignedEntitlementEnvelope
+
+    func deactivate(
+        licenseKeys: [String],
+        device: LicenseDeviceIdentity
+    ) async throws
 }
 
-public struct GumroadLicenseServiceClient: LicenseServiceClientProtocol {
+public struct RemoteLicenseServiceClient: LicenseServiceClientProtocol {
     private let configuration: LicenseServiceConfiguration
     private let session: URLSession
-    private let now: @Sendable () -> Date
 
     public init(
         configuration: LicenseServiceConfiguration,
-        session: URLSession = .shared,
-        now: @escaping @Sendable () -> Date = Date.init
+        session: URLSession = .shared
     ) {
         self.configuration = configuration
         self.session = session
-        self.now = now
     }
 
     public func requestEntitlements(
         licenseKeys: [String],
+        device: LicenseDeviceIdentity,
         reason: LicenseValidationReason
-    ) async throws -> LicenseEntitlementPayload {
-        guard configuration.isConfigured else {
-            throw LicenseServiceError.serviceUnavailable
-        }
+    ) async throws -> SignedEntitlementEnvelope {
+        let requestBody = LicenseActivationRequest(
+            licenseKeys: licenseKeys,
+            device: device,
+            reason: reason
+        )
+        let endpoint = reason == .activate ? "v1/activate" : "v1/refresh"
+        let response: LicenseEntitlementEnvelopeResponse = try await send(
+            requestBody,
+            path: endpoint,
+            expecting: LicenseEntitlementEnvelopeResponse.self
+        )
+        return response.envelope
+    }
 
-        let keys = normalized(keys: licenseKeys)
-        guard !keys.isEmpty else {
-            throw LicenseServiceError.rejected("Enter the license key from your Gumroad receipt.")
-        }
-
-        let purchases = try await verify(keys: keys)
-        let timestamp = now()
-        let records = zip(keys, purchases).map { licenseKey, purchase in
-            let saleID = purchase.saleID ?? "gumroad-\(Self.hashHint(licenseKey))"
-            return ActivatedLicenseRecord(
-                id: "\(saleID):\(ProductSKU.proBundle.rawValue)",
-                saleID: saleID,
-                keyHint: Self.mask(licenseKey),
-                sku: .proBundle,
-                productName: purchase.productName ?? ProductSKU.proBundle.displayName,
-                email: purchase.email,
-                purchasedAt: Self.parseDate(purchase.saleTimestamp ?? purchase.createdAt)
-            )
-        }
-
-        return LicenseEntitlementPayload(
-            status: .active,
-            issuedAt: timestamp,
-            validatedAt: timestamp,
-            nextValidationAt: timestamp.addingTimeInterval(configuration.validationInterval),
-            graceExpiresAt: timestamp.addingTimeInterval(configuration.gracePeriod),
-            bundleUnlocked: true,
-            entitlements: ProductEntitlement.allCases,
-            customerEmail: purchases.compactMap(\.email).first,
-            warningMessage: nil,
-            activeLicenses: records
+    public func deactivate(
+        licenseKeys: [String],
+        device: LicenseDeviceIdentity
+    ) async throws {
+        let requestBody = LicenseDeactivationRequest(
+            licenseKeys: licenseKeys,
+            deviceID: device.deviceID
+        )
+        let _: EmptyLicenseServiceResponse = try await send(
+            requestBody,
+            path: "v1/deactivate",
+            expecting: EmptyLicenseServiceResponse.self
         )
     }
 
-    private func verify(keys: [String]) async throws -> [GumroadPurchase] {
-        var purchases: [GumroadPurchase] = []
-        purchases.reserveCapacity(keys.count)
-
-        for key in keys {
-            purchases.append(try await verify(licenseKey: key))
+    private func send<RequestBody: Encodable, ResponseBody: Decodable>(
+        _ body: RequestBody,
+        path: String,
+        expecting responseType: ResponseBody.Type
+    ) async throws -> ResponseBody {
+        guard let baseURL = configuration.baseURL else {
+            throw LicenseServiceError.serviceUnavailable
         }
 
-        return purchases
-    }
-
-    private func verify(licenseKey: String) async throws -> GumroadPurchase {
-        let endpoint = configuration.verificationURL
-        guard endpoint.scheme?.lowercased() == "https" else {
-            throw LicenseServiceError.invalidConfiguration("Gumroad license verification must use HTTPS.")
-        }
-        guard NetworkPrivacyPolicy.isRequestAllowed(url: endpoint) else {
-            throw LicenseServiceError.invalidConfiguration(NetworkPrivacyPolicy.blockedMessage)
-        }
-
-        var form = URLComponents()
-        form.queryItems = [
-            URLQueryItem(name: "product_id", value: configuration.productID),
-            URLQueryItem(name: "license_key", value: licenseKey),
-            URLQueryItem(name: "increment_uses_count", value: "false")
-        ]
-
+        let endpoint = baseURL.appendingPathComponent(path)
+        try validate(endpoint: endpoint)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 20
-        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.httpBody = form.percentEncodedQuery?.data(using: .utf8)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder.licensePayloadEncoder.encode(body)
 
         let (data, response) = try await session.data(
             for: request,
@@ -255,132 +428,39 @@ public struct GumroadLicenseServiceClient: LicenseServiceClientProtocol {
         }
 
         guard (200 ... 299).contains(httpResponse.statusCode) else {
-            if let failure = try? JSONDecoder().decode(GumroadFailureResponse.self, from: data) {
-                throw LicenseServiceError.rejected(failure.message)
+            if let errorPayload = try? JSONDecoder.licensePayloadDecoder.decode(LicenseServiceErrorPayload.self, from: data) {
+                let message = errorPayload.detail ?? errorPayload.error
+                throw LicenseServiceError.server(statusCode: httpResponse.statusCode, message: message)
             }
-            throw LicenseServiceError.rejected("Gumroad could not verify this license key.")
+
+            let fallbackMessage = String(data: data, encoding: .utf8) ?? "The license service returned HTTP \(httpResponse.statusCode)."
+            throw LicenseServiceError.server(statusCode: httpResponse.statusCode, message: fallbackMessage)
         }
 
-        let verification: GumroadLicenseVerification
         do {
-            verification = try JSONDecoder().decode(GumroadLicenseVerification.self, from: data)
+            return try JSONDecoder.licensePayloadDecoder.decode(responseType, from: data)
         } catch {
             throw LicenseServiceError.decodingFailed
         }
-
-        guard verification.success, let purchase = verification.purchase else {
-            throw LicenseServiceError.rejected(verification.message ?? "Gumroad could not verify this license key.")
-        }
-        guard purchase.productID == configuration.productID else {
-            throw LicenseServiceError.wrongProduct
-        }
-        guard purchase.isActive(at: now()) else {
-            throw LicenseServiceError.inactivePurchase
-        }
-        return purchase
     }
 
-    private func normalized(keys: [String]) -> [String] {
-        var seen: Set<String> = []
-        return keys.compactMap { key in
-            let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return nil }
-            return trimmed
+    private func validate(endpoint: URL) throws {
+        guard let scheme = endpoint.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            throw LicenseServiceError.invalidConfiguration(
+                "Sorty's license service URL must use http or https."
+            )
+        }
+
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: endpoint) else {
+            throw LicenseServiceError.invalidConfiguration(NetworkPrivacyPolicy.blockedMessage)
+        }
+
+        if scheme != "https" && !NetworkPrivacyPolicy.isLoopbackURL(endpoint) {
+            throw LicenseServiceError.invalidConfiguration(
+                "Sorty's license service must use HTTPS unless it points to localhost or loopback."
+            )
         }
     }
-
-    private static func mask(_ licenseKey: String) -> String {
-        guard licenseKey.count > 8 else { return "****" }
-        return "\(licenseKey.prefix(4))...\(licenseKey.suffix(4))"
-    }
-
-    private static func hashHint(_ licenseKey: String) -> String {
-        String(licenseKey.unicodeScalars.reduce(into: UInt64(5_381)) { hash, scalar in
-            hash = ((hash << 5) &+ hash) &+ UInt64(scalar.value)
-        }, radix: 16)
-    }
-
-    fileprivate static func parseDate(_ value: String?) -> Date? {
-        guard let value else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    }
-}
-
-private struct GumroadLicenseVerification: Decodable, Sendable {
-    let success: Bool
-    let message: String?
-    let purchase: GumroadPurchase?
-}
-
-private struct GumroadPurchase: Decodable, Sendable {
-    let productID: String
-    let productName: String?
-    let email: String?
-    let refunded: Bool
-    let disputed: Bool
-    let chargebacked: Bool
-    let subscriptionEndedAt: String?
-    let subscriptionFailedAt: String?
-    let saleID: String?
-    let saleTimestamp: String?
-    let createdAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case productID = "product_id"
-        case productName = "product_name"
-        case email
-        case refunded
-        case disputed
-        case chargebacked
-        case subscriptionEndedAt = "subscription_ended_at"
-        case subscriptionFailedAt = "subscription_failed_at"
-        case saleID = "sale_id"
-        case id
-        case orderNumber = "order_number"
-        case saleTimestamp = "sale_timestamp"
-        case createdAt = "created_at"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        productID = try container.decode(String.self, forKey: .productID)
-        productName = try container.decodeIfPresent(String.self, forKey: .productName)
-        email = try container.decodeIfPresent(String.self, forKey: .email)
-        refunded = try container.decodeIfPresent(Bool.self, forKey: .refunded) ?? false
-        disputed = try container.decodeIfPresent(Bool.self, forKey: .disputed) ?? false
-        chargebacked = try container.decodeIfPresent(Bool.self, forKey: .chargebacked) ?? false
-        subscriptionEndedAt = try container.decodeIfPresent(String.self, forKey: .subscriptionEndedAt)
-        subscriptionFailedAt = try container.decodeIfPresent(String.self, forKey: .subscriptionFailedAt)
-        saleTimestamp = try container.decodeIfPresent(String.self, forKey: .saleTimestamp)
-        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
-
-        if let value = try container.decodeIfPresent(String.self, forKey: .saleID) {
-            saleID = value
-        } else if let value = try container.decodeIfPresent(String.self, forKey: .id) {
-            saleID = value
-        } else if let value = try container.decodeIfPresent(Int.self, forKey: .orderNumber) {
-            saleID = String(value)
-        } else {
-            saleID = nil
-        }
-    }
-
-    func isActive(at now: Date) -> Bool {
-        guard !refunded, !disputed, !chargebacked else { return false }
-        if let endedAt = GumroadLicenseServiceClient.parseDate(subscriptionEndedAt), endedAt <= now {
-            return false
-        }
-        if let failedAt = GumroadLicenseServiceClient.parseDate(subscriptionFailedAt), failedAt <= now {
-            return false
-        }
-        return true
-    }
-}
-
-private struct GumroadFailureResponse: Decodable, Sendable {
-    let message: String
 }
 
 private final class LicenseRedirectRejectingDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -394,6 +474,57 @@ private final class LicenseRedirectRejectingDelegate: NSObject, URLSessionTaskDe
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         completionHandler(nil)
+    }
+}
+
+private struct EmptyLicenseServiceResponse: Codable, Sendable {}
+
+public struct SignedEntitlementVerifier: Sendable {
+    private let publicKey: P256.Signing.PublicKey
+    private let expectedKeyID: String
+
+    public init(configuration: LicenseServiceConfiguration) throws {
+        guard configuration.isConfigured else {
+            throw LicenseServiceError.serviceUnavailable
+        }
+        self.publicKey = try P256.Signing.PublicKey(pemRepresentation: configuration.publicKeyPEM)
+        self.expectedKeyID = configuration.keyID
+    }
+
+    public func verify(_ envelope: SignedEntitlementEnvelope) throws -> LicenseEntitlementPayload {
+        guard envelope.algorithm.uppercased() == "ES256" else {
+            throw LicenseServiceError.signatureVerificationFailed(
+                "Sorty received an unsupported license signature algorithm: \(envelope.algorithm)."
+            )
+        }
+
+        guard envelope.keyID == expectedKeyID else {
+            throw LicenseServiceError.signatureVerificationFailed(
+                "Sorty received a license payload signed with an unexpected key identifier."
+            )
+        }
+
+        guard let payloadData = Data(base64Encoded: envelope.payload),
+              let signatureData = Data(base64Encoded: envelope.signature) else {
+            throw LicenseServiceError.signatureVerificationFailed(
+                "Sorty couldn't decode the signed entitlement payload."
+            )
+        }
+
+        let signature = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
+        guard publicKey.isValidSignature(signature, for: payloadData) else {
+            throw LicenseServiceError.signatureVerificationFailed(
+                "The signed entitlement payload failed local signature verification."
+            )
+        }
+
+        do {
+            return try JSONDecoder.licensePayloadDecoder.decode(LicenseEntitlementPayload.self, from: payloadData)
+        } catch {
+            throw LicenseServiceError.signatureVerificationFailed(
+                "The signed entitlement payload passed signature checks but could not be decoded."
+            )
+        }
     }
 }
 

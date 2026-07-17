@@ -65,9 +65,6 @@ public final class ModelCatalog: ObservableObject {
     }
     
     public func cachedModels(for provider: AIProvider) -> [ModelInfo] {
-        guard EntitlementRuntime.currentSnapshot.isProviderSelectable(provider) else {
-            return []
-        }
         let cached = modelsByProvider[provider] ?? []
         if cached.isEmpty {
             return fallbackModels(for: provider)
@@ -76,13 +73,6 @@ public final class ModelCatalog: ObservableObject {
     }
     
     public func refresh(provider: AIProvider, force: Bool = false) async {
-        guard EntitlementRuntime.currentSnapshot.isProviderSelectable(provider) else {
-            modelsByProvider[provider] = []
-            isFetching[provider] = false
-            usingFallback[provider] = false
-            lastError[provider] = nil
-            return
-        }
         if !force, let timestamp = cacheTimestamps[provider] {
             let ttl = provider == .ollama ? Self.ollamaTTL : Self.cloudTTL
             if Date().timeIntervalSince(timestamp) < ttl {
@@ -118,7 +108,7 @@ public final class ModelCatalog: ObservableObject {
     
     public func refreshAllAvailable(force: Bool = false) async {
         await withTaskGroup(of: Void.self) { group in
-            for provider in EntitlementRuntime.currentSnapshot.availableProviders where provider.isAvailable {
+            for provider in AIProvider.allCases where provider.isAvailable {
                 group.addTask {
                     await self.refresh(provider: provider, force: force)
                 }
@@ -157,7 +147,7 @@ public final class ModelCatalog: ObservableObject {
         config.model = provider.defaultModel
         config.requiresAPIKey = provider.typicallyRequiresAPIKey
         config.apiKey = KeychainManager.get(key: provider.keychainKey)
-        return config.applyingEntitlements()
+        return config
     }
     
     public func performDebouncedSearch(query: String) {

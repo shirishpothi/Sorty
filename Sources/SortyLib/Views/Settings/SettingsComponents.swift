@@ -377,54 +377,6 @@ extension View {
     }
 }
 
-struct ProLockedSettingsContent<Content: View>: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    let isLocked: Bool
-    let message: String
-    var buttonTitle: String
-    @ViewBuilder let content: Content
-
-    init(
-        isLocked: Bool,
-        message: String,
-        buttonTitle: String = "Upgrade",
-        @ViewBuilder content: () -> Content
-    ) {
-        self.isLocked = isLocked
-        self.message = message
-        self.buttonTitle = buttonTitle
-        self.content = content()
-    }
-
-    var body: some View {
-        ZStack {
-            content
-                .disabled(isLocked)
-                .saturation(isLocked ? 0.1 : 1)
-                .blur(radius: isLocked ? 2.8 : 0)
-                .opacity(isLocked ? 0.62 : 1)
-                .accessibilityHidden(isLocked)
-
-            if isLocked {
-                VStack(spacing: 8) {
-                    Label("Locked", systemImage: "lock.fill")
-                        .font(.caption.weight(.semibold))
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    OpenLicensingButton(title: buttonTitle, size: .mini)
-                }
-                .padding(12)
-                .background(AccessibleLiquidGlassPanel(cornerRadius: 12))
-                .accessibilityElement(children: .contain)
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isLocked)
-    }
-}
-
 private struct FeatureRow: View {
     let icon: String
     let text: String

@@ -11,7 +11,6 @@ struct AutomationSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var entitlementManager: EntitlementManager
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
@@ -24,20 +23,10 @@ struct AutomationSettingsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            ProLockedSettingsContent(
-                isLocked: !entitlementManager.allowsAutomationSeparateModelSelection,
-                message: "A separate automation model is available with a paid unlock."
-            ) {
-                globalModelSection
-            }
+            globalModelSection
                 .animatedAppearance(delay: 0.05)
 
-            ProLockedSettingsContent(
-                isLocked: !entitlementManager.allowsBackgroundAutomation,
-                message: "Launch-at-login and background automation are available with a paid unlock."
-            ) {
-                backgroundBehaviorSection
-            }
+            backgroundBehaviorSection
                 .animatedAppearance(delay: 0.1)
         }
         .onAppear {
@@ -292,6 +281,5 @@ struct AutomationSettingsView: View {
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(WatchedFoldersManager())
         .environmentObject(AppState())
-        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 600)
 }

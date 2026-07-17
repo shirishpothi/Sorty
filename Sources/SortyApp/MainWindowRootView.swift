@@ -5,7 +5,6 @@ import SortyLib
 #endif
 
 struct MainWindowRootView: View {
-    @EnvironmentObject private var entitlementManager: EntitlementManager
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
@@ -131,10 +130,6 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                guard entitlementManager.isEnabled(.learnings) else {
-                    windowSession.appState.currentView = .learnings
-                    return
-                }
                 windowSession.appState.currentView = .learnings
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 100_000_000)
@@ -143,10 +138,6 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                guard entitlementManager.isEnabled(.learnings) else {
-                    windowSession.appState.currentView = .learnings
-                    return
-                }
                 Task { @MainActor in
                     await learningsManager.clearAllData()
                 }
@@ -199,17 +190,6 @@ struct MainWindowRootView: View {
                 }
                 scheduleSetupRepairReconciliation()
             }
-            .onChange(of: entitlementManager.snapshot) { _, snapshot in
-                settingsViewModel.applyEntitlementSnapshot(snapshot)
-                watchedFoldersManager.applyEntitlementPolicy(snapshot)
-                storageLocationsManager.applyEntitlementPolicy(snapshot)
-                Task { @MainActor in
-                    await windowSession.applyConfiguration(
-                        settingsViewModel.config,
-                        learningsManager: learningsManager
-                    )
-                }
-            }
             .onChange(of: windowSession.appState.hasCompletedOnboarding) { wasComplete, isComplete in
                 scheduleSetupRepairReconciliation()
                 if !wasComplete && isComplete {
@@ -243,7 +223,6 @@ struct MainWindowRootView: View {
 
     private var contentWithEnvironment: some View {
         ContentView()
-            .environmentObject(entitlementManager)
             .environmentObject(settingsViewModel)
             .environmentObject(windowSession.appState)
             .environmentObject(personaManager)

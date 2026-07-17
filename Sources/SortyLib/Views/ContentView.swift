@@ -10,9 +10,7 @@
 import SwiftUI
 
 public struct ContentView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var entitlementManager: EntitlementManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var exclusionRules: ExclusionRulesManager
@@ -61,7 +59,7 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
+        .animation(.easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
     }
 
     private var mainContent: some View {
@@ -178,28 +176,21 @@ public struct ContentView: View {
 
     @ViewBuilder
     private func contentView(for view: AppState.AppView) -> some View {
-        if let capability = view.requiredCapability,
-           !entitlementManager.isEnabled(capability) {
-            UpgradePromptView(capability: capability)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(40)
-        } else {
-            switch view {
-            case .organize:
-                OrganizeView()
-            case .settings:
-                SettingsView()
-            case .history:
-                HistoryView()
-            case .duplicates:
-                DuplicatesView()
-            case .exclusions:
-                ExclusionRulesView()
-            case .watchedFolders:
-                WatchedFoldersView()
-            case .learnings:
-                LearningsView()
-            }
+        switch view {
+        case .organize:
+            OrganizeView()
+        case .settings:
+            SettingsView()
+        case .history:
+            HistoryView()
+        case .duplicates:
+            DuplicatesView()
+        case .exclusions:
+            ExclusionRulesView()
+        case .watchedFolders:
+            WatchedFoldersView()
+        case .learnings:
+            LearningsView()
         }
     }
 

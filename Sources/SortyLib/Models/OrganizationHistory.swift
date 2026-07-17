@@ -548,18 +548,6 @@ public class OrganizationHistory: ObservableObject {
         entries.count
     }
 
-    public var manualOrganizationSessionCount: Int {
-        entries.filter { entry in
-            guard entry.source == .manual else { return false }
-            switch entry.status {
-            case .cancelled, .skipped, .duplicatesCleanup:
-                return false
-            case .completed, .failed, .undo, .partiallyUndone:
-                return true
-            }
-        }.count
-    }
-
     public var revertedCount: Int {
         entries.filter { $0.status == .undo || $0.status == .partiallyUndone || $0.isUndone }.count
     }

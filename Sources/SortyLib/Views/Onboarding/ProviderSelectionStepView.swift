@@ -8,9 +8,7 @@
 import SwiftUI
 
 public struct ProviderSelectionStepView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var entitlementManager: EntitlementManager
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
@@ -39,6 +37,7 @@ public struct ProviderSelectionStepView: View {
         case failed
     }
 
+    let providers = AIProvider.userSelectableProviders
     private let providerGridColumns = Array(
         repeating: GridItem(.flexible(), spacing: 8),
         count: 3
@@ -97,28 +96,16 @@ public struct ProviderSelectionStepView: View {
                 .frame(maxWidth: 640)
 
                 LazyVGrid(columns: providerGridColumns, spacing: 8) {
-                    ForEach(entitlementManager.visibleProviders, id: \.self) { provider in
+                    ForEach(providers, id: \.self) { provider in
                         OnboardingProviderRow(
                             provider: provider,
-                            isSelected: settingsViewModel.config.provider == provider,
-                            isLocked: !entitlementManager.isProviderSelectable(provider)
+                            isSelected: settingsViewModel.config.provider == provider
                         ) {
                             selectProvider(provider)
                         }
                     }
                 }
                 .frame(maxWidth: 640)
-
-                if entitlementManager.visibleProviders.contains(where: { !entitlementManager.isProviderSelectable($0) }) {
-                    HStack(spacing: 10) {
-                        Label("More providers available with Pro", systemImage: "lock.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        OpenLicensingButton(title: "View Upgrade")
-                    }
-                    .frame(maxWidth: 640)
-                }
 
                 if settingsViewModel.config.provider != .appleFoundationModel {
                     VStack(alignment: .leading, spacing: 14) {
@@ -167,7 +154,7 @@ public struct ProviderSelectionStepView: View {
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
         .onAppear {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { hasAppeared = true }
+            withAnimation { hasAppeared = true }
             if settingsViewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }
@@ -411,7 +398,7 @@ public struct ProviderSelectionStepView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if supportsSubscriptionAuthUI {
                         Picker("Authentication", selection: selectedAuthMethod) {
-                            ForEach(entitlementManager.supportedAuthMethods(for: settingsViewModel.config.provider), id: \.self) { method in
+                            ForEach(settingsViewModel.config.provider.supportedAuthMethods, id: \.self) { method in
                                 Text(method.displayName).tag(method)
                             }
                         }
@@ -813,9 +800,8 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func selectProvider(_ provider: AIProvider) {
-        guard entitlementManager.isProviderSelectable(provider) else { return }
         HapticFeedbackManager.shared.selection()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             settingsViewModel.config.provider = provider
             if let defaultURL = provider.defaultAPIURL {
                 settingsViewModel.config.apiURL = defaultURL
@@ -1077,10 +1063,8 @@ struct PrivacyFeatureRow: View {
 struct OnboardingProviderRow: View {
     let provider: AIProvider
     let isSelected: Bool
-    let isLocked: Bool
     let action: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
     private var subtitle: String? {
@@ -1097,54 +1081,41 @@ struct OnboardingProviderRow: View {
 
     var body: some View {
         Button(action: {
-            if provider.isAvailable && !isLocked { action() }
+            if provider.isAvailable { action() }
         }) {
-            ZStack(alignment: .trailing) {
-                HStack(spacing: 9) {
-                    ProviderLogoView(provider: provider, size: 20)
-                        .frame(width: 28, height: 28)
+            HStack(spacing: 9) {
+                ProviderLogoView(provider: provider, size: 20)
+                    .frame(width: 28, height: 28)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(provider.displayName)
-                            .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
-                            .foregroundColor(provider.isAvailable ? .primary : .secondary)
-                            .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(provider.displayName)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
+                        .foregroundColor(provider.isAvailable ? .primary : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
 
-                        if let subtitle {
-                            Text(subtitle)
-                                .font(.caption2)
-                                .foregroundStyle(subtitleColor)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    Spacer(minLength: 4)
-
-                    if !provider.isAvailable {
-                        Text("Unavailable")
+                    if let subtitle {
+                        Text(subtitle)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.secondary.opacity(0.1), in: Capsule())
-                    } else if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
-                            .font(.system(size: 17))
-                            .transition(.scale.combined(with: .opacity))
+                            .foregroundStyle(subtitleColor)
+                            .lineLimit(1)
                     }
                 }
-                .saturation(isLocked ? 0.1 : 1)
-                .blur(radius: isLocked ? 2.5 : 0)
-                .opacity(isLocked ? 0.66 : 1)
 
-                if isLocked {
-                    Label("Pro", systemImage: "lock.fill")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Color(nsColor: .windowBackgroundColor), in: Capsule())
-                        .accessibilityHidden(true)
+                Spacer(minLength: 4)
+
+                if !provider.isAvailable {
+                    Text("Unavailable")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(0.1), in: Capsule())
+                } else if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
+                        .font(.system(size: 17))
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(.vertical, 8)
@@ -1168,15 +1139,12 @@ struct OnboardingProviderRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isLocked || !provider.isAvailable)
         .opacity(provider.isAvailable ? 1.0 : 0.6)
         .onHover { hovering in
-            if provider.isAvailable && !isLocked { isHovering = hovering }
+            if provider.isAvailable { isHovering = hovering }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
-        .accessibilityValue(isLocked ? "Locked" : (isSelected ? "Selected" : "Not selected"))
-        .accessibilityHint(isLocked ? "Requires an upgrade" : "Selects \(provider.displayName)")
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.easeOut(duration: 0.15), value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
     }
 }
@@ -1188,8 +1156,6 @@ struct OnboardingProviderRow: View {
 
     ProviderSelectionStepView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(AppState())
-        .environmentObject(EntitlementManager())
         .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
         .environmentObject(codexAuthManager)
 }

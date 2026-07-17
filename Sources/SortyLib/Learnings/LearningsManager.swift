@@ -117,7 +117,7 @@ public class LearningsManager: ObservableObject {
     
     private func computeSummary() -> LearningsSummary {
         // Check consent first
-        guard canCaptureLearnings else {
+        guard consentManager.canCollectData else {
             return LearningsSummary(
                 state: .noConsent,
                 maturity: .new,
@@ -249,20 +249,8 @@ public class LearningsManager: ObservableObject {
         loadLearningsModelSelection()
         loadModelDirectories()
     }
-
-    private var isLearningsEnabled: Bool {
-        EntitlementRuntime.currentSnapshot.isEnabled(.learnings)
-    }
-
-    private var canCaptureLearnings: Bool {
-        isLearningsEnabled && consentManager.canCollectData
-    }
     
     public func configure(with config: AIConfig) {
-        guard isLearningsEnabled else {
-            error = nil
-            return
-        }
         do {
             let client = try AIClientFactory.createClient(config: effectiveAIConfig(from: config))
             analyzer.configure(aiClient: client)
@@ -410,7 +398,7 @@ public class LearningsManager: ObservableObject {
     }
 
     public func upsertOrganizationSession(_ session: OrganizationSession) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(session.folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -773,7 +761,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record additional instructions provided by user
     public func recordAdditionalInstruction(_ instruction: String, for folderPath: String, fileCount: Int? = nil) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -802,7 +790,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record guiding instructions for next attempt
     public func recordGuidingInstruction(_ instruction: String, for folderPath: String? = nil, fileCount: Int? = nil) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -845,7 +833,7 @@ public class LearningsManager: ObservableObject {
         regenerationInstructions: [String]? = nil,
         aiModel: String? = nil
     ) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -882,7 +870,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a regenerated organization session
     public func recordRegeneratedOrganization(folderPath: String, previousPlanSummary: String? = nil, guidingInstruction: String? = nil, regenerationCount: Int) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -912,7 +900,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a steering prompt (post-organization feedback)
     public func recordSteeringPrompt(_ prompt: String, folderPath: String?, sessionId: String?) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -939,7 +927,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a directory change made after AI organization
     public func recordDirectoryChange(from original: String, to new: String, wasAIOrganized: Bool, sessionId: String? = nil) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !shouldExcludeLearning(paths: [original, new]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -966,7 +954,7 @@ public class LearningsManager: ObservableObject {
         action: ExampleAction,
         confidence: Double?
     ) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1004,7 +992,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a history revert event
     public func recordHistoryRevert(entryId: String, operationCount: Int, folderPath: String? = nil, revertReason: String? = nil) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1030,7 +1018,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record quick outcome feedback for a session from history view
     public func recordSessionOutcomeFeedback(sessionId: String, outcome: SessionOutcome, folderPath: String? = nil) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !sessionLearningPaused else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
@@ -1076,7 +1064,6 @@ public class LearningsManager: ObservableObject {
     
     /// Get the count of active rules applicable to a specific folder
     public func activeRuleCount(forFolder folderPath: String) -> Int {
-        guard isLearningsEnabled else { return 0 }
         guard let profile = currentProfile else { return 0 }
         return profile.inferredRules
             .filter { $0.isEnabled && $0.status == .active }
@@ -1086,7 +1073,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a successfully completed organization run
     public func recordSuccessfulRun(folderPath: String, fileCount: Int, ruleIdsUsed: Set<String>) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1112,7 +1099,6 @@ public class LearningsManager: ObservableObject {
         from session: OrganizationSession,
         proposedFolders: [String]
     ) -> InlineLearningMoment? {
-        guard isLearningsEnabled else { return nil }
         guard !session.filesMoved.isEmpty else { return nil }
         
         let existingFolderNames = Set(session.folderPatterns.map(\.folderName))
@@ -1180,7 +1166,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record the user's answer to an inline learning moment
     public func recordInlineLearningMomentAnswer(_ answer: InlineLearningMomentAnswer) async {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -1315,7 +1301,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a manual correction (File moved manually after AI organization)
     public func recordCorrection(originalPath: String, newPath: String) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !shouldExcludeLearning(paths: [originalPath, newPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1335,7 +1321,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rejection (File reverted or explicitly rejected)
     public func recordRejection(originalPath: String) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !isPathExcludedFromLearning(originalPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1368,7 +1354,7 @@ public class LearningsManager: ObservableObject {
     
     /// Internal helper to add a labeled example
     public func addLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard !shouldExcludeLearning(paths: [srcPath, dstPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
@@ -1436,7 +1422,6 @@ public class LearningsManager: ObservableObject {
     
     /// Run analysis on current profile and paths
     public func analyze(rootPaths: [String], examplePaths: [String]) async {
-        guard isLearningsEnabled else { return }
         guard useAIForLearnings else {
             error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
             return
@@ -1455,7 +1440,6 @@ public class LearningsManager: ObservableObject {
 
     /// Re-synthesize learning insights without requiring scan roots.
     public func synthesizeLearnings() async {
-        guard isLearningsEnabled else { return }
         guard useAIForLearnings else {
             error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
             return
@@ -1844,7 +1828,6 @@ public class LearningsManager: ObservableObject {
     
     /// Apply proposed mappings with optional backup
     public func applyMappings(backupDirectory: URL?, onlyHighConfidence: Bool = false) async {
-        guard isLearningsEnabled else { return }
         guard var profile = currentProfile, let result = analysisResult else {
             error = "No profile or analysis result"
             return
@@ -1991,7 +1974,6 @@ public class LearningsManager: ObservableObject {
     /// The context is intentionally short and session-centric so the model gets
     /// recent, attributable signals instead of a long undifferentiated dump.
     public func generatePromptContext(forFolder folderPath: String? = nil) -> String {
-        guard isLearningsEnabled else { return "" }
         guard let profile = currentProfile, (profile.consentGranted || consentManager.hasConsented) else {
             return ""
         }
@@ -2306,7 +2288,6 @@ public class LearningsManager: ObservableObject {
     
     /// Enable or disable a specific inferred rule
     public func setRuleEnabled(ruleId: String, enabled: Bool) async {
-        guard isLearningsEnabled else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2318,7 +2299,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rule success (applied and no correction followed)
     public func recordRuleSuccess(ruleId: String) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2331,7 +2312,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rule failure (applied but user corrected)
     public func recordRuleFailure(ruleId: String) {
-        guard canCaptureLearnings else { return }
+        guard consentManager.canCollectData else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2351,7 +2332,6 @@ public class LearningsManager: ObservableObject {
     
     /// Get active rules filtered by learning strength and optionally by scope
     public func getActiveRules(forFolder folderPath: String? = nil, forPersona personaId: UUID? = nil) -> [InferredRule] {
-        guard isLearningsEnabled else { return [] }
         guard let profile = currentProfile else { return [] }
 
         return activeRules(from: profile, folderPath: folderPath, personaId: personaId)
@@ -2382,14 +2362,12 @@ public class LearningsManager: ObservableObject {
     
     /// Get pending approval rules
     public func getPendingRules() -> [InferredRule] {
-        guard isLearningsEnabled else { return [] }
         guard let profile = currentProfile else { return [] }
         return profile.inferredRules.filter { $0.status == .pendingApproval }
     }
     
     /// Approve a pending rule
     public func approveRule(ruleId: String) async {
-        guard isLearningsEnabled else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2401,7 +2379,6 @@ public class LearningsManager: ObservableObject {
     
     /// Reject a pending rule with cooling-off period
     public func rejectRule(ruleId: String, cooldownDays: Int = 30) async {
-        guard isLearningsEnabled else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2420,7 +2397,6 @@ public class LearningsManager: ObservableObject {
     
     /// Edit a pending rule's explanation and approve it
     public func editAndApproveRule(ruleId: String, newExplanation: String? = nil, newPriority: Int? = nil, newScope: RuleScope? = nil) async {
-        guard isLearningsEnabled else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -2464,7 +2440,6 @@ public class LearningsManager: ObservableObject {
     
     /// Check if a rule pattern is in cooldown (was recently rejected)
     public func isRuleInCooldown(pattern: String) -> Bool {
-        guard isLearningsEnabled else { return false }
         guard let profile = currentProfile else { return false }
         let now = Date()
         
@@ -2568,7 +2543,6 @@ public class LearningsManager: ObservableObject {
     }
 
     public func setLearningsModelOverride(provider: AIProvider, model: String) {
-        guard isLearningsEnabled else { return }
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { return }
         learningsModelSelection = LearningsModelSelection(provider: provider, model: trimmedModel)
@@ -2581,16 +2555,14 @@ public class LearningsManager: ObservableObject {
     }
 
     public func effectiveAIConfig(from config: AIConfig) -> AIConfig {
-        let gatedConfig = config.applyingEntitlements()
-        guard isLearningsEnabled else { return gatedConfig }
         guard
             let learningsModelSelection,
-            learningsModelSelection.provider == gatedConfig.provider
+            learningsModelSelection.provider == config.provider
         else {
-            return gatedConfig
+            return config
         }
 
-        var effectiveConfig = gatedConfig
+        var effectiveConfig = config
         effectiveConfig.model = learningsModelSelection.model
         return effectiveConfig
     }
@@ -2781,8 +2753,7 @@ public class LearningsManager: ObservableObject {
     
     /// Returns enabled, accessible reference directory paths (capped at maxEnabledModelDirectories)
     public func enabledModelDirectoryPaths() -> [String] {
-        guard isLearningsEnabled else { return [] }
-        return modelDirectories
+        modelDirectories
             .filter { $0.isEnabled && $0.isAccessible }
             .prefix(Self.maxEnabledModelDirectories)
             .map { $0.path }
@@ -2791,7 +2762,6 @@ public class LearningsManager: ObservableObject {
     /// Build a reference-directory context string for prompt injection.
     /// Uses cached snapshots when available, falling back to live scan via PromptBuilder.
     public func generateModelDirectoryContext() -> String {
-        guard isLearningsEnabled else { return "" }
         let enabledDirs = modelDirectories
             .filter { $0.isEnabled && $0.isAccessible }
             .prefix(Self.maxEnabledModelDirectories)

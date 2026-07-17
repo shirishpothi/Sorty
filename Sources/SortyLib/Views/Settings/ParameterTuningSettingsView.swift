@@ -9,16 +9,11 @@ import SwiftUI
 
 struct ParameterTuningSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var entitlementManager: EntitlementManager
     
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
-                ProLockedSettingsContent(
-                    isLocked: !entitlementManager.allowsParameterTuning,
-                    message: "Temperature tuning is available with a paid unlock."
-                ) {
-                    VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Temperature")
                             .font(.subheadline)
@@ -45,7 +40,6 @@ struct ParameterTuningSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    }
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -56,7 +50,5 @@ struct ParameterTuningSettingsView: View {
 #Preview {
     ParameterTuningSettingsView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(AppState())
-        .environmentObject(EntitlementManager())
         .frame(width: 500, height: 200)
 }

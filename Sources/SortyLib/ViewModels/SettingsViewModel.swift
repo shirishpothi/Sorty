@@ -26,14 +26,6 @@ public class SettingsViewModel: ObservableObject {
         didSet {
             guard !isApplyingConfigMutation else { return }
 
-            let sanitizedConfig = config.applyingEntitlements()
-            if sanitizedConfig != config {
-                isApplyingConfigMutation = true
-                config = sanitizedConfig
-                isApplyingConfigMutation = false
-                return
-            }
-
             let oldKey = oldValue.apiKey
             let newKey = config.apiKey
             let oldProvider = oldValue.provider
@@ -163,7 +155,6 @@ public class SettingsViewModel: ObservableObject {
         userDefaults = .standard
         credentialStore = .keychain
         loadConfig()
-        applyEntitlementSnapshot(EntitlementRuntime.currentSnapshot)
         checkAppleModelAvailability()
         setupNotificationObservers()
     }
@@ -176,7 +167,6 @@ public class SettingsViewModel: ObservableObject {
         self.userDefaults = userDefaults
         self.credentialStore = credentialStore
         loadConfig()
-        applyEntitlementSnapshot(EntitlementRuntime.currentSnapshot)
         checkAppleModelAvailability()
         if observesNotifications {
             setupNotificationObservers()
@@ -196,7 +186,7 @@ public class SettingsViewModel: ObservableObject {
 
             decoded.enableSmartRename = true
             isApplyingConfigMutation = true
-            config = decoded.applyingEntitlements()
+            config = decoded
             isApplyingConfigMutation = false
         }
 
@@ -366,22 +356,12 @@ public class SettingsViewModel: ObservableObject {
         }
     }
 
-    public func applyEntitlementSnapshot(_ snapshot: EntitlementSnapshot) {
-        let sanitizedConfig = snapshot.sanitized(config)
-        guard sanitizedConfig != config else { return }
-
-        isApplyingConfigMutation = true
-        config = sanitizedConfig
-        isApplyingConfigMutation = false
-        updateAvailableModels(force: true)
-    }
-
     public func reset() {
         // Clear per-provider saved model selections
         for provider in AIProvider.allCases {
             userDefaults.removeObject(forKey: modelSelectionKey(for: provider))
         }
-        config = AIConfig.default.applyingEntitlements()
+        config = .default
         availableModels = config.provider.recommendedModels
         // No need to save manually here as config.didSet will trigger debouncedSave,
         // but since we want to clear from UserDefaults, we already handled it in AppState.

@@ -653,6 +653,8 @@ public final class EntitlementManager: ObservableObject {
     @Published public private(set) var snapshot: EntitlementSnapshot
     @Published public private(set) var activeLicenses: [ActivatedLicenseRecord]
     @Published public private(set) var customerEmail: String?
+    @Published public private(set) var currentDevice: LicenseDeviceIdentity
+    @Published public private(set) var seatState: LicenseSeatState?
     @Published public private(set) var validatedAt: Date?
     @Published public private(set) var nextValidationAt: Date?
     @Published public private(set) var graceExpiresAt: Date?
@@ -665,6 +667,7 @@ public final class EntitlementManager: ObservableObject {
     private let configuration: LicenseServiceConfiguration
     private let secureStore: EntitlementSecureStore
     private let serviceClient: any LicenseServiceClientProtocol
+    private let verifier: SignedEntitlementVerifier?
     private let now: @Sendable () -> Date
     private let previewStateKey = "entitlementPreviewState"
     private let previewEntitlementsKey = "entitlementPreviewEntitlements"
@@ -682,12 +685,15 @@ public final class EntitlementManager: ObservableObject {
         self.userDefaults = userDefaults
         self.configuration = configuration
         self.secureStore = secureStore
-        self.serviceClient = serviceClient ?? GumroadLicenseServiceClient(configuration: configuration)
+        self.serviceClient = serviceClient ?? RemoteLicenseServiceClient(configuration: configuration)
+        self.verifier = try? SignedEntitlementVerifier(configuration: configuration)
         self.now = now
         self.state = .unknown
         self.snapshot = EntitlementCatalog.shared.snapshot(for: .unknown)
         self.activeLicenses = []
         self.customerEmail = nil
+        self.currentDevice = secureStore.currentDeviceIdentity()
+        self.seatState = nil
         self.validatedAt = nil
         self.nextValidationAt = nil
         self.graceExpiresAt = nil
@@ -714,12 +720,14 @@ public final class EntitlementManager: ObservableObject {
         configuration.isConfigured
     }
 
-    public var purchaseURL: URL {
-        configuration.purchaseURL
-    }
-
     public var hasStoredPurchases: Bool {
         !secureStore.storedLicenseKeys().isEmpty
+    }
+
+    public var maskedDeviceID: String {
+        let id = currentDevice.deviceID
+        guard id.count > 8 else { return id }
+        return "\(id.prefix(4))...\(id.suffix(4))"
     }
 
     public func isEnabled(_ capability: ProductCapability) -> Bool {
@@ -799,6 +807,7 @@ public final class EntitlementManager: ObservableObject {
         cachedPayload = nil
         activeLicenses = []
         customerEmail = nil
+        seatState = nil
         validatedAt = nil
         nextValidationAt = nil
         graceExpiresAt = nil
@@ -818,6 +827,8 @@ public final class EntitlementManager: ObservableObject {
             refreshFromPreviewOverrides()
             return
         }
+
+        currentDevice = secureStore.currentDeviceIdentity()
 
         if !hasBootstrapped {
             hasBootstrapped = true
@@ -839,7 +850,9 @@ public final class EntitlementManager: ObservableObject {
             return false
         }
 
-        return await syncEntitlements(with: [trimmed], reason: .activate)
+        var keys = secureStore.storedLicenseKeys()
+        keys.append(trimmed)
+        return await syncEntitlements(with: keys, reason: .activate)
     }
 
     @discardableResult
@@ -873,9 +886,21 @@ public final class EntitlementManager: ObservableObject {
     }
 
     @discardableResult
-    public func removeLicense() async -> Bool {
+    public func deactivateThisDevice() async -> Bool {
         let keys = secureStore.storedLicenseKeys()
         guard !keys.isEmpty else {
+            do {
+                try secureStore.clearAll()
+            } catch {
+                lastErrorMessage = error.localizedDescription
+                return false
+            }
+            clearRuntimeLicenseMetadata()
+            apply(.free)
+            return true
+        }
+
+        guard configuration.isConfigured else {
             do {
                 try secureStore.clearAll()
             } catch {
@@ -897,6 +922,7 @@ public final class EntitlementManager: ObservableObject {
         }
 
         do {
+            try await serviceClient.deactivate(licenseKeys: keys, device: currentDevice)
             try secureStore.clearAll()
             clearRuntimeLicenseMetadata()
             apply(.free)
@@ -977,14 +1003,17 @@ public final class EntitlementManager: ObservableObject {
         }
 
         do {
-            let payload = try await serviceClient.requestEntitlements(
+            let envelope = try await serviceClient.requestEntitlements(
                 licenseKeys: licenseKeys,
+                device: currentDevice,
                 reason: reason
             )
-            guard secureStore.saveLicenseKeys(licenseKeys) else {
-                throw EntitlementSecureStoreError.keychainSaveFailed
+            guard let verifier else {
+                throw LicenseServiceError.serviceUnavailable
             }
-            try secureStore.saveCachedPayload(payload)
+            let payload = try verifier.verify(envelope)
+            _ = secureStore.saveLicenseKeys(licenseKeys)
+            try secureStore.saveCachedEnvelope(envelope)
             applyValidatedPayload(payload)
             return true
         } catch {
@@ -997,12 +1026,18 @@ public final class EntitlementManager: ObservableObject {
     }
 
     private func restoreCachedState() {
+        guard let verifier else {
+            apply(.free)
+            return
+        }
+
         do {
-            guard let payload = try secureStore.loadCachedPayload() else {
+            guard let envelope = try secureStore.loadCachedEnvelope() else {
                 apply(.free)
                 return
             }
 
+            let payload = try verifier.verify(envelope)
             cachedPayload = payload
             if payload.nextValidationAt <= now() {
                 applyGraceOrActiveState(from: payload)
@@ -1019,6 +1054,7 @@ public final class EntitlementManager: ObservableObject {
         cachedPayload = payload
         activeLicenses = payload.activeLicenses
         customerEmail = payload.customerEmail
+        seatState = payload.seatState
         validatedAt = payload.validatedAt
         nextValidationAt = payload.nextValidationAt
         graceExpiresAt = payload.graceExpiresAt
@@ -1037,6 +1073,7 @@ public final class EntitlementManager: ObservableObject {
         cachedPayload = payload
         activeLicenses = payload.activeLicenses
         customerEmail = payload.customerEmail
+        seatState = payload.seatState
         validatedAt = payload.validatedAt
         nextValidationAt = payload.nextValidationAt
         graceExpiresAt = payload.graceExpiresAt
@@ -1054,13 +1091,16 @@ public final class EntitlementManager: ObservableObject {
     }
 
     private func loadCachedPayloadForGrace() -> LicenseEntitlementPayload? {
-        try? secureStore.loadCachedPayload()
+        guard let verifier else { return nil }
+        guard let envelope = try? secureStore.loadCachedEnvelope() else { return nil }
+        return try? verifier.verify(envelope)
     }
 
     private func clearRuntimeLicenseMetadata() {
         cachedPayload = nil
         activeLicenses = []
         customerEmail = nil
+        seatState = nil
         validatedAt = nil
         nextValidationAt = nil
         graceExpiresAt = nil

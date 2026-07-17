@@ -170,20 +170,6 @@ public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-public enum StorageLocationAccessError: LocalizedError, Equatable {
-    case capabilityLocked
-    case limitReached(maxAllowed: Int)
-
-    public var errorDescription: String? {
-        switch self {
-        case .capabilityLocked:
-            return "Storage locations are locked on this Mac. Open Licensing to unlock this feature."
-        case .limitReached(let maxAllowed):
-            return "Free access includes \(maxAllowed) storage location\(maxAllowed == 1 ? "" : "s"). Open Licensing to add more."
-        }
-    }
-}
-
 public enum StorageEnvironmentInspector {
     public static func profile(for url: URL) -> StorageCapabilityProfile {
         let provider = providerKind(for: url)
@@ -292,23 +278,13 @@ public enum StorageEnvironmentInspector {
 @MainActor
 public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
-    @Published public private(set) var limitMessage: String?
-    private let userDefaults: UserDefaults
-    private let entitlementSnapshotProvider: @Sendable () -> EntitlementSnapshot
+    private let userDefaults = UserDefaults.standard
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
     
-    public init(
-        userDefaults: UserDefaults = .standard,
-        entitlementSnapshotProvider: @escaping @Sendable () -> EntitlementSnapshot = {
-            EntitlementRuntime.currentSnapshot
-        }
-    ) {
-        self.userDefaults = userDefaults
-        self.entitlementSnapshotProvider = entitlementSnapshotProvider
+    public init() {
         loadLocations()
-        applyEntitlementPolicy(entitlementSnapshotProvider())
         setupNotificationObservers()
     }
     
@@ -319,8 +295,6 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     public var enabledLocations: [StorageLocation] {
-        guard isStorageLocationsEnabled else { return [] }
-
         var deduped: [StorageLocation] = []
         var seenPaths: Set<String> = []
 
@@ -333,22 +307,12 @@ public class StorageLocationsManager: ObservableObject {
             deduped.append(normalizedLocation)
         }
 
-        guard maxAllowedLocations != .max else { return deduped }
-        return Array(deduped.prefix(maxAllowedLocations))
-    }
-
-    public var maxAllowedLocations: Int {
-        entitlementSnapshotProvider().maxStorageLocations
-    }
-
-    public var isAtLocationLimit: Bool {
-        maxAllowedLocations != .max && locations.count >= maxAllowedLocations
+        return deduped
     }
 
     public func clearAll() {
         stopAllSecurityScopedAccess()
         locations.removeAll()
-        limitMessage = nil
         userDefaults.removeObject(forKey: storageKey)
     }
     
@@ -358,29 +322,14 @@ public class StorageLocationsManager: ObservableObject {
 
         // Avoid duplicates, even if path formatting differs (e.g. trailing slash)
         guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, normalized.path) }) else { return }
-        guard !isAtLocationLimit else {
-            limitMessage = StorageLocationAccessError.limitReached(maxAllowed: maxAllowedLocations).errorDescription
-            return
-        }
-        limitMessage = nil
         locations.append(normalized)
         saveLocations()
     }
     
     public func addLocation(url: URL, description: String? = nil, customName: String? = nil) throws {
-        guard isStorageLocationsEnabled else {
-            limitMessage = StorageLocationAccessError.capabilityLocked.errorDescription
-            throw StorageLocationAccessError.capabilityLocked
-        }
-
         let canonicalPath = StorageLocationPathResolver.canonicalPath(url.path)
         guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, canonicalPath) }) else {
             throw StorageLocationError.duplicateLocation
-        }
-
-        guard !isAtLocationLimit else {
-            limitMessage = StorageLocationAccessError.limitReached(maxAllowed: maxAllowedLocations).errorDescription
-            throw StorageLocationAccessError.limitReached(maxAllowed: maxAllowedLocations)
         }
 
         // For picker URLs, explicitly starting security scope improves bookmark reliability
@@ -407,7 +356,6 @@ public class StorageLocationsManager: ObservableObject {
         )
         location.accessStatus = .unknown
         locations.append(location)
-        limitMessage = nil
         saveLocations()
         refreshAccess(for: location)
     }
@@ -415,9 +363,6 @@ public class StorageLocationsManager: ObservableObject {
     public func removeLocation(_ location: StorageLocation) {
         stopSecurityScopedAccess(for: location.id)
         locations.removeAll { $0.id == location.id }
-        if maxAllowedLocations == .max || locations.count < maxAllowedLocations {
-            limitMessage = nil
-        }
         saveLocations()
     }
     
@@ -441,35 +386,9 @@ public class StorageLocationsManager: ObservableObject {
             updateLocation(updated)
         }
     }
-
-    public func applyEntitlementPolicy(_ snapshot: EntitlementSnapshot) {
-        guard snapshot.state != .unknown else { return }
-
-        var enabledSlotsUsed = 0
-        let sanitizedLocations = locations.map { location in
-            var updated = location
-            if updated.isEnabled {
-                enabledSlotsUsed += 1
-                if snapshot.maxStorageLocations != .max,
-                   enabledSlotsUsed > snapshot.maxStorageLocations {
-                    updated.isEnabled = false
-                }
-            }
-            return updated
-        }
-
-        limitMessage = snapshot.maxStorageLocations != .max && locations.count > snapshot.maxStorageLocations
-            ? StorageLocationAccessError.limitReached(maxAllowed: snapshot.maxStorageLocations).errorDescription
-            : nil
-
-        guard sanitizedLocations != locations else { return }
-        locations = sanitizedLocations
-        saveLocations()
-    }
     
     /// Generates prompt context for all enabled storage locations
     public func generatePromptContext() async -> String? {
-        guard isStorageLocationsEnabled else { return nil }
         let enabled = enabledLocations
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         guard !enabled.isEmpty else { return nil }
@@ -555,7 +474,6 @@ public class StorageLocationsManager: ObservableObject {
     /// Returns known subfolders for each enabled storage location.
     /// Keys are canonical root paths; values are lists of discovered subfolder absolute paths.
     public func discoverAllSubfolders() async -> [String: [String]] {
-        guard isStorageLocationsEnabled else { return [:] }
         let enabled = enabledLocations
         return await withTaskGroup(
             of: (String, [String]).self,
@@ -700,10 +618,6 @@ public class StorageLocationsManager: ObservableObject {
         activeSecurityScopedURLs.removeAll()
     }
 
-    private var isStorageLocationsEnabled: Bool {
-        maxAllowedLocations > 0
-    }
-
     private func loadLocations() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) {
@@ -718,8 +632,6 @@ public class StorageLocationsManager: ObservableObject {
 
             locations = normalized
         }
-
-        applyEntitlementPolicy(entitlementSnapshotProvider())
     }
 
     private func saveLocations() {

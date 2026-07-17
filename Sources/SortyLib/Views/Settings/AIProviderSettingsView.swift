@@ -10,7 +10,6 @@ import SwiftUI
 struct AIProviderSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var entitlementManager: EntitlementManager
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
@@ -34,10 +33,6 @@ struct AIProviderSettingsView: View {
         count: 3
     )
 
-    private var lockedProviders: [AIProvider] {
-        entitlementManager.visibleProviders.filter { !entitlementManager.isProviderSelectable($0) }
-    }
-
     var body: some View {
         VStack(spacing: 16) {
             // Provider Selection
@@ -47,12 +42,10 @@ struct AIProviderSettingsView: View {
                     alignment: .leading,
                     spacing: 10
                 ) {
-                    ForEach(entitlementManager.visibleProviders, id: \.self) { provider in
+                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
                         AIProviderRow(
                             provider: provider,
                             isSelected: viewModel.config.provider == provider,
-                            isLocked: !entitlementManager.isProviderSelectable(provider),
-                            lockLabel: "Pro",
                             action: {
                                 withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.8)) {
                                     viewModel.config.provider = provider
@@ -65,22 +58,6 @@ struct AIProviderSettingsView: View {
                             }
                         )
                     }
-                }
-
-                if !lockedProviders.isEmpty {
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Unlock more AI providers")
-                                .font(.subheadline.weight(.semibold))
-                            Text("Locked providers remain visible so you can compare the full lineup before upgrading.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 8)
-                        OpenLicensingButton(title: "View Upgrade")
-                    }
-                    .padding(.top, 4)
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -365,7 +342,7 @@ struct AIProviderSettingsView: View {
         if supportsSubscriptionAuthUI {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Authentication", selection: selectedAuthMethod) {
-                    ForEach(entitlementManager.supportedAuthMethods(for: viewModel.config.provider), id: \.self) { method in
+                    ForEach(viewModel.config.provider.supportedAuthMethods, id: \.self) { method in
                         Text(method.displayName).tag(method)
                     }
                 }
@@ -1060,8 +1037,6 @@ private struct CodexDeviceAuthStatusView: View {
     let codexAuthManager = CodexCLIAuthManager()
     AIProviderSettingsView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(AppState())
-        .environmentObject(EntitlementManager())
         .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
         .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)

@@ -59,19 +59,6 @@ public final class WindowSession: ObservableObject {
                 exclusionRules: ExclusionRulesManager,
                 storageLocationsManager: StorageLocationsManager,
                 learningsManager: LearningsManager) {
-        if let requiredCapability = destination.requiredCapability,
-           !EntitlementRuntime.currentSnapshot.isEnabled(requiredCapability) {
-            switch requiredCapability {
-            case .duplicateDetection:
-                appState.currentView = .duplicates
-            case .learnings:
-                appState.currentView = .learnings
-            default:
-                appState.currentView = .organize
-            }
-            return
-        }
-
         switch destination {
         case .organize(let path, let personaId, _, let autostart):
             if let path {

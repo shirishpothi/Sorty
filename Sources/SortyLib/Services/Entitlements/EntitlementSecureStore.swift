@@ -1,6 +1,10 @@
 import Foundation
 import CryptoKit
 
+#if canImport(AppKit)
+import AppKit
+#endif
+
 public protocol EntitlementSecretStore: Sendable {
     func save(value: String, for key: String) -> Bool
     func loadValue(for key: String) -> String?
@@ -24,11 +28,11 @@ public struct SystemEntitlementSecretStore: EntitlementSecretStore {
 }
 
 public struct EntitlementCacheRecord: Codable, Equatable, Sendable {
-    public let payload: LicenseEntitlementPayload
+    public let envelope: SignedEntitlementEnvelope
     public let cachedAt: Date
 
-    public init(payload: LicenseEntitlementPayload, cachedAt: Date) {
-        self.payload = payload
+    public init(envelope: SignedEntitlementEnvelope, cachedAt: Date) {
+        self.envelope = envelope
         self.cachedAt = cachedAt
     }
 }
@@ -49,6 +53,7 @@ public enum EntitlementSecureStoreError: LocalizedError {
 
 public final class EntitlementSecureStore: @unchecked Sendable {
     private enum StorageKey {
+        static let deviceID = "sorty_license_device_id"
         static let cacheKey = "sorty_license_cache_key"
         static let activeLicenseKeys = "sorty_active_license_keys"
     }
@@ -65,6 +70,14 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         self.fileManager = fileManager
         self.secretStore = secretStore
         self.rootDirectory = rootDirectory ?? Self.defaultRootDirectory(fileManager: fileManager)
+    }
+
+    public func currentDeviceIdentity() -> LicenseDeviceIdentity {
+        LicenseDeviceIdentity(
+            deviceID: loadOrCreateDeviceID(),
+            deviceName: currentDeviceName(),
+            appVersion: BuildInfo.version
+        )
     }
 
     public func storedLicenseKeys() -> [String] {
@@ -91,7 +104,7 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         secretStore.deleteValue(for: StorageKey.activeLicenseKeys)
     }
 
-    public func loadCachedPayload() throws -> LicenseEntitlementPayload? {
+    public func loadCachedEnvelope() throws -> SignedEntitlementEnvelope? {
         guard fileManager.fileExists(atPath: cacheURL.path) else {
             return nil
         }
@@ -99,12 +112,12 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         let encryptedData = try Data(contentsOf: cacheURL)
         let decrypted = try decrypt(data: encryptedData)
         let record = try JSONDecoder.licensePayloadDecoder.decode(EntitlementCacheRecord.self, from: decrypted)
-        return record.payload
+        return record.envelope
     }
 
-    public func saveCachedPayload(_ payload: LicenseEntitlementPayload) throws {
+    public func saveCachedEnvelope(_ envelope: SignedEntitlementEnvelope) throws {
         try ensureDirectoryExists()
-        let record = EntitlementCacheRecord(payload: payload, cachedAt: Date())
+        let record = EntitlementCacheRecord(envelope: envelope, cachedAt: Date())
         let data = try JSONEncoder.licensePayloadEncoder.encode(record)
         let encrypted = try encrypt(data: data)
         try encrypted.write(to: cacheURL, options: .atomic)
@@ -151,6 +164,25 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         return key
     }
 
+    private func loadOrCreateDeviceID() -> String {
+        if let existing = secretStore.loadValue(for: StorageKey.deviceID),
+           !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return existing
+        }
+
+        let deviceID = UUID().uuidString.lowercased()
+        _ = secretStore.save(value: deviceID, for: StorageKey.deviceID)
+        return deviceID
+    }
+
+    private func currentDeviceName() -> String {
+        #if canImport(AppKit)
+        return Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+        #else
+        return ProcessInfo.processInfo.hostName
+        #endif
+    }
+
     private func ensureDirectoryExists() throws {
         if !fileManager.fileExists(atPath: rootDirectory.path) {
             try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
@@ -182,3 +214,4 @@ public final class EntitlementSecureStore: @unchecked Sendable {
         rootDirectory.appendingPathComponent("license-cache.enc")
     }
 }
+
