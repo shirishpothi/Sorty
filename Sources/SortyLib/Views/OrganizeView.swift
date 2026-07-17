@@ -541,6 +541,7 @@ struct OrganizeView: View {
 
         Task {
             do {
+                await appState.prepareForManualOrganization(at: directory)
                 try await organizer.organize(directory: directory)
             } catch {
                 organizer.state = .error(error)

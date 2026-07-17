@@ -166,6 +166,10 @@ struct MainWindowRootView: View {
                 let calibrate: ((WatchedFolder) -> Void)? = coordinator.map { coord in
                     { folder in coord.calibrateFolder(folder) }
                 }
+                let sessionID = windowSession.id
+                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator] directory in
+                    await coordinator?.beginManualOrganization(in: directory, sessionID: sessionID)
+                }
                 await windowSession.configureIfNeeded(
                     settingsViewModel: settingsViewModel,
                     personaManager: personaManager,
@@ -212,12 +216,20 @@ struct MainWindowRootView: View {
                     )
                 }
             }
+            .onChange(of: windowSession.organizer.state) { _, newState in
+                if !newState.isOperationInProgress {
+                    coordinator?.finishManualOrganization(sessionID: windowSession.id)
+                }
+            }
             .onChange(of: watchedFoldersManager.folders) { _, _ in
                 coordinator?.syncWatchedFolders()
             }
             .onOpenURL { url in
                 SortyAppDelegate.pendingDeeplinkActivation = true
                 handleExternalDeeplink(url)
+            }
+            .onDisappear {
+                coordinator?.finishManualOrganization(sessionID: windowSession.id)
             }
     }
 

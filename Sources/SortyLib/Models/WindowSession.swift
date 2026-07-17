@@ -80,6 +80,7 @@ public final class WindowSession: ObservableObject {
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 500_000_000)
                     if let directory = appState.selectedDirectory {
+                        await appState.prepareForManualOrganization(at: directory)
                         try? await appState.organizer?.organize(directory: directory)
                     }
                 }

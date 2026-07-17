@@ -474,6 +474,11 @@ public class AppState: ObservableObject {
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
     public var calibrateAction: ((WatchedFolder) -> Void)?
+    public var prepareManualOrganizationAction: ((URL) async -> Void)?
+
+    public func prepareForManualOrganization(at directory: URL) async {
+        await prepareManualOrganizationAction?(directory)
+    }
     
     // Window controllers - retained to prevent use-after-free crashes
     // These MUST be retained to keep windows alive during animations

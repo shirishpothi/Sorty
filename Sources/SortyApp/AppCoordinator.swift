@@ -25,6 +25,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var watchedFoldersSubscription: AnyCancellable?
     private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
+    private var manualOrganizationFolders: [UUID: WatchedFolder] = [:]
+    private var autoOrganizeTasks: [UUID: Task<Void, Never>] = [:]
+    private var autoOrganizeTaskIDs: [UUID: UUID] = [:]
     private var retryTask: Task<Void, Never>?
     private let candidateStabilityDelay: TimeInterval = 1.5
     nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
@@ -80,6 +83,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     deinit {
         retryTask?.cancel()
+        autoOrganizeTasks.values.forEach { $0.cancel() }
         notificationObservers.forEach(NotificationCenter.default.removeObserver)
     }
     
@@ -470,6 +474,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
         guard !newFiles.isEmpty else { return }
 
+        guard !isManualOrganizationActive(for: folder.id) else {
+            print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
+            return
+        }
+
         if let ignoreUntil = ignoredWatchEventsUntil[folder.id] {
             if ignoreUntil > Date() {
                 print("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
@@ -485,12 +494,40 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             return
         }
         
-        Task {
-            await autoOrganize(folder: folder, files: newFiles, resolvedURL: resolvedURL)
+        startAutoOrganize(folder: folder, files: newFiles, resolvedURL: resolvedURL)
+    }
+
+    @discardableResult
+    private func startAutoOrganize(
+        folder: WatchedFolder,
+        files: Set<String>,
+        resolvedURL: URL
+    ) -> Task<Void, Never> {
+        if let existingTask = autoOrganizeTasks[folder.id] {
+            mergePendingFiles(folder: folder, files: files, resolvedURL: resolvedURL)
+            return existingTask
         }
+
+        let taskID = UUID()
+        autoOrganizeTaskIDs[folder.id] = taskID
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.autoOrganize(folder: folder, files: files, resolvedURL: resolvedURL)
+            if self.autoOrganizeTaskIDs[folder.id] == taskID {
+                self.autoOrganizeTasks.removeValue(forKey: folder.id)
+                self.autoOrganizeTaskIDs.removeValue(forKey: folder.id)
+            }
+            if !Task.isCancelled, !self.isOrganizerBusyForAutomation(), !self.pendingFiles.isEmpty {
+                await self.processPendingFiles()
+            }
+        }
+        autoOrganizeTasks[folder.id] = task
+        return task
     }
     
     private func autoOrganize(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) async {
+        guard !isManualOrganizationActive(for: folder.id) else { return }
+
         guard organizer.aiClient != nil else {
             print("Coordinator: Cannot auto-organize \(folder.name) - provider not configured")
             notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no provider configured", isCritical: false)
@@ -502,6 +539,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             rootURL: resolvedURL,
             stabilityDelay: candidateStabilityDelay
         )
+
+        guard !Task.isCancelled, !isManualOrganizationActive(for: folder.id) else { return }
 
         if !candidateAudit.unsettled.isEmpty {
             print("Coordinator: Deferring \(candidateAudit.unsettled.count) unsettled files for \(folder.name)")
@@ -537,6 +576,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 historySource: .watchedFolder
             )
 
+            guard !Task.isCancelled, !isManualOrganizationActive(for: folder.id) else {
+                organizer.state = .idle
+                return
+            }
+
             organizer.state = .idle
             
             let duration = Date().timeIntervalSince(startTime)
@@ -557,8 +601,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             )
             
             notificationManager.showBatchSummary(stats: stats, isAutomated: true)
-            
-            await processPendingFiles()
             
         } catch {
             print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
@@ -728,8 +770,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         let pendingBatch = pendingFiles
         pendingFiles.removeAll()
 
-        for (_, pending) in pendingBatch {
-            await autoOrganize(folder: pending.folder, files: pending.files, resolvedURL: pending.resolvedURL)
+        for (folderID, pending) in pendingBatch {
+            guard !isManualOrganizationActive(for: pending.folder.id) else { continue }
+            let currentFolder = watchedFoldersManager.folders.first { $0.id == folderID } ?? pending.folder
+            let task = startAutoOrganize(
+                folder: currentFolder,
+                files: pending.files,
+                resolvedURL: pending.resolvedURL
+            )
+            await task.value
         }
     }
     
@@ -747,12 +796,67 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func isOrganizerBusyForAutomation() -> Bool {
+        if !autoOrganizeTasks.isEmpty {
+            return true
+        }
+
         switch organizer.state {
         case .scanning, .organizing, .applying:
             return true
         case .idle, .ready, .completed, .error:
             return false
         }
+    }
+
+    func beginManualOrganization(in directory: URL, sessionID: UUID) async {
+        guard let folder = watchedFolder(matching: directory), folder.isEnabled else {
+            finishManualOrganization(sessionID: sessionID)
+            return
+        }
+
+        if let existing = manualOrganizationFolders[sessionID], existing.id != folder.id {
+            finishManualOrganization(sessionID: sessionID)
+        }
+
+        manualOrganizationFolders[sessionID] = folder
+        pendingFiles.removeValue(forKey: folder.id)
+        ignoredWatchEventsUntil.removeValue(forKey: folder.id)
+        folderWatcher.pause(folder)
+
+        guard let automaticTask = autoOrganizeTasks[folder.id] else { return }
+
+        print("Coordinator: Prioritizing manual organization for \(folder.name)")
+        automaticTask.cancel()
+        organizer.cancel(source: .watchedFolder)
+        await automaticTask.value
+    }
+
+    func finishManualOrganization(sessionID: UUID) {
+        guard let folder = manualOrganizationFolders.removeValue(forKey: sessionID) else { return }
+        guard !isManualOrganizationActive(for: folder.id) else { return }
+
+        pendingFiles.removeValue(forKey: folder.id)
+        ignoredWatchEventsUntil[folder.id] = Date().addingTimeInterval(2.0)
+        if let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+           currentFolder.isEnabled {
+            folderWatcher.resume(currentFolder)
+            print("Coordinator: Resumed watching \(currentFolder.name) after manual organization")
+        }
+    }
+
+    private func isManualOrganizationActive(for folderID: UUID) -> Bool {
+        manualOrganizationFolders.values.contains { $0.id == folderID }
+    }
+
+    private func watchedFolder(matching directory: URL) -> WatchedFolder? {
+        let directoryPath = canonicalPath(directory)
+        return watchedFoldersManager.folders.first {
+            canonicalPath($0.url) == directoryPath
+        }
+    }
+
+    private func canonicalPath(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
     }
     
     func calibrateFolder(_ folder: WatchedFolder) {
