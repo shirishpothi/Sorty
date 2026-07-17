@@ -468,10 +468,6 @@ public struct FreePlanAccessPolicy: Equatable, Sendable {
     }
 }
 
-public enum LicensingRollout {
-    public static let isEnabled = false
-}
-
 public final class EntitlementCatalog: Sendable {
     public static let shared = EntitlementCatalog()
 
@@ -622,7 +618,7 @@ public final class EntitlementCatalog: Sendable {
 
 private final class LockedEntitlementSnapshotStore: @unchecked Sendable {
     private let lock = NSLock()
-    private var snapshot = EntitlementCatalog.shared.snapshot(for: .bundleUnlocked)
+    private var snapshot = EntitlementCatalog.shared.snapshot(for: .free)
 
     func currentSnapshot() -> EntitlementSnapshot {
         lock.lock()
@@ -670,7 +666,6 @@ public final class EntitlementManager: ObservableObject {
     private let secureStore: EntitlementSecureStore
     private let serviceClient: any LicenseServiceClientProtocol
     private let now: @Sendable () -> Date
-    private let licensingEnabled: Bool
     private let previewStateKey = "entitlementPreviewState"
     private let previewEntitlementsKey = "entitlementPreviewEntitlements"
     private let previewGraceExpiryKey = "entitlementPreviewGraceExpiry"
@@ -682,18 +677,15 @@ public final class EntitlementManager: ObservableObject {
         configuration: LicenseServiceConfiguration = .current(),
         secureStore: EntitlementSecureStore = EntitlementSecureStore(),
         serviceClient: (any LicenseServiceClientProtocol)? = nil,
-        licensingEnabled: Bool = LicensingRollout.isEnabled,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.userDefaults = userDefaults
         self.configuration = configuration
         self.secureStore = secureStore
         self.serviceClient = serviceClient ?? GumroadLicenseServiceClient(configuration: configuration)
-        self.licensingEnabled = licensingEnabled
         self.now = now
-        let initialState: EntitlementState = licensingEnabled ? .unknown : .bundleUnlocked
-        self.state = initialState
-        self.snapshot = EntitlementCatalog.shared.snapshot(for: initialState)
+        self.state = .unknown
+        self.snapshot = EntitlementCatalog.shared.snapshot(for: .unknown)
         self.activeLicenses = []
         self.customerEmail = nil
         self.validatedAt = nil
@@ -703,9 +695,7 @@ public final class EntitlementManager: ObservableObject {
         self.lastErrorMessage = nil
         EntitlementRuntime.update(snapshot)
 
-        if !licensingEnabled {
-            return
-        } else if usesPreviewOverrides {
+        if usesPreviewOverrides {
             refreshFromPreviewOverrides()
         } else {
             restoreCachedState()
@@ -818,18 +808,12 @@ public final class EntitlementManager: ObservableObject {
     }
 
     public func apply(_ newState: EntitlementState) {
-        let effectiveState: EntitlementState = licensingEnabled ? newState : .bundleUnlocked
-        state = effectiveState
-        snapshot = EntitlementCatalog.shared.snapshot(for: effectiveState)
+        state = newState
+        snapshot = EntitlementCatalog.shared.snapshot(for: newState)
         EntitlementRuntime.update(snapshot)
     }
 
     public func bootstrapIfNeeded() async {
-        guard licensingEnabled else {
-            apply(.bundleUnlocked)
-            return
-        }
-
         guard !usesPreviewOverrides else {
             refreshFromPreviewOverrides()
             return

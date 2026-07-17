@@ -44,7 +44,7 @@ struct SettingsView: View {
         }
         .onAppear {
             if let section = appState.selectedSettingsSection {
-                selectedCategory = sanitizedCategory(section)
+                selectedCategory = section
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
@@ -53,7 +53,7 @@ struct SettingsView: View {
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    selectedCategory = sanitizedCategory(section)
+                    selectedCategory = section
                 }
             }
         }
@@ -205,11 +205,7 @@ struct SettingsView: View {
     }
     
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
-        category != .tuning && (LicensingRollout.isEnabled || category != .licensing)
-    }
-
-    private func sanitizedCategory(_ category: SettingsCategory) -> SettingsCategory {
-        isCategoryEnabled(category) ? category : .rules
+        category != .tuning
     }
 
     private var categoryHeader: some View {

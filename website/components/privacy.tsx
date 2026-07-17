@@ -6,12 +6,12 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const POINTS = [
   {
     icon: ShieldOff,
-    title: 'No servers. No accounts. No telemetry.',
-    body: 'Sorty has no backend. There is nothing to sign up for and nothing phones home. The developers literally cannot see your files, your folder names, your activity, or anything else — because none of it is ever sent to us.',
+    title: 'No Sorty servers. No accounts. No telemetry.',
+    body: 'Your files, folder names, and activity never go to the developers. License activation sends only the Sorty product ID and your license key directly to Gumroad over HTTPS.',
   },
   {
     icon: EyeOff,
-    title: 'Only your AI provider sees anything',
+    title: 'Only your AI provider sees folder context',
     body: 'To build a plan, Sorty sends file names and metadata to the AI provider you choose. File contents are only ever shared if you explicitly turn on Deep Scan — and even then, contents go directly to your provider, never through Sorty.',
   },
   {
@@ -39,10 +39,10 @@ export function Privacy() {
             Your files never reach us. Ever.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Sorty has no servers and no account system, so your files and folder
-            data never touch the developers. The only party that ever sees
-            anything is the AI provider you choose — and only file contents, only
-            if you switch on Deep Scan.
+            Sorty has no app backend or account system, so your files and folder
+            data never touch the developers. The AI provider you choose receives
+            the context needed to organize, while Gumroad sees only license
+            verification data when you activate or refresh Sorty Pro.
           </p>
         </Reveal>
 
@@ -62,8 +62,8 @@ export function Privacy() {
               Private by architecture, not by promise
             </span>
             <p className="mx-auto mt-4 max-w-2xl text-balance text-lg font-medium leading-relaxed sm:text-xl">
-              Sorty can&apos;t leak what it never receives. With no backend, the
-              app and its developers have{' '}
+              Sorty can&apos;t leak what it never receives. With no file-processing
+              backend, the app and its developers have{' '}
               <span className="text-primary">zero visibility</span> into your
               files. Cloud AI providers only see contents when{' '}
               <span className="text-primary">Deep Scan</span> is on — your call,
