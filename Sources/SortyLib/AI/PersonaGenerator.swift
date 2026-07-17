@@ -100,7 +100,6 @@ The generated prompt MUST be compatible with the base organization system:
 - DO NOT override the JSON output format (the base system handles this)
 - DO NOT tell the AI to emit markdown, prose, tables, or alternate schemas
 - DO NOT specify different tag requirements (base system requires 1-3 tags per file)
-- DO NOT change folder depth limits (max 3 levels)
 - DO NOT ask for hidden chain-of-thought; live insights should be short user-facing observations
 - Focus ONLY on: categorization logic, naming patterns, folder structure philosophy, domain-specific intelligence
 - The prompt should ADD specialized knowledge on top of the base system, not REPLACE it
@@ -147,7 +146,7 @@ Bad behavior examples:
 
 ## AVOID
 - Generic advice like "organize by type" without domain-specific rationale
-- Contradicting base system rules (JSON format, tag counts, depth limits)
+- Contradicting base system rules (JSON format, tag counts, and output limits)
 - Specifying output format (already defined in base system)
 - Mentioning tags (base system handles tagging requirements)
 - Prompts under 1500 characters — these are too shallow to be useful

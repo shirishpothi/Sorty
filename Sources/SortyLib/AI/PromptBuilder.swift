@@ -428,7 +428,11 @@ struct PromptBuilder {
         """
     }
 
-    private static func minimalCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
+    private static func minimalCompactSystemPrompt(
+        mode: OrganizationMode = .organize,
+        enableReasoning: Bool = false,
+        maxTopLevelFolders: Int = 10
+    ) -> String {
         var base = "You organize files into practical folders."
         if mode == .renameOnly {
             base += " Keep all files in '.' and only suggest better names."
@@ -439,7 +443,7 @@ struct PromptBuilder {
         if mode != .renameOnly {
             base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
-        base += " Nest folders at most 3 levels deep; folder names must not contain '/'. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
+        base += " Create at most \(maxTopLevelFolders) top-level folders, merging related categories when needed. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
@@ -450,9 +454,14 @@ struct PromptBuilder {
     static func buildUltraCompactPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
+        enableReasoning: Bool = false,
+        maxTopLevelFolders: Int = 10
     ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: enableReasoning)
+        let system = minimalCompactSystemPrompt(
+            mode: mode,
+            enableReasoning: enableReasoning,
+            maxTopLevelFolders: maxTopLevelFolders
+        )
         let table = compactFileIdTable(files: files, maxNameLength: 24)
         let user = """
         \(compactFileSummary(files: files))
@@ -467,9 +476,14 @@ struct PromptBuilder {
     static func buildSummaryPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
+        enableReasoning: Bool = false,
+        maxTopLevelFolders: Int = 10
     ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: enableReasoning)
+        let system = minimalCompactSystemPrompt(
+            mode: mode,
+            enableReasoning: enableReasoning,
+            maxTopLevelFolders: maxTopLevelFolders
+        )
         let table = compactFileIdTable(files: files, maxNameLength: 14)
         let user = """
         \(compactFileSummary(files: files, maxExtensions: 8))
@@ -484,9 +498,14 @@ struct PromptBuilder {
     static func buildMicroPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
+        enableReasoning: Bool = false,
+        maxTopLevelFolders: Int = 10
     ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: false)
+        let system = minimalCompactSystemPrompt(
+            mode: mode,
+            enableReasoning: false,
+            maxTopLevelFolders: maxTopLevelFolders
+        )
         var lines: [String] = []
         lines.reserveCapacity(files.count)
         for (index, file) in files.enumerated() {
@@ -540,7 +559,6 @@ struct PromptBuilder {
         
         prompt += """
         Rules:
-        - Max 3 levels deep
         - HARD LIMIT: You MUST output ≤ \(maxTopLevelFolders) top-level folders. Merge categories if needed.
         - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
         - Never name a folder the same as an existing file in the input.
@@ -581,11 +599,26 @@ struct PromptBuilder {
             let user = buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
             return (system, user)
         case .ultra:
-            return buildUltraCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+            return buildUltraCompactPrompt(
+                files: files,
+                mode: config.mode,
+                enableReasoning: config.enableReasoning,
+                maxTopLevelFolders: config.maxTopLevelFolders
+            )
         case .summary:
-            return buildSummaryPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+            return buildSummaryPrompt(
+                files: files,
+                mode: config.mode,
+                enableReasoning: config.enableReasoning,
+                maxTopLevelFolders: config.maxTopLevelFolders
+            )
         case .micro:
-            return buildMicroPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+            return buildMicroPrompt(
+                files: files,
+                mode: config.mode,
+                enableReasoning: config.enableReasoning,
+                maxTopLevelFolders: config.maxTopLevelFolders
+            )
         }
     }
     
@@ -766,7 +799,7 @@ struct PromptBuilder {
         if truncated {
             context += ", ... and \(existingFolders.count - 30) more"
         }
-        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable. Reusing an existing folder never permits exceeding the 3-level depth limit: the final structure, including any existing path segments you reuse, must stay within 3 levels."
+        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable."
         
         return context
     }

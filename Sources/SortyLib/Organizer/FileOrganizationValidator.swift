@@ -43,12 +43,7 @@ struct FileOrganizationValidator {
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
         let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })
 
-        func checkSuggestion(_ suggestion: FolderSuggestion, depth: Int) throws {
-            // Check depth limit (max 3 levels as per instructions)
-            if depth > 3 {
-                throw ValidationError.folderTooDeep(suggestion.folderName)
-            }
-
+        func checkSuggestion(_ suggestion: FolderSuggestion) throws {
             // Check if this destination is an absolute storage location
             if let absolutePath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName) {
                 if !isAllowedStorageDestination(absolutePath, allowedRoots: allowedPaths) {
@@ -58,12 +53,12 @@ struct FileOrganizationValidator {
 
             // Check subfolders
             for subfolder in suggestion.subfolders {
-                try checkSuggestion(subfolder, depth: depth + 1)
+                try checkSuggestion(subfolder)
             }
         }
 
         for suggestion in plan.suggestions {
-            try checkSuggestion(suggestion, depth: 1)
+            try checkSuggestion(suggestion)
         }
     }
     
@@ -157,7 +152,6 @@ enum ValidationError: LocalizedError {
     case largeOperation(Int)
     case tooManyFolders(Int, max: Int)
     case invalidStorageLocation(String)
-    case folderTooDeep(String)
     
     var errorDescription: String? {
         switch self {
@@ -175,8 +169,6 @@ enum ValidationError: LocalizedError {
             return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
         case .invalidStorageLocation(let path):
             return "Invalid storage location: \(path). Sorty suggested a path that is not in your approved storage locations list."
-        case .folderTooDeep(let folder):
-            return "Folder structure is too deep at '\(folder)'. Maximum depth is 3 levels."
         }
     }
 }

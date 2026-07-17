@@ -380,7 +380,7 @@ struct ResponseParser {
         // Convert response to OrganizationPlan
         let suggestions = folderPayload.map { folder in
             convertFolderResponse(folder, originalFiles: originalFiles, fileIdIndex: fileIdIndex, mode: mode)
-        }.map { flattenToMaxDepth($0, depth: effectiveDepth(of: $0, startingAt: 1)) }
+        }
         let assignedFileIDs = collectAssignedFileIDs(from: suggestions)
 
         var unorganizedDetails = (response.unorganized ?? []).map { unorg in
@@ -429,47 +429,6 @@ struct ResponseParser {
             timestamp: Date(),
             version: 1
         )
-    }
-
-    private static let maxFolderDepth = 3
-
-    /// Depth consumed by a folder name, counting slash-separated path segments ("A/B" consumes 2 levels).
-    private static func depthConsumed(byName name: String) -> Int {
-        max(1, name.split(separator: "/").filter { !$0.isEmpty }.count)
-    }
-
-    /// The deepest level this suggestion's own name reaches when it starts at `depth`.
-    private static func effectiveDepth(of suggestion: FolderSuggestion, startingAt depth: Int) -> Int {
-        depth + depthConsumed(byName: suggestion.folderName) - 1
-    }
-
-    /// Repairs AI responses that nest deeper than `maxFolderDepth` by merging everything
-    /// below the limit into the deepest allowed folder, instead of failing validation.
-    private static func flattenToMaxDepth(_ suggestion: FolderSuggestion, depth: Int) -> FolderSuggestion {
-        var result = suggestion
-        if depth >= maxFolderDepth {
-            var files = result.files
-            var renames = result.fileRenameMappings
-            var tagMappings = result.fileTagMappings
-
-            func absorb(_ folder: FolderSuggestion) {
-                files.append(contentsOf: folder.files)
-                renames.append(contentsOf: folder.fileRenameMappings)
-                tagMappings.append(contentsOf: folder.fileTagMappings)
-                folder.subfolders.forEach(absorb)
-            }
-
-            result.subfolders.forEach(absorb)
-            result.files = files
-            result.fileRenameMappings = renames
-            result.fileTagMappings = tagMappings
-            result.subfolders = []
-        } else {
-            result.subfolders = result.subfolders.map {
-                flattenToMaxDepth($0, depth: effectiveDepth(of: $0, startingAt: depth + 1))
-            }
-        }
-        return result
     }
 
     private static func collectAssignedFileIDs(from suggestions: [FolderSuggestion]) -> Set<UUID> {

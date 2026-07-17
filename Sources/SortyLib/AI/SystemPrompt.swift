@@ -24,19 +24,14 @@ Your single JSON object drives live organization animations and rename suggestio
 - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
 - Preferred top-level categories: Documents, Media, Code, Archives, Financial, Personal, Projects, Design, Reference
 
-## 2. Maximum Folder Depth: 3 Levels
-- The deepest allowed structure is top-level folder > subfolder > sub-subfolder. A sub-subfolder MUST NOT contain a "subfolders" array with entries.
-- Depth is counted by JSON nesting: top-level folders are level 1, their "subfolders" entries are level 2, and those folders' "subfolders" entries are level 3. Level 4 does not exist.
-- Folder "name" values MUST normally be a single folder name with no "/" or path separators.
-- Exception: when the user prompt provides `VALID_STORAGE_PATHS`, an approved absolute storage path or one of its subfolders MUST be returned as one complete folder "name" value. Its filesystem path segments do not add JSON nesting depth.
-- Existing folders shown in context may be deeper than 3 levels; that never permits you to nest new folders beyond 3 levels. When in doubt, keep the structure flatter.
-
-## 3. Folder Name Conflicts
+## 2. Folder Name Conflicts
 - NEVER create a folder whose name exactly matches an existing FILE name in the input.
 - Existing DIRECTORIES may be reused (you can organize files into them).
 - If a desired folder name conflicts with a file, choose a DIFFERENT name (add a qualifier or use a broader category).
+- Folder "name" values should normally be one folder name rather than a path.
+- Exception: when the user prompt provides `VALID_STORAGE_PATHS`, an approved absolute storage path or one of its subfolders MUST be returned as one complete folder "name" value.
 
-## 4. Custom User Instructions Override Everything
+## 3. Custom User Instructions Override Everything
 - If the user provides custom instructions, those instructions take HIGHEST PRIORITY.
 - Custom instructions override ALL default rules below, including category mappings, naming conventions, and grouping strategies.
 - If a user says "do X", you MUST do X. If a user says "don't do Y", you MUST NOT do Y. No exceptions.
@@ -92,7 +87,6 @@ Return only valid JSON matching this shape:
 # STRUCTURAL RULES
 
 ## Hierarchy
-- Maximum 3 folder levels deep.
 - Maximum \(maxTopLevelFolders) top-level folders.
 - Consolidate small categories (≤2 files) into broader parent folders.
 - Don't create a folder for a single file unless it clearly belongs to a distinct category.
@@ -147,7 +141,6 @@ The returned JSON object must satisfy all of the following:
 ✓ Output is exactly one valid JSON object with no markdown, prose, progress lines, or hidden reasoning before or after it.
 ✓ Every file from the input appears exactly once in your output, and "unorganized" is empty unless a file genuinely has no logical folder destination.
 \(enableTagging ? "✓ Every file object has a \"tags\" array with 1-3 string tags (never null, never missing, never empty)." : "✓ No file or folder object includes \"tags\" or \"comment\" fields.")
-✓ Folder depth ≤ 3 levels from root.
 ✓ Top-level folders ≤ \(maxTopLevelFolders). This is a hard limit.
 ✓ No folder name matches an existing file name in the input.
 ✓ No empty folders (every folder has at least one file or subfolder with files).

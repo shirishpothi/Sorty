@@ -71,6 +71,32 @@ final class PromptBuilderTests: XCTestCase {
             XCTAssertFalse(prompt.contains("Before JSON"))
         }
     }
+
+    func testEverySystemPromptUsesConfiguredTopLevelFolderLimitWithoutFixedDepth() {
+        var config = AIConfig(mode: .organize)
+        config.maxTopLevelFolders = 17
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        let fullPrompt = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            maxTopLevelFolders: config.maxTopLevelFolders,
+            mode: .organize,
+            enableTagging: true
+        )
+        XCTAssertTrue(fullPrompt.contains("17 top-level folders"))
+        XCTAssertFalse(fullPrompt.localizedCaseInsensitiveContains("3 levels"))
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
+            XCTAssertTrue(prompt.contains("17 top-level folders"), "Missing Settings limit in \(level)")
+            XCTAssertFalse(prompt.localizedCaseInsensitiveContains("3 levels"), "Fixed depth leaked into \(level)")
+        }
+    }
     
     // MARK: - Empty Input
     
