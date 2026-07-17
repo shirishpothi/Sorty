@@ -306,6 +306,10 @@ print_build_start_summary() {
 }
 
 print_build_complete_summary() {
+    if ! is_truthy "${SORTY_VERBOSE}" && [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then
+        printf '\033[2J\033[H'
+    fi
+
     echo ""
     print_divider "═" 50
     echo ""
