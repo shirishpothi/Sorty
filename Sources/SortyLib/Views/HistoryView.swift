@@ -1678,7 +1678,6 @@ struct HistoryDetailSheet: View {
     let onDismiss: () -> Void
 
     @State private var showRawAIResponse = false
-    @State private var rawAIResponseContentVisible = false
     @State private var showRedoModelPicker = false
     @State private var undoneOperationIDs: Set<UUID> = []
     @State private var failedOperationIDs: Set<UUID> = []
@@ -2262,6 +2261,7 @@ struct HistoryDetailSheet: View {
     private func rawAIResponseSection(_ raw: String) -> some View {
         let displayRaw = FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(raw) : raw
         let copyRaw = FeatureFlags.privacyModeEnabled ? displayRaw : raw
+        let responseLines = displayRaw.components(separatedBy: .newlines)
 
         VStack(alignment: .leading, spacing: 8) {
             Button {
@@ -2294,14 +2294,29 @@ struct HistoryDetailSheet: View {
                     }
 
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                        Text(displayRaw)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .opacity(rawAIResponseContentVisible ? 1 : 0)
-                            .blur(radius: rawAIResponseContentVisible || reduceMotion ? 0 : 4)
-                            .offset(y: rawAIResponseContentVisible || reduceMotion ? 0 : 8)
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(responseLines.enumerated()), id: \.offset) { _, line in
+                                Text(line.isEmpty ? " " : line)
+                                    .scrollTransition(
+                                        topLeading: .identity,
+                                        bottomTrailing: reduceMotion
+                                            ? .identity
+                                            : .animated(.easeOut(duration: 0.42))
+                                                .threshold(.visible(0.12)),
+                                        axis: .vertical
+                                    ) { content, phase in
+                                        content
+                                            .opacity(phase == .bottomTrailing ? 0 : 1)
+                                            .blur(radius: phase == .bottomTrailing ? 3 : 0)
+                                            .offset(y: phase == .bottomTrailing ? 8 : 0)
+                                    }
+                            }
+                        }
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .defaultScrollAnchor(.topLeading)
                     .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
@@ -2309,16 +2324,6 @@ struct HistoryDetailSheet: View {
                     .background(Color.black.opacity(0.05))
                     .cornerRadius(8)
                     .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "Raw AI response hidden in Privacy Mode" : "Raw AI response data")
-                    .task(id: showRawAIResponse) {
-                        guard showRawAIResponse else { return }
-                        if !reduceMotion {
-                            try? await Task.sleep(for: .milliseconds(180))
-                        }
-                        guard !Task.isCancelled else { return }
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.46)) {
-                            rawAIResponseContentVisible = true
-                        }
-                    }
                 }
                 .transition(
                     reduceMotion
@@ -2327,22 +2332,16 @@ struct HistoryDetailSheet: View {
                 )
             }
         }
-        .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            guard shouldReduceMotion, showRawAIResponse else { return }
-            rawAIResponseContentVisible = true
-        }
     }
 
     private func toggleRawAIResponse() {
         if showRawAIResponse {
             withAnimation(rawAIResponseDisclosureAnimation) {
-                rawAIResponseContentVisible = false
                 showRawAIResponse = false
             }
             return
         }
 
-        rawAIResponseContentVisible = reduceMotion
         withAnimation(rawAIResponseDisclosureAnimation) {
             showRawAIResponse = true
         }
