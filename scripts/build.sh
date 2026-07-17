@@ -554,6 +554,11 @@ prune_nonshipping_resources() {
     local resources_dir="$1"
 
     rm -rf "${resources_dir}/CLI"
+    # SortyLib resources ship flattened into Contents/Resources. A nested
+    # Sorty_SortyLib.bundle left behind by older builds shadows the fresh
+    # flattened resources at runtime (SortyResources prefers it by name),
+    # so remove it whenever the app bundle is preserved incrementally.
+    rm -rf "${resources_dir}/Sorty_SortyLib.bundle"
     rm -f \
         "${resources_dir}/.DS_Store" \
         "${resources_dir}/.png" \

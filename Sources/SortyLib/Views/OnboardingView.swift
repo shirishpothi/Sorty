@@ -852,11 +852,10 @@ private struct EnergyScanIconFrame: View {
 
     var body: some View {
         ZStack {
-            ZStack {
-                icon
+            icon
 
-                ZStack {
-                    LinearGradient(
+            ZStack {
+                LinearGradient(
                         stops: [
                             .init(color: .clear, location: 0),
                             .init(color: Color(red: 0.84, green: 0.18, blue: 1.00).opacity(0.36), location: 0.20),
@@ -885,25 +884,8 @@ private struct EnergyScanIconFrame: View {
                 .mask(icon)
                 .blendMode(.plusLighter)
                 .opacity(scanStrength * 0.88)
-            }
-            .clipShape(iconShape)
-
-            iconShape
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.18),
-                            .clear,
-                            Color(red: 0.95, green: 0.08, blue: 0.98).opacity(0.52),
-                            Color(red: 1.00, green: 0.16, blue: 0.24).opacity(0.46)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: max(1, size * 0.012)
-                )
-                .opacity(max(scanStrength * 0.48, 0.08))
         }
+        .clipShape(iconShape)
         .frame(width: size, height: size)
         .compositingGroup()
     }
@@ -1023,7 +1005,7 @@ private struct OnboardingScreenEdgeGlow: View {
             let phase = context.date.timeIntervalSinceReferenceDate
                 .truncatingRemainder(dividingBy: 5.6) / 5.6
             let pulse = reduceMotion ? 0.35 : (1 - cos(phase * 2 * .pi)) / 2
-            let strength = 0.30 + pulse * 0.26
+            let strength = 0.46 + pulse * 0.30
 
             ZStack {
                 edgeGradient(startPoint: .top, endPoint: .bottom, strength: strength)
@@ -1032,7 +1014,7 @@ private struct OnboardingScreenEdgeGlow: View {
                 edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
             }
             .compositingGroup()
-            .blur(radius: 14 + pulse * 6)
+            .blur(radius: 16 + pulse * 7)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -1050,10 +1032,14 @@ private struct OnboardingScreenEdgeGlow: View {
                     location: 0
                 ),
                 .init(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.34),
-                    location: 0.035
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.45),
+                    location: 0.045
                 ),
-                .init(color: .clear, location: 0.13)
+                .init(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.14),
+                    location: 0.10
+                ),
+                .init(color: .clear, location: 0.17)
             ],
             startPoint: startPoint,
             endPoint: endPoint
@@ -1209,9 +1195,19 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             ]
 
             let backdrop = NSVisualEffectView()
-            backdrop.material = .underWindowBackground
+            backdrop.material = .fullScreenUI
             backdrop.blendingMode = .behindWindow
             backdrop.state = .active
+
+            // A whisper of dimming on top of the blur separates the onboarding
+            // window from the desktop without muddying the frosted look.
+            let dimmingView = NSView()
+            dimmingView.wantsLayer = true
+            dimmingView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.10).cgColor
+            dimmingView.autoresizingMask = [.width, .height]
+            dimmingView.frame = backdrop.bounds
+            backdrop.addSubview(dimmingView)
+
             panel.contentView = backdrop
             return panel
         }
@@ -1267,7 +1263,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                backdropPanel.animator().alphaValue = 0.52
+                backdropPanel.animator().alphaValue = 0.62
             }
         }
 
