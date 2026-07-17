@@ -20,7 +20,6 @@ env:
   LEGACY_APPCAST_RELEASE: v1.1.2
   LEGACY_APPCAST_SHA256: 63941687d2b08847befb4e33b7ec9cb1a9fecc09d2a7c73700850b895aa27ac8
   MINIMUM_PUBLISHED_BUILD: '202607091757'
-  NIGHTLY_APPCAST_URL: https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml
 
 jobs:
   prepare-release:
@@ -30,7 +29,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
       build_num: ${{ steps.version.outputs.BUILD_NUM }}
-      current_nightly_build: ${{ steps.version.outputs.CURRENT_NIGHTLY_BUILD }}
       is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
 
     steps:
@@ -52,27 +50,13 @@ jobs:
             echo "Invalid release version: $VERSION" >&2
             exit 1
           fi
-          CURRENT_NIGHTLY_BUILD=$(curl --fail --silent --show-error --location "${{ env.NIGHTLY_APPCAST_URL }}" | python3 -c '
-          import sys
-          import xml.etree.ElementTree as ET
-
-          root = ET.parse(sys.stdin).getroot()
-          enclosure = root.find("./channel/item/enclosure")
-          if enclosure is None:
-              raise SystemExit("The nightly appcast has no update item.")
-          build = enclosure.get("{http://www.andymatuschak.org/xml-namespaces/sparkle}version")
-          if build is None or not build.isdecimal():
-              raise SystemExit("The nightly appcast has no numeric Sparkle build number.")
-          print(build)
-          ')
           BUILD_NUM=$(date -u +%Y%m%d%H%M%S)
-          if [ "$BUILD_NUM" -le "$CURRENT_NIGHTLY_BUILD" ]; then
-            BUILD_NUM=$((CURRENT_NIGHTLY_BUILD + 1))
+          if [ "$BUILD_NUM" -le "${{ env.MINIMUM_PUBLISHED_BUILD }}" ]; then
+            BUILD_NUM=$((${{ env.MINIMUM_PUBLISHED_BUILD }} + 1))
           fi
 
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "BUILD_NUM=${BUILD_NUM}" >> "$GITHUB_OUTPUT"
-          echo "CURRENT_NIGHTLY_BUILD=${CURRENT_NIGHTLY_BUILD}" >> "$GITHUB_OUTPUT"
 
           if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
             echo "IS_PRERELEASE=true" >> "$GITHUB_OUTPUT"
@@ -334,10 +318,6 @@ jobs:
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
-          APPCAST_CHANNEL="nightly" \
-          APPCAST_FILE_OVERRIDE="releases/appcast-nightly.xml" \
-          ZIP_NAME_OVERRIDE="Sorty.zip" \
-          ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
         run: |
@@ -347,12 +327,6 @@ jobs:
             --minimum-build "${{ env.MINIMUM_PUBLISHED_BUILD }}" \
             --expected-version "${{ needs.prepare-release.outputs.version }}" \
             --expected-channel default \
-            --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
-          ./scripts/validate_sparkle.sh \
-            --appcast releases/appcast-nightly.xml \
-            --minimum-build "${{ needs.prepare-release.outputs.current_nightly_build }}" \
-            --expected-version "${{ needs.prepare-release.outputs.version }}" \
-            --expected-channel nightly \
             --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
 
       - name: Preserve legacy key-transition appcast
@@ -421,13 +395,6 @@ jobs:
 
             `Sorty.zip` is a universal build for Apple silicon and Intel Macs. GitHub provides the source code archives automatically.
           prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
-
-      - name: Offer stable release to nightly users
-        if: needs.prepare-release.outputs.is_prerelease == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "nightly" releases/appcast-nightly.xml --clobber
 
       - name: Verify published release
         env:
