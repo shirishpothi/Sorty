@@ -1,0 +1,292 @@
+{
+  "title": "Sorty First Customer Finder",
+  "product": "Sorty",
+  "product_url": "https://sorty-organizer.github.io/Sorty",
+  "target_customer": "Mac users with large, messy work folders who want AI organization without maintaining complex rules, while retaining preview, undo, exclusions, and local-model options",
+  "search_scope": "Public English-language Reddit and Noodlesoft forum signals from May 2025 through July 2026, prioritizing the most recent explicit requests and active workarounds",
+  "generated_at": "2026-07-14",
+  "verdict": "Sorty has reachable early-customer signals. The strongest current demand comes from Mac users comparing file organizers because rule systems are too labor-intensive, especially for large nested folders, screenshots, photos, and long-lived Downloads archives. Position Sorty around plain-language organization plus preview, undo, exclusions, and local-provider choice; validate workflow-specific gaps before promising recursion, date rules, or image understanding.",
+  "prospects": [
+    {
+      "name": "darknternal",
+      "type": "Public Reddit prospect",
+      "stage": "High intent",
+      "score": 95,
+      "pain_signal": "They are actively looking for an AI file organizer for large datasets because they do not want to spend time creating complex rules.",
+      "evidence": "In a current comparison thread, the prospect explicitly asked for an AI-type organizer that can tidy large datasets without complex rule creation.",
+      "why_fit": "Sorty uses AI-generated organization plans and lets the user preview, edit, exclude, and undo file moves instead of maintaining a large deterministic rule set.",
+      "why_now": "The comment was posted four days before this report in an active discussion comparing the available Mac file organizers.",
+      "source_title": "App Request: Auto organizing files",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1uqf1og/app_request_auto_organizing_files/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-07-10 (shown publicly as 4 days ago)",
+      "suggested_channel": "Reply manually in the active Reddit discussion",
+      "opener": "Saw your note about wanting AI organization for large datasets without building complex rules. Sorty is a free, open-source Mac app that generates a proposed folder plan, then lets you review every move, exclude files, and undo. Would you be willing to try it on one representative folder and tell me where the plan breaks down?",
+      "caution": "Confirm performance and source-folder depth on their real dataset before positioning it as a large-library solution.",
+      "dimensions": {
+        "pain_strength": 4,
+        "product_fit": 5,
+        "timing": 5,
+        "reachability": 5,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "Latter_Pen2421",
+      "type": "Public Reddit prospect",
+      "stage": "High intent",
+      "score": 90,
+      "pain_signal": "They are currently evaluating Mac file organizers and specifically need subfolder traversal, last-modified-date handling, and folder exclusions.",
+      "evidence": "The prospect listed nine competing tools, asked which support subfolders and age-based organization, and said they would not test another option unless it allowed folder exclusions.",
+      "why_fit": "Sorty supports nested organization plans, exclusion rules, preview, history, and undo, matching the safety criteria that matter to this evaluator.",
+      "why_now": "The comparison was posted four days before this report, and the prospect is still asking follow-up questions about product capability.",
+      "source_title": "App Request: Auto organizing files",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1uqf1og/app_request_auto_organizing_files/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-07-10 (shown publicly as 4 days ago)",
+      "suggested_channel": "Reply manually in the active Reddit discussion",
+      "opener": "Your checklist around subfolders, file age, exclusions, preview, and undo is close to the workflow Sorty is built for. It is free and open source, and it shows the proposed moves before applying them. Could I give you a two-minute setup for one nested test folder and have you score it against that checklist?",
+      "caution": "Verify the exact source-recursion and last-modified-date behavior before claiming parity with Hazel-style date rules.",
+      "dimensions": {
+        "pain_strength": 4,
+        "product_fit": 4,
+        "timing": 5,
+        "reachability": 5,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "itsoutofmyhands",
+      "type": "Public Reddit prospect",
+      "stage": "Problem aware",
+      "score": 90,
+      "pain_signal": "They iteratively organized years of Downloads into nested folders and found Hazel too rule-heavy for hundreds of varied receipt and invoice scans.",
+      "evidence": "The prospect described using Claude to iterate toward a nested folder structure, rename files from document details, and handle years of accumulated files while acknowledging the security risk of granting an LLM folder access.",
+      "why_fit": "Sorty can cover the organization and renaming slice with preview, undo, exclusions, and a user-selected local or cloud provider, reducing the need to expose an unrestricted folder to a general agent.",
+      "why_now": "The workflow was described three days before this report in an active comparison thread.",
+      "source_title": "App Request: Auto organizing files",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1uqf1og/app_request_auto_organizing_files/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-07-11 (shown publicly as 3 days ago)",
+      "suggested_channel": "Reply manually in the active Reddit discussion",
+      "opener": "Your years-of-Downloads workflow and the security concern around giving a general agent folder access stood out. Sorty narrows that job to a reviewable organization plan with undo and local-provider options. Would you test it on a copy of one mixed folder and compare the result with the structure you reached through Claude?",
+      "caution": "Do not imply that Sorty extracts invoice line items or generates spreadsheets; qualify only the organization and renaming workflow.",
+      "dimensions": {
+        "pain_strength": 5,
+        "product_fit": 3,
+        "timing": 5,
+        "reachability": 5,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "A_Drop_of_Colour",
+      "type": "Public Reddit prospect",
+      "stage": "Problem aware",
+      "score": 88,
+      "pain_signal": "A current project was producing a very large volume of screenshots, and the prospect wanted them renamed and sorted by application, date, and time without buying a tool they would soon stop needing.",
+      "evidence": "The prospect publicly described the temporary project surge, the desired naming convention, and hesitation to buy Hazel for a short-lived need.",
+      "why_fit": "Sorty is free and can propose AI-assisted renames and folder moves with a preview, making it suitable for a concentrated project cleanup without a subscription commitment.",
+      "why_now": "The project signal is four months old, but the workflow is concrete enough for a focused design-partner follow-up.",
+      "source_title": "Best Desktop Files Organizer?",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1rpy336/best_desktop_files_organizer/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-03 (shown publicly as 4 months ago)",
+      "suggested_channel": "Reply in the Reddit thread if still open, otherwise use the public Reddit profile only if messages are enabled",
+      "opener": "You mentioned a project generating a large screenshot backlog and wanting app-name, date, and time-based organization without buying Hazel for a short-term need. Sorty is free and previews every proposed rename and move. Is that project still active, and would one real batch be useful as a test case?",
+      "caution": "The project may already be over, and image-content naming depends on a configured vision-capable provider.",
+      "dimensions": {
+        "pain_strength": 5,
+        "product_fit": 4,
+        "timing": 4,
+        "reachability": 4,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "itsdanielsultan",
+      "type": "Public Reddit prospect",
+      "stage": "High intent",
+      "score": 88,
+      "pain_signal": "They wanted AI to rename, sort, deduplicate, and age out a desktop full of screenshots, installed Sorty, but did not see the AI workflow they expected.",
+      "evidence": "The prospect listed a detailed screenshot workflow, asked for a Sorty link, later reported installing it, and requested local Foundation Models for privacy-sensitive image understanding.",
+      "why_fit": "They have already crossed the discovery and install barriers, so a precise follow-up can reveal whether the blocker is product capability, provider configuration, onboarding, or positioning.",
+      "why_now": "The public interaction is four months old but represents an unusually strong activation and product-clarity signal.",
+      "source_title": "Best Desktop Files Organizer?",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1rpy336/best_desktop_files_organizer/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-03 (shown publicly as 4 months ago)",
+      "suggested_channel": "Follow up manually in the existing Reddit thread if it remains open",
+      "opener": "You tried Sorty after asking for AI screenshot renaming, but it did not expose the workflow you expected. That is useful product feedback, not a setup mistake to dismiss. If the need is still current, could I walk through one screenshot batch with you and identify whether the blocker is vision support, provider setup, or the organization flow itself?",
+      "caution": "Apple Foundation Models image analysis is not currently available in Sorty; do not promise fully local screenshot understanding through that provider.",
+      "dimensions": {
+        "pain_strength": 5,
+        "product_fit": 4,
+        "timing": 4,
+        "reachability": 4,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "aumano",
+      "type": "Public forum prospect",
+      "stage": "Problem aware",
+      "score": 87,
+      "pain_signal": "They maintain 95 file-move rules that break when target folders move, spent hours trying to create dynamic mappings, and ultimately said the advanced rule mechanism was beyond their skill level.",
+      "evidence": "Across a public Hazel support thread, the prospect described the 95-rule structure, repeatedly sought a smarter semantic mapping, offered to pay for specialist help, and ended by admitting defeat with the rule configuration.",
+      "why_fit": "A plain-language AI plan could replace much of the brittle rule-authoring burden, while Sorty's preview and exclusions reduce the risk of testing on a complex hierarchy.",
+      "why_now": "The prospect remained active from late May through mid-June 2026 and demonstrated unusually strong willingness to invest in solving the problem.",
+      "source_title": "avoid broken rules when renaming/moving folders",
+      "source_url": "https://www.noodlesoft.com/forums/viewtopic.php?f=4&t=17365",
+      "source_type": "Public vendor support forum",
+      "signal_date": "2026-05-27 to 2026-06-15",
+      "suggested_channel": "Do not pitch inside the Hazel support thread; use the public forum profile only if its rules permit alternatives and a contact path is intentionally exposed",
+      "opener": "You described maintaining 95 rules whose destinations break when folders move, then getting stuck on dynamic mappings. Sorty approaches the problem through a reviewable AI-generated plan instead of one rule per destination. If discussing alternatives is welcome, would a copy of one small branch of that folder tree be a useful no-risk test?",
+      "caution": "Sorty may not reproduce arbitrary cross-directory dynamic mappings; validate on a copied sample tree, and respect the competitor forum's solicitation rules.",
+      "dimensions": {
+        "pain_strength": 5,
+        "product_fit": 3,
+        "timing": 5,
+        "reachability": 4,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "glendamccall",
+      "type": "Public forum prospect",
+      "stage": "Problem aware",
+      "score": 79,
+      "pain_signal": "They want an automated photo workflow that watches Downloads and Desktop, sorts by year and month, renames from EXIF plus a descriptor, isolates duplicates, and handles large batches safely.",
+      "evidence": "The public forum post provides a four-step desired workflow and explicitly asks about scripts, metadata extraction, performance, and rule conflicts.",
+      "why_fit": "Sorty can organize photos into semantic or date-oriented folder structures, review duplicates, and preview moves, although EXIF-specific naming must be validated.",
+      "why_now": "The request was posted in January 2026 and received only a general reply asking what had been tried.",
+      "source_title": "Best Practices for Automating Photo Organization with Hazel",
+      "source_url": "https://www.noodlesoft.com/forums/viewtopic.php?f=4&t=17230",
+      "source_type": "Public vendor support forum",
+      "signal_date": "2026-01-05",
+      "suggested_channel": "Use the public forum profile only if contact is enabled and the forum permits discussion of alternatives",
+      "opener": "Your photo workflow combines watched folders, year/month sorting, descriptive renaming, duplicate isolation, and concern about large-batch conflicts. Sorty covers the preview, organization, and duplicate-review parts, but I would want to test EXIF naming rather than promise it. Would a copied batch of 30 photos be a useful design-partner case?",
+      "caution": "Hazel may already solve much of this; verify EXIF-driven naming and avoid unsolicited promotion in its support forum.",
+      "dimensions": {
+        "pain_strength": 4,
+        "product_fit": 4,
+        "timing": 3,
+        "reachability": 4,
+        "evidence_quality": 5
+      }
+    },
+    {
+      "name": "emma_lorien",
+      "type": "Public Reddit prospect",
+      "stage": "Trigger present",
+      "score": 77,
+      "pain_signal": "They recently could not find important notes on their Mac and concluded that their files need better organization.",
+      "evidence": "The prospect said the recent loss-of-findability incident prompted them to evaluate the organizer list in the active thread.",
+      "why_fit": "Sorty can create a clearer semantic hierarchy and learn from later corrections, which may reduce future search friction for a Mac-local collection.",
+      "why_now": "The triggering incident and stated intent to evaluate tools were posted four days before this report.",
+      "source_title": "App Request: Auto organizing files",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1uqf1og/app_request_auto_organizing_files/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2026-07-10 (shown publicly as 4 days ago)",
+      "suggested_channel": "Reply manually in the active Reddit discussion",
+      "opener": "You mentioned losing track of important notes and deciding it was time to organize the Mac better. Sorty is free and proposes a semantic folder structure before moving anything. Would you be open to testing it on the folder where those notes usually accumulate and judging whether the preview would make them easier to find?",
+      "caution": "The evidence shows a findability problem, not necessarily a file-moving problem; confirm the notes are normal files rather than content inside another app.",
+      "dimensions": {
+        "pain_strength": 2,
+        "product_fit": 4,
+        "timing": 5,
+        "reachability": 5,
+        "evidence_quality": 4
+      }
+    },
+    {
+      "name": "xBossBigx",
+      "type": "Public Reddit prospect",
+      "stage": "High intent",
+      "score": 77,
+      "pain_signal": "They were actively comparing Sparkle with Hazel AI Organizer and asked which product was better for automated file organization.",
+      "evidence": "The original public post is a direct alternative-evaluation request, and the discussion focuses on AI automation, privacy, control, content awareness, and subscription cost.",
+      "why_fit": "Sorty offers a third path: AI-generated organization with user-controlled preview and undo, free open-source distribution, and local-provider options.",
+      "why_now": "The comparison is seven months old and archived, but it captures a buyer already evaluating the exact category.",
+      "source_title": "Sparkle vs Hazel AI Organizer?",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1p4u4wv/sparkle_vs_hazel_ai_organizer/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2025-12 (shown publicly as 7 months ago)",
+      "suggested_channel": "Use the public Reddit profile only if messages are enabled; the original post is archived",
+      "opener": "You compared Sparkle and Hazel around AI automation versus precise control. Sorty combines an AI-generated plan with a preview you can edit, full undo, and local-provider options, and it is free. If you are still evaluating the category, which folder would be the fairest test for a third option?",
+      "caution": "The source is archived and does not state the prospect's exact folder type or whether they already chose a tool.",
+      "dimensions": {
+        "pain_strength": 3,
+        "product_fit": 5,
+        "timing": 4,
+        "reachability": 3,
+        "evidence_quality": 4
+      }
+    },
+    {
+      "name": "tdah",
+      "type": "Public Reddit prospect",
+      "stage": "Problem aware",
+      "score": 75,
+      "pain_signal": "Years of client documents, petitions, repeated text, and duplicates had produced a file system only the owner could understand, while privacy made tool choice difficult.",
+      "evidence": "The original post describes long-running disorganization and duplicate-heavy client files; a follow-up says even offline solutions require careful scrutiny because privacy is a concern.",
+      "why_fit": "Sorty directly addresses semantic organization, duplicates, preview, undo, exclusions, and user-selected local processing, all of which matter for a sensitive document collection.",
+      "why_now": "The signal is older than the priority window and the post is archived, but the pain is unusually direct and severe.",
+      "source_title": "Hello! Any recommendations of a IA or App to organize my files?",
+      "source_url": "https://www.reddit.com/r/macapps/comments/1khpver/hello_any_recommendations_of_a_ia_or_app_to/",
+      "source_type": "Public Reddit discussion",
+      "signal_date": "2025-05-08",
+      "suggested_channel": "Use the public Reddit profile only if messages are enabled; the original post is archived",
+      "opener": "You described years of client documents, duplicates, and a structure that only you can understand, with privacy as a deciding constraint. Sorty can run with a local provider and shows every proposed move before applying it. If that problem is still current, would you test only a redacted or non-client sample first?",
+      "caution": "Do not ask for client files or sensitive document samples; use synthetic, redacted, or non-confidential material only.",
+      "dimensions": {
+        "pain_strength": 5,
+        "product_fit": 5,
+        "timing": 1,
+        "reachability": 2,
+        "evidence_quality": 5
+      }
+    }
+  ],
+  "patterns": [
+    {
+      "title": "Rule maintenance is the clearest displacement wedge",
+      "count": 6,
+      "insight": "Prospects repeatedly describe complex rules, scripts, or iterative agent prompts as the work they want to avoid. Lead with a plain-language plan that remains reviewable rather than with generic AI claims."
+    },
+    {
+      "title": "Large and long-lived folders create urgency",
+      "count": 6,
+      "insight": "The strongest pain appears after months or years of accumulation, dozens of rules, or project-scale screenshot and document batches. A copied real-world folder is a better validation unit than a polished demo."
+    },
+    {
+      "title": "Trust determines whether automation is usable",
+      "count": 5,
+      "insight": "Privacy, dry runs, preview, exclusions, logs, undo, and control appear alongside demand for AI. Sorty's safety model should be demonstrated before its intelligence."
+    },
+    {
+      "title": "Screenshots and photos form a concrete adjacent ICP",
+      "count": 3,
+      "insight": "These users can describe success precisely through renaming, duplicate handling, date or project folders, and image context, making them strong design partners if provider limitations are stated clearly."
+    },
+    {
+      "title": "Free and open source remove a visible buying objection",
+      "count": 2,
+      "insight": "Some prospects hesitate over subscriptions or short-term projects. Sorty's price is an advantage, but outreach should still lead with the exact workflow and trust model rather than price alone."
+    }
+  ],
+  "outreach_plan": {
+    "angle": "Offer a manual, ten-minute test on one copied folder and ask the prospect to judge the preview, not to adopt the whole product.",
+    "first_step": "Reply manually to the three current Reddit prospects with the highest scores: darknternal, Latter_Pen2421, and itsoutofmyhands. Ask one source-based question and offer no more than one relevant link.",
+    "follow_up": "After a prospect confirms the workflow, provide a tiny test protocol: duplicate the folder, choose a suitable provider, run preview only, record wrong moves and missing categories, then stop before applying unless they explicitly choose to continue.",
+    "success": "Within seven days, get three substantive replies, two completed preview tests on real copied folders, and one recurring design partner willing to test the next build."
+  },
+  "limits": [
+    "These are potential customers based on public signals, not confirmed buyers, users, or people who consented to outreach.",
+    "No messages, replies, follows, form submissions, or CRM records were created.",
+    "Some Reddit dates are displayed relatively; month-level dates are labeled as estimates, and archived posts receive lower timing and reachability scores.",
+    "Sorty is macOS 15+; Apple Foundation Models currently provide text analysis in this codebase, so fully local image understanding requires a compatible vision-capable local provider and must be tested.",
+    "Source recursion, last-modified-date automation, EXIF naming, and arbitrary cross-directory mappings must be verified on the prospect's workflow before they are promised.",
+    "Vendor support forums may prohibit alternative-product solicitation. Respect their rules and skip outreach when an appropriate public channel is not clearly available."
+  ]
+}
