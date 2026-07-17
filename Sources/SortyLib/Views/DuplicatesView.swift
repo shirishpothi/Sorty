@@ -1775,10 +1775,7 @@ struct ScanProgressViewNew: View {
     private var progressCard: some View {
         ZStack {
             HStack(alignment: .center, spacing: 14) {
-                if isPreparing {
-                    CometLoader(size: 28, lineWidth: 2.5)
-                        .frame(width: 30)
-                } else {
+                if !isPreparing {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -1813,9 +1810,12 @@ struct ScanProgressViewNew: View {
 
                 Spacer(minLength: 0)
 
-                LoadingDotsView(dotCount: 3, dotSize: 5, color: .accentColor)
-                    .frame(width: 34)
-                    .accessibilityHidden(true)
+                MinsangGlassLoader(
+                    textChangeTrigger: title,
+                    size: 54,
+                    isActive: isAnimationActive
+                )
+                .frame(width: 54)
             }
             .padding(.horizontal, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
