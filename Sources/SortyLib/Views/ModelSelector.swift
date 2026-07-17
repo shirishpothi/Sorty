@@ -19,7 +19,7 @@ struct ModelSelectorRow: View {
             HStack(spacing: 10) {
                 ProviderLogoView(provider: provider, size: 16)
                     .frame(width: 20)
-                
+
                 VStack(alignment: .leading, spacing: 1) {
                     Text(provider.displayName)
                         .font(.caption)
@@ -29,13 +29,13 @@ struct ModelSelectorRow: View {
                         .fontWeight(.medium)
                         .lineLimit(1)
                 }
-                
+
                 Spacer()
-                
+
                 Text("Change")
                     .font(.caption)
                     .foregroundColor(.accentColor)
-                
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.secondary)
@@ -325,20 +325,20 @@ struct ModelSelectionPopover: View {
                 ProviderLogoView(provider: provider, size: 12)
                     .foregroundColor(selectedProvider == provider ? .white : .accentColor)
                     .frame(width: 16)
-                
+
                 Text(provider.displayName)
                     .font(.system(size: 12))
                     .foregroundColor(selectedProvider == provider ? .white : .primary)
                     .lineLimit(1)
-                
+
                 Spacer()
-                
+
                 if provider == currentProvider {
                     Circle()
                         .fill(selectedProvider == provider ? Color.white.opacity(0.8) : Color.green)
                         .frame(width: 6, height: 6)
                 }
-                
+
                 if modelCatalog.isFetching[provider] ?? false {
                     SortyGradientCircularLoader(size: 9, lineWidth: 1.8)
                 }
