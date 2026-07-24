@@ -434,12 +434,15 @@ struct MainWindowRootView: View {
 
         guard appState.requiresSetupRepair else { return }
 
+        let testedConfig = settingsViewModel.config
         do {
             try await settingsViewModel.testConnection()
+            guard settingsViewModel.config == testedConfig else { return }
             appState.clearSetupRepairState()
         } catch {
+            guard settingsViewModel.config == testedConfig else { return }
             appState.startSetupRepair(
-                message: "Sorty could not verify \(settingsViewModel.config.provider.displayName): \(error.localizedDescription)",
+                message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)",
                 navigateToSettings: false
             )
         }

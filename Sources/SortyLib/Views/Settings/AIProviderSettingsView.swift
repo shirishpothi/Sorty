@@ -92,6 +92,7 @@ struct AIProviderSettingsView: View {
             }
         }
         .onChange(of: viewModel.config.provider) { _, newProvider in
+            NotificationManager.shared.dismissHUD(identifier: "setup-repair")
             if newProvider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }

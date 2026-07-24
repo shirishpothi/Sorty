@@ -604,29 +604,12 @@ struct OrganizeView: View {
     }
 
     private func updateSetupRepairHUD() {
-        let notificationManager = NotificationManager.shared
         guard let message = activeSetupRepairMessage else {
-            notificationManager.dismissHUD(identifier: "setup-repair")
+            NotificationManager.shared.dismissHUD(identifier: "setup-repair")
             return
         }
 
-        notificationManager.showHUDInfo(
-            title: "Setup Repair Needed",
-            message: message,
-            icon: "wrench.and.screwdriver.fill",
-            iconColor: .orange,
-            identifier: "setup-repair",
-            isPersistent: true,
-            actions: [
-                HUDNotificationAction(
-                    title: "Open Provider Settings",
-                    systemImage: "gearshape"
-                ) {
-                    HapticFeedbackManager.shared.selection()
-                    appState.startSetupRepair(message: message, navigateToSettings: true)
-                }
-            ]
-        )
+        appState.presentSetupRepairHUD(message: message)
     }
 
 }

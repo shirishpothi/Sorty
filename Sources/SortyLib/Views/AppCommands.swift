@@ -773,9 +773,30 @@ public class AppState: ObservableObject {
     public func startSetupRepair(message: String, navigateToSettings: Bool = false) {
         requiresSetupRepair = true
         setupRepairMessage = message
+        presentSetupRepairHUD(message: message)
         if navigateToSettings {
             openProviderSettingsForRepair()
         }
+    }
+
+    public func presentSetupRepairHUD(message: String) {
+        NotificationManager.shared.showHUDInfo(
+            title: "Setup Repair Needed",
+            message: message,
+            icon: "wrench.and.screwdriver.fill",
+            iconColor: .orange,
+            identifier: "setup-repair",
+            isPersistent: true,
+            actions: [
+                HUDNotificationAction(
+                    title: "Open Provider Settings",
+                    systemImage: "gearshape"
+                ) { [weak self] in
+                    HapticFeedbackManager.shared.selection()
+                    self?.openProviderSettingsForRepair()
+                }
+            ]
+        )
     }
 
     public func clearSetupRepairState() {

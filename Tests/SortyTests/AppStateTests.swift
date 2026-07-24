@@ -33,6 +33,7 @@ class AppStateTests: XCTestCase {
     }
     
     override func tearDown() async throws {
+        NotificationManager.shared.dismissHUD(identifier: "setup-repair")
         if let testDefaultsSuiteName {
             testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
         }
