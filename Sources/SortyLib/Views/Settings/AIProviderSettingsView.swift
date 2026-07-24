@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
@@ -628,6 +629,7 @@ struct AIProviderSettingsView: View {
         testConnectionStatus = nil
         testConnectionDetails = nil
         isDetailsExpanded = false
+        let testedConfig = viewModel.config
 
         Task {
             do {
@@ -638,6 +640,7 @@ struct AIProviderSettingsView: View {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil
                     }
+                    clearSetupRepairIfProviderIsUsable(testedConfig: testedConfig)
                 }
             } catch let decodingError as DecodingError {
                 HapticFeedbackManager.shared.error()
@@ -678,6 +681,26 @@ struct AIProviderSettingsView: View {
             }
             isTestingConnection = false
         }
+    }
+
+    @MainActor
+    private func clearSetupRepairIfProviderIsUsable(testedConfig: AIConfig) {
+        guard viewModel.config == testedConfig else { return }
+
+        let providerStatus = OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: testedConfig,
+                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+                isCodexAuthenticated: codexAuth.isAuthenticated,
+                isCodexInstalled: codexAuth.isCodexInstalled,
+                isAppleFoundationModelAvailable: viewModel.isAppleModelAvailable,
+                appleFoundationModelStatus: viewModel.appleModelStatus
+            )
+        )
+        guard providerStatus.isReady else { return }
+
+        appState.clearSetupRepairState()
+        NotificationManager.shared.dismissHUD(identifier: "setup-repair")
     }
 
     private func autoVerifyCodexSignInLoop() async {
@@ -1036,6 +1059,7 @@ private struct CodexDeviceAuthStatusView: View {
 #Preview {
     let codexAuthManager = CodexCLIAuthManager()
     AIProviderSettingsView()
+        .environmentObject(AppState())
         .environmentObject(SettingsViewModel())
         .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
         .environmentObject(codexAuthManager)
