@@ -526,7 +526,7 @@ struct AIProviderSettingsView: View {
     private var connectionSection: some View {
         SettingsCard(title: "Connection", icon: "network", color: .blue) {
             VStack(alignment: .leading, spacing: 12) {
-                if viewModel.config.provider != .appleFoundationModel {
+                if [.openAICompatible, .ollama].contains(viewModel.config.provider) {
                     HStack {
                         Spacer()
                         Toggle(isOn: $viewModel.config.requiresAPIKey) {
