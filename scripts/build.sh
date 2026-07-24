@@ -646,6 +646,17 @@ copy_resources_safely() {
     fi
 }
 
+compile_string_catalogs() {
+    local resources_dir="$1"
+    local catalog
+
+    while IFS= read -r catalog; do
+        log_detail "Compiling string catalog $(basename "${catalog}")"
+        xcrun xcstringstool compile "${catalog}" --output-directory "${resources_dir}"
+        rm -f "${catalog}"
+    done < <(find "${resources_dir}" -maxdepth 1 -type f -name '*.xcstrings' | LC_ALL=C sort)
+}
+
 copy_swiftpm_dependency_resource_bundles() {
     local resources_dir="$1"
     local build_dir="$2"
@@ -1190,6 +1201,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
+    compile_string_catalogs "${RESOURCES_DIR}"
 
     # Compile Assets.xcassets into Assets.car (xcodebuild may have already done this)
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
@@ -1359,6 +1371,7 @@ else
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
+    compile_string_catalogs "${RESOURCES_DIR}"
     copy_swiftpm_dependency_resource_bundles "${RESOURCES_DIR}" "${BUILD_DIR}"
 
     # Compile Assets.xcassets into Assets.car
