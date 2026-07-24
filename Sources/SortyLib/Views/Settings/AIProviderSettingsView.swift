@@ -18,6 +18,7 @@ struct AIProviderSettingsView: View {
     @State private var testConnectionStatus: String?
     @State private var testConnectionDetails: String?
     @State private var isTestingConnection = false
+    @State private var connectionTestID: UUID?
     @State private var hasCopiedCode = false
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
@@ -98,6 +99,9 @@ struct AIProviderSettingsView: View {
                 codexAuth.checkStatus()
                 openAIAuth.checkAuthenticationStatus()
             }
+        }
+        .onChange(of: viewModel.config) {
+            resetConnectionTestState()
         }
         .modelSelectionOverlay(
             isPresented: $showModelPicker,
@@ -630,12 +634,15 @@ struct AIProviderSettingsView: View {
         testConnectionDetails = nil
         isDetailsExpanded = false
         let testedConfig = viewModel.config
+        let testID = UUID()
+        connectionTestID = testID
 
         Task {
             do {
                 try await viewModel.testConnection()
-                HapticFeedbackManager.shared.success()
                 await MainActor.run {
+                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
+                    HapticFeedbackManager.shared.success()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil
@@ -643,7 +650,6 @@ struct AIProviderSettingsView: View {
                     clearSetupRepairIfProviderIsUsable(testedConfig: testedConfig)
                 }
             } catch let decodingError as DecodingError {
-                HapticFeedbackManager.shared.error()
                 let context: String
                 switch decodingError {
                 case .dataCorrupted(let ctx):
@@ -658,14 +664,17 @@ struct AIProviderSettingsView: View {
                     context = decodingError.localizedDescription
                 }
                 await MainActor.run {
+                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
+                    HapticFeedbackManager.shared.error()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         testConnectionStatus = "Error: Invalid response format"
                         testConnectionDetails = "The API endpoint may be incorrect or the service returned unexpected data.\n\nDetails: \(context)"
                     }
                 }
             } catch {
-                HapticFeedbackManager.shared.error()
                 await MainActor.run {
+                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
+                    HapticFeedbackManager.shared.error()
                     var details: String? = nil
                     if let aiError = error as? AIClientError {
                         details = aiError.failureReason
@@ -679,8 +688,21 @@ struct AIProviderSettingsView: View {
                     }
                 }
             }
-            isTestingConnection = false
+            await MainActor.run {
+                guard connectionTestID == testID else { return }
+                connectionTestID = nil
+                isTestingConnection = false
+            }
         }
+    }
+
+    @MainActor
+    private func resetConnectionTestState() {
+        connectionTestID = nil
+        isTestingConnection = false
+        testConnectionStatus = nil
+        testConnectionDetails = nil
+        isDetailsExpanded = false
     }
 
     @MainActor
@@ -700,7 +722,6 @@ struct AIProviderSettingsView: View {
         guard providerStatus.isReady else { return }
 
         appState.clearSetupRepairState()
-        NotificationManager.shared.dismissHUD(identifier: "setup-repair")
     }
 
     private func autoVerifyCodexSignInLoop() async {

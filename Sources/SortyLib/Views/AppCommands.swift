@@ -781,6 +781,7 @@ public class AppState: ObservableObject {
     public func clearSetupRepairState() {
         requiresSetupRepair = false
         setupRepairMessage = nil
+        NotificationManager.shared.dismissHUD(identifier: "setup-repair")
     }
     
     public func exportResults() {
