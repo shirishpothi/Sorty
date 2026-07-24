@@ -712,10 +712,10 @@ private struct CompletionFeatureSuggestionCard: View {
                 )
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

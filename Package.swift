@@ -43,6 +43,7 @@ let package = Package(
                 .copy("Resources/whats-new-design-system-5.png"),
                 .copy("Resources/whats-new-preview.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
+                .process("Resources/Localizable.xcstrings"),
                 .process("Resources/automation-demo.mp4"),
                 .process("Resources/files-and-folders-demo.mp4"),
                 .process("Resources/full-disk-access-demo.mp4"),

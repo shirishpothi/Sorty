@@ -526,7 +526,7 @@ struct PermissionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
-                    Text(type.rawValue)
+                    Text(LocalizedStringKey(type.rawValue))
                         .font(.headline)
 
                     if isRequired {
@@ -974,7 +974,7 @@ private struct PermissionActionButton: View {
         Button {
             action(frameInScreen.isEmpty ? nil : frameInScreen.integral)
         } label: {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .frame(minWidth: style == .primary ? 74 : 96)
         }
         .buttonStyle(buttonStyle)

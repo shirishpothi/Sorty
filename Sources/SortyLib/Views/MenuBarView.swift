@@ -407,7 +407,7 @@ private struct MenuBarButton: View {
                         .frame(width: 16)
                         .foregroundStyle(isHovered ? (hoverIconColor ?? .primary) : .primary)
                 }
-                Text(title)
+                Text(LocalizedStringKey(title))
                 Spacer()
                 if showsExternalArrow {
                     Image(systemName: "arrow.up.forward")

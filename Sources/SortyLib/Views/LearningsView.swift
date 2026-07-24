@@ -238,8 +238,8 @@ struct LearningsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(description).font(.subheadline).foregroundStyle(.secondary)
+                Text(LocalizedStringKey(title)).font(.headline)
+                Text(LocalizedStringKey(description)).font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -860,7 +860,7 @@ struct LearningsView: View {
                     Text(heroTitle)
                         .font(.headline)
                     if let subtitle = heroSubtitle {
-                        Text(subtitle)
+                        Text(LocalizedStringKey(subtitle))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -1363,8 +1363,8 @@ struct LearningsView: View {
                 .font(.body.bold())
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text(LocalizedStringKey(title)).font(.subheadline)
+                Text(LocalizedStringKey(subtitle)).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Toggle("", isOn: isOn)

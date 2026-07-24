@@ -7,7 +7,7 @@ struct ReadyToOrganizeTitle: View {
         VStack(spacing: 6) {
             Text("Ready to \(mode.actionVerb)")
                 .font(.title2.weight(.semibold))
-            Text(mode.description)
+            Text(LocalizedStringKey(mode.description))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

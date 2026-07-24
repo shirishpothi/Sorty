@@ -116,7 +116,7 @@ struct EmptyPreviewState: View {
             emptyStateArtwork
             
             VStack(spacing: 8) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.title3)
                     .fontWeight(.semibold)
                 

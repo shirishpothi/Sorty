@@ -119,7 +119,7 @@ struct ThanksForUsingSortyView: View {
         return VStack(alignment: .leading, spacing: 4) {
             Text(item.value)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
-            Text(item.title)
+            Text(LocalizedStringKey(item.title))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }

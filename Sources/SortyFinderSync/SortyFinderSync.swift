@@ -50,7 +50,7 @@ final class SortyFinderSync: FIFinderSync {
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
             let organizeItem = NSMenuItem(
-                title: "Organize with Sorty",
+                title: String(localized: "Organize with Sorty"),
                 action: #selector(organizeAction(_:)),
                 keyEquivalent: ""
             )
@@ -59,7 +59,7 @@ final class SortyFinderSync: FIFinderSync {
             menu.addItem(organizeItem)
 
             let watchItem = NSMenuItem(
-                title: "Watch with Sorty",
+                title: String(localized: "Watch with Sorty"),
                 action: #selector(watchAction(_:)),
                 keyEquivalent: ""
             )
@@ -68,7 +68,7 @@ final class SortyFinderSync: FIFinderSync {
             menu.addItem(watchItem)
         case .toolbarItemMenu:
             let organizeItem = NSMenuItem(
-                title: "Organize Folder",
+                title: String(localized: "Organize Folder"),
                 action: #selector(organizeAction(_:)),
                 keyEquivalent: ""
             )
@@ -77,7 +77,7 @@ final class SortyFinderSync: FIFinderSync {
             menu.addItem(organizeItem)
 
             let watchItem = NSMenuItem(
-                title: "Watch Folder",
+                title: String(localized: "Watch Folder"),
                 action: #selector(watchAction(_:)),
                 keyEquivalent: ""
             )

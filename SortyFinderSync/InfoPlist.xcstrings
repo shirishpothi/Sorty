@@ -1,0 +1,16 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty Finder Sync" } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty Finder Sync" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty Finder Sync" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty Finder Sync" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sorty Finder Sync" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty Finder Sync" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

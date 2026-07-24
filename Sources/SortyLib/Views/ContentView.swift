@@ -82,8 +82,8 @@ public struct ContentView: View {
                         sidebarRow(item: item, commandNumber: index + 1)
                     }
                     .accessibilityIdentifier(item.accessibilityIdentifier)
-                    .accessibilityHint(item.accessibilityHint)
-                    .help(item.helpText)
+                    .accessibilityHint(Text(LocalizedStringKey(item.accessibilityHint)))
+                    .help(String(localized: String.LocalizationValue(item.helpText)))
                 }
             }
             .navigationTitle("Sorty")
@@ -202,7 +202,11 @@ public struct ContentView: View {
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
         let shortcutLabel = item.view == .settings ? "," : "\(commandNumber)"
 
-        Label(item.title, systemImage: item.systemImage)
+        Label {
+            Text(LocalizedStringKey(item.title))
+        } icon: {
+            Image(systemName: item.systemImage)
+        }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, showCommandNumbers ? 38 : 0)

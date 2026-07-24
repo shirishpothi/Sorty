@@ -776,7 +776,7 @@ struct WatchedFolderConfigView: View {
                             .accessibilityElement(children: .contain)
                             .accessibilityLabel("Watched folder action")
 
-                            Text(selectedMode.description)
+                            Text(LocalizedStringKey(selectedMode.description))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -986,7 +986,7 @@ struct ConfigSection<Content: View>: View {
                 Image(systemName: icon)
                     .font(.system(size: 12))
                     .foregroundStyle(color)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.secondary)
             }

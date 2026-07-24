@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A2B3C4D5E6F700000000001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000101 /* Localizable.xcstrings */; };
+		1A2B3C4D5E6F700000000002 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000102 /* InfoPlist.xcstrings */; };
+		1A2B3C4D5E6F700000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000103 /* Localizable.xcstrings */; };
+		1A2B3C4D5E6F700000000004 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F700000000104 /* InfoPlist.xcstrings */; };
 		D713B0010000000000000001 /* ImproveInstructionsToolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D713A0010000000000000001 /* ImproveInstructionsToolTests.swift */; };
 		9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */; };
 		C836ED182D2842A2A579A019 /* LearningsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981E7344DFEC4943BA212BED /* LearningsView.swift */; };
@@ -325,6 +329,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1A2B3C4D5E6F700000000101 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Sources/SortyLib/Resources/Localizable.xcstrings; sourceTree = SOURCE_ROOT; };
+		1A2B3C4D5E6F700000000102 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		1A2B3C4D5E6F700000000103 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1A2B3C4D5E6F700000000104 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		D713A0010000000000000001 /* ImproveInstructionsToolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImproveInstructionsToolTests.swift; sourceTree = "<group>"; };
 		AABBCC330000000000000001 /* Sorty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sorty.entitlements; sourceTree = "<group>"; };
 		D4A500100000000000000001 /* SortyWidgetSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/SortyWidgetSyncManager.swift; sourceTree = SOURCE_ROOT; };
@@ -880,6 +888,8 @@
 			isa = PBXGroup;
 			children = (
 				F1A1F001F001F001F001F002 /* Info.plist */,
+				1A2B3C4D5E6F700000000104 /* InfoPlist.xcstrings */,
+				1A2B3C4D5E6F700000000103 /* Localizable.xcstrings */,
 				F1A1F001F001F001F001F003 /* SortyFinderSync.entitlements */,
 				F1A1F001F001F001F001F006 /* SortyMascotHead.icns */,
 				F1A1F001F001F001F001F007 /* SortyMascotHead.png */,
@@ -914,6 +924,8 @@
 		99999999AAAA000000000003 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				1A2B3C4D5E6F700000000102 /* InfoPlist.xcstrings */,
+				1A2B3C4D5E6F700000000101 /* Localizable.xcstrings */,
 				99999999AAAA000000000001 /* AppIcon.icns */,
 				CC110001000000000000A019 /* Assets.xcassets */,
 				CC110001000000000000A018 /* AppIcons */,
@@ -1216,6 +1228,11 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
+				ja,
+				"zh-Hans",
 			);
 			mainGroup = 33A128592F01230000A86470;
 			minimizedProjectReferenceProxies = 1;
@@ -1240,6 +1257,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A2B3C4D5E6F700000000002 /* InfoPlist.xcstrings in Resources */,
+				1A2B3C4D5E6F700000000001 /* Localizable.xcstrings in Resources */,
 				99999999AAAA000000000002 /* AppIcon.icns in Resources */,
 				CC220002000000000000A018 /* AppIcons in Resources */,
 				CC220002000000000000A016 /* Assets.xcassets in Resources */,
@@ -1265,6 +1284,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A2B3C4D5E6F700000000004 /* InfoPlist.xcstrings in Resources */,
+				1A2B3C4D5E6F700000000003 /* Localizable.xcstrings in Resources */,
 				F1A1B001B001B001B001B006 /* SortyMascotHead.icns in Resources */,
 				F1A1B001B001B001B001B008 /* SortyMascotHead.png in Resources */,
 			);
@@ -1534,7 +1555,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1565,7 +1586,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1602,7 +1623,7 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};
@@ -1636,7 +1657,7 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};

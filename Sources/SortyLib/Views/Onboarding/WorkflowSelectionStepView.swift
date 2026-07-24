@@ -772,11 +772,11 @@ struct CreatePersonaButton: View {
                 }
                 
                 VStack(spacing: 4) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.headline)
                         .foregroundStyle(.primary)
                     
-                    Text(subtitle)
+                    Text(LocalizedStringKey(subtitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -833,11 +833,11 @@ struct CompactCreatePersonaButton: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    Text(subtitle)
+                    Text(LocalizedStringKey(subtitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

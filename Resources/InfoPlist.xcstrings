@@ -1,0 +1,46 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleName" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty" } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sorty" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty" } }
+      }
+    },
+    "NSAppleEventsUsageDescription" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty muss mit dem Finder kommunizieren, um Ihre Dateien und Ordner zu organisieren." } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty needs to communicate with Finder to organize your files and folders." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty necesita comunicarse con Finder para organizar tus archivos y carpetas." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty doit communiquer avec le Finder pour organiser vos fichiers et dossiers." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyは、ファイルとフォルダを整理するためにFinderと通信する必要があります。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty 需要与访达通信，以整理你的文件和文件夹。" } }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty verwendet biometrische Authentifizierung, um Ihre Lerndaten zu schützen." } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty uses biometric authentication to protect your learning data." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty usa la autenticación biométrica para proteger tus datos de aprendizaje." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty utilise l’authentification biométrique pour protéger vos données d’apprentissage." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyは学習データを保護するために生体認証を使用します。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty 使用生物识别认证来保护你的学习数据。" } }
+      }
+    },
+    "Sorty Learnings Profile" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty-Lernprofil" } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty Learnings Profile" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Perfil de aprendizaje de Sorty" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Profil d’apprentissage Sorty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sorty学習プロファイル" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty 学习配置文件" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

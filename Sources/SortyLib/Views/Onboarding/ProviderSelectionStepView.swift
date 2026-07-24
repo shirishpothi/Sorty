@@ -1009,7 +1009,7 @@ private struct ProviderReadinessStatusView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(status.title)
+                Text(LocalizedStringKey(status.title))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
@@ -1107,7 +1107,7 @@ struct OnboardingProviderRow: View {
                         .minimumScaleFactor(0.9)
 
                     if let subtitle {
-                        Text(subtitle)
+                        Text(LocalizedStringKey(subtitle))
                             .font(.caption2)
                             .foregroundStyle(subtitleColor)
                             .lineLimit(1)

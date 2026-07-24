@@ -2550,7 +2550,7 @@ private struct InlineNoticeHeader: View {
                 .foregroundStyle(color)
                 .accessibilityHidden(true)
 
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption)
                 .fontWeight(.semibold)
 

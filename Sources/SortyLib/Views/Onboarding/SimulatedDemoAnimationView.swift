@@ -870,7 +870,7 @@ struct DemoOrganizationPlanCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.bold())
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -882,7 +882,7 @@ struct DemoOrganizationPlanCard: View {
                 }
             }
             
-            Text(subtitle)
+            Text(LocalizedStringKey(subtitle))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -951,7 +951,7 @@ struct DemoPersonaCard: View {
                         .background(Capsule().fill(color))
                 }
                 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

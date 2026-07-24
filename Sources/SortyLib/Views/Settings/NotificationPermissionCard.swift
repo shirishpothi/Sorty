@@ -39,9 +39,9 @@ struct NotificationPermissionCard: View {
                         .foregroundStyle(statusInfo.color)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(statusInfo.title)
+                        Text(LocalizedStringKey(statusInfo.title))
                             .font(.subheadline.weight(.medium))
-                        Text(statusInfo.description)
+                        Text(LocalizedStringKey(statusInfo.description))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

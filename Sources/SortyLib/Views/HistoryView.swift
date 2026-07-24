@@ -604,7 +604,7 @@ struct HistoryHeader: View {
             options: HistoryView.HistoryFilter.allCases,
             minSegmentHeight: controlsHeight
         ) { filter, _ in
-            Text(filter.rawValue)
+            Text(LocalizedStringKey(filter.rawValue))
         }
         .frame(height: controlsHeight)
         .accessibilityLabel("Filter history sessions")
@@ -757,7 +757,7 @@ private struct HistoryStatItem: View {
                 .monospacedDigit()
                 .numericTextTransition(animationValue: value)
 
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -1719,11 +1719,11 @@ private struct HistoryFeaturePreviewCard: View {
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -2488,7 +2488,7 @@ struct DetailStatView: View {
                     .font(.headline)
                     .numericTextTransition(animationValue: value)
             }
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

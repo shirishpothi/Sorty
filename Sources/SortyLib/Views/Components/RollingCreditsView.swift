@@ -607,7 +607,7 @@ struct RollingCreditsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("RollingCreditsTitle")

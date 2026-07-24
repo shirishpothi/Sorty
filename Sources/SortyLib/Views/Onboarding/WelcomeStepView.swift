@@ -570,7 +570,7 @@ struct WelcomeFeatureRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.headline)
 
                     if let badge = badge {
@@ -583,7 +583,7 @@ struct WelcomeFeatureRow: View {
                     }
                 }
 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

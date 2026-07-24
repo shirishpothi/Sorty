@@ -39,7 +39,7 @@ struct DuplicateHandlingPicker: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text(selection.rawValue)
+            Text(LocalizedStringKey(selection.rawValue))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
             Image(systemName: "chevron.down")
@@ -79,11 +79,11 @@ struct DuplicateHandlingPicker: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.rawValue)
+                    Text(LocalizedStringKey(mode.rawValue))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    Text(mode.description)
+                    Text(LocalizedStringKey(mode.description))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

@@ -110,7 +110,7 @@ struct SettingsView: View {
     }
     
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
+        Text(LocalizedStringKey(title))
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.secondary)
@@ -216,7 +216,7 @@ struct SettingsView: View {
                 .frame(width: 32, height: 32)
                 .background(selectedCategory.color.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            Text(selectedCategory.rawValue)
+            Text(LocalizedStringKey(selectedCategory.rawValue))
                 .font(.title2.bold())
             Spacer()
         }
@@ -276,12 +276,16 @@ struct SettingsView: View {
                         color: result.category.color
                     ) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(result.snippet.summary)
+                            Text(LocalizedStringKey(result.snippet.summary))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
                             HStack(spacing: 8) {
-                                Label(result.category.rawValue, systemImage: result.category.icon)
+                                Label {
+                                    Text(LocalizedStringKey(result.category.rawValue))
+                                } icon: {
+                                    Image(systemName: result.category.icon)
+                                }
                                     .font(.caption)
                                     .foregroundStyle(result.category.color)
 

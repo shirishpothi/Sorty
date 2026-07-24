@@ -592,7 +592,7 @@ struct RuleGroupCard: View {
                 HapticFeedbackManager.shared.tap()
             } label: {
                 HStack {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
 
@@ -683,7 +683,7 @@ struct ExclusionRuleRow: View {
                     if let description = rule.description, !description.isEmpty {
                         Text("•")
                             .foregroundStyle(.secondary)
-                        Text(description)
+                        Text(LocalizedStringKey(description))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

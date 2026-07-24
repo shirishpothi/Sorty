@@ -80,7 +80,7 @@ private struct PopoverMenuButton: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.callout)
                 Spacer()
             }

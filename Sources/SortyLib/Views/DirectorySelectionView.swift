@@ -346,9 +346,9 @@ struct QuickTipItemCompact: View {
                 .foregroundStyle(isHovering ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.system(size: 11, weight: .bold))
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }

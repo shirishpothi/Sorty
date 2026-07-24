@@ -317,7 +317,7 @@ public struct NerdStatPillExpanded: View {
                     }
                 }
                 
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -365,7 +365,7 @@ struct NerdStatCard: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(iconColor)
                 
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -388,7 +388,7 @@ struct NerdStatCard: View {
                     }
                 }
                 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

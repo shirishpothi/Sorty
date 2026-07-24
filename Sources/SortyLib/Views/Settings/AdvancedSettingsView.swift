@@ -156,7 +156,7 @@ private struct TimeoutSliderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline)
                 Spacer()
                 Text("\(Int(value))s")
@@ -206,7 +206,7 @@ private struct TimeoutSliderRow: View {
                 }
             }
             
-            Text(description)
+            Text(LocalizedStringKey(description))
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

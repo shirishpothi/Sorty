@@ -44,12 +44,12 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
     private var triggerLabel: some View {
         HStack(spacing: 8) {
             if let title = title {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .foregroundStyle(.secondary)
                     .font(.caption)
             }
 
-            Text(selection.rawValue)
+            Text(LocalizedStringKey(selection.rawValue))
                 .fontWeight(.medium)
 
             Image(systemName: "chevron.down")
@@ -93,7 +93,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
                     .font(.system(size: 11))
                     .foregroundColor(isSelected ? .accentColor : .secondary)
 
-                Text(option.rawValue)
+                Text(LocalizedStringKey(option.rawValue))
                     .font(.system(size: 13))
                     .foregroundStyle(isSelected ? .primary : .secondary)
 

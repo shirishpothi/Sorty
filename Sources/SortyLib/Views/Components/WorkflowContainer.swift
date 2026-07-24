@@ -438,7 +438,7 @@ struct WorkflowStepIndicator: View {
                 }
             }
             
-            Text(step.title)
+            Text(LocalizedStringKey(step.title))
                 .font(.caption2)
                 .fontWeight(isActive ? .semibold : .regular)
                 .foregroundStyle(isActive ? .primary : .secondary)
@@ -481,7 +481,7 @@ struct WorkflowCard<Content: View>: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(.secondary)

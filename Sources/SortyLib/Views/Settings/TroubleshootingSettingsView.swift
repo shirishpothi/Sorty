@@ -200,7 +200,7 @@ private struct MaintenanceActionTile: View {
                     .accessibilityHidden(true)
 
                 HStack(spacing: 6) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isHovered ? .primary : .secondary)
                         .lineLimit(1)
@@ -215,7 +215,7 @@ private struct MaintenanceActionTile: View {
                     }
                 }
 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

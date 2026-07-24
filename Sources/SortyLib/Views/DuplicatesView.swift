@@ -1619,10 +1619,10 @@ struct DuplicatesEmptyStateView: View {
             .accessibilityHidden(true)
 
             VStack(spacing: 8) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.title2.bold())
 
-                Text(description)
+                Text(LocalizedStringKey(description))
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1785,7 +1785,7 @@ struct ScanProgressViewNew: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(title)
+                        Text(LocalizedStringKey(title))
                             .lineLimit(1)
                             .truncationMode(.tail)
 
@@ -1801,7 +1801,7 @@ struct ScanProgressViewNew: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.primary)
 
-                    Text(subtitle)
+                    Text(LocalizedStringKey(subtitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

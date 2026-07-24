@@ -362,7 +362,7 @@ private struct HelpIconLink: View {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(isHovered ? color : .secondary)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isHovered ? .primary : .secondary)
                     .lineLimit(1)
@@ -436,7 +436,11 @@ private struct DeeplinkGroupSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(group.title, systemImage: group.icon)
+            Label {
+                Text(LocalizedStringKey(group.title))
+            } icon: {
+                Image(systemName: group.icon)
+            }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(group.color)
 
@@ -464,10 +468,10 @@ private struct DeeplinkEntryRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.title)
+                Text(LocalizedStringKey(entry.title))
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text(entry.summary)
+                Text(LocalizedStringKey(entry.summary))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

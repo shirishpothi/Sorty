@@ -972,7 +972,7 @@ private struct CodexDeviceAuthStep<Content: View>: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 content

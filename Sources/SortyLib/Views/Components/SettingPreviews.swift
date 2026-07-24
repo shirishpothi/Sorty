@@ -34,7 +34,7 @@ struct SettingPreviewPanel<Content: View>: View {
                             .font(.caption2)
                             .foregroundStyle(accent)
                     }
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)

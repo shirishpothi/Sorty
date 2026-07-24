@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Organize Folder" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ordner organisieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Organizar carpeta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Organiser le dossier" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "フォルダを整理" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "整理文件夹" } }
+      }
+    },
+    "Organize with Sorty" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mit Sorty organisieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Organizar con Sorty" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Organiser avec Sorty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyで整理" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "使用 Sorty 整理" } }
+      }
+    },
+    "Watch Folder" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ordner überwachen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Supervisar carpeta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Surveiller le dossier" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "フォルダを監視" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "监视文件夹" } }
+      }
+    },
+    "Watch with Sorty" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mit Sorty überwachen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Supervisar con Sorty" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Surveiller avec Sorty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyで監視" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "使用 Sorty 监视" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

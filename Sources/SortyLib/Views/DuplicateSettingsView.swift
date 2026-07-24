@@ -73,7 +73,7 @@ struct DuplicateSettingsView: View {
                                             Text(strategy.displayName)
                                                 .font(SortyDesignSystem.Typography.body(weight: .medium))
                                                 .foregroundStyle(SortyDesignSystem.Colors.textPrimary)
-                                            Text(strategy.description)
+                                            Text(LocalizedStringKey(strategy.description))
                                                 .font(SortyDesignSystem.Typography.caption2())
                                                 .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                         }
@@ -134,7 +134,7 @@ struct SettingsSection<Content: View>: View {
                     .background(SortyDesignSystem.Colors.primary.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(SortyDesignSystem.Typography.headline())
             }
             

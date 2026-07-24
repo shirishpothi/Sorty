@@ -54,7 +54,7 @@ struct SidebarButton: View {
                     .foregroundStyle(isSelected ? color : .secondary)
                     .frame(width: 20)
                 
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline)
                     .foregroundStyle(isSelected ? .primary : .secondary)
                 
@@ -83,7 +83,7 @@ struct SettingsCard<Content: View>: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(color)
                     .frame(width: 14)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.secondary)
             }
@@ -119,10 +119,10 @@ struct SettingsNavigationCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.headline)
                         .foregroundColor(.primary)
-                    Text(description)
+                    Text(LocalizedStringKey(description))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -158,7 +158,7 @@ struct StepCard<Content: View>: View {
                 .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 6) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.medium))
                 content
             }
@@ -173,9 +173,9 @@ struct SettingsTextField: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.subheadline)
-            TextField(placeholder, text: $text)
+            TextField(LocalizedStringKey(placeholder), text: $text)
                 .textFieldStyle(.roundedBorder)
         }
     }
@@ -193,7 +193,7 @@ struct SettingsSecureField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline)
                 if isOptional {
                     Text("Optional")
@@ -259,11 +259,11 @@ struct SettingsToggle: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.primary)
                 if let description = description {
-                    Text(description)
+                    Text(LocalizedStringKey(description))
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -313,7 +313,7 @@ struct URLSchemeRow: View {
             
             Spacer()
             
-            Text(description)
+            Text(LocalizedStringKey(description))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

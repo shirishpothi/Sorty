@@ -240,7 +240,7 @@ public struct WhatsNewTourView: View {
                     .background(color.opacity(0.14), in: Circle())
                     .accessibilityHidden(true)
 
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.system(.headline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
             }
@@ -413,7 +413,7 @@ public struct WhatsNewTourView: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .foregroundStyle(isActive ? .cyan : .white.opacity(0.46))
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(isActive ? .white.opacity(0.9) : .white.opacity(0.58))
         }
@@ -428,7 +428,7 @@ public struct WhatsNewTourView: View {
             Image(systemName: icon)
                 .frame(width: 16)
                 .foregroundStyle(isPrimary ? .cyan : .white.opacity(0.7))
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(size: 12, weight: isPrimary ? .semibold : .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(isPrimary ? 0.95 : 0.78))
             Spacer()

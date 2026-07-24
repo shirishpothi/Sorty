@@ -101,7 +101,7 @@ struct LiquidGlassLearningsButton: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
+        Text(LocalizedStringKey(title))
             .font(.caption2)
             .foregroundStyle(.quaternary)
             .textCase(.uppercase)

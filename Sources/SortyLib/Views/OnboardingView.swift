@@ -1763,7 +1763,7 @@ struct OnboardingProgressBar: View {
                         }
                     }
 
-                    Text(step.title)
+                    Text(LocalizedStringKey(step.title))
                         .font(.caption2)
                         .foregroundStyle(step == currentStep ? .primary : .secondary)
                         .lineLimit(2)
