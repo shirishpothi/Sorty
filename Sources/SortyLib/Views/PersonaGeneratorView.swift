@@ -289,6 +289,7 @@ struct PersonaGeneratorView: View {
             HStack {
                 if currentQuestionIndex > 0 {
                     Button("Back") {
+                        focusedCustomAnswerQuestionID = nil
                         HapticFeedbackManager.shared.selection()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                             currentQuestionIndex -= 1
@@ -311,6 +312,7 @@ struct PersonaGeneratorView: View {
     }
     
     private func selectAnswer(_ option: String, for question: HoningQuestion) {
+        focusedCustomAnswerQuestionID = nil
         guard answers[question.id] != option else { return }
         HapticFeedbackManager.shared.selection()
         customAnswers[question.id] = ""
@@ -356,6 +358,7 @@ struct PersonaGeneratorView: View {
     }
 
     private func advance(from question: HoningQuestion) {
+        focusedCustomAnswerQuestionID = nil
         guard answers[question.id] != nil else { return }
 
         if currentQuestionIndex < questions.count - 1 {
