@@ -14,6 +14,7 @@ struct PersonaPickerView: View {
     @State private var hoveringCustom: String?
     @State private var showingGenerator: Bool = false
     @State private var showingEditor: Bool = false
+    @State private var opensGeneratorAfterEditorDismiss = false
     @State private var editingPersona: CustomPersona?
     @State private var localPrompt: String = ""
     @State private var showingInstructionsInfo: Bool = false
@@ -119,7 +120,7 @@ struct PersonaPickerView: View {
 
             personaInstructionsEditor
         }
-        .sheet(isPresented: $showingEditor, onDismiss: { editingPersona = nil }) {
+        .sheet(isPresented: $showingEditor, onDismiss: finishEditorDismissal) {
             PersonaEditorView(
                 store: customStore,
                 editing: editingPersona,
@@ -128,6 +129,10 @@ struct PersonaPickerView: View {
                     if personaManager.selectedCustomPersonaId == persona.id {
                         personaManager.selectedCustomPersonaId = nil
                     }
+                },
+                onGeneratePersona: {
+                    opensGeneratorAfterEditorDismiss = true
+                    showingEditor = false
                 }
             )
                 .environmentObject(customStore)
@@ -152,6 +157,14 @@ struct PersonaPickerView: View {
         .onChange(of: customStore.customPersonas) { _, _ in
             updateLocalPrompt()
         }
+    }
+
+    private func finishEditorDismissal() {
+        editingPersona = nil
+        guard opensGeneratorAfterEditorDismiss else { return }
+
+        opensGeneratorAfterEditorDismiss = false
+        showingGenerator = true
     }
 
     @ViewBuilder

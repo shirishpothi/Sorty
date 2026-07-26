@@ -19,9 +19,7 @@ struct PersonaEditorView: View {
     @State private var instructionSuggestions = PersonaInstructionSuggestions()
     @State private var showIconPicker: Bool = false
     @State private var automaticallySelectIcon: Bool
-    @State private var showingGenerator: Bool = false
     @State private var showingChat: Bool = false
-    @State private var generationInput: String = ""
     @State private var identityGenerationError: String?
     @State private var showingDeleteConfirmation = false
     @StateObject private var generator = PersonaGenerator()
@@ -29,15 +27,18 @@ struct PersonaEditorView: View {
     // Edit mode
     var editingPersona: CustomPersona?
     private let onDelete: ((CustomPersona) -> Void)?
+    private let onGeneratePersona: (() -> Void)?
     
     init(
         store: CustomPersonaStore,
         editing persona: CustomPersona? = nil,
-        onDelete: ((CustomPersona) -> Void)? = nil
+        onDelete: ((CustomPersona) -> Void)? = nil,
+        onGeneratePersona: (() -> Void)? = nil
     ) {
         self.store = store
         self.editingPersona = persona
         self.onDelete = onDelete
+        self.onGeneratePersona = onGeneratePersona
         _automaticallySelectIcon = State(initialValue: persona == nil)
         
         if let persona = persona {
@@ -108,66 +109,6 @@ struct PersonaEditorView: View {
             PersonaChatView(promptModifier: promptModifier)
                 .environmentObject(settingsViewModel)
         }
-        .sheet(isPresented: $showingGenerator) {
-            VStack(spacing: 20) {
-                Text("Generate Persona")
-                    .font(.headline)
-                
-                Text("Describe how you want your files to be organized. Be as specific as you like about file types, folder structures, and naming conventions.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                TextEditor(text: $generationInput)
-                    .font(.body)
-                    .frame(height: 150)
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
-                
-                if let error = generator.error {
-                    Text(error.localizedDescription)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                }
-                
-                HStack {
-                    Button("Cancel") {
-                        showingGenerator = false
-                    }
-                    
-                    if generator.isGenerating {
-                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                    } else {
-                        Button("Generate") {
-                            Task {
-                                do {
-                                    let result = try await generator.generatePersona(from: generationInput, config: settingsViewModel.config)
-                                    name = result.name
-                                    if automaticallySelectIcon {
-                                        selectedIcon = result.icon
-                                    }
-                                    description = generationInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    promptModifier = result.prompt
-                                    instructionSuggestions = result.suggestions
-                                    showingGenerator = false
-                                } catch {
-                                    // Error is handled by generator.error publishing
-                                }
-                            }
-                        }
-                        .buttonStyle(.sortyProminent)
-                        .disabled(generationInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                }
-            }
-            .padding()
-            .frame(width: 400)
-        }
     }
 
     private var organizationInstructionsSection: some View {
@@ -209,7 +150,7 @@ struct PersonaEditorView: View {
                     }
                     .buttonStyle(.sortyBordered)
 
-                    Button(action: { showingGenerator = true }) {
+                    Button(action: openPersonaGenerator) {
                         Label("Generate Instructions…", systemImage: "sparkles")
                     }
                     .buttonStyle(.sortyBordered)
@@ -430,6 +371,15 @@ struct PersonaEditorView: View {
 
     private var trimmedInstructions: String {
         promptModifier.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func openPersonaGenerator() {
+        HapticFeedbackManager.shared.tap()
+        if let onGeneratePersona {
+            onGeneratePersona()
+        } else {
+            dismiss()
+        }
     }
 
     private func generateIdentityFromInstructions() {
