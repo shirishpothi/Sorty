@@ -819,13 +819,6 @@ private struct HistorySessionCardHeader: View {
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(Capsule())
                         .accessibilityLabel("Model: \(modelBadgeText)")
-                } else {
-                    Text(" ")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .opacity(0)
-                        .accessibilityHidden(true)
                 }
 
                 Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
