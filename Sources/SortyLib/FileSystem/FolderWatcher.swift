@@ -404,23 +404,29 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     static func coalescedMonitoringRoots(from paths: [String]) -> [String] {
-        let minimalRoots = minimalMonitoringRoots(from: paths)
         var rootsByAnchor: [String: [String]] = [:]
+        var collapsedAnchors: Set<String> = []
 
-        for root in minimalRoots {
-            rootsByAnchor[monitoringAnchor(for: root), default: []].append(root)
-        }
+        for rawPath in paths {
+            let root = URL(fileURLWithPath: rawPath).standardizedFileURL.path
+            let anchor = monitoringAnchor(for: root)
+            guard !collapsedAnchors.contains(anchor) else { continue }
 
-        var coalesced: [String] = []
-        coalesced.reserveCapacity(minimalRoots.count)
-        for (anchor, roots) in rootsByAnchor {
-            if roots.count > maximumExplicitRootsPerAnchor, anchor != "/" {
-                coalesced.append(anchor)
-            } else {
-                coalesced.append(contentsOf: roots)
+            rootsByAnchor[anchor, default: []].append(root)
+            if rootsByAnchor[anchor]?.count ?? 0 > maximumExplicitRootsPerAnchor, anchor != "/" {
+                rootsByAnchor.removeValue(forKey: anchor)
+                collapsedAnchors.insert(anchor)
             }
         }
-        return minimalMonitoringRoots(from: coalesced)
+
+        var candidates = Array(collapsedAnchors)
+        candidates.reserveCapacity(
+            collapsedAnchors.count + rootsByAnchor.values.reduce(0) { $0 + $1.count }
+        )
+        for roots in rootsByAnchor.values {
+            candidates.append(contentsOf: roots)
+        }
+        return minimalMonitoringRoots(from: candidates)
     }
 
     private static func monitoringAnchor(for path: String) -> String {
