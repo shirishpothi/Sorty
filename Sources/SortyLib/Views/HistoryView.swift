@@ -842,7 +842,6 @@ private enum HistoryCardActionState: Equatable {
 
 private struct HistorySessionCardHeader: View {
     let entry: OrganizationHistoryEntry
-    let modelBadgeText: String?
     let statusColor: Color
     let isExpanded: Bool
 
@@ -863,17 +862,6 @@ private struct HistorySessionCardHeader: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                if let modelBadgeText {
-                    Text(modelBadgeText)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Capsule())
-                        .accessibilityLabel("Model: \(modelBadgeText)")
-                }
-
                 Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
                 Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
@@ -921,6 +909,7 @@ private struct HistorySessionSummary: View {
 
 private struct HistorySessionExpandedContent: View {
     let entry: OrganizationHistoryEntry
+    let generationMetadata: String?
     let hasStorageMoves: Bool
     let operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int)
     let hasOperationsData: Bool
@@ -949,6 +938,13 @@ private struct HistorySessionExpandedContent: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
+
+            if let generationMetadata {
+                Label(generationMetadata, systemImage: "cpu")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Model and cost: \(generationMetadata)")
+            }
 
             if hasStorageMoves {
                 HStack(spacing: 8) {
@@ -1125,7 +1121,7 @@ struct HistorySessionCard: View {
         return breakdown.moves > 0 || breakdown.renames > 0 || breakdown.folderCreates > 0
     }
 
-    private var modelBadgeText: String? {
+    private var generationMetadata: String? {
         guard let stats = entry.plan?.generationStats else { return nil }
         let modelName = stats.compactModelName
         if stats.hasBillableCost {
@@ -1182,7 +1178,6 @@ struct HistorySessionCard: View {
             } label: {
                 HistorySessionCardHeader(
                     entry: entry,
-                    modelBadgeText: modelBadgeText,
                     statusColor: statusColor,
                     isExpanded: isExpanded
                 )
@@ -1201,6 +1196,7 @@ struct HistorySessionCard: View {
 
                 HistorySessionExpandedContent(
                     entry: entry,
+                    generationMetadata: generationMetadata,
                     hasStorageMoves: hasStorageMoves,
                     operationsBreakdown: operationsBreakdown,
                     hasOperationsData: hasOperationsData,
