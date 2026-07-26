@@ -265,29 +265,30 @@ struct PersonaPickerView: View {
                     .font(.subheadline.weight(.semibold))
 
                 instructionsInfoButton(
-                    text: "These editable instructions are saved with \(localName.isEmpty ? custom.name : localName). Use the wand to turn a rough draft into clear, structured rules without changing what you want.",
+                    text: "These editable instructions are saved with \(localName.isEmpty ? custom.name : localName). If you change the generated prompt, use the wand to turn your draft into clear, structured rules without changing what you want.",
                     accessibilityLabel: "\(custom.name) instruction information"
                 )
 
                 Spacer()
 
-                if promptPolisher.isGenerating {
-                    SortyGradientCircularLoader(size: 11, lineWidth: 2)
-                        .accessibilityLabel("Cleaning up prompt")
-                }
+                if localPrompt != custom.promptModifier || promptPolisher.isGenerating {
+                    if promptPolisher.isGenerating {
+                        SortyGradientCircularLoader(size: 11, lineWidth: 2)
+                            .accessibilityLabel("Cleaning up prompt")
+                    }
 
-                Button {
-                    polishPrompt()
-                } label: {
-                    Label("Clean Up", systemImage: "wand.and.stars")
+                    Button {
+                        polishPrompt()
+                    } label: {
+                        Label("Clean Up", systemImage: "wand.and.stars")
+                    }
+                    .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                    .disabled(
+                        localPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || promptPolisher.isGenerating
+                    )
+                    .help("Clean up and structure this prompt")
                 }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                .disabled(
-                    localPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || promptPolisher.isGenerating
-                )
-                .help("Clean up and structure this prompt")
-
             }
 
             ZStack(alignment: .topLeading) {
