@@ -10,7 +10,6 @@ import SwiftUI
 struct AutomationSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
-    @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
@@ -19,6 +18,7 @@ struct AutomationSettingsView: View {
     @State private var selectedProvider: AIProvider = .openAI
     @State private var selectedModel: String = ""
     @State private var showModelPicker = false
+    @State private var showAutomationModelInfo = false
     @State private var showBackgroundInfo = false
     
     var body: some View {
@@ -39,8 +39,37 @@ struct AutomationSettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: $useSeparateModel) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Use separate model for automation")
-                            .font(.subheadline)
+                        HStack(spacing: 6) {
+                            Text("Use separate model for automation")
+                                .font(.subheadline)
+
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                showAutomationModelInfo.toggle()
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help("About using a separate automation model")
+                            .accessibilityLabel("Separate automation model information")
+                            .popover(isPresented: $showAutomationModelInfo, arrowEdge: .trailing) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Separate Automation Model")
+                                        .font(.headline)
+
+                                    Text("The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna (High).")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(14)
+                                .frame(width: 300, alignment: .leading)
+                                .systemLiquidGlassPopover(cornerRadius: 12)
+                            }
+                        }
+
                         Text("Run background tasks with a different AI model")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -63,8 +92,6 @@ struct AutomationSettingsView: View {
                 if useSeparateModel {
                     Divider()
 
-                    automationOverrideNotice
-                    
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Automation Model")
@@ -83,19 +110,6 @@ struct AutomationSettingsView: View {
                         )
                         .modelSelectorTriggerBounds()
                     }
-                    
-                    Divider()
-                    
-                    HStack(spacing: 8) {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundStyle(.yellow)
-                        Text("A lean automation model keeps watched folders responsive without changing the main Organize page.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .background(Color.yellow.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
@@ -193,43 +207,6 @@ struct AutomationSettingsView: View {
 
             }
         }
-    }
-
-    private var automationOverrideNotice: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Automation override is active")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(automationOverrideMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(10)
-        .background(Color.orange.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    private var automationOverrideMessage: String {
-        let overrideCount = watchedFoldersManager.folders.filter { $0.providerOverride != nil || $0.modelOverride != nil }.count
-        let folderText = overrideCount == 1 ? "1 folder-level model choice" : "\(overrideCount) folder-level model choices"
-
-        if overrideCount > 0 {
-            return "Watched folders and background runs use \(automationModelName); \(folderText) are ignored while this is on. The main Organize page still uses its AI Provider model."
-        }
-
-        return "Watched folders and background runs use \(automationModelName). The main Organize page still uses its AI Provider model."
-    }
-
-    private var automationModelName: String {
-        selectedModel.isEmpty ? selectedProvider.defaultModel : selectedModel
     }
 
     private var backgroundStatusBadge: some View {
