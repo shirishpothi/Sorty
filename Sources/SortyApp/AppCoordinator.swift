@@ -90,11 +90,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         // Initial sync
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
-        self.watchedFoldersSubscription = watchedFoldersManager.$folders
+        self.watchedFoldersSubscription = watchedFoldersManager.$monitoringRevision
             .dropFirst()
-            .sink { [weak self] folders in
-                self?.folderWatcher.syncWithFolders(folders)
-                self?.reconcilePendingWork(with: folders)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let folders = self.watchedFoldersManager.folders
+                self.folderWatcher.syncWithFolders(folders)
+                self.reconcilePendingWork(with: folders)
             }
         restorePendingWatchWork()
         self.organizerConfigurationSubscription = organizer.$isAIConfigured

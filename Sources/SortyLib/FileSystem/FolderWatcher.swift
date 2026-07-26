@@ -59,6 +59,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private static let retryDelay: TimeInterval = 0.25
     private static let healthCheckInterval: TimeInterval = 300
     private static let maximumExplicitRootsPerAnchor = 512
+    private static let maximumPendingScans = 128
 
     private let queue = DispatchQueue(label: "com.sorty.folderwatcher", qos: .utility)
     private let scanQueue = DispatchQueue(label: "com.sorty.folderwatcher.scanner", qos: .utility)
@@ -85,6 +86,9 @@ public final class FolderWatcher: @unchecked Sendable {
 
     private var recentlyRemovedFiles: [UUID: [String: Date]] = [:]
     private var activeScanCount = 0
+    private var activeScanPath: String?
+    private var pendingScanPaths: [String] = []
+    private var requiresFullRecoveryScan = false
     private var healthTimer: DispatchSourceTimer?
     private var cursorPersistenceWorkItem: DispatchWorkItem?
     private var persistedEventID: FSEventStreamEventId?
@@ -205,6 +209,8 @@ public final class FolderWatcher: @unchecked Sendable {
             pausedFolders.removeAll()
             minimumEventIDs.removeAll()
             clearAllPendingFiles()
+            pendingScanPaths.removeAll()
+            requiresFullRecoveryScan = false
             stopHealthTimerIfIdle()
         }
     }
@@ -818,15 +824,49 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func beginScan(at path: String) {
+        let path = standardizedPath(path)
+        if let activeScanPath, Self.isPath(path, within: activeScanPath) {
+            return
+        }
+        if pendingScanPaths.contains(where: { Self.isPath(path, within: $0) }) {
+            return
+        }
+
+        pendingScanPaths.removeAll(where: { Self.isPath($0, within: path) })
+        guard pendingScanPaths.count < Self.maximumPendingScans else {
+            pendingScanPaths.removeAll(keepingCapacity: true)
+            requiresFullRecoveryScan = true
+            return
+        }
+        pendingScanPaths.append(path)
+        startNextScanIfNeeded()
+    }
+
+    private func startNextScanIfNeeded() {
+        guard activeScanPath == nil else { return }
+
+        if pendingScanPaths.isEmpty, requiresFullRecoveryScan {
+            pendingScanPaths = monitoringRoots
+            requiresFullRecoveryScan = false
+        }
+        guard !pendingScanPaths.isEmpty else {
+            activeScanCount = 0
+            resumeAfterBackpressureIfPossible()
+            scheduleCursorPersistence()
+            return
+        }
+
+        let path = pendingScanPaths.removeFirst()
         let matcher = exclusionMatcher
-        activeScanCount += 1
+        activeScanPath = path
+        activeScanCount = 1
         scanQueue.async { [weak self] in
             guard let self else { return }
             self.enumerateFiles(at: path, exclusionMatcher: matcher)
             self.queue.async {
-                self.activeScanCount = max(self.activeScanCount - 1, 0)
-                self.resumeAfterBackpressureIfPossible()
-                self.scheduleCursorPersistence()
+                self.activeScanPath = nil
+                self.activeScanCount = 0
+                self.startNextScanIfNeeded()
             }
         }
     }

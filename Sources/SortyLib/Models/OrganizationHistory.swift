@@ -282,10 +282,7 @@ private final class OrganizationHistoryRepository {
             do {
                 try writeVerifiedTemp(data, to: tempURL)
                 try replacePrimary(with: tempURL, at: primaryFileURL)
-                let verifiedEntries = try readEntries(from: primaryFileURL)
-                guard verifiedEntries == entries else {
-                    throw CocoaError(.coderReadCorrupt)
-                }
+                try verifyFileSize(at: primaryFileURL, expectedByteCount: data.count)
                 try mirrorBackup(from: primaryFileURL, to: backupFileURL)
                 userDefaults.removeObject(forKey: Self.legacyHistoryKey)
                 return true
@@ -365,7 +362,15 @@ private final class OrganizationHistoryRepository {
             throw error
         }
 
-        _ = try readEntries(from: tempURL)
+        try verifyFileSize(at: tempURL, expectedByteCount: data.count)
+    }
+
+    private func verifyFileSize(at url: URL, expectedByteCount: Int) throws {
+        let attributes = try fileManager.attributesOfItem(atPath: url.path)
+        guard let fileSize = attributes[.size] as? NSNumber,
+              fileSize.intValue == expectedByteCount else {
+            throw CocoaError(.fileWriteUnknown)
+        }
     }
 
     private func replacePrimary(with tempURL: URL, at primaryFileURL: URL) throws {

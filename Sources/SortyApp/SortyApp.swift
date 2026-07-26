@@ -525,7 +525,7 @@ struct SortyApp: App {
                     }
                 }
             }
-            .onChange(of: watchedFoldersManager.folders) { _, _ in
+            .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
                 widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager

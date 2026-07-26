@@ -39,7 +39,7 @@ public class FolderThumbnailProvider: ObservableObject {
     // MARK: - Initialization
     
     private init() {
-        cache.countLimit = 80
+        cache.countLimit = 256
         cache.totalCostLimit = 8 * 1024 * 1024
     }
     
@@ -102,7 +102,9 @@ public class FolderThumbnailProvider: ObservableObject {
         // Check if the URL is a directory
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else {
-            return NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+            let icon = NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
+            icon.size = size
+            return icon
         }
 
         // For directories: skip QuickLook (it only returns a generic folder icon)

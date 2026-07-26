@@ -85,6 +85,7 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var folders: [WatchedFolder] = []
     @Published public private(set) var activeFolderCount = 0
     @Published public private(set) var accessIssueFolderCount = 0
+    @Published public private(set) var monitoringRevision = 0
 
     private let userDefaults = UserDefaults.standard
     private let legacyStorageKey = "watchedFolders"
@@ -115,6 +116,7 @@ public class WatchedFoldersManager: ObservableObject {
         idByNormalizedPath[normalizedPath] = normalizedFolder.id
         folders.append(normalizedFolder)
         journal.upsert(normalizedFolder)
+        monitoringRevision &+= 1
         if normalizedFolder.isEnabled {
             setActiveFolderCount(activeFolderCount + 1)
         }
@@ -131,6 +133,7 @@ public class WatchedFoldersManager: ObservableObject {
         activeFolderCount = 0
         accessIssueFolderCount = 0
         journal.clear()
+        monitoringRevision &+= 1
         userDefaults.removeObject(forKey: legacyStorageKey)
         userDefaults.set(0, forKey: activeCountStorageKey)
     }
@@ -148,6 +151,7 @@ public class WatchedFoldersManager: ObservableObject {
         }
         folders.removeLast()
         journal.remove(folder.id)
+        monitoringRevision &+= 1
         if removedFolder.isEnabled {
             setActiveFolderCount(max(activeFolderCount - 1, 0))
         }
@@ -157,6 +161,10 @@ public class WatchedFoldersManager: ObservableObject {
     }
     
     public func updateFolder(_ folder: WatchedFolder) {
+        updateFolder(folder, affectsMonitoring: true)
+    }
+
+    private func updateFolder(_ folder: WatchedFolder, affectsMonitoring: Bool) {
         guard let index = indexByID[folder.id] else { return }
 
         let oldPath = Self.normalizedPath(folders[index].path)
@@ -171,10 +179,14 @@ public class WatchedFoldersManager: ObservableObject {
         let wasEnabled = previousFolder.isEnabled
         var normalizedFolder = folder
         normalizedFolder.autoOrganize = normalizedFolder.isEnabled
+        guard previousFolder != normalizedFolder else { return }
         folders[index] = normalizedFolder
         idByNormalizedPath.removeValue(forKey: oldPath)
         idByNormalizedPath[newPath] = normalizedFolder.id
         journal.upsert(normalizedFolder)
+        if affectsMonitoring {
+            monitoringRevision &+= 1
+        }
         if wasEnabled != normalizedFolder.isEnabled {
             setActiveFolderCount(activeFolderCount + (normalizedFolder.isEnabled ? 1 : -1))
         }
@@ -196,7 +208,7 @@ public class WatchedFoldersManager: ObservableObject {
     public func markTriggered(_ folder: WatchedFolder) {
         if var updated = self.folder(withID: folder.id) {
             updated.lastTriggered = Date()
-            updateFolder(updated)
+            updateFolder(updated, affectsMonitoring: false)
         }
     }
     
@@ -217,6 +229,7 @@ public class WatchedFoldersManager: ObservableObject {
             folders = updatedFolders
             rebuildIndexes()
             journal.disableAll()
+            monitoringRevision &+= 1
             setActiveFolderCount(0)
             
             // Post notification for user feedback
@@ -293,6 +306,9 @@ public class WatchedFoldersManager: ObservableObject {
             rebuildIndexes()
             for index in persistenceIndexes {
                 journal.upsert(folders[index])
+            }
+            if !persistenceIndexes.isEmpty {
+                monitoringRevision &+= 1
             }
             accessIssueFolderCount = folders.lazy.filter(Self.hasAccessIssue).count
         }

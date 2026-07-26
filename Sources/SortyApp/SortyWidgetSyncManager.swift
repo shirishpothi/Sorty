@@ -4,10 +4,49 @@ import WidgetKit
 import SortyLib
 #endif
 
+private struct WidgetSnapshotSyncResult: Sendable {
+    let didChange: Bool
+    let errorDescription: String?
+}
+
+private actor WidgetSnapshotSyncWorker {
+    func sync(
+        watchedFolders: [WatchedFolder],
+        storageLocations: [StorageLocation],
+        activeWatchedFolderCount: Int
+    ) -> WidgetSnapshotSyncResult {
+        guard !Task.isCancelled else {
+            return WidgetSnapshotSyncResult(didChange: false, errorDescription: nil)
+        }
+
+        let snapshot = SortyWidgetSnapshotStore.makeSnapshot(
+            entries: OrganizationHistory.loadPersistedEntries(),
+            watchedFolders: watchedFolders,
+            storageLocations: storageLocations,
+            activeWatchedFolderCount: activeWatchedFolderCount
+        )
+        let persistedSnapshot = SortyWidgetSnapshotStore.load()
+        guard !snapshot.hasSameWidgetContent(as: persistedSnapshot) else {
+            return WidgetSnapshotSyncResult(didChange: false, errorDescription: nil)
+        }
+
+        do {
+            try SortyWidgetSnapshotStore.save(snapshot)
+            return WidgetSnapshotSyncResult(didChange: true, errorDescription: nil)
+        } catch {
+            return WidgetSnapshotSyncResult(
+                didChange: false,
+                errorDescription: error.localizedDescription
+            )
+        }
+    }
+}
+
 @MainActor
 final class SortyWidgetSyncManager {
     static let shared = SortyWidgetSyncManager()
 
+    private let syncWorker = WidgetSnapshotSyncWorker()
     private var observers: [NSObjectProtocol] = []
     private var scheduledSyncTask: Task<Void, Never>?
     private var scheduledSyncRequiresReload = false
@@ -45,40 +84,39 @@ final class SortyWidgetSyncManager {
             }
         }
 
-        sync(
-            watchedFoldersManager: watchedFoldersManager,
-            storageLocationsManager: storageLocationsManager
-        )
+        Task { @MainActor [weak self, weak watchedFoldersManager, weak storageLocationsManager] in
+            guard let self, let watchedFoldersManager, let storageLocationsManager else { return }
+            await self.sync(
+                watchedFoldersManager: watchedFoldersManager,
+                storageLocationsManager: storageLocationsManager
+            )
+        }
     }
 
     func sync(
         watchedFoldersManager: WatchedFoldersManager,
         storageLocationsManager: StorageLocationsManager,
         forceReload: Bool = false
-    ) {
-        let snapshot = SortyWidgetSnapshotStore.makeSnapshot(
-            entries: OrganizationHistory.loadPersistedEntries(),
-            watchedFolders: watchedFoldersManager.folders,
-            storageLocations: storageLocationsManager.locations,
-            activeWatchedFolderCount: watchedFoldersManager.activeFolderCount
+    ) async {
+        let watchedFolders = watchedFoldersManager.folders
+        let storageLocations = storageLocationsManager.locations
+        let activeWatchedFolderCount = watchedFoldersManager.activeFolderCount
+
+        let result = await syncWorker.sync(
+            watchedFolders: watchedFolders,
+            storageLocations: storageLocations,
+            activeWatchedFolderCount: activeWatchedFolderCount
         )
 
-        do {
-            let persistedSnapshot = SortyWidgetSnapshotStore.load()
-            guard !snapshot.hasSameWidgetContent(as: persistedSnapshot) else {
-                if forceReload {
-                    WidgetCenter.shared.reloadTimelines(ofKind: SortyWidgetSnapshotStore.widgetKind)
-                }
-                return
-            }
-
-            try SortyWidgetSnapshotStore.save(snapshot)
-            WidgetCenter.shared.reloadTimelines(ofKind: SortyWidgetSnapshotStore.widgetKind)
-        } catch {
+        if let errorDescription = result.errorDescription {
             LogManager.shared.log(
-                "Failed to sync widget snapshot: \(error.localizedDescription)",
+                "Failed to sync widget snapshot: \(errorDescription)",
                 level: .warning,
                 category: "Widgets"
+            )
+        } else if result.didChange || forceReload {
+            WidgetCenter.shared.reloadTimelines(
+                ofKind: SortyWidgetSnapshotStore.widgetKind
             )
         }
     }
@@ -101,7 +139,7 @@ final class SortyWidgetSyncManager {
 
             let forceReload = self.scheduledSyncRequiresReload
             self.scheduledSyncRequiresReload = false
-            self.sync(
+            await self.sync(
                 watchedFoldersManager: watchedFoldersManager,
                 storageLocationsManager: storageLocationsManager,
                 forceReload: forceReload

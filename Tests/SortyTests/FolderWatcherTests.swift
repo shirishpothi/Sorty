@@ -65,4 +65,23 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertEqual(reloadedManager.folder(matchingPath: folder.path)?.id, folder.id)
         XCTAssertEqual(reloadedManager.activeFolderCount, 1)
     }
+
+    @MainActor
+    func testLastTriggeredUpdateDoesNotRebuildWatcherConfiguration() {
+        let manager = WatchedFoldersManager()
+        manager.clearAll()
+        defer { manager.clearAll() }
+
+        let folder = WatchedFolder(
+            path: "/tmp/Sorty-Watched-Trigger",
+            isEnabled: true
+        )
+        manager.addFolder(folder)
+        let revision = manager.monitoringRevision
+
+        manager.markTriggered(folder)
+
+        XCTAssertNotNil(manager.folder(withID: folder.id)?.lastTriggered)
+        XCTAssertEqual(manager.monitoringRevision, revision)
+    }
 }

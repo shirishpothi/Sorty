@@ -380,6 +380,7 @@ struct HistoryView: View {
             .listRowBackground(Color.clear)
 
             ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                let pageIndex = index % pageSize
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry?.id == entry.id,
@@ -391,7 +392,9 @@ struct HistoryView: View {
                         prepareTryAgain(id: entry.id)
                     }
                 )
-                .animatedAppearance(delay: Double(index) * (kind == .manual ? 0.03 : 0.02))
+                .animatedAppearance(
+                    delay: Double(pageIndex) * (kind == .manual ? 0.03 : 0.02)
+                )
                 .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
