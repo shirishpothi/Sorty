@@ -2302,18 +2302,15 @@ struct ErrorView: View {
         case retry
         case settings
         case copy
-        case helpSupport
     }
 
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
-    @State private var isHoveringHelpSupport = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
     
     @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
     private enum ErrorCategory {
         case apiKey
@@ -2371,67 +2368,7 @@ struct ErrorView: View {
         case .permissions:
             return "Grant file access for this folder and try again."
         case .generic:
-            return "Try again or choose a smarter model."
-        }
-    }
-
-    private var showsHelpSupportChevron: Bool {
-        isHoveringHelpSupport || activeActionFeedback == .helpSupport
-    }
-
-    private var privacySafeSupportDetails: String {
-        """
-        Sorty Error Report
-
-        Error: \(errorTitle)
-        Category: \(privacySafeCategoryName)
-        Summary: \(privacySafeErrorSummary)
-        Suggested action: \(privacySafeSuggestedAction)
-        Workflow: \(settingsViewModel.config.mode.displayName)
-        Provider: \(settingsViewModel.config.provider.displayName)
-        Sorty: \(BuildInfo.fullVersion)
-        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
-
-        Privacy: This report does not include file names, paths, file contents, custom instructions, prompts, model responses, credentials, API endpoints, or model identifiers.
-        """
-    }
-
-    private var privacySafeCategoryName: String {
-        switch category {
-        case .apiKey:
-            return "AI credentials"
-        case .network:
-            return "Network connection"
-        case .permissions:
-            return "File permissions"
-        case .generic:
-            return "Plan generation"
-        }
-    }
-
-    private var privacySafeErrorSummary: String {
-        switch category {
-        case .apiKey:
-            return "Sorty couldn't authenticate with the selected AI provider."
-        case .network:
-            return "Sorty couldn't reach the selected AI provider."
-        case .permissions:
-            return "Sorty couldn't access a required folder."
-        case .generic:
-            return "Sorty couldn't create an organization plan."
-        }
-    }
-
-    private var privacySafeSuggestedAction: String {
-        switch category {
-        case .apiKey:
-            return "Check the selected provider and its API key in Settings, then retry."
-        case .network:
-            return "Check the internet connection and provider availability, then retry."
-        case .permissions:
-            return "Grant access to the required folder, then retry."
-        case .generic:
-            return "Retry with the current model, choose a smarter model, or open Help & Support."
+            return "Try again, or retry with a smarter model. If this keeps happening, open Help & Support with the copied error details."
         }
     }
 
@@ -2461,7 +2398,11 @@ struct ErrorView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
 
-                recoveryGuidance
+                Text(recoveryText)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 500)
             }
 
             HStack(spacing: 12) {
@@ -2527,7 +2468,7 @@ struct ErrorView: View {
 
                 Button {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(privacySafeSupportDetails, forType: .string)
+                    NSPasteboard.general.setString(error.localizedDescription, forType: .string)
                     HapticFeedbackManager.shared.selection()
                     animateActionFeedback(.copy)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
@@ -2554,10 +2495,7 @@ struct ErrorView: View {
                 }
                 .buttonStyle(.tintedPill(.orange, size: .small))
                 .scaleEffect(showCopiedFeedback || activeActionFeedback == .copy ? 1.04 : 1.0)
-                .help("Copy a privacy-safe error report for support")
-                .accessibilityHint(
-                    "Copies diagnostics without private file, instruction, prompt, or credential data"
-                )
+                .help("Copy error details for support")
                 .accessibilityIdentifier("ErrorCopyDetailsButton")
             }
 
@@ -2583,68 +2521,6 @@ struct ErrorView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Retry using your current model, or choose a smarter model first.")
-        }
-    }
-
-    @ViewBuilder
-    private var recoveryGuidance: some View {
-        if category == .generic {
-            VStack(spacing: 3) {
-                Text(recoveryText)
-
-                HStack(spacing: 4) {
-                    Text("If it keeps happening, open")
-
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        animateActionFeedback(.helpSupport)
-                        appState.openSettingsWindow(section: .help)
-                        appState.navigatedFromSettings = true
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text("Help & Support")
-                                .underline()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 8, weight: .bold))
-                                .frame(width: showsHelpSupportChevron ? 8 : 0)
-                                .opacity(showsHelpSupportChevron ? 1 : 0)
-                                .offset(x: showsHelpSupportChevron ? 0 : -4)
-                                .symbolEffect(
-                                    .bounce,
-                                    value: activeActionFeedback == .helpSupport
-                                )
-                        }
-                        .foregroundStyle(Color.blue)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            isHoveringHelpSupport = hovering
-                        }
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                    .help("Open Help & Support")
-                    .accessibilityLabel("Open Help and Support")
-                    .accessibilityHint("Opens the Help and Support settings page")
-                    .accessibilityIdentifier("ErrorHelpSupportLink")
-
-                    Text("with the copied details.")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: 520)
-        } else {
-            Text(recoveryText)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 500)
         }
     }
 
