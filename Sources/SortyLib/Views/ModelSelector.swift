@@ -945,7 +945,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
             return .easeOut(duration: 0.12)
         }
 
-        return .spring(response: 0.42, dampingFraction: 0.86)
+        return .spring(response: 0.28, dampingFraction: 0.86)
     }
 
     private var popoverTransition: AnyTransition {
