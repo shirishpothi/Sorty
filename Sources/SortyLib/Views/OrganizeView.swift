@@ -1778,6 +1778,9 @@ struct SavedPromptsSheet: View {
     @State private var editName = ""
     @State private var editText = ""
     @State private var improvingPromptId: UUID? = nil
+    @State private var showImprovePromptRequest = false
+    @State private var improvePromptRequestMessage = ""
+    @FocusState private var isEditTextFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1866,6 +1869,7 @@ struct SavedPromptsSheet: View {
 
                 TextEditor(text: $editText)
                     .font(.body)
+                    .focused($isEditTextFocused)
                     .frame(minHeight: 100, maxHeight: 160)
                     .scrollContentBackground(.hidden)
                     .padding(8)
@@ -1892,6 +1896,15 @@ struct SavedPromptsSheet: View {
                     .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                     .disabled(editText.trimmingCharacters(in: .whitespaces).isEmpty || improvingPromptId == prompt.id)
+                    .alert("Sorty needs more detail", isPresented: $showImprovePromptRequest) {
+                        Button("Edit Instructions") {
+                            isEditTextFocused = true
+                        }
+                    } message: {
+                        Text(
+                            "\(improvePromptRequestMessage)\n\nEdit the instructions above, then click Improve again."
+                        )
+                    }
 
                     Spacer()
 
@@ -1990,14 +2003,21 @@ struct SavedPromptsSheet: View {
 
         do {
             let client = try AIClientFactory.createClient(config: settingsConfig)
-            let improved = try await client.generateText(
-                prompt: "Improve the following file organization instructions to be clearer, more specific, and more actionable for an AI file organizer. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
-                systemPrompt: "You are a file organization expert. You help users write better instructions for organizing their files and folders. Be concise and practical."
+            let outcome = try await ImproveInstructionsTool.run(
+                client: client,
+                originalInstructions: original,
+                workflow: "organization"
             )
-            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                editText = trimmed
+
+            switch outcome {
+            case .replacement(let replacement):
+                editText = replacement
+                showImprovePromptRequest = false
                 HapticFeedbackManager.shared.success()
+            case .needsUserInput(let message):
+                improvePromptRequestMessage = message
+                showImprovePromptRequest = true
+                HapticFeedbackManager.shared.tap()
             }
         } catch {
             HapticFeedbackManager.shared.error()

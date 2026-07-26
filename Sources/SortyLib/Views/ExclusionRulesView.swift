@@ -20,6 +20,9 @@ struct ExclusionRulesView: View {
     @State private var contentOpacity: Double = 0
     @State private var newNLException = ""
     @State private var isImprovingException = false
+    @State private var showImproveExceptionRequest = false
+    @State private var improveExceptionRequestMessage = ""
+    @FocusState private var isNLExceptionFocused: Bool
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -337,6 +340,7 @@ struct ExclusionRulesView: View {
                 HStack(spacing: 8) {
                     TextField("e.g. don't touch any npm module files", text: $newNLException)
                         .textFieldStyle(.roundedBorder)
+                        .focused($isNLExceptionFocused)
                         .onSubmit {
                             addException()
                         }
@@ -357,6 +361,15 @@ struct ExclusionRulesView: View {
                             || isImprovingException
                     )
                     .help("Refine with Sorty")
+                    .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
+                        Button("Edit Exception") {
+                            isNLExceptionFocused = true
+                        }
+                    } message: {
+                        Text(
+                            "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
+                        )
+                    }
 
                     Button("Add") {
                         addException()
@@ -458,16 +471,21 @@ struct ExclusionRulesView: View {
 
         do {
             let client = try AIClientFactory.createClient(config: settingsViewModel.config)
-            let improved = try await client.generateText(
-                prompt:
-                    "Improve this file exclusion rule to be more precise and comprehensive: \"\(original)\"\n\nReturn only the improved rule text, nothing else. Keep it concise (under 200 characters).",
-                systemPrompt:
-                    "You are a file organization expert. Refine the natural language exclusion rule to be clearer and more specific about which files should be excluded from organization."
+            let outcome = try await ImproveInstructionsTool.run(
+                client: client,
+                originalInstructions: original,
+                workflow: "exclusion rule"
             )
-            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                newNLException = String(trimmed.prefix(200))
+
+            switch outcome {
+            case .replacement(let replacement):
+                newNLException = String(replacement.prefix(200))
+                showImproveExceptionRequest = false
                 HapticFeedbackManager.shared.success()
+            case .needsUserInput(let message):
+                improveExceptionRequestMessage = message
+                showImproveExceptionRequest = true
+                HapticFeedbackManager.shared.tap()
             }
         } catch {
             HapticFeedbackManager.shared.error()
