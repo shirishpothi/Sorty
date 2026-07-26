@@ -124,6 +124,7 @@ struct OrganizationStrategySettingsView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .tint(.primary)
                         .labelsHidden()
 
                         Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
@@ -141,6 +142,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             }
                             .pickerStyle(.menu)
+                            .tint(.primary)
 
                             Picker("Case", selection: $viewModel.config.renameNamingOptions.caseStyle) {
                                 ForEach(RenameCaseStyle.allCases, id: \.self) { style in
@@ -148,6 +150,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             }
                             .pickerStyle(.menu)
+                            .tint(.primary)
                         }
 
                         HStack(spacing: 12) {
@@ -157,6 +160,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             }
                             .pickerStyle(.menu)
+                            .tint(.primary)
 
                             TextField(
                                 "Language",
