@@ -23,14 +23,21 @@ struct PersonaEditorView: View {
     @State private var showingChat: Bool = false
     @State private var generationInput: String = ""
     @State private var identityGenerationError: String?
+    @State private var showingDeleteConfirmation = false
     @StateObject private var generator = PersonaGenerator()
     
     // Edit mode
     var editingPersona: CustomPersona?
+    private let onDelete: ((CustomPersona) -> Void)?
     
-    init(store: CustomPersonaStore, editing persona: CustomPersona? = nil) {
+    init(
+        store: CustomPersonaStore,
+        editing persona: CustomPersona? = nil,
+        onDelete: ((CustomPersona) -> Void)? = nil
+    ) {
         self.store = store
         self.editingPersona = persona
+        self.onDelete = onDelete
         _automaticallySelectIcon = State(initialValue: persona == nil)
         
         if let persona = persona {
@@ -52,10 +59,20 @@ struct PersonaEditorView: View {
                 
                 Spacer()
                 
-                Button("Cancel") {
-                    dismiss()
+                if editingPersona != nil {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .buttonStyle(.sortyBordered(intent: .destructive))
+                } else {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .buttonStyle(.sortyBordered)
+                    .keyboardShortcut(.escape)
                 }
-                .keyboardShortcut(.escape)
                 
                 Button(editingPersona == nil ? "Create" : "Save") {
                     savePersona()
@@ -79,6 +96,14 @@ struct PersonaEditorView: View {
             }
         }
         .frame(width: 700, height: 680)
+        .alert("Delete Persona?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                deletePersona()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes \(name.isEmpty ? "this persona" : "“\(name)”").")
+        }
         .sheet(isPresented: $showingChat) {
             PersonaChatView(promptModifier: promptModifier)
                 .environmentObject(settingsViewModel)
@@ -471,6 +496,26 @@ struct PersonaEditorView: View {
             )
             store.addPersona(newPersona)
         }
+    }
+
+    private func deletePersona() {
+        guard let editingPersona else { return }
+
+        if let onDelete {
+            onDelete(editingPersona)
+        } else {
+            store.deletePersona(id: editingPersona.id)
+        }
+
+        HapticFeedbackManager.shared.error()
+        NotificationManager.shared.showHUDInfo(
+            title: "Persona Deleted",
+            message: "\(editingPersona.name) was removed.",
+            icon: "trash.fill",
+            iconColor: .red,
+            identifier: "persona-deleted"
+        )
+        dismiss()
     }
 }
 

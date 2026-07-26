@@ -9,14 +9,14 @@ import SwiftUI
 
 struct PersonaGeneratorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @ObservedObject var store: CustomPersonaStore
     @Binding var selectedPersonaId: String?
     
     @StateObject private var generator = PersonaGenerator()
     @State private var prompt: String = ""
-    @State private var generatedPersona: CustomPersona?
-    @State private var isDetailView: Bool = false
+    @State private var generationStatusIndex: Int = 0
     
     @StateObject private var honingEngine = PersonaHoningEngine()
     @State private var questions: [HoningQuestion] = []
@@ -39,40 +39,81 @@ struct PersonaGeneratorView: View {
                 generationOverlay
             }
         }
-        .frame(width: 500, height: 550)
-        .alert("Persona Generated", isPresented: $isDetailView) {
-            Button("Save & Use") {
-                if let persona = generatedPersona {
-                    store.addPersona(persona)
-                    selectedPersonaId = persona.id
-                    dismiss()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your new expert-level persona has been created.")
-        }
+        .frame(width: 500, height: isHoning || generator.isGenerating ? 550 : 430)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82),
+            value: isHoning || generator.isGenerating
+        )
     }
 
     private var generationOverlay: some View {
-        VStack(spacing: 24) {
-            SortyGradientLoadingBar(width: 180, height: 10)
-            
-            VStack(spacing: 8) {
-                Text("Architecting Strategy...")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                
-                Text("Designing deep folder structures and organization rules.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 60)
+        VStack(spacing: 22) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                .frame(width: 58, height: 58)
+                .background(
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.13),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .symbolEffect(.breathe, isActive: !reduceMotion)
+
+            VStack(spacing: 10) {
+                Text("Building Your Persona")
+                    .font(.title3.weight(.bold))
+
+                SortyGradientLoadingBar(
+                    accent: SortyDesignSystem.Colors.resolvedAccent,
+                    width: 220,
+                    height: 9
+                )
+            }
+
+            Text(currentGenerationStatus)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(width: 340)
+                .frame(minHeight: 42)
+                .id(generationStatusIndex)
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    )
+                )
+
+            HStack(spacing: 14) {
+                generationDetail(
+                    icon: "slider.horizontal.3",
+                    text: refinementSummary
+                )
+                generationDetail(
+                    icon: "folder.badge.gearshape",
+                    text: "Reusable strategy"
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .task {
+            generationStatusIndex = 0
+            guard !reduceMotion else { return }
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(2.4))
+                } catch {
+                    return
+                }
+
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    generationStatusIndex =
+                        (generationStatusIndex + 1) % generationStatuses.count
+                }
+            }
+        }
     }
 
     private var initialInputView: some View {
@@ -91,7 +132,7 @@ struct PersonaGeneratorView: View {
                     .font(.body)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 30)
+            .padding(.top, 24)
             
             // Input Area
             VStack(alignment: .leading, spacing: 8) {
@@ -116,10 +157,11 @@ struct PersonaGeneratorView: View {
                 Text(error.localizedDescription).foregroundColor(.red).font(.caption).padding(.horizontal)
             }
             
-            Spacer()
-            
             HStack(spacing: 16) {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") {
+                    dismiss()
+                }
+                .buttonStyle(.sortyBordered)
                 
                 Button {
                     startHoning()
@@ -131,69 +173,91 @@ struct PersonaGeneratorView: View {
                     }
                 }
                 .buttonStyle(.sortyProminent)
-                .disabled(prompt.isEmpty || isLoadingQuestions)
+                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoadingQuestions)
             }
-            .padding(.bottom, 30)
+            .padding(.top, 4)
+            .padding(.bottom, 24)
         }
     }
     
     private var honingView: some View {
-        VStack(spacing: 24) {
-            Text("Refining Your Persona")
-                .font(.title3)
-                .fontWeight(.bold)
-                .padding(.top, 20)
-            
+        VStack(spacing: 20) {
+            let question = questions[currentQuestionIndex]
+
+            VStack(spacing: 10) {
+                Text("Refining Your Persona")
+                    .font(.title3.weight(.bold))
+
+                HStack(spacing: 4) {
+                    Text("Question")
+                    Text("\(currentQuestionIndex + 1)")
+                        .numericTextTransition(animationValue: currentQuestionIndex)
+                    Text("of")
+                    Text("\(questions.count)")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
+                .background(
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                    in: Capsule(style: .continuous)
+                )
+            }
+            .padding(.top, 18)
+
             SortyGradientProgressBar(
                 progress: Double(currentQuestionIndex + 1) / Double(max(questions.count, 1)),
-                height: 10
+                accent: SortyDesignSystem.Colors.resolvedAccent,
+                height: 9
             )
-                .padding(.horizontal)
-            
-            let question = questions[currentQuestionIndex]
-            
+            .padding(.horizontal, 28)
+
             VStack(alignment: .leading, spacing: 16) {
                 Text(question.text)
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
                 
                 ForEach(question.options, id: \.self) { option in
-                    Button {
+                    HoningOptionButton(
+                        option: option,
+                        isSelected: answers[question.id] == option
+                    ) {
                         selectAnswer(option, for: question)
-                    } label: {
-                        HStack {
-                            Text(option)
-                            Spacer()
-                            if answers[question.id] == option {
-                                Image(systemName: "checkmark.circle.fill").foregroundColor(.blue)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .padding()
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(answers[question.id] == option ? Color.blue : Color.secondary.opacity(0.2), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 30)
-            
+
+            if let error = generator.error {
+                Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 30)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Spacer()
             
             HStack {
                 if currentQuestionIndex > 0 {
-                    Button("Back") { currentQuestionIndex -= 1 }
+                    Button("Back") {
+                        HapticFeedbackManager.shared.selection()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                            currentQuestionIndex -= 1
+                        }
+                    }
+                    .buttonStyle(.sortyBordered)
                 }
                 
                 Spacer()
                 
                 Button(currentQuestionIndex == questions.count - 1 ? "Generate Persona" : "Next") {
                     if currentQuestionIndex < questions.count - 1 {
-                        currentQuestionIndex += 1
+                        HapticFeedbackManager.shared.selection()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                            currentQuestionIndex += 1
+                        }
                     } else {
                         generateFinalPersona()
                     }
@@ -207,8 +271,9 @@ struct PersonaGeneratorView: View {
     }
     
     private func selectAnswer(_ option: String, for question: HoningQuestion) {
+        guard answers[question.id] != option else { return }
+        HapticFeedbackManager.shared.selection()
         answers[question.id] = option
-        // Auto-advance after small delay if it's not the last one? No, let user click Next for control.
     }
     
     private func startHoning() {
@@ -217,13 +282,14 @@ struct PersonaGeneratorView: View {
             do {
                 questions = try await honingEngine.generateQuestions(from: prompt, config: settingsViewModel.config)
                 if questions.isEmpty {
-                    // Fallback to direct generation if no questions needed/generated
                     generateFinalPersona()
                 } else {
-                    isHoning = true
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                        isHoning = true
+                    }
                 }
             } catch {
-                // Ignore error and fall back to direct generation
                 generateFinalPersona()
             }
             isLoadingQuestions = false
@@ -232,17 +298,15 @@ struct PersonaGeneratorView: View {
     
     private func generateFinalPersona() {
         Task {
-            // Map back question text for better context
-             // Actually, passing the question text in the prompt would be better.
-             // We can do a quick mapping here
-             var richAnswers: [HoningAnswer] = []
-             for (qId, option) in answers {
-                 if let q = questions.first(where: { $0.id == qId }) {
-                     // We'll append the question text to the option for the generator context
-                     let richOption = "Q: \(q.text) -> A: \(option)"
-                     richAnswers.append(HoningAnswer(questionId: qId, selectedOption: richOption))
-                 }
-             }
+            var richAnswers: [HoningAnswer] = []
+            for (questionID, option) in answers {
+                if let question = questions.first(where: { $0.id == questionID }) {
+                    let richOption = "Q: \(question.text) -> A: \(option)"
+                    richAnswers.append(
+                        HoningAnswer(questionId: questionID, selectedOption: richOption)
+                    )
+                }
+            }
 
             do {
                 let result = try await generator.generatePersona(from: prompt, answers: richAnswers, config: settingsViewModel.config)
@@ -256,12 +320,143 @@ struct PersonaGeneratorView: View {
                 )
                 
                 await MainActor.run {
-                    self.generatedPersona = newPersona
-                    self.isDetailView = true
+                    store.addPersona(newPersona)
+                    selectedPersonaId = newPersona.id
+                    HapticFeedbackManager.shared.success()
+                    NotificationManager.shared.showHUDInfo(
+                        title: "Persona Ready",
+                        message: "\(newPersona.name) is saved and now active.",
+                        icon: "checkmark.circle.fill",
+                        iconColor: SortyDesignSystem.Colors.resolvedAccent,
+                        identifier: "persona-generated"
+                    )
+                    dismiss()
                 }
             } catch {
-                // error handled by generator binding
+                HapticFeedbackManager.shared.error()
             }
         }
+    }
+
+    private var generationStatuses: [String] {
+        [
+            answers.isEmpty
+                ? "Turning your description into a complete organization strategy."
+                : "Combining your description with \(answers.count) refinements.",
+            "Defining folder hierarchy, placement rules, and naming conventions.",
+            "Adding edge-case behavior and workflow-specific suggestions.",
+            "Finalizing a concise identity and reusable instructions.",
+        ]
+    }
+
+    private var currentGenerationStatus: String {
+        generationStatuses[generationStatusIndex % generationStatuses.count]
+    }
+
+    private var refinementSummary: String {
+        answers.isEmpty
+            ? "Description analyzed"
+            : "\(answers.count) \(answers.count == 1 ? "refinement" : "refinements")"
+    }
+
+    private func generationDetail(icon: String, text: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(
+                Color.primary.opacity(0.055),
+                in: Capsule(style: .continuous)
+            )
+    }
+}
+
+private struct HoningOptionButton: View {
+    let option: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    private var accent: Color {
+        SortyDesignSystem.Colors.resolvedAccent
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Text(option)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 12)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(
+                        isSelected
+                            ? accent
+                            : Color.secondary.opacity(isHovered ? 0.72 : 0.36)
+                    )
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .contentShape(Rectangle())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(cardFill)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(cardStroke, lineWidth: isSelected ? 1.5 : 1)
+            }
+            .shadow(
+                color: accent.opacity(isSelected ? 0.10 : isHovered ? 0.07 : 0),
+                radius: isHovered || isSelected ? 10 : 0,
+                y: isHovered ? 4 : 2
+            )
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered && !reduceMotion ? 1.008 : 1)
+        .offset(y: isHovered && !reduceMotion ? -1 : 0)
+        .onHover { hovering in
+            if hovering && !isHovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovered = hovering
+        }
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6),
+            value: isHovered
+        )
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6),
+            value: isSelected
+        )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var cardFill: Color {
+        if isSelected {
+            return accent.opacity(0.11)
+        }
+        if isHovered {
+            return accent.opacity(0.055)
+        }
+        return Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var cardStroke: Color {
+        if isSelected {
+            return accent.opacity(0.82)
+        }
+        if isHovered {
+            return accent.opacity(0.34)
+        }
+        return Color.secondary.opacity(0.18)
     }
 }

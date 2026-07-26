@@ -120,7 +120,16 @@ struct PersonaPickerView: View {
             personaInstructionsEditor
         }
         .sheet(isPresented: $showingEditor, onDismiss: { editingPersona = nil }) {
-            PersonaEditorView(store: customStore, editing: editingPersona)
+            PersonaEditorView(
+                store: customStore,
+                editing: editingPersona,
+                onDelete: { persona in
+                    customStore.deletePersona(id: persona.id)
+                    if personaManager.selectedCustomPersonaId == persona.id {
+                        personaManager.selectedCustomPersonaId = nil
+                    }
+                }
+            )
                 .environmentObject(customStore)
         }
         .sheet(isPresented: $showingGenerator) {

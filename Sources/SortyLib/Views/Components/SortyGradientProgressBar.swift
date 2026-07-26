@@ -20,7 +20,7 @@ private struct SortyGradientRingSegment: View {
             .inset(by: lineWidth / 2)
             .trim(from: start, to: end)
             .stroke(
-                SortyBeamPalette.arcGradient,
+                SortyBeamPalette.arcGradient(accent: accent),
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
             )
             .rotationEffect(.degrees(-90))
@@ -29,10 +29,6 @@ private struct SortyGradientRingSegment: View {
 }
 
 private enum SortyBeamPalette {
-    static let primary = Color(red: 0.055, green: 0.647, blue: 0.643)
-    static let warm = primary
-    static let cool = primary
-
     static var trackFill: some ShapeStyle {
         Color.white.opacity(0.055)
     }
@@ -45,26 +41,26 @@ private enum SortyBeamPalette {
         )
     }
 
-    static var barGradient: LinearGradient {
+    static func barGradient(accent: Color) -> LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: primary.opacity(0.88), location: 0.0),
-                .init(color: primary.opacity(0.98), location: 0.48),
-                .init(color: primary.opacity(0.90), location: 1.0),
+                .init(color: accent.opacity(0.82), location: 0.0),
+                .init(color: accent.opacity(0.98), location: 0.48),
+                .init(color: accent.opacity(0.86), location: 1.0),
             ],
             startPoint: .leading,
             endPoint: .trailing
         )
     }
 
-    static var arcGradient: AngularGradient {
+    static func arcGradient(accent: Color) -> AngularGradient {
         AngularGradient(
             stops: [
                 .init(color: .clear, location: 0.0),
-                .init(color: primary.opacity(0.24), location: 0.48),
-                .init(color: primary.opacity(0.70), location: 0.76),
-                .init(color: primary.opacity(0.94), location: 0.92),
-                .init(color: primary.opacity(0.98), location: 1.0),
+                .init(color: accent.opacity(0.24), location: 0.48),
+                .init(color: accent.opacity(0.70), location: 0.76),
+                .init(color: accent.opacity(0.94), location: 0.92),
+                .init(color: accent.opacity(0.98), location: 1.0),
             ],
             center: .center
         )
@@ -97,7 +93,7 @@ struct SortyGradientProgressBar: View {
                     let fillWidth = max(height, geo.size.width * clampedProgress)
 
                     Capsule(style: .continuous)
-                        .fill(SortyBeamPalette.barGradient)
+                        .fill(SortyBeamPalette.barGradient(accent: accent))
                         .overlay(
                             Capsule(style: .continuous)
                                 .inset(by: max(1, height * 0.14))
@@ -106,8 +102,8 @@ struct SortyGradientProgressBar: View {
                             alignment: .top
                         )
                         .frame(width: fillWidth)
-                        .shadow(color: SortyBeamPalette.primary.opacity(0.22), radius: height * 0.65, x: 0, y: 0)
-                        .shadow(color: SortyBeamPalette.primary.opacity(0.16), radius: height * 1.05, x: 0, y: 0)
+                        .shadow(color: accent.opacity(0.22), radius: height * 0.65, x: 0, y: 0)
+                        .shadow(color: accent.opacity(0.16), radius: height * 1.05, x: 0, y: 0)
                 }
             }
             .clipShape(Capsule(style: .continuous))
@@ -147,14 +143,14 @@ struct SortyGradientLoadingBar: View {
                     )
 
                 Capsule(style: .continuous)
-                    .fill(SortyBeamPalette.barGradient)
+                    .fill(SortyBeamPalette.barGradient(accent: accent))
                     .overlay(
                         Capsule(style: .continuous)
-                            .fill(SortyBeamPalette.primary.opacity(0.16))
+                            .fill(accent.opacity(0.16))
                     )
                     .frame(width: segmentWidth)
                     .offset(x: (travelPhase * travelDistance) - segmentWidth)
-                    .shadow(color: SortyBeamPalette.cool.opacity(0.42), radius: 7, x: 0, y: 0)
+                    .shadow(color: accent.opacity(0.42), radius: 7, x: 0, y: 0)
             }
             .clipShape(Capsule(style: .continuous))
         }
@@ -230,7 +226,7 @@ struct SortyGradientCircularProgress: View {
                         .inset(by: lineWidth / 2)
                         .trim(from: trimStart, to: trimEnd)
                         .stroke(
-                            SortyBeamPalette.primary.opacity(peakOpacity),
+                            accent.opacity(peakOpacity),
                             style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))
@@ -339,17 +335,17 @@ struct SortyGradientCircularTrackProgress: View {
         let highlightStart = max(0, safeP - highlightSpan)
         let highlightStops: [Gradient.Stop] = [
             .init(color: .clear, location: highlightStart),
-            .init(color: SortyBeamPalette.primary.opacity(0.28), location: highlightStart + (highlightSpan * 0.34)),
-            .init(color: SortyBeamPalette.primary.opacity(0.72), location: highlightStart + (highlightSpan * 0.70)),
-            .init(color: SortyBeamPalette.primary.opacity(0.94), location: highlightStart + (highlightSpan * 0.90)),
-            .init(color: SortyBeamPalette.primary.opacity(0.98), location: safeP),
+            .init(color: accent.opacity(0.28), location: highlightStart + (highlightSpan * 0.34)),
+            .init(color: accent.opacity(0.72), location: highlightStart + (highlightSpan * 0.70)),
+            .init(color: accent.opacity(0.94), location: highlightStart + (highlightSpan * 0.90)),
+            .init(color: accent.opacity(0.98), location: safeP),
         ]
 
         Circle()
             .inset(by: lineWidth / 2)
             .trim(from: 0, to: safeP)
             .stroke(
-                SortyBeamPalette.primary.opacity(baseOpacity),
+                accent.opacity(baseOpacity),
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt)
             )
             .rotationEffect(.degrees(-90))
@@ -373,9 +369,9 @@ struct SortyGradientCircularTrackProgress: View {
             .fill(
                 RadialGradient(
                     colors: [
-                        SortyBeamPalette.primary.opacity(0.98),
-                        SortyBeamPalette.primary.opacity(0.62),
-                        SortyBeamPalette.primary.opacity(0.18),
+                        accent.opacity(0.98),
+                        accent.opacity(0.62),
+                        accent.opacity(0.18),
                         .clear
                     ],
                     center: .center,
@@ -386,10 +382,10 @@ struct SortyGradientCircularTrackProgress: View {
             .frame(width: d, height: d)
             // Layered shadows build a soft circular glow with no arc artefacts.
             // Shadows render outside the view frame, so they're never hard-clipped.
-            .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: lineWidth * 0.25)
-            .shadow(color: SortyBeamPalette.cool.opacity(0.90), radius: lineWidth * 0.70)
-            .shadow(color: SortyBeamPalette.warm.opacity(0.65), radius: lineWidth * 1.60)
-            .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: lineWidth * 3.50)
+            .shadow(color: accent.opacity(0.56), radius: lineWidth * 0.25)
+            .shadow(color: accent.opacity(0.90), radius: lineWidth * 0.70)
+            .shadow(color: accent.opacity(0.65), radius: lineWidth * 1.60)
+            .shadow(color: accent.opacity(0.28), radius: lineWidth * 3.50)
             .offset(y: -(size / 2) + (lineWidth / 2))
             .rotationEffect(.degrees(p * 360))
     }
@@ -402,9 +398,9 @@ struct SortyGradientCircularTrackProgress: View {
             let arcLen = end - start
             let stops: [Gradient.Stop] = [
                 .init(color: .clear, location: start),
-                .init(color: SortyBeamPalette.primary.opacity(0.34), location: start + arcLen * 0.50),
-                .init(color: SortyBeamPalette.primary.opacity(0.78), location: start + arcLen * 0.84),
-                .init(color: SortyBeamPalette.primary.opacity(0.98), location: end),
+                .init(color: accent.opacity(0.34), location: start + arcLen * 0.50),
+                .init(color: accent.opacity(0.78), location: start + arcLen * 0.84),
+                .init(color: accent.opacity(0.98), location: end),
             ]
 
             Circle()
@@ -421,9 +417,9 @@ struct SortyGradientCircularTrackProgress: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            SortyBeamPalette.primary.opacity(0.98),
-                            SortyBeamPalette.primary.opacity(0.62),
-                            SortyBeamPalette.primary.opacity(0.18),
+                            accent.opacity(0.98),
+                            accent.opacity(0.62),
+                            accent.opacity(0.18),
                             .clear
                         ],
                         center: .center,
@@ -432,10 +428,10 @@ struct SortyGradientCircularTrackProgress: View {
                     )
                 )
                 .frame(width: d, height: d)
-                .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: lineWidth * 0.25)
-                .shadow(color: SortyBeamPalette.cool.opacity(0.90), radius: lineWidth * 0.70)
-                .shadow(color: SortyBeamPalette.warm.opacity(0.65), radius: lineWidth * 1.60)
-                .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: lineWidth * 3.50)
+                .shadow(color: accent.opacity(0.56), radius: lineWidth * 0.25)
+                .shadow(color: accent.opacity(0.90), radius: lineWidth * 0.70)
+                .shadow(color: accent.opacity(0.65), radius: lineWidth * 1.60)
+                .shadow(color: accent.opacity(0.28), radius: lineWidth * 3.50)
                 .offset(y: -(size / 2) + (lineWidth / 2))
                 .rotationEffect(.degrees(end * 360))
         }
@@ -474,9 +470,9 @@ struct SortyGradientCircularLoader: View {
 
             let stops: [Gradient.Stop] = [
                 .init(color: .clear, location: trailEnd),
-                .init(color: SortyBeamPalette.primary.opacity(0.34), location: trailEnd + arcLen * 0.50),
-                .init(color: SortyBeamPalette.primary.opacity(0.78), location: trailEnd + arcLen * 0.84),
-                .init(color: SortyBeamPalette.primary.opacity(0.98), location: leadEnd),
+                .init(color: accent.opacity(0.34), location: trailEnd + arcLen * 0.50),
+                .init(color: accent.opacity(0.78), location: trailEnd + arcLen * 0.84),
+                .init(color: accent.opacity(0.98), location: leadEnd),
             ]
 
             ZStack {
@@ -492,7 +488,7 @@ struct SortyGradientCircularLoader: View {
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(rotation - 90))
-                    .shadow(color: SortyBeamPalette.cool.opacity(0.48), radius: lineWidth * 1.2, x: 0, y: 0)
+                    .shadow(color: accent.opacity(0.48), radius: lineWidth * 1.2, x: 0, y: 0)
             }
         }
         .frame(width: size, height: size)
