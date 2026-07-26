@@ -15,12 +15,15 @@ public struct ContentView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var exclusionRules: ExclusionRulesManager
     @EnvironmentObject var extensionListener: ExtensionListener
+    @EnvironmentObject var personaManager: PersonaManager
+    @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
     @State private var previousView: AppState.AppView?
     @State private var displayedView: AppState.AppView = .organize
     @State private var showCommandNumbers = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var commandFlagsMonitor: Any?
+    @State private var personaHighlightDismissalTask: Task<Void, Never>?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
     public init() {}
@@ -58,8 +61,20 @@ public struct ContentView: View {
         }
         .onDisappear {
             windowLinkHoverState.clearAllHover()
+            personaHighlightDismissalTask?.cancel()
         }
         .animation(.easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
+        .sheet(item: $appState.personaGeneratorPresentationContext) { context in
+            PersonaGeneratorView(
+                store: customPersonaStore,
+                selectedPersonaId: $personaManager.selectedCustomPersonaId,
+                onPersonaGenerated: {
+                    if context == .settings {
+                        showPersonaGenerationHighlight()
+                    }
+                }
+            )
+        }
     }
 
     private var mainContent: some View {
@@ -198,6 +213,22 @@ public struct ContentView: View {
         SidebarNavigationItem.mainItems
     }
 
+    private func showPersonaGenerationHighlight() {
+        personaHighlightDismissalTask?.cancel()
+        appState.currentView = .settings
+        appState.selectedSettingsSection = .rules
+        appState.settingsFocusTarget = .rulesOrganizationStyle
+        personaHighlightDismissalTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled,
+                  appState.settingsFocusTarget == .rulesOrganizationStyle
+            else {
+                return
+            }
+            appState.settingsFocusTarget = nil
+        }
+    }
+
     @ViewBuilder
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
         let shortcutLabel = item.view == .settings ? "," : "\(commandNumber)"
@@ -278,6 +309,8 @@ public struct ContentView: View {
         .environmentObject(FolderOrganizer.preview)
         .environmentObject(ExclusionRulesManager.preview)
         .environmentObject(ExtensionListener.preview)
+        .environmentObject(PersonaManager())
+        .environmentObject(CustomPersonaStore())
         .frame(width: 1200, height: 800)
 }
 
@@ -288,6 +321,8 @@ public struct ContentView: View {
         .environmentObject(FolderOrganizer.preview)
         .environmentObject(ExclusionRulesManager.preview)
         .environmentObject(ExtensionListener.preview)
+        .environmentObject(PersonaManager())
+        .environmentObject(CustomPersonaStore())
         .frame(width: 1000, height: 720)
 }
 

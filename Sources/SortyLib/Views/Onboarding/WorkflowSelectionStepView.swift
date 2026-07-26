@@ -11,8 +11,8 @@ import SwiftUI
 public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
+    @EnvironmentObject var appState: AppState
     @State private var hasAppeared = false
-    @State private var isCreatingCustom = false
     
     public init() {}
     
@@ -74,7 +74,7 @@ public struct WorkflowSelectionStepView: View {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 personaManager.selectPersona(persona)
                                 personaManager.selectedCustomPersonaId = nil
-                                isCreatingCustom = false
+                                appState.personaGeneratorPresentationContext = nil
                             }
                         }
                     }
@@ -113,11 +113,11 @@ public struct WorkflowSelectionStepView: View {
                     CompactGeneratePersonaButton(
                         title: "Generate Another",
                         subtitle: "Try a different custom workflow idea",
-                        isCreatingCustom: $isCreatingCustom
+                        action: presentPersonaGenerator
                     )
                     .frame(maxWidth: 420)
                 } else {
-                    GeneratePersonaButton(isCreatingCustom: $isCreatingCustom)
+                    GeneratePersonaButton(action: presentPersonaGenerator)
                         .frame(maxWidth: 420)
                 }
             }
@@ -128,18 +128,15 @@ public struct WorkflowSelectionStepView: View {
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
-        .sheet(isPresented: $isCreatingCustom) {
-            PersonaGeneratorView(
-                store: customPersonaStore,
-                selectedPersonaId: $personaManager.selectedCustomPersonaId
-            )
-            .environmentObject(customPersonaStore)
-        }
         .onAppear {
             withAnimation { hasAppeared = true }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workflow Selection Step")
+    }
+
+    private func presentPersonaGenerator() {
+        appState.personaGeneratorPresentationContext = .onboarding
     }
 
     private var customPersonaGrid: some View {
@@ -164,7 +161,7 @@ public struct WorkflowSelectionStepView: View {
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         personaManager.selectCustomPersona(persona.id)
-                        isCreatingCustom = false
+                        appState.personaGeneratorPresentationContext = nil
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -482,23 +479,23 @@ struct OnboardingCustomPersonaCard: View {
 struct GeneratePersonaButton: View {
     let title: String
     let subtitle: String
-    @Binding var isCreatingCustom: Bool
+    let action: () -> Void
     @State private var isHovered = false
 
     init(
         title: String = "Generate Your Own",
         subtitle: String = "Describe your ideal organization style",
-        isCreatingCustom: Binding<Bool>
+        action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
-        self._isCreatingCustom = isCreatingCustom
+        self.action = action
     }
     
     var body: some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isCreatingCustom = true
+                action()
             }
             HapticFeedbackManager.shared.selection()
         } label: {
@@ -553,13 +550,13 @@ struct GeneratePersonaButton: View {
 struct CompactGeneratePersonaButton: View {
     let title: String
     let subtitle: String
-    @Binding var isCreatingCustom: Bool
+    let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                isCreatingCustom = true
+                action()
             }
             HapticFeedbackManager.shared.selection()
         } label: {
@@ -625,5 +622,6 @@ private func copyWorkflowText(_ value: String) {
     WorkflowSelectionStepView()
         .environmentObject(PersonaManager())
         .environmentObject(SettingsViewModel())
-    .environmentObject(CustomPersonaStore())
+        .environmentObject(CustomPersonaStore())
+        .environmentObject(AppState())
 }

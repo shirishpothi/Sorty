@@ -385,6 +385,13 @@ private final class HelpMenuHoverHapticsController: NSObject, NSMenuDelegate {
 public class AppState: ObservableObject {
     private static let requiredOnboardingVersion = "1.2.0"
     private static let completedOnboardingVersionKey = "completedOnboardingVersion"
+    public enum PersonaGeneratorPresentationContext: String, Identifiable {
+        case onboarding
+        case settings
+
+        public var id: String { rawValue }
+    }
+
     public enum HistoryExportFormat {
         case csv
         case json
@@ -427,6 +434,8 @@ public class AppState: ObservableObject {
     @Published public var updateManager: SparkleUpdateManager
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
+    @Published public var personaGeneratorPresentationContext:
+        PersonaGeneratorPresentationContext?
     @Published public var duplicateManager = DuplicateDetectionManager()
     @Published public var duplicateSettings = DuplicateSettingsManager()
     @Published public var duplicateSelectedDirectory: URL?
