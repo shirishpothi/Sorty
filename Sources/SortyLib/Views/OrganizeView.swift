@@ -2302,15 +2302,18 @@ struct ErrorView: View {
         case retry
         case settings
         case copy
+        case helpSupport
     }
 
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
+    @State private var isHoveringHelpSupport = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
     
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
     private enum ErrorCategory {
         case apiKey
@@ -2324,13 +2327,18 @@ struct ErrorView: View {
         if description.contains("api key") || description.contains("unauthorized") || description.contains("authentication") {
             return .apiKey
         }
-        if description.contains("network") || description.contains("internet") || description.contains("offline") || description.contains("timeout") {
+        if description.contains("network") || description.contains("internet") || description.contains("offline") || isTimeoutError {
             return .network
         }
         if description.contains("permission") || description.contains("access") || description.contains("sandbox") {
             return .permissions
         }
         return .generic
+    }
+
+    private var isTimeoutError: Bool {
+        let description = error.localizedDescription.lowercased()
+        return description.contains("timeout") || description.contains("timed out")
     }
     
     private var errorIcon: String {
@@ -2364,11 +2372,80 @@ struct ErrorView: View {
         case .apiKey:
             return "Check your provider and API key in Settings, then retry."
         case .network:
+            if isTimeoutError {
+                return "If your connection is stable, a slower provider may need more time."
+            }
             return "Check your internet connection and provider availability, then retry."
         case .permissions:
             return "Grant file access for this folder and try again."
         case .generic:
-            return "Try again, or retry with a smarter model. If this keeps happening, open Help & Support with the copied error details."
+            return "Try again or choose a smarter model."
+        }
+    }
+
+    private var showsHelpSupportChevron: Bool {
+        isHoveringHelpSupport || activeActionFeedback == .helpSupport
+    }
+
+    private var privacySafeSupportDetails: String {
+        """
+        Sorty Error Report
+
+        Error: \(errorTitle)
+        Category: \(privacySafeCategoryName)
+        Summary: \(privacySafeErrorSummary)
+        Suggested action: \(privacySafeSuggestedAction)
+        Workflow: \(settingsViewModel.config.mode.displayName)
+        Provider: \(settingsViewModel.config.provider.displayName)
+        Sorty: \(BuildInfo.fullVersion)
+        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+
+        Privacy: This report does not include file names, paths, file contents, custom instructions, prompts, model responses, credentials, API endpoints, or model identifiers.
+        """
+    }
+
+    private var privacySafeCategoryName: String {
+        switch category {
+        case .apiKey:
+            return "AI credentials"
+        case .network:
+            return "Network connection"
+        case .permissions:
+            return "File permissions"
+        case .generic:
+            return "Plan generation"
+        }
+    }
+
+    private var privacySafeErrorSummary: String {
+        switch category {
+        case .apiKey:
+            return "Sorty couldn't authenticate with the selected AI provider."
+        case .network:
+            if isTimeoutError {
+                return "The selected AI provider didn't respond before the request timeout."
+            }
+            return "Sorty couldn't reach the selected AI provider."
+        case .permissions:
+            return "Sorty couldn't access a required folder."
+        case .generic:
+            return "Sorty couldn't create an organization plan."
+        }
+    }
+
+    private var privacySafeSuggestedAction: String {
+        switch category {
+        case .apiKey:
+            return "Check the selected provider and its API key in Settings, then retry."
+        case .network:
+            if isTimeoutError {
+                return "Check the internet connection, then review timeout settings before retrying."
+            }
+            return "Check the internet connection and provider availability, then retry."
+        case .permissions:
+            return "Grant access to the required folder, then retry."
+        case .generic:
+            return "Retry with the current model, choose a smarter model, or open Help & Support."
         }
     }
 
@@ -2398,11 +2475,7 @@ struct ErrorView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
 
-                Text(recoveryText)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 500)
+                recoveryGuidance
             }
 
             HStack(spacing: 12) {
@@ -2443,6 +2516,31 @@ struct ErrorView: View {
                 .accessibilityIdentifier("ErrorTryAgainButton")
                 .modelSelectorTriggerBounds()
 
+                if category == .network && isTimeoutError {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.settings)
+                        appState.openSettingsWindow(
+                            section: .advanced,
+                            focusTarget: .advancedTimeouts
+                        )
+                        appState.navigatedFromSettings = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10, weight: .semibold))
+                                .symbolEffect(.bounce, value: activeActionFeedback == .settings)
+                            Text("Timeout Settings")
+                                .font(.caption.bold())
+                        }
+                    }
+                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
+                    .help("Open Advanced Settings and focus the timeout controls")
+                    .accessibilityHint("Opens the request and resource timeout controls")
+                    .accessibilityIdentifier("ErrorOpenTimeoutSettingsButton")
+                }
+
                 if category == .apiKey || category == .permissions {
                     Button {
                         HapticFeedbackManager.shared.tap()
@@ -2468,7 +2566,7 @@ struct ErrorView: View {
 
                 Button {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(error.localizedDescription, forType: .string)
+                    NSPasteboard.general.setString(privacySafeSupportDetails, forType: .string)
                     HapticFeedbackManager.shared.selection()
                     animateActionFeedback(.copy)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
@@ -2495,7 +2593,10 @@ struct ErrorView: View {
                 }
                 .buttonStyle(.tintedPill(.orange, size: .small))
                 .scaleEffect(showCopiedFeedback || activeActionFeedback == .copy ? 1.04 : 1.0)
-                .help("Copy error details for support")
+                .help("Copy a privacy-safe error report for support")
+                .accessibilityHint(
+                    "Copies diagnostics without private file, instruction, prompt, or credential data"
+                )
                 .accessibilityIdentifier("ErrorCopyDetailsButton")
             }
 
@@ -2521,6 +2622,68 @@ struct ErrorView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Retry using your current model, or choose a smarter model first.")
+        }
+    }
+
+    @ViewBuilder
+    private var recoveryGuidance: some View {
+        if category == .generic {
+            VStack(spacing: 3) {
+                Text(recoveryText)
+
+                HStack(spacing: 4) {
+                    Text("If it keeps happening, open")
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.helpSupport)
+                        appState.openSettingsWindow(section: .help)
+                        appState.navigatedFromSettings = true
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("Help & Support")
+                                .underline()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .frame(width: showsHelpSupportChevron ? 8 : 0)
+                                .opacity(showsHelpSupportChevron ? 1 : 0)
+                                .offset(x: showsHelpSupportChevron ? 0 : -4)
+                                .symbolEffect(
+                                    .bounce,
+                                    value: activeActionFeedback == .helpSupport
+                                )
+                        }
+                        .foregroundStyle(Color.blue)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                            isHoveringHelpSupport = hovering
+                        }
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+                    .help("Open Help & Support")
+                    .accessibilityLabel("Open Help and Support")
+                    .accessibilityHint("Opens the Help and Support settings page")
+                    .accessibilityIdentifier("ErrorHelpSupportLink")
+
+                    Text("with the copied details.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 520)
+        } else {
+            Text(recoveryText)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 500)
         }
     }
 
