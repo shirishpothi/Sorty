@@ -742,7 +742,7 @@ private struct HistorySessionSummary: View {
     let entry: OrganizationHistoryEntry
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 4) {
             if entry.status == .duplicatesCleanup {
                 Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
                 if let recovered = entry.recoveredSpace {
