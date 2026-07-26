@@ -99,14 +99,11 @@ struct PersonaGeneratorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
-        .beam(
-            .medium,
-            palette: .colorful,
-            theme: .dark,
-            active: !reduceMotion,
-            cornerRadius: 18,
-            strength: 1.0
-        )
+        .overlay {
+            PersonaGenerationBorderBeam(cornerRadius: 18)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
@@ -465,6 +462,65 @@ struct PersonaGeneratorView: View {
         return answers.isEmpty
             ? "Preparing a tailored organization strategy from your description."
             : "Preparing a strategy from your description and \(answers.count) refinements."
+    }
+}
+
+private struct PersonaGenerationBorderBeam: View {
+    let cornerRadius: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    private var shouldAnimate: Bool {
+        !reduceMotion && controlActiveState != .inactive
+    }
+
+    var body: some View {
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+        ) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let phase = shouldAnimate ? time / 1.96 : 0
+
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(
+                    AngularGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.00),
+                            .init(color: .clear, location: 0.08),
+                            .init(
+                                color: Color(red: 0.08, green: 0.80, blue: 1.0)
+                                    .opacity(0.36),
+                                location: 0.16
+                            ),
+                            .init(
+                                color: Color(red: 0.92, green: 0.16, blue: 0.58)
+                                    .opacity(0.62),
+                                location: 0.25
+                            ),
+                            .init(color: .white.opacity(0.88), location: 0.32),
+                            .init(
+                                color: Color(red: 1.0, green: 0.34, blue: 0.18)
+                                    .opacity(0.54),
+                                location: 0.39
+                            ),
+                            .init(
+                                color: Color(red: 0.40, green: 0.20, blue: 1.0)
+                                    .opacity(0.36),
+                                location: 0.48
+                            ),
+                            .init(color: .clear, location: 0.58),
+                            .init(color: .clear, location: 1.00),
+                        ],
+                        center: .center,
+                        angle: .degrees(
+                            (phase.truncatingRemainder(dividingBy: 1)) * 360
+                        )
+                    ),
+                    lineWidth: 1
+                )
+                .opacity(0.82)
+        }
     }
 }
 
