@@ -27,16 +27,11 @@ struct AdvancedSettingsView: View {
             }
             .animatedAppearance(delay: 0.0)
 
-            SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
-                HStack(alignment: .center, spacing: 8) {
-                    SettingsToggle(
-                        isOn: $automationManager.autoSelectOrganizedFolders,
-                        title: "Automatically reveal organized folders",
-                        description: "Open Finder and highlight newly organized folders after each completed run",
-                        focusTarget: .advancedFinderWorkflow
-                    )
-                    .accessibilityIdentifier("FinderAutoRevealToggle")
-
+            SettingsCard(
+                title: "Finder Workflow",
+                icon: "folder.badge.gearshape",
+                color: .mint,
+                headerAccessory: {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         isShowingFinderRecommendation.toggle()
@@ -61,6 +56,14 @@ struct AdvancedSettingsView: View {
                     .help("About automatically revealing organized folders")
                     .accessibilityLabel("Automatically reveal organized folders recommendation")
                 }
+            ) {
+                SettingsToggle(
+                    isOn: $automationManager.autoSelectOrganizedFolders,
+                    title: "Automatically reveal organized folders",
+                    description: "Open Finder and highlight newly organized folders after each completed run",
+                    focusTarget: .advancedFinderWorkflow
+                )
+                .accessibilityIdentifier("FinderAutoRevealToggle")
             }
             .animatedAppearance(delay: 0.03)
 

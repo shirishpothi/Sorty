@@ -143,47 +143,48 @@ struct AutomationSettingsView: View {
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationLaunchAtLogin)
 
-                    HStack(alignment: .center, spacing: 8) {
-                        Toggle(isOn: $keepInBackground) {
-                            VStack(alignment: .leading, spacing: 2) {
+                    Toggle(isOn: $keepInBackground) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
                                 Text("Keep in Background")
                                     .font(.subheadline)
-                                Text("Continue monitoring folders even when all windows are closed")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                        .settingsFocusableSetting(.automationKeepInBackground)
 
-                        Button {
-                            showBackgroundInfo.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Keep in Background information")
-                        .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text("Background Activity")
-                                        .font(.headline)
-                                    Spacer()
-                                    backgroundStatusBadge
+                                Button {
+                                    showBackgroundInfo.toggle()
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                        .font(.caption)
                                 }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Keep in Background information")
+                                .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            Text("Background Activity")
+                                                .font(.headline)
+                                            Spacer()
+                                            backgroundStatusBadge
+                                        }
 
-                                Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably. It is recommended to keep this on.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                        Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably. It is recommended to keep this on.")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(14)
+                                    .frame(width: 280, alignment: .leading)
+                                    .systemLiquidGlassPopover(cornerRadius: 12)
+                                }
                             }
-                            .padding(14)
-                            .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
+
+                            Text("Continue monitoring folders even when all windows are closed")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
+                    .toggleStyle(.switch)
+                    .settingsFocusableSetting(.automationKeepInBackground)
 
                     @AppStorage("hideDockIcon") var hideDockIcon = false
                     Toggle(isOn: $hideDockIcon) {

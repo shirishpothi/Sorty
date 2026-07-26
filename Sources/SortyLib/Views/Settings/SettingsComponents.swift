@@ -126,7 +126,35 @@ struct SettingsCard<Content: View>: View {
     let title: String
     let icon: String
     let color: Color
+    let headerAccessory: AnyView?
     @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        icon: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.headerAccessory = nil
+        self.content = content()
+    }
+
+    init<HeaderAccessory: View>(
+        title: String,
+        icon: String,
+        color: Color,
+        @ViewBuilder headerAccessory: () -> HeaderAccessory,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.headerAccessory = AnyView(headerAccessory())
+        self.content = content()
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -138,6 +166,7 @@ struct SettingsCard<Content: View>: View {
                 Text(LocalizedStringKey(title))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.secondary)
+                headerAccessory
             }
             
             content
