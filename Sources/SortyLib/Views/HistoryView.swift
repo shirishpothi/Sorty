@@ -574,7 +574,8 @@ private struct HistoryNavigatorPicker: View {
                     .help(filter.rawValue)
             }
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.palette)
+        .buttonStyle(.accessoryBar)
         .labelsHidden()
         .controlSize(.large)
         .fixedSize()
