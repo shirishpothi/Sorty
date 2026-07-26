@@ -837,6 +837,14 @@ struct ReadyToOrganizeView: View {
         unavailableSelectedStorageLocationCount > 0 ? .orange : .green
     }
 
+    private var storageLocationsVerticalPadding: CGFloat {
+        if showStorageLocations {
+            return 10
+        }
+
+        return storageLocationsManager.locations.isEmpty ? 4 : 6
+    }
+
     private var storageLocationListIDs: [StorageLocation.ID] {
         storageLocationsManager.locations.map(\.id)
     }
@@ -883,7 +891,7 @@ struct ReadyToOrganizeView: View {
             .animation(reduceMotion ? nil : .smooth(duration: 0.45).delay(0.10), value: hasAppeared)
 
             if mode != .renameOnly {
-                WorkflowCard(verticalPadding: 10) {
+                WorkflowCard(verticalPadding: storageLocationsVerticalPadding) {
                     storageLocationsContent
                 }
                 .opacity(hasAppeared ? 1 : 0)
