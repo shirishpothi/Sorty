@@ -1080,15 +1080,17 @@ struct ReadyToOrganizeView: View {
         }
     }
 
+    private func toggleStorageLocations() {
+        HapticFeedbackManager.shared.selection()
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+            showStorageLocations.toggle()
+        }
+    }
+
     private var storageLocationsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                        showStorageLocations.toggle()
-                    }
-                } label: {
+            HStack(spacing: 0) {
+                Button(action: toggleStorageLocations) {
                     HStack(spacing: 6) {
                         Image(systemName: selectedStorageLocationCount > 0 ? "externaldrive.fill" : "externaldrive")
                             .font(.system(size: 12))
@@ -1118,13 +1120,6 @@ struct ReadyToOrganizeView: View {
                         Spacer(minLength: 8)
 
                         storageLocationSelectionSummary
-
-                        Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 16)
-                            .offset(x: 16, y: -1)
-                            .accessibilityHidden(true)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())
@@ -1134,6 +1129,18 @@ struct ReadyToOrganizeView: View {
                 .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
                 .accessibilityHint("Expand to manage local, cloud, and external organization locations")
                 .accessibilityValue(showStorageLocations ? "Expanded" : "Collapsed")
+
+                Button(action: toggleStorageLocations) {
+                    Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
+                .accessibilityLabel(showStorageLocations ? "Collapse storage locations" : "Expand storage locations")
+                .accessibilityIdentifier("StorageLocationsDisclosureButton")
 
                 Button {
                     HapticFeedbackManager.shared.tap()
