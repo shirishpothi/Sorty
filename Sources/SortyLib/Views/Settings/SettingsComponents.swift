@@ -162,15 +162,37 @@ struct SettingsCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
             if let isExpanded {
                 Button {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isExpanded.wrappedValue.toggle()
                     }
+                    HapticFeedbackManager.shared.tap()
                 } label: {
-                    header(isExpanded: isExpanded.wrappedValue)
+                    HStack(spacing: 8) {
+                        Image(systemName: icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(color)
+                            .frame(width: 16)
+
+                        Text(LocalizedStringKey(title))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        headerAccessory
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(
+                                .degrees(isExpanded.wrappedValue ? 90 : 0)
+                            )
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
@@ -186,16 +208,21 @@ struct SettingsCard<Content: View>: View {
             }
 
             if isExpanded?.wrappedValue != false {
+                if isExpanded != nil {
+                    Divider()
+                        .padding(.horizontal, 16)
+                }
+
                 content
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(isExpanded == nil ? 0 : 16)
             }
         }
-        .padding(16)
+        .padding(isExpanded == nil ? 16 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 12)
     }
 
-    private func header(isExpanded: Bool? = nil) -> some View {
+    private func header() -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
@@ -205,15 +232,6 @@ struct SettingsCard<Content: View>: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
             headerAccessory
-
-            if let isExpanded {
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-            }
         }
         .contentShape(Rectangle())
     }
