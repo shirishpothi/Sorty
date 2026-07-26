@@ -84,18 +84,9 @@ extension View {
         }
     }
 
-    @ViewBuilder
+    /// Keeps the native popover surface; adding a second glass background here
+    /// creates a visible inner edge where the two surfaces overlap.
     func systemLiquidGlassPopover(cornerRadius: CGFloat) -> some View {
-        if #available(macOS 26.0, *) {
-            self
-                .background {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.clear)
-                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                }
-                .presentationCornerRadius(cornerRadius)
-        } else {
-            self.presentationCornerRadius(cornerRadius)
-        }
+        presentationCornerRadius(cornerRadius)
     }
 }
