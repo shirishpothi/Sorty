@@ -566,6 +566,21 @@ private struct HistoryGlassFilterPicker: View {
     @Namespace private var selectionAnimation
 
     var body: some View {
+        Group {
+            if #available(macOS 26.0, *) {
+                GlassEffectContainer(spacing: 8) {
+                    navigatorBar
+                }
+            } else {
+                navigatorBar
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Filter history sessions")
+        .accessibilityIdentifier("HistoryFilterPicker")
+    }
+
+    private var navigatorBar: some View {
         HStack(spacing: 2) {
             ForEach(HistoryView.HistoryFilter.allCases) { filter in
                 Button {
@@ -582,10 +597,6 @@ private struct HistoryGlassFilterPicker: View {
                         .background {
                             if selection == filter {
                                 selectedGlass
-                                    .matchedGeometryEffect(
-                                        id: "HistoryFilterSelection",
-                                        in: selectionAnimation
-                                    )
                             }
                         }
                         .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -599,9 +610,6 @@ private struct HistoryGlassFilterPicker: View {
         .padding(4)
         .systemLiquidGlassBackground(cornerRadius: 13)
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Filter history sessions")
-        .accessibilityIdentifier("HistoryFilterPicker")
     }
 
     @ViewBuilder
@@ -615,9 +623,14 @@ private struct HistoryGlassFilterPicker: View {
                         .interactive(),
                     in: .rect(cornerRadius: 9)
                 )
+                .glassEffectID("HistoryFilterSelection", in: selectionAnimation)
         } else {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(SortyDesignSystem.Colors.resolvedAccent)
+                .matchedGeometryEffect(
+                    id: "HistoryFilterSelection",
+                    in: selectionAnimation
+                )
         }
     }
 }
