@@ -86,6 +86,55 @@ class DirectoryScannerTests: XCTestCase {
         XCTAssertTrue(files.contains(where: { $0.name == "sub" }))
     }
 
+    func testScanningPrunesExcludedSubtreesBeforeDeepAnalysis() async throws {
+        let excludedDirectory = tempDirectory
+            .appendingPathComponent("node_modules", isDirectory: true)
+            .appendingPathComponent("package", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: excludedDirectory,
+            withIntermediateDirectories: true
+        )
+        try "dependency".write(
+            to: excludedDirectory.appendingPathComponent("index.js"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "report".write(
+            to: tempDirectory.appendingPathComponent("report.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .folderName, pattern: "node_modules")
+        ])
+
+        let files = try await scanner.scanDirectory(
+            at: tempDirectory,
+            deepScan: true,
+            exclusionMatcher: matcher
+        )
+
+        XCTAssertEqual(files.map(\.displayName), ["report.txt"])
+        XCTAssertNotNil(files.first?.contentMetadata)
+    }
+
+    func testScanFileRejectsExcludedItem() async throws {
+        let file = tempDirectory.appendingPathComponent("scratch.tmp")
+        try "temporary".write(to: file, atomically: true, encoding: .utf8)
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .fileExtension, pattern: "tmp")
+        ])
+
+        do {
+            _ = try await scanner.scanFile(at: file, exclusionMatcher: matcher)
+            XCTFail("Expected the excluded file to be rejected")
+        } catch let error as ScannerError {
+            guard case .excluded = error else {
+                return XCTFail("Expected excluded, got \(error)")
+            }
+        }
+    }
+
     func testGoogleDriveNativeDocumentsAreScanned() async throws {
         let document = tempDirectory.appendingPathComponent("Planning.gdoc")
         let sheet = tempDirectory.appendingPathComponent("Budget.gsheet")
