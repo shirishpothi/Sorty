@@ -1980,45 +1980,80 @@ struct SavedPromptsSheet: View {
 
             Divider()
 
-            if steeringManager.prompts.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "text.alignleft")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.tertiary)
-                    Text("No saved prompts yet")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text("Save your instructions from the organize view to reuse them.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .padding(20)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(steeringManager.prompts) { prompt in
-                            savedPromptCard(prompt)
+            ZStack {
+                if steeringManager.prompts.isEmpty {
+                    VStack(spacing: 16) {
+                        Spacer()
+
+                        ZStack {
+                            Circle()
+                                .fill(Color.accentColor.opacity(0.1))
+                                .frame(width: 72, height: 72)
+
+                            Image(systemName: "text.badge.plus")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                                .symbolRenderingMode(.hierarchical)
                         }
+
+                        VStack(spacing: 6) {
+                            Text("No saved prompts yet")
+                                .font(.headline)
+
+                            Text("Save your instructions from the organize view to reuse them.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 300)
+                        }
+
+                        Button {
+                            addNewPrompt()
+                        } label: {
+                            Label("Add New Prompt", systemImage: "plus")
+                        }
+                        .buttonStyle(.sortyBordered)
+
+                        Spacer()
                     }
-                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(24)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                            removal: .opacity.combined(with: .scale(scale: 1.02))
+                        )
+                    )
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(steeringManager.prompts) { prompt in
+                                savedPromptCard(prompt)
+                                    .transition(
+                                        .asymmetric(
+                                            insertion: .opacity
+                                                .combined(with: .scale(scale: 0.96, anchor: .top))
+                                                .combined(with: .offset(y: -8)),
+                                            removal: .opacity
+                                                .combined(with: .scale(scale: 0.96))
+                                                .combined(with: .offset(y: -6))
+                                        )
+                                    )
+                            }
+                        }
+                        .padding(20)
+                    }
+                    .transition(.opacity)
                 }
             }
+            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: steeringManager.prompts.map(\.id))
 
             Divider()
 
             // Footer
             HStack {
                 Button("Add New Prompt") {
-                    let newPrompt = SavedSteeringPrompt(name: "New Prompt", prompt: "")
-                    steeringManager.addPrompt(newPrompt)
-                    editingPromptId = newPrompt.id
-                    editName = newPrompt.name
-                    editText = newPrompt.prompt
-                    HapticFeedbackManager.shared.tap()
+                    addNewPrompt()
                 }
                 .buttonStyle(.sortyBordered)
 
@@ -2152,7 +2187,12 @@ struct SavedPromptsSheet: View {
                     Spacer()
 
                     Button(role: .destructive) {
-                        steeringManager.deletePrompt(id: prompt.id)
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                            if editingPromptId == prompt.id {
+                                editingPromptId = nil
+                            }
+                            steeringManager.deletePrompt(id: prompt.id)
+                        }
                         HapticFeedbackManager.shared.tap()
                     } label: {
                         Image(systemName: "trash")
@@ -2170,6 +2210,17 @@ struct SavedPromptsSheet: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
         )
+    }
+
+    private func addNewPrompt() {
+        let newPrompt = SavedSteeringPrompt(name: "New Prompt", prompt: "")
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            steeringManager.addPrompt(newPrompt)
+            editingPromptId = newPrompt.id
+            editName = newPrompt.name
+            editText = newPrompt.prompt
+        }
+        HapticFeedbackManager.shared.tap()
     }
 
     private func improveEditingPrompt(_ prompt: SavedSteeringPrompt) async {
