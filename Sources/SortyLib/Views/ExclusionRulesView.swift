@@ -22,6 +22,7 @@ struct ExclusionRulesView: View {
     @State private var isImprovingException = false
     @State private var showImproveExceptionRequest = false
     @State private var improveExceptionRequestMessage = ""
+    @State private var learningExclusionSliverTrigger = 0
     @FocusState private var isNLExceptionFocused: Bool
 
     private var trimmedSearchText: String {
@@ -303,6 +304,13 @@ struct ExclusionRulesView: View {
                         Image(systemName: "eye.slash")
                             .font(.system(size: 28))
                             .foregroundStyle(.orange.opacity(0.6))
+                            .milestoneEmptyStateSliver(
+                                trigger: learningExclusionSliverTrigger
+                            )
+                            .onScrollVisibilityChange(threshold: 0.6) { isVisible in
+                                guard isVisible else { return }
+                                learningExclusionSliverTrigger += 1
+                            }
                             .accessibilityHidden(true)
                         Text("No folders excluded")
                             .font(.subheadline.bold())
