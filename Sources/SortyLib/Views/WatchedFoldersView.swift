@@ -877,22 +877,14 @@ struct WatchedFolderConfigView: View {
                             .toggleStyle(.switch)
 
                             if useCustomModel {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Folder Model")
-                                            .font(.subheadline)
-                                        Text("Used only for this watched folder")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Model")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
 
-                                    Spacer()
-
-                                    ModelSelectorCompactButton(
+                                    ModelSelectorRow(
                                         provider: selectedProvider,
-                                        label: selectedModel.isEmpty
-                                            ? selectedProvider.defaultModel
-                                            : selectedModel,
+                                        model: selectedModel,
                                         onTap: { showModelPicker = true }
                                     )
                                     .modelSelectorTriggerBounds()

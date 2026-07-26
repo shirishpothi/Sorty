@@ -245,16 +245,11 @@ public struct ProviderSelectionStepView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(8)
 
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Model")
-                            .font(.subheadline)
-                        Text("Used for organization")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
+                // Model selector
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Model")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
 
                     if isLoadingModels {
                         HStack(spacing: 8) {
@@ -264,9 +259,9 @@ public struct ProviderSelectionStepView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        ModelSelectorCompactButton(
+                        ModelSelectorRow(
                             provider: settingsViewModel.config.provider,
-                            label: selectedModelDisplay
+                            model: settingsViewModel.config.model
                         ) {
                             isShowingModelPopover = true
                         }
@@ -423,20 +418,14 @@ public struct ProviderSelectionStepView: View {
                 }
             }
             if settingsViewModel.config.provider != .githubCopilot {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Model")
-                            .font(.subheadline)
-                        Text("Used for organization")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Model")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
 
-                    Spacer()
-
-                    ModelSelectorCompactButton(
+                    ModelSelectorRow(
                         provider: settingsViewModel.config.provider,
-                        label: selectedModelDisplay
+                        model: settingsViewModel.config.model
                     ) {
                         isShowingModelPopover = true
                     }
@@ -444,13 +433,6 @@ public struct ProviderSelectionStepView: View {
                 }
             }
         }
-    }
-
-    private var selectedModelDisplay: String {
-        let provider = settingsViewModel.config.provider
-        return settingsViewModel.config.model.isEmpty
-            ? provider.defaultModel
-            : settingsViewModel.config.model
     }
 
     @ViewBuilder
