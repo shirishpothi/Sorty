@@ -1302,6 +1302,7 @@ struct LearningsView: View {
                         Text("Forever").tag(0)
                     }
                     .pickerStyle(.menu)
+                    .tint(.primary)
                     .frame(width: 120)
                     .labelsHidden()
                     .onChange(of: manager.dataRetentionDays) { _ in
