@@ -26,7 +26,10 @@ struct ModelSelectorRow: View {
     let onTap: () -> Void
     
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            HapticFeedbackManager.shared.light()
+            onTap()
+        } label: {
             HStack(spacing: 10) {
                 ProviderLogoView(provider: provider, size: 16)
                     .frame(width: 20)

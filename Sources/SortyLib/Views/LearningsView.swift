@@ -1272,7 +1272,6 @@ struct LearningsView: View {
                             ? effectiveLearningsModel
                             : settingsViewModel.config.model,
                         onTap: {
-                            HapticFeedbackManager.shared.tap()
                             showLearningsModelPicker = true
                         }
                     )
