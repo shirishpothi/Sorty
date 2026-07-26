@@ -34,30 +34,32 @@ private struct SettingsFocusableModifier: ViewModifier {
             .id(target.rawValue)
             .overlay(
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
+                            ? Color.accentColor.opacity(isBreathing ? 0.92 : 0.72)
                             : Color.clear,
-                            lineWidth: 2
+                            lineWidth: 1.8
                         )
 
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
+                            ? Color.accentColor.opacity(isBreathing ? 0.32 : 0.14)
                             : Color.clear,
-                            lineWidth: 3
+                            lineWidth: 2.4
                         )
-                        .scaleEffect(isBreathing ? 1.012 : 1)
-                        .blur(radius: isBreathing ? 4 : 2)
+                        .blur(radius: isBreathing ? 6 : 3)
+                        .shadow(
+                            color: isFocused
+                                ? Color.accentColor.opacity(isBreathing ? 0.28 : 0.12)
+                                : .clear,
+                            radius: isBreathing ? 12 : 6
+                        )
                 }
-            )
-            .shadow(
-                color: isFocused
-                    ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
-                    : .clear,
-                radius: isBreathing ? 14 : 7
+                .padding(.horizontal, -8)
+                .padding(.vertical, -6)
+                .allowsHitTesting(false)
             )
             .animation(.easeInOut(duration: 0.2), value: isFocused)
             .onAppear {
@@ -80,7 +82,7 @@ private struct SettingsFocusableModifier: ViewModifier {
         }
 
         isBreathing = false
-        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
             isBreathing = true
         }
     }
