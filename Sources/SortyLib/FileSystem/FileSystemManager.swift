@@ -925,6 +925,20 @@ public actor FileSystemManager {
         let operations: [FileOperation]
         let processedCount: Int
     }
+
+    private struct OrganizationProgress {
+        let totalOperations: Int
+        let handler: (@Sendable (Double, String) -> Void)?
+        private(set) var completedOperations = 0
+
+        mutating func report(_ message: String) {
+            completedOperations += 1
+            let rawProgress = totalOperations > 0
+                ? Double(completedOperations) / Double(totalOperations)
+                : 1.0
+            handler?(min(rawProgress, 1.0), message)
+        }
+    }
     
     public struct ApplyOrganizationResult: Sendable {
         public let operations: [FileOperation]
@@ -955,13 +969,7 @@ public actor FileSystemManager {
             let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
             let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
             let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
-            var completedOps = 0
-
-            func updateProgress(_ message: String) {
-                completedOps += 1
-                let raw = totalOps > 0 ? Double(completedOps) / Double(totalOps) : 1.0
-                progress?(min(raw, 1.0), message)
-            }
+            var operationProgress = OrganizationProgress(totalOperations: totalOps, handler: progress)
 
             if !dryRun {
                 progress?(0.02, "Validating files...")
@@ -975,9 +983,14 @@ public actor FileSystemManager {
             progress?(0.05, "Creating folder structure...")
 
             for suggestion in plan.suggestions {
-                let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
-                    updateProgress(message)
-                }, failures: &allFailures)
+                let result = try await createFoldersWithProgress(
+                    suggestion,
+                    currentURL: baseURL,
+                    dryRun: dryRun,
+                    exclusionManager: exclusionManager,
+                    operationProgress: &operationProgress,
+                    failures: &allFailures
+                )
                 allOperations.append(contentsOf: result.operations)
             }
 
@@ -991,9 +1004,14 @@ public actor FileSystemManager {
             progress?(0.1, "Moving files...")
 
             for suggestion in plan.suggestions {
-                let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
-                    updateProgress(message)
-                }, failures: &allFailures)
+                let result = try await moveFilesInSuggestionWithProgress(
+                    suggestion,
+                    parentURL: baseURL,
+                    dryRun: dryRun,
+                    exclusionManager: exclusionManager,
+                    operationProgress: &operationProgress,
+                    failures: &allFailures
+                )
                 allOperations.append(contentsOf: result.operations)
             }
 
@@ -1008,9 +1026,13 @@ public actor FileSystemManager {
                 progress?(0.8, "Applying tags...")
 
                 for suggestion in plan.suggestions {
-                    let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
-                        updateProgress(message)
-                    }
+                    let result = try await tagFilesWithProgress(
+                        suggestion,
+                        currentURL: baseURL,
+                        dryRun: dryRun,
+                        exclusionManager: exclusionManager,
+                        operationProgress: &operationProgress
+                    )
                     allOperations.append(contentsOf: result.operations)
                 }
             }
@@ -1071,7 +1093,14 @@ public actor FileSystemManager {
         }
     }
     
-    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void, failures: inout [OperationFailure]) async throws -> OperationResult {
+    private func createFoldersWithProgress(
+        _ suggestion: FolderSuggestion,
+        currentURL: URL,
+        dryRun: Bool,
+        exclusionManager: ExclusionRulesManager? = nil,
+        operationProgress: inout OrganizationProgress,
+        failures: inout [OperationFailure]
+    ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -1128,16 +1157,23 @@ public actor FileSystemManager {
                     error: error.localizedDescription,
                     isRetryable: false
                 ))
-                onProgress("Skipped folder \(suggestion.folderName) (permission denied)...")
+                operationProgress.report("Skipped folder \(suggestion.folderName) (permission denied)...")
                 processedCount += 1
                 return OperationResult(operations: operations, processedCount: processedCount)
             }
         }
-        onProgress("Creating folder \(suggestion.folderName)...")
+        operationProgress.report("Creating folder \(suggestion.folderName)...")
         processedCount += 1
         
         for subfolder in suggestion.subfolders {
-            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress, failures: &failures)
+            let subResult = try await createFoldersWithProgress(
+                subfolder,
+                currentURL: folderURL,
+                dryRun: dryRun,
+                exclusionManager: exclusionManager,
+                operationProgress: &operationProgress,
+                failures: &failures
+            )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -1145,7 +1181,14 @@ public actor FileSystemManager {
         return OperationResult(operations: operations, processedCount: processedCount)
     }
     
-    private func moveFilesInSuggestionWithProgress(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void, failures: inout [OperationFailure]) async throws -> OperationResult {
+    private func moveFilesInSuggestionWithProgress(
+        _ suggestion: FolderSuggestion,
+        parentURL: URL,
+        dryRun: Bool,
+        exclusionManager: ExclusionRulesManager? = nil,
+        operationProgress: inout OrganizationProgress,
+        failures: inout [OperationFailure]
+    ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -1158,7 +1201,7 @@ public actor FileSystemManager {
             if let manager = exclusionManager {
                 if await manager.shouldExclude(file) {
                     DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
-                    onProgress("Skipped \(sourceURL.lastPathComponent) (excluded)...")
+                    operationProgress.report("Skipped \(sourceURL.lastPathComponent) (excluded)...")
                     processedCount += 1
                     continue
                 }
@@ -1200,7 +1243,7 @@ public actor FileSystemManager {
                                 error: "Source file no longer exists",
                                 isRetryable: false
                             ))
-                            onProgress("Skipped \(finalFilename) (not found)...")
+                            operationProgress.report("Skipped \(finalFilename) (not found)...")
                             processedCount += 1
                             continue
                         }
@@ -1258,12 +1301,19 @@ public actor FileSystemManager {
                 }
             }
             
-            onProgress(progressMessage)
+            operationProgress.report(progressMessage)
             processedCount += 1
         }
 
         for subfolder in suggestion.subfolders {
-            let subResult = try await moveFilesInSuggestionWithProgress(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress, failures: &failures)
+            let subResult = try await moveFilesInSuggestionWithProgress(
+                subfolder,
+                parentURL: folderURL,
+                dryRun: dryRun,
+                exclusionManager: exclusionManager,
+                operationProgress: &operationProgress,
+                failures: &failures
+            )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -1289,7 +1339,13 @@ public actor FileSystemManager {
         return "Organizing and renaming \(finalFilename)..."
     }
 
-    private func tagFilesWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void) async throws -> OperationResult {
+    private func tagFilesWithProgress(
+        _ suggestion: FolderSuggestion,
+        currentURL: URL,
+        dryRun: Bool,
+        exclusionManager: ExclusionRulesManager? = nil,
+        operationProgress: inout OrganizationProgress
+    ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -1299,7 +1355,7 @@ public actor FileSystemManager {
 
         if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
             operations.append(folderOp)
-            onProgress("Tagging \(suggestion.folderName)...")
+            operationProgress.report("Tagging \(suggestion.folderName)...")
             processedCount += 1
         }
         
@@ -1318,12 +1374,18 @@ public actor FileSystemManager {
             if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
                 operations.append(op)
             }
-            onProgress("Tagging \(finalFilename)...")
+            operationProgress.report("Tagging \(finalFilename)...")
             processedCount += 1
         }
         
         for subfolder in suggestion.subfolders {
-            let subResult = try await tagFilesWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress)
+            let subResult = try await tagFilesWithProgress(
+                subfolder,
+                currentURL: folderURL,
+                dryRun: dryRun,
+                exclusionManager: exclusionManager,
+                operationProgress: &operationProgress
+            )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
