@@ -19,6 +19,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var pendingPresetInstructions: String = ""
     @State private var editingPreset: NamingPreset? = nil
     @State private var showEditSheet: Bool = false
+    @State private var showingRenamingInfo: Bool = false
     @State private var showingNamingInstructionsInfo: Bool = false
 
     var body: some View {
@@ -88,7 +89,7 @@ struct OrganizationStrategySettingsView: View {
             // Renaming Section
             SettingsCard(title: "Renaming", icon: "textformat", color: .indigo) {
                 VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
                         Picker("Template", selection: Binding(
                             get: { viewModel.config.selectedNamingPresetId },
                             set: { newId in
@@ -128,9 +129,26 @@ struct OrganizationStrategySettingsView: View {
                         .tint(.primary)
                         .labelsHidden()
 
-                        Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            showingRenamingInfo.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showingRenamingInfo, arrowEdge: .bottom) {
+                            Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(14)
+                                .frame(width: 300, alignment: .leading)
+                                .systemLiquidGlassPopover(cornerRadius: 12)
+                        }
+                        .help("About renaming files")
+                        .accessibilityLabel("Renaming information")
                     }
 
                     Divider()
