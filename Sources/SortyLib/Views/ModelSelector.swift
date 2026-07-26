@@ -848,39 +848,11 @@ private struct ModelSelectionPopoverGlassModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(fallbackSurfaceFill)
-            }
-            .systemLiquidGlassBackground(cornerRadius: cornerRadius)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.1), radius: 14, y: 8)
-            .presentationCornerRadius(cornerRadius)
-    }
-
-    private var fallbackSurfaceFill: AnyShapeStyle {
-        if #available(macOS 26.0, *) {
-            return AnyShapeStyle(Color.clear)
-        } else {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(nsColor: .windowBackgroundColor),
-                        Color(nsColor: .controlBackgroundColor)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-        }
+            .systemLiquidGlassPopover(cornerRadius: cornerRadius)
     }
 }
 
 private struct ModelSelectionOverlayModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
@@ -892,47 +864,39 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let onSelect: (AIProvider, String) -> Void
 
     private let contentPadding: CGFloat = 12
-    private let verticalSpacing: CGFloat = 12
     private let idealPopoverSize = CGSize(width: 500, height: 420)
-    private let minimumUsableHostSize = CGSize(width: 420, height: 320)
 
     func body(content: Content) -> some View {
         content
             .overlayPreferenceValue(ModelSelectionTriggerBoundsPreferenceKey.self) { anchor in
                 GeometryReader { proxy in
-                    if isPresented {
-                        let frame = anchor.map { proxy[$0] }
-                        let popoverSize = resolvedPopoverSize(for: frame, in: proxy.size)
+                    if let anchor {
+                        let frame = proxy[anchor]
 
-                        ZStack(alignment: .topLeading) {
-                            Color.black
-                                .opacity(0.05)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    isPresented = false
-                                }
-                                .transition(.opacity)
-
-                            ModelSelectionPopover(
+                        Color.clear
+                            .frame(width: max(frame.width, 1), height: max(frame.height, 1))
+                            .position(x: frame.midX, y: frame.midY)
+                            .allowsHitTesting(false)
+                            .popover(
                                 isPresented: $isPresented,
-                                currentProvider: currentProvider,
-                                currentModel: currentModel,
-                                contextMessage: contextMessage,
-                                selectionActionTitle: selectionActionTitle,
-                                isSelectionActionProminent: isSelectionActionProminent,
-                                resetActionTitle: resetActionTitle,
-                                onReset: onReset,
-                                popoverSize: popoverSize,
-                                onSelect: onSelect
-                            )
-                            .shadow(color: .black.opacity(0.22), radius: 28, y: 14)
-                            .offset(x: resolvedX(for: frame, popoverSize: popoverSize, in: proxy.size), y: resolvedY(for: frame, popoverSize: popoverSize, in: proxy.size))
-                            .transition(popoverTransition)
-                        }
-                        .zIndex(1000)
+                                attachmentAnchor: .rect(.bounds),
+                                arrowEdge: .bottom
+                            ) {
+                                ModelSelectionPopover(
+                                    isPresented: $isPresented,
+                                    currentProvider: currentProvider,
+                                    currentModel: currentModel,
+                                    contextMessage: contextMessage,
+                                    selectionActionTitle: selectionActionTitle,
+                                    isSelectionActionProminent: isSelectionActionProminent,
+                                    resetActionTitle: resetActionTitle,
+                                    onReset: onReset,
+                                    popoverSize: resolvedPopoverSize,
+                                    onSelect: onSelect
+                                )
+                            }
                     }
                 }
-                .animation(presentationAnimation, value: isPresented)
             }
             .onChange(of: isPresented) { _, presented in
                 guard presented else { return }
@@ -940,81 +904,16 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
             }
     }
 
-    private var presentationAnimation: Animation {
-        if reduceMotion {
-            return .easeOut(duration: 0.12)
+    private var resolvedPopoverSize: CGSize {
+        let activeScreen = (NSApp.keyWindow ?? NSApp.mainWindow)?.screen ?? NSScreen.main
+        guard let screenSize = activeScreen?.visibleFrame.size else {
+            return idealPopoverSize
         }
-
-        return .spring(response: 0.18, dampingFraction: 0.86)
-    }
-
-    private var popoverTransition: AnyTransition {
-        if reduceMotion {
-            return .opacity
-        }
-
-        return .opacity
-            .combined(with: .scale(scale: 0.965, anchor: .topTrailing))
-            .combined(with: .offset(y: 6))
-    }
-
-    private func resolvedPopoverSize(for frame: CGRect?, in containerSize: CGSize) -> CGSize {
-        let hostAvailableWidth = max(0, containerSize.width - (contentPadding * 2))
-        let hostAvailableHeight = max(0, containerSize.height - (contentPadding * 2))
-        let anchoredAvailableHeight: CGFloat
-
-        if let frame {
-            let availableAbove = max(0, frame.minY - verticalSpacing - contentPadding)
-            let availableBelow = max(0, containerSize.height - frame.maxY - verticalSpacing - contentPadding)
-            anchoredAvailableHeight = max(availableAbove, availableBelow)
-        } else {
-            anchoredAvailableHeight = hostAvailableHeight
-        }
-
-        let resolvedHeight = min(idealPopoverSize.height, anchoredAvailableHeight)
-
-        let hostCanFitPopoverComfortably = hostAvailableWidth >= minimumUsableHostSize.width && hostAvailableHeight >= minimumUsableHostSize.height
-
-        if hostCanFitPopoverComfortably {
-            return CGSize(
-                width: min(idealPopoverSize.width, hostAvailableWidth),
-                height: resolvedHeight
-            )
-        }
-
-        // Preserve a usable width in compact hosts while keeping the height clear of the trigger.
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let screenAvailableWidth = max(0, screenFrame.width - (contentPadding * 2))
 
         return CGSize(
-            width: min(idealPopoverSize.width, screenAvailableWidth > 0 ? screenAvailableWidth : hostAvailableWidth),
-            height: resolvedHeight
+            width: min(idealPopoverSize.width, max(0, screenSize.width - (contentPadding * 2))),
+            height: min(idealPopoverSize.height, max(0, screenSize.height - (contentPadding * 2)))
         )
-    }
-
-    private func resolvedX(for frame: CGRect?, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
-        guard let frame else {
-            return max(contentPadding, (containerSize.width - popoverSize.width) / 2)
-        }
-
-        let preferredX = frame.maxX - popoverSize.width
-        let maxX = max(contentPadding, containerSize.width - popoverSize.width - contentPadding)
-        return min(max(preferredX, contentPadding), maxX)
-    }
-
-    private func resolvedY(for frame: CGRect?, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
-        guard let frame else {
-            return max(contentPadding, (containerSize.height - popoverSize.height) / 2)
-        }
-
-        let belowY = frame.maxY + verticalSpacing
-        let maxY = containerSize.height - popoverSize.height - contentPadding
-
-        if belowY <= maxY {
-            return belowY
-        }
-
-        return max(frame.minY - popoverSize.height - verticalSpacing, contentPadding)
     }
 
 }
