@@ -63,7 +63,7 @@ struct HistoryView: View {
             return manualEntries.count < totalManualFilteredCount
         case .watched:
             return watchedEntries.count < totalWatchedFilteredCount
-        case .all, .success, .failed, .skipped, .cancelled:
+        case .all, .undoable, .failed, .skipped, .cancelled:
             return manualEntries.count < totalManualFilteredCount ||
                 watchedEntries.count < totalWatchedFilteredCount
         }
@@ -71,7 +71,7 @@ struct HistoryView: View {
 
     enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "All"
-        case success = "Success"
+        case undoable = "Undoable"
         case failed = "Failed"
         case skipped = "Skipped"
         case cancelled = "Cancelled"
@@ -83,7 +83,7 @@ struct HistoryView: View {
         var systemImage: String {
             switch self {
             case .all: "tray.full"
-            case .success: "checkmark.diamond"
+            case .undoable: "arrow.uturn.backward.circle"
             case .failed: "exclamationmark.triangle"
             case .skipped: "forward"
             case .cancelled: "xmark.circle"
@@ -93,13 +93,26 @@ struct HistoryView: View {
         }
 
         func includes(_ entry: OrganizationHistoryEntry) -> Bool {
-            includes(status: entry.status, source: entry.source)
+            includes(
+                status: entry.status,
+                source: entry.source,
+                isUndone: entry.isUndone,
+                hasOperations: !(entry.operations?.isEmpty ?? true)
+            )
         }
 
-        func includes(status: OrganizationStatus, source: OrganizationEntrySource) -> Bool {
+        func includes(
+            status: OrganizationStatus,
+            source: OrganizationEntrySource,
+            isUndone: Bool = false,
+            hasOperations: Bool = false
+        ) -> Bool {
             switch self {
             case .all: true
-            case .success: status == .completed
+            case .undoable:
+                !isUndone &&
+                    hasOperations &&
+                    (status == .completed || status == .partiallyUndone)
             case .failed: status == .failed
             case .skipped: status == .skipped
             case .cancelled: status == .cancelled

@@ -217,26 +217,34 @@ class HistoryTests: XCTestCase {
     }
 
     func testHistoryFiltersMatchOnlyTheirIntendedStatusOrSource() {
-        let testCases: [(HistoryView.HistoryFilter, OrganizationStatus, OrganizationEntrySource, Bool)] = [
-            (.all, .completed, .manual, true),
-            (.all, .failed, .watchedFolder, true),
-            (.success, .completed, .manual, true),
-            (.success, .failed, .manual, false),
-            (.failed, .failed, .manual, true),
-            (.failed, .cancelled, .manual, false),
-            (.skipped, .skipped, .manual, true),
-            (.skipped, .cancelled, .manual, false),
-            (.cancelled, .cancelled, .manual, true),
-            (.cancelled, .skipped, .manual, false),
-            (.manual, .completed, .manual, true),
-            (.manual, .completed, .watchedFolder, false),
-            (.watched, .completed, .watchedFolder, true),
-            (.watched, .completed, .manual, false),
+        let testCases: [(HistoryView.HistoryFilter, OrganizationStatus, OrganizationEntrySource, Bool, Bool, Bool)] = [
+            (.all, .completed, .manual, false, false, true),
+            (.all, .failed, .watchedFolder, false, false, true),
+            (.undoable, .completed, .manual, false, true, true),
+            (.undoable, .partiallyUndone, .manual, false, true, true),
+            (.undoable, .completed, .manual, true, true, false),
+            (.undoable, .completed, .manual, false, false, false),
+            (.undoable, .failed, .manual, false, true, false),
+            (.failed, .failed, .manual, false, false, true),
+            (.failed, .cancelled, .manual, false, false, false),
+            (.skipped, .skipped, .manual, false, false, true),
+            (.skipped, .cancelled, .manual, false, false, false),
+            (.cancelled, .cancelled, .manual, false, false, true),
+            (.cancelled, .skipped, .manual, false, false, false),
+            (.manual, .completed, .manual, false, false, true),
+            (.manual, .completed, .watchedFolder, false, false, false),
+            (.watched, .completed, .watchedFolder, false, false, true),
+            (.watched, .completed, .manual, false, false, false),
         ]
 
-        for (filter, status, source, expectedMatch) in testCases {
+        for (filter, status, source, isUndone, hasOperations, expectedMatch) in testCases {
             XCTAssertEqual(
-                filter.includes(status: status, source: source),
+                filter.includes(
+                    status: status,
+                    source: source,
+                    isUndone: isUndone,
+                    hasOperations: hasOperations
+                ),
                 expectedMatch,
                 "\(filter.rawValue) produced the wrong result for \(status.rawValue), \(source.rawValue)"
             )
