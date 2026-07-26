@@ -8,6 +8,78 @@
 
 import SwiftUI
 
+private struct HistoryImpactSummary: Equatable {
+    var filesOrganized = 0
+    var foldersCreated = 0
+    var totalSessions = 0
+    var completedSessions = 0
+    var totalTimeSaved: TimeInterval = 0
+
+    init(entries: [OrganizationHistoryEntry] = []) {
+        totalSessions = entries.count
+
+        for entry in entries where entry.status == .completed {
+            filesOrganized += entry.filesOrganized
+            foldersCreated += entry.foldersCreated
+            completedSessions += 1
+            totalTimeSaved += entry.plan?.generationStats?.estimatedTimeSaved ?? 0
+        }
+    }
+
+    var successRate: Double {
+        guard totalSessions > 0 else { return 0 }
+        return Double(completedSessions) / Double(totalSessions)
+    }
+}
+
+private struct HistorySessionRow: Identifiable, Equatable {
+    let id: UUID
+    let folderName: String
+    let timestamp: Date
+    let status: OrganizationStatus
+    let filesOrganized: Int
+    let foldersCreated: Int
+    let duplicatesDeleted: Int?
+    let recoveredSpace: Int64?
+    let generationMetadata: String?
+
+    init(entry: OrganizationHistoryEntry) {
+        id = entry.id
+        folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+        timestamp = entry.timestamp
+        status = entry.status
+        filesOrganized = entry.filesOrganized
+        foldersCreated = entry.foldersCreated
+        duplicatesDeleted = entry.duplicatesDeleted
+        recoveredSpace = entry.recoveredSpace
+
+        if let stats = entry.plan?.generationStats {
+            let modelName = stats.compactModelName
+            generationMetadata = stats.hasBillableCost
+                ? "\(modelName) · \(GenerationStats.formatCost(stats.computedCost))"
+                : modelName
+        } else {
+            generationMetadata = nil
+        }
+    }
+}
+
+private struct HistorySessionRecord: Equatable {
+    let row: HistorySessionRow
+    let directoryPath: String
+    let source: OrganizationEntrySource
+    let isUndone: Bool
+    let hasOperations: Bool
+
+    init(entry: OrganizationHistoryEntry) {
+        row = HistorySessionRow(entry: entry)
+        directoryPath = entry.directoryPath
+        source = entry.source
+        isUndone = entry.isUndone
+        hasOperations = !(entry.operations?.isEmpty ?? true)
+    }
+}
+
 struct HistoryView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -23,50 +95,29 @@ struct HistoryView: View {
     @State private var showRedoModelPicker = false
     @State private var redoModelEntry: OrganizationHistoryEntry?
     @State private var activeNotificationRedoRequestID: UUID?
+    @State private var cachedEntries: [OrganizationHistoryEntry] = []
+    @State private var cachedSessionRecords: [HistorySessionRecord] = []
+    @State private var filteredManualEntries: [HistorySessionRow] = []
+    @State private var filteredWatchedEntries: [HistorySessionRow] = []
+    @State private var impactSummary = HistoryImpactSummary()
+    @State private var displayedEntryCount = 50
+    private let pageSize = 50
 
-    // Lazy loading state
-    @State private var displayedEntryCount: Int = 50
-    @State private var isLoadingMore: Bool = false
-    private let pageSize: Int = 50
-    private let loadMoreThreshold: Int = 10 // Load more when within 10 items of end
-
-    private var allFilteredEntries: [OrganizationHistoryEntry] {
-        let statusFiltered = organizer.history.entries.filter(selectedFilter.includes)
-
-        guard !searchText.isEmpty else { return statusFiltered }
-        let query = searchText.lowercased()
-        return statusFiltered.filter { entry in
-            entry.directoryPath.lowercased().contains(query) ||
-            URL(fileURLWithPath: entry.directoryPath).lastPathComponent.lowercased().contains(query)
-        }
+    private var hasFilteredEntries: Bool {
+        !filteredManualEntries.isEmpty || !filteredWatchedEntries.isEmpty
     }
 
-    private var manualEntries: [OrganizationHistoryEntry] {
-        Array(allFilteredEntries.filter { $0.source == .manual }.prefix(displayedEntryCount))
+    private var manualEntries: ArraySlice<HistorySessionRow> {
+        filteredManualEntries.prefix(displayedEntryCount)
     }
 
-    private var watchedEntries: [OrganizationHistoryEntry] {
-        Array(allFilteredEntries.filter { $0.source == .watchedFolder }.prefix(displayedEntryCount))
-    }
-
-    private var totalManualFilteredCount: Int {
-        allFilteredEntries.filter { $0.source == .manual }.count
-    }
-
-    private var totalWatchedFilteredCount: Int {
-        allFilteredEntries.filter { $0.source == .watchedFolder }.count
+    private var watchedEntries: ArraySlice<HistorySessionRow> {
+        filteredWatchedEntries.prefix(displayedEntryCount)
     }
 
     private var hasMoreEntries: Bool {
-        switch selectedFilter {
-        case .manual:
-            return manualEntries.count < totalManualFilteredCount
-        case .watched:
-            return watchedEntries.count < totalWatchedFilteredCount
-        case .all, .undoable, .failed, .skipped, .cancelled:
-            return manualEntries.count < totalManualFilteredCount ||
-                watchedEntries.count < totalWatchedFilteredCount
-        }
+        manualEntries.count < filteredManualEntries.count ||
+            watchedEntries.count < filteredWatchedEntries.count
     }
 
     private enum HistorySectionKind: Equatable {
@@ -119,15 +170,6 @@ struct HistoryView: View {
             }
         }
 
-        func includes(_ entry: OrganizationHistoryEntry) -> Bool {
-            includes(
-                status: entry.status,
-                source: entry.source,
-                isUndone: entry.isUndone,
-                hasOperations: !(entry.operations?.isEmpty ?? true)
-            )
-        }
-
         func includes(
             status: OrganizationStatus,
             source: OrganizationEntrySource,
@@ -151,15 +193,16 @@ struct HistoryView: View {
 
     var body: some View {
         Group {
-            if organizer.history.entries.count > 1 {
+            if cachedEntries.count > 1 {
                 content
                     .searchable(text: $searchText, prompt: "Search folders")
             } else {
                 content
             }
         }
-        .onChange(of: organizer.history.entries.count) { _, count in
-            if count <= 1 {
+        .onReceive(organizer.history.$entries) { entries in
+            refreshHistorySnapshot(entries)
+            if entries.count <= 1 {
                 searchText = ""
             }
         }
@@ -167,13 +210,13 @@ struct HistoryView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            if organizer.history.entries.isEmpty {
+            if cachedEntries.isEmpty {
                 ZStack(alignment: .topLeading) {
                     HistoryEmptyStateView()
                         .transition(TransitionStyles.scaleAndFade)
 
                     HistoryHeader(
-                        manager: organizer,
+                        totalSessions: impactSummary.totalSessions,
                         selectedFilter: $selectedFilter,
                         showsControls: false,
                         onClearHistory: {
@@ -186,7 +229,7 @@ struct HistoryView: View {
             } else {
                 // Header - matches DuplicatesView style
                 HistoryHeader(
-                    manager: organizer,
+                    totalSessions: impactSummary.totalSessions,
                     selectedFilter: $selectedFilter,
                     showsControls: true,
                     onClearHistory: {
@@ -197,7 +240,7 @@ struct HistoryView: View {
                 Divider()
 
                 ZStack {
-                    if !searchText.isEmpty && allFilteredEntries.isEmpty {
+                    if !searchText.isEmpty && !hasFilteredEntries {
                         HistorySearchEmptyStateView(searchText: searchText, onClear: { searchText = "" })
                             .transition(TransitionStyles.scaleAndFade)
                     } else {
@@ -209,8 +252,8 @@ struct HistoryView: View {
                 .opacity(contentOpacity)
             }
         }
-        .emptyStateWorkflowGradient(isVisible: organizer.history.entries.isEmpty)
-        .animation(.pageTransition, value: organizer.history.entries.isEmpty)
+        .emptyStateWorkflowGradient(isVisible: cachedEntries.isEmpty)
+        .animation(.pageTransition, value: cachedEntries.isEmpty)
         .navigationTitle("History")
         .disabled(isProcessing)
         .overlay {
@@ -263,11 +306,12 @@ struct HistoryView: View {
             consumePendingNotificationActionIfNeeded()
         }
         .onChange(of: selectedFilter) { _, _ in
-            // Reset pagination when filter changes
             displayedEntryCount = pageSize
+            refreshFilteredEntries()
         }
         .onChange(of: searchText) { _, _ in
             displayedEntryCount = pageSize
+            refreshFilteredEntries()
         }
         .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
             consumePendingNotificationActionIfNeeded()
@@ -280,35 +324,44 @@ struct HistoryView: View {
     }
 
     private var historyEntriesScroll: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                HistorySummaryCard(history: organizer.history)
-                    .padding(.top, 16)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("History Summary")
+        List {
+            HistorySummaryCard(summary: impactSummary)
+                .padding(.top, 10)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("History Summary")
+                .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 12, trailing: 28))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
 
-                historySessionsSection(primarySectionKind)
+            historySessionsSection(primarySectionKind)
 
-                if showsSecondaryWatchedSection {
-                    historySessionsSection(.watched)
-                }
-
-                if hasMoreEntries {
-                    LoadMoreButton(isLoading: isLoadingMore) {
-                        loadMoreEntries()
-                    }
-                    .padding(.vertical, 16)
-                }
+            if showsSecondaryWatchedSection {
+                historySessionsSection(.watched)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 24)
+
+            if hasMoreEntries {
+                LoadMoreHistoryRow {
+                    displayedEntryCount += pageSize
+                }
+                .task(id: displayedEntryCount) {
+                    await Task.yield()
+                    guard hasMoreEntries else { return }
+                    displayedEntryCount += pageSize
+                }
+                .listRowInsets(EdgeInsets(top: 10, leading: 28, bottom: 16, trailing: 28))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 
     @ViewBuilder
     private func historySessionsSection(_ kind: HistorySectionKind) -> some View {
         let entries = kind == .manual ? manualEntries : watchedEntries
-        let totalCount = kind == .manual ? totalManualFilteredCount : totalWatchedFilteredCount
+        let totalCount = kind == .manual ? filteredManualEntries.count : filteredWatchedEntries.count
 
         if !entries.isEmpty {
             HStack {
@@ -320,50 +373,93 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
                     .numericTextTransition(animationValue: totalCount)
             }
+            .listRowInsets(EdgeInsets(top: 8, leading: 28, bottom: 4, trailing: 28))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
 
-            ForEach(entries.indices, id: \.self) { index in
-                let entry = entries[index]
+            ForEach(entries) { entry in
                 HistorySessionCard(
                     entry: entry,
-                    isSelected: selectedEntry == entry,
+                    isSelected: selectedEntry?.id == entry.id,
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
-                        selectEntry(entry)
+                        selectEntry(id: entry.id)
                     },
                     onTryAgain: {
-                        redoModelEntry = entry
-                        showRedoModelPicker = true
+                        prepareTryAgain(id: entry.id)
                     }
                 )
-                .animatedAppearance(delay: Double(index) * (kind == .manual ? 0.03 : 0.02))
-                .onAppear {
-                    if index >= entries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                        loadMoreEntries()
-                    }
-                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+
+            if kind == .manual && showsSecondaryWatchedSection {
+                Color.clear
+                    .frame(height: 4)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
         }
     }
 
-    private func loadMoreEntries() {
-        guard !isLoadingMore && hasMoreEntries else { return }
-
-        isLoadingMore = true
-
-        // Simulate a small delay for better UX (shows loading state)
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
-
-            displayedEntryCount += pageSize
-            isLoadingMore = false
-        }
+    private func refreshHistorySnapshot(_ entries: [OrganizationHistoryEntry]) {
+        let records = entries.map(HistorySessionRecord.init)
+        cachedEntries = entries
+        cachedSessionRecords = records
+        impactSummary = HistoryImpactSummary(entries: entries)
+        refreshFilteredEntries(in: records)
     }
 
-    private func selectEntry(_ entry: OrganizationHistoryEntry) {
+    private func refreshFilteredEntries() {
+        refreshFilteredEntries(in: cachedSessionRecords)
+    }
+
+    private func refreshFilteredEntries(in records: [HistorySessionRecord]) {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var manual: [HistorySessionRow] = []
+        var watched: [HistorySessionRow] = []
+        manual.reserveCapacity(records.count)
+        watched.reserveCapacity(records.count / 4)
+
+        for record in records {
+            guard selectedFilter.includes(
+                status: record.row.status,
+                source: record.source,
+                isUndone: record.isUndone,
+                hasOperations: record.hasOperations
+            ) else {
+                continue
+            }
+            guard query.isEmpty || record.directoryPath.localizedCaseInsensitiveContains(query) else {
+                continue
+            }
+
+            switch record.source {
+            case .manual:
+                manual.append(record.row)
+            case .watchedFolder:
+                watched.append(record.row)
+            }
+        }
+
+        filteredManualEntries = manual
+        filteredWatchedEntries = watched
+    }
+
+    private func selectEntry(id: UUID) {
+        guard let entry = cachedEntries.first(where: { $0.id == id }) else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             selectedEntry = entry
             showingDetail = true
         }
+    }
+
+    private func prepareTryAgain(id: UUID) {
+        guard let entry = cachedEntries.first(where: { $0.id == id }) else { return }
+        redoModelEntry = entry
+        showRedoModelPicker = true
     }
 
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
@@ -430,7 +526,7 @@ struct HistoryView: View {
 // MARK: - History Header
 
 struct HistoryHeader: View {
-    @ObservedObject var manager: FolderOrganizer
+    let totalSessions: Int
     @Binding var selectedFilter: HistoryView.HistoryFilter
     var showsControls: Bool = true
     let onClearHistory: () -> Void
@@ -459,15 +555,15 @@ struct HistoryHeader: View {
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .lineLimit(1)
 
-                Text("\(manager.history.totalSessions) runs")
+                Text("\(totalSessions) runs")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
-                    .numericTextTransition(animationValue: manager.history.totalSessions)
-                    .accessibilityLabel("\(manager.history.totalSessions) runs recorded")
+                    .numericTextTransition(animationValue: totalSessions)
+                    .accessibilityLabel("\(totalSessions) runs recorded")
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("History, \(manager.history.totalSessions) runs")
+            .accessibilityLabel("History, \(totalSessions) runs")
 
             Spacer(minLength: 12)
 
@@ -507,7 +603,7 @@ struct HistoryHeader: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(manager.history.entries.isEmpty)
+        .disabled(totalSessions == 0)
         .accessibilityLabel("Clear all history")
         .accessibilityIdentifier("ClearHistoryButton")
     }
@@ -550,15 +646,15 @@ private struct HistoryNavigatorPicker: View {
 
 // MARK: - History Summary Card (Dashboard Impact Stats)
 
-struct HistorySummaryCard: View {
-    let history: OrganizationHistory
+private struct HistorySummaryCard: View {
+    let summary: HistoryImpactSummary
 
     private var filesOrganizedValue: String {
-        "\(history.totalFilesOrganized)"
+        "\(summary.filesOrganized)"
     }
 
     private var timeSavedValue: String {
-        let seconds = history.totalTimeSaved
+        let seconds = summary.totalTimeSaved
         if seconds < 3600 {
             let minutes = seconds / 60.0
             return String(format: "%.1f", minutes)
@@ -569,26 +665,26 @@ struct HistorySummaryCard: View {
     }
 
     private var timeSavedLabel: String {
-        history.totalTimeSaved < 3600 ? "Minutes Saved" : "Hours Saved"
+        summary.totalTimeSaved < 3600 ? "Minutes Saved" : "Hours Saved"
     }
 
     private var foldersCreatedValue: String {
-        "\(history.totalFoldersCreated)"
+        "\(summary.foldersCreated)"
     }
 
     private var totalSessionsValue: String {
-        "\(history.totalSessions)"
+        "\(summary.totalSessions)"
     }
 
     private var successRateValue: String {
-        history.totalSessions > 0
-            ? "\(Int(history.successRate * 100))%"
+        summary.totalSessions > 0
+            ? "\(Int(summary.successRate * 100))%"
             : "—"
     }
 
     private var successRateLabel: String {
-        history.totalSessions > 0
-            ? "\(Int(history.successRate * 100)) percent"
+        summary.totalSessions > 0
+            ? "\(Int(summary.successRate * 100)) percent"
             : "not available"
     }
 
@@ -701,29 +797,31 @@ private struct HistoryStatItem: View {
 // MARK: - History Session Card
 
 private struct HistorySessionCardHeader: View {
-    let entry: OrganizationHistoryEntry
-    let generationMetadata: String?
+    let entry: HistorySessionRow
+    let timestampText: String
     let statusColor: Color
     let showsStatus: Bool
 
     var body: some View {
         HStack(spacing: 12) {
-            FolderThumbnailView(url: URL(fileURLWithPath: entry.directoryPath), size: CGSize(width: 32, height: 32))
-                .frame(width: 32)
+            Image(systemName: "folder.fill")
+                .font(.system(size: 25))
+                .foregroundStyle(.blue.gradient)
+                .frame(width: 32, height: 32)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
+                Text(entry.folderName)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
 
                 HStack(spacing: 10) {
                     HistorySessionSummary(entry: entry)
 
-                    Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
+                    Text(timestampText)
                         .lineLimit(1)
 
-                    if let generationMetadata {
+                    if let generationMetadata = entry.generationMetadata {
                         Label(generationMetadata, systemImage: "cpu")
                             .lineLimit(1)
                     }
@@ -750,7 +848,7 @@ private struct HistorySessionCardHeader: View {
 }
 
 private struct HistorySessionSummary: View {
-    let entry: OrganizationHistoryEntry
+    let entry: HistorySessionRow
 
     var body: some View {
         HStack(spacing: 4) {
@@ -774,27 +872,17 @@ private struct HistorySessionSummary: View {
             Image(systemName: systemImage)
             Text(value)
                 .monospacedDigit()
-                .numericTextTransition(animationValue: value)
         }
     }
 }
 
-struct HistorySessionCard: View {
-    let entry: OrganizationHistoryEntry
+private struct HistorySessionCard: View {
+    let entry: HistorySessionRow
     let isSelected: Bool
     let onSelect: () -> Void
     let onTryAgain: () -> Void
 
     @State private var isHovered = false
-
-    private var generationMetadata: String? {
-        guard let stats = entry.plan?.generationStats else { return nil }
-        let modelName = stats.compactModelName
-        if stats.hasBillableCost {
-            return "\(modelName) · \(GenerationStats.formatCost(stats.computedCost))"
-        }
-        return modelName
-    }
 
     private var statusColor: Color {
         switch entry.status {
@@ -816,13 +904,15 @@ struct HistorySessionCard: View {
     }
 
     var body: some View {
+        let timestampText = entry.timestamp.formatted(date: .abbreviated, time: .shortened)
+
         HStack(spacing: 4) {
             Button {
                 onSelect()
             } label: {
                 HistorySessionCardHeader(
                     entry: entry,
-                    generationMetadata: generationMetadata,
+                    timestampText: timestampText,
                     statusColor: statusColor,
                     showsStatus: !canTryAgain
                 )
@@ -831,7 +921,7 @@ struct HistorySessionCard: View {
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
-                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.displayName)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+                "\(entry.folderName), \(entry.status.displayName)\(entry.generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(timestampText)"
             )
             .accessibilityHint("Open session details")
             .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
@@ -863,18 +953,39 @@ struct HistorySessionCard: View {
                 .padding(.trailing, 12)
                 .accessibilityHidden(true)
         }
-        .background(.ultraThinMaterial)
+        .background(
+            isHovered
+                ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.055)
+                : Color(NSColor.controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 16)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
         )
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+private struct LoadMoreHistoryRow: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("Load More History", systemImage: "chevron.down.circle.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Load more history entries")
+        .accessibilityIdentifier("LoadMoreHistoryButton")
     }
 }
 
@@ -2403,46 +2514,6 @@ private struct FolderHistoryFileRow: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(file.displayName), \(file.formattedSize)")
-    }
-}
-
-// MARK: - Load More Button
-
-struct LoadMoreButton: View {
-    let isLoading: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if isLoading {
-                    CometLoader(size: 16, lineWidth: 2)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: "chevron.down.circle.fill")
-                        .font(.system(size: 16))
-                }
-
-                Text(isLoading ? "Loading..." : "Load More History")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-            .foregroundColor(.accentColor)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isLoading)
-        .accessibilityLabel(isLoading ? "Loading more history entries" : "Load more history entries")
-        .accessibilityIdentifier("LoadMoreHistoryButton")
     }
 }
 
