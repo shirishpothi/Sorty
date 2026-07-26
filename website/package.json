@@ -15,7 +15,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "react": "^19",
     "react-dom": "^19",
     "shadcn": "^4.8.0",
@@ -28,19 +28,20 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9.0.0",
-    "eslint-config-next": "16.2.6",
-    "postcss": "^8.5.16",
+    "eslint-config-next": "16.2.11",
+    "postcss": "^8.5.18",
     "tailwindcss": "^4.2.0",
     "typescript": "5.7.3"
   },
   "pnpm": {
     "overrides": {
-      "@hono/node-server": "2.0.5",
+      "@hono/node-server": "2.0.10",
       "body-parser": "2.3.0",
-      "brace-expansion@>=3.0.0": "5.0.7",
+      "brace-expansion@>=3.0.0": "5.0.8",
       "fast-uri": "3.1.4",
       "hono": "4.12.27",
-      "postcss": "8.5.16",
+      "js-yaml": "4.3.0",
+      "postcss": "8.5.18",
       "sharp": "0.35.0"
     }
   }
