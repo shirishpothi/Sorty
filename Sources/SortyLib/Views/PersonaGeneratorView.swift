@@ -37,8 +37,8 @@ struct PersonaGeneratorView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 20) {
-                if isHoning && !questions.isEmpty {
-                    honingView
+                if isHoning, let question = currentHoningQuestion {
+                    honingView(question: question)
                 } else {
                     initialInputView
                 }
@@ -223,10 +223,8 @@ struct PersonaGeneratorView: View {
         }
     }
     
-    private var honingView: some View {
+    private func honingView(question: HoningQuestion) -> some View {
         VStack(spacing: 20) {
-            let question = questions[currentQuestionIndex]
-
             VStack(spacing: 10) {
                 Text("Refining Your Persona")
                     .font(.title3.weight(.bold))
@@ -319,6 +317,11 @@ struct PersonaGeneratorView: View {
         answers[question.id] = option
     }
 
+    private var currentHoningQuestion: HoningQuestion? {
+        guard questions.indices.contains(currentQuestionIndex) else { return nil }
+        return questions[currentQuestionIndex]
+    }
+
     private var currentPromptSuggestion: String {
         promptSuggestions[promptSuggestionIndex % promptSuggestions.count]
     }
@@ -336,7 +339,12 @@ struct PersonaGeneratorView: View {
     }
     
     private func startHoning() {
+        guard !isLoadingQuestions else { return }
+
         isLoadingQuestions = true
+        currentQuestionIndex = 0
+        answers.removeAll()
+
         Task {
             do {
                 questions = try await honingEngine.generateQuestions(from: prompt, config: settingsViewModel.config)
