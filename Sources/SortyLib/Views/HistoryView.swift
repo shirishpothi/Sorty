@@ -599,13 +599,14 @@ struct HistoryHeader: View {
     }
 
     private var filterPicker: some View {
-        LiquidGlassSegmentedControl(
-            selection: $selectedFilter,
-            options: HistoryView.HistoryFilter.allCases,
-            minSegmentHeight: controlsHeight
-        ) { filter, _ in
-            Text(LocalizedStringKey(filter.rawValue))
+        Picker("Filter history sessions", selection: $selectedFilter) {
+            ForEach(HistoryView.HistoryFilter.allCases) { filter in
+                Text(LocalizedStringKey(filter.rawValue))
+                    .tag(filter)
+            }
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
         .frame(height: controlsHeight)
         .accessibilityLabel("Filter history sessions")
         .accessibilityIdentifier("HistoryFilterPicker")
