@@ -332,7 +332,7 @@ final class PersonaGeneratorTests: XCTestCase {
 
     func testExtractsQuestionsArrayAfterLeadingProgressText() {
         let response = """
-        I will identify the three missing preferences.
+        I will identify the missing preferences.
         [{"id":"q1","text":"One?","options":["A","B","C"]}]
         """
 
@@ -340,6 +340,59 @@ final class PersonaGeneratorTests: XCTestCase {
             PersonaHoningEngine.extractJSONArray(from: response),
             #"[{"id":"q1","text":"One?","options":["A","B","C"]}]"#
         )
+    }
+
+    func testAcceptsDynamicClarificationQuestionCount() throws {
+        let questions = (1...7).map {
+            HoningQuestion(
+                id: "q\($0)",
+                text: "Question \($0)?",
+                options: ["Choice A", "Choice B", "Choice C"]
+            )
+        }
+        let data = try JSONEncoder().encode(questions)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+        XCTAssertEqual(PersonaHoningEngine.validatedQuestions(from: json)?.count, 7)
+
+        let twoQuestionData = try JSONEncoder().encode(Array(questions.prefix(2)))
+        let twoQuestionJSON = try XCTUnwrap(String(data: twoQuestionData, encoding: .utf8))
+        XCTAssertEqual(PersonaHoningEngine.validatedQuestions(from: twoQuestionJSON)?.count, 2)
+    }
+
+    func testRejectsClarificationQuestionCountOutsideTwoThroughSeven() throws {
+        let oneQuestion = [
+            HoningQuestion(text: "Only question?", options: ["A", "B", "C"])
+        ]
+        let eightQuestions = (1...8).map {
+            HoningQuestion(
+                text: "Question \($0)?",
+                options: ["A", "B", "C"]
+            )
+        }
+
+        let oneJSON = try XCTUnwrap(
+            String(data: JSONEncoder().encode(oneQuestion), encoding: .utf8)
+        )
+        let eightJSON = try XCTUnwrap(
+            String(data: JSONEncoder().encode(eightQuestions), encoding: .utf8)
+        )
+
+        XCTAssertNil(PersonaHoningEngine.validatedQuestions(from: oneJSON))
+        XCTAssertNil(PersonaHoningEngine.validatedQuestions(from: eightJSON))
+    }
+
+    func testDecodesPolishedInstructionsWithoutLeadingCommentary() throws {
+        let response = """
+        I will preserve the user's intent.
+        {"prompt":"## Primary Grouping\\nGroup files by confirmed project code.\\n\\n## Ambiguous Files\\nLeave uncertain files for review."}
+        """
+
+        let prompt = try PersonaGenerator.decodePolishedInstructions(from: response)
+
+        XCTAssertTrue(prompt.hasPrefix("## Primary Grouping"))
+        XCTAssertTrue(prompt.contains("## Ambiguous Files"))
+        XCTAssertFalse(prompt.contains("preserve the user's intent"))
     }
 
     func testGenericCodexTextGenerationDoesNotUseOrganizationSchema() {

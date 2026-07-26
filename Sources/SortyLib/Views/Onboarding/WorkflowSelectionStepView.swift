@@ -10,7 +10,6 @@ import SwiftUI
 
 public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var personaManager: PersonaManager
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @State private var hasAppeared = false
     @State private var isCreatingCustom = false
@@ -111,7 +110,7 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
 
-                    CompactCreatePersonaButton(
+                    CompactGeneratePersonaButton(
                         title: "Generate Another",
                         subtitle: "Try a different custom workflow idea",
                         isCreatingCustom: $isCreatingCustom
@@ -545,7 +544,7 @@ struct GeneratePersonaButton: View {
     }
 }
 
-struct CompactCreatePersonaButton: View {
+struct CompactGeneratePersonaButton: View {
     let title: String
     let subtitle: String
     @Binding var isCreatingCustom: Bool

@@ -10,15 +10,22 @@ import SwiftUI
 struct PersonaPickerView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var hoveringPersona: PersonaType?
     @State private var hoveringCustom: String?
     @State private var showingGenerator: Bool = false
-    @State private var showingEditor: Bool = false
-    @State private var opensGeneratorAfterEditorDismiss = false
-    @State private var editingPersona: CustomPersona?
+    @State private var showingChat: Bool = false
+    @State private var showingIconPicker: Bool = false
+    @State private var showingDeleteConfirmation: Bool = false
+    @State private var personaPendingDeletion: CustomPersona?
     @State private var localPrompt: String = ""
+    @State private var localName: String = ""
+    @State private var localDescription: String = ""
+    @State private var localIcon: String = "star.fill"
     @State private var showingInstructionsInfo: Bool = false
-    @FocusState private var isEditorFocused: Bool
+    @State private var polishError: String?
+    @StateObject private var promptPolisher = PersonaGenerator()
+    @FocusState private var focusedField: PersonaEditableField?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -36,16 +43,8 @@ struct PersonaPickerView: View {
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .padding(.trailing, 8)
-
-                Button(action: { showingEditor = true }) {
-                    Label("Create", systemImage: "plus")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
             }
 
-            // Built-in personas
             LazyVGrid(columns: personaGridColumns, spacing: 8) {
                 ForEach(PersonaType.allCases, id: \.self) { persona in
                     PersonaButton(
@@ -67,7 +66,6 @@ struct PersonaPickerView: View {
                 }
             }
 
-            // Custom personas
             if !customStore.customPersonas.isEmpty {
                 Divider()
 
@@ -88,15 +86,8 @@ struct PersonaPickerView: View {
                                     updateLocalPrompt()
                                 }
                             },
-                            onEdit: {
-                                editingPersona = custom
-                                showingEditor = true
-                            },
                             onDelete: {
-                                customStore.deletePersona(id: custom.id)
-                                if personaManager.selectedCustomPersonaId == custom.id {
-                                    personaManager.selectedCustomPersonaId = nil
-                                }
+                                requestDeletion(of: custom)
                             }
                         )
                         .onHover { hovering in
@@ -106,9 +97,8 @@ struct PersonaPickerView: View {
                 }
             }
 
-            // Built-in persona description
             if selectedCustomPersona == nil {
-                Text(currentDescription)
+                Text(personaManager.selectedPersona.description)
                     .font(.caption2)
                     .foregroundColor(.secondary.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -120,34 +110,31 @@ struct PersonaPickerView: View {
 
             personaInstructionsEditor
         }
-        .sheet(isPresented: $showingEditor, onDismiss: finishEditorDismissal) {
-            PersonaEditorView(
-                store: customStore,
-                editing: editingPersona,
-                onDelete: { persona in
-                    customStore.deletePersona(id: persona.id)
-                    if personaManager.selectedCustomPersonaId == persona.id {
-                        personaManager.selectedCustomPersonaId = nil
-                    }
-                },
-                onGeneratePersona: {
-                    opensGeneratorAfterEditorDismiss = true
-                    showingEditor = false
-                }
-            )
-                .environmentObject(customStore)
-        }
         .sheet(isPresented: $showingGenerator) {
             PersonaGeneratorView(
                 store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId
             )
             .environmentObject(customStore)
         }
+        .sheet(isPresented: $showingChat) {
+            PersonaChatView(promptModifier: localPrompt)
+                .environmentObject(settingsViewModel)
+        }
+        .alert("Delete Persona?", isPresented: $showingDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                deletePendingPersona()
+            }
+            Button("Cancel", role: .cancel) {
+                personaPendingDeletion = nil
+            }
+        } message: {
+            Text("This permanently removes \(personaPendingDeletion?.name ?? "this persona").")
+        }
         .onAppear {
             updateLocalPrompt()
         }
-        .onChange(of: isEditorFocused) { oldValue, newValue in
-            if !newValue {
+        .onChange(of: focusedField) { oldValue, newValue in
+            if oldValue != nil, oldValue != newValue {
                 saveChangesIfNeeded()
             }
         }
@@ -157,73 +144,15 @@ struct PersonaPickerView: View {
         .onChange(of: customStore.customPersonas) { _, _ in
             updateLocalPrompt()
         }
-    }
-
-    private func finishEditorDismissal() {
-        editingPersona = nil
-        guard opensGeneratorAfterEditorDismiss else { return }
-
-        opensGeneratorAfterEditorDismiss = false
-        showingGenerator = true
+        .onDisappear {
+            saveChangesIfNeeded()
+        }
     }
 
     @ViewBuilder
     private var personaInstructionsEditor: some View {
         if let custom = selectedCustomPersona {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: custom.icon)
-                        .foregroundStyle(.purple)
-                        .frame(width: 22, height: 22)
-                        .accessibilityHidden(true)
-
-                    Text(custom.name)
-                        .foregroundStyle(.purple)
-                        .fontWeight(.semibold)
-                        + Text(" System Prompt")
-                        .font(.subheadline.weight(.medium))
-
-                    instructionsInfoButton(
-                        text: "These instructions are saved with \(custom.name) and apply whenever you use this persona. Use them for preferences such as folder count, hierarchy depth, or grouping rules.",
-                        accessibilityLabel: "\(custom.name) instruction information"
-                    )
-
-                    Spacer()
-
-                    Button {
-                        saveChangesIfNeeded()
-                        HapticFeedbackManager.shared.tap()
-                        editingPersona = custom
-                        showingEditor = true
-                    } label: {
-                        Label("Edit Persona", systemImage: "pencil")
-                    }
-                    .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                }
-
-                TextEditor(text: $localPrompt)
-                    .focused($isEditorFocused)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(4)
-                    .background(alignment: .topLeading) {
-                        Text(localPrompt.isEmpty ? " " : localPrompt + " ")
-                            .font(.system(.body, design: .monospaced))
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .foregroundColor(.clear)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(minHeight: 70, maxHeight: 320)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
-                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
-                    .accessibilityLabel("\(custom.name) system prompt")
-            }
+            customPersonaEditor(custom)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
@@ -251,7 +180,7 @@ struct PersonaPickerView: View {
                 }
 
                 TextEditor(text: $localPrompt)
-                    .focused($isEditorFocused)
+                    .focused($focusedField, equals: .prompt)
                     .font(.system(.body, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(4)
@@ -273,6 +202,176 @@ struct PersonaPickerView: View {
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
             }
         }
+    }
+
+    private func customPersonaEditor(_ custom: CustomPersona) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showingIconPicker = true
+                } label: {
+                    Image(systemName: localIcon)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.purple)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Color.purple.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingIconPicker) {
+                    iconPicker
+                }
+                .help("Choose a persona icon")
+                .accessibilityLabel("Choose persona icon")
+
+                VStack(spacing: 8) {
+                    TextField("Persona name", text: $localName)
+                        .focused($focusedField, equals: .name)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.subheadline.weight(.semibold))
+                        .onChange(of: localName) { _, value in
+                            if value.count > 20 {
+                                localName = String(value.prefix(20))
+                            }
+                        }
+
+                    TextField(
+                        "Describe when and how to use this persona",
+                        text: $localDescription,
+                        axis: .vertical
+                    )
+                    .focused($focusedField, equals: .description)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+                }
+
+                Button(role: .destructive) {
+                    requestDeletion(of: custom)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                .help("Delete persona")
+                .accessibilityLabel("Delete \(custom.name)")
+            }
+
+            Divider()
+
+            HStack(alignment: .center, spacing: 8) {
+                Text("System Prompt")
+                    .font(.subheadline.weight(.semibold))
+
+                instructionsInfoButton(
+                    text: "These editable instructions are saved with \(localName.isEmpty ? custom.name : localName). Use the wand to turn a rough draft into clear, structured rules without changing what you want.",
+                    accessibilityLabel: "\(custom.name) instruction information"
+                )
+
+                Spacer()
+
+                if promptPolisher.isGenerating {
+                    SortyGradientCircularLoader(size: 11, lineWidth: 2)
+                        .accessibilityLabel("Cleaning up prompt")
+                }
+
+                Button {
+                    polishPrompt()
+                } label: {
+                    Label("Clean Up", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                .disabled(
+                    localPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || promptPolisher.isGenerating
+                )
+                .help("Clean up and structure this prompt")
+
+                Button {
+                    saveChangesIfNeeded()
+                    HapticFeedbackManager.shared.tap()
+                    showingChat = true
+                } label: {
+                    Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
+                }
+                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                .disabled(localPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if localPrompt.isEmpty {
+                    Text("Write rough organization rules here, then use the wand to structure and improve them…")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
+                }
+
+                TextEditor(text: $localPrompt)
+                    .focused($focusedField, equals: .prompt)
+                    .font(.system(.body, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(4)
+                    .accessibilityLabel("\(custom.name) system prompt")
+            }
+            .frame(minHeight: 150, maxHeight: 340)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            }
+
+            if let polishError {
+                Label(polishError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var iconPicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Choose Icon")
+                .font(.headline)
+
+            ScrollView {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 40), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(personaIconOptions, id: \.self) { icon in
+                        Button {
+                            localIcon = icon
+                            showingIconPicker = false
+                            saveChangesIfNeeded()
+                            HapticFeedbackManager.shared.selection()
+                        } label: {
+                            Image(systemName: icon)
+                                .font(.system(size: 18, weight: .medium))
+                                .frame(width: 38, height: 38)
+                                .foregroundStyle(localIcon == icon ? Color.purple : Color.primary)
+                                .background(
+                                    localIcon == icon
+                                        ? Color.purple.opacity(0.14)
+                                        : Color.primary.opacity(0.04),
+                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(icon)
+                        .accessibilityLabel(icon)
+                    }
+                }
+            }
+            .frame(maxHeight: 270)
+        }
+        .padding(16)
+        .frame(width: 390)
+        .systemLiquidGlassPopover(cornerRadius: 12)
     }
 
     private func instructionsInfoButton(
@@ -304,21 +403,37 @@ struct PersonaPickerView: View {
     private func updateLocalPrompt() {
         if let custom = selectedCustomPersona {
             localPrompt = custom.promptModifier
+            localName = custom.name
+            localDescription = custom.description
+            localIcon = custom.icon
         } else {
             localPrompt = personaManager.customPrompts[personaManager.selectedPersona] ?? ""
+            localName = ""
+            localDescription = ""
+            localIcon = "star.fill"
         }
+        polishError = nil
     }
 
     private func saveChangesIfNeeded() {
         if let custom = selectedCustomPersona {
-            guard custom.promptModifier != localPrompt else { return }
+            let trimmedName = localName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolvedName = trimmedName.isEmpty ? custom.name : trimmedName
+            guard custom.name != resolvedName
+                    || custom.icon != localIcon
+                    || custom.description != localDescription
+                    || custom.promptModifier != localPrompt
+            else {
+                return
+            }
 
             var updated = custom
             updated.update(
-                name: custom.name,
-                icon: custom.icon,
-                description: custom.description,
-                prompt: localPrompt
+                name: resolvedName,
+                icon: localIcon,
+                description: localDescription,
+                prompt: localPrompt,
+                instructionSuggestions: custom.instructionSuggestions
             )
             customStore.updatePersona(updated)
             return
@@ -332,20 +447,68 @@ struct PersonaPickerView: View {
         }
     }
 
-    private var currentDescription: String {
-        if let customId = personaManager.selectedCustomPersonaId,
-            let custom = customStore.customPersonas.first(where: { $0.id == customId })
-        {
-            return custom.description
+    private func polishPrompt() {
+        let draft = localPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !draft.isEmpty, !promptPolisher.isGenerating else { return }
+
+        let personaID = selectedCustomPersona?.id
+        polishError = nil
+        saveChangesIfNeeded()
+        HapticFeedbackManager.shared.tap()
+
+        Task {
+            do {
+                let polished = try await promptPolisher.polishInstructions(
+                    draft,
+                    config: settingsViewModel.config
+                )
+                guard selectedCustomPersona?.id == personaID else { return }
+                guard localPrompt.trimmingCharacters(in: .whitespacesAndNewlines) == draft else {
+                    polishError = "The prompt changed while Sorty was working, so your newer draft was kept."
+                    return
+                }
+
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                    localPrompt = polished
+                }
+                saveChangesIfNeeded()
+                HapticFeedbackManager.shared.success()
+                NotificationManager.shared.showHUDInfo(
+                    title: "Prompt Cleaned Up",
+                    message: "Your intent was preserved and the rules were structured automatically.",
+                    icon: "wand.and.stars",
+                    iconColor: .purple,
+                    identifier: "persona-prompt-polished"
+                )
+            } catch {
+                polishError = error.localizedDescription
+                HapticFeedbackManager.shared.error()
+            }
         }
-        return personaManager.selectedPersona.description
     }
 
-    private var personaName: String {
-        if let custom = selectedCustomPersona {
-            return custom.name
+    private func requestDeletion(of persona: CustomPersona) {
+        personaPendingDeletion = persona
+        showingDeleteConfirmation = true
+        HapticFeedbackManager.shared.tap()
+    }
+
+    private func deletePendingPersona() {
+        guard let persona = personaPendingDeletion else { return }
+
+        customStore.deletePersona(id: persona.id)
+        if personaManager.selectedCustomPersonaId == persona.id {
+            personaManager.selectedCustomPersonaId = nil
         }
-        return personaManager.selectedPersona.displayName
+        personaPendingDeletion = nil
+        HapticFeedbackManager.shared.error()
+        NotificationManager.shared.showHUDInfo(
+            title: "Persona Deleted",
+            message: "\(persona.name) was removed.",
+            icon: "trash.fill",
+            iconColor: .red,
+            identifier: "persona-deleted"
+        )
     }
 
     private var selectedCustomPersona: CustomPersona? {
@@ -366,6 +529,12 @@ struct PersonaPickerView: View {
     }
 }
 
+private enum PersonaEditableField: Hashable {
+    case name
+    case description
+    case prompt
+}
+
 // MARK: - Custom Persona Button
 
 struct CustomPersonaButton: View {
@@ -373,7 +542,6 @@ struct CustomPersonaButton: View {
     let isSelected: Bool
     let isHovering: Bool
     let onSelect: () -> Void
-    let onEdit: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -409,7 +577,6 @@ struct CustomPersonaButton: View {
             onSelect()
         }
         .contextMenu {
-            Button("Edit", action: onEdit)
             Button("Delete", role: .destructive, action: onDelete)
         }
     }
@@ -581,6 +748,7 @@ struct CompactPersonaPicker: View {
     PersonaPickerView()
         .environmentObject(PersonaManager())
         .environmentObject(CustomPersonaStore())
+        .environmentObject(SettingsViewModel())
         .padding()
         .frame(width: 400)
 }

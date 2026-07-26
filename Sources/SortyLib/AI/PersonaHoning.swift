@@ -35,19 +35,23 @@ public struct HoningAnswer: Identifiable, Codable, Sendable {
 @MainActor
 public class PersonaHoningEngine: ObservableObject {
     private let metaQuestionPrompt = """
-    You ask three short multiple-choice questions that give Sorty enough concrete information to create a useful file-organization persona.
+    You ask the fewest useful clarification questions Sorty needs to create a faithful file-organization persona.
 
-    Return only a JSON array of exactly three objects:
+    Return only a JSON array containing between two and seven question objects:
     [
-      {"id":"q1","text":"Question?","options":["Choice A","Choice B","Choice C"]},
-      {"id":"q2","text":"Question?","options":["Choice A","Choice B","Choice C"]},
-      {"id":"q3","text":"Question?","options":["Choice A","Choice B","Choice C"]}
+      {"id":"q1","text":"Question?","options":["Choice A","Choice B","Choice C"]}
     ]
 
+    Choose the question count from the user's description:
+    - Ask two questions when the user's domain and desired result are already clear
+    - Add questions only when a missing answer would materially change the generated organization rules
+    - Use up to seven questions for vague, conflicting, or unusually complex descriptions
+
     Rules:
-    - Ask only about information that is missing from the description
+    - Never ask for information the user already supplied
     - If the description is vague or meaningless, first ask what kind of files or work this persona is for
-    - Then establish the primary grouping axis and one material ambiguity or naming preference
+    - Establish the primary grouping evidence, desired hierarchy, relevant file or filename signals, naming behavior when relevant, and how to handle ambiguity
+    - Ask only the subset of those topics that is genuinely missing
     - If the domain is clear, make every question and option specific to that domain
     - Each question is one sentence and each option is a concrete action in 8-24 words
     - Give exactly three mutually distinct options per question
@@ -58,7 +62,7 @@ public class PersonaHoningEngine: ObservableObject {
     
     public func generateQuestions(from description: String, config: AIConfig) async throws -> [HoningQuestion] {
         var genConfig = config
-        genConfig.maxTokens = 2000
+        genConfig.maxTokens = 4000
         
         let client = try AIClientFactory.createClient(config: genConfig)
         
@@ -67,7 +71,7 @@ public class PersonaHoningEngine: ObservableObject {
         \(description.trimmingCharacters(in: .whitespacesAndNewlines))
         USER DESCRIPTION END
 
-        Generate the three most useful clarification questions.
+        Generate only the clarification questions still needed.
         """
         
         let response = try await client.generateText(
@@ -77,10 +81,7 @@ public class PersonaHoningEngine: ObservableObject {
         )
         let jsonString = Self.extractJSONArray(from: response) ?? response
         
-        guard let data = jsonString.data(using: .utf8),
-              let questions = try? JSONDecoder().decode([HoningQuestion].self, from: data),
-              questions.count == 3,
-              questions.allSatisfy({ $0.options.count == 3 }) else {
+        guard let questions = Self.validatedQuestions(from: jsonString) else {
             LogManager.shared.log(
                 "Failed to decode honing questions (response length: \(jsonString.count) characters)",
                 level: .error,
@@ -89,6 +90,24 @@ public class PersonaHoningEngine: ObservableObject {
             return []
         }
         
+        return questions
+    }
+
+    nonisolated static func validatedQuestions(from json: String) -> [HoningQuestion]? {
+        guard let data = json.data(using: .utf8),
+              let questions = try? JSONDecoder().decode([HoningQuestion].self, from: data),
+              (2...7).contains(questions.count),
+              questions.allSatisfy({
+                  !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      && $0.options.count == 3
+                      && $0.options.allSatisfy {
+                          !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      }
+              })
+        else {
+            return nil
+        }
+
         return questions
     }
 

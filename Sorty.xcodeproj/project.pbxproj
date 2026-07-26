@@ -15,7 +15,6 @@
 		9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */; };
 		C836ED182D2842A2A579A019 /* LearningsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981E7344DFEC4943BA212BED /* LearningsView.swift */; };
 		85137445BF444F6A88D754C4 /* PersonaGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */; };
-		F6164663847540069EEB8A54 /* PersonaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5062580BD1774F0F962F59AB /* PersonaEditorView.swift */; };
 		94F6F33B4A704362BD91C1B7 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184F7C8F139045209C236DEF /* AboutView.swift */; };
 		2C347B73946C4BE3A65A11B3 /* PersonaHoning.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC10DBA81E6B4008B54F0753 /* PersonaHoning.swift */; };
 		FD2674BB5DB344E6834A0020 /* PersonaGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8F13C6A8A94E8E8A9CA15F /* PersonaGenerator.swift */; };
@@ -350,7 +349,6 @@
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		981E7344DFEC4943BA212BED /* LearningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsView.swift; sourceTree = "<group>"; };
 		DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaGeneratorView.swift; sourceTree = "<group>"; };
-		5062580BD1774F0F962F59AB /* PersonaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaEditorView.swift; sourceTree = "<group>"; };
 		184F7C8F139045209C236DEF /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		CC10DBA81E6B4008B54F0753 /* PersonaHoning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaHoning.swift; sourceTree = "<group>"; };
 		9C8F13C6A8A94E8E8A9CA15F /* PersonaGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaGenerator.swift; sourceTree = "<group>"; };
@@ -817,7 +815,6 @@
 				A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */,
 				981E7344DFEC4943BA212BED /* LearningsView.swift */,
 				DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */,
-				5062580BD1774F0F962F59AB /* PersonaEditorView.swift */,
 				184F7C8F139045209C236DEF /* AboutView.swift */,
 				3353FC3B2F0124320097CD23 /* AnalysisView.swift */,
 				3353FCBA2F0124320097CD23 /* AppCommands.swift */,

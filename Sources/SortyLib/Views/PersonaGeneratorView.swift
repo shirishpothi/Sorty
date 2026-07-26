@@ -22,7 +22,8 @@ struct PersonaGeneratorView: View {
     
     @StateObject private var honingEngine = PersonaHoningEngine()
     @State private var questions: [HoningQuestion] = []
-    @State private var answers: [String: String] = [:] // QuestionID -> SelectedOption
+    @State private var answers: [String: String] = [:]
+    @State private var customAnswers: [String: String] = [:]
     @State private var isHoning: Bool = false
     @State private var isLoadingQuestions: Bool = false
     @State private var currentQuestionIndex: Int = 0
@@ -70,12 +71,6 @@ struct PersonaGeneratorView: View {
             VStack(spacing: 10) {
                 Text("Building Your Persona")
                     .font(.title3.weight(.bold))
-
-                SortyGradientLoadingBar(
-                    accent: SortyDesignSystem.Colors.resolvedAccent,
-                    width: 220,
-                    height: 9
-                )
             }
 
             VStack(spacing: 6) {
@@ -103,6 +98,14 @@ struct PersonaGeneratorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
+        .beam(
+            .medium,
+            palette: .colorful,
+            theme: .dark,
+            active: !reduceMotion,
+            cornerRadius: 18,
+            strength: 1.0
+        )
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
@@ -267,6 +270,17 @@ struct PersonaGeneratorView: View {
                         selectAnswer(option, for: question)
                     }
                 }
+
+                TextField(
+                    "Or type exactly what you want…",
+                    text: customAnswerBinding(for: question)
+                )
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    guard answers[question.id] != nil else { return }
+                    advance(from: question)
+                }
+                .accessibilityLabel("Custom answer")
             }
             .padding(.horizontal, 30)
 
@@ -294,14 +308,7 @@ struct PersonaGeneratorView: View {
                 Spacer()
                 
                 Button(currentQuestionIndex == questions.count - 1 ? "Generate Persona" : "Next") {
-                    if currentQuestionIndex < questions.count - 1 {
-                        HapticFeedbackManager.shared.selection()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
-                            currentQuestionIndex += 1
-                        }
-                    } else {
-                        generateFinalPersona()
-                    }
+                    advance(from: question)
                 }
                 .buttonStyle(.sortyProminent)
                 .disabled(answers[question.id] == nil || generator.isGenerating)
@@ -314,7 +321,36 @@ struct PersonaGeneratorView: View {
     private func selectAnswer(_ option: String, for question: HoningQuestion) {
         guard answers[question.id] != option else { return }
         HapticFeedbackManager.shared.selection()
+        customAnswers[question.id] = ""
         answers[question.id] = option
+    }
+
+    private func customAnswerBinding(for question: HoningQuestion) -> Binding<String> {
+        Binding(
+            get: { customAnswers[question.id] ?? "" },
+            set: { value in
+                customAnswers[question.id] = value
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    answers[question.id] = nil
+                } else {
+                    answers[question.id] = trimmed
+                }
+            }
+        )
+    }
+
+    private func advance(from question: HoningQuestion) {
+        guard answers[question.id] != nil else { return }
+
+        if currentQuestionIndex < questions.count - 1 {
+            HapticFeedbackManager.shared.selection()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                currentQuestionIndex += 1
+            }
+        } else {
+            generateFinalPersona()
+        }
     }
 
     private var currentHoningQuestion: HoningQuestion? {
@@ -344,6 +380,7 @@ struct PersonaGeneratorView: View {
         isLoadingQuestions = true
         currentQuestionIndex = 0
         answers.removeAll()
+        customAnswers.removeAll()
 
         Task {
             do {
@@ -365,14 +402,12 @@ struct PersonaGeneratorView: View {
     
     private func generateFinalPersona() {
         Task {
-            var richAnswers: [HoningAnswer] = []
-            for (questionID, option) in answers {
-                if let question = questions.first(where: { $0.id == questionID }) {
-                    let richOption = "Q: \(question.text) -> A: \(option)"
-                    richAnswers.append(
-                        HoningAnswer(questionId: questionID, selectedOption: richOption)
-                    )
-                }
+            let richAnswers = questions.compactMap { question -> HoningAnswer? in
+                guard let answer = answers[question.id] else { return nil }
+                return HoningAnswer(
+                    questionId: question.id,
+                    selectedOption: "Q: \(question.text) -> A: \(answer)"
+                )
             }
 
             do {

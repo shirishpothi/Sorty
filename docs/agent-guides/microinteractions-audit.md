@@ -80,7 +80,7 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
 - **Concrete sites:**
   - `ExclusionRulesView` (rule editor, pencil/plus icons) → `.drawOn` on the
     "add rule" pencil when the sheet opens.
-  - `LearningsView` / `PersonaEditorView` / `PersonaGeneratorView` —
+  - `LearningsView` / `PersonaPickerView` / `PersonaGeneratorView` —
     `signature`/`pencil.line` learning-capture moments → `.drawOn` auto-loop while
     generating.
   - `AnalysisView:1653/1658/1719` already uses `.variableColor.iterative` — the
