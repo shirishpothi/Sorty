@@ -515,8 +515,21 @@ struct HistoryHeader: View {
 private struct HistoryNavigatorPicker: View {
     @Binding var selection: HistoryView.HistoryFilter
 
+    private var animatedSelection: Binding<HistoryView.HistoryFilter> {
+        Binding(
+            get: { selection },
+            set: { newSelection in
+                guard newSelection != selection else { return }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                    selection = newSelection
+                }
+                HapticFeedbackManager.shared.selection()
+            }
+        )
+    }
+
     var body: some View {
-        Picker("Filter history sessions", selection: $selection) {
+        Picker("Filter history sessions", selection: animatedSelection) {
             ForEach(HistoryView.HistoryFilter.allCases) { filter in
                 Label(filter.rawValue, systemImage: filter.systemImage)
                     .labelStyle(.iconOnly)
@@ -530,9 +543,6 @@ private struct HistoryNavigatorPicker: View {
         .labelsHidden()
         .controlSize(.large)
         .fixedSize()
-        .onChange(of: selection) { _, _ in
-            HapticFeedbackManager.shared.selection()
-        }
         .accessibilityIdentifier("HistoryFilterPicker")
     }
 }
@@ -744,14 +754,26 @@ private struct HistorySessionSummary: View {
     var body: some View {
         HStack(spacing: 4) {
             if entry.status == .duplicatesCleanup {
-                Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
+                metric("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
                 if let recovered = entry.recoveredSpace {
-                    Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
+                    metric(
+                        ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
+                        systemImage: "externaldrive"
+                    )
                 }
             } else {
-                Label("\(entry.filesOrganized)", systemImage: "doc")
-                Label("\(entry.foldersCreated)", systemImage: "folder")
+                metric("\(entry.filesOrganized)", systemImage: "doc")
+                metric("\(entry.foldersCreated)", systemImage: "folder")
             }
+        }
+    }
+
+    private func metric(_ value: String, systemImage: String) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: systemImage)
+            Text(value)
+                .monospacedDigit()
+                .numericTextTransition(animationValue: value)
         }
     }
 }
