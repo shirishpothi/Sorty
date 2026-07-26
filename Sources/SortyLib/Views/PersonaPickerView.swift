@@ -495,7 +495,8 @@ struct CompactPersonaPicker: View {
                 HapticFeedbackManager.shared.light()
             }
         }
-        .accessibilityLabel("Workflow")
+        .help("Organization style: \(currentName). \(currentDescription)")
+        .accessibilityLabel("Organization style")
         .accessibilityValue(currentName)
     }
 
@@ -515,6 +516,15 @@ struct CompactPersonaPicker: View {
             return custom.name
         }
         return personaManager.selectedPersona.displayName
+    }
+
+    private var currentDescription: String {
+        if let customId = personaManager.selectedCustomPersonaId,
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
+            return custom.description
+        }
+        return personaManager.selectedPersona.description
     }
 }
 
