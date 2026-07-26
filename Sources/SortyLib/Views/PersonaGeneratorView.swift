@@ -156,24 +156,13 @@ struct PersonaGeneratorView: View {
 
                     if prompt.isEmpty {
                         HStack(alignment: .top, spacing: 10) {
-                            ZStack(alignment: .topLeading) {
-                                Text(currentPromptSuggestion)
-                                    .font(.body)
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(2)
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    .id(promptSuggestionIndex)
-                                    .transition(
-                                        reduceMotion
-                                            ? .opacity
-                                            : .asymmetric(
-                                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                                removal: .move(edge: .top).combined(with: .opacity)
-                                            )
-                                    )
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
-                            .clipped()
+                            Text(currentPromptSuggestion)
+                                .font(.body)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
+                                .numericTextTransition(animationValue: promptSuggestionIndex)
+
+                            Spacer(minLength: 0)
 
                             Text("Tab")
                                 .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -196,14 +185,8 @@ struct PersonaGeneratorView: View {
                             while !Task.isCancelled {
                                 try? await Task.sleep(for: .seconds(3.5))
                                 guard !Task.isCancelled else { return }
-                                withAnimation(
-                                    reduceMotion
-                                        ? .easeOut(duration: 0.12)
-                                        : .easeInOut(duration: 0.22)
-                                ) {
-                                    promptSuggestionIndex =
-                                        (promptSuggestionIndex + 1) % promptSuggestions.count
-                                }
+                                promptSuggestionIndex =
+                                    (promptSuggestionIndex + 1) % promptSuggestions.count
                             }
                         }
                     }
