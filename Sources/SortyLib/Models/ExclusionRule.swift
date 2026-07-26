@@ -254,6 +254,9 @@ public struct ExclusionMatcher: Sendable {
     private let pathOnlyRules: [CompiledExclusionRule]
     private let metadataRules: [CompiledExclusionRule]
     private let directoryPruningRules: [CompiledExclusionRule]
+    private let sourceRules: [ExclusionRule]
+    private let referenceDate: Date
+    private let hasRelativeDateRules: Bool
 
     public init(rules: [ExclusionRule], referenceDate: Date = Date()) {
         let compiled = rules.compactMap {
@@ -267,10 +270,28 @@ public struct ExclusionMatcher: Sendable {
             .filter { !$0.isPathOnly }
             .sorted { $0.evaluationCost < $1.evaluationCost }
         self.directoryPruningRules = compiled.filter(\.canPruneDirectory)
+        self.sourceRules = rules
+        self.referenceDate = referenceDate
+        self.hasRelativeDateRules = rules.contains {
+            $0.isEnabled && ($0.type == .creationDate || $0.type == .modificationDate)
+        }
     }
 
     public var isEmpty: Bool {
         rules.isEmpty
+    }
+
+    public func needsRefresh(
+        at date: Date = Date(),
+        maximumAge: TimeInterval = 60
+    ) -> Bool {
+        hasRelativeDateRules
+            && date.timeIntervalSince(referenceDate) >= max(0, maximumAge)
+    }
+
+    public func refreshed(at date: Date = Date()) -> ExclusionMatcher {
+        guard hasRelativeDateRules else { return self }
+        return ExclusionMatcher(rules: sourceRules, referenceDate: date)
     }
 
     public func shouldExclude(_ file: FileItem) -> Bool {
@@ -978,24 +999,31 @@ public class ExclusionRulesManager: ObservableObject {
     // MARK: - Matching
 
     public func shouldExclude(_ file: FileItem) -> Bool {
-        compiledMatcher.shouldExclude(file)
+        matcherSnapshot().shouldExclude(file)
     }
 
     public func filterFiles(_ files: [FileItem]) -> [FileItem] {
-        compiledMatcher.filterFiles(files)
+        matcherSnapshot().filterFiles(files)
     }
 
     /// Returns which rules matched a file (for debugging)
     public func matchingRules(for file: FileItem) -> [ExclusionRule] {
-        let matchingIDs = Set(compiledMatcher.matchingRuleIDs(for: file))
+        let matchingIDs = Set(matcherSnapshot().matchingRuleIDs(for: file))
         return rules.filter { matchingIDs.contains($0.id) }
     }
 
     public func firstMatchingRule(for file: FileItem) -> ExclusionRule? {
-        guard let matchingID = compiledMatcher.firstMatchingRuleID(for: file) else {
+        guard let matchingID = matcherSnapshot().firstMatchingRuleID(for: file) else {
             return nil
         }
         return rules.first { $0.id == matchingID }
+    }
+
+    public func matcherSnapshot() -> ExclusionMatcher {
+        if compiledMatcher.needsRefresh() {
+            compiledMatcher = compiledMatcher.refreshed()
+        }
+        return compiledMatcher
     }
 
     // MARK: - Statistics
