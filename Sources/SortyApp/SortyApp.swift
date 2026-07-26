@@ -727,7 +727,7 @@ struct SortyApp: App {
             try? LearningsFileManager.save(profile: seededProfile)
         }
 
-        if env["XCUITEST_SEED_HISTORY_ENTRY"] == "1" {
+        if let historySeed = env["XCUITEST_SEED_HISTORY_ENTRY"] {
             let appSupport = FileManager.default.urls(
                 for: .applicationSupportDirectory, in: .userDomainMask
             ).first
@@ -742,18 +742,62 @@ struct SortyApp: App {
                     at: historyDirectory, withIntermediateDirectories: true)
             }
 
-            let seededEntries = [
-                OrganizationHistoryEntry(
-                    id: UUID(uuidString: "11111111-2222-3333-4444-555555555555") ?? UUID(),
-                    timestamp: Date(),
-                    directoryPath: "/tmp",
-                    filesOrganized: 4,
-                    foldersCreated: 2,
-                    success: true,
-                    status: .completed,
-                    source: .manual
-                )
-            ]
+            let seededEntries: [OrganizationHistoryEntry]
+            if historySeed == "filter_set" {
+                seededEntries = [
+                    OrganizationHistoryEntry(
+                        directoryPath: "/tmp/completed-manual",
+                        filesOrganized: 4,
+                        foldersCreated: 2,
+                        status: .completed,
+                        source: .manual
+                    ),
+                    OrganizationHistoryEntry(
+                        directoryPath: "/tmp/failed-manual",
+                        filesOrganized: 0,
+                        foldersCreated: 0,
+                        success: false,
+                        status: .failed,
+                        source: .manual
+                    ),
+                    OrganizationHistoryEntry(
+                        directoryPath: "/tmp/skipped-manual",
+                        filesOrganized: 0,
+                        foldersCreated: 0,
+                        success: false,
+                        status: .skipped,
+                        source: .manual
+                    ),
+                    OrganizationHistoryEntry(
+                        directoryPath: "/tmp/cancelled-manual",
+                        filesOrganized: 0,
+                        foldersCreated: 0,
+                        success: false,
+                        status: .cancelled,
+                        source: .manual
+                    ),
+                    OrganizationHistoryEntry(
+                        directoryPath: "/tmp/completed-watched",
+                        filesOrganized: 3,
+                        foldersCreated: 1,
+                        status: .completed,
+                        source: .watchedFolder
+                    ),
+                ]
+            } else {
+                seededEntries = [
+                    OrganizationHistoryEntry(
+                        id: UUID(uuidString: "11111111-2222-3333-4444-555555555555") ?? UUID(),
+                        timestamp: Date(),
+                        directoryPath: "/tmp",
+                        filesOrganized: 4,
+                        foldersCreated: 2,
+                        success: true,
+                        status: .completed,
+                        source: .manual
+                    )
+                ]
+            }
 
             if let data = try? JSONEncoder().encode(seededEntries) {
                 if let historyURL {

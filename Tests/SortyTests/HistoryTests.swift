@@ -215,4 +215,31 @@ class HistoryTests: XCTestCase {
         XCTAssertEqual(history.entries.first?.directoryPath, "/imported/104")
         XCTAssertEqual(history.entries.last?.directoryPath, "/imported/5")
     }
+
+    func testHistoryFiltersMatchOnlyTheirIntendedStatusOrSource() {
+        let testCases: [(HistoryView.HistoryFilter, OrganizationStatus, OrganizationEntrySource, Bool)] = [
+            (.all, .completed, .manual, true),
+            (.all, .failed, .watchedFolder, true),
+            (.success, .completed, .manual, true),
+            (.success, .failed, .manual, false),
+            (.failed, .failed, .manual, true),
+            (.failed, .cancelled, .manual, false),
+            (.skipped, .skipped, .manual, true),
+            (.skipped, .cancelled, .manual, false),
+            (.cancelled, .cancelled, .manual, true),
+            (.cancelled, .skipped, .manual, false),
+            (.manual, .completed, .manual, true),
+            (.manual, .completed, .watchedFolder, false),
+            (.watched, .completed, .watchedFolder, true),
+            (.watched, .completed, .manual, false),
+        ]
+
+        for (filter, status, source, expectedMatch) in testCases {
+            XCTAssertEqual(
+                filter.includes(status: status, source: source),
+                expectedMatch,
+                "\(filter.rawValue) produced the wrong result for \(status.rawValue), \(source.rawValue)"
+            )
+        }
+    }
 }

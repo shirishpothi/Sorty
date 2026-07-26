@@ -31,21 +31,7 @@ struct HistoryView: View {
     private let loadMoreThreshold: Int = 10 // Load more when within 10 items of end
 
     private var allFilteredEntries: [OrganizationHistoryEntry] {
-        let statusFiltered: [OrganizationHistoryEntry]
-        switch selectedFilter {
-        case .all:
-            statusFiltered = organizer.history.entries
-        case .success:
-            statusFiltered = organizer.history.entries.filter { $0.status == .completed }
-        case .failed:
-            statusFiltered = organizer.history.entries.filter { $0.status == .failed }
-        case .skipped:
-            statusFiltered = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
-        case .manual:
-            statusFiltered = organizer.history.entries.filter { $0.source == .manual }
-        case .watched:
-            statusFiltered = organizer.history.entries.filter { $0.source == .watchedFolder }
-        }
+        let statusFiltered = organizer.history.entries.filter(selectedFilter.includes)
 
         guard !searchText.isEmpty else { return statusFiltered }
         let query = searchText.lowercased()
@@ -77,17 +63,18 @@ struct HistoryView: View {
             return manualEntries.count < totalManualFilteredCount
         case .watched:
             return watchedEntries.count < totalWatchedFilteredCount
-        case .all, .success, .failed, .skipped:
+        case .all, .success, .failed, .skipped, .cancelled:
             return manualEntries.count < totalManualFilteredCount ||
                 watchedEntries.count < totalWatchedFilteredCount
         }
     }
 
-    enum HistoryFilter: String, CaseIterable, Identifiable {
+    enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "All"
         case success = "Success"
         case failed = "Failed"
         case skipped = "Skipped"
+        case cancelled = "Cancelled"
         case manual = "Manual"
         case watched = "Watched"
 
@@ -99,8 +86,25 @@ struct HistoryView: View {
             case .success: "checkmark.diamond"
             case .failed: "exclamationmark.triangle"
             case .skipped: "forward"
+            case .cancelled: "xmark.circle"
             case .manual: "hand.tap"
             case .watched: "eye"
+            }
+        }
+
+        func includes(_ entry: OrganizationHistoryEntry) -> Bool {
+            includes(status: entry.status, source: entry.source)
+        }
+
+        func includes(status: OrganizationStatus, source: OrganizationEntrySource) -> Bool {
+            switch self {
+            case .all: true
+            case .success: status == .completed
+            case .failed: status == .failed
+            case .skipped: status == .skipped
+            case .cancelled: status == .cancelled
+            case .manual: source == .manual
+            case .watched: source == .watchedFolder
             }
         }
     }
@@ -279,6 +283,10 @@ struct HistoryView: View {
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
                         selectEntry(entry)
+                    },
+                    onTryAgain: {
+                        redoModelEntry = entry
+                        showRedoModelPicker = true
                     }
                 )
                 .animatedAppearance(delay: Double(index) * 0.03)
@@ -312,6 +320,10 @@ struct HistoryView: View {
                         onSelect: {
                             HapticFeedbackManager.shared.selection()
                             selectEntry(entry)
+                        },
+                        onTryAgain: {
+                            redoModelEntry = entry
+                            showRedoModelPicker = true
                         }
                     )
                     .animatedAppearance(delay: Double(index) * 0.02)
@@ -677,6 +689,7 @@ private struct HistorySessionCardHeader: View {
     let entry: OrganizationHistoryEntry
     let generationMetadata: String?
     let statusColor: Color
+    let showsStatus: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -706,13 +719,15 @@ private struct HistorySessionCardHeader: View {
 
             Spacer()
 
-            Text(entry.status.rawValue.capitalized)
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(statusColor.opacity(0.15))
-                .foregroundStyle(statusColor)
-                .clipShape(Capsule())
+            if showsStatus {
+                Text(entry.status.rawValue.capitalized)
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(statusColor.opacity(0.15))
+                    .foregroundStyle(statusColor)
+                    .clipShape(Capsule())
+            }
 
             Image(systemName: "chevron.right")
                 .font(.caption)
@@ -746,6 +761,7 @@ struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
     let onSelect: () -> Void
+    let onTryAgain: () -> Void
 
     @State private var isHovered = false
 
@@ -770,24 +786,55 @@ struct HistorySessionCard: View {
         }
     }
 
-    var body: some View {
-        Button {
-            onSelect()
-        } label: {
-            HistorySessionCardHeader(
-                entry: entry,
-                generationMetadata: generationMetadata,
-                statusColor: statusColor
-            )
+    private var canTryAgain: Bool {
+        switch entry.status {
+        case .failed, .cancelled, .skipped: true
+        case .completed, .undo, .partiallyUndone, .duplicatesCleanup: false
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
-        )
-        .accessibilityHint("Open session details")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button {
+                onSelect()
+            } label: {
+                HistorySessionCardHeader(
+                    entry: entry,
+                    generationMetadata: generationMetadata,
+                    statusColor: statusColor,
+                    showsStatus: !canTryAgain
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+            )
+            .accessibilityHint("Open session details")
+            .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
+
+            if canTryAgain {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    onTryAgain()
+                } label: {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 30)
+                        .background(
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                            in: Capsule()
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .accessibilityLabel("Try this organization again")
+                .accessibilityHint("Choose a model and regenerate the organization")
+                .accessibilityIdentifier("TryAgainButton-\(entry.id.uuidString)")
+            }
+        }
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(

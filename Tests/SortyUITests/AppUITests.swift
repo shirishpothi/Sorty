@@ -229,38 +229,33 @@ final class AppUITests: XCTestCase {
     // MARK: - History View Functional Tests
 
     func testHistoryFilterActuallyFiltersEntries() throws {
-        navigateToView("HistorySidebarItem")
+        app.terminate()
+        app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://history"
+        app.launchEnvironment["XCUITEST_SEED_HISTORY_ENTRY"] = "filter_set"
+        app.launch()
 
-        // The filter dropdown should change what's displayed
-        let filterDropdown = app.buttons["HistoryFilterDropdown"]
+        let filterPicker = app.segmentedControls["HistoryFilterPicker"]
+        XCTAssertTrue(waitForElement(filterPicker, timeout: 8.0))
 
-        if waitForElement(filterDropdown, timeout: 2.0) {
-            // Remember initial state
-            let initialEntryCount = app.cells.count
+        let cards = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'HistorySessionCard-'")
+        )
+        let expectations: [(String, Int)] = [
+            ("All", 5),
+            ("Success", 2),
+            ("Failed", 1),
+            ("Skipped", 1),
+            ("Cancelled", 1),
+            ("Manual", 4),
+            ("Watched", 1),
+        ]
 
-            filterDropdown.click()
-            Thread.sleep(forTimeInterval: 0.3)
-
-            // Try to select "Success" filter
-            let successOption = app.buttons["Success"]
-            if successOption.exists {
-                successOption.click()
-                Thread.sleep(forTimeInterval: 0.5)
-
-                // The displayed entries may have changed
-                // We can't assert exact counts without knowing the data,
-                // but the filter should have been applied
-            }
-
-            // Reset to "All"
-            if waitForElement(filterDropdown) {
-                filterDropdown.click()
-                Thread.sleep(forTimeInterval: 0.3)
-                let allOption = app.buttons["All"]
-                if allOption.exists {
-                    allOption.click()
-                }
-            }
+        for (name, expectedCount) in expectations {
+            let filter = filterPicker.buttons[name]
+            XCTAssertTrue(waitForElement(filter), "\(name) filter should be available")
+            filter.click()
+            Thread.sleep(forTimeInterval: 0.2)
+            XCTAssertEqual(cards.count, expectedCount, "\(name) should show the expected history entries")
         }
     }
 
