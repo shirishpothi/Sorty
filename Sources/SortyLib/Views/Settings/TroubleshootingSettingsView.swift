@@ -227,6 +227,7 @@ private struct MaintenanceActionTile: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                            .numericTextTransition(animationValue: detail)
                     }
                 }
 
