@@ -538,60 +538,48 @@ struct HistoryHeader: View {
     @Binding var selectedFilter: HistoryView.HistoryFilter
     var showsControls: Bool = true
     let onClearHistory: () -> Void
-    private let controlsHeight: CGFloat = 31
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Group {
             if showsControls {
-                titleRow
+                populatedHeader
             } else {
                 emptyStateTitleRow
             }
-
-            if showsControls {
-                HStack(spacing: 12) {
-                    filterPicker
-                        .frame(maxWidth: .infinity)
-                        .frame(height: controlsHeight)
-
-                    clearHistoryButton
-                }
-            }
         }
         .padding(.horizontal, showsControls ? 28 : 32)
-        .padding(.top, showsControls ? 10 : 0)
-        .padding(.bottom, showsControls ? 10 : 0)
-        .background {
-            if showsControls {
-                Rectangle().fill(.bar)
-            }
-        }
+        .padding(.vertical, showsControls ? 12 : 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")
     }
 
-    private var titleRow: some View {
-        HStack(spacing: 12) {
+    private var populatedHeader: some View {
+        HStack(spacing: 16) {
             HStack(spacing: 8) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.blue.gradient)
                 Text("History")
-                    .font(.title3.bold())
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.9)
+
+                Text("\(manager.history.totalSessions) runs")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                    .numericTextTransition(animationValue: manager.history.totalSessions)
+                    .accessibilityLabel("\(manager.history.totalSessions) runs recorded")
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("History")
+            .accessibilityLabel("History, \(manager.history.totalSessions) runs")
 
-            Text("\(manager.history.totalSessions) runs")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .numericTextTransition(animationValue: manager.history.totalSessions)
-                .accessibilityLabel("\(manager.history.totalSessions) runs recorded")
+            Spacer(minLength: 12)
 
-            Spacer()
+            HistoryGlassFilterPicker(selection: $selectedFilter)
+
+            Spacer(minLength: 12)
+
+            clearHistoryButton
         }
     }
 
@@ -609,33 +597,84 @@ struct HistoryHeader: View {
         }
     }
 
-    private var filterPicker: some View {
-        Picker("Filter history sessions", selection: $selectedFilter) {
+    private var clearHistoryButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            onClearHistory()
+        } label: {
+            Label("Clear", systemImage: "trash")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .systemLiquidGlassBackground(cornerRadius: 999)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(manager.history.entries.isEmpty)
+        .accessibilityLabel("Clear all history")
+        .accessibilityIdentifier("ClearHistoryButton")
+    }
+}
+
+private struct HistoryGlassFilterPicker: View {
+    @Binding var selection: HistoryView.HistoryFilter
+    @Namespace private var selectionAnimation
+
+    var body: some View {
+        HStack(spacing: 2) {
             ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Label(LocalizedStringKey(filter.rawValue), systemImage: filter.systemImage)
-                    .labelStyle(.iconOnly)
-                    .help(filter.rawValue)
-                    .tag(filter)
+                Button {
+                    guard selection != filter else { return }
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                        selection = filter
+                    }
+                } label: {
+                    Image(systemName: filter.systemImage)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selection == filter ? Color.white : Color.secondary)
+                        .frame(width: 34, height: 30)
+                        .background {
+                            if selection == filter {
+                                selectedGlass
+                                    .matchedGeometryEffect(
+                                        id: "HistoryFilterSelection",
+                                        in: selectionAnimation
+                                    )
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(filter.rawValue)
+                .accessibilityLabel(filter.rawValue)
+                .accessibilityAddTraits(selection == filter ? .isSelected : [])
             }
         }
-        .pickerStyle(.palette)
-        .labelsHidden()
-        .frame(height: controlsHeight)
+        .padding(4)
+        .systemLiquidGlassBackground(cornerRadius: 13)
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Filter history sessions")
         .accessibilityIdentifier("HistoryFilterPicker")
     }
 
-    private var clearHistoryButton: some View {
-        Button {
-            onClearHistory()
-        } label: {
-            Label("Clear", systemImage: "trash")
+    @ViewBuilder
+    private var selectedGlass: some View {
+        if #available(macOS 26.0, *) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(.clear)
+                .glassEffect(
+                    .regular
+                        .tint(SortyDesignSystem.Colors.resolvedAccent.opacity(0.72))
+                        .interactive(),
+                    in: .rect(cornerRadius: 9)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(SortyDesignSystem.Colors.resolvedAccent)
         }
-        .buttonStyle(.tintedPill(.red, size: .small))
-        .controlSize(.small)
-        .disabled(manager.history.entries.isEmpty)
-        .accessibilityLabel("Clear all history")
-        .accessibilityIdentifier("ClearHistoryButton")
     }
 }
 
