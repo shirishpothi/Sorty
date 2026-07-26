@@ -220,40 +220,20 @@ final class PersonaGeneratorTests: XCTestCase {
         }
     }
     
-    // MARK: - Prompt Building Tests
-    
-    func testPromptBuildingWithoutAnswers() {
-        let description = "Organize my photos"
-        let answers: [HoningAnswer] = []
-        
-        var prompt = "User description: \(description)"
-        if !answers.isEmpty {
-            prompt += "\n\nAnswers provided"
-        }
-        
-        XCTAssertTrue(prompt.contains("Organize my photos"))
-        XCTAssertFalse(prompt.contains("Answers provided"))
+    // MARK: - Description Quality Tests
+
+    func testPlaceholderDescriptionRequiresClarification() {
+        XCTAssertFalse(PersonaGenerator.hasMeaningfulDescription("idk"))
+        XCTAssertFalse(PersonaGenerator.hasMeaningfulDescription("I don't know"))
+        XCTAssertFalse(PersonaGenerator.hasMeaningfulDescription("organize files"))
     }
-    
-    func testPromptBuildingWithAnswers() {
-        let description = "Organize my documents"
-        let answers = [
-            HoningAnswer(questionId: "q1", selectedOption: "By project"),
-            HoningAnswer(questionId: "q2", selectedOption: "Deep nesting")
-        ]
-        
-        var prompt = "User description: \(description)"
-        if !answers.isEmpty {
-            prompt += "\n\n### ARCHITECTURAL ANCHORS (MANDATORY):\n"
-            for answer in answers {
-                prompt += "- \(answer.selectedOption)\n"
-            }
-        }
-        
-        XCTAssertTrue(prompt.contains("Organize my documents"))
-        XCTAssertTrue(prompt.contains("By project"))
-        XCTAssertTrue(prompt.contains("Deep nesting"))
-        XCTAssertTrue(prompt.contains("ARCHITECTURAL ANCHORS"))
+
+    func testConcreteDescriptionCanGeneratePersona() {
+        XCTAssertTrue(
+            PersonaGenerator.hasMeaningfulDescription(
+                "Keep each photo shoot together and separate RAW files from exports"
+            )
+        )
     }
     
     // MARK: - Error Handling Tests
@@ -299,44 +279,71 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertTrue(contextLimit.errorDescription?.contains("Request too large") ?? false)
     }
     
-    // MARK: - Fallback Extraction Tests
-    
-    func testFallbackNameExtraction() {
-        let malformedResponse = """
-        Some text before
-        "name": "Extracted Name"
-        "prompt": "Extracted Prompt"
-        Some text after
+    // MARK: - Structured Response Tests
+
+    func testExtractsPersonaJSONWithoutPersistingLeadingReasoning() {
+        let response = """
+        We need to decide which folder rules fit the user.
+        {"name":"Photo Desk","prompt":"Keep related shoots together, including braces such as {RAW}.","icon":"camera.fill","suggestions":{"organize":[],"organizeAndRename":[],"renameOnly":[]}}
         """
-        
-        if let nameRange = malformedResponse.range(of: "\"name\": \""),
-           let nameEnd = malformedResponse.range(of: "\"", range: nameRange.upperBound..<malformedResponse.endIndex) {
-            let extractedName = String(malformedResponse[nameRange.upperBound..<nameEnd.lowerBound])
-            XCTAssertEqual(extractedName, "Extracted Name")
-        } else {
-            XCTFail("Should extract name from malformed response")
-        }
+
+        let extracted = PersonaGenerator.extractJSONObject(from: response)
+
+        XCTAssertNotNil(extracted)
+        XCTAssertFalse(extracted?.contains("We need to decide") ?? true)
+        XCTAssertTrue(extracted?.contains("{RAW}") ?? false)
     }
-    
-    func testFallbackPromptExtraction() {
-        let malformedResponse = """
-        "name": "Test"
-        "prompt": "Test Prompt Content"
+
+    func testRejectsKnownGenerationReasoningLeak() {
+        XCTAssertTrue(
+            PersonaGenerator.containsGenerationLeak(
+                "We have a user description, so the user gave no description."
+            )
+        )
+        XCTAssertFalse(
+            PersonaGenerator.containsGenerationLeak(
+                "Group confirmed photo shoots by capture date and keep RAW sidecars together."
+            )
+        )
+    }
+
+    func testExtractsQuestionsArrayAfterLeadingProgressText() {
+        let response = """
+        I will identify the three missing preferences.
+        [{"id":"q1","text":"One?","options":["A","B","C"]}]
         """
-        
-        if let promptRange = malformedResponse.range(of: "\"prompt\": \""),
-           let promptEnd = malformedResponse.range(of: "\"", range: promptRange.upperBound..<malformedResponse.endIndex) {
-            let extractedPrompt = String(malformedResponse[promptRange.upperBound..<promptEnd.lowerBound])
-            XCTAssertEqual(extractedPrompt, "Test Prompt Content")
-        } else {
-            XCTFail("Should extract prompt from malformed response")
-        }
+
+        XCTAssertEqual(
+            PersonaHoningEngine.extractJSONArray(from: response),
+            #"[{"id":"q1","text":"One?","options":["A","B","C"]}]"#
+        )
     }
-    
-    func testDefaultFallbackName() {
-        let defaultName = "Custom Persona"
-        XCTAssertEqual(defaultName, "Custom Persona")
-        XCTAssertLessThanOrEqual(defaultName.count, 20)
+
+    func testGenericCodexTextGenerationDoesNotUseOrganizationSchema() {
+        let arguments = CodexSubscriptionClient.codexArguments(
+            model: "gpt-test",
+            outputURL: URL(fileURLWithPath: "/tmp/output.txt"),
+            schemaURL: nil,
+            imageFiles: []
+        )
+
+        XCTAssertFalse(arguments.contains("--output-schema"))
+    }
+
+    func testCodexOrganizationGenerationKeepsStructuredSchema() {
+        let schemaURL = URL(fileURLWithPath: "/tmp/organization-schema.json")
+        let arguments = CodexSubscriptionClient.codexArguments(
+            model: "gpt-test",
+            outputURL: URL(fileURLWithPath: "/tmp/output.txt"),
+            schemaURL: schemaURL,
+            imageFiles: []
+        )
+
+        let schemaFlagIndex = arguments.firstIndex(of: "--output-schema")
+        guard let schemaFlagIndex else {
+            return XCTFail("Organization requests must pass the response schema")
+        }
+        XCTAssertEqual(arguments[schemaFlagIndex + 1], schemaURL.path)
     }
     
     // MARK: - AIConfig Modification Tests

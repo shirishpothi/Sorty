@@ -42,7 +42,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         let start = Date()
-        let response = try await runCodex(prompt: prompt, imageFiles: [])
+        let response = try await runCodex(
+            prompt: prompt,
+            imageFiles: [],
+            usesOrganizationSchema: true
+        )
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
@@ -96,7 +100,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         let start = Date()
-        let response = try await runCodex(prompt: prompt, imageFiles: imageFiles)
+        let response = try await runCodex(
+            prompt: prompt,
+            imageFiles: imageFiles,
+            usesOrganizationSchema: true
+        )
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
@@ -123,7 +131,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         .filter { !$0.isEmpty }
         .joined(separator: "\n\n")
 
-        return try await runCodex(prompt: combinedPrompt, imageFiles: [])
+        return try await runCodex(
+            prompt: combinedPrompt,
+            imageFiles: [],
+            usesOrganizationSchema: false
+        )
     }
 
     public func checkHealth() async throws {
@@ -155,7 +167,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
     }
 
-    private func runCodex(prompt: String, imageFiles: [URL]) async throws -> String {
+    private func runCodex(
+        prompt: String,
+        imageFiles: [URL],
+        usesOrganizationSchema: Bool
+    ) async throws -> String {
         try await checkHealth()
         guard let codexPath = Self.resolveCodexExecutablePath() else {
             throw AIClientError.apiError(
@@ -168,14 +184,20 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             .appendingPathComponent("sorty-codex-\(UUID().uuidString).txt")
         let diagnosticsURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-codex-diagnostics-\(UUID().uuidString).txt")
-        let schemaURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sorty-codex-schema-\(UUID().uuidString).json")
+        let schemaURL = usesOrganizationSchema
+            ? FileManager.default.temporaryDirectory
+                .appendingPathComponent("sorty-codex-schema-\(UUID().uuidString).json")
+            : nil
         defer {
             try? FileManager.default.removeItem(at: outputURL)
             try? FileManager.default.removeItem(at: diagnosticsURL)
-            try? FileManager.default.removeItem(at: schemaURL)
+            if let schemaURL {
+                try? FileManager.default.removeItem(at: schemaURL)
+            }
         }
-        try Self.writeOrganizationResponseSchema(to: schemaURL)
+        if let schemaURL {
+            try Self.writeOrganizationResponseSchema(to: schemaURL)
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
@@ -279,10 +301,10 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         """
     }
 
-    private nonisolated static func codexArguments(
+    nonisolated static func codexArguments(
         model: String,
         outputURL: URL,
-        schemaURL: URL,
+        schemaURL: URL?,
         imageFiles: [URL]
     ) -> [String] {
         var arguments = [
@@ -296,11 +318,13 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             "--json",
             "--output-last-message",
             outputURL.path,
-            "--output-schema",
-            schemaURL.path,
             "--model",
             model
         ]
+
+        if let schemaURL {
+            arguments += ["--output-schema", schemaURL.path]
+        }
 
         for imageFile in imageFiles {
             arguments += ["--image", imageFile.path]
@@ -544,6 +568,8 @@ private final class CodexOutputStreamer: @unchecked Sendable {
                 return nonEmptyString(json["delta"] ?? json["content"] ?? json["text"] ?? json["summary"])
             case "agent_message", "assistant_message", "message":
                 return nonEmptyString(json["message"] ?? json["content"] ?? json["text"])
+            case "reasoning":
+                return nonEmptyString(json["text"] ?? json["summary"] ?? json["content"])
             case "item.completed", "item.updated":
                 if let item = json["item"] as? [String: Any] {
                     return extractVisibleChunk(from: item)

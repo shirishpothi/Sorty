@@ -19,7 +19,6 @@ struct PersonaGeneratorView: View {
     @State private var prompt: String = ""
     @State private var promptSelection = NSRange(location: 0, length: 0)
     @State private var promptSuggestionIndex: Int = 0
-    @State private var generationStatusIndex: Int = 0
     
     @StateObject private var honingEngine = PersonaHoningEngine()
     @State private var questions: [HoningQuestion] = []
@@ -79,19 +78,28 @@ struct PersonaGeneratorView: View {
                 )
             }
 
-            Text(currentGenerationStatus)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(width: 340)
-                .frame(minHeight: 42)
-                .id(generationStatusIndex)
-                .transition(
-                    .asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
+            VStack(spacing: 6) {
+                if !generator.generationUpdate.isEmpty {
+                    Label("Live model update", systemImage: "brain")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                }
+
+                Text(currentGenerationStatus)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 360)
+                    .frame(minHeight: 42)
+                    .id(currentGenerationStatus)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
                     )
-                )
+            }
+            .animation(.easeInOut(duration: 0.22), value: currentGenerationStatus)
 
             HStack(spacing: 14) {
                 generationDetail(
@@ -107,23 +115,6 @@ struct PersonaGeneratorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .task {
-            generationStatusIndex = 0
-            guard !reduceMotion else { return }
-
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(2.4))
-                } catch {
-                    return
-                }
-
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    generationStatusIndex =
-                        (generationStatusIndex + 1) % generationStatuses.count
-                }
-            }
-        }
     }
 
     private var initialInputView: some View {
@@ -417,19 +408,13 @@ struct PersonaGeneratorView: View {
         }
     }
 
-    private var generationStatuses: [String] {
-        [
-            answers.isEmpty
-                ? "Turning your description into a complete organization strategy."
-                : "Combining your description with \(answers.count) refinements.",
-            "Defining folder hierarchy, placement rules, and naming conventions.",
-            "Adding edge-case behavior and workflow-specific suggestions.",
-            "Finalizing a concise identity and reusable instructions.",
-        ]
-    }
-
     private var currentGenerationStatus: String {
-        generationStatuses[generationStatusIndex % generationStatuses.count]
+        if !generator.generationUpdate.isEmpty {
+            return generator.generationUpdate
+        }
+        return answers.isEmpty
+            ? "Preparing a tailored organization strategy from your description."
+            : "Preparing a strategy from your description and \(answers.count) refinements."
     }
 
     private var refinementSummary: String {

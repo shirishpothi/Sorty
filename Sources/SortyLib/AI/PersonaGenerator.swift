@@ -10,12 +10,18 @@ import Combine
 
 public enum PersonaGeneratorError: LocalizedError {
     case emptyInstructions
+    case insufficientDescription
+    case invalidPersonaResponse
     case invalidIdentityResponse
 
     public var errorDescription: String? {
         switch self {
         case .emptyInstructions:
             return "Add organization instructions before generating the identity."
+        case .insufficientDescription:
+            return "Tell Sorty what you want to organize, or answer the refinement questions first."
+        case .invalidPersonaResponse:
+            return "Sorty couldn’t read the generated persona. Nothing was saved; please try again."
         case .invalidIdentityResponse:
             return "Sorty couldn’t read the generated identity. Please try again."
         }
@@ -24,161 +30,46 @@ public enum PersonaGeneratorError: LocalizedError {
 
 @MainActor
 
-public class PersonaGenerator: ObservableObject {
+public class PersonaGenerator: ObservableObject, StreamingDelegate {
     @Published public var isGenerating: Bool = false
     @Published public var error: Error?
-    
-    // Meta-prompt to guide the AI in creating a system prompt
+    @Published public private(set) var generationUpdate: String = ""
+
+    private var generationUpdateBuffer = ""
+
     private let metaSystemPrompt = """
-You are a world-class Information Architect designing a Sorty workflow persona. Sorty is a live macOS file organizer: users watch insight lines, file moves, and optional rename suggestions stream into the app. Your job is to create a specialized, opinionated system prompt that makes the organizer behave like a domain expert while preserving Sorty's base JSON contract.
+You create a Sorty persona: a compact set of durable file-organization instructions grounded in what the user actually asked for.
 
-# OUTPUT REQUIREMENTS (STRICT)
+Return exactly one JSON object with this shape and no surrounding text:
+{"name":"Short Name","icon":"sf.symbol.name","prompt":"Organization instructions","suggestions":{"organize":["..."],"organizeAndRename":["..."],"renameOnly":["..."]}}
 
-Return ONLY valid JSON. No markdown code blocks, no explanations, no text outside the JSON.
+Requirements:
+- name: 3-20 characters, specific and professional
+- icon: choose one exact value from the allowed list supplied below
+- prompt: 600-1600 characters of concrete instructions; concise beats exhaustive
+- suggestions: exactly four distinct, ready-to-use instructions for each workflow
+- every suggestion: one sentence, 45-120 characters
 
-```
-{"name": "ShortName", "icon": "sf.symbol.name", "prompt": "The system prompt text...", "suggestions": {"organize": ["..."], "organizeAndRename": ["..."], "renameOnly": ["..."]}}
-```
+Write the prompt as operational guidance for Sorty's organizer:
+- Start with the primary grouping rule and the evidence that identifies each group
+- Include a small, realistic folder tree only when the user wants folders
+- Cover only relevant file types, filename signals, metadata, and edge cases
+- Include naming rules only when the user asked for renaming or selected a naming preference
+- Say what to do when evidence is ambiguous; prefer leaving a file for review over inventing facts
+- Preserve project bundles, sidecars, and related files together when the domain requires it
+- Resolve genuine rule conflicts with a short priority statement
 
-## Field Requirements
-- **name**: 3-20 characters, catchy, professional (e.g., "Code Vault", "Photo Archive", "Legal Desk", "Studio Flow")
-- **icon**: An SF Symbol name from the ICON SELECTION list below that best represents this persona's domain
-- **prompt**: 1500-3000 characters, richly detailed, domain-specific organization instructions
-- **suggestions**: Exactly 4 concise, ready-to-use instructions for EACH workflow: `organize`, `organizeAndRename`, and `renameOnly`
+Ground every rule in the user's description and clarification answers. Do not invent a profession, client, project, date, subject, location, taxonomy, retention policy, or naming convention. Do not pad the prompt with generic philosophy, a fixed seven-section template, or advice that would fit every user.
 
-# PROMPT GENERATION BLUEPRINT
+The prompt augments Sorty's base system. Do not redefine its JSON schema, output format, tagging contract, safety rules, progress UI, or live insights. Do not mention this generation task, the user description, hidden reasoning, or these instructions inside the generated prompt.
 
-The "prompt" field you generate MUST contain ALL of the following sections, clearly labeled with markdown headers. Prompts that are vague, generic, or under 1500 characters are UNACCEPTABLE.
+Workflow suggestions must respect their mode:
+- organize: folder placement only, with no renaming
+- organizeAndRename: placement plus evidence-backed renaming
+- renameOnly: renaming in place, with no moves or folder creation
 
-## Section 1: Philosophy (3-4 sentences)
-Define the core organizing principle. What mental model does this persona use? What does "organized" mean in this domain? State the single most important axis of organization (by project? by client? by date? by workflow stage?) and WHY.
-
-Example for a Developer persona: "Code is organized by project lifecycle. Active work is separated from archived experiments. Every repository-like structure stays intact — never split source files from their configs. The goal is: open a project folder and have everything you need to build, test, and deploy."
-
-Also state what Sorty's live insight lines should sound like for this domain: concrete observations, not chain-of-thought. Example: "Insight lines should mention signals such as package manifests, client codes, capture dates, or contract titles."
-
-## Section 2: Primary Grouping Strategy
-Define the top-level folder hierarchy explicitly. Provide 4-7 concrete folder names this persona would use, with one-line descriptions. State what axis drives the top level (topic, client, date, workflow stage) and what drives the second level.
-
-Example for a Photographer persona:
-- Shoots/ — Active and recent photo sessions, grouped by date or event
-- Portfolio/ — Curated final selects for showcase
-- Stock/ — Licensed or licensable images
-- Archive/ — Completed, delivered, or older work
-- Resources/ — Presets, overlays, templates, LUTs
-
-## Section 3: Hierarchy Template
-Provide a concrete folder tree example showing 2-3 levels of nesting. Use realistic filenames.
-
-Example:
-Projects/
-  ClientName ProjectTitle/
-    Deliverables/
-    Working Files/
-    Reference/
-  Another Project/
-    ...
-
-## Section 4: File Type Rules
-For the 4-6 most relevant file types in this domain, state EXACTLY where they go. Be specific — don't just say "documents go in Documents."
-
-Example for a Designer:
-- .psd/.ai/.sketch → Working Files/ under the relevant project
-- .png/.jpg (exports) → Deliverables/ under the relevant project
-- .ttf/.otf (fonts) → Resources/Fonts/
-- .pdf (briefs, contracts) → the project's Reference/ subfolder
-
-## Section 5: Naming Conventions
-Define the naming pattern files and folders should follow. Include separator style, date format, and any required prefixes/suffixes.
-
-Example: "Use snake_case. Prefix client-facing deliverables with the client code. Dates use YYYY-MM-DD. Version suffixes: _v1, _v2, _final. Example: acme_brand_guide_v2_2026-01-15.pdf"
-
-Add 2-3 concrete rename examples that follow the persona and cite the evidence needed. Good: "IMG_1234.jpg → 2026-01-15 Yosemite Half Dome.jpg when EXIF/location or image content confirms the scene." Bad: inventing a client, date, or project from filename alone.
-
-## Section 6: Edge Cases & Special Rules
-Address 3-5 domain-specific edge cases. What happens with ambiguous files? How are temp files handled? What about files that span multiple projects?
-
-Example for a Developer:
-- .env, .gitignore, Makefile → Stay at project root, never move into subfolders
-- node_modules/, .build/, __pycache__/ → Flag as "generated" and suggest exclusion
-- README.md → Always stays at project root
-- Files outside any project context → go to a "Sandbox/" or "Snippets/" catch-all
-
-## Section 7: Priority Rules
-When the persona's rules conflict with general organization heuristics, state which wins. List 2-3 explicit priority overrides.
-
-Example: "Project cohesion > file type grouping. A .png that belongs to a code project stays in that project's assets folder, NOT in a global Images folder. Workflow stage > alphabetical sorting."
-
-# SUGGESTION GENERATION
-
-Generate 4 domain-specific suggestions for each workflow mode. Each suggestion must:
-- Be a direct instruction the user can paste into Sorty's Instructions field without editing
-- Be one sentence between 45 and 120 characters
-- Add a concrete preference beyond the persona defaults, such as folder count, hierarchy depth, grouping axis, naming format, archive policy, or ambiguity handling
-- Make sense for its exact workflow: `organize` must not request renaming, and `renameOnly` must not request moving or folders
-- Vary meaningfully from the other suggestions instead of rephrasing the same rule
-
-Examples for a photography persona:
-- organize: "Keep each shoot together, with separate RAW, Edited, and Delivery subfolders."
-- organizeAndRename: "Group by shoot date, then rename confirmed photos as YYYY-MM-DD Event Subject."
-- renameOnly: "Use capture date first, preserve sequence numbers, and keep RAW sidecar names matched."
-
-# CRITICAL CONSTRAINTS
-
-The generated prompt MUST be compatible with the base organization system:
-- DO NOT override the JSON output format (the base system handles this)
-- DO NOT tell the AI to emit markdown, prose, tables, or alternate schemas
-- DO NOT specify different tag requirements (base system requires 1-3 tags per file)
-- DO NOT ask for hidden chain-of-thought; live insights should be short user-facing observations
-- Focus ONLY on: categorization logic, naming patterns, folder structure philosophy, domain-specific intelligence
-- The prompt should ADD specialized knowledge on top of the base system, not REPLACE it
-
-# DOMAIN INTELLIGENCE HINTS
-
-If the description mentions development/coding, include knowledge of: .gitignore, build folders, package managers (node_modules, .build, target/), config files, README placement, test file conventions.
-
-If the description mentions photography/media, include knowledge of: RAW vs processed, sidecar files (.xmp), EXIF-based grouping, portfolio curation, client delivery structure.
-
-If the description mentions business/legal, include knowledge of: client-matter organization, retention policies, version control for contracts, regulatory document types.
-
-If the description mentions academia/research, include knowledge of: citation files (.bib), datasets, paper drafts, LaTeX projects, literature review organization.
-
-# ICON SELECTION
-
-Choose the single best SF Symbol icon name for this persona from EXACTLY this list:
-star.fill, leaf.fill, paintbrush.fill, music.note, film.fill, gamecontroller.fill, book.fill, briefcase.fill, house.fill, graduationcap.fill, heart.fill, cart.fill, airplane, car.fill, hammer.fill, wrench.and.screwdriver.fill, scissors, pencil, doc.text.fill, folder.fill.badge.person.crop, tray.2.fill, archivebox.fill, cube.fill, wand.and.stars, sparkles, camera.fill, desktopcomputer, stethoscope, gavel.fill, banknote.fill, theatermasks.fill, sportscourt.fill, leaf.arrow.circlepath, cpu.fill, flask.fill
-
-Pick the icon that BEST represents the domain described by the user. For example:
-- A developer persona → hammer.fill or cpu.fill
-- A photographer → camera.fill
-- A student → graduationcap.fill
-- An accountant → banknote.fill or briefcase.fill
-- A musician → music.note
-- A designer → paintbrush.fill
-- A legal professional → gavel.fill
-
-# QUALITY BAR
-
-A GOOD generated prompt is one where: if you gave 100 random files to the AI with this persona active, an expert in that domain would look at the result and say "yes, this is exactly how I would organize these."
-
-A BAD generated prompt is generic advice that could apply to anyone ("sort documents by type"). Every sentence should contain domain-specific insight.
-
-Good persona-specific behavior examples:
-- Insight: ">> pattern: Found recurring Matter IDs across PDFs and spreadsheets"
-- Organization: "Client Matters/Acme Contract Renewal/Working Drafts" beats "Documents/PDFs"
-- Rename: "scan0007.pdf → Acme Signed Service Agreement.pdf" only when text confirms title and client
-
-Bad behavior examples:
-- "Move every PDF into Documents" when project/client context is visible
-- "Renamed for clarity" as a rename reason with no evidence
-- Any instruction that changes Sorty's required JSON output
-
-## AVOID
-- Generic advice like "organize by type" without domain-specific rationale
-- Contradicting base system rules (JSON format, tag counts, and output limits)
-- Specifying output format (already defined in base system)
-- Mentioning tags (base system handles tagging requirements)
-- Prompts under 1500 characters — these are too shallow to be useful
+Allowed icons:
+\(personaIconOptions.joined(separator: ", "))
 """
     
     public init() {}
@@ -280,6 +171,21 @@ Bad behavior examples:
         prompt: String,
         suggestions: PersonaInstructionSuggestions
     ) {
+        generationUpdate = ""
+        generationUpdateBuffer = ""
+
+        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDescription.isEmpty else {
+            let error = PersonaGeneratorError.insufficientDescription
+            self.error = error
+            throw error
+        }
+        guard !answers.isEmpty || Self.hasMeaningfulDescription(trimmedDescription) else {
+            let error = PersonaGeneratorError.insufficientDescription
+            self.error = error
+            throw error
+        }
+
         isGenerating = true
         error = nil
         
@@ -288,70 +194,56 @@ Bad behavior examples:
         }
         
         do {
-            // Create a config with high token limit for this specific task
             var genConfig = config
-            genConfig.maxTokens = 4000 // Ensure we have enough tokens for 1500+ char prompts
-            genConfig.requestTimeout = 180 // Allow more time for deep thinking
+            genConfig.maxTokens = 2600
+            genConfig.requestTimeout = max(genConfig.requestTimeout, 120)
             
-            let client = try AIClientFactory.createClient(config: genConfig)
-            
-            var prompt = "User description: \(description)"
-            
+            var client = try AIClientFactory.createClient(config: genConfig)
+            client.streamingDelegate = self
+            defer {
+                client.streamingDelegate = nil
+            }
+
+            var prompt = """
+            USER DESCRIPTION BEGIN
+            \(trimmedDescription)
+            USER DESCRIPTION END
+            """
+
             if !answers.isEmpty {
-                prompt += "\n\n### ARCHITECTURAL ANCHORS (MANDATORY):\n"
-                prompt += "The following user choices define the core philosophy of this system. The entire hierarchy, naming pattern, and edge-case logic MUST be built around these anchors:\n"
+                prompt += "\n\nUSER CLARIFICATIONS BEGIN\n"
                 for answer in answers {
                     prompt += "- \(answer.selectedOption)\n"
                 }
+                prompt += "USER CLARIFICATIONS END"
             }
-            
-            prompt += "\n\nGenerate the JSON for this expert organization persona."
-            
-            var jsonString = try await client.generateText(prompt: prompt, systemPrompt: metaSystemPrompt)
-            
-            // Clean up common AI artifacts like ```json ... ```
-            if jsonString.contains("```") {
-                let lines = jsonString.components(separatedBy: .newlines)
-                jsonString = lines.filter { !$0.contains("```") }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            prompt += "\n\nCreate the persona JSON now."
+
+            let response = try await client.generateText(
+                prompt: prompt,
+                systemPrompt: metaSystemPrompt
+            )
+            let generated = try Self.decodeGeneratedPersona(from: response)
+            let generatedName = enforceNameLength(generated.name)
+            let generatedPrompt = generated.prompt
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let suggestions = sanitizedSuggestions(generated.suggestions)
+
+            guard generatedName.count >= 3,
+                  (400...2000).contains(generatedPrompt.count),
+                  !Self.containsGenerationLeak(generatedPrompt),
+                  suggestions.organize.count == 4,
+                  suggestions.organizeAndRename.count == 4,
+                  suggestions.renameOnly.count == 4 else {
+                throw PersonaGeneratorError.invalidPersonaResponse
             }
-            
-            // Basic JSON parsing
-            guard let data = jsonString.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let name = json["name"] as? String,
-                  let generatedPrompt = json["prompt"] as? String else {
-                
-                // Fallback extraction if JSON is buried in text
-                if let nameRange = jsonString.range(of: "\"name\": \""),
-                   let nameEnd = jsonString.range(of: "\"", range: nameRange.upperBound..<jsonString.endIndex),
-                   let promptRange = jsonString.range(of: "\"prompt\": \""),
-                   let promptEnd = jsonString.range(of: "\"", range: promptRange.upperBound..<jsonString.endIndex) {
-                    
-                    let extractedName = String(jsonString[nameRange.upperBound..<nameEnd.lowerBound])
-                    let extractedPrompt = String(jsonString[promptRange.upperBound..<promptEnd.lowerBound])
-                    let extractedIcon = extractIcon(from: jsonString)
-                    return (
-                        enforceNameLength(extractedName),
-                        extractedIcon,
-                        extractedPrompt,
-                        PersonaInstructionSuggestions()
-                    )
-                }
-                
-                return (
-                    enforceNameLength("Custom Persona"),
-                    "star.fill",
-                    jsonString,
-                    PersonaInstructionSuggestions()
-                )
-            }
-            
-            let icon = validateIcon(json["icon"] as? String)
+
             return (
-                enforceNameLength(name),
-                icon,
+                generatedName,
+                validateIcon(generated.icon),
                 generatedPrompt,
-                extractSuggestions(from: json)
+                suggestions
             )
             
         } catch {
@@ -364,36 +256,141 @@ Bad behavior examples:
         guard let icon, validIcons.contains(icon) else { return "star.fill" }
         return icon
     }
-    
-    private func extractIcon(from text: String) -> String {
-        if let iconRange = text.range(of: "\"icon\": \""),
-           let iconEnd = text.range(of: "\"", range: iconRange.upperBound..<text.endIndex) {
-            let extracted = String(text[iconRange.upperBound..<iconEnd.lowerBound])
-            return validateIcon(extracted)
-        }
-        return "star.fill"
-    }
 
-    private func extractSuggestions(from json: [String: Any]) -> PersonaInstructionSuggestions {
-        guard let suggestions = json["suggestions"] as? [String: Any] else {
-            return PersonaInstructionSuggestions()
-        }
-
+    private func sanitizedSuggestions(
+        _ suggestions: PersonaInstructionSuggestions
+    ) -> PersonaInstructionSuggestions {
         return PersonaInstructionSuggestions(
-            organize: sanitizedSuggestions(suggestions["organize"]),
-            organizeAndRename: sanitizedSuggestions(suggestions["organizeAndRename"]),
-            renameOnly: sanitizedSuggestions(suggestions["renameOnly"])
+            organize: sanitizedSuggestions(suggestions.organize),
+            organizeAndRename: sanitizedSuggestions(suggestions.organizeAndRename),
+            renameOnly: sanitizedSuggestions(suggestions.renameOnly)
         )
     }
 
-    private func sanitizedSuggestions(_ value: Any?) -> [String] {
-        guard let suggestions = value as? [String] else { return [] }
-
+    private func sanitizedSuggestions(_ suggestions: [String]) -> [String] {
         return suggestions
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .prefix(6)
+            .prefix(4)
             .map { $0 }
+    }
+
+    public func didReceiveChunk(_ chunk: String) {
+        guard isGenerating else { return }
+
+        generationUpdateBuffer += chunk
+        if generationUpdateBuffer.count > 4_000 {
+            generationUpdateBuffer = String(generationUpdateBuffer.suffix(4_000))
+        }
+
+        if let update = Self.latestGenerationUpdate(from: generationUpdateBuffer) {
+            generationUpdate = update
+        }
+    }
+
+    public func didComplete(content: String) {}
+
+    public func didFail(error: Error) {}
+
+    nonisolated static func hasMeaningfulDescription(_ description: String) -> Bool {
+        let normalized = description
+            .lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "’", with: "")
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let placeholders: Set<String> = [
+            "idk", "i dont know", "not sure", "anything", "whatever",
+            "something", "stuff", "files", "organize files", "help me"
+        ]
+        return !placeholders.contains(normalized)
+    }
+
+    nonisolated static func containsGenerationLeak(_ prompt: String) -> Bool {
+        let normalized = prompt.lowercased()
+        let markers = [
+            "we have a user description",
+            "so the user gave",
+            "we need to generate",
+            "let's craft",
+            "now produce json",
+            "must output only json"
+        ]
+        return markers.contains { normalized.contains($0) }
+    }
+
+    private nonisolated static func decodeGeneratedPersona(
+        from response: String
+    ) throws -> GeneratedPersona {
+        guard let json = extractJSONObject(from: response),
+              let data = json.data(using: .utf8),
+              let generated = try? JSONDecoder().decode(GeneratedPersona.self, from: data)
+        else {
+            throw PersonaGeneratorError.invalidPersonaResponse
+        }
+        return generated
+    }
+
+    nonisolated static func extractJSONObject(from text: String) -> String? {
+        var candidates: [String] = []
+        var depth = 0
+        var start: String.Index?
+        var isInsideString = false
+        var isEscaping = false
+
+        for index in text.indices {
+            let character = text[index]
+
+            if isInsideString {
+                if isEscaping {
+                    isEscaping = false
+                } else if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    isInsideString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                isInsideString = true
+            } else if character == "{" {
+                if depth == 0 {
+                    start = index
+                }
+                depth += 1
+            } else if character == "}", depth > 0 {
+                depth -= 1
+                if depth == 0, let start {
+                    candidates.append(String(text[start...index]))
+                }
+            }
+        }
+
+        return candidates.last
+    }
+
+    private nonisolated static func latestGenerationUpdate(from text: String) -> String? {
+        let narrative = text.split(separator: "{", maxSplits: 1).first.map(String.init) ?? text
+        let cleanedLines = narrative
+            .components(separatedBy: .newlines)
+            .map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(
+                        of: #"^(?:[-*#>]+\s*|\d+[.)]\s*)"#,
+                        with: "",
+                        options: .regularExpression
+                    )
+            }
+            .filter { line in
+                line.count >= 12 &&
+                    !line.contains("```") &&
+                    !line.lowercased().contains("output only json")
+            }
+
+        guard let latest = cleanedLines.last else { return nil }
+        return String(latest.prefix(180))
     }
     
     private func enforceNameLength(_ name: String) -> String {
@@ -411,4 +408,11 @@ private struct GeneratedPersonaIdentity: Decodable {
     let name: String
     let description: String
     let icon: String
+}
+
+private struct GeneratedPersona: Decodable {
+    let name: String
+    let icon: String
+    let prompt: String
+    let suggestions: PersonaInstructionSuggestions
 }
