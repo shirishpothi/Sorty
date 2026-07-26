@@ -728,11 +728,6 @@ private struct HistorySessionCardHeader: View {
                     .foregroundStyle(statusColor)
                     .clipShape(Capsule())
             }
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
         }
         .padding(12)
         .contentShape(Rectangle())
@@ -806,6 +801,7 @@ struct HistorySessionCard: View {
                 )
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.displayName)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
@@ -829,11 +825,16 @@ struct HistorySessionCard: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 12)
                 .accessibilityLabel("Try this organization again")
                 .accessibilityHint("Choose a model and regenerate the organization")
                 .accessibilityIdentifier("TryAgainButton-\(entry.id.uuidString)")
             }
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.trailing, 12)
+                .accessibilityHidden(true)
         }
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
