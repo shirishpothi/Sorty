@@ -368,6 +368,19 @@ public final class RunningOrganizationActivity: ObservableObject {
 
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
+    private actor LargeFolderPlanAccumulator {
+        private var plan = OrganizationPlan()
+
+        func merge(_ incoming: OrganizationPlan) -> [String] {
+            FolderOrganizer.mergeLargeFolderBatch(incoming, into: &plan)
+            return FolderOrganizer.destinationTaxonomy(in: plan, limit: 80)
+        }
+
+        func result() -> OrganizationPlan {
+            plan
+        }
+    }
+
     nonisolated(unsafe) private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
     @MainActor public static let runningActivity = RunningOrganizationActivity()
 
@@ -431,6 +444,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var lastDisplayUpdate: Date = .distantPast
     private let displayUpdateInterval: TimeInterval = 0.55 // Slightly slower cadence to reduce dropped frames during generation
     nonisolated private static let streamPreviewCharacterLimit = 1000
+    nonisolated private static let streamUIPresentationCharacterLimit = 48_000
+    nonisolated private static let streamRetentionCharacterLimit = 256_000
+    nonisolated private static let streamRetentionTrimSlack = 32_000
+    nonisolated private static let deepScanFileLimit = 2_000
+    nonisolated private static let organizeAnalysisBatchSize = 350
+    nonisolated private static let renameAnalysisBatchSize = 120
+    nonisolated private static let previewVersionFileLimit = 20_000
     nonisolated private static let assignmentDestinationRegex =
         try? NSRegularExpression(
             pattern: #"\b(?:assigning|moving|mapping)\b.+?\bto\b\s+(.+)$"#,
@@ -648,6 +668,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     #endif
 
+    private func recordPreviewVersion(_ plan: OrganizationPlan) {
+        guard plan.totalFiles <= Self.previewVersionFileLimit else {
+            planHistory.removeAll(keepingCapacity: false)
+            return
+        }
+        planHistory.append(plan)
+        if planHistory.count > Constants.maxPreviewVersions {
+            planHistory.removeFirst()
+        }
+    }
+
     public func configure(with config: AIConfig) async throws {
         do {
             var client = try AIClientFactory.createClient(config: config)
@@ -680,6 +711,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     nonisolated private static func makeStreamPresentationPayload(from content: String) -> StreamPresentationPayload {
+        let fullContent: String
+        if content.count > streamUIPresentationCharacterLimit {
+            fullContent = String(content.suffix(streamUIPresentationCharacterLimit))
+        } else {
+            fullContent = content
+        }
+
         let truncatedContent: String
         if content.count > streamPreviewCharacterLimit {
             let start = content.index(content.endIndex, offsetBy: -streamPreviewCharacterLimit)
@@ -687,7 +725,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         } else {
             truncatedContent = content
         }
-        return StreamPresentationPayload(fullContent: content, truncatedContent: truncatedContent)
+        return StreamPresentationPayload(
+            fullContent: fullContent,
+            truncatedContent: truncatedContent
+        )
+    }
+
+    @MainActor
+    private func appendRetainedStreamChunk(_ chunk: String) {
+        streamingContent += chunk
+        let trimThreshold = Self.streamRetentionCharacterLimit + Self.streamRetentionTrimSlack
+        if streamingContent.count > trimThreshold {
+            streamingContent = String(streamingContent.suffix(Self.streamRetentionCharacterLimit))
+        }
+    }
+
+    nonisolated private static func retainedStreamCompletion(_ content: String) -> String {
+        guard content.count > streamRetentionCharacterLimit else { return content }
+        return String(content.suffix(streamRetentionCharacterLimit))
     }
 
     @MainActor
@@ -778,7 +833,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
             
         let isFirstChunk = streamingContent.isEmpty
-        streamingContent += chunk
+        appendRetainedStreamChunk(chunk)
 
         if isFirstChunk {
             // Batch all initial state updates together
@@ -1223,15 +1278,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     
     private func setScannedFiles(_ files: [FileItem]) {
-        scannedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
-        scannedFilePathLookup = Dictionary(grouping: files, by: { $0.displayName.lowercased() })
+        let publishedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
+        scannedFiles = publishedFiles
+        scannedFilePathLookup = Dictionary(grouping: publishedFiles, by: { $0.displayName.lowercased() })
             .mapValues { $0.map { $0.path } }
     }
     
     public func didComplete(content: String) {
         if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // Prefer the provider's finalized completion payload so history stores full output.
-            streamingContent = content
+            // The provider returns the parsed plan separately. Keep only a bounded
+            // diagnostic tail so streaming, UI, and history do not duplicate an
+            // arbitrarily large response.
+            streamingContent = Self.retainedStreamCompletion(content)
             if liveInsightsEnabled {
                 syncDisplayContentImmediately()
             }
@@ -1439,11 +1497,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Set up deep scan progress reporting
         await scanner.setDeepScanProgressCallback { [weak self] current, _ in
+            guard current == 1 || current.isMultiple(of: 25) else { return }
             Task { @MainActor in
                 self?.deepScanProgress = (current: current, total: 0)
-                if current % 5 == 0 {
-                    self?.organizationStage = "Analyzing file content: \(current) files..."
-                }
+                self?.organizationStage = "Analyzing file content: \(current) files..."
+            }
+        }
+        await scanner.setScanProgressCallback { [weak self] current in
+            Task { @MainActor in
+                guard let self, !self.isCancellationRequested else { return }
+                self.scannedFileCount = current
+                self.organizationStage =
+                    "Scanning directory: \(GenerationStats.formatCount(current)) files found..."
             }
         }
 
@@ -1452,10 +1517,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         await scanner.setOCRLanguages(aiConfig?.ocrLanguages ?? ["en-US"])
 
-        let filesFound = try await scanner.scanDirectory(
-            at: directory,
-            deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
-        )
+        let exclusionMatcher = exclusionRules?.matcherSnapshot()
+        let filesFound: [FileItem]
+        do {
+            filesFound = try await scanner.scanDirectory(
+                at: directory,
+                deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true),
+                deepScanFileLimit: Self.deepScanFileLimit,
+                exclusionMatcher: exclusionMatcher
+            )
+        } catch {
+            await scanner.setScanProgressCallback(nil)
+            await scanner.setDeepScanProgressCallback(nil)
+            throw error
+        }
+        await scanner.setScanProgressCallback(nil)
+        await scanner.setDeepScanProgressCallback(nil)
         scannedFileCount = filesFound.count
         setScannedFiles(filesFound)
 
@@ -1467,19 +1544,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try? await Task.sleep(for: .seconds(1.5))
         }
 
-        updateProgress(0.15, stage: "Found \(filesFound.count) files")
+        let scanResultStage = exclusionMatcher?.isEmpty == false
+            ? "Found \(filesFound.count) files after exclusions"
+            : "Found \(filesFound.count) files"
+        updateProgress(0.20, stage: scanResultStage)
 
         try checkCancellation()
 
-        var files = filesFound
-        if let exclusionRules = exclusionRules {
-            files = exclusionRules.filterFiles(files)
-            updateProgress(0.20, stage: "Filtered to \(files.count) files")
-        }
-
-        try checkCancellation()
-
-        return files
+        return filesFound
     }
 
     private func duplicateDetectionPhase(files: [FileItem]) async throws -> ([FileItem], String) {
@@ -1491,17 +1563,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updateProgress(0.21, stage: "Checking for duplicates...")
 
         let detector = DuplicateDetector()
-        var updatedFiles = files
-        if updatedFiles.contains(where: { $0.sha256Hash == nil }) {
-            await detector.computeHashes(for: &updatedFiles)
+        let result = await detector.findExactDuplicates(in: files) { [weak self] completed, total in
+            guard let self, total > 0 else { return }
+            self.updateProgress(
+                0.21,
+                stage: "Checking \(completed.formatted()) of \(total.formatted()) duplicate candidates..."
+            )
         }
-
-        let duplicates = await detector.findDuplicates(in: updatedFiles)
+        try checkCancellation()
+        let duplicates = result.groups
         await MainActor.run {
             self.detectedDuplicates = duplicates
         }
 
-        return (updatedFiles, PromptContextHelper.duplicateContext(from: duplicates))
+        return (files, PromptContextHelper.duplicateContext(from: duplicates))
     }
 
     private func aiAnalysisPhase(
@@ -1581,27 +1656,35 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Existing Folders context into prompt")
         }
 
-        let imageFiles = files.filter { visionImageExtensions.contains($0.extension.lowercased()) }
         var imagePayload: [String: Data] = [:]
 
         let visionEnabled = aiConfig?.enableVision ?? false
         let currentModel = aiConfig?.model ?? ""
         let currentProvider = aiConfig?.provider ?? .openAICompatible
         let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
+        let shouldLimitVisionImages = aiConfig?.limitVisionImages ?? true
+        let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 5)
+        let visionSelectionLimit: Int
+        if shouldLimitVisionImages {
+            visionSelectionLimit = configuredBatchSize
+        } else if files.count > 10_000 {
+            visionSelectionLimit = 100
+        } else {
+            visionSelectionLimit = files.count
+        }
+        let visionSelection = visionEnabled
+            ? boundedVisionSelection(
+                from: files,
+                batchSize: visionSelectionLimit,
+                strategy: aiConfig?.visionBatchStrategy ?? .firstN
+            )
+            : (selected: [], total: 0)
 
-        if !imageFiles.isEmpty && visionEnabled && modelSupportsVision {
-            let shouldLimitVisionImages = aiConfig?.limitVisionImages ?? true
-            let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 5)
-            let strategy = aiConfig?.visionBatchStrategy ?? .firstN
-            let selectedBatch: [FileItem]
-            if shouldLimitVisionImages {
-                selectedBatch = selectVisionBatch(from: imageFiles, batchSize: configuredBatchSize, strategy: strategy)
-            } else {
-                selectedBatch = imageFiles
-            }
+        if visionSelection.total > 0 && modelSupportsVision {
+            let selectedBatch = visionSelection.selected
             let selectedImageURLs = Array(Set(selectedBatch.compactMap(\.url)))
-            let totalImageCount = imageFiles.count
-            let isLimitedSelection = shouldLimitVisionImages && selectedBatch.count < imageFiles.count
+            let totalImageCount = visionSelection.total
+            let isLimitedSelection = selectedBatch.count < totalImageCount
             let initialPreparationStage = isLimitedSelection
                 ? "Sorty is analyzing 0 of \(selectedImageURLs.count) selected images..."
                 : "Sorty is analyzing 0 images..."
@@ -1635,10 +1718,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             let failedCount = max(0, selectedBatch.count - analyzedNames.count)
-            let skippedCount = max(0, imageFiles.count - analyzedNames.count)
+            let skippedCount = max(0, totalImageCount - analyzedNames.count)
             visionAnalysisSummary = VisionAnalysisSummary(
                 analyzedCount: analyzedNames.count,
-                totalImageCount: imageFiles.count,
+                totalImageCount: totalImageCount,
                 skippedCount: skippedCount,
                 failedCount: failedCount,
                 warningMessage: nil
@@ -1656,13 +1739,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     stage: "Continuing with file details..."
                 )
             }
-            DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(imageFiles.count), failed preprocess: \(failedCount))")
-        } else if !imageFiles.isEmpty && visionEnabled && !modelSupportsVision {
+            DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(totalImageCount), failed preprocess: \(failedCount))")
+        } else if visionSelection.total > 0 && !modelSupportsVision {
             let warning = "Vision is enabled but \(currentProvider.displayName) (\(currentModel)) doesn't support multimodal analysis. Results will use text-only analysis."
             visionAnalysisSummary = VisionAnalysisSummary(
                 analyzedCount: 0,
-                totalImageCount: imageFiles.count,
-                skippedCount: imageFiles.count,
+                totalImageCount: visionSelection.total,
+                skippedCount: visionSelection.total,
                 failedCount: 0,
                 warningMessage: warning
             )
@@ -1675,23 +1758,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.clientNotConfigured
         }
 
-        let plan: OrganizationPlan
-        if !imagePayload.isEmpty {
-            plan = try await client.analyzeWithImages(
-                files: files,
-                imageData: imagePayload,
-                customInstructions: instructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature
-            )
-        } else {
-            plan = try await client.analyze(
-                files: files,
-                customInstructions: instructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature
-            )
-        }
+        let plan = try await analyzeInBoundedBatches(
+            files: files,
+            client: client,
+            imagePayload: imagePayload,
+            instructions: instructions,
+            personaPrompt: personaPrompt,
+            temperature: temperature
+        )
 
         try checkCancellation()
 
@@ -1700,15 +1774,361 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return (plan, instructions, personaPrompt, imagePayload)
     }
 
-    private func selectVisionBatch(from imageFiles: [FileItem], batchSize: Int, strategy: VisionBatchStrategy) -> [FileItem] {
+    private func analyzeInBoundedBatches(
+        files: [FileItem],
+        client: AIClientProtocol,
+        imagePayload: [String: Data],
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        modeOverride: OrganizationMode? = nil
+    ) async throws -> OrganizationPlan {
+        let mode = modeOverride ?? aiConfig?.mode ?? client.config.mode
+        let batchSize = mode == .organize
+            ? Self.organizeAnalysisBatchSize
+            : Self.renameAnalysisBatchSize
+        let batchCount = max(1, (files.count + batchSize - 1) / batchSize)
+
+        guard batchCount > 1 else {
+            if imagePayload.isEmpty {
+                return try await client.analyze(
+                    files: files,
+                    customInstructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            }
+            return try await client.analyzeWithImages(
+                files: files,
+                imageData: imagePayload,
+                customInstructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+        }
+
+        let analysisStart = Date()
+        let accumulator = LargeFolderPlanAccumulator()
+        var taxonomy: [String] = []
+        var retainedNotes: [String] = []
+        var totalResponseTokens = 0
+        var totalPromptTokens = 0
+        var hasPromptTokenCount = false
+        var firstTTFT: TimeInterval?
+        var estimatedCost = Decimal.zero
+        var hasEstimatedCost = false
+
+        for batchIndex in 0..<batchCount {
+            try checkCancellation()
+
+            let start = batchIndex * batchSize
+            let end = min(start + batchSize, files.count)
+            let batch = Array(files[start..<end])
+            let completedBeforeRequest = batchIndex
+            let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
+            updateMeasuredProgress(
+                completed: completedBeforeRequest,
+                total: batchCount,
+                estimatedOverallProgress: phaseProgress,
+                stage: "Planning batch \(batchIndex + 1) of \(batchCount) · \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
+            )
+
+            var batchInstructions = instructions
+            batchInstructions += Self.largeFolderBatchContext(
+                batchIndex: batchIndex,
+                batchCount: batchCount,
+                taxonomy: taxonomy,
+                mode: mode
+            )
+
+            let batchNames = Set(batch.map(\.displayName))
+            let batchImages = imagePayload.filter { batchNames.contains($0.key) }
+
+            startTimeoutTimer()
+            let batchPlan: OrganizationPlan
+            if batchImages.isEmpty {
+                batchPlan = try await client.analyze(
+                    files: batch,
+                    customInstructions: batchInstructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            } else {
+                batchPlan = try await client.analyzeWithImages(
+                    files: batch,
+                    imageData: batchImages,
+                    customInstructions: batchInstructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            }
+
+            try checkCancellation()
+
+            if let stats = batchPlan.generationStats {
+                totalResponseTokens += stats.totalTokens
+                if let promptTokens = stats.promptTokens {
+                    totalPromptTokens += promptTokens
+                    hasPromptTokenCount = true
+                }
+                if firstTTFT == nil {
+                    firstTTFT = stats.ttft
+                }
+                if let cost = stats.estimatedCost {
+                    estimatedCost += cost
+                    hasEstimatedCost = true
+                }
+            }
+            let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
+                retainedNotes.append(note)
+            }
+
+            taxonomy = await accumulator.merge(batchPlan)
+
+            let completed = batchIndex + 1
+            let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
+            updateMeasuredProgress(
+                completed: completed,
+                total: batchCount,
+                estimatedOverallProgress: completedProgress,
+                stage: "Planned \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
+            )
+        }
+
+        var mergedPlan = await accumulator.result()
+        let duration = Date().timeIntervalSince(analysisStart)
+        let totalFileSize = await Task.detached(priority: .utility) {
+            files.reduce(Int64.zero) { partial, file in
+                let (sum, overflow) = partial.addingReportingOverflow(file.size)
+                return overflow ? Int64.max : sum
+            }
+        }.value
+        let model = client.config.model
+        let provider = client.config.provider.displayName
+        let summary = "Analyzed \(GenerationStats.formatCount(files.count)) files in \(batchCount) bounded batches."
+        mergedPlan.notes = ([summary] + retainedNotes).joined(separator: " ")
+        mergedPlan.generationStats = GenerationStats(
+            duration: duration,
+            tps: duration > 0 ? Double(totalResponseTokens) / duration : 0,
+            ttft: firstTTFT ?? 0,
+            totalTokens: totalResponseTokens,
+            model: model,
+            filesScanned: files.count,
+            totalFileSize: totalFileSize,
+            promptTokens: hasPromptTokenCount ? totalPromptTokens : nil,
+            provider: provider,
+            estimatedCost: hasEstimatedCost ? estimatedCost : nil
+        )
+        clearMeasuredProgress(
+            estimatedOverallProgress: 0.84,
+            stage: mode == .renameOnly ? "Checking name suggestions..." : "Checking organization plan..."
+        )
+        return mergedPlan
+    }
+
+    nonisolated private static func largeFolderBatchContext(
+        batchIndex: Int,
+        batchCount: Int,
+        taxonomy: [String],
+        mode: OrganizationMode
+    ) -> String {
+        let taxonomyContext: String
+        if mode == .renameOnly || taxonomy.isEmpty {
+            taxonomyContext = ""
+        } else {
+            taxonomyContext = """
+
+            Reuse these destination paths from earlier batches whenever they fit:
+            \(taxonomy.map { "- \($0)" }.joined(separator: "\n"))
+            """
+        }
+
+        return """
+
+        LARGE FOLDER BATCH \(batchIndex + 1) OF \(batchCount)
+        - This request contains a complete, disjoint batch from one larger folder.
+        - File IDs are local to this batch. Include every file in this batch exactly once.
+        - Keep decisions consistent across batches and do not invent wrapper folders just because this is a batch.
+        \(taxonomyContext)
+        """
+    }
+
+    nonisolated private static func mergeLargeFolderBatch(
+        _ incomingPlan: OrganizationPlan,
+        into accumulatedPlan: inout OrganizationPlan
+    ) {
+        let incoming = removingDuplicateAssignments(from: incomingPlan)
+        mergeSuggestions(incoming.suggestions, into: &accumulatedPlan.suggestions)
+        accumulatedPlan.unorganizedFiles.append(contentsOf: incoming.unorganizedFiles)
+        accumulatedPlan.unorganizedDetails.append(contentsOf: incoming.unorganizedDetails)
+    }
+
+    nonisolated private static func removingDuplicateAssignments(
+        from plan: OrganizationPlan
+    ) -> OrganizationPlan {
+        var updated = plan
+        var claimedFileIDs: Set<UUID> = []
+
+        func prune(_ folder: FolderSuggestion) -> FolderSuggestion {
+            var result = folder
+            result.files = folder.files.filter { claimedFileIDs.insert($0.id).inserted }
+            let retainedIDs = Set(result.files.map(\.id))
+            result.fileRenameMappings = folder.fileRenameMappings.filter {
+                retainedIDs.contains($0.originalFile.id)
+            }
+            result.fileTagMappings = folder.fileTagMappings.filter {
+                retainedIDs.contains($0.originalFile.id)
+            }
+            result.subfolders = folder.subfolders.map(prune)
+            return result
+        }
+
+        updated.suggestions = plan.suggestions.map(prune)
+        updated.unorganizedFiles = plan.unorganizedFiles.filter {
+            claimedFileIDs.insert($0.id).inserted
+        }
+        let unorganizedNames = Set(updated.unorganizedFiles.map(\.displayName))
+        updated.unorganizedDetails = plan.unorganizedDetails.filter {
+            unorganizedNames.contains($0.filename)
+        }
+        return updated
+    }
+
+    nonisolated private static func mergeSuggestions(
+        _ incoming: [FolderSuggestion],
+        into existing: inout [FolderSuggestion]
+    ) {
+        var existingIndexByKey = Dictionary(
+            existing.enumerated().map {
+                (normalizedDestinationKey($0.element.folderName), $0.offset)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        for suggestion in incoming {
+            let key = normalizedDestinationKey(suggestion.folderName)
+            if let index = existingIndexByKey[key] {
+                existing[index] = mergeFolderSuggestion(suggestion, into: existing[index])
+            } else {
+                existingIndexByKey[key] = existing.count
+                existing.append(suggestion)
+            }
+        }
+    }
+
+    nonisolated private static func mergeFolderSuggestion(
+        _ incoming: FolderSuggestion,
+        into existing: FolderSuggestion
+    ) -> FolderSuggestion {
+        var merged = existing
+        merged.files.append(contentsOf: incoming.files)
+        merged.fileRenameMappings.append(contentsOf: incoming.fileRenameMappings)
+        merged.fileTagMappings.append(contentsOf: incoming.fileTagMappings)
+        merged.tags = Array(Set(existing.tags).union(incoming.tags)).sorted()
+        merged.semanticTags = Array(Set(existing.semanticTags).union(incoming.semanticTags)).sorted()
+        if merged.description.isEmpty {
+            merged.description = incoming.description
+        }
+        if merged.reasoning.isEmpty {
+            merged.reasoning = incoming.reasoning
+        }
+        if merged.comment == nil {
+            merged.comment = incoming.comment
+        }
+        if merged.confidenceScore == nil {
+            merged.confidenceScore = incoming.confidenceScore
+        }
+        if merged.ruleId == nil {
+            merged.ruleId = incoming.ruleId
+        }
+        mergeSuggestions(incoming.subfolders, into: &merged.subfolders)
+        return merged
+    }
+
+    nonisolated private static func normalizedDestinationKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .precomposedStringWithCanonicalMapping
+            .lowercased()
+    }
+
+    nonisolated private static func destinationTaxonomy(
+        in plan: OrganizationPlan,
+        limit: Int
+    ) -> [String] {
+        var result: [String] = []
+
+        func collect(_ folders: [FolderSuggestion], parent: String?) {
+            for folder in folders where result.count < limit {
+                let path: String
+                if folder.folderName.hasPrefix("/") || parent == nil || parent?.isEmpty == true {
+                    path = folder.folderName
+                } else {
+                    path = "\(parent!)/\(folder.folderName)"
+                }
+                result.append(String(path.prefix(180)))
+                collect(folder.subfolders, parent: path)
+            }
+        }
+
+        collect(plan.suggestions, parent: nil)
+        return result
+    }
+
+    private func boundedVisionSelection(
+        from files: [FileItem],
+        batchSize: Int,
+        strategy: VisionBatchStrategy
+    ) -> (selected: [FileItem], total: Int) {
         let safeBatchSize = max(1, batchSize)
+        var selected: [FileItem] = []
+        selected.reserveCapacity(min(safeBatchSize, files.count))
+        var total = 0
+
+        func isVisionImage(_ file: FileItem) -> Bool {
+            visionImageExtensions.contains(file.extension.lowercased())
+        }
+
         switch strategy {
         case .firstN:
-            return Array(imageFiles.prefix(safeBatchSize))
+            for file in files where isVisionImage(file) {
+                total += 1
+                if selected.count < safeBatchSize {
+                    selected.append(file)
+                }
+            }
         case .random:
-            return Array(imageFiles.shuffled().prefix(safeBatchSize))
+            for file in files where isVisionImage(file) {
+                total += 1
+                if selected.count < safeBatchSize {
+                    selected.append(file)
+                } else {
+                    let replacementIndex = Int.random(in: 0..<total)
+                    if replacementIndex < safeBatchSize {
+                        selected[replacementIndex] = file
+                    }
+                }
+            }
         case .noText:
-            let prioritized = imageFiles.sorted { lhs, rhs in
+            for file in files where isVisionImage(file) {
+                total += 1
+                selected.append(file)
+                if selected.count > safeBatchSize * 2 {
+                    selected.sort(by: visionPriority)
+                    selected.removeLast(selected.count - safeBatchSize)
+                }
+            }
+            selected.sort(by: visionPriority)
+            if selected.count > safeBatchSize {
+                selected.removeLast(selected.count - safeBatchSize)
+            }
+        }
+
+        return (selected, total)
+    }
+
+    private func visionPriority(_ lhs: FileItem, _ rhs: FileItem) -> Bool {
                 let lhsHasOCR = !(lhs.contentMetadata?.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
                 let rhsHasOCR = !(rhs.contentMetadata?.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
                 if lhsHasOCR != rhsHasOCR {
@@ -1717,9 +2137,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let lhsDate = lhs.modificationDate ?? lhs.creationDate ?? .distantPast
                 let rhsDate = rhs.modificationDate ?? rhs.creationDate ?? .distantPast
                 return lhsDate > rhsDate
-            }
-            return Array(prioritized.prefix(safeBatchSize))
-        }
     }
 
     private func visionPromptInstructions(for analyzedImageFilenames: [String]) -> String {
@@ -1938,30 +2355,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var updated = folder
         var existingNames = Set(updated.files.map(\.displayName))
 
-        for mapping in updated.fileRenameMappings {
+        for index in updated.fileRenameMappings.indices {
+            let mapping = updated.fileRenameMappings[index]
             guard mapping.hasRename, let suggestedName = mapping.suggestedName else { continue }
             guard let normalized = FilenameNormalizer.normalize(
                 suggestedName,
                 originalFilename: mapping.originalFile.displayName,
                 options: options
             ) else {
-                updated.updateRename(
-                    for: mapping.originalFile,
-                    newName: nil,
-                    reason: mapping.renameReason,
-                    confidence: mapping.renameConfidence
-                )
+                updated.fileRenameMappings[index].suggestedName = nil
                 continue
             }
 
             existingNames.remove(mapping.originalFile.displayName)
             let uniqueName = FilenameNormalizer.uniqued(normalized, against: &existingNames)
-            updated.updateRename(
-                for: mapping.originalFile,
-                newName: uniqueName,
-                reason: mapping.renameReason,
-                confidence: mapping.renameConfidence
-            )
+            updated.fileRenameMappings[index].suggestedName =
+                uniqueName == mapping.originalFile.displayName ? nil : uniqueName
         }
 
         updated.subfolders = updated.subfolders.map {
@@ -1976,9 +2385,47 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         mode: RenameRuleApplicationMode
     ) -> FolderSuggestion {
         var updated = folder
+        var mappingIndices = Dictionary(
+            updated.fileRenameMappings.enumerated().map {
+                ($0.element.originalFile.id, $0.offset)
+            },
+            uniquingKeysWith: { _, latest in latest }
+        )
+
+        func updateRename(
+            for file: FileItem,
+            newName: String?,
+            reason: String?
+        ) {
+            let sanitizedName: String?
+            if let newName, !newName.isEmpty {
+                sanitizedName = FilenameSanitizer.sanitize(
+                    newName,
+                    preservingExtension: file.extension,
+                    enforceExtension: true
+                ).sanitizedName
+            } else {
+                sanitizedName = nil
+            }
+            let finalName = sanitizedName == file.displayName ? nil : sanitizedName
+
+            if let index = mappingIndices[file.id] {
+                updated.fileRenameMappings[index].suggestedName = finalName
+                if let reason {
+                    updated.fileRenameMappings[index].renameReason = reason
+                }
+            } else if finalName != nil {
+                mappingIndices[file.id] = updated.fileRenameMappings.count
+                updated.fileRenameMappings.append(FileRenameMapping(
+                    originalFile: file,
+                    suggestedName: finalName,
+                    renameReason: reason
+                ))
+            }
+        }
 
         for file in updated.files {
-            let existing = updated.renameMapping(for: file)
+            let existing = mappingIndices[file.id].map { updated.fileRenameMappings[$0] }
             let transformed = RenameRuleEngine.applyRules(to: file.displayName, rules: rules)
             let sanitization = FilenameSanitizer.sanitize(
                 transformed,
@@ -1991,16 +2438,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             switch mode {
             case .rulesOnly:
                 if let ruleCandidate, shouldUseRule {
-                    updated.updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
+                    updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
                 } else {
-                    updated.updateRename(for: file, newName: nil)
+                    updateRename(for: file, newName: nil, reason: nil)
                 }
             case .beforeAI:
                 if existing?.hasRename == true {
                     continue
                 }
                 if let ruleCandidate, shouldUseRule {
-                    updated.updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
+                    updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
                 }
             }
         }
@@ -2253,23 +2700,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         do {
             defer { stopTimeoutTimer() }
-            let retryPlan: OrganizationPlan
-            if !imagePayload.isEmpty {
-                retryPlan = try await client.analyzeWithImages(
-                    files: files,
-                    imageData: imagePayload,
-                    customInstructions: enhancedPrompt,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            } else {
-                retryPlan = try await client.analyze(
-                    files: files,
-                    customInstructions: enhancedPrompt,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            }
+            let retryPlan = try await analyzeInBoundedBatches(
+                files: files,
+                client: client,
+                imagePayload: imagePayload,
+                instructions: enhancedPrompt,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
             return retryPlan
         } catch {
             LogManager.shared.log("Exclusion retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
@@ -2331,23 +2769,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         do {
             defer { stopTimeoutTimer() }
-            let retryPlan: OrganizationPlan
-            if !imagePayload.isEmpty {
-                retryPlan = try await client.analyzeWithImages(
-                    files: files,
-                    imageData: imagePayload,
-                    customInstructions: enhancedPrompt,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            } else {
-                retryPlan = try await client.analyze(
-                    files: files,
-                    customInstructions: enhancedPrompt,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            }
+            let retryPlan = try await analyzeInBoundedBatches(
+                files: files,
+                client: client,
+                imagePayload: imagePayload,
+                instructions: enhancedPrompt,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
             
             let normalizedRetryPlan = await normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
 
@@ -2500,7 +2929,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         currentDirectory = directory
-        
+
+        let exclusionMatcher = exclusionRules?.matcherSnapshot()
         var files: [FileItem] = []
         
         if let specificFiles = specificFiles {
@@ -2521,10 +2951,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
 
                 if isDirectory.boolValue {
-                    if let nestedFiles = try? await scanner.scanDirectory(at: fileURL, deepScan: shouldDeepScan) {
+                    if let nestedFiles = try? await scanner.scanDirectory(
+                        at: fileURL,
+                        deepScan: shouldDeepScan,
+                        exclusionMatcher: exclusionMatcher
+                    ) {
                         files.append(contentsOf: nestedFiles)
                     }
-                } else if let item = try? await scanner.scanFile(at: fileURL, deepScan: shouldDeepScan) {
+                } else if let item = try? await scanner.scanFile(
+                    at: fileURL,
+                    deepScan: shouldDeepScan,
+                    exclusionMatcher: exclusionMatcher
+                ) {
                     files.append(item)
                 }
             }
@@ -2535,7 +2973,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             updateState(.scanning, stage: "Scanning for new files...", progress: 0.1)
             try checkCancellation()
             
-            let allFiles = try await scanner.scanDirectory(at: directory)
+            let allFiles = try await scanner.scanDirectory(
+                at: directory,
+                exclusionMatcher: exclusionMatcher
+            )
             
             // Filter: Only top-level files (no folders, no deep scan) for incremental drop
             files = allFiles.filter {
@@ -2543,10 +2984,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 return !relativePath.contains("/") // Only files in root
             }
             setScannedFiles(files)
-        }
-
-        if let exclusionRules = exclusionRules {
-            files = exclusionRules.filterFiles(files)
         }
 
         if files.isEmpty {
@@ -2631,7 +3068,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
-            let plan = try await client.analyze(files: files, customInstructions: finalPrompt, personaPrompt: personaPrompt, temperature: temperature)
+            let plan = try await analyzeInBoundedBatches(
+                files: files,
+                client: client,
+                imagePayload: [:],
+                instructions: finalPrompt,
+                personaPrompt: personaPrompt,
+                temperature: temperature,
+                modeOverride: mode
+            )
 
             stopTimeoutTimer()
 
@@ -2751,9 +3196,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let directory = firstFile.deletingLastPathComponent()
 
         // Convert URLs to FileItems
+        let exclusionMatcher = exclusionRules?.matcherSnapshot()
         var files: [FileItem] = []
         for url in selectedFiles {
-            if let item = try? await scanner.scanFile(at: url) {
+            if let item = try? await scanner.scanFile(
+                at: url,
+                exclusionMatcher: exclusionMatcher
+            ) {
                 files.append(item)
             }
         }
@@ -2762,20 +3211,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !files.isEmpty else {
             await MainActor.run {
                 transition(to: .idle, force: true)
-                organizationStage = "No files found to organize"
-            }
-            return 0
-        }
-
-        // Filter with exclusion rules
-        if let exclusionRules = exclusionRules {
-            files = exclusionRules.filterFiles(files)
-        }
-
-        guard !files.isEmpty else {
-            await MainActor.run {
-                transition(to: .idle, force: true)
-                organizationStage = "All selected files are excluded by your rules"
+                organizationStage = exclusionMatcher?.isEmpty == false
+                    ? "All selected files are excluded by your rules"
+                    : "No files found to organize"
             }
             return 0
         }
@@ -2870,7 +3308,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
-            let plan = try await client.analyze(files: files, customInstructions: finalPrompt, personaPrompt: personaPrompt, temperature: temperature)
+            let plan = try await analyzeInBoundedBatches(
+                files: files,
+                client: client,
+                imagePayload: [:],
+                instructions: finalPrompt,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
 
             stopTimeoutTimer()
 
@@ -3168,11 +3613,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
         
-        let plan = try await tempClient.analyze(
+        let plan = try await analyzeInBoundedBatches(
             files: files,
-            customInstructions: instructions,
+            client: tempClient,
+            imagePayload: [:],
+            instructions: instructions,
             personaPrompt: personaPrompt,
-            temperature: nil
+            temperature: nil,
+            modeOverride: tempConfig.mode
         )
         
         return plan
@@ -3202,6 +3650,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         learningsManager?.loadProfileIfNeededForCollection()
         let activeRules = learningsManager?.getActiveRules() ?? []
         guard !activeRules.isEmpty else { return }
+        let compiledRules = activeRules.compactMap { rule -> (id: String, regex: NSRegularExpression)? in
+            guard let regex = try? NSRegularExpression(
+                pattern: rule.pattern,
+                options: .caseInsensitive
+            ) else {
+                return nil
+            }
+            return (rule.id, regex)
+        }
         
         // Build a map of filename to ruleId from the plan suggestions
         var fileToRuleMap: [String: String] = [:]
@@ -3232,14 +3689,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             
             // Priority 2: Try to match the rule's regex pattern against the filename (heuristic backup)
-            for rule in activeRules {
-                // Try to match the rule's regex pattern against the filename
-                if let regex = try? NSRegularExpression(pattern: rule.pattern, options: .caseInsensitive) {
-                    let range = NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)
-                    if regex.firstMatch(in: fileName, options: [], range: range) != nil {
-                        observer.recordRuleApplication(destinationPath: destPath, ruleId: rule.id)
-                        break
-                    }
+            let range = NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)
+            for rule in compiledRules {
+                if rule.regex.firstMatch(in: fileName, options: [], range: range) != nil {
+                    observer.recordRuleApplication(destinationPath: destPath, ruleId: rule.id)
+                    break
                 }
             }
         }
@@ -3297,10 +3751,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 organizationStage = "Ready!"
                 progress = 1.0
                 if let existingPlan = self.currentPlan {
-                    self.planHistory.append(existingPlan)
-                    if self.planHistory.count > Constants.maxPreviewVersions {
-                        self.planHistory.removeFirst()
-                    }
+                    self.recordPreviewVersion(existingPlan)
                 }
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
@@ -3403,10 +3854,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 organizationStage = "Ready!"
                 progress = 1.0
                 if let existingPlan = self.currentPlan {
-                    self.planHistory.append(existingPlan)
-                    if self.planHistory.count > Constants.maxPreviewVersions {
-                        self.planHistory.removeFirst()
-                    }
+                    self.recordPreviewVersion(existingPlan)
                 }
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
@@ -3531,7 +3979,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
             
-            var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
+            var newPlan = try await analyzeInBoundedBatches(
+                files: allFiles,
+                client: client,
+                imagePayload: [:],
+                instructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: nil
+            )
             newPlan.version = (currentPlan.version) + 1
             
             if let exclusionRules = exclusionRules {
@@ -3552,10 +4007,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 organizationStage = "Ready!"
                 progress = 1.0
                 if let existingPlan = self.currentPlan {
-                    self.planHistory.append(existingPlan)
-                    if self.planHistory.count > Constants.maxPreviewVersions {
-                        self.planHistory.removeFirst()
-                    }
+                    self.recordPreviewVersion(existingPlan)
                 }
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)

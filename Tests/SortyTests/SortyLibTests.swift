@@ -6,6 +6,7 @@ import Combine
 actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     let config: AIConfig
     var analyzeHandler: (([FileItem]) async throws -> OrganizationPlan)?
+    private(set) var analyzedBatchSizes: [Int] = []
     @MainActor weak var streamingDelegate: StreamingDelegate?
 
     init(config: AIConfig) {
@@ -13,6 +14,7 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     }
 
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+        analyzedBatchSizes.append(files.count)
         if let handler = analyzeHandler {
             return try await handler(files)
         }
@@ -21,6 +23,10 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
 
     func setHandler(_ handler: @escaping @Sendable ([FileItem]) async throws -> OrganizationPlan) {
         self.analyzeHandler = handler
+    }
+
+    func currentAnalyzedBatchSizes() -> [Int] {
+        analyzedBatchSizes
     }
 
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
@@ -95,6 +101,61 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(folderOrganizer.state, .ready)
         XCTAssertNotNil(folderOrganizer.currentPlan)
         XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.first?.folderName, "Docs")
+    }
+
+    @MainActor
+    func testLargeOrganizeFlowUsesBoundedAIBatches() async throws {
+        for index in 0..<351 {
+            let fileURL = tempDirectory.appendingPathComponent("file-\(index).txt")
+            try Data().write(to: fileURL)
+        }
+
+        folderOrganizer.setAIClientForTesting(mockClient)
+        await mockClient.setHandler { files in
+            OrganizationPlan(
+                suggestions: [
+                    FolderSuggestion(folderName: "Documents", files: files)
+                ]
+            )
+        }
+
+        try await folderOrganizer.organize(directory: tempDirectory)
+        let batchSizes = await mockClient.currentAnalyzedBatchSizes()
+
+        XCTAssertEqual(batchSizes, [350, 1])
+        XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 351)
+        XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.count, 1)
+    }
+
+    @MainActor
+    func testLargeRenameFlowUsesSmallerBoundedAIBatches() async throws {
+        for index in 0..<121 {
+            let fileURL = tempDirectory.appendingPathComponent("rename-\(index).txt")
+            try Data().write(to: fileURL)
+        }
+
+        let renameConfig = AIConfig(
+            apiKey: "test-key",
+            model: "test-model",
+            mode: .renameOnly,
+            enableDeepScan: false,
+            enableVision: false
+        )
+        let renameClient = MockAIClient(config: renameConfig)
+        folderOrganizer.setAIClientForTesting(renameClient)
+        await renameClient.setHandler { files in
+            OrganizationPlan(
+                suggestions: [
+                    FolderSuggestion(folderName: "", files: files)
+                ]
+            )
+        }
+
+        try await folderOrganizer.organize(directory: tempDirectory)
+        let batchSizes = await renameClient.currentAnalyzedBatchSizes()
+
+        XCTAssertEqual(batchSizes, [120, 1])
+        XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 121)
     }
 
     @MainActor

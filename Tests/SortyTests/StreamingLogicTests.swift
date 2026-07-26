@@ -128,6 +128,16 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertFalse(organizer.isStreaming)
     }
 
+    func testLargeStreamRetentionAndPresentationAreBounded() {
+        let content = String(repeating: "x", count: 400_000)
+
+        organizer.didComplete(content: content)
+
+        XCTAssertLessThanOrEqual(organizer.streamingContent.count, 256_000)
+        XCTAssertLessThanOrEqual(organizer.displayStreamingContent.count, 48_000)
+        XCTAssertLessThanOrEqual(organizer.truncatedDisplayStreamingContent.count, 1_003)
+    }
+
     func testChunkAfterCompletedStreamStartsFreshSession() async {
         organizer.didReceiveChunk("first stream")
         try? await Task.sleep(nanoseconds: 100_000_000)

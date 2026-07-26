@@ -702,4 +702,34 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan?.suggestions.first?.tags(for: files[0]), ["Finance", "2026"])
         XCTAssertEqual(plan?.suggestions.first?.tags(for: files[1]), ["Work", "Review"])
     }
+
+    func testCompactFileIDsResolveWithinLargeInventory() throws {
+        let files = (1...25_000).map { index in
+            FileItem(
+                path: "/large/file-\(index).txt",
+                name: "file-\(index)",
+                extension: "txt",
+                size: Int64(index),
+                isDirectory: false
+            )
+        }
+        let response = """
+        {
+          "folder_assignments": [
+            {
+              "name": "Selected",
+              "file_ids": [1, 12500, 25000]
+            }
+          ]
+        }
+        """
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: files)
+
+        XCTAssertEqual(
+            plan.suggestions.first?.files.map(\.displayName),
+            ["file-1.txt", "file-12500.txt", "file-25000.txt"]
+        )
+        XCTAssertEqual(plan.unorganizedFiles.count, 24_997)
+    }
 }

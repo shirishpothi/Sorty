@@ -11,6 +11,81 @@ import Foundation
 struct ResponseParser {
     // MARK: - Response Models
 
+    private struct FileLookup {
+        let files: [FileItem]
+        private let exactNames: [String: FileItem]
+        private let foldedNames: [String: FileItem]
+        private let extensions: [String: FileItem]
+
+        init(files: [FileItem]) {
+            self.files = files
+            var exactNames: [String: FileItem] = [:]
+            var foldedNames: [String: FileItem] = [:]
+            var extensions: [String: FileItem] = [:]
+            exactNames.reserveCapacity(files.count * 2)
+            foldedNames.reserveCapacity(files.count * 2)
+
+            for file in files {
+                if exactNames[file.displayName] == nil {
+                    exactNames[file.displayName] = file
+                }
+                if exactNames[file.name] == nil {
+                    exactNames[file.name] = file
+                }
+
+                let displayKey = file.displayName.lowercased()
+                let nameKey = file.name.lowercased()
+                if foldedNames[displayKey] == nil {
+                    foldedNames[displayKey] = file
+                }
+                if foldedNames[nameKey] == nil {
+                    foldedNames[nameKey] = file
+                }
+
+                let extensionKey = file.extension.lowercased()
+                if !extensionKey.isEmpty, extensions[extensionKey] == nil {
+                    extensions[extensionKey] = file
+                }
+            }
+
+            self.exactNames = exactNames
+            self.foldedNames = foldedNames
+            self.extensions = extensions
+        }
+
+        func resolve(_ filename: String) -> FileItem? {
+            let candidates = ResponseParser.normalizedFilenameCandidates(from: filename)
+            guard !candidates.isEmpty else { return nil }
+
+            for candidate in candidates {
+                if let exact = exactNames[candidate] {
+                    return exact
+                }
+            }
+            for candidate in candidates {
+                if let folded = foldedNames[candidate.lowercased()] {
+                    return folded
+                }
+            }
+            for candidate in candidates where candidate.count <= 5 && !candidate.contains(".") {
+                if let extensionMatch = extensions[candidate.lowercased()] {
+                    return extensionMatch
+                }
+            }
+
+            // Partial matching is deliberately the last resort. Normal compact
+            // responses resolve through the O(1) indexes above.
+            for candidate in candidates where candidate.count > 3 {
+                if let partial = files.first(where: {
+                    $0.displayName.contains(candidate) || candidate.contains($0.displayName)
+                }) {
+                    return partial
+                }
+            }
+            return nil
+        }
+    }
+
     private struct LossyArray<Element: Decodable>: Decodable {
         let elements: [Element]
 
@@ -314,6 +389,7 @@ struct ResponseParser {
         guard let jsonData = cleanedJSON.data(using: .utf8) else {
             throw ParserError.invalidJSON
         }
+        let fileLookup = FileLookup(files: originalFiles)
 
         // Check for ultra-compact format first
         if let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
@@ -325,7 +401,7 @@ struct ResponseParser {
                     
                     var files: [FileItem] = []
                     for fileName in fileNames {
-                        if let file = findFile(named: fileName, in: originalFiles) {
+                        if let file = fileLookup.resolve(fileName) {
                             files.append(file)
                         }
                     }
@@ -379,7 +455,12 @@ struct ResponseParser {
 
         // Convert response to OrganizationPlan
         let suggestions = folderPayload.map { folder in
-            convertFolderResponse(folder, originalFiles: originalFiles, fileIdIndex: fileIdIndex, mode: mode)
+            convertFolderResponse(
+                folder,
+                fileLookup: fileLookup,
+                fileIdIndex: fileIdIndex,
+                mode: mode
+            )
         }
         let assignedFileIDs = collectAssignedFileIDs(from: suggestions)
 
@@ -403,7 +484,7 @@ struct ResponseParser {
         var seenUnorganizedIDs: Set<UUID> = []
 
         for detail in unorganizedDetails {
-            guard let file = findFile(named: detail.filename, in: originalFiles) else { continue }
+            guard let file = fileLookup.resolve(detail.filename) else { continue }
             guard !assignedFileIDs.contains(file.id) else { continue }
             guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
             unorganizedFiles.append(file)
@@ -452,7 +533,7 @@ struct ResponseParser {
 
     private static func convertFolderResponse(
         _ folder: FolderResponse,
-        originalFiles: [FileItem],
+        fileLookup: FileLookup,
         fileIdIndex: [Int: FileItem],
         mode: OrganizationMode
     ) -> FolderSuggestion {
@@ -474,7 +555,7 @@ struct ResponseParser {
         }
 
         for fileEntry in folder.files {
-            if let file = findFile(named: fileEntry.filename, in: originalFiles) {
+            if let file = fileLookup.resolve(fileEntry.filename) {
                 if seenFileIds.insert(file.id).inserted {
                     files.append(file)
                 }
@@ -519,7 +600,7 @@ struct ResponseParser {
         // Collect tag and comment mappings
         var tagMappings: [FileTagMapping] = []
         for fileEntry in folder.files {
-           if let file = findFile(named: fileEntry.filename, in: originalFiles) {
+           if let file = fileLookup.resolve(fileEntry.filename) {
                let tags = fileEntry.tags ?? []
                let comment = fileEntry.comment
                if !tags.isEmpty || (comment != nil && !comment!.isEmpty) {
@@ -529,7 +610,12 @@ struct ResponseParser {
         }
 
         let subfolders = (folder.subfolders ?? []).map { subfolder in
-            convertFolderResponse(subfolder, originalFiles: originalFiles, fileIdIndex: fileIdIndex, mode: mode)
+            convertFolderResponse(
+                subfolder,
+                fileLookup: fileLookup,
+                fileIdIndex: fileIdIndex,
+                mode: mode
+            )
         }
 
         return FolderSuggestion(
@@ -577,50 +663,6 @@ struct ResponseParser {
             renameReason: cleanedReason.isEmpty ? nil : cleanedReason,
             renameConfidence: clampedConfidence
         )
-    }
-
-    /// Find a file by name with fuzzy matching support
-    private static func findFile(named filename: String, in files: [FileItem]) -> FileItem? {
-        let candidates = normalizedFilenameCandidates(from: filename)
-        guard !candidates.isEmpty else { return nil }
-
-        // Exact match on displayName or name
-        for candidate in candidates {
-            if let exact = files.first(where: { $0.displayName == candidate }) {
-                return exact
-            }
-            if let exactName = files.first(where: { $0.name == candidate }) {
-                return exactName
-            }
-        }
-
-        // Case-insensitive match
-        for candidate in candidates {
-            let lowered = candidate.lowercased()
-            if let caseInsensitive = files.first(where: {
-                $0.displayName.lowercased() == lowered || $0.name.lowercased() == lowered
-            }) {
-                return caseInsensitive
-            }
-        }
-
-        // Special case: AI provides extension only (like "sh", "png", "jpg")
-        for candidate in candidates where candidate.count <= 5 && !candidate.contains(".") {
-            if let extMatch = files.first(where: { $0.extension.lowercased() == candidate.lowercased() }) {
-                return extMatch
-            }
-        }
-
-        // Partial match (only for names longer than 3 chars to avoid false positives)
-        for candidate in candidates where candidate.count > 3 {
-            if let partial = files.first(where: {
-                $0.displayName.contains(candidate) || candidate.contains($0.displayName)
-            }) {
-                return partial
-            }
-        }
-
-        return nil
     }
 
     private static func normalizedFilenameCandidates(from raw: String) -> [String] {
@@ -783,13 +825,14 @@ struct ResponseParser {
         var assignedFiles: Set<UUID> = []
         let workingJSON = stripProgressPreamble(jsonString)
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
+        let fileLookup = FileLookup(files: originalFiles)
 
         for segment in folderObjectSegments(in: workingJSON) {
             if let data = sanitizeJSONPayload(segment).data(using: .utf8),
                let folder = try? JSONDecoder().decode(FolderResponse.self, from: data) {
                 let suggestion = convertFolderResponse(
                     folder,
-                    originalFiles: originalFiles,
+                    fileLookup: fileLookup,
                     fileIdIndex: fileIdIndex,
                     mode: mode
                 )
@@ -807,7 +850,7 @@ struct ResponseParser {
             var folderFiles: [FileItem] = []
 
             for fileName in fileNames {
-                guard let file = findFile(named: fileName, in: originalFiles),
+                guard let file = fileLookup.resolve(fileName),
                       assignedFiles.insert(file.id).inserted else { continue }
                 folderFiles.append(file)
             }

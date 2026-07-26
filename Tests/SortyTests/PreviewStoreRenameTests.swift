@@ -101,4 +101,47 @@ final class PreviewStoreRenameTests: XCTestCase {
         XCTAssertTrue(persistedMapping?.isAutoSkippedForLowConfidence ?? false)
         XCTAssertEqual(persistedMapping?.finalFilename, file.displayName)
     }
+
+    func testLargePlanStartsCollapsedAndBoundsExpandedRows() {
+        let files = (0..<3_000).map { index in
+            makeFile("file-\(index)")
+        }
+        let mappings = files.map { file in
+            FileRenameMapping(
+                originalFile: file,
+                suggestedName: "renamed-\(file.displayName)"
+            )
+        }
+        let folder = FolderSuggestion(
+            folderName: "Documents",
+            files: files,
+            fileRenameMappings: mappings
+        )
+        let store = PreviewStore(plan: OrganizationPlan(suggestions: [folder]))
+
+        XCTAssertEqual(store.flattenedRows.count, 1)
+        XCTAssertTrue(store.renameMappings.isEmpty)
+
+        store.toggleFolder(id: folder.id.uuidString)
+
+        XCTAssertEqual(store.flattenedRows.count, 502)
+        XCTAssertEqual(store.renameMappings.count, 500)
+        guard case .remainingFiles(let count) = store.flattenedRows.last?.type else {
+            return XCTFail("Expected a bounded remainder row")
+        }
+        XCTAssertEqual(count, 2_500)
+    }
+
+    func testLargeUnorganizedSectionBoundsRows() {
+        let files = (0..<3_000).map { index in
+            makeFile("unorganized-\(index)")
+        }
+        let store = PreviewStore(plan: OrganizationPlan(unorganizedFiles: files))
+
+        XCTAssertEqual(store.flattenedRows.count, 502)
+        guard case .remainingFiles(let count) = store.flattenedRows.last?.type else {
+            return XCTFail("Expected a bounded remainder row")
+        }
+        XCTAssertEqual(count, 2_500)
+    }
 }

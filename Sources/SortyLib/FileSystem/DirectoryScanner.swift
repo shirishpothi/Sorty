@@ -32,6 +32,7 @@ actor DirectoryScanner {
     // Configuration
     private var normalBatchSize = 50
     private var pressureBatchSize = 10
+    private let enumerationProgressInterval = 1_000
     private let pauseTimeout: Duration = .seconds(30)
     private let duplicateScanBatchSize = 2_048
     private let maximumCompleteSemanticFileCount = 5_000
@@ -43,6 +44,8 @@ actor DirectoryScanner {
 
     /// Callback for deep scan progress updates
     private var deepScanProgressCallback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
+    /// Enumeration progress has no stable total until the scan finishes.
+    private var scanProgressCallback: (@Sendable (_ current: Int) -> Void)?
     private var deepScanAnalyzedCount = 0
 
     deinit {
@@ -76,7 +79,9 @@ actor DirectoryScanner {
         includeHidden: Bool = false,
         deepScan: Bool = false,
         computeHashes: Bool = false,
-        skipCloudPlaceholders: Bool = true
+        skipCloudPlaceholders: Bool = true,
+        deepScanFileLimit: Int? = nil,
+        exclusionMatcher: ExclusionMatcher? = nil
     ) async throws -> [FileItem] {
         guard !isScanning else {
             throw ScannerError.alreadyScanning
@@ -118,6 +123,9 @@ actor DirectoryScanner {
         guard fileManager.isReadableFile(atPath: url.path) else {
             throw ScannerError.pathNotReadable
         }
+        if exclusionMatcher?.shouldPruneDirectory(at: url) == true {
+            return []
+        }
 
         // Check initial memory pressure
         await checkMemoryPressure()
@@ -129,6 +137,8 @@ actor DirectoryScanner {
             deepScan: deepScan,
             computeHashes: computeHashes,
             skipCloudPlaceholders: skipCloudPlaceholders,
+            deepScanFileLimit: deepScanFileLimit,
+            exclusionMatcher: exclusionMatcher,
             files: &files
         )
 
@@ -429,7 +439,8 @@ actor DirectoryScanner {
         at url: URL,
         deepScan: Bool = false,
         computeHashes: Bool = false,
-        skipCloudPlaceholders: Bool = true
+        skipCloudPlaceholders: Bool = true,
+        exclusionMatcher: ExclusionMatcher? = nil
     ) async throws -> FileItem {
         let fileManager = FileManager.default
 
@@ -456,6 +467,15 @@ actor DirectoryScanner {
 
         let pathExtension = url.pathExtension
         let fileName = url.deletingPathExtension().lastPathComponent
+
+        if exclusionMatcher?.shouldExcludeFile(
+            at: url,
+            size: Int64(size),
+            creationDate: creationDate,
+            modificationDate: modificationDate
+        ) == true {
+            throw ScannerError.excluded
+        }
 
         let hasCloudSignals = hasPotentialCloudSignals(
             at: url,
@@ -528,6 +548,8 @@ actor DirectoryScanner {
         deepScan: Bool,
         computeHashes: Bool,
         skipCloudPlaceholders: Bool,
+        deepScanFileLimit: Int?,
+        exclusionMatcher: ExclusionMatcher?,
         files: inout [FileItem]
     ) async throws {
         let cloudResourceKeys: [URLResourceKey] = [
@@ -592,13 +614,27 @@ actor DirectoryScanner {
             let lastAccessDate = resourceValues?.contentAccessDate
             let finderTags = resourceValues?.tagNames
 
-            // Skip if it's a directory (we only want files)
             if isDirectory {
+                if exclusionMatcher?.shouldPruneDirectory(at: fileURL) == true {
+                    enumerator.skipDescendants()
+                }
                 continue
             }
 
             let pathExtension = fileURL.pathExtension
             let fileName = fileURL.deletingPathExtension().lastPathComponent
+
+            // Reject excluded files before cloud xattrs, OCR, image analysis,
+            // hashing, and FileItem retention.
+            if exclusionMatcher?.shouldExcludeFile(
+                at: fileURL,
+                size: Int64(size),
+                creationDate: creationDate,
+                modificationDate: modificationDate
+            ) == true {
+                continue
+            }
+
             let hasCloudSignals = hasPotentialCloudSignals(
                 at: fileURL,
                 resourceValues: resourceValues,
@@ -618,16 +654,24 @@ actor DirectoryScanner {
             // Determine cloud status for the file
             let cloudStatus = hasCloudSignals ? detectCloudStatus(at: fileURL) : nil
 
-            // Read Finder comment via extended attribute
-            let finderComment = Self.readFinderComment(at: fileURL)
-
             // Deep scan: extract content metadata (skipped under memory pressure)
             var contentMetadata: ContentMetadata?
-            if effectiveDeepScan {
+            let isWithinDeepScanBudget = deepScanFileLimit.map {
+                deepScanAnalyzedCount < max(0, $0)
+            } ?? true
+            if effectiveDeepScan && isWithinDeepScanBudget {
                 contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
                 deepScanAnalyzedCount += 1
                 deepScanProgressCallback?(deepScanAnalyzedCount, 0)
+            } else if effectiveDeepScan && !isWithinDeepScanBudget && degradationReason == nil {
+                lastScanWasDegraded = true
+                degradationReason =
+                    "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
             }
+
+            // Finder comments require a separate xattr syscall. Read them only
+            // for files that already receive the more expensive deep analysis.
+            let finderComment = contentMetadata == nil ? nil : Self.readFinderComment(at: fileURL)
 
             let extractedOCRText = contentMetadata?.ocrText
             let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
@@ -662,6 +706,9 @@ actor DirectoryScanner {
 
             // Periodic memory pressure check and yield
             if scannedCount % getCurrentBatchSize() == 0 {
+                if scannedCount % enumerationProgressInterval == 0 {
+                    scanProgressCallback?(scannedCount)
+                }
                 await Task.yield()
                 await checkMemoryPressure()
 
@@ -673,6 +720,8 @@ actor DirectoryScanner {
                 }
             }
         }
+
+        scanProgressCallback?(scannedCount)
 
         // Final memory state logging
         if memoryPressureState != .normal {
@@ -696,6 +745,12 @@ actor DirectoryScanner {
         _ callback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
     ) {
         deepScanProgressCallback = callback
+    }
+
+    func setScanProgressCallback(
+        _ callback: (@Sendable (_ current: Int) -> Void)?
+    ) {
+        scanProgressCallback = callback
     }
 
     // MARK: - Finder Metadata
@@ -1061,6 +1116,7 @@ enum ScannerError: LocalizedError {
     case notDirectory
     case pathNotReadable
     case cloudPlaceholder
+    case excluded
     case enumerationFailed
     case memoryPressureTimeout
 
@@ -1078,6 +1134,8 @@ enum ScannerError: LocalizedError {
             return "The specified scan location is not readable"
         case .cloudPlaceholder:
             return "The cloud file is not available locally"
+        case .excluded:
+            return "The file is excluded by the current rules"
         case .enumerationFailed:
             return "Failed to enumerate directory contents"
         case .memoryPressureTimeout:

@@ -92,6 +92,7 @@ enum OrganizationModePlanEnforcer {
 
     private struct RenameOnlyGroup {
         var files: [FileItem] = []
+        var fileIDs: Set<UUID> = []
         var renameMappings: [FileRenameMapping] = []
         var tagMappings: [FileTagMapping] = []
     }
@@ -105,6 +106,15 @@ enum OrganizationModePlanEnforcer {
         var rejectedFiles: [FileItem] = []
 
         func collect(_ suggestion: FolderSuggestion) {
+            let renameMappings = Dictionary(
+                suggestion.fileRenameMappings.map { ($0.originalFile.id, $0) },
+                uniquingKeysWith: { _, latest in latest }
+            )
+            let tagMappings = Dictionary(
+                suggestion.fileTagMappings.map { ($0.originalFile.id, $0) },
+                uniquingKeysWith: { _, latest in latest }
+            )
+
             for file in suggestion.files {
                 guard let fileURL = file.url else {
                     rejectedFiles.append(file)
@@ -119,16 +129,14 @@ enum OrganizationModePlanEnforcer {
 
                 let relativeParent = relativePath(of: parentPath, within: canonicalBasePath)
                 var group = groups[relativeParent, default: RenameOnlyGroup()]
-                if !group.files.contains(where: { $0.id == file.id }) {
+                if group.fileIDs.insert(file.id).inserted {
                     group.files.append(file)
-                }
-                if let mapping = suggestion.fileRenameMappings.first(where: { $0.originalFile.id == file.id }) {
-                    group.renameMappings.removeAll { $0.originalFile.id == file.id }
-                    group.renameMappings.append(mapping)
-                }
-                if let mapping = suggestion.fileTagMappings.first(where: { $0.originalFile.id == file.id }) {
-                    group.tagMappings.removeAll { $0.originalFile.id == file.id }
-                    group.tagMappings.append(mapping)
+                    if let mapping = renameMappings[file.id] {
+                        group.renameMappings.append(mapping)
+                    }
+                    if let mapping = tagMappings[file.id] {
+                        group.tagMappings.append(mapping)
+                    }
                 }
                 groups[relativeParent] = group
             }

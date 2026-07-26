@@ -525,11 +525,11 @@ public actor FileSystemManager {
 
     private func resolvedFinalFilename(
         for file: FileItem,
-        in suggestion: FolderSuggestion,
+        mapping: FileRenameMapping?,
         sourceURL: URL,
         destinationFolderURL: URL
     ) -> (name: String, metadata: FileOperation.OperationMetadata?) {
-        guard let mapping = suggestion.renameMapping(for: file),
+        guard let mapping,
               mapping.hasRename,
               let proposedName = mapping.suggestedName else {
             return (sourceURL.lastPathComponent, nil)
@@ -561,9 +561,30 @@ public actor FileSystemManager {
     ) -> FileOperation.OperationType {
         renameMetadata == nil ? .moveFile : .renameFile
     }
+
+    private func renameMappingsByFileID(
+        in suggestion: FolderSuggestion
+    ) -> [UUID: FileRenameMapping] {
+        Dictionary(
+            suggestion.fileRenameMappings.map { ($0.originalFile.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+    }
+
+    private func finalFilenamesByFileID(
+        in suggestion: FolderSuggestion
+    ) -> [UUID: String] {
+        let mappings = renameMappingsByFileID(in: suggestion)
+        return Dictionary(
+            uniqueKeysWithValues: suggestion.files.map { file in
+                (file.id, mappings[file.id]?.finalFilename ?? file.displayName)
+            }
+        )
+    }
     
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
+        let renameMappings = renameMappingsByFileID(in: suggestion)
         
         let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
@@ -581,7 +602,7 @@ public actor FileSystemManager {
 
             let resolvedName = resolvedFinalFilename(
                 for: file,
-                in: suggestion,
+                mapping: renameMappings[file.id],
                 sourceURL: sourceURL,
                 destinationFolderURL: folderURL
             )
@@ -665,6 +686,7 @@ public actor FileSystemManager {
 
     private func detectConflictsInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) -> [FileConflict] {
         var conflicts: [FileConflict] = []
+        let renameMappings = renameMappingsByFileID(in: suggestion)
 
         guard let folderURL = try? resolveDestinationFolderURL(
             folderName: suggestion.folderName,
@@ -679,7 +701,7 @@ public actor FileSystemManager {
 
             let finalFilename = resolvedFinalFilename(
                 for: file,
-                in: suggestion,
+                mapping: renameMappings[file.id],
                 sourceURL: sourceURL,
                 destinationFolderURL: folderURL
             ).name
@@ -859,6 +881,7 @@ public actor FileSystemManager {
 
     private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
+        let finalFilenames = finalFilenamesByFileID(in: suggestion)
         
         let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
@@ -876,7 +899,7 @@ public actor FileSystemManager {
             }
 
             // Find the file name (use the new name if it was renamed)
-            let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
+            let finalFilename = finalFilenames[mapping.originalFile.id] ?? mapping.originalFile.displayName
             
             let fileURL = folderURL.appendingPathComponent(finalFilename)
             
@@ -927,15 +950,37 @@ public actor FileSystemManager {
     }
 
     private struct OrganizationProgress {
+        private static let minimumOperationInterval = 250
+        private static let minimumTimeInterval: TimeInterval = 0.15
+
         let totalOperations: Int
         let handler: (@Sendable (Double, String) -> Void)?
         private(set) var completedOperations = 0
+        private var lastReportedOperations = 0
+        private var lastReportedAt = Date.distantPast
+
+        init(
+            totalOperations: Int,
+            handler: (@Sendable (Double, String) -> Void)?
+        ) {
+            self.totalOperations = totalOperations
+            self.handler = handler
+        }
 
         mutating func report(_ message: String) {
             completedOperations += 1
+            let now = Date()
+            let shouldReport = completedOperations == 1
+                || completedOperations >= totalOperations
+                || completedOperations - lastReportedOperations >= Self.minimumOperationInterval
+                || now.timeIntervalSince(lastReportedAt) >= Self.minimumTimeInterval
+            guard shouldReport else { return }
+
             let rawProgress = totalOperations > 0
                 ? Double(completedOperations) / Double(totalOperations)
                 : 1.0
+            lastReportedOperations = completedOperations
+            lastReportedAt = now
             handler?(min(rawProgress, 1.0), message)
         }
     }
@@ -969,6 +1014,7 @@ public actor FileSystemManager {
             let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
             let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
             let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
+            allOperations.reserveCapacity(totalFiles + totalFolders)
             var operationProgress = OrganizationProgress(totalOperations: totalOps, handler: progress)
 
             if !dryRun {
@@ -1039,7 +1085,7 @@ public actor FileSystemManager {
 
             if !dryRun {
                 progress?(0.9, "Cleaning up empty folders...")
-                undoStack.append(contentsOf: allOperations)
+                undoStack = allOperations
 
                 let fileOps = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }
                 let sourceFolders = Set(fileOps.compactMap { URL(fileURLWithPath: $0.sourcePath).deletingLastPathComponent().path })
@@ -1078,7 +1124,7 @@ public actor FileSystemManager {
                 throw error
             }
 
-            undoStack.append(contentsOf: allOperations)
+            undoStack = allOperations
             if !allFailures.isEmpty {
                 DebugLogger.log("Organization failed after \(allOperations.count) recorded operation(s) and \(allFailures.count) skipped file(s)")
                 for failure in allFailures {
@@ -1191,6 +1237,7 @@ public actor FileSystemManager {
     ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
+        let renameMappings = renameMappingsByFileID(in: suggestion)
         
         let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
@@ -1209,7 +1256,7 @@ public actor FileSystemManager {
             
             let resolvedName = resolvedFinalFilename(
                 for: file,
-                in: suggestion,
+                mapping: renameMappings[file.id],
                 sourceURL: sourceURL,
                 destinationFolderURL: folderURL
             )
@@ -1348,6 +1395,7 @@ public actor FileSystemManager {
     ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
+        let finalFilenames = finalFilenamesByFileID(in: suggestion)
         
         try Task.checkCancellation()
         
@@ -1368,7 +1416,7 @@ public actor FileSystemManager {
                 }
             }
             
-            let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
+            let finalFilename = finalFilenames[mapping.originalFile.id] ?? mapping.originalFile.displayName
             let fileURL = folderURL.appendingPathComponent(finalFilename)
             
             if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {

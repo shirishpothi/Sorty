@@ -188,8 +188,12 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
 
     /// Returns files with their final names (renamed or original)
     public var filesWithFinalNames: [(file: FileItem, finalName: String)] {
-        files.map { file in
-            let mapping = fileRenameMappings.first { $0.originalFile.id == file.id }
+        let mappingsByFileID = Dictionary(
+            fileRenameMappings.map { ($0.originalFile.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        return files.map { file in
+            let mapping = mappingsByFileID[file.id]
             let finalName = mapping?.finalFilename ?? file.displayName
             return (file, finalName)
         }

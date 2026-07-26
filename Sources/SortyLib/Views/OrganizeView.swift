@@ -288,7 +288,7 @@ struct OrganizeView: View {
                     stats: plan.generationStats,
                     totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
                     totalFolders: plan.suggestions.count,
-                    renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
+                    renameCount: plan.suggestions.reduce(0) { $0 + $1.renameCount },
                     mode: settingsViewModel.config.mode,
                     directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
                     onReturnToStart: returnToStartAfterCancellation

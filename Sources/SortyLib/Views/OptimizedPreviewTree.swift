@@ -25,6 +25,7 @@ struct FlattenedRow: Identifiable, Equatable {
         case file(FileItem, parentFolderID: UUID)
         case unorganizedHeader
         case unorganizedFile(FileItem)
+        case remainingFiles(count: Int)
     }
     
     static func == (lhs: FlattenedRow, rhs: FlattenedRow) -> Bool {
@@ -36,6 +37,9 @@ struct FlattenedRow: Identifiable, Equatable {
 
 @MainActor
 class PreviewStore: ObservableObject {
+    private static let automaticExpansionFileLimit = 2_000
+    private static let renderedFilesPerSectionLimit = 500
+
     @Published private(set) var flattenedRows: [FlattenedRow] = []
     @Published private(set) var plan: OrganizationPlan
     @Published var expandedFolders: Set<String> = []
@@ -172,7 +176,7 @@ class PreviewStore: ObservableObject {
     
     private func expandAllFolders() {
         let ids = collectFolderIDs(from: plan)
-        expandedFolders = ids
+        expandedFolders = plan.totalFiles <= Self.automaticExpansionFileLimit ? ids : []
         knownFolderIDs = ids
     }
 
@@ -180,7 +184,9 @@ class PreviewStore: ObservableObject {
         let currentIDs = collectFolderIDs(from: plan)
         let newIDs = currentIDs.subtracting(knownFolderIDs)
         expandedFolders = expandedFolders.intersection(currentIDs)
-        expandedFolders.formUnion(newIDs)
+        if plan.totalFiles <= Self.automaticExpansionFileLimit {
+            expandedFolders.formUnion(newIDs)
+        }
         knownFolderIDs = currentIDs
     }
 
@@ -211,55 +217,9 @@ class PreviewStore: ObservableObject {
         lastExpandedFolders = expandedFolders
 
         var rows: [FlattenedRow] = []
+        var visibleFiles: [FileItem] = []
+        visibleFiles.reserveCapacity(min(plan.totalFiles, Self.renderedFilesPerSectionLimit))
 
-        // Always recompute rename mappings when plan version changes
-        var mappings: [UUID: FileRenameMapping] = [:]
-
-        func cacheMappings(for folder: FolderSuggestion) {
-            for file in folder.files {
-                if let mapping = folder.renameMapping(for: file) {
-                    mappings[file.id] = mapping
-                }
-            }
-            for subfolder in folder.subfolders {
-                cacheMappings(for: subfolder)
-            }
-        }
-
-        for suggestion in plan.suggestions {
-            cacheMappings(for: suggestion)
-        }
-
-        var tagsByFileID: [UUID: [String]] = [:]
-        var tagsByFolderID: [UUID: [String]] = [:]
-        var commentsByFolderID: [UUID: String] = [:]
-        var commentsByFileID: [UUID: String] = [:]
-
-        func cacheTagMappings(for folder: FolderSuggestion) {
-            for m in folder.fileTagMappings {
-                tagsByFileID[m.originalFile.id] = m.tags
-                if let comment = m.comment, !comment.isEmpty {
-                    commentsByFileID[m.originalFile.id] = comment
-                }
-            }
-            for sub in folder.subfolders { cacheTagMappings(for: sub) }
-        }
-
-        func cacheFolderMetadata(for folder: FolderSuggestion) {
-            if !folder.tags.isEmpty {
-                tagsByFolderID[folder.id] = folder.tags
-            }
-            if let comment = folder.comment, !comment.isEmpty {
-                commentsByFolderID[folder.id] = comment
-            }
-            for sub in folder.subfolders { cacheFolderMetadata(for: sub) }
-        }
-
-        for suggestion in plan.suggestions {
-            cacheTagMappings(for: suggestion)
-            cacheFolderMetadata(for: suggestion)
-        }
-        
         func processFolder(_ folder: FolderSuggestion, depth: Int) {
             let id = folder.id.uuidString
             let isExpanded = expandedFolders.contains(id)
@@ -278,11 +238,22 @@ class PreviewStore: ObservableObject {
                 }
                 
                 // Add files
-                for (index, file) in folder.files.enumerated() {
+                let visibleFileCount = min(folder.files.count, Self.renderedFilesPerSectionLimit)
+                for index in 0..<visibleFileCount {
+                    let file = folder.files[index]
+                    visibleFiles.append(file)
                     rows.append(FlattenedRow(
                         id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
                         depth: depth + 1,
                         type: .file(file, parentFolderID: folder.id),
+                        isExpanded: false
+                    ))
+                }
+                if folder.files.count > visibleFileCount {
+                    rows.append(FlattenedRow(
+                        id: "\(folder.id.uuidString)-remaining",
+                        depth: depth + 1,
+                        type: .remainingFiles(count: folder.files.count - visibleFileCount),
                         isExpanded: false
                     ))
                 }
@@ -301,7 +272,10 @@ class PreviewStore: ObservableObject {
                 isExpanded: true
             ))
 
-            for (index, file) in plan.unorganizedFiles.enumerated() {
+            let visibleFileCount = min(plan.unorganizedFiles.count, Self.renderedFilesPerSectionLimit)
+            for index in 0..<visibleFileCount {
+                let file = plan.unorganizedFiles[index]
+                visibleFiles.append(file)
                 rows.append(FlattenedRow(
                     id: "unorganized-\(file.id.uuidString)-\(index)",
                     depth: 1,
@@ -309,42 +283,64 @@ class PreviewStore: ObservableObject {
                     isExpanded: false
                 ))
             }
+            if plan.unorganizedFiles.count > visibleFileCount {
+                rows.append(FlattenedRow(
+                    id: "unorganized-remaining",
+                    depth: 1,
+                    type: .remainingFiles(count: plan.unorganizedFiles.count - visibleFileCount),
+                    isExpanded: false
+                ))
+            }
         }
 
-        // Compute duplicate mappings based on file hashes
-        let duplicatesByFileID = computeDuplicateMappings()
+        let visibleFileIDs = Set(visibleFiles.map(\.id))
+        var mappings: [UUID: FileRenameMapping] = [:]
+        var tagsByFileID: [UUID: [String]] = [:]
+        var tagsByFolderID: [UUID: [String]] = [:]
+        var commentsByFolderID: [UUID: String] = [:]
+        var commentsByFileID: [UUID: String] = [:]
+
+        func cacheVisibleMetadata(for folder: FolderSuggestion) {
+            for mapping in folder.fileRenameMappings
+                where visibleFileIDs.contains(mapping.originalFile.id) {
+                mappings[mapping.originalFile.id] = mapping
+            }
+            for mapping in folder.fileTagMappings
+                where visibleFileIDs.contains(mapping.originalFile.id) {
+                tagsByFileID[mapping.originalFile.id] = mapping.tags
+                if let comment = mapping.comment, !comment.isEmpty {
+                    commentsByFileID[mapping.originalFile.id] = comment
+                }
+            }
+            if !folder.tags.isEmpty {
+                tagsByFolderID[folder.id] = folder.tags
+            }
+            if let comment = folder.comment, !comment.isEmpty {
+                commentsByFolderID[folder.id] = comment
+            }
+            for subfolder in folder.subfolders {
+                cacheVisibleMetadata(for: subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            cacheVisibleMetadata(for: suggestion)
+        }
 
         self.renameMappings = mappings
         self.tagMappings = tagsByFileID
         self.folderTagMappings = tagsByFolderID
         self.folderCommentMappings = commentsByFolderID
         self.fileCommentMappings = commentsByFileID
-        self.duplicateMappings = duplicatesByFileID
+        self.duplicateMappings = computeDuplicateMappings(for: visibleFiles)
         self.flattenedRows = rows
     }
 
     /// Computes duplicate mappings by grouping files with the same hash
-    private func computeDuplicateMappings() -> [UUID: DuplicateInfo] {
-        var allFiles: [FileItem] = []
-
-        // Collect all files from suggestions
-        func collectFiles(from folder: FolderSuggestion) {
-            allFiles.append(contentsOf: folder.files)
-            for subfolder in folder.subfolders {
-                collectFiles(from: subfolder)
-            }
-        }
-
-        for suggestion in plan.suggestions {
-            collectFiles(from: suggestion)
-        }
-
-        // Also include unorganized files
-        allFiles.append(contentsOf: plan.unorganizedFiles)
-
+    private func computeDuplicateMappings(for visibleFiles: [FileItem]) -> [UUID: DuplicateInfo] {
         // Group by hash (only files that have a hash)
         var hashGroups: [String: [FileItem]] = [:]
-        for file in allFiles {
+        for file in visibleFiles {
             guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
             hashGroups[hash, default: []].append(file)
         }
@@ -385,11 +381,21 @@ class PreviewStore: ObservableObject {
             }
         }
 
-        for (index, file) in folder.files.enumerated() {
+        let visibleFileCount = min(folder.files.count, Self.renderedFilesPerSectionLimit)
+        for index in 0..<visibleFileCount {
+            let file = folder.files[index]
             rows.append(FlattenedRow(
                 id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
                 depth: depth,
                 type: .file(file, parentFolderID: folder.id),
+                isExpanded: false
+            ))
+        }
+        if folder.files.count > visibleFileCount {
+            rows.append(FlattenedRow(
+                id: "\(folder.id.uuidString)-remaining",
+                depth: depth,
+                type: .remainingFiles(count: folder.files.count - visibleFileCount),
                 isExpanded: false
             ))
         }
@@ -441,6 +447,11 @@ class PreviewStore: ObservableObject {
             expandedFolders.insert(id)
         }
 
+        if !wasExpanded, plan.totalFiles > Self.automaticExpansionFileLimit {
+            rebuildFlattenedRows()
+            return
+        }
+
         if cachedPlanVersion == plan.version, applyIncrementalToggle(id: id, wasExpanded: wasExpanded) {
             lastExpandedFolders = expandedFolders
         } else {
@@ -471,7 +482,7 @@ class PreviewStore: ObservableObject {
                 return file.id == fileID
             case .unorganizedFile(let file):
                 return file.id == fileID
-            case .folder, .unorganizedHeader:
+            case .folder, .unorganizedHeader, .remainingFiles:
                 return false
             }
         }?.id
@@ -912,6 +923,17 @@ struct FlattenedRowView: View {
                 dragDropManager: dragDropManager,
                 store: store
             )
+        case .remainingFiles(let count):
+            HStack(spacing: 8) {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                Text("\(count.formatted()) more files hidden to keep the preview responsive. Apply still includes them.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.leading, CGFloat(row.depth) * 20 + 12)
+            .padding(.vertical, 7)
         }
     }
 }

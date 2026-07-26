@@ -45,7 +45,7 @@ struct PreviewView: View {
     }
     
     private var renameCount: Int {
-        editablePlan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count }
+        editablePlan.suggestions.reduce(0) { $0 + $1.renameCount }
     }
     private var shouldDisableButtons: Bool { isApplying || organizer.state == .scanning || organizer.state == .organizing }
     private var isOrganizing: Bool { isApplying || organizer.state == .applying }
@@ -306,10 +306,14 @@ struct PreviewView: View {
     /// Record accepted file placements and rename decisions before applying
     private func recordAcceptedPlacements() {
         guard learningsManager.consentManager.canCollectData else { return }
+        var remainingLearningExamples = 2_000
         
         func processFolder(_ folder: FolderSuggestion, parentPath: String) {
+            guard remainingLearningExamples > 0 else { return }
             let folderPath = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
             for file in folder.files {
+                guard remainingLearningExamples > 0 else { break }
+                remainingLearningExamples -= 1
                 let destPath = "\(folderPath)/\(file.displayName)"
                 learningsManager.addPositiveExample(srcPath: file.path, dstPath: destPath)
                 
@@ -326,11 +330,13 @@ struct PreviewView: View {
                 }
             }
             for subfolder in folder.subfolders {
+                guard remainingLearningExamples > 0 else { break }
                 processFolder(subfolder, parentPath: folderPath)
             }
         }
         
         for suggestion in editablePlan.suggestions {
+            guard remainingLearningExamples > 0 else { break }
             processFolder(suggestion, parentPath: "")
         }
     }

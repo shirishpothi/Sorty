@@ -232,6 +232,8 @@ struct PromptBuilder {
         
         // Group files by extension for better context
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withFullDate]
         
         for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
@@ -250,12 +252,10 @@ struct PromptBuilder {
                 sortedFiles = fileList
             }
             
-            for file in sortedFiles.prefix(50) {
+            for file in sortedFiles {
                 var fileDesc = "  - \(file.displayName) (\(file.formattedSize))"
                 
                 // Include file dates
-                let dateFormatter = ISO8601DateFormatter()
-                dateFormatter.formatOptions = [.withFullDate]
                 if let created = file.creationDate {
                     fileDesc += ", created: \(dateFormatter.string(from: created))"
                 }
@@ -286,9 +286,6 @@ struct PromptBuilder {
                 }
                 
                 prompt += "\(fileDesc)\n"
-            }
-            if fileList.count > 50 {
-                prompt += "  ... and \(fileList.count - 50) more \(extLabel) files\n"
             }
         }
 
@@ -831,37 +828,51 @@ struct PromptBuilder {
     ) -> String? {
         guard !files.isEmpty else { return nil }
 
-        let sortedFiles = files.sorted {
-            let lhs = relativePath(for: $0, baseDirectoryURL: baseDirectoryURL)
-            let rhs = relativePath(for: $1, baseDirectoryURL: baseDirectoryURL)
-            return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
-        }
+        // Build summaries in one pass. Sorting and Dictionary(grouping:) over the
+        // complete scan used to duplicate the entire FileItem array before the AI
+        // request, which is especially costly for very large folders.
+        var extensionCounts: [String: Int] = [:]
+        var parentCounts: [String: Int] = [:]
+        var manifestEntries: [(relativePath: String, file: FileItem)] = []
+        manifestEntries.reserveCapacity(min(maxEntries, files.count))
 
-        let extensionSummary = Dictionary(grouping: sortedFiles) { file in
-            file.extension.isEmpty ? "(none)" : file.extension.lowercased()
-        }
-        .sorted { $0.value.count > $1.value.count }
-        .prefix(12)
-        .map { "\($0.key):\($0.value.count)" }
-        .joined(separator: ", ")
-
-        let parentSummary = Dictionary(grouping: sortedFiles) { file in
+        for file in files {
             let relative = relativePath(for: file, baseDirectoryURL: baseDirectoryURL)
+            let ext = file.extension.isEmpty ? "(none)" : file.extension.lowercased()
+            extensionCounts[ext, default: 0] += 1
+
             let parent = URL(fileURLWithPath: relative).deletingLastPathComponent().path
-            return parent == "/" || parent == "." ? "(root)" : parent
+            let parentKey = parent == "/" || parent == "." ? "(root)" : parent
+            parentCounts[parentKey, default: 0] += 1
+
+            if manifestEntries.count < maxEntries {
+                manifestEntries.append((relative, file))
+            }
         }
-        .sorted { $0.value.count > $1.value.count }
-        .prefix(10)
-        .map { "\($0.key): \($0.value.count)" }
+
+        manifestEntries.sort {
+            $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+        }
+
+        let extensionSummary = extensionCounts
+        .sorted { $0.value > $1.value }
+        .prefix(12)
+        .map { "\($0.key):\($0.value)" }
         .joined(separator: ", ")
 
-        let manifestLines = sortedFiles.prefix(maxEntries).map { file in
-            let relative = relativePath(for: file, baseDirectoryURL: baseDirectoryURL)
-            var line = "- \(relative) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
+        let parentSummary = parentCounts
+        .sorted { $0.value > $1.value }
+        .prefix(10)
+        .map { "\($0.key): \($0.value)" }
+        .joined(separator: ", ")
+
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withFullDate]
+        let manifestLines = manifestEntries.map { entry in
+            let file = entry.file
+            var line = "- \(entry.relativePath) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
             if let modified = file.modificationDate {
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withFullDate]
-                line += " | modified \(formatter.string(from: modified))"
+                line += " | modified \(dateFormatter.string(from: modified))"
             }
             return line
         }
@@ -906,12 +917,7 @@ struct PromptBuilder {
 
     private static func relativePath(for file: FileItem, baseDirectoryURL: URL) -> String {
         let path = file.path
-        let basePath = baseDirectoryURL.path
-        let resolvedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
-        let resolvedBasePath = baseDirectoryURL.resolvingSymlinksInPath().path
-        if resolvedPath.hasPrefix(resolvedBasePath + "/") {
-            return String(resolvedPath.dropFirst(resolvedBasePath.count + 1))
-        }
+        let basePath = baseDirectoryURL.standardizedFileURL.path
         if path.hasPrefix(basePath + "/") {
             return String(path.dropFirst(basePath.count + 1))
         }
