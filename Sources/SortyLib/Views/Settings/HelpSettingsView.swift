@@ -10,6 +10,7 @@ import SwiftUI
 
 struct HelpSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let docsURL = URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!
     private let issuesURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues")!
@@ -19,6 +20,7 @@ struct HelpSettingsView: View {
     private let developerURL = URL(string: "https://github.com/shirishpothi")!
 
     @State private var copiedIssueDetails = false
+    @State private var copyResetTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 20) {
@@ -109,11 +111,18 @@ struct HelpSettingsView: View {
                     Button {
                         copyIssueDetails()
                     } label: {
-                        Label(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details", systemImage: copiedIssueDetails ? "checkmark" : "doc.on.doc")
+                        HStack(spacing: 8) {
+                            Image(systemName: copiedIssueDetails ? "checkmark" : "doc.on.doc")
+                                .contentTransition(.symbolEffect(.replace))
+
+                            Text(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details")
+                                .contentTransition(.opacity)
+                        }
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.sortyProminent(intent: .secondary))
                     .accessibilityIdentifier("CopyIssueDetailsButton")
+                    .accessibilityValue(copiedIssueDetails ? "Copied" : "")
                     .onHover { hovering in
                         if hovering {
                             HapticFeedbackManager.shared.selection()
@@ -123,6 +132,9 @@ struct HelpSettingsView: View {
             }
             .animatedAppearance(delay: 0.16)
         }
+        .onDisappear {
+            copyResetTask?.cancel()
+        }
     }
 
     private func copyIssueDetails() {
@@ -130,13 +142,15 @@ struct HelpSettingsView: View {
         NSPasteboard.general.setString(issueDetailsText, forType: .string)
         HapticFeedbackManager.shared.success()
 
-        withAnimation(.easeInOut(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
             copiedIssueDetails = true
         }
 
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            withAnimation(.easeInOut(duration: 0.15)) {
+        copyResetTask?.cancel()
+        copyResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
                 copiedIssueDetails = false
             }
         }
