@@ -245,11 +245,16 @@ public struct ProviderSelectionStepView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(8)
 
-                // Model selector
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Model")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Model")
+                            .font(.subheadline)
+                        Text("Used for organization")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
 
                     if isLoadingModels {
                         HStack(spacing: 8) {
@@ -259,9 +264,9 @@ public struct ProviderSelectionStepView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        ModelSelectorRow(
+                        ModelSelectorCompactButton(
                             provider: settingsViewModel.config.provider,
-                            model: settingsViewModel.config.model
+                            label: selectedModelDisplay
                         ) {
                             isShowingModelPopover = true
                         }
@@ -418,14 +423,20 @@ public struct ProviderSelectionStepView: View {
                 }
             }
             if settingsViewModel.config.provider != .githubCopilot {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Model")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Model")
+                            .font(.subheadline)
+                        Text("Used for organization")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-                    ModelSelectorRow(
+                    Spacer()
+
+                    ModelSelectorCompactButton(
                         provider: settingsViewModel.config.provider,
-                        model: settingsViewModel.config.model
+                        label: selectedModelDisplay
                     ) {
                         isShowingModelPopover = true
                     }
@@ -433,6 +444,13 @@ public struct ProviderSelectionStepView: View {
                 }
             }
         }
+    }
+
+    private var selectedModelDisplay: String {
+        let provider = settingsViewModel.config.provider
+        return settingsViewModel.config.model.isEmpty
+            ? provider.defaultModel
+            : settingsViewModel.config.model
     }
 
     @ViewBuilder

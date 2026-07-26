@@ -12,7 +12,6 @@ struct HistoryView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var learningsManager: LearningsManager
     @State private var selectedEntry: OrganizationHistoryEntry?
     @State private var isProcessing = false
     @State private var alertMessage: String?
@@ -21,7 +20,6 @@ struct HistoryView: View {
     @State private var searchText: String = ""
     @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
-    @State private var showWatchedAutomations = true
     @State private var showRedoModelPicker = false
     @State private var redoModelEntry: OrganizationHistoryEntry?
     @State private var activeNotificationRedoRequestID: UUID?
@@ -87,10 +85,6 @@ struct HistoryView: View {
             return manualEntries.count < totalManualFilteredCount ||
                 watchedEntries.count < totalWatchedFilteredCount
         }
-    }
-
-    private var canProvideSessionFeedback: Bool {
-        learningsManager.summary.canProvideFeedback
     }
 
     enum HistoryFilter: String, CaseIterable, Identifiable {
@@ -240,9 +234,6 @@ struct HistoryView: View {
         .onChange(of: selectedFilter) { _, _ in
             // Reset pagination when filter changes
             displayedEntryCount = pageSize
-            if selectedFilter == .watched {
-                showWatchedAutomations = true
-            }
         }
         .onChange(of: searchText) { _, _ in
             displayedEntryCount = pageSize
@@ -298,21 +289,11 @@ struct HistoryView: View {
                     entry: entry,
                     isSelected: selectedEntry == entry,
                     isProcessing: isProcessing,
-                    isModelPickerAnchorActive: showRedoModelPicker && redoModelEntry?.id == entry.id,
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
                         selectEntry(entry)
                     },
-                    onUndo: { handleUndo(entry) },
-                    onRedo: { handleRedo(entry) },
-                    onOpenModelPicker: {
-                        redoModelEntry = entry
-                        showRedoModelPicker = true
-                    },
-                    canProvideFeedback: canProvideSessionFeedback,
-                    onFeedback: { outcome in
-                        handleFeedback(entry, outcome: outcome)
-                    }
+                    onUndo: { handleUndo(entry) }
                 )
                 .animatedAppearance(delay: Double(index) * 0.03)
                 .onAppear {
@@ -328,39 +309,31 @@ struct HistoryView: View {
     private var watchedAutomationsSection: some View {
         if !watchedEntries.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showWatchedAutomations.toggle()
-                    }
-                } label: {
-                    HStack {
-                        Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
-                            .font(.headline)
-                        Spacer()
-                        Text("\(totalWatchedFilteredCount)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .numericTextTransition(animationValue: totalWatchedFilteredCount)
-                        Image(systemName: showWatchedAutomations ? "chevron.up" : "chevron.down")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
+                HStack {
+                    Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(totalWatchedFilteredCount)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: totalWatchedFilteredCount)
                 }
-                .buttonStyle(.plain)
 
-                if showWatchedAutomations {
-                    ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
-                        WatchedAutomationRow(entry: entry) {
+                ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
+                    HistorySessionCard(
+                        entry: entry,
+                        isSelected: selectedEntry == entry,
+                        isProcessing: isProcessing,
+                        onSelect: {
                             HapticFeedbackManager.shared.selection()
                             selectEntry(entry)
-                        }
-                        .animatedAppearance(delay: Double(index) * 0.02)
-                        .onAppear {
-                            if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                                loadMoreEntries()
-                            }
+                        },
+                        onUndo: { handleUndo(entry) }
+                    )
+                    .animatedAppearance(delay: Double(index) * 0.02)
+                    .onAppear {
+                        if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                            loadMoreEntries()
                         }
                     }
                 }
@@ -441,23 +414,6 @@ struct HistoryView: View {
         return "Could not undo: \(error.localizedDescription)"
     }
 
-    private func handleRedo(_ entry: OrganizationHistoryEntry) {
-        isProcessing = true
-        Task { @MainActor in
-            do {
-                try await organizer.redoOrganization(from: entry)
-                HapticFeedbackManager.shared.success()
-                alertMessage = "Organization re-applied."
-                showAlert = true
-            } catch {
-                HapticFeedbackManager.shared.error()
-                alertMessage = "Error: \(error.localizedDescription)"
-                showAlert = true
-            }
-            isProcessing = false
-        }
-    }
-
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
         isProcessing = true
         if activeNotificationRedoRequestID != nil {
@@ -490,18 +446,6 @@ struct HistoryView: View {
             }
             isProcessing = false
         }
-    }
-
-    private func handleFeedback(_ entry: OrganizationHistoryEntry, outcome: LearningsManager.SessionOutcome) {
-        learningsManager.recordSessionOutcomeFeedback(
-            sessionId: entry.id.uuidString,
-            outcome: outcome,
-            folderPath: entry.directoryPath
-        )
-
-        DebugLogger.log(
-            "Session feedback recorded: \(outcome.rawValue) for session \(entry.id.uuidString)"
-        )
     }
 
     private func consumePendingNotificationActionIfNeeded() {
@@ -833,10 +777,7 @@ private struct HistoryStatItem: View {
 private enum HistoryCardActionState: Equatable {
     case idle
     case undoing
-    case redoing
 
-    var isUndoing: Bool { self == .undoing }
-    var isRedoing: Bool { self == .redoing }
     var isBusy: Bool { self != .idle }
 }
 
@@ -844,7 +785,6 @@ private struct HistorySessionCardHeader: View {
     let entry: OrganizationHistoryEntry
     let generationMetadata: String?
     let statusColor: Color
-    let isExpanded: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -852,240 +792,61 @@ private struct HistorySessionCardHeader: View {
                 .frame(width: 32)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    HistorySessionSummary(entry: entry, statusColor: statusColor)
+                HStack(spacing: 10) {
+                    HistorySessionSummary(entry: entry)
+
+                    Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
+                        .lineLimit(1)
 
                     if let generationMetadata {
-                        Text("·")
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                        Text(generationMetadata)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        Label(generationMetadata, systemImage: "cpu")
                             .lineLimit(1)
                     }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption)
-                Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            Text(entry.status.rawValue.capitalized)
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(statusColor.opacity(0.15))
+                .foregroundStyle(statusColor)
+                .clipShape(Capsule())
 
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+            Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(12)
         .contentShape(Rectangle())
     }
 }
 
 private struct HistorySessionSummary: View {
     let entry: OrganizationHistoryEntry
-    let statusColor: Color
 
     var body: some View {
-        HStack(spacing: 12) {
-            if entry.status == .completed {
-                Label("\(entry.filesOrganized) files", systemImage: "doc")
-                Label("\(entry.foldersCreated) folders", systemImage: "folder")
-            } else if entry.status == .duplicatesCleanup {
+        HStack(spacing: 10) {
+            if entry.status == .duplicatesCleanup {
                 Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
                 if let recovered = entry.recoveredSpace {
                     Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
                 }
-            } else if entry.status == .partiallyUndone {
-                Text("Partially Undone")
-                    .foregroundStyle(statusColor)
             } else {
-                Text(entry.status.rawValue.capitalized)
-                    .foregroundStyle(statusColor)
+                Label("\(entry.filesOrganized)", systemImage: "doc")
+                Label("\(entry.foldersCreated)", systemImage: "folder")
             }
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-}
-
-private struct HistorySessionExpandedContent: View {
-    let entry: OrganizationHistoryEntry
-    let hasStorageMoves: Bool
-    let operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int)
-    let hasOperationsData: Bool
-    let isProcessing: Bool
-    let actionState: HistoryCardActionState
-    let isModelPickerAnchorActive: Bool
-    let canProvideFeedback: Bool
-    @Binding var feedbackGiven: LearningsManager.SessionOutcome?
-    @Binding var showFeedbackConfirmation: Bool
-    let onSelect: () -> Void
-    let onApplyPlan: () -> Void
-    let onUndo: () -> Void
-    let onRedo: () -> Void
-    let onOpenModelPicker: () -> Void
-    let onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "folder")
-                    .foregroundStyle(.secondary)
-                PrivacySensitivePathText(path: entry.directoryPath)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
-
-            if hasStorageMoves {
-                HStack(spacing: 8) {
-                    Image(systemName: "externaldrive")
-                        .foregroundStyle(.orange)
-                    Text("Includes moves to storage locations")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("This organization included moves to external storage locations")
-            }
-
-            if hasOperationsData && entry.status == .completed {
-                OperationsBreakdownBar(
-                    moves: operationsBreakdown.moves,
-                    renames: operationsBreakdown.renames,
-                    folderCreates: operationsBreakdown.folderCreates
-                )
-            }
-
-            HistorySessionActions(
-                entry: entry,
-                isProcessing: isProcessing,
-                actionState: actionState,
-                isModelPickerAnchorActive: isModelPickerAnchorActive,
-                canProvideFeedback: canProvideFeedback,
-                feedbackGiven: $feedbackGiven,
-                showFeedbackConfirmation: $showFeedbackConfirmation,
-                onSelect: onSelect,
-                onApplyPlan: onApplyPlan,
-                onUndo: onUndo,
-                onRedo: onRedo,
-                onOpenModelPicker: onOpenModelPicker,
-                onFeedback: onFeedback
-            )
-        }
-        .padding(16)
-        .background(Color.black.opacity(0.02))
-    }
-}
-
-private struct HistorySessionActions: View {
-    let entry: OrganizationHistoryEntry
-    let isProcessing: Bool
-    let actionState: HistoryCardActionState
-    let isModelPickerAnchorActive: Bool
-    let canProvideFeedback: Bool
-    @Binding var feedbackGiven: LearningsManager.SessionOutcome?
-    @Binding var showFeedbackConfirmation: Bool
-    let onSelect: () -> Void
-    let onApplyPlan: () -> Void
-    let onUndo: () -> Void
-    let onRedo: () -> Void
-    let onOpenModelPicker: () -> Void
-    let onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onSelect) {
-                Label("View Details", systemImage: "info.circle")
-            }
-            .buttonStyle(.sortyBordered)
-            .controlSize(.small)
-            .accessibilityLabel("View session details")
-            .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
-
-            if entry.hasApplicablePlan {
-                Button(action: onApplyPlan) {
-                    Label("Apply Plan", systemImage: "checkmark.circle")
-                }
-                .buttonStyle(.sortyProminent)
-                .controlSize(.small)
-                .accessibilityLabel("Apply this generated organization plan")
-                .accessibilityIdentifier("ApplyPlanButton-\(entry.id.uuidString)")
-            } else if entry.success && entry.status != .duplicatesCleanup {
-                undoOrRedoButton
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    onOpenModelPicker()
-                } label: {
-                    Label("Try Different Model", systemImage: "wand.and.stars")
-                }
-                .buttonStyle(.sortyBordered)
-                .controlSize(.small)
-                .accessibilityLabel("Try organization with a different AI model")
-                .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
-                .background {
-                    if isModelPickerAnchorActive {
-                        Color.clear.modelSelectorTriggerBounds()
-                    }
-                }
-            }
-
-            Spacer()
-
-            if canProvideFeedback && entry.status == .completed && !entry.isUndone, let onFeedback {
-                QuickFeedbackButtons(
-                    feedbackGiven: $feedbackGiven,
-                    showConfirmation: $showFeedbackConfirmation,
-                    onFeedback: onFeedback
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var undoOrRedoButton: some View {
-        Group {
-            if entry.isUndone {
-                Button(action: onRedo) {
-                    Label(
-                        actionState.isRedoing ? "Redoing…" : "Redo",
-                        systemImage: actionState.isRedoing ? "arrow.triangle.2.circlepath" : "arrow.uturn.forward"
-                    )
-                }
-                .buttonStyle(.onboardingPill)
-                .accessibilityLabel("Redo organization")
-                .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
-            } else {
-                Button(action: onUndo) {
-                    Label(
-                        actionState.isUndoing ? "Undoing…" : "Undo",
-                        systemImage: actionState.isUndoing ? "arrow.triangle.2.circlepath" : "arrow.uturn.backward"
-                    )
-                }
-                .buttonStyle(.sortyBordered)
-                .accessibilityLabel("Undo organization")
-                .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
-            }
-        }
-        .controlSize(.small)
-        .contentTransition(.symbolEffect(.replace))
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .disabled(isProcessing || actionState.isBusy)
     }
 }
 
@@ -1093,38 +854,13 @@ struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
     let isProcessing: Bool
-    let isModelPickerAnchorActive: Bool
     let onSelect: () -> Void
     let onUndo: () -> Void
-    let onRedo: () -> Void
-    let onOpenModelPicker: () -> Void
-    let canProvideFeedback: Bool
-    var onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
 
-    @State private var isExpanded = false
     @State private var isHovered = false
-    @State private var feedbackGiven: LearningsManager.SessionOutcome?
-    @State private var showFeedbackConfirmation = false
     @State private var actionState: HistoryCardActionState = .idle
     @State private var swipeOffset: CGFloat = 0
     @State private var hasCrossedSwipeThreshold = false
-
-    // MARK: - Operations Breakdown
-
-    private var operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int) {
-        guard let operations = entry.operations else {
-            return (0, 0, 0)
-        }
-        let moves = operations.filter { $0.type == .moveFile }.count
-        let renames = operations.filter { $0.type == .renameFile || $0.metadata?.newFilename != nil }.count
-        let folderCreates = operations.filter { $0.type == .createFolder }.count
-        return (moves, renames, folderCreates)
-    }
-
-    private var hasOperationsData: Bool {
-        let breakdown = operationsBreakdown
-        return breakdown.moves > 0 || breakdown.renames > 0 || breakdown.folderCreates > 0
-    }
 
     private var generationMetadata: String? {
         guard let stats = entry.plan?.generationStats else { return nil }
@@ -1147,23 +883,6 @@ struct HistorySessionCard: View {
         }
     }
 
-    private var hasStorageMoves: Bool {
-        guard let plan = entry.plan else { return false }
-        return plan.suggestions.contains { $0.folderName.hasPrefix("/") }
-    }
-
-    private var statusIcon: String {
-        switch entry.status {
-        case .completed: return "checkmark.circle.fill"
-        case .failed: return "xmark.circle.fill"
-        case .cancelled: return "stop.circle.fill"
-        case .skipped: return "arrow.right.circle.fill"
-        case .undo: return "arrow.uturn.backward.circle.fill"
-        case .partiallyUndone: return "exclamationmark.triangle.fill"
-        case .duplicatesCleanup: return "trash.circle.fill"
-        }
-    }
-
     private var canSwipeToRevert: Bool {
         entry.success &&
             !entry.isUndone &&
@@ -1173,55 +892,23 @@ struct HistorySessionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header Row
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
-                }
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                HistorySessionCardHeader(
-                    entry: entry,
-                    generationMetadata: generationMetadata,
-                    statusColor: statusColor,
-                    isExpanded: isExpanded
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(
-                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+        Button {
+            onSelect()
+        } label: {
+            HistorySessionCardHeader(
+                entry: entry,
+                generationMetadata: generationMetadata,
+                statusColor: statusColor
             )
-            .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
-
-            // Expanded Content
-            if isExpanded {
-                Divider()
-                    .padding(.horizontal, 16)
-
-                HistorySessionExpandedContent(
-                    entry: entry,
-                    hasStorageMoves: hasStorageMoves,
-                    operationsBreakdown: operationsBreakdown,
-                    hasOperationsData: hasOperationsData,
-                    isProcessing: isProcessing,
-                    actionState: actionState,
-                    isModelPickerAnchorActive: isModelPickerAnchorActive,
-                    canProvideFeedback: canProvideFeedback,
-                    feedbackGiven: $feedbackGiven,
-                    showFeedbackConfirmation: $showFeedbackConfirmation,
-                    onSelect: onSelect,
-                    onApplyPlan: onRedo,
-                    onUndo: beginUndo,
-                    onRedo: beginRedo,
-                    onOpenModelPicker: onOpenModelPicker,
-                    onFeedback: onFeedback
-                )
-            }
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+        )
+        .accessibilityHint("Open session details")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
         .background(swipeActionBackground)
         .offset(x: swipeOffset)
         .background(.ultraThinMaterial)
@@ -1310,15 +997,6 @@ struct HistorySessionCard: View {
             actionState = .undoing
         }
         onUndo()
-    }
-
-    private func beginRedo() {
-        guard !isProcessing, !actionState.isBusy else { return }
-        HapticFeedbackManager.shared.tap()
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-            actionState = .redoing
-        }
-        onRedo()
     }
 
     private func resetActionState() {
@@ -1541,66 +1219,6 @@ private struct OperationsBreakdownBar: View {
     }
 }
 
-struct WatchedAutomationRow: View {
-    let entry: OrganizationHistoryEntry
-    let onSelect: () -> Void
-
-    private var statusColor: Color {
-        switch entry.status {
-        case .completed: return .green
-        case .failed: return .red
-        case .cancelled: return .gray
-        case .skipped: return .secondary
-        case .undo: return .orange
-        case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .accentColor
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bolt.horizontal.circle.fill")
-                .foregroundStyle(.blue)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Label("\(entry.filesOrganized)", systemImage: "doc")
-                    Label("\(entry.foldersCreated)", systemImage: "folder")
-                    Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Text(entry.status.rawValue.capitalized)
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(statusColor.opacity(0.15))
-                .foregroundStyle(statusColor)
-                .clipShape(Capsule())
-
-            Button("Details") {
-                onSelect()
-            }
-            .buttonStyle(.sortyBordered)
-            .controlSize(.small)
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Watched automation for \(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)")
-        .accessibilityIdentifier("WatchedAutomationRow-\(entry.id.uuidString)")
-    }
-}
-
 // MARK: - History Search Empty State
 
 struct HistorySearchEmptyStateView: View {
@@ -1811,6 +1429,8 @@ struct HistoryDetailSheet: View {
     @State private var failedOperationIDs: Set<UUID> = []
     @State private var undoingOperationID: UUID?
     @State private var highlightedFileID: UUID? = nil
+    @State private var feedbackGiven: LearningsManager.SessionOutcome?
+    @State private var showFeedbackConfirmation = false
 
     // Pre-flight validation state
     @State private var showUndoConfirmation = false
@@ -1853,6 +1473,16 @@ struct HistoryDetailSheet: View {
                         onUndo: handleUndo,
                         onTryDifferentModel: showDifferentModelPicker
                     )
+
+                    if learningsManager.summary.canProvideFeedback,
+                       entry.status == .completed,
+                       !entry.isUndone {
+                        QuickFeedbackButtons(
+                            feedbackGiven: $feedbackGiven,
+                            showConfirmation: $showFeedbackConfirmation,
+                            onFeedback: recordFeedback
+                        )
+                    }
 
                     // Timeline Section
                     if entry.success {
@@ -1996,6 +1626,15 @@ struct HistoryDetailSheet: View {
             message += "\n\n⚠️ \(result.directoryIssues.count) original folder(s) no longer exist and will be recreated."
         }
         return message
+    }
+
+    private func recordFeedback(_ outcome: LearningsManager.SessionOutcome) {
+        learningsManager.recordSessionOutcomeFeedback(
+            sessionId: entry.id.uuidString,
+            outcome: outcome,
+            folderPath: entry.directoryPath
+        )
+        DebugLogger.log("Session feedback recorded: \(outcome.rawValue) for session \(entry.id.uuidString)")
     }
 
     private func redoConfirmationMessage(_ result: PreflightValidationResult) -> String {
