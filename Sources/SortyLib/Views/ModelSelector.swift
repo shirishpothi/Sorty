@@ -5,7 +5,18 @@
 //  Unified model selection component for consistent UX across the app
 //
 
+import AppKit
 import SwiftUI
+
+/// Drops the window's AppKit first responder so an in-window overlay can take
+/// keyboard focus. Without this a focused `NSTextField`/`NSSecureTextField`
+/// behind the overlay keeps first responder status (and keeps drawing its focus
+/// ring on top of the overlay), swallowing typing meant for the overlay.
+@MainActor
+private func resignWindowFirstResponder() {
+    let window = NSApp.keyWindow ?? NSApp.mainWindow
+    window?.makeFirstResponder(nil)
+}
 
 // MARK: - Model Selector Row (Compact Display + Trigger)
 
@@ -205,6 +216,10 @@ struct ModelSelectionPopover: View {
             selectedModel = currentModel
         }
         .task {
+            // Take keyboard focus away from whatever field is focused behind the
+            // overlay before claiming it for the search field.
+            resignWindowFirstResponder()
+            await Task.yield()
             isSearchFocused = true
             isSearchAccessibilityFocused = true
             await modelCatalog.refresh(provider: currentProvider)
@@ -814,6 +829,10 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                     }
                 }
                 .animation(presentationAnimation, value: isPresented)
+            }
+            .onChange(of: isPresented) { _, presented in
+                guard presented else { return }
+                resignWindowFirstResponder()
             }
     }
 
