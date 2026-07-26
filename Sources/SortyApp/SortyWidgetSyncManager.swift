@@ -59,7 +59,8 @@ final class SortyWidgetSyncManager {
         let snapshot = SortyWidgetSnapshotStore.makeSnapshot(
             entries: OrganizationHistory.loadPersistedEntries(),
             watchedFolders: watchedFoldersManager.folders,
-            storageLocations: storageLocationsManager.locations
+            storageLocations: storageLocationsManager.locations,
+            activeWatchedFolderCount: watchedFoldersManager.activeFolderCount
         )
 
         do {

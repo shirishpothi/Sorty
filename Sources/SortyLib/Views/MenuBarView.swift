@@ -140,11 +140,7 @@ public struct MenuBarView: View {
     public init() {}
 
     private var activeWatchedCount: Int {
-        watchedFoldersManager.folders.filter(\.isEnabled).count
-    }
-
-    private var foldersWithIssues: [WatchedFolder] {
-        watchedFoldersManager.folders.filter { $0.accessStatus == .lost || $0.accessStatus == .stale }
+        watchedFoldersManager.activeFolderCount
     }
 
     public var body: some View {
@@ -207,10 +203,10 @@ public struct MenuBarView: View {
 
             Spacer()
 
-            if !foldersWithIssues.isEmpty {
+            if watchedFoldersManager.accessIssueFolderCount > 0 {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                    .help("\(foldersWithIssues.count) folder(s) need attention")
+                    .help("\(watchedFoldersManager.accessIssueFolderCount) folder(s) need attention")
             }
         }
         .padding(.horizontal, 12)

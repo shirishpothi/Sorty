@@ -95,6 +95,11 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         private var activeWatchedAutoOrganizeFolderCount: Int {
+            let defaults = UserDefaults.standard
+            if defaults.object(forKey: "activeWatchedFolderCount") != nil {
+                return defaults.integer(forKey: "activeWatchedFolderCount")
+            }
+
             guard let data = UserDefaults.standard.data(forKey: "watchedFolders"),
                 let folders = try? JSONDecoder().decode([WatchedFolder].self, from: data)
             else {
@@ -521,7 +526,6 @@ struct SortyApp: App {
                 }
             }
             .onChange(of: watchedFoldersManager.folders) { _, _ in
-                coordinator?.syncWatchedFolders()
                 widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager
@@ -594,7 +598,8 @@ struct SortyApp: App {
             coordinator = AppCoordinator(
                 organizer: automationOrganizer,
                 watchedFoldersManager: watchedFoldersManager,
-                learningsManager: learningsManager
+                learningsManager: learningsManager,
+                exclusionRules: exclusionRules
             )
         }
 

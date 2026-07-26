@@ -46,13 +46,9 @@ struct WatchedFoldersView: View {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                ForEach(
-                                    Array(watchedFoldersManager.folders.enumerated()),
-                                    id: \.element.id
-                                ) { index, folder in
+                                ForEach(watchedFoldersManager.folders) { folder in
                                     WatchedFolderCard(folder: folder)
                                         .id(folder.id)
-                                        .animatedAppearance(delay: Double(index) * 0.05)
                                 }
                             }
                             .padding(20)
@@ -173,8 +169,7 @@ struct WatchedFoldersView: View {
                         .fontWeight(.semibold)
 
                     HStack(spacing: 8) {
-                        let activeCount = watchedFoldersManager.folders.filter { $0.isEnabled }
-                            .count
+                        let activeCount = watchedFoldersManager.activeFolderCount
 
                         Text("\(activeCount) active")
                             .foregroundStyle(activeCount > 0 ? .green : .secondary)

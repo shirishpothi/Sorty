@@ -121,6 +121,8 @@ Personas customize how Sorty organizes your files based on your profession or us
 
 Sorty uses SHA-256 content hashing to find files with identical content, regardless of filename.
 
+Large folders use a staged scan: Sorty indexes lightweight size metadata first, samples the beginning and end of large same-size files, and only reads the full contents of plausible matches. Hashing stays at two concurrent utility-priority workers, and similarity analysis is skipped when a folder is too large to analyze completely within a stable resource budget; exact duplicate results remain complete.
+
 ### Safe Deletion
 
 When enabled (default), "deleted" duplicates aren't immediately removed:
@@ -169,6 +171,16 @@ Set up automatic organization for folders like Downloads. New files are organize
 2. Click "Add Folder" or use suggested folders (Downloads, Desktop, Documents)
 3. Configure auto-organization settings
 4. Enable the folder to start monitoring
+
+### Large Folder Behavior
+
+Watched folders use a coalesced FSEvents stream and persist the last processed
+event cursor, so routine monitoring does not rescan folders or retain metadata
+for every existing file. Nested watched roots share the same OS monitor, new
+directories are enumerated on a utility queue in 256-file batches, and
+automation applies backpressure when its bounded queue is full. Watched-folder
+configuration is stored as an append-only journal instead of re-encoding the
+entire list after every trigger or setting change.
 
 ---
 

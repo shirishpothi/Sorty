@@ -221,9 +221,6 @@ struct MainWindowRootView: View {
                     coordinator?.finishManualOrganization(sessionID: windowSession.id)
                 }
             }
-            .onChange(of: watchedFoldersManager.folders) { _, _ in
-                coordinator?.syncWatchedFolders()
-            }
             .onOpenURL { url in
                 SortyAppDelegate.pendingDeeplinkActivation = true
                 handleExternalDeeplink(url)

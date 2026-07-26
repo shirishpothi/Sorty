@@ -41,6 +41,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private let notificationManager = NotificationManager.shared
     private var watchedFoldersSubscription: AnyCancellable?
     private var organizerConfigurationSubscription: AnyCancellable?
+    private var exclusionMatcherSubscription: AnyCancellable?
     private var pendingFiles: [UUID: PendingWatchBatch] = [:]
     private var activeWatchBatches: [UUID: PendingWatchBatch] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
@@ -52,6 +53,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private let retryBaseDelay: TimeInterval = 3
     private let maximumStabilityRetryDelay: TimeInterval = 60
     private let maximumOperationRetryCount = 2
+    private let maximumPendingFilesPerFolder = 512
+    private let maximumPendingFolderCount = 32
     private lazy var pendingWorkURL: URL? = {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("Sorty", isDirectory: true)
@@ -59,7 +62,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }()
     nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     
-    init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
+    init(
+        organizer: FolderOrganizer,
+        watchedFoldersManager: WatchedFoldersManager,
+        learningsManager: LearningsManager,
+        exclusionRules: ExclusionRulesManager
+    ) {
         self.organizer = organizer
         self.watchedFoldersManager = watchedFoldersManager
         self.learningsManager = learningsManager
@@ -72,7 +80,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         // Inject observer into organizer
         organizer.learningsObserver = self.continuousLearningObserver
-        
+
+        self.folderWatcher.updateExclusionMatcher(exclusionRules.matcherSnapshot())
+        self.exclusionMatcherSubscription = exclusionRules.$compiledMatcher
+            .dropFirst()
+            .sink { [weak self] matcher in
+                self?.folderWatcher.updateExclusionMatcher(matcher)
+            }
+
         // Initial sync
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
         self.watchedFoldersSubscription = watchedFoldersManager.$folders
@@ -131,7 +146,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                   let url = notification.userInfo?["url"] as? URL else { return }
             
             Task {
-                guard let folder = await self.watchedFoldersManager.folders.first(where: { $0.url.path == url.path }) else { return }
+                guard let folder = await self.watchedFoldersManager.folder(matchingPath: url.path) else {
+                    return
+                }
                 
                 // Just reverted, so we must update snapshot to avoid re-triggering
                 print("Coordinator: Revert detected for \(folder.name), updating snapshot to ignore reverted files")
@@ -159,9 +176,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 // the new baseline and ignore the immediate filesystem event burst.
                 if entry.source == .manual {
                     let completedPath = URL(fileURLWithPath: entry.directoryPath).standardizedFileURL.path
-                    if let watchedFolder = self.watchedFoldersManager.folders.first(where: {
-                        URL(fileURLWithPath: $0.path).standardizedFileURL.path == completedPath
-                    }) {
+                    if let watchedFolder = self.watchedFoldersManager.folder(matchingPath: completedPath) {
                         self.pendingFiles.removeValue(forKey: watchedFolder.id)
                         self.persistOutstandingWatchWork()
                         self.ignoredWatchEventsUntil[watchedFolder.id] = Date().addingTimeInterval(2.0)
@@ -503,7 +518,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data) {
-        guard var updatedFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }) else {
+        guard var updatedFolder = watchedFoldersManager.folder(withID: folder.id) else {
             return
         }
         updatedFolder.bookmarkData = newBookmarkData
@@ -513,35 +528,48 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         print("Coordinator: Updated stale bookmark for \(folder.name)")
     }
     
-    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
-        let routedFiles = filesOwnedByWatchedFolder(
-            folder,
-            candidates: newFiles,
-            resolvedURL: resolvedURL
-        )
-        guard !routedFiles.isEmpty else { return }
+    @discardableResult
+    func folderWatcher(
+        _ watcher: FolderWatcher,
+        didDetectChangesIn folder: WatchedFolder,
+        newFiles: Set<String>,
+        resolvedURL: URL
+    ) -> Bool {
+        // FolderWatcher already resolves nested roots with its path index. Doing
+        // that work again here used to scan every watched folder for every file,
+        // which made event routing quadratic as either dimension grew.
+        let routedFiles = newFiles
+        guard !routedFiles.isEmpty else { return true }
 
         guard !isManualOrganizationActive(for: folder.id) else {
             print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
-            return
+            return true
         }
 
         if let ignoreUntil = ignoredWatchEventsUntil[folder.id] {
             if ignoreUntil > Date() {
                 print("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
-                return
+                return true
             }
             ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         }
         
         if isOrganizerBusyForAutomation() {
+            let existingFileCount = pendingFiles[folder.id]?.files.count ?? 0
+            let isNewPendingFolder = pendingFiles[folder.id] == nil
+            guard existingFileCount + routedFiles.count <= maximumPendingFilesPerFolder,
+                  !isNewPendingFolder || pendingFiles.count < maximumPendingFolderCount else {
+                return false
+            }
+
             print("Coordinator: Organizer busy, queueing \(routedFiles.count) files for \(folder.name)")
             mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
             scheduleRetry()
-            return
+            return true
         }
         
         startAutoOrganize(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
+        return true
     }
 
     @discardableResult
@@ -599,7 +627,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         operationRetryAttempt: Int
     ) async {
         guard !isManualOrganizationActive(for: folder.id),
-              let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+              let currentFolder = watchedFoldersManager.folder(withID: folder.id),
               currentFolder.isEnabled else { return }
 
         guard organizer.aiClient != nil else {
@@ -624,7 +652,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         guard !Task.isCancelled,
               !isManualOrganizationActive(for: folder.id),
-              let executionFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+              let executionFolder = watchedFoldersManager.folder(withID: folder.id),
               executionFolder.isEnabled else { return }
 
         if !candidateAudit.unsettled.isEmpty {
@@ -763,24 +791,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             )
         }
         persistOutstandingWatchWork()
-    }
-
-    private func filesOwnedByWatchedFolder(
-        _ folder: WatchedFolder,
-        candidates: Set<String>,
-        resolvedURL: URL
-    ) -> Set<String> {
-        let ownerRoots = watchedFoldersManager.folders.filter(\.isEnabled).map { watchedFolder in
-            let rootURL = watchedFolder.id == folder.id ? resolvedURL : watchedFolder.url
-            return (id: watchedFolder.id, path: canonicalPath(rootURL))
-        }
-        return Set(candidates.filter { relativePath in
-            let candidateURL = resolvedURL.appendingPathComponent(relativePath).standardizedFileURL
-            let candidatePath = canonicalPath(candidateURL)
-            let owners = ownerRoots.filter { candidatePath == $0.path || candidatePath.hasPrefix($0.path + "/") }
-            let mostSpecificOwner = owners.max { $0.path.count < $1.path.count }
-            return mostSpecificOwner?.id == folder.id
-        })
     }
 
     private var isOrganizerStateBusy: Bool {
@@ -1077,7 +1087,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         pendingFiles.removeValue(forKey: folderID)
         guard !isManualOrganizationActive(for: folderID),
-              let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folderID }),
+              let currentFolder = watchedFoldersManager.folder(withID: folderID),
               currentFolder.isEnabled else {
             persistOutstandingWatchWork()
             scheduleRetry()
@@ -1159,7 +1169,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         pendingFiles.removeValue(forKey: folder.id)
         persistOutstandingWatchWork()
         ignoredWatchEventsUntil[folder.id] = Date().addingTimeInterval(2.0)
-        if let currentFolder = watchedFoldersManager.folders.first(where: { $0.id == folder.id }),
+        if let currentFolder = watchedFoldersManager.folder(withID: folder.id),
            currentFolder.isEnabled {
             folderWatcher.resume(currentFolder)
             print("Coordinator: Resumed watching \(currentFolder.name) after manual organization")
@@ -1195,7 +1205,4 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
     }
     
-    func syncWatchedFolders() {
-        folderWatcher.syncWithFolders(watchedFoldersManager.folders)
-    }
 }

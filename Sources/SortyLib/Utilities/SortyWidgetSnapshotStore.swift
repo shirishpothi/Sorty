@@ -99,6 +99,7 @@ public enum SortyWidgetSnapshotStore {
         entries: [OrganizationHistoryEntry],
         watchedFolders: [WatchedFolder],
         storageLocations: [StorageLocation],
+        activeWatchedFolderCount: Int? = nil,
         now: Date = Date()
     ) -> SortyWidgetSnapshot {
         var latestEntry: OrganizationHistoryEntry?
@@ -128,7 +129,8 @@ public enum SortyWidgetSnapshotStore {
             totalFilesOrganized: totalFilesOrganized,
             successCount: successCount,
             failedCount: failedCount,
-            activeWatchedFolderCount: watchedFolders.filter { $0.isEnabled && $0.autoOrganize }.count,
+            activeWatchedFolderCount: activeWatchedFolderCount
+                ?? watchedFolders.lazy.filter { $0.isEnabled && $0.autoOrganize }.count,
             enabledStorageLocationCount: storageLocations.filter(\.isEnabled).count,
             lastRunDate: latestEntry?.timestamp,
             lastRunFolderName: latestEntry.flatMap(lastRunFolderName(for:)),

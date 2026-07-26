@@ -83,9 +83,16 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
 @MainActor
 public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var folders: [WatchedFolder] = []
+    @Published public private(set) var activeFolderCount = 0
+    @Published public private(set) var accessIssueFolderCount = 0
+
     private let userDefaults = UserDefaults.standard
-    private let storageKey = "watchedFolders"
+    private let legacyStorageKey = "watchedFolders"
+    private let activeCountStorageKey = "activeWatchedFolderCount"
+    private let journal = WatchedFolderJournal()
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
+    private var indexByID: [UUID: Int] = [:]
+    private var idByNormalizedPath: [String: UUID] = [:]
     
     public init() {
         loadFolders()
@@ -99,38 +106,87 @@ public class WatchedFoldersManager: ObservableObject {
     }
     
     public func addFolder(_ folder: WatchedFolder) {
-        // Avoid duplicates
         let normalizedPath = Self.normalizedPath(folder.path)
-        guard !folders.contains(where: { Self.normalizedPath($0.path) == normalizedPath }) else { return }
+        guard idByNormalizedPath[normalizedPath] == nil else { return }
+
         var normalizedFolder = folder
         normalizedFolder.autoOrganize = normalizedFolder.isEnabled
+        indexByID[normalizedFolder.id] = folders.count
+        idByNormalizedPath[normalizedPath] = normalizedFolder.id
         folders.append(normalizedFolder)
-        saveFolders()
+        journal.upsert(normalizedFolder)
+        if normalizedFolder.isEnabled {
+            setActiveFolderCount(activeFolderCount + 1)
+        }
+        if Self.hasAccessIssue(normalizedFolder) {
+            accessIssueFolderCount += 1
+        }
     }
 
     public func clearAll() {
         stopAllSecurityScopedAccess()
         folders.removeAll()
-        userDefaults.removeObject(forKey: storageKey)
+        indexByID.removeAll()
+        idByNormalizedPath.removeAll()
+        activeFolderCount = 0
+        accessIssueFolderCount = 0
+        journal.clear()
+        userDefaults.removeObject(forKey: legacyStorageKey)
+        userDefaults.set(0, forKey: activeCountStorageKey)
     }
     
     public func removeFolder(_ folder: WatchedFolder) {
         stopSecurityScopedAccess(for: folder.id)
-        folders.removeAll { $0.id == folder.id }
-        saveFolders()
+        guard let index = indexByID.removeValue(forKey: folder.id) else { return }
+
+        let removedFolder = folders[index]
+        idByNormalizedPath.removeValue(forKey: Self.normalizedPath(removedFolder.path))
+        let lastIndex = folders.index(before: folders.endIndex)
+        if index != lastIndex {
+            folders.swapAt(index, lastIndex)
+            indexByID[folders[index].id] = index
+        }
+        folders.removeLast()
+        journal.remove(folder.id)
+        if removedFolder.isEnabled {
+            setActiveFolderCount(max(activeFolderCount - 1, 0))
+        }
+        if Self.hasAccessIssue(removedFolder) {
+            accessIssueFolderCount = max(accessIssueFolderCount - 1, 0)
+        }
     }
     
     public func updateFolder(_ folder: WatchedFolder) {
-        if let index = folders.firstIndex(where: { $0.id == folder.id }) {
-            var normalizedFolder = folder
-            normalizedFolder.autoOrganize = normalizedFolder.isEnabled
-            folders[index] = normalizedFolder
-            saveFolders()
+        guard let index = indexByID[folder.id] else { return }
+
+        let oldPath = Self.normalizedPath(folders[index].path)
+        let newPath = Self.normalizedPath(folder.path)
+        if oldPath != newPath,
+           let existingID = idByNormalizedPath[newPath],
+           existingID != folder.id {
+            return
+        }
+
+        let previousFolder = folders[index]
+        let wasEnabled = previousFolder.isEnabled
+        var normalizedFolder = folder
+        normalizedFolder.autoOrganize = normalizedFolder.isEnabled
+        folders[index] = normalizedFolder
+        idByNormalizedPath.removeValue(forKey: oldPath)
+        idByNormalizedPath[newPath] = normalizedFolder.id
+        journal.upsert(normalizedFolder)
+        if wasEnabled != normalizedFolder.isEnabled {
+            setActiveFolderCount(activeFolderCount + (normalizedFolder.isEnabled ? 1 : -1))
+        }
+        let hadAccessIssue = Self.hasAccessIssue(previousFolder)
+        let hasAccessIssue = Self.hasAccessIssue(normalizedFolder)
+        if hadAccessIssue != hasAccessIssue {
+            accessIssueFolderCount += hasAccessIssue ? 1 : -1
         }
     }
     
     public func toggleEnabled(for folder: WatchedFolder) {
-        if var updated = folders.first(where: { $0.id == folder.id }) {
+        if var updated = self.folder(withID: folder.id) {
             updated.isEnabled.toggle()
             updated.autoOrganize = updated.isEnabled
             updateFolder(updated)
@@ -138,7 +194,7 @@ public class WatchedFoldersManager: ObservableObject {
     }
     
     public func markTriggered(_ folder: WatchedFolder) {
-        if var updated = folders.first(where: { $0.id == folder.id }) {
+        if var updated = self.folder(withID: folder.id) {
             updated.lastTriggered = Date()
             updateFolder(updated)
         }
@@ -159,7 +215,9 @@ public class WatchedFoldersManager: ObservableObject {
         
         if hasChanges {
             folders = updatedFolders
-            saveFolders()
+            rebuildIndexes()
+            journal.disableAll()
+            setActiveFolderCount(0)
             
             // Post notification for user feedback
             NotificationCenter.default.post(
@@ -175,6 +233,7 @@ public class WatchedFoldersManager: ObservableObject {
     public func restoreSecurityScopedAccess() {
         var updatedFolders = folders
         var hasChanges = false
+        var persistenceIndexes: Set<Int> = []
         
         for (index, folder) in folders.enumerated() {
             guard let bookmarkData = folder.bookmarkData else {
@@ -189,14 +248,19 @@ public class WatchedFoldersManager: ObservableObject {
                                   relativeTo: nil,
                                   bookmarkDataIsStale: &isStale)
                 
-                if url.startAccessingSecurityScopedResource() {
-                    activeSecurityScopedURLs[folder.id] = url
+                let didAccess = !Self.requiresSecurityScopedAccess
+                    || url.startAccessingSecurityScopedResource()
+                if didAccess {
+                    if Self.requiresSecurityScopedAccess {
+                        activeSecurityScopedURLs[folder.id] = url
+                    }
                     // Success!
                     if isStale {
                          // Recreate bookmark
                          if let newData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
                              updatedFolders[index].bookmarkData = newData
                              hasChanges = true
+                             persistenceIndexes.insert(index)
                          }
                          updatedFolders[index].accessStatus = .stale
                     } else {
@@ -207,10 +271,14 @@ public class WatchedFoldersManager: ObservableObject {
                     if url.path != folder.path {
                         updatedFolders[index].path = url.path
                         hasChanges = true
+                        persistenceIndexes.insert(index)
                     }
                 } else {
                     DebugLogger.log("Failed to access security resource for \(folder.name)")
                     updatedFolders[index].accessStatus = .lost
+                    hasChanges = true
+                }
+                if updatedFolders[index].accessStatus != folder.accessStatus {
                     hasChanges = true
                 }
             } catch {
@@ -222,7 +290,11 @@ public class WatchedFoldersManager: ObservableObject {
         
         if hasChanges {
             folders = updatedFolders
-            saveFolders()
+            rebuildIndexes()
+            for index in persistenceIndexes {
+                journal.upsert(folders[index])
+            }
+            accessIssueFolderCount = folders.lazy.filter(Self.hasAccessIssue).count
         }
     }
     
@@ -256,7 +328,8 @@ public class WatchedFoldersManager: ObservableObject {
                 // do NOT stop this access — it must remain active for the
                 // watched folder to function until the app quits.
                 stopSecurityScopedAccess(for: folder.id)
-                if resolvedURL.startAccessingSecurityScopedResource() {
+                if Self.requiresSecurityScopedAccess,
+                   resolvedURL.startAccessingSecurityScopedResource() {
                     activeSecurityScopedURLs[folder.id] = resolvedURL
                 }
             }
@@ -273,22 +346,62 @@ public class WatchedFoldersManager: ObservableObject {
         }
     }
 
+    public func folder(withID id: UUID) -> WatchedFolder? {
+        guard let index = indexByID[id], folders.indices.contains(index) else {
+            return nil
+        }
+        return folders[index]
+    }
+
+    public func folder(matchingPath path: String) -> WatchedFolder? {
+        guard let id = idByNormalizedPath[Self.normalizedPath(path)] else {
+            return nil
+        }
+        return folder(withID: id)
+    }
+
     private func loadFolders() {
-        if let data = userDefaults.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
-            folders = decoded.map { folder in
-                var migrated = folder
-                migrated.autoOrganize = migrated.isEnabled
-                return migrated
+        var loadedFolders: [WatchedFolder]
+        if let journalFolders = journal.load() {
+            loadedFolders = journalFolders
+        } else if let data = userDefaults.data(forKey: legacyStorageKey),
+                  let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
+            loadedFolders = decoded
+            if journal.replaceAll(with: decoded) {
+                userDefaults.removeObject(forKey: legacyStorageKey)
             }
-            saveFolders()
+        } else {
+            loadedFolders = []
+        }
+
+        for index in loadedFolders.indices {
+            loadedFolders[index].autoOrganize = loadedFolders[index].isEnabled
+        }
+        folders = loadedFolders
+        rebuildIndexes()
+        setActiveFolderCount(folders.lazy.filter(\.isEnabled).count)
+        accessIssueFolderCount = folders.lazy.filter(Self.hasAccessIssue).count
+    }
+
+    private func rebuildIndexes() {
+        indexByID.removeAll(keepingCapacity: true)
+        idByNormalizedPath.removeAll(keepingCapacity: true)
+        indexByID.reserveCapacity(folders.count)
+        idByNormalizedPath.reserveCapacity(folders.count)
+
+        for (index, folder) in folders.enumerated() {
+            indexByID[folder.id] = index
+            idByNormalizedPath[Self.normalizedPath(folder.path)] = folder.id
         }
     }
-    
-    private func saveFolders() {
-        if let encoded = try? JSONEncoder().encode(folders) {
-            userDefaults.set(encoded, forKey: storageKey)
+
+    private func setActiveFolderCount(_ count: Int) {
+        guard activeFolderCount != count ||
+              userDefaults.object(forKey: activeCountStorageKey) == nil else {
+            return
         }
+        activeFolderCount = count
+        userDefaults.set(activeFolderCount, forKey: activeCountStorageKey)
     }
 
     private func stopSecurityScopedAccess(for id: UUID) {
@@ -305,5 +418,194 @@ public class WatchedFoldersManager: ObservableObject {
 
     private static func normalizedPath(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
+    }
+
+    private static func hasAccessIssue(_ folder: WatchedFolder) -> Bool {
+        folder.accessStatus == .lost || folder.accessStatus == .stale
+    }
+
+    private static var requiresSecurityScopedAccess: Bool {
+        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+    }
+}
+
+/// Append-only persistence keeps add, update, trigger, and removal work O(1).
+/// The previous UserDefaults array re-encoded every bookmark and folder record
+/// after each small change, creating large temporary allocations at scale.
+private final class WatchedFolderJournal: @unchecked Sendable {
+    private enum Operation: String, Codable {
+        case upsert
+        case remove
+        case disableAll
+    }
+
+    private struct Record: Codable {
+        let operation: Operation
+        let id: UUID
+        let folder: WatchedFolder?
+    }
+
+    private let ioQueue = DispatchQueue(label: "com.sorty.watched-folders.persistence", qos: .utility)
+    private let fileManager = FileManager.default
+    private let storeURL: URL?
+
+    init() {
+        let isRunningTests =
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTest.XCTestCase") != nil
+            || NSClassFromString("XCTestCase") != nil
+        if isRunningTests {
+            storeURL = fileManager.temporaryDirectory
+                .appendingPathComponent(
+                    "SortyTests-\(ProcessInfo.processInfo.processIdentifier)",
+                    isDirectory: true
+                )
+                .appendingPathComponent("WatchedFolders.jsonl")
+        } else {
+            storeURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sorty", isDirectory: true)
+                .appendingPathComponent("WatchedFolders.jsonl")
+        }
+    }
+
+    func load() -> [WatchedFolder]? {
+        ioQueue.sync {
+            guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+                return nil
+            }
+
+            guard let stream = InputStream(url: storeURL) else { return [] }
+            stream.open()
+            defer { stream.close() }
+
+            var slots: [WatchedFolder?] = []
+            var indexByID: [UUID: Int] = [:]
+            var readBuffer = [UInt8](repeating: 0, count: 64 * 1_024)
+            var lineBuffer: [UInt8] = []
+            lineBuffer.reserveCapacity(4_096)
+            let decoder = JSONDecoder()
+
+            func applyLine() {
+                guard !lineBuffer.isEmpty,
+                      let record = try? decoder.decode(Record.self, from: Data(lineBuffer)) else {
+                    lineBuffer.removeAll(keepingCapacity: true)
+                    return
+                }
+
+                switch record.operation {
+                case .upsert:
+                    guard let folder = record.folder else { break }
+                    if let index = indexByID[record.id] {
+                        slots[index] = folder
+                    } else {
+                        indexByID[record.id] = slots.count
+                        slots.append(folder)
+                    }
+                case .remove:
+                    if let index = indexByID.removeValue(forKey: record.id) {
+                        slots[index] = nil
+                    }
+                case .disableAll:
+                    for index in slots.indices {
+                        slots[index]?.isEnabled = false
+                        slots[index]?.autoOrganize = false
+                    }
+                }
+                lineBuffer.removeAll(keepingCapacity: true)
+            }
+
+            while true {
+                let count = stream.read(&readBuffer, maxLength: readBuffer.count)
+                guard count > 0 else { break }
+                for byte in readBuffer.prefix(count) {
+                    if byte == 0x0A {
+                        applyLine()
+                    } else {
+                        lineBuffer.append(byte)
+                    }
+                }
+            }
+            applyLine()
+            return slots.compactMap { $0 }
+        }
+    }
+
+    func upsert(_ folder: WatchedFolder) {
+        append(Record(operation: .upsert, id: folder.id, folder: folder))
+    }
+
+    func remove(_ id: UUID) {
+        append(Record(operation: .remove, id: id, folder: nil))
+    }
+
+    func disableAll() {
+        append(Record(operation: .disableAll, id: UUID(), folder: nil))
+    }
+
+    func clear() {
+        ioQueue.sync {
+            guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+                return
+            }
+            try? fileManager.removeItem(at: storeURL)
+        }
+    }
+
+    @discardableResult
+    func replaceAll(with folders: [WatchedFolder]) -> Bool {
+        ioQueue.sync {
+            guard let storeURL else { return false }
+            do {
+                try fileManager.createDirectory(
+                    at: storeURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                let temporaryURL = storeURL
+                    .deletingLastPathComponent()
+                    .appendingPathComponent(".WatchedFolders-\(UUID().uuidString).jsonl")
+                fileManager.createFile(atPath: temporaryURL.path, contents: nil)
+                let handle = try FileHandle(forWritingTo: temporaryURL)
+                let encoder = JSONEncoder()
+
+                for folder in folders {
+                    let record = Record(operation: .upsert, id: folder.id, folder: folder)
+                    try handle.write(contentsOf: encoder.encode(record))
+                    try handle.write(contentsOf: Data([0x0A]))
+                }
+                try handle.close()
+
+                if fileManager.fileExists(atPath: storeURL.path) {
+                    _ = try fileManager.replaceItemAt(storeURL, withItemAt: temporaryURL)
+                } else {
+                    try fileManager.moveItem(at: temporaryURL, to: storeURL)
+                }
+                return true
+            } catch {
+                DebugLogger.log("Failed to compact watched-folder storage: \(error)")
+                return false
+            }
+        }
+    }
+
+    private func append(_ record: Record) {
+        ioQueue.sync {
+            guard let storeURL else { return }
+            do {
+                try fileManager.createDirectory(
+                    at: storeURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                if !fileManager.fileExists(atPath: storeURL.path) {
+                    fileManager.createFile(atPath: storeURL.path, contents: nil)
+                }
+                let handle = try FileHandle(forWritingTo: storeURL)
+                try handle.seekToEnd()
+                try handle.write(contentsOf: JSONEncoder().encode(record))
+                try handle.write(contentsOf: Data([0x0A]))
+                try handle.close()
+            } catch {
+                DebugLogger.log("Failed to persist watched-folder change: \(error)")
+            }
+        }
     }
 }
