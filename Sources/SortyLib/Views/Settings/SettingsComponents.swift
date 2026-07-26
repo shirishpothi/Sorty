@@ -126,6 +126,7 @@ struct SettingsCard<Content: View>: View {
     let title: String
     let icon: String
     let color: Color
+    let count: Int?
     let isExpanded: Binding<Bool>?
     let headerAccessory: AnyView?
     @ViewBuilder let content: Content
@@ -134,12 +135,14 @@ struct SettingsCard<Content: View>: View {
         title: String,
         icon: String,
         color: Color,
+        count: Int? = nil,
         isExpanded: Binding<Bool>? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.color = color
+        self.count = count
         self.isExpanded = isExpanded
         self.headerAccessory = nil
         self.content = content()
@@ -149,6 +152,7 @@ struct SettingsCard<Content: View>: View {
         title: String,
         icon: String,
         color: Color,
+        count: Int? = nil,
         isExpanded: Binding<Bool>? = nil,
         @ViewBuilder headerAccessory: () -> HeaderAccessory,
         @ViewBuilder content: () -> Content
@@ -156,6 +160,7 @@ struct SettingsCard<Content: View>: View {
         self.title = title
         self.icon = icon
         self.color = color
+        self.count = count
         self.isExpanded = isExpanded
         self.headerAccessory = AnyView(headerAccessory())
         self.content = content()
@@ -180,6 +185,7 @@ struct SettingsCard<Content: View>: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
+                        countBadge
                         headerAccessory
                         Spacer()
 
@@ -231,9 +237,24 @@ struct SettingsCard<Content: View>: View {
             Text(LocalizedStringKey(title))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
+            countBadge
             headerAccessory
         }
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var countBadge: some View {
+        if let count {
+            Text("\(count)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .numericTextTransition(animationValue: count)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(Capsule())
+        }
     }
 }
 
