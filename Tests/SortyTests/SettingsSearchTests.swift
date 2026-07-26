@@ -74,8 +74,34 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertNil(SettingsCategory.rules.focusTarget(for: customSnippet))
     }
 
-    func testFocusTargetIsNilOutsideRulesCategory() {
-        XCTAssertNil(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Support Links")))
+    func testHelpFocusTargetMappingsForKnownSnippets() {
+        XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Support Links")), .helpSupport)
+        XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Copy Issue Details")), .helpIssueDetails)
+    }
+
+    func testEveryVisibleFeatureSnippetHasAFocusTarget() {
+        for category in SettingsCategory.allCases where category != .tuning {
+            for snippet in category.featureSnippets {
+                XCTAssertNotNil(
+                    category.focusTarget(for: snippet),
+                    "Missing focus target for \(category.rawValue) > \(snippet.title)"
+                )
+            }
+        }
+    }
+
+    func testEveryVisibleCategoryFallbackHasAFocusTarget() {
+        for category in SettingsCategory.allCases where category != .tuning {
+            let fallback = SettingsFeatureSnippet(
+                title: category.rawValue,
+                summary: "Open this section"
+            )
+
+            XCTAssertNotNil(
+                category.focusTarget(for: fallback),
+                "Missing fallback focus target for \(category.rawValue)"
+            )
+        }
     }
 
     private func snippet(

@@ -58,6 +58,7 @@ struct ExperimentalSettingsView: View {
         .frame(maxWidth: .infinity)
         .systemLiquidGlassBackground(cornerRadius: 12)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .settingsFocusable(.experimentalEmptyState)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No experimental features are available right now.")
         .task {

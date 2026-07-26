@@ -26,7 +26,8 @@ struct TroubleshootingSettingsView: View {
                         icon: "internaldrive",
                         color: .orange,
                         buttonTitle: "Clear",
-                        buttonIcon: "trash"
+                        buttonIcon: "trash",
+                        focusTarget: .troubleshootingCache
                     ) {
                         clearCache()
                     }
@@ -38,7 +39,8 @@ struct TroubleshootingSettingsView: View {
                         icon: "brain.head.profile",
                         color: .purple,
                         buttonTitle: "Delete All",
-                        buttonIcon: "trash"
+                        buttonIcon: "trash",
+                        focusTarget: .troubleshootingLearnings
                     ) {
                         showingDeleteDataConfirmation = true
                     }
@@ -50,12 +52,14 @@ struct TroubleshootingSettingsView: View {
                         icon: "arrow.counterclockwise",
                         color: .red,
                         buttonTitle: "Erase All",
-                        buttonIcon: "trash"
+                        buttonIcon: "trash",
+                        focusTarget: .troubleshootingReset
                     ) {
                         showingResetConfirmation = true
                     }
                 }
             }
+            .settingsFocusable(.troubleshootingMaintenance)
             .animatedAppearance(delay: 0.05)
             .onAppear {
                 calculateCacheSize()
@@ -194,6 +198,7 @@ private struct MaintenanceActionTile: View {
     let color: Color
     let buttonTitle: String
     let buttonIcon: String
+    let focusTarget: SettingsFocusTarget
     let action: () -> Void
 
     @State private var isHovered = false
@@ -250,6 +255,7 @@ private struct MaintenanceActionTile: View {
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
+        .settingsFocusable(focusTarget)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering

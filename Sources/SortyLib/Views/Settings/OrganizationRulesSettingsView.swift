@@ -55,6 +55,7 @@ struct OrganizationRulesSettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.rulesTemperature)
             .animatedAppearance(delay: 0.1)
 
             // Organization Style

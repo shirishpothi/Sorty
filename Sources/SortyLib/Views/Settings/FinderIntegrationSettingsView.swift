@@ -56,31 +56,37 @@ struct FinderIntegrationSettingsView: View {
                     VStack(spacing: 8) {
                         compactStatusRow(
                             label: "Organize with Sorty",
-                            isHealthy: isOrganizeActionInstalled
+                            isHealthy: isOrganizeActionInstalled,
+                            focusTarget: .finderOrganize
                         )
 
                         compactStatusRow(
                             label: "Watch with Sorty",
-                            isHealthy: isWatchActionInstalled
+                            isHealthy: isWatchActionInstalled,
+                            focusTarget: .finderWatch
                         )
 
                         compactStatusRow(
                             label: "Exclude with Sorty",
-                            isHealthy: isExcludeActionInstalled
+                            isHealthy: isExcludeActionInstalled,
+                            focusTarget: .finderExclude
                         )
 
                         compactStatusRow(
                             label: "Finder extension",
-                            isHealthy: finderSyncActive
+                            isHealthy: finderSyncActive,
+                            focusTarget: .finderExtension
                         )
 
                         compactStatusRow(
                             label: "Automation permission",
-                            isHealthy: automationManager.automationStatus.isGranted
+                            isHealthy: automationManager.automationStatus.isGranted,
+                            focusTarget: .finderAutomationPermission
                         )
                     }
                 }
             }
+            .settingsFocusable(.finderIntegration)
             .animatedAppearance(delay: 0.03)
 
             if shouldShowTroubleshooting {
@@ -198,7 +204,11 @@ struct FinderIntegrationSettingsView: View {
     }
 
     @ViewBuilder
-    private func compactStatusRow(label: String, isHealthy: Bool) -> some View {
+    private func compactStatusRow(
+        label: String,
+        isHealthy: Bool,
+        focusTarget: SettingsFocusTarget
+    ) -> some View {
         HStack(spacing: 8) {
             Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(isHealthy ? .green : .orange)
@@ -208,6 +218,7 @@ struct FinderIntegrationSettingsView: View {
                 .font(.caption.weight(.medium))
             Spacer()
         }
+        .settingsFocusableSetting(focusTarget)
         .accessibilityElement(children: .combine)
         .accessibilityValue(isHealthy ? "ready" : "needs attention")
     }

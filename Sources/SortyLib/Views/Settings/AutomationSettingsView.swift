@@ -141,7 +141,7 @@ struct AutomationSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
-                    .settingsFocusable(.automationLaunchAtLogin)
+                    .settingsFocusableSetting(.automationLaunchAtLogin)
 
                     HStack(alignment: .center, spacing: 8) {
                         Toggle(isOn: $keepInBackground) {
@@ -154,7 +154,7 @@ struct AutomationSettingsView: View {
                             }
                         }
                         .toggleStyle(.switch)
-                        .settingsFocusable(.automationKeepInBackground)
+                        .settingsFocusableSetting(.automationKeepInBackground)
 
                         Button {
                             showBackgroundInfo.toggle()
@@ -196,7 +196,7 @@ struct AutomationSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
-                    .settingsFocusable(.automationHideDockIcon)
+                    .settingsFocusableSetting(.automationHideDockIcon)
                 }
 
             }

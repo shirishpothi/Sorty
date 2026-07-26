@@ -24,6 +24,8 @@ private struct SettingsFocusableModifier: ViewModifier {
     @State private var isBreathing = false
 
     let target: SettingsFocusTarget
+    let horizontalRingPadding: CGFloat
+    let verticalRingPadding: CGFloat
 
     private var isFocused: Bool {
         focusTarget == target
@@ -34,32 +36,33 @@ private struct SettingsFocusableModifier: ViewModifier {
             .id(target.rawValue)
             .overlay(
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.92 : 0.72)
+                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
                             : Color.clear,
-                            lineWidth: 1.8
+                            lineWidth: 2
                         )
 
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.32 : 0.14)
+                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
                             : Color.clear,
-                            lineWidth: 2.4
+                            lineWidth: 3
                         )
-                        .blur(radius: isBreathing ? 6 : 3)
-                        .shadow(
-                            color: isFocused
-                                ? Color.accentColor.opacity(isBreathing ? 0.28 : 0.12)
-                                : .clear,
-                            radius: isBreathing ? 12 : 6
-                        )
+                        .scaleEffect(isBreathing ? 1.012 : 1)
+                        .blur(radius: isBreathing ? 4 : 2)
                 }
-                .padding(.horizontal, -8)
-                .padding(.vertical, -6)
+                .padding(.horizontal, -horizontalRingPadding)
+                .padding(.vertical, -verticalRingPadding)
                 .allowsHitTesting(false)
+            )
+            .shadow(
+                color: isFocused
+                    ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
+                    : .clear,
+                radius: isBreathing ? 14 : 7
             )
             .animation(.easeInOut(duration: 0.2), value: isFocused)
             .onAppear {
@@ -82,7 +85,7 @@ private struct SettingsFocusableModifier: ViewModifier {
         }
 
         isBreathing = false
-        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
             isBreathing = true
         }
     }
@@ -340,7 +343,7 @@ struct SettingsToggle: View {
                 .toggleStyle(.switch)
         }
         .padding(.vertical, 4)
-        .settingsFocusable(focusTarget)
+        .settingsFocusableSetting(focusTarget)
         .onChange(of: isOn) { _, _ in
             HapticFeedbackManager.shared.selection()
         }
@@ -413,13 +416,38 @@ extension View {
     }
 
     func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
-        modifier(SettingsFocusableModifier(target: target))
+        modifier(
+            SettingsFocusableModifier(
+                target: target,
+                horizontalRingPadding: 0,
+                verticalRingPadding: 0
+            )
+        )
     }
 
     @ViewBuilder
     func settingsFocusable(_ target: SettingsFocusTarget?) -> some View {
         if let target {
             settingsFocusable(target)
+        } else {
+            self
+        }
+    }
+
+    func settingsFocusableSetting(_ target: SettingsFocusTarget) -> some View {
+        modifier(
+            SettingsFocusableModifier(
+                target: target,
+                horizontalRingPadding: 8,
+                verticalRingPadding: 6
+            )
+        )
+    }
+
+    @ViewBuilder
+    func settingsFocusableSetting(_ target: SettingsFocusTarget?) -> some View {
+        if let target {
+            settingsFocusableSetting(target)
         } else {
             self
         }

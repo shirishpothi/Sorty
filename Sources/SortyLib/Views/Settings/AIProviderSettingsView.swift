@@ -62,6 +62,7 @@ struct AIProviderSettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.providerSelect)
             .animatedAppearance(delay: 0.05)
 
             // Provider-specific configuration
@@ -269,6 +270,7 @@ struct AIProviderSettingsView: View {
                 }
             }
         }
+        .settingsFocusable(.providerConfiguration)
     }
 
     private var apiConfigSection: some View {
@@ -305,6 +307,7 @@ struct AIProviderSettingsView: View {
                 }
             }
         }
+        .settingsFocusable(.providerConfiguration)
     }
 
     private var supportsSubscriptionAuthUI: Bool {
@@ -521,6 +524,7 @@ struct AIProviderSettingsView: View {
                 }
             }
         }
+        .settingsFocusable(.providerConfiguration)
     }
 
     private var connectionSection: some View {
@@ -626,6 +630,7 @@ struct AIProviderSettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
         }
+        .settingsFocusable(.providerConnection)
     }
 
     private func testConnection() {

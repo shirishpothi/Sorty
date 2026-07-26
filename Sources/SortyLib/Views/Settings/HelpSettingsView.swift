@@ -94,6 +94,7 @@ struct HelpSettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.helpSupport)
             .animatedAppearance(delay: 0.1)
 
             SettingsCard(title: "Issue Details", icon: "clipboard", color: .blue) {
@@ -130,6 +131,7 @@ struct HelpSettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.helpIssueDetails)
             .animatedAppearance(delay: 0.16)
         }
         .onDisappear {
@@ -267,6 +269,7 @@ struct DeeplinkSettingsView: View {
                 title: "Core",
                 icon: "app.badge",
                 color: .blue,
+                focusTarget: .deeplinksCore,
                 entries: [
                     DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
                     DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
@@ -278,12 +281,14 @@ struct DeeplinkSettingsView: View {
                 title: "Organization",
                 icon: "folder.badge.gearshape",
                 color: .green,
+                focusTarget: .deeplinksOrganization,
                 entries: organizationEntries
             ),
             DeeplinkGroup(
                 title: "Automation",
                 icon: "bolt.circle",
                 color: .orange,
+                focusTarget: .deeplinksAutomation,
                 entries: [
                     DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
                     DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
@@ -297,6 +302,7 @@ struct DeeplinkSettingsView: View {
                 title: "Finder",
                 icon: "folder.badge.plus",
                 color: .cyan,
+                focusTarget: .deeplinksFinder,
                 entries: [
                     DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder."),
                     DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders."),
@@ -308,6 +314,7 @@ struct DeeplinkSettingsView: View {
                 title: "Compatibility",
                 icon: "arrow.triangle.2.circlepath",
                 color: .secondary,
+                focusTarget: .deeplinksCompatibility,
                 entries: [
                     DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink for older launchers.")
                 ]
@@ -432,6 +439,7 @@ private struct DeeplinkGroup: Identifiable {
     let title: String
     let icon: String
     let color: Color
+    let focusTarget: SettingsFocusTarget
     let entries: [DeeplinkEntry]
 
     var id: String { title }
@@ -469,6 +477,7 @@ private struct DeeplinkGroupSection: View {
                 }
             }
         }
+        .settingsFocusable(group.focusTarget)
     }
 }
 

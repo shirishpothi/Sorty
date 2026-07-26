@@ -30,15 +30,30 @@ public struct SettingsFeatureMatch: Identifiable, Hashable {
 }
 
 public enum SettingsFocusTarget: String, Sendable {
+    case providerSelect = "settings.provider.select"
+    case providerConfiguration = "settings.provider.configuration"
+    case providerConnection = "settings.provider.connection"
     case strategyFastMode = "settings.strategy.fast-mode"
     case strategyVision = "settings.strategy.vision"
     case strategyRenaming = "settings.strategy.renaming"
     case rulesContentRules = "settings.rules.content-rules"
+    case rulesTemperature = "settings.rules.temperature"
     case rulesOrganizationStyle = "settings.rules.organization-style"
     case automationGlobalModel = "settings.automation.global-model"
     case automationLaunchAtLogin = "settings.automation.launch-at-login"
     case automationKeepInBackground = "settings.automation.keep-in-background"
     case automationHideDockIcon = "settings.automation.hide-dock-icon"
+    case deeplinksCore = "settings.deeplinks.core"
+    case deeplinksOrganization = "settings.deeplinks.organization"
+    case deeplinksAutomation = "settings.deeplinks.automation"
+    case deeplinksFinder = "settings.deeplinks.finder"
+    case deeplinksCompatibility = "settings.deeplinks.compatibility"
+    case finderIntegration = "settings.finder.integration"
+    case finderOrganize = "settings.finder.organize"
+    case finderWatch = "settings.finder.watch"
+    case finderExclude = "settings.finder.exclude"
+    case finderExtension = "settings.finder.extension"
+    case finderAutomationPermission = "settings.finder.automation-permission"
     case notificationsPermission = "settings.notifications.permission"
     case notificationsInAppHUD = "settings.notifications.in-app-hud"
     case notificationsSystem = "settings.notifications.system"
@@ -50,6 +65,13 @@ public enum SettingsFocusTarget: String, Sendable {
     case advancedInternetPrivacy = "settings.advanced.internet-privacy"
     case advancedTimeouts = "settings.advanced.timeouts"
     case advancedDeveloper = "settings.advanced.developer"
+    case troubleshootingMaintenance = "settings.troubleshooting.maintenance"
+    case troubleshootingCache = "settings.troubleshooting.cache"
+    case troubleshootingLearnings = "settings.troubleshooting.learnings"
+    case troubleshootingReset = "settings.troubleshooting.reset"
+    case helpSupport = "settings.help.support"
+    case helpIssueDetails = "settings.help.issue-details"
+    case experimentalEmptyState = "settings.experimental.empty-state"
 }
 
 public enum SettingsCategoryGroup: String, CaseIterable {
@@ -193,6 +215,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Core Deeplinks", summary: "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"]),
                 SettingsFeatureSnippet(title: "Organization Deeplinks", summary: "Copy links for organize, duplicates, scan, storage, and workspace-health workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"]),
                 SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"]),
+                SettingsFeatureSnippet(title: "Finder Deeplinks", summary: "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"]),
                 SettingsFeatureSnippet(title: "Legacy Path Deeplink", summary: "Open older path-only links such as sorty:///Users/me/Downloads.", keywords: ["legacy path", "sorty:///Users/me/Downloads", "downloads"])
             ]
         case .finder:
@@ -233,7 +256,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Copy Issue Details", summary: "Copy app, build, macOS, and device details for GitHub issue reports.", keywords: ["support data", "diagnostics", "bug report"])
             ]
         case .experimental:
-            return []
+            return [
+                SettingsFeatureSnippet(
+                    title: "Experimental Features",
+                    summary: "See whether any labs or beta features are currently available.",
+                    keywords: ["experimental", "labs", "beta", "feature flags"]
+                )
+            ]
         }
     }
 
@@ -277,6 +306,12 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
     public func focusTarget(for snippet: SettingsFeatureSnippet) -> SettingsFocusTarget? {
         switch (self, snippet.title) {
+        case (.provider, "Select Provider"), (.provider, "GitHub Copilot"):
+            return .providerSelect
+        case (.provider, "API Configuration"), (.provider, "Model Catalog"):
+            return .providerConfiguration
+        case (.provider, "Connection Testing"):
+            return .providerConnection
         case (.strategy, "Fast Mode"):
             return .strategyFastMode
         case (.strategy, "AI Vision for Images"):
@@ -285,6 +320,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .strategyRenaming
         case (.rules, "Duplicate Handling"), (.rules, "Enable File Tagging"):
             return .rulesContentRules
+        case (.rules, "AI Temperature"):
+            return .rulesTemperature
         case (.rules, "Organization Style"):
             return .rulesOrganizationStyle
         case (.automation, "Global Automation Model"):
@@ -295,6 +332,26 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .automationKeepInBackground
         case (.automation, "Hide Dock Icon"):
             return .automationHideDockIcon
+        case (.deeplinks, "Core Deeplinks"):
+            return .deeplinksCore
+        case (.deeplinks, "Organization Deeplinks"):
+            return .deeplinksOrganization
+        case (.deeplinks, "Automation Deeplinks"):
+            return .deeplinksAutomation
+        case (.deeplinks, "Finder Deeplinks"):
+            return .deeplinksFinder
+        case (.deeplinks, "Legacy Path Deeplink"):
+            return .deeplinksCompatibility
+        case (.finder, "Organize with Sorty"):
+            return .finderOrganize
+        case (.finder, "Watch with Sorty"):
+            return .finderWatch
+        case (.finder, "Exclude with Sorty"):
+            return .finderExclude
+        case (.finder, "Finder Extension"):
+            return .finderExtension
+        case (.finder, "Automation Permission"):
+            return .finderAutomationPermission
         case (.notifications, "Notification Permission"):
             return .notificationsPermission
         case (.notifications, "In-App HUD"):
@@ -317,8 +374,49 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .advancedTimeouts
         case (.advanced, "Stats for Nerds"), (.advanced, "Show Error Logs"):
             return .advancedDeveloper
+        case (.troubleshooting, "Cache"):
+            return .troubleshootingCache
+        case (.troubleshooting, "Learnings Data"):
+            return .troubleshootingLearnings
+        case (.troubleshooting, "Reset Sorty"):
+            return .troubleshootingReset
+        case (.help, "Support Links"):
+            return .helpSupport
+        case (.help, "Copy Issue Details"):
+            return .helpIssueDetails
+        case (.experimental, "Experimental Features"):
+            return .experimentalEmptyState
         default:
+            return snippet.title == rawValue ? fallbackFocusTarget : nil
+        }
+    }
+
+    private var fallbackFocusTarget: SettingsFocusTarget? {
+        switch self {
+        case .provider:
+            return .providerSelect
+        case .strategy:
+            return .strategyFastMode
+        case .rules:
+            return .rulesContentRules
+        case .tuning:
             return nil
+        case .automation:
+            return .automationGlobalModel
+        case .deeplinks:
+            return .deeplinksCore
+        case .finder:
+            return .finderIntegration
+        case .notifications:
+            return .notificationsPermission
+        case .advanced:
+            return .advancedMenuBar
+        case .troubleshooting:
+            return .troubleshootingMaintenance
+        case .help:
+            return .helpSupport
+        case .experimental:
+            return .experimentalEmptyState
         }
     }
 }
