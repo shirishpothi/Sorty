@@ -93,7 +93,7 @@ public class ExclusionEnforcer: ObservableObject {
         
         // Check files in this folder
         for file in folder.files {
-            if let matchingRule = exclusionManager.matchingRules(for: file).first(where: { $0.isEnabled }) {
+            if let matchingRule = exclusionManager.firstMatchingRule(for: file) {
                 violations.append(ExclusionViolation(
                     file: file,
                     rule: matchingRule,

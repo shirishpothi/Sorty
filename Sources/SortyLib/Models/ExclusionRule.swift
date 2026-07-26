@@ -182,101 +182,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
 
     /// Check if a file matches this rule
     public func matches(_ file: FileItem) -> Bool {
-        guard isEnabled else { return false }
-
-        let result: Bool
-        switch type {
-        case .fileExtension:
-            let normalizedPattern = normalizedExtensionPattern
-            guard !normalizedPattern.isEmpty else { return false }
-            let normalizedExtension = file.extension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if caseSensitive {
-                result = file.extension.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedPattern.trimmingLeadingDots()
-            } else {
-                result = normalizedExtension == normalizedPattern
-            }
-
-        case .fileName:
-            let pattern = trimmedPattern
-            guard !pattern.isEmpty else { return false }
-            if caseSensitive {
-                result = file.name.contains(pattern)
-            } else {
-                result = file.name.localizedCaseInsensitiveContains(pattern)
-            }
-
-        case .folderName:
-            let pattern = trimmedPattern
-            guard !pattern.isEmpty else { return false }
-            let pathComponents = file.path.components(separatedBy: "/")
-            if caseSensitive {
-                result = pathComponents.contains { $0.contains(pattern) }
-            } else {
-                result = pathComponents.contains { $0.localizedCaseInsensitiveContains(pattern) }
-            }
-
-        case .pathContains:
-            let pattern = trimmedPattern
-            guard !pattern.isEmpty else { return false }
-            if caseSensitive {
-                result = file.path.contains(pattern)
-            } else {
-                result = file.path.localizedCaseInsensitiveContains(pattern)
-            }
-
-        case .regex:
-            let pattern = trimmedPattern
-            guard !pattern.isEmpty else { return false }
-            let options: NSRegularExpression.Options = caseSensitive ? [] : .caseInsensitive
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
-                return false
-            }
-            let range = NSRange(location: 0, length: file.name.utf16.count)
-            result = regex.firstMatch(in: file.name, options: [], range: range) != nil
-
-        case .fileSize:
-            guard let limitMB = numericValue, let greater = comparisonGreater else { return false }
-            let sizeMB = Double(file.size) / (1024 * 1024)
-            result = greater ? (sizeMB > limitMB) : (sizeMB < limitMB)
-
-        case .creationDate:
-            guard let days = numericValue, let older = comparisonGreater else { return false }
-            let date = file.creationDate ?? Date()
-            let limitDate = Calendar.current.date(byAdding: .day, value: -Int(days), to: Date()) ?? Date()
-            result = older ? (date < limitDate) : (date > limitDate)
-
-        case .modificationDate:
-            guard let days = numericValue, let older = comparisonGreater else { return false }
-            // Use creation date as fallback since FileItem doesn't track modification date
-            let date = file.creationDate ?? Date()
-            let limitDate = Calendar.current.date(byAdding: .day, value: -Int(days), to: Date()) ?? Date()
-            result = older ? (date < limitDate) : (date > limitDate)
-
-        case .hiddenFiles:
-            result = file.name.hasPrefix(".") || file.path.contains("/.")
-
-        case .systemFiles:
-            let systemPatterns = [".DS_Store", "Thumbs.db", "desktop.ini", ".Spotlight-V100", ".Trashes", ".fseventsd", ".TemporaryItems"]
-            result = systemPatterns.contains { file.name == $0 || file.path.contains($0) }
-
-        case .fileType:
-            guard let category = fileTypeCategory else { return false }
-            result = category.extensions.contains(file.extension.lowercased())
-
-        case .customScript:
-            // Custom scripts not implemented in basic matching
-            result = false
-        }
-
-        return negated ? !result : result
-    }
-
-    private var trimmedPattern: String {
-        pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var normalizedExtensionPattern: String {
-        trimmedPattern.trimmingLeadingDots().lowercased()
+        ExclusionMatcher(rules: [self]).shouldExclude(file)
     }
 
     /// Human-readable description of the rule
@@ -321,6 +227,504 @@ private extension String {
             value.removeFirst()
         }
         return value
+    }
+}
+
+// MARK: - Compiled Matching
+
+/// An immutable, concurrency-safe snapshot of exclusion rules.
+///
+/// Rules are normalized and regular expressions are compiled once when the
+/// snapshot is created. The snapshot can then be shared by manual organization,
+/// watched-folder work, and background scanners without main-actor contention.
+public struct ExclusionMatcher: Sendable {
+    public static let empty = ExclusionMatcher(rules: [])
+
+    private static let systemPatterns = [
+        ".DS_Store",
+        "Thumbs.db",
+        "desktop.ini",
+        ".Spotlight-V100",
+        ".Trashes",
+        ".fseventsd",
+        ".TemporaryItems",
+    ]
+
+    private let rules: [CompiledExclusionRule]
+    private let pathOnlyRules: [CompiledExclusionRule]
+    private let metadataRules: [CompiledExclusionRule]
+    private let directoryPruningRules: [CompiledExclusionRule]
+
+    public init(rules: [ExclusionRule], referenceDate: Date = Date()) {
+        let compiled = rules.compactMap {
+            CompiledExclusionRule(rule: $0, referenceDate: referenceDate)
+        }
+        self.rules = compiled
+        self.pathOnlyRules = compiled
+            .filter(\.isPathOnly)
+            .sorted { $0.evaluationCost < $1.evaluationCost }
+        self.metadataRules = compiled
+            .filter { !$0.isPathOnly }
+            .sorted { $0.evaluationCost < $1.evaluationCost }
+        self.directoryPruningRules = compiled.filter(\.canPruneDirectory)
+    }
+
+    public var isEmpty: Bool {
+        rules.isEmpty
+    }
+
+    public func shouldExclude(_ file: FileItem) -> Bool {
+        var cache = ExclusionMatchCache(
+            path: file.path,
+            name: file.name,
+            pathExtension: file.extension,
+            size: file.size,
+            creationDate: file.creationDate,
+            modificationDate: file.modificationDate
+        )
+        return matchesAnyRule(cache: &cache)
+    }
+
+    /// Fast path for scanners to reject name/path based exclusions before any
+    /// resource values, extended attributes, OCR, hashes, or image work.
+    public func shouldExcludeUsingPathOnly(at url: URL) -> Bool {
+        guard !pathOnlyRules.isEmpty else { return false }
+        var cache = ExclusionMatchCache(url: url)
+        return pathOnlyRules.contains { $0.matches(cache: &cache) }
+    }
+
+    /// Completes matching once inexpensive filesystem metadata is available.
+    public func shouldExcludeFile(
+        at url: URL,
+        size: Int64,
+        creationDate: Date?,
+        modificationDate: Date?
+    ) -> Bool {
+        var cache = ExclusionMatchCache(
+            url: url,
+            size: size,
+            creationDate: creationDate,
+            modificationDate: modificationDate
+        )
+        if pathOnlyRules.contains(where: { $0.matches(cache: &cache) }) {
+            return true
+        }
+        return metadataRules.contains { $0.matches(cache: &cache) }
+    }
+
+    /// Returns true only when every descendant must match a positive rule.
+    /// Negated and file-metadata rules cannot safely prune an entire subtree.
+    public func shouldPruneDirectory(at url: URL) -> Bool {
+        guard !directoryPruningRules.isEmpty else { return false }
+        var cache = ExclusionMatchCache(url: url)
+        return directoryPruningRules.contains {
+            $0.matchesDirectoryForPruning(cache: &cache)
+        }
+    }
+
+    public func filterFiles(_ files: [FileItem]) -> [FileItem] {
+        guard !rules.isEmpty else { return files }
+
+        var included: [FileItem] = []
+        included.reserveCapacity(min(files.count, 4_096))
+        for file in files where !shouldExclude(file) {
+            included.append(file)
+        }
+        return included
+    }
+
+    func shouldExclude(
+        path: String,
+        name: String,
+        pathExtension: String,
+        size: Int64 = 0,
+        creationDate: Date? = nil,
+        modificationDate: Date? = nil
+    ) -> Bool {
+        var cache = ExclusionMatchCache(
+            path: path,
+            name: name,
+            pathExtension: pathExtension,
+            size: size,
+            creationDate: creationDate,
+            modificationDate: modificationDate
+        )
+        return matchesAnyRule(cache: &cache)
+    }
+
+    func firstMatchingRuleID(for file: FileItem) -> UUID? {
+        var cache = ExclusionMatchCache(
+            path: file.path,
+            name: file.name,
+            pathExtension: file.extension,
+            size: file.size,
+            creationDate: file.creationDate,
+            modificationDate: file.modificationDate
+        )
+        return rules.first { $0.matches(cache: &cache) }?.id
+    }
+
+    func matchingRuleIDs(for file: FileItem) -> [UUID] {
+        var cache = ExclusionMatchCache(
+            path: file.path,
+            name: file.name,
+            pathExtension: file.extension,
+            size: file.size,
+            creationDate: file.creationDate,
+            modificationDate: file.modificationDate
+        )
+        var matches: [UUID] = []
+        for rule in rules where rule.matches(cache: &cache) {
+            matches.append(rule.id)
+        }
+        return matches
+    }
+
+    private func matchesAnyRule(cache: inout ExclusionMatchCache) -> Bool {
+        if pathOnlyRules.contains(where: { $0.matches(cache: &cache) }) {
+            return true
+        }
+        return metadataRules.contains { $0.matches(cache: &cache) }
+    }
+
+    fileprivate static func isSystemItem(name: String, path: String) -> Bool {
+        systemPatterns.contains { name == $0 || path.contains($0) }
+    }
+}
+
+private struct ExclusionMatchCache {
+    let path: String
+    let name: String
+    let pathExtension: String
+    let size: Int64
+    let creationDate: Date?
+    let modificationDate: Date?
+
+    private var lowercasedPathStorage: String?
+    private var lowercasedNameStorage: String?
+    private var normalizedExtensionStorage: String?
+    private var pathComponentsStorage: [Substring]?
+    private var lowercasedPathComponentsStorage: [Substring]?
+
+    init(
+        path: String,
+        name: String,
+        pathExtension: String,
+        size: Int64,
+        creationDate: Date?,
+        modificationDate: Date?
+    ) {
+        self.path = path
+        self.name = name
+        self.pathExtension = pathExtension
+        self.size = size
+        self.creationDate = creationDate
+        self.modificationDate = modificationDate
+    }
+
+    init(
+        url: URL,
+        size: Int64 = 0,
+        creationDate: Date? = nil,
+        modificationDate: Date? = nil
+    ) {
+        self.init(
+            path: url.path,
+            name: url.deletingPathExtension().lastPathComponent,
+            pathExtension: url.pathExtension,
+            size: size,
+            creationDate: creationDate,
+            modificationDate: modificationDate
+        )
+    }
+
+    mutating func lowercasedPath() -> String {
+        if let lowercasedPathStorage {
+            return lowercasedPathStorage
+        }
+        let value = path.lowercased()
+        lowercasedPathStorage = value
+        return value
+    }
+
+    mutating func lowercasedName() -> String {
+        if let lowercasedNameStorage {
+            return lowercasedNameStorage
+        }
+        let value = name.lowercased()
+        lowercasedNameStorage = value
+        return value
+    }
+
+    mutating func normalizedExtension() -> String {
+        if let normalizedExtensionStorage {
+            return normalizedExtensionStorage
+        }
+        let value = pathExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        normalizedExtensionStorage = value
+        return value
+    }
+
+    mutating func pathComponents() -> [Substring] {
+        if let pathComponentsStorage {
+            return pathComponentsStorage
+        }
+        let value = path.split(separator: "/", omittingEmptySubsequences: false)
+        pathComponentsStorage = value
+        return value
+    }
+
+    mutating func lowercasedPathComponents() -> [Substring] {
+        if let lowercasedPathComponentsStorage {
+            return lowercasedPathComponentsStorage
+        }
+        let value = lowercasedPath().split(separator: "/", omittingEmptySubsequences: false)
+        lowercasedPathComponentsStorage = value
+        return value
+    }
+}
+
+private struct CompiledExclusionRule: Sendable {
+    let id: UUID
+    let predicate: CompiledExclusionPredicate
+    let negated: Bool
+
+    init?(rule: ExclusionRule, referenceDate: Date) {
+        guard rule.isEnabled else { return nil }
+
+        let trimmedPattern = rule.pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        let predicate: CompiledExclusionPredicate
+
+        switch rule.type {
+        case .fileExtension:
+            let pattern = trimmedPattern.trimmingLeadingDots()
+            guard !pattern.isEmpty else { return nil }
+            predicate = .fileExtension(
+                rule.caseSensitive ? pattern : pattern.lowercased(),
+                caseSensitive: rule.caseSensitive
+            )
+
+        case .fileName:
+            guard !trimmedPattern.isEmpty else { return nil }
+            predicate = .fileNameContains(
+                rule.caseSensitive ? trimmedPattern : trimmedPattern.lowercased(),
+                caseSensitive: rule.caseSensitive
+            )
+
+        case .folderName:
+            guard !trimmedPattern.isEmpty else { return nil }
+            predicate = .folderNameContains(
+                rule.caseSensitive ? trimmedPattern : trimmedPattern.lowercased(),
+                caseSensitive: rule.caseSensitive
+            )
+
+        case .pathContains:
+            guard !trimmedPattern.isEmpty else { return nil }
+            predicate = .pathContains(
+                rule.caseSensitive ? trimmedPattern : trimmedPattern.lowercased(),
+                caseSensitive: rule.caseSensitive
+            )
+
+        case .regex:
+            guard !trimmedPattern.isEmpty else { return nil }
+            let options: NSRegularExpression.Options = rule.caseSensitive ? [] : .caseInsensitive
+            guard let regex = try? NSRegularExpression(pattern: trimmedPattern, options: options) else {
+                return nil
+            }
+            predicate = .regex(CompiledExclusionRegex(regex))
+
+        case .fileSize:
+            guard let limitMB = rule.numericValue,
+                  let greater = rule.comparisonGreater else {
+                return nil
+            }
+            predicate = .fileSize(limitMB: limitMB, greater: greater)
+
+        case .creationDate, .modificationDate:
+            guard let days = rule.numericValue,
+                  days.isFinite,
+                  days >= Double(Int.min),
+                  days <= Double(Int.max),
+                  let older = rule.comparisonGreater else {
+                return nil
+            }
+            let threshold = Calendar.current.date(
+                byAdding: .day,
+                value: -Int(days),
+                to: referenceDate
+            ) ?? referenceDate
+            predicate = .date(
+                type: rule.type,
+                threshold: threshold,
+                fallbackDate: referenceDate,
+                older: older
+            )
+
+        case .hiddenFiles:
+            predicate = .hiddenFiles
+
+        case .systemFiles:
+            predicate = .systemFiles
+
+        case .fileType:
+            guard let category = rule.fileTypeCategory else { return nil }
+            predicate = .fileType(Set(category.extensions.map { $0.lowercased() }))
+
+        case .customScript:
+            predicate = .constant(false)
+        }
+
+        self.id = rule.id
+        self.predicate = predicate
+        self.negated = rule.negated
+    }
+
+    var isPathOnly: Bool {
+        predicate.isPathOnly
+    }
+
+    var canPruneDirectory: Bool {
+        !negated && predicate.canPruneDirectory
+    }
+
+    var evaluationCost: Int {
+        predicate.evaluationCost
+    }
+
+    func matches(cache: inout ExclusionMatchCache) -> Bool {
+        let result = predicate.matches(cache: &cache)
+        return negated ? !result : result
+    }
+
+    func matchesDirectoryForPruning(cache: inout ExclusionMatchCache) -> Bool {
+        guard canPruneDirectory else { return false }
+        return predicate.matches(cache: &cache)
+    }
+}
+
+private enum CompiledExclusionPredicate: Sendable {
+    case fileExtension(String, caseSensitive: Bool)
+    case fileNameContains(String, caseSensitive: Bool)
+    case folderNameContains(String, caseSensitive: Bool)
+    case pathContains(String, caseSensitive: Bool)
+    case regex(CompiledExclusionRegex)
+    case fileSize(limitMB: Double, greater: Bool)
+    case date(
+        type: ExclusionRuleType,
+        threshold: Date,
+        fallbackDate: Date,
+        older: Bool
+    )
+    case hiddenFiles
+    case systemFiles
+    case fileType(Set<String>)
+    case constant(Bool)
+
+    var isPathOnly: Bool {
+        switch self {
+        case .fileSize, .date:
+            return false
+        default:
+            return true
+        }
+    }
+
+    var canPruneDirectory: Bool {
+        switch self {
+        case .folderNameContains, .pathContains, .hiddenFiles, .systemFiles:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var evaluationCost: Int {
+        switch self {
+        case .fileExtension, .fileType, .constant:
+            return 0
+        case .fileSize, .date, .hiddenFiles:
+            return 1
+        case .fileNameContains:
+            return 2
+        case .systemFiles:
+            return 3
+        case .pathContains:
+            return 4
+        case .folderNameContains:
+            return 5
+        case .regex:
+            return 6
+        }
+    }
+
+    func matches(cache: inout ExclusionMatchCache) -> Bool {
+        switch self {
+        case .fileExtension(let pattern, let caseSensitive):
+            if caseSensitive {
+                return cache.pathExtension
+                    .trimmingCharacters(in: .whitespacesAndNewlines) == pattern
+            }
+            return cache.normalizedExtension() == pattern
+
+        case .fileNameContains(let pattern, let caseSensitive):
+            return caseSensitive
+                ? cache.name.contains(pattern)
+                : cache.lowercasedName().contains(pattern)
+
+        case .folderNameContains(let pattern, let caseSensitive):
+            let components = caseSensitive
+                ? cache.pathComponents()
+                : cache.lowercasedPathComponents()
+            return components.contains { $0.range(of: pattern) != nil }
+
+        case .pathContains(let pattern, let caseSensitive):
+            return caseSensitive
+                ? cache.path.contains(pattern)
+                : cache.lowercasedPath().contains(pattern)
+
+        case .regex(let regex):
+            return regex.matches(cache.name)
+
+        case .fileSize(let limitMB, let greater):
+            let sizeMB = Double(cache.size) / (1_024 * 1_024)
+            return greater ? sizeMB > limitMB : sizeMB < limitMB
+
+        case .date(let type, let threshold, let fallbackDate, let older):
+            let date: Date
+            if type == .modificationDate {
+                date = cache.modificationDate ?? cache.creationDate ?? fallbackDate
+            } else {
+                date = cache.creationDate ?? fallbackDate
+            }
+            return older ? date < threshold : date > threshold
+
+        case .hiddenFiles:
+            return cache.name.hasPrefix(".") || cache.path.contains("/.")
+
+        case .systemFiles:
+            return ExclusionMatcher.isSystemItem(name: cache.name, path: cache.path)
+
+        case .fileType(let extensions):
+            return extensions.contains(cache.normalizedExtension())
+
+        case .constant(let value):
+            return value
+        }
+    }
+}
+
+private final class CompiledExclusionRegex: @unchecked Sendable {
+    private let expression: NSRegularExpression
+
+    init(_ expression: NSRegularExpression) {
+        self.expression = expression
+    }
+
+    func matches(_ value: String) -> Bool {
+        let range = NSRange(location: 0, length: value.utf16.count)
+        return expression.firstMatch(in: value, options: [], range: range) != nil
     }
 }
 
@@ -472,6 +876,7 @@ public class ExclusionRulesManager: ObservableObject {
     @Published public private(set) var rules: [ExclusionRule] = []
     @Published public var activePresetName: String?
     @Published public private(set) var naturalLanguageExceptions: [String] = []
+    @Published public private(set) var compiledMatcher = ExclusionMatcher.empty
 
     private let userDefaults = UserDefaults.standard
     private let rulesKey = "exclusionRules"
@@ -573,16 +978,24 @@ public class ExclusionRulesManager: ObservableObject {
     // MARK: - Matching
 
     public func shouldExclude(_ file: FileItem) -> Bool {
-        rules.contains { $0.matches(file) }
+        compiledMatcher.shouldExclude(file)
     }
 
     public func filterFiles(_ files: [FileItem]) -> [FileItem] {
-        files.filter { !shouldExclude($0) }
+        compiledMatcher.filterFiles(files)
     }
 
     /// Returns which rules matched a file (for debugging)
     public func matchingRules(for file: FileItem) -> [ExclusionRule] {
-        rules.filter { $0.matches(file) }
+        let matchingIDs = Set(compiledMatcher.matchingRuleIDs(for: file))
+        return rules.filter { matchingIDs.contains($0.id) }
+    }
+
+    public func firstMatchingRule(for file: FileItem) -> ExclusionRule? {
+        guard let matchingID = compiledMatcher.firstMatchingRuleID(for: file) else {
+            return nil
+        }
+        return rules.first { $0.id == matchingID }
     }
 
     // MARK: - Statistics
@@ -678,6 +1091,7 @@ public class ExclusionRulesManager: ObservableObject {
             rules = decoded
         }
         activePresetName = userDefaults.string(forKey: presetKey)
+        rebuildMatcher()
     }
 
     private func removeRules(where shouldRemove: (ExclusionRule) -> Bool) {
@@ -700,9 +1114,14 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     private func saveRules() {
+        rebuildMatcher()
         if let encoded = try? JSONEncoder().encode(rules) {
             userDefaults.set(encoded, forKey: rulesKey)
         }
         userDefaults.set(activePresetName, forKey: presetKey)
+    }
+
+    private func rebuildMatcher() {
+        compiledMatcher = ExclusionMatcher(rules: rules)
     }
 }

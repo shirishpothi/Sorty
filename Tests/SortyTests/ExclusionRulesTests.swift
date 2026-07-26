@@ -87,6 +87,80 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertTrue(manager.shouldExclude(file))
     }
 
+    func testCompiledMatcherUsesModificationDateWithoutRecompilingPerFile() {
+        let referenceDate = Date(timeIntervalSince1970: 2_000_000_000)
+        let matcher = ExclusionMatcher(
+            rules: [
+                ExclusionRule(
+                    type: .modificationDate,
+                    numericValue: 30,
+                    comparisonGreater: true
+                )
+            ],
+            referenceDate: referenceDate
+        )
+        let file = FileItem(
+            path: "/p/archive.txt",
+            name: "archive",
+            extension: "txt",
+            size: 0,
+            isDirectory: false,
+            creationDate: referenceDate,
+            modificationDate: referenceDate.addingTimeInterval(-60 * 24 * 60 * 60)
+        )
+
+        XCTAssertTrue(matcher.shouldExclude(file))
+    }
+
+    func testCompiledMatcherHandlesHundredThousandFilesAcrossConcurrentConsumers() async {
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .regex, pattern: "^skip_"),
+            ExclusionRule(type: .fileExtension, pattern: "tmp"),
+        ])
+        let fileCount = 100_000
+        let workerCount = 4
+
+        let excludedCount = await withTaskGroup(of: Int.self, returning: Int.self) { group in
+            for worker in 0..<workerCount {
+                group.addTask {
+                    var count = 0
+                    for index in stride(from: worker, to: fileCount, by: workerCount) {
+                        let name = index.isMultiple(of: 2) ? "skip_\(index)" : "keep_\(index)"
+                        if matcher.shouldExclude(
+                            path: "/large/\(name).txt",
+                            name: name,
+                            pathExtension: "txt"
+                        ) {
+                            count += 1
+                        }
+                    }
+                    return count
+                }
+            }
+
+            var total = 0
+            for await count in group {
+                total += count
+            }
+            return total
+        }
+
+        XCTAssertEqual(excludedCount, fileCount / 2)
+    }
+
+    func testCompiledMatcherPrunesOnlySafePositiveDirectoryRules() {
+        let positiveMatcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .folderName, pattern: "node_modules")
+        ])
+        let negatedMatcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .folderName, pattern: "node_modules", negated: true)
+        ])
+        let directory = URL(fileURLWithPath: "/project/node_modules/package")
+
+        XCTAssertTrue(positiveMatcher.shouldPruneDirectory(at: directory))
+        XCTAssertFalse(negatedMatcher.shouldPruneDirectory(at: directory))
+    }
+
     @MainActor
     func testExclusionEnforcerRemovesNestedViolationsFromAIPlan() {
         let excludedFile = FileItem(path: "/p/cache/secret.tmp", name: "secret", extension: "tmp", size: 0, isDirectory: false)
