@@ -101,6 +101,30 @@ final class CustomPersonaTests: XCTestCase {
         XCTAssertEqual(decoded.name, original.name)
         XCTAssertEqual(decoded.instructionSuggestions, PersonaInstructionSuggestions())
     }
+
+    func testInstructionSuggestionsExcludeFillInPlaceholders() {
+        let suggestions = PersonaInstructionSuggestions(
+            organize: [
+                "Group files by project and keep related documents together.",
+                "Move files into [Project] folders."
+            ],
+            organizeAndRename: [
+                "Group files by project and rename them using confirmed metadata.",
+                "Rename files with [ProjectCode]_[Version].",
+                "Rename files with {Client} and a confirmed date.",
+                "Rename files with <Department> and document type."
+            ]
+        )
+
+        XCTAssertEqual(
+            suggestions.suggestions(for: .organize),
+            ["Group files by project and keep related documents together."]
+        )
+        XCTAssertEqual(
+            suggestions.suggestions(for: .organizeAndRename),
+            ["Group files by project and rename them using confirmed metadata."]
+        )
+    }
     
     // MARK: - PersonaIconOptions Tests
     

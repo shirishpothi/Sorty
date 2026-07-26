@@ -26,14 +26,24 @@ public struct PersonaInstructionSuggestions: Codable, Hashable, Sendable {
     }
 
     public func suggestions(for mode: OrganizationMode) -> [String] {
+        let suggestions: [String]
         switch mode {
         case .organize:
-            return organize
+            suggestions = organize
         case .organizeAndRename:
-            return organizeAndRename
+            suggestions = organizeAndRename
         case .renameOnly:
-            return renameOnly
+            suggestions = renameOnly
         }
+
+        return suggestions.filter(Self.isReadyToUse)
+    }
+
+    private static func isReadyToUse(_ suggestion: String) -> Bool {
+        suggestion.range(
+            of: #"\[[^\[\]\n]+\]|\{[^{}\n]+\}|<[^<>\n]+>"#,
+            options: .regularExpression
+        ) == nil
     }
 }
 
