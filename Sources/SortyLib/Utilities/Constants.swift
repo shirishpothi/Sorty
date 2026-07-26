@@ -93,7 +93,7 @@ public final class HapticSequenceManager {
     
     private init() {}
     
-    /// Plays a left-to-right haptic wave that eases forward to mirror shimmer motion.
+    /// Plays a left-to-right haptic wave whose cadence mirrors an ease-in-out shimmer.
     public func playShimmerWave(
         tapCount: Int = 5,
         duration: TimeInterval = 0.65,
@@ -106,16 +106,16 @@ public final class HapticSequenceManager {
         activeTask?.cancel()
         activeTask = Task { @MainActor in
             let clampedTapCount = max(tapCount, 2)
-            var previousEasedPhase = 0.0
+            var previousTimelinePhase = 0.0
 
             for i in 0..<clampedTapCount {
                 guard !Task.isCancelled else { return }
 
                 if i > 0 {
-                    let phase = Double(i) / Double(clampedTapCount - 1)
-                    let easedPhase = pow(phase, 1.35)
-                    let delay = max(0, duration * (easedPhase - previousEasedPhase))
-                    previousEasedPhase = easedPhase
+                    let spatialPhase = Double(i) / Double(clampedTapCount - 1)
+                    let timelinePhase = easeInOutTimelinePhase(for: spatialPhase)
+                    let delay = max(0, duration * (timelinePhase - previousTimelinePhase))
+                    previousTimelinePhase = timelinePhase
 
                     if delay > 0 {
                         try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -129,6 +129,13 @@ public final class HapticSequenceManager {
                 NSHapticFeedbackManager.defaultPerformer.perform(feedback, performanceTime: .now)
             }
         }
+    }
+
+    /// Inverts a smooth ease-in-out curve so evenly spaced haptic positions
+    /// arrive slowly at each edge and more quickly through the center.
+    private func easeInOutTimelinePhase(for spatialPhase: Double) -> Double {
+        let clampedPhase = min(max(spatialPhase, 0), 1)
+        return 0.5 - sin(asin(1 - 2 * clampedPhase) / 3)
     }
     
     /// Plays a single emphasis haptic for a notable UI event (new insight, popup appearing).

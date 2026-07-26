@@ -8,7 +8,10 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
 
 - **`HapticFeedbackManager`** (`Utilities/Constants.swift:36`) — `tap` / `success` /
   `error` / `selection` / `light` / `alignment`. Plus `HapticSequenceManager` for
-  timed haptic waves (`playShimmerWave`, `playEventPulse`).
+  timed haptic waves (`playShimmerWave`, `playEventPulse`). The shared one-shot
+  sliver modifiers drive `playShimmerWave` with the same 1.25-second ease-in-out
+  cadence as the visual sweep, while onboarding folder reveals use their matching
+  0.6-second cadence. Repeating slivers remain silent.
 - **Button styles** (`Utilities/ButtonStyles.swift`) — `SortyStandard`,
   `SortyPrimary`, `OnboardingPill`, `TintedPill`, `SortySecondary`,
   `SortyDestructive`, `HapticBounce`, `MetalFxPrimary`, `GlossyCallToAction`.

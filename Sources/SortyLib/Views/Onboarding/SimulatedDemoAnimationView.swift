@@ -1138,8 +1138,11 @@ struct OrganizingSliverEffect: View {
 // MARK: - Folder Sliver Effect
 struct FolderSliverEffect: View {
     let isVisible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sliverPhase: CGFloat = 0
     @State private var hasAnimated = false
+
+    private let sliverDuration: TimeInterval = 0.6
     
     var body: some View {
         GeometryReader { geometry in
@@ -1166,10 +1169,18 @@ struct FolderSliverEffect: View {
         .clipped()
         .onAppear {
             guard isVisible else { return }
-            withAnimation(.easeInOut(duration: 0.6)) {
+            guard !reduceMotion else {
+                hasAnimated = true
+                return
+            }
+            HapticSequenceManager.shared.playShimmerWave(
+                duration: sliverDuration,
+                minimumInterval: sliverDuration
+            )
+            withAnimation(.easeInOut(duration: sliverDuration)) {
                 sliverPhase = 1
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + sliverDuration + 0.1) {
                 hasAnimated = true
             }
         }

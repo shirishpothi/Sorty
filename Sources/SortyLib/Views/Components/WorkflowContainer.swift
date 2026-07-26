@@ -219,6 +219,8 @@ extension View {
     }
 }
 
+private let emptyStateSliverDuration: TimeInterval = 1.25
+
 private struct MilestoneEmptyStateSliverModifier: ViewModifier {
     let trigger: Int
 
@@ -254,7 +256,10 @@ private struct MilestoneEmptyStateSliverModifier: ViewModifier {
         sweepTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 1.25)) {
+            HapticSequenceManager.shared.playShimmerWave(
+                duration: emptyStateSliverDuration
+            )
+            withAnimation(.easeInOut(duration: emptyStateSliverDuration)) {
                 sweepProgress = 1
             }
         }
@@ -322,7 +327,10 @@ private struct AnimatedEmptyStateIconModifier: ViewModifier {
             .onAppear {
                 guard !reduceMotion else { return }
                 sweepProgress = 0
-                withAnimation(.easeInOut(duration: 1.25)) {
+                HapticSequenceManager.shared.playShimmerWave(
+                    duration: emptyStateSliverDuration
+                )
+                withAnimation(.easeInOut(duration: emptyStateSliverDuration)) {
                     sweepProgress = 1
                 }
             }
