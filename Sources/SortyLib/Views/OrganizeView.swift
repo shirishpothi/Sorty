@@ -2392,7 +2392,7 @@ struct ErrorView: View {
         case .permissions:
             return "Grant file access for this folder and try again."
         case .generic:
-            return "Try again or choose a smarter model."
+            return "Choose a smarter model, then retry."
         }
     }
 
@@ -2458,7 +2458,7 @@ struct ErrorView: View {
         case .permissions:
             return "Grant access to the required folder, then retry."
         case .generic:
-            return "Retry with the current model, choose a smarter model, or open Help & Support."
+            return "Choose a smarter model and retry. If it still fails, simplify Instructions or Persona, then review Learnings, workflow, and organization rules."
         }
     }
 
@@ -2622,30 +2622,34 @@ struct ErrorView: View {
             isPresented: $showRetryOptions,
             titleVisibility: .visible
         ) {
-            Button("Retry with Current Model") {
-                HapticFeedbackManager.shared.tap()
-                onRetry()
-            }
-
             Button("Choose Smarter Model") {
                 HapticFeedbackManager.shared.tap()
                 onRetryWithSmarterModel()
             }
 
+            Button("Retry with Current Model") {
+                HapticFeedbackManager.shared.tap()
+                onRetry()
+            }
+
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Retry using your current model, or choose a smarter model first.")
+            Text("A stronger model is more likely to return the structured plan Sorty needs.")
         }
     }
 
     @ViewBuilder
     private var recoveryGuidance: some View {
         if category == .generic {
-            VStack(spacing: 3) {
+            VStack(spacing: 6) {
                 Text(recoveryText)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
 
-                HStack(spacing: 4) {
-                    Text("If it keeps happening, open")
+                Text("If it still fails, simplify your Instructions or Persona, then review Learnings, workflow, and organization rules.")
+
+                HStack(spacing: 3) {
+                    Text("Still stuck? Copy the details and open")
 
                     Button {
                         HapticFeedbackManager.shared.tap()
@@ -2658,7 +2662,7 @@ struct ErrorView: View {
 
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 8, weight: .semibold))
-                                .frame(width: showsHelpSupportChevron ? 9 : 0)
+                                .frame(width: 9)
                                 .opacity(showsHelpSupportChevron ? 1 : 0)
                                 .offset(
                                     x: reduceMotion || showsHelpSupportChevron ? 0 : -3,
@@ -2695,8 +2699,6 @@ struct ErrorView: View {
                     .accessibilityLabel("Open Help and Support")
                     .accessibilityHint("Opens the Help and Support settings page")
                     .accessibilityIdentifier("ErrorHelpSupportLink")
-
-                    Text("with the copied details.")
                 }
             }
             .font(.caption)
