@@ -28,10 +28,10 @@ struct PersonaGeneratorView: View {
     @State private var currentQuestionIndex: Int = 0
 
     private let promptSuggestions = [
-        "Example: \"Organize my sci-fi ebook collection by author, then series.\"",
-        "Example: \"Group my photos by year and event, with RAW files separate from edits.\"",
-        "Example: \"Sort client work by project, then keep active and completed work separate.\"",
-        "Example: \"Organize school files by subject, unit, and assignment type.\"",
+        "Organize my sci-fi ebook collection by author, then series.",
+        "Group my photos by year and event, with RAW files separate from edits.",
+        "Sort client work by project, then keep active and completed work separate.",
+        "Organize school files by subject, unit, and assignment type.",
     ]
 
     var body: some View {
@@ -156,13 +156,24 @@ struct PersonaGeneratorView: View {
 
                     if prompt.isEmpty {
                         HStack(alignment: .top, spacing: 10) {
-                            Text(currentPromptSuggestion)
-                                .font(.body)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(2)
-                                .numericTextTransition(animationValue: promptSuggestionIndex)
-
-                            Spacer(minLength: 0)
+                            ZStack(alignment: .topLeading) {
+                                Text(currentPromptSuggestion)
+                                    .font(.body)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(2)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    .id(promptSuggestionIndex)
+                                    .transition(
+                                        reduceMotion
+                                            ? .opacity
+                                            : .asymmetric(
+                                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                                removal: .move(edge: .top).combined(with: .opacity)
+                                            )
+                                    )
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
+                            .clipped()
 
                             Text("Tab")
                                 .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -175,9 +186,9 @@ struct PersonaGeneratorView: View {
                                 )
                                 .accessibilityHidden(true)
                         }
-                        .padding(.leading, 18)
+                        .padding(.leading, 15)
                         .padding(.trailing, 10)
-                        .padding(.vertical, 9)
+                        .padding(.top, 7)
                         .allowsHitTesting(false)
                         .task {
                             promptSuggestionIndex = 0
@@ -185,8 +196,14 @@ struct PersonaGeneratorView: View {
                             while !Task.isCancelled {
                                 try? await Task.sleep(for: .seconds(3.5))
                                 guard !Task.isCancelled else { return }
-                                promptSuggestionIndex =
-                                    (promptSuggestionIndex + 1) % promptSuggestions.count
+                                withAnimation(
+                                    reduceMotion
+                                        ? .easeOut(duration: 0.12)
+                                        : .easeInOut(duration: 0.22)
+                                ) {
+                                    promptSuggestionIndex =
+                                        (promptSuggestionIndex + 1) % promptSuggestions.count
+                                }
                             }
                         }
                     }
