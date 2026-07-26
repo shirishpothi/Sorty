@@ -34,6 +34,7 @@ private struct HistoryImpactSummary: Equatable {
 
 private struct HistorySessionRow: Identifiable, Equatable {
     let id: UUID
+    let directoryPath: String
     let folderName: String
     let timestamp: Date
     let status: OrganizationStatus
@@ -45,6 +46,7 @@ private struct HistorySessionRow: Identifiable, Equatable {
 
     init(entry: OrganizationHistoryEntry) {
         id = entry.id
+        directoryPath = entry.directoryPath
         folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
         timestamp = entry.timestamp
         status = entry.status
@@ -377,7 +379,7 @@ struct HistoryView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            ForEach(entries) { entry in
+            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry?.id == entry.id,
@@ -389,6 +391,7 @@ struct HistoryView: View {
                         prepareTryAgain(id: entry.id)
                     }
                 )
+                .animatedAppearance(delay: Double(index) * (kind == .manual ? 0.03 : 0.02))
                 .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -804,11 +807,12 @@ private struct HistorySessionCardHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 25))
-                .foregroundStyle(.blue.gradient)
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
+            FolderThumbnailView(
+                url: URL(fileURLWithPath: entry.directoryPath),
+                size: CGSize(width: 32, height: 32)
+            )
+            .frame(width: 32)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(entry.folderName)
@@ -953,17 +957,13 @@ private struct HistorySessionCard: View {
                 .padding(.trailing, 12)
                 .accessibilityHidden(true)
         }
-        .background(
-            isHovered
-                ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.055)
-                : Color(NSColor.controlBackgroundColor),
-            in: RoundedRectangle(cornerRadius: 16)
-        )
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
         )
+        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
