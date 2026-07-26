@@ -1,56 +1,5 @@
 import SwiftUI
 
-private struct LiquidGlassSegmentBubbleShape: Shape {
-    let topLeading: CGFloat
-    let bottomLeading: CGFloat
-    let bottomTrailing: CGFloat
-    let topTrailing: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let tl = max(0, min(min(topLeading, rect.width / 2), rect.height / 2))
-        let bl = max(0, min(min(bottomLeading, rect.width / 2), rect.height / 2))
-        let br = max(0, min(min(bottomTrailing, rect.width / 2), rect.height / 2))
-        let tr = max(0, min(min(topTrailing, rect.width / 2), rect.height / 2))
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + tl, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - tr, y: rect.minY))
-        path.addArc(
-            center: CGPoint(x: rect.maxX - tr, y: rect.minY + tr),
-            radius: tr,
-            startAngle: .degrees(-90),
-            endAngle: .degrees(0),
-            clockwise: false
-        )
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
-        path.addArc(
-            center: CGPoint(x: rect.maxX - br, y: rect.maxY - br),
-            radius: br,
-            startAngle: .degrees(0),
-            endAngle: .degrees(90),
-            clockwise: false
-        )
-        path.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
-        path.addArc(
-            center: CGPoint(x: rect.minX + bl, y: rect.maxY - bl),
-            radius: bl,
-            startAngle: .degrees(90),
-            endAngle: .degrees(180),
-            clockwise: false
-        )
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + tl))
-        path.addArc(
-            center: CGPoint(x: rect.minX + tl, y: rect.minY + tl),
-            radius: tl,
-            startAngle: .degrees(180),
-            endAngle: .degrees(270),
-            clockwise: false
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
 private struct LiquidGlassSegmentFramesPreferenceKey: PreferenceKey {
     static let defaultValue: [Int: CGRect] = [:]
 
@@ -74,7 +23,6 @@ struct LiquidGlassSegmentedControl<Option: Hashable, Label: View>: View {
 
     private let coordinateSpaceName = "LiquidGlassSegmentedControl"
     private let segmentSpacing: CGFloat = 2
-    private let cornerRadius: CGFloat = 10
 
     init(
         selection: Binding<Option>,
@@ -108,8 +56,9 @@ struct LiquidGlassSegmentedControl<Option: Hashable, Label: View>: View {
                     segmentButton(for: index)
                 }
             }
+            .padding(3)
+            .systemLiquidGlassBackground(cornerRadius: 999)
         }
-        .padding(2)
         .coordinateSpace(name: coordinateSpaceName)
         .onPreferenceChange(LiquidGlassSegmentFramesPreferenceKey.self) { segmentFrames = $0 }
         .simultaneousGesture(dragSelectionGesture)
@@ -136,7 +85,7 @@ struct LiquidGlassSegmentedControl<Option: Hashable, Label: View>: View {
         } label: {
             ZStack {
                 if isSelected {
-                    selectionBubble(for: index)
+                    selectionBubble
                 }
 
                 label(option, isSelected)
@@ -157,77 +106,11 @@ struct LiquidGlassSegmentedControl<Option: Hashable, Label: View>: View {
     }
 
     @available(macOS 26.0, *)
-    private func selectionBubble(for index: Int) -> some View {
-        Group {
-            if isDraggingSelection {
-                Color.clear
-                    .glassEffect(
-                        colorScheme == .dark
-                            ? .regular.tint(Color.white.opacity(0.08)).interactive()
-                            : .regular.tint(Color.white.opacity(0.03)).interactive(),
-                        in: bubbleShape(for: index)
-                    )
-            } else {
-                bubbleShape(for: index)
-                    .fill(solidSelectionFillColor)
-                    .overlay {
-                        bubbleShape(for: index)
-                            .stroke(solidSelectionStrokeColor, lineWidth: 1)
-                    }
-            }
-        }
+    private var selectionBubble: some View {
+        Color.clear
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .matchedGeometryEffect(id: "selection", in: selectionNamespace)
-            .padding(edgePadding(for: index))
-    }
-
-    @available(macOS 26.0, *)
-    private func bubbleShape(for index: Int) -> LiquidGlassSegmentBubbleShape {
-        let outerRadius = cornerRadius + 4
-        let innerRadius = max(cornerRadius - 4.5, 5)
-
-        if options.count <= 1 {
-            return LiquidGlassSegmentBubbleShape(
-                topLeading: outerRadius,
-                bottomLeading: outerRadius,
-                bottomTrailing: outerRadius,
-                topTrailing: outerRadius
-            )
-        }
-
-        if index == options.startIndex {
-            return LiquidGlassSegmentBubbleShape(
-                topLeading: outerRadius,
-                bottomLeading: outerRadius,
-                bottomTrailing: innerRadius,
-                topTrailing: innerRadius
-            )
-        }
-
-        if index == options.indices.last {
-            return LiquidGlassSegmentBubbleShape(
-                topLeading: innerRadius,
-                bottomLeading: innerRadius,
-                bottomTrailing: outerRadius,
-                topTrailing: outerRadius
-            )
-        }
-
-        return LiquidGlassSegmentBubbleShape(
-            topLeading: innerRadius,
-            bottomLeading: innerRadius,
-            bottomTrailing: innerRadius,
-            topTrailing: innerRadius
-        )
-    }
-
-    @available(macOS 26.0, *)
-    private func edgePadding(for index: Int) -> EdgeInsets {
-        EdgeInsets(
-            top: 0,
-            leading: index == options.startIndex ? -3 : 0,
-            bottom: 0,
-            trailing: index == options.indices.last ? -3 : 0
-        )
+            .padding(.horizontal, isDraggingSelection ? -2 : 0)
     }
 
     @available(macOS 26.0, *)
@@ -278,11 +161,4 @@ struct LiquidGlassSegmentedControl<Option: Hashable, Label: View>: View {
         colorScheme == .dark ? Color.white.opacity(0.74) : Color.primary.opacity(0.68)
     }
 
-    private var solidSelectionFillColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.08)
-    }
-
-    private var solidSelectionStrokeColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.22) : Color.black.opacity(0.14)
-    }
 }
