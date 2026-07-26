@@ -24,25 +24,32 @@ struct AIProviderRow: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
                     )
+                    .overlay(alignment: .bottomTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white, provider.brandColor)
+                                .background(Circle().fill(provider.brandColor))
+                                .offset(x: 3, y: 3)
+                                .accessibilityHidden(true)
+                        }
+                    }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(provider.selectorTitle)
                         .font(.subheadline.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.88)
 
                     Text(provider.selectorDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.88)
                 }
-
-                Spacer(minLength: 4)
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
-                    .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
