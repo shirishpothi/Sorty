@@ -1550,6 +1550,13 @@ private struct StreamingProgressBeam: View {
                         )
                         .milestoneEmptyStateSliver(trigger: milestone)
                         .frame(width: 54, alignment: .trailing)
+                } else {
+                    MinsangGlassLoader(
+                        textChangeTrigger: displayedStage,
+                        size: 54,
+                        isActive: isAnimationActive
+                    )
+                        .frame(width: 54, alignment: .trailing)
                 }
             }
             .font(.system(size: 18, weight: .semibold))
@@ -1580,7 +1587,7 @@ private struct StreamingProgressBeam: View {
             cornerRadius: 16,
             strength: 1.0
         )
-        .referenceBeamFallback(cornerRadius: 16, active: true)
+        .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
