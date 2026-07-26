@@ -210,8 +210,10 @@ extension View {
         modifier(EmptyStateWorkflowGradientModifier(isVisible: isVisible))
     }
 
-    func animatedEmptyStateIcon() -> some View {
-        modifier(AnimatedEmptyStateIconModifier())
+    func animatedEmptyStateIcon(
+        tint: Color = SortyDesignSystem.Colors.resolvedAccent
+    ) -> some View {
+        modifier(AnimatedEmptyStateIconModifier(tint: tint))
     }
 
     func milestoneEmptyStateSliver(trigger: Int) -> some View {
@@ -233,7 +235,8 @@ private struct MilestoneEmptyStateSliverModifier: ViewModifier {
             .modifier(
                 EmptyStateIconSweep(
                     progress: reduceMotion ? 0.5 : sweepProgress,
-                    reduceMotion: reduceMotion
+                    reduceMotion: reduceMotion,
+                    tint: SortyDesignSystem.Colors.resolvedAccent
                 )
             )
             .onAppear {
@@ -313,6 +316,8 @@ struct EmptyStateHeroIcon: View {
 }
 
 private struct AnimatedEmptyStateIconModifier: ViewModifier {
+    let tint: Color
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sweepProgress: CGFloat = 0
 
@@ -321,7 +326,8 @@ private struct AnimatedEmptyStateIconModifier: ViewModifier {
             .modifier(
                 EmptyStateIconSweep(
                     progress: reduceMotion ? 0.5 : sweepProgress,
-                    reduceMotion: reduceMotion
+                    reduceMotion: reduceMotion,
+                    tint: tint
                 )
             )
             .onAppear {
@@ -343,6 +349,7 @@ private struct AnimatedEmptyStateIconModifier: ViewModifier {
 private struct EmptyStateIconSweep: ViewModifier, Animatable {
     var progress: CGFloat
     let reduceMotion: Bool
+    let tint: Color
 
     nonisolated var animatableData: CGFloat {
         get { progress }
@@ -365,20 +372,20 @@ private struct EmptyStateIconSweep: ViewModifier, Animatable {
                 LinearGradient(
                     stops: [
                         .init(
-                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.25),
+                            color: tint.opacity(0.25),
                             location: 0
                         ),
                         .init(
-                            color: SortyDesignSystem.Colors.resolvedAccent,
+                            color: tint,
                             location: max(0, sweep - 0.16)
                         ),
                         .init(color: .white, location: sweep),
                         .init(
-                            color: SortyDesignSystem.Colors.resolvedAccent,
+                            color: tint,
                             location: min(1, sweep + 0.16)
                         ),
                         .init(
-                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.25),
+                            color: tint.opacity(0.25),
                             location: 1
                         ),
                     ],
@@ -388,16 +395,12 @@ private struct EmptyStateIconSweep: ViewModifier, Animatable {
                 .mask { content }
                 .opacity(overlayOpacity)
                 .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                        glow * 0.8
-                    ),
+                    color: tint.opacity(glow * 0.8),
                     radius: glow * 13
                 )
             }
             .shadow(
-                color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                    glow * 0.52
-                ),
+                color: tint.opacity(glow * 0.52),
                 radius: glow * 11
             )
     }

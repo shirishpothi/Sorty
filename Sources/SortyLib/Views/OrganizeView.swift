@@ -2384,7 +2384,7 @@ struct ErrorView: View {
                 Image(systemName: errorIcon)
                     .font(.system(size: 44, weight: .semibold))
                     .foregroundStyle(.red)
-                    .animatedEmptyStateIcon()
+                    .animatedEmptyStateIcon(tint: .red)
             }
 
             VStack(spacing: 8) {
