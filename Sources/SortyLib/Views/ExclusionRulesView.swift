@@ -24,6 +24,7 @@ struct ExclusionRulesView: View {
     @State private var improveExceptionRequestMessage = ""
     @State private var learningExclusionSliverTrigger = 0
     @State private var isShowingLearningExclusionsInfo = false
+    @State private var isShowingNaturalLanguageExceptionsInfo = false
     @State private var isLearningExclusionsExpanded = true
     @State private var isNaturalLanguageExceptionsExpanded = true
     @FocusState private var isNLExceptionFocused: Bool
@@ -371,13 +372,27 @@ struct ExclusionRulesView: View {
             color: .purple,
             count: filteredNaturalLanguageExceptions.count,
             isExpanded: filteredNaturalLanguageExceptions.isEmpty
-                ? nil : $isNaturalLanguageExceptionsExpanded
+                ? nil : $isNaturalLanguageExceptionsExpanded,
+            headerAccessory: {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .onHover { isShowingNaturalLanguageExceptionsInfo = $0 }
+                    .popover(
+                        isPresented: $isShowingNaturalLanguageExceptionsInfo,
+                        arrowEdge: .trailing
+                    ) {
+                        Text("Describe files Sorty should never touch, in plain English.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+            }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Describe files Sorty should never touch, in plain English.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
                 HStack(spacing: 8) {
                     TextField("e.g. don't touch any npm module files", text: $newNLException)
                         .textFieldStyle(.roundedBorder)
