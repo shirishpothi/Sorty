@@ -902,7 +902,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                 GeometryReader { proxy in
                     if isPresented {
                         let frame = anchor.map { proxy[$0] }
-                        let popoverSize = resolvedPopoverSize(in: proxy.size)
+                        let popoverSize = resolvedPopoverSize(for: frame, in: proxy.size)
 
                         ZStack(alignment: .topLeading) {
                             Color.black
@@ -945,7 +945,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
             return .easeOut(duration: 0.12)
         }
 
-        return .spring(response: 0.28, dampingFraction: 0.86)
+        return .spring(response: 0.18, dampingFraction: 0.86)
     }
 
     private var popoverTransition: AnyTransition {
@@ -958,27 +958,37 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
             .combined(with: .offset(y: 6))
     }
 
-    private func resolvedPopoverSize(in containerSize: CGSize) -> CGSize {
+    private func resolvedPopoverSize(for frame: CGRect?, in containerSize: CGSize) -> CGSize {
         let hostAvailableWidth = max(0, containerSize.width - (contentPadding * 2))
         let hostAvailableHeight = max(0, containerSize.height - (contentPadding * 2))
+        let anchoredAvailableHeight: CGFloat
+
+        if let frame {
+            let availableAbove = max(0, frame.minY - verticalSpacing - contentPadding)
+            let availableBelow = max(0, containerSize.height - frame.maxY - verticalSpacing - contentPadding)
+            anchoredAvailableHeight = max(availableAbove, availableBelow)
+        } else {
+            anchoredAvailableHeight = hostAvailableHeight
+        }
+
+        let resolvedHeight = min(idealPopoverSize.height, anchoredAvailableHeight)
 
         let hostCanFitPopoverComfortably = hostAvailableWidth >= minimumUsableHostSize.width && hostAvailableHeight >= minimumUsableHostSize.height
 
         if hostCanFitPopoverComfortably {
             return CGSize(
                 width: min(idealPopoverSize.width, hostAvailableWidth),
-                height: min(idealPopoverSize.height, hostAvailableHeight)
+                height: resolvedHeight
             )
         }
 
-        // Fallback to screen bounds so compact hosts (like history cards) don't collapse the selector UI.
+        // Preserve a usable width in compact hosts while keeping the height clear of the trigger.
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
         let screenAvailableWidth = max(0, screenFrame.width - (contentPadding * 2))
-        let screenAvailableHeight = max(0, screenFrame.height - (contentPadding * 2))
 
         return CGSize(
             width: min(idealPopoverSize.width, screenAvailableWidth > 0 ? screenAvailableWidth : hostAvailableWidth),
-            height: min(idealPopoverSize.height, screenAvailableHeight > 0 ? screenAvailableHeight : hostAvailableHeight)
+            height: resolvedHeight
         )
     }
 
