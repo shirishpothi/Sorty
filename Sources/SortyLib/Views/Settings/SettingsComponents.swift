@@ -19,23 +19,70 @@ extension EnvironmentValues {
 }
 
 private struct SettingsFocusableModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.settingsFocusTarget) private var focusTarget
+    @State private var isBreathing = false
+
     let target: SettingsFocusTarget
+
+    private var isFocused: Bool {
+        focusTarget == target
+    }
 
     func body(content: Content) -> some View {
         content
             .id(target.rawValue)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(
-                        focusTarget == target
-                        ? Color.accentColor.opacity(0.8)
-                        : Color.clear,
-                        lineWidth: 2
-                    )
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(
+                            isFocused
+                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
+                            : Color.clear,
+                            lineWidth: 2
+                        )
+
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(
+                            isFocused
+                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
+                            : Color.clear,
+                            lineWidth: 3
+                        )
+                        .scaleEffect(isBreathing ? 1.012 : 1)
+                        .blur(radius: isBreathing ? 4 : 2)
+                }
             )
-            .shadow(color: focusTarget == target ? Color.accentColor.opacity(0.2) : .clear, radius: 8, x: 0, y: 1)
-            .animation(.easeInOut(duration: 0.2), value: focusTarget == target)
+            .shadow(
+                color: isFocused
+                    ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
+                    : .clear,
+                radius: isBreathing ? 14 : 7
+            )
+            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .onAppear {
+                updateBreathingAnimation(isFocused)
+            }
+            .onChange(of: isFocused) { _, newValue in
+                updateBreathingAnimation(newValue)
+            }
+            .onChange(of: reduceMotion) { _, _ in
+                updateBreathingAnimation(isFocused)
+            }
+    }
+
+    private func updateBreathingAnimation(_ shouldBreathe: Bool) {
+        guard shouldBreathe, !reduceMotion else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isBreathing = false
+            }
+            return
+        }
+
+        isBreathing = false
+        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+            isBreathing = true
+        }
     }
 }
 
