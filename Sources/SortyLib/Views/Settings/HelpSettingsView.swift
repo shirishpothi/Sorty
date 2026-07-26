@@ -331,7 +331,7 @@ struct DeeplinkSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $isShowingEncodingInfo, arrowEdge: .bottom) {
-                        Text("URL-encode path and prompt values when generating links programmatically.")
+                        Text("If you build a link yourself, URL-encode the folder path and prompt so spaces and special characters work correctly.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
