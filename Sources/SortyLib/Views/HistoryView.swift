@@ -756,7 +756,7 @@ private struct HistorySessionCardHeader: View {
                 .frame(width: 32)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
