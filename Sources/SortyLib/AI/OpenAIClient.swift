@@ -173,6 +173,18 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+        try await generateText(
+            prompt: prompt,
+            systemPrompt: systemPrompt,
+            responseFormat: .plain
+        )
+    }
+
+    public func generateText(
+        prompt: String,
+        systemPrompt: String? = nil,
+        responseFormat: AITextResponseFormat
+    ) async throws -> String {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
         try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
@@ -189,6 +201,12 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
+
+        Self.configureTextGenerationOutput(
+            in: &requestBody,
+            provider: config.provider,
+            responseFormat: responseFormat
+        )
         
         let headers = authHeaders()
         let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
@@ -210,6 +228,24 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         }
         
         return content
+    }
+
+    static func configureTextGenerationOutput(
+        in requestBody: inout [String: Any],
+        provider: AIProvider,
+        responseFormat: AITextResponseFormat
+    ) {
+        guard provider == .openRouter, responseFormat != .plain else { return }
+
+        requestBody["reasoning"] = [
+            "effort": "none",
+            "exclude": true
+        ]
+
+        if responseFormat == .jsonObject {
+            requestBody["response_format"] = ["type": "json_object"]
+            requestBody["plugins"] = [["id": "response-healing"]]
+        }
     }
     
     public func checkHealth() async throws {

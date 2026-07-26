@@ -126,7 +126,8 @@ Allowed icons:
             """
             let response = try await client.generateText(
                 prompt: prompt,
-                systemPrompt: identitySystemPrompt
+                systemPrompt: identitySystemPrompt,
+                responseFormat: .jsonObject
             )
             let cleanedResponse = response
                 .components(separatedBy: .newlines)
@@ -222,7 +223,8 @@ Allowed icons:
 
             let response = try await client.generateText(
                 prompt: prompt,
-                systemPrompt: metaSystemPrompt
+                systemPrompt: metaSystemPrompt,
+                responseFormat: .jsonObject
             )
             let generated = try Self.decodeGeneratedPersona(from: response)
             let generatedName = enforceNameLength(generated.name)

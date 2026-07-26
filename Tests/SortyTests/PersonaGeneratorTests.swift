@@ -368,6 +368,40 @@ final class PersonaGeneratorTests: XCTestCase {
         }
         XCTAssertEqual(arguments[schemaFlagIndex + 1], schemaURL.path)
     }
+
+    func testOpenRouterStructuredObjectRequestsDisableReasoningAndRequireJSON() throws {
+        var requestBody: [String: Any] = [:]
+
+        OpenAIClient.configureTextGenerationOutput(
+            in: &requestBody,
+            provider: .openRouter,
+            responseFormat: .jsonObject
+        )
+
+        let reasoning = try XCTUnwrap(requestBody["reasoning"] as? [String: Any])
+        XCTAssertEqual(reasoning["effort"] as? String, "none")
+        XCTAssertEqual(reasoning["exclude"] as? Bool, true)
+        XCTAssertEqual(
+            (requestBody["response_format"] as? [String: Any])?["type"] as? String,
+            "json_object"
+        )
+        XCTAssertNotNil(requestBody["plugins"])
+    }
+
+    func testOpenRouterStructuredArrayRequestsDisableReasoningWithoutForcingObject() throws {
+        var requestBody: [String: Any] = [:]
+
+        OpenAIClient.configureTextGenerationOutput(
+            in: &requestBody,
+            provider: .openRouter,
+            responseFormat: .jsonArray
+        )
+
+        let reasoning = try XCTUnwrap(requestBody["reasoning"] as? [String: Any])
+        XCTAssertEqual(reasoning["effort"] as? String, "none")
+        XCTAssertEqual(reasoning["exclude"] as? Bool, true)
+        XCTAssertNil(requestBody["response_format"])
+    }
     
     // MARK: - AIConfig Modification Tests
     

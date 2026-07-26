@@ -70,7 +70,11 @@ public class PersonaHoningEngine: ObservableObject {
         Generate the three most useful clarification questions.
         """
         
-        let response = try await client.generateText(prompt: prompt, systemPrompt: metaQuestionPrompt)
+        let response = try await client.generateText(
+            prompt: prompt,
+            systemPrompt: metaQuestionPrompt,
+            responseFormat: .jsonArray
+        )
         let jsonString = Self.extractJSONArray(from: response) ?? response
         
         guard let data = jsonString.data(using: .utf8),

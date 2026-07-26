@@ -7,6 +7,12 @@
 
 import Foundation
 
+public enum AITextResponseFormat: Equatable, Sendable {
+    case plain
+    case jsonObject
+    case jsonArray
+}
+
 /// Delegate protocol for streaming updates
 @MainActor
 public protocol StreamingDelegate: AnyObject {
@@ -19,9 +25,24 @@ public protocol AIClientProtocol: Sendable {
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan
     func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan
     func generateText(prompt: String, systemPrompt: String?) async throws -> String
+    func generateText(
+        prompt: String,
+        systemPrompt: String?,
+        responseFormat: AITextResponseFormat
+    ) async throws -> String
     func checkHealth() async throws
     var config: AIConfig { get }
     @MainActor var streamingDelegate: StreamingDelegate? { get set }
+}
+
+public extension AIClientProtocol {
+    func generateText(
+        prompt: String,
+        systemPrompt: String?,
+        responseFormat: AITextResponseFormat
+    ) async throws -> String {
+        try await generateText(prompt: prompt, systemPrompt: systemPrompt)
+    }
 }
 
 public enum AIClientError: LocalizedError, Sendable {
@@ -162,4 +183,3 @@ public enum AIClientError: LocalizedError, Sendable {
         return message.count > 300 ? String(message.prefix(300)) + "..." : message
     }
 }
-
