@@ -2312,6 +2312,7 @@ struct ErrorView: View {
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
     
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
@@ -2642,26 +2643,38 @@ struct ErrorView: View {
                     } label: {
                         HStack(spacing: 3) {
                             Text("Help & Support")
-                                .underline()
 
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 8, weight: .bold))
-                                .frame(width: showsHelpSupportChevron ? 8 : 0)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 8, weight: .semibold))
+                                .frame(width: showsHelpSupportChevron ? 9 : 0)
                                 .opacity(showsHelpSupportChevron ? 1 : 0)
-                                .offset(x: showsHelpSupportChevron ? 0 : -4)
+                                .offset(
+                                    x: reduceMotion || showsHelpSupportChevron ? 0 : -3,
+                                    y: reduceMotion || showsHelpSupportChevron ? 0 : 3
+                                )
+                                .scaleEffect(
+                                    reduceMotion || showsHelpSupportChevron ? 1 : 0.75
+                                )
                                 .symbolEffect(
                                     .bounce,
                                     value: activeActionFeedback == .helpSupport
                                 )
+                                .accessibilityHidden(true)
                         }
-                        .foregroundStyle(Color.blue)
+                        .foregroundStyle(
+                            showsHelpSupportChevron
+                                ? SortyDesignSystem.Colors.accent
+                                : SortyDesignSystem.Colors.textTertiary
+                        )
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                        value: showsHelpSupportChevron
+                    )
                     .onHover { hovering in
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                            isHoveringHelpSupport = hovering
-                        }
+                        isHoveringHelpSupport = hovering
                         if hovering {
                             HapticFeedbackManager.shared.selection()
                         }
