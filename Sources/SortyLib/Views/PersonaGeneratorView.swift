@@ -232,21 +232,16 @@ struct PersonaGeneratorView: View {
                 Text("Refining Your Persona")
                     .font(.title3.weight(.bold))
 
-                HStack(spacing: 4) {
-                    Text("Question")
-                    Text("\(currentQuestionIndex + 1)")
-                        .numericTextTransition(animationValue: currentQuestionIndex)
-                    Text("of")
-                    Text("\(questions.count)")
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
-                .background(
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
-                    in: Capsule(style: .continuous)
-                )
+                Text("Question \(currentQuestionIndex + 1) of \(questions.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 5)
+                    .background(
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                        in: Capsule(style: .continuous)
+                    )
             }
             .padding(.top, 18)
 
