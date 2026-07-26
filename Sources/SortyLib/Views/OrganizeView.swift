@@ -1957,8 +1957,20 @@ struct SavedPromptsSheet: View {
     @State private var improvingPromptId: UUID? = nil
     @State private var showImprovePromptRequest = false
     @State private var improvePromptRequestMessage = ""
+    @State private var isEmptyStateVisible: Bool
     @FocusState private var isEditTextFocused: Bool
     @Environment(\.dismiss) private var dismiss
+
+    init(
+        steeringManager: SteeringPromptManager,
+        settingsConfig: AIConfig,
+        onApplyPrompt: @escaping (String) -> Void
+    ) {
+        self.steeringManager = steeringManager
+        self.settingsConfig = settingsConfig
+        self.onApplyPrompt = onApplyPrompt
+        _isEmptyStateVisible = State(initialValue: steeringManager.prompts.isEmpty)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1999,9 +2011,8 @@ struct SavedPromptsSheet: View {
                     }
                     .padding(20)
                 }
-                .opacity(steeringManager.prompts.isEmpty ? 0 : 1)
 
-                if steeringManager.prompts.isEmpty {
+                if isEmptyStateVisible {
                     VStack(spacing: 16) {
                         Spacer()
 
@@ -2026,13 +2037,6 @@ struct SavedPromptsSheet: View {
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: 300)
                         }
-
-                        Button {
-                            addNewPrompt()
-                        } label: {
-                            Label("Add New Prompt", systemImage: "plus")
-                        }
-                        .buttonStyle(.sortyBordered)
 
                         Spacer()
                     }
@@ -2068,6 +2072,17 @@ struct SavedPromptsSheet: View {
             .padding(20)
         }
         .frame(width: 520, height: 500)
+        .onChange(of: steeringManager.prompts.isEmpty) { _, isEmpty in
+            if isEmpty {
+                withAnimation(.easeOut(duration: 0.24).delay(0.16)) {
+                    isEmptyStateVisible = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.14)) {
+                    isEmptyStateVisible = false
+                }
+            }
+        }
     }
 
     @ViewBuilder
