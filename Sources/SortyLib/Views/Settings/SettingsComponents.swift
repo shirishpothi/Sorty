@@ -185,8 +185,8 @@ struct SettingsCard<Content: View>: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
-                        countBadge
                         headerAccessory
+                        countBadge
                         Spacer()
 
                         Image(systemName: "chevron.right")
@@ -237,8 +237,8 @@ struct SettingsCard<Content: View>: View {
             Text(LocalizedStringKey(title))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
-            countBadge
             headerAccessory
+            countBadge
         }
         .contentShape(Rectangle())
     }

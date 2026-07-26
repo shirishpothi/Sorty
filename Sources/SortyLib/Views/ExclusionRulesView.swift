@@ -23,6 +23,7 @@ struct ExclusionRulesView: View {
     @State private var showImproveExceptionRequest = false
     @State private var improveExceptionRequestMessage = ""
     @State private var learningExclusionSliverTrigger = 0
+    @State private var isShowingLearningExclusionsInfo = false
     @State private var isLearningExclusionsExpanded = true
     @State private var isNaturalLanguageExceptionsExpanded = true
     @FocusState private var isNLExceptionFocused: Bool
@@ -277,19 +278,35 @@ struct ExclusionRulesView: View {
             icon: "eye.slash",
             color: .orange,
             count: filteredLearningExclusionPatterns.count,
-            isExpanded: $isLearningExclusionsExpanded
+            isExpanded: $isLearningExclusionsExpanded,
+            headerAccessory: {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .onHover { isShowingLearningExclusionsInfo = $0 }
+                    .popover(
+                        isPresented: $isShowingLearningExclusionsInfo,
+                        arrowEdge: .trailing
+                    ) {
+                        Text(
+                            "Folders here are still organized, but they won't teach Sorty anything."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(14)
+                        .frame(width: 280, alignment: .leading)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+            }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Folders here are still organized, but they won't teach Sorty anything.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                if let patterns = learningsManager.currentProfile?.learningExclusionPatterns,
+                    !patterns.isEmpty
+                {
+                    HStack {
+                        Spacer()
 
-                    Spacer()
-
-                    if let patterns = learningsManager.currentProfile?.learningExclusionPatterns,
-                        !patterns.isEmpty
-                    {
                         Button {
                             presentLearningExclusionImporter()
                         } label: {
