@@ -23,6 +23,8 @@ struct WatchedFoldersView: View {
                     EmptyWatchedFoldersView(onAddFolder: {
                         HapticFeedbackManager.shared.tap()
                         showingFolderPicker = true
+                    }, onAddSuggestedFolder: { url in
+                        addWatchedFolder(from: url)
                     })
                     .transition(TransitionStyles.scaleAndFade)
                     .animatedAppearance(delay: 0.08)
@@ -218,6 +220,7 @@ struct WatchedFoldersView: View {
 
 struct EmptyWatchedFoldersView: View {
     let onAddFolder: () -> Void
+    let onAddSuggestedFolder: (URL) -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
 
@@ -234,13 +237,32 @@ struct EmptyWatchedFoldersView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text(
-                    "Add folders like Downloads or Desktop to automatically organize new files as they arrive"
-                )
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text("Add folders like")
+
+                        FolderSuggestionPill(
+                            name: "Downloads",
+                            url: FileManager.default.homeDirectoryForCurrentUser
+                                .appendingPathComponent("Downloads"),
+                            action: onAddSuggestedFolder
+                        )
+
+                        Text("or")
+
+                        FolderSuggestionPill(
+                            name: "Desktop",
+                            url: FileManager.default.homeDirectoryForCurrentUser
+                                .appendingPathComponent("Desktop"),
+                            action: onAddSuggestedFolder
+                        )
+                    }
+
+                    Text("to automatically organize new files as they arrive")
+                }
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
@@ -271,28 +293,31 @@ struct EmptyWatchedFoldersView: View {
 
 struct FolderSuggestionPill: View {
     let name: String
-    let icon: String
-    let action: () -> Void
+    let url: URL
+    let action: (URL) -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button {
-            HapticFeedbackManager.shared.tap()
-            action()
+            action(url)
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
+            HStack(spacing: 4) {
+                FolderThumbnailView(
+                    url: url,
+                    size: CGSize(width: 16, height: 16)
+                )
+
                 Text(name)
-                    .font(.caption)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.secondary.opacity(isHovered ? 0.16 : 0.1))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(isHovered ? 0.14 : 0.07))
             .clipShape(Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.03 : 1)
+        .foregroundStyle(isHovered ? .primary : .secondary)
+        .scaleEffect(isHovered ? 1.02 : 1)
         .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
         .onHover { hovering in
             if hovering && !isHovered {
