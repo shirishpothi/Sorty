@@ -87,69 +87,71 @@ struct OrganizationStrategySettingsView: View {
             .animatedAppearance(delay: 0.1)
 
             // Renaming Section
-            SettingsCard(title: "Renaming", icon: "textformat", color: .indigo) {
+            SettingsCard(
+                title: "Renaming",
+                icon: "textformat",
+                color: .indigo
+            ) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showingRenamingInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingRenamingInfo, arrowEdge: .bottom) {
+                    Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(14)
+                        .frame(width: 300, alignment: .leading)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
+                }
+                .help("About renaming files")
+                .accessibilityLabel("Renaming information")
+            } content: {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Picker("Template", selection: Binding(
-                            get: { viewModel.config.selectedNamingPresetId },
-                            set: { newId in
-                                viewModel.config.selectedNamingPresetId = newId
-                                if let id = newId, let preset = presetManager.preset(for: id) {
-                                    if preset.isBuiltIn {
-                                        // Map built-in preset back to its NamingStyle
-                                        if let style = presetManager.namingStyle(for: id) {
-                                            viewModel.config.namingStyle = style
-                                            viewModel.config.customNamingInstructions = nil
-                                        }
-                                    } else {
-                                        // Custom preset
-                                        viewModel.config.namingStyle = .custom
-                                        viewModel.config.customNamingInstructions = preset.instructions
+                    Picker("Template", selection: Binding(
+                        get: { viewModel.config.selectedNamingPresetId },
+                        set: { newId in
+                            viewModel.config.selectedNamingPresetId = newId
+                            if let id = newId, let preset = presetManager.preset(for: id) {
+                                if preset.isBuiltIn {
+                                    // Map built-in preset back to its NamingStyle
+                                    if let style = presetManager.namingStyle(for: id) {
+                                        viewModel.config.namingStyle = style
+                                        viewModel.config.customNamingInstructions = nil
                                     }
+                                } else {
+                                    // Custom preset
+                                    viewModel.config.namingStyle = .custom
+                                    viewModel.config.customNamingInstructions = preset.instructions
                                 }
                             }
-                        )) {
-                            Text("None").tag(nil as UUID?)
+                        }
+                    )) {
+                        Text("None").tag(nil as UUID?)
 
-                            Section("Built-in") {
-                                ForEach(presetManager.builtInPresets) { preset in
+                        Section("Built-in") {
+                            ForEach(presetManager.builtInPresets) { preset in
+                                Text(preset.name).tag(preset.id as UUID?)
+                            }
+                        }
+
+                        if !presetManager.customPresets.isEmpty {
+                            Section("Custom") {
+                                ForEach(presetManager.customPresets) { preset in
                                     Text(preset.name).tag(preset.id as UUID?)
                                 }
                             }
-
-                            if !presetManager.customPresets.isEmpty {
-                                Section("Custom") {
-                                    ForEach(presetManager.customPresets) { preset in
-                                        Text(preset.name).tag(preset.id as UUID?)
-                                    }
-                                }
-                            }
                         }
-                        .pickerStyle(.menu)
-                        .tint(.primary)
-                        .labelsHidden()
-
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            showingRenamingInfo.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showingRenamingInfo, arrowEdge: .bottom) {
-                            Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(14)
-                                .frame(width: 300, alignment: .leading)
-                                .systemLiquidGlassPopover(cornerRadius: 12)
-                        }
-                        .help("About renaming files")
-                        .accessibilityLabel("Renaming information")
                     }
+                    .pickerStyle(.menu)
+                    .tint(.primary)
+                    .labelsHidden()
 
                     Divider()
 
