@@ -253,6 +253,7 @@ struct SettingsView: View {
                     .font(.system(size: 96, weight: .regular))
                     .foregroundStyle(Color.accentColor.opacity(0.85))
                     .frame(width: 220, height: 160)
+                    .animatedEmptyStateIcon(tint: Color.accentColor)
                     .accessibilityLabel("No matching settings")
 
                 VStack(spacing: 5) {
