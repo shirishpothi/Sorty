@@ -100,17 +100,6 @@ struct PersonaGeneratorView: View {
                     )
             }
             .animation(.easeInOut(duration: 0.22), value: currentGenerationStatus)
-
-            HStack(spacing: 14) {
-                generationDetail(
-                    icon: "slider.horizontal.3",
-                    text: refinementSummary
-                )
-                generationDetail(
-                    icon: "folder.badge.gearshape",
-                    text: "Reusable strategy"
-                )
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
@@ -415,24 +404,6 @@ struct PersonaGeneratorView: View {
         return answers.isEmpty
             ? "Preparing a tailored organization strategy from your description."
             : "Preparing a strategy from your description and \(answers.count) refinements."
-    }
-
-    private var refinementSummary: String {
-        answers.isEmpty
-            ? "Description analyzed"
-            : "\(answers.count) \(answers.count == 1 ? "refinement" : "refinements")"
-    }
-
-    private func generationDetail(icon: String, text: String) -> some View {
-        Label(text, systemImage: icon)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(
-                Color.primary.opacity(0.055),
-                in: Capsule(style: .continuous)
-            )
     }
 }
 
