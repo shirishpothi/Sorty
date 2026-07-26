@@ -321,7 +321,8 @@ struct HistoryView: View {
                     .numericTextTransition(animationValue: totalCount)
             }
 
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+            ForEach(entries.indices, id: \.self) { index in
+                let entry = entries[index]
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry == entry,
@@ -769,7 +770,7 @@ private struct HistorySessionSummary: View {
     }
 
     private func metric(_ value: String, systemImage: String) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             Image(systemName: systemImage)
             Text(value)
                 .monospacedDigit()
