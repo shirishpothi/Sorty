@@ -169,7 +169,6 @@ public struct MenuBarView: View {
             backgroundToggle
 
             Divider()
-                .padding(.vertical, 4)
 
             bottomActions
         }
@@ -495,7 +494,7 @@ private struct MenuBarButton: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
