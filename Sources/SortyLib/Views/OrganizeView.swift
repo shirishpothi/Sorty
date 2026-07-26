@@ -1981,6 +1981,26 @@ struct SavedPromptsSheet: View {
             Divider()
 
             ZStack {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(steeringManager.prompts) { prompt in
+                            savedPromptCard(prompt)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity
+                                            .combined(with: .scale(scale: 0.97, anchor: .top))
+                                            .combined(with: .offset(y: -6)),
+                                        removal: .opacity
+                                            .combined(with: .scale(scale: 0.97, anchor: .top))
+                                            .combined(with: .offset(y: -6))
+                                    )
+                                )
+                        }
+                    }
+                    .padding(20)
+                }
+                .opacity(steeringManager.prompts.isEmpty ? 0 : 1)
+
                 if steeringManager.prompts.isEmpty {
                     VStack(spacing: 16) {
                         Spacer()
@@ -2024,29 +2044,9 @@ struct SavedPromptsSheet: View {
                             removal: .opacity.combined(with: .scale(scale: 1.02))
                         )
                     )
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(steeringManager.prompts) { prompt in
-                                savedPromptCard(prompt)
-                                    .transition(
-                                        .asymmetric(
-                                            insertion: .opacity
-                                                .combined(with: .scale(scale: 0.96, anchor: .top))
-                                                .combined(with: .offset(y: -8)),
-                                            removal: .opacity
-                                                .combined(with: .scale(scale: 0.96))
-                                                .combined(with: .offset(y: -6))
-                                        )
-                                    )
-                            }
-                        }
-                        .padding(20)
-                    }
-                    .transition(.opacity)
                 }
             }
-            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: steeringManager.prompts.map(\.id))
+            .animation(.spring(response: 0.42, dampingFraction: 0.88), value: steeringManager.prompts.map(\.id))
 
             Divider()
 
@@ -2121,16 +2121,20 @@ struct SavedPromptsSheet: View {
                     Spacer()
 
                     Button("Cancel") {
-                        editingPromptId = nil
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+                            editingPromptId = nil
+                        }
                     }
                     .controlSize(.small)
 
                     Button("Save") {
-                        var updated = prompt
-                        updated.name = editName.isEmpty ? "Untitled" : editName
-                        updated.prompt = editText
-                        steeringManager.updatePrompt(updated)
-                        editingPromptId = nil
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+                            var updated = prompt
+                            updated.name = editName.isEmpty ? "Untitled" : editName
+                            updated.prompt = editText
+                            steeringManager.updatePrompt(updated)
+                            editingPromptId = nil
+                        }
                         HapticFeedbackManager.shared.success()
                     }
                     .buttonStyle(.sortyProminent)
@@ -2168,9 +2172,11 @@ struct SavedPromptsSheet: View {
                     .controlSize(.small)
 
                     Button("Edit") {
-                        editingPromptId = prompt.id
-                        editName = prompt.name
-                        editText = prompt.prompt
+                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+                            editingPromptId = prompt.id
+                            editName = prompt.name
+                            editText = prompt.prompt
+                        }
                     }
                     .controlSize(.small)
 
