@@ -24,6 +24,7 @@ struct PersonaPickerView: View {
     @State private var localIcon: String = "star.fill"
     @State private var showingInstructionsInfo: Bool = false
     @State private var polishError: String?
+    @State private var personaHighlightDismissalTask: Task<Void, Never>?
     @StateObject private var promptPolisher = PersonaGenerator()
     @FocusState private var focusedField: PersonaEditableField?
 
@@ -110,12 +111,17 @@ struct PersonaPickerView: View {
 
             personaInstructionsEditor
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                dismissPersonaGenerationHighlight()
+            }
+        )
         .sheet(isPresented: $showingGenerator) {
             PersonaGeneratorView(
                 store: customStore,
                 selectedPersonaId: $personaManager.selectedCustomPersonaId,
                 onPersonaGenerated: {
-                    appState.settingsFocusTarget = .rulesOrganizationStyle
+                    showPersonaGenerationHighlight()
                 }
             )
             .environmentObject(customStore)
@@ -145,7 +151,28 @@ struct PersonaPickerView: View {
             updateLocalPrompt()
         }
         .onDisappear {
+            personaHighlightDismissalTask?.cancel()
             saveChangesIfNeeded()
+        }
+    }
+
+    private func showPersonaGenerationHighlight() {
+        personaHighlightDismissalTask?.cancel()
+        appState.settingsFocusTarget = .rulesOrganizationStyle
+        personaHighlightDismissalTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            dismissPersonaGenerationHighlight()
+        }
+    }
+
+    private func dismissPersonaGenerationHighlight() {
+        personaHighlightDismissalTask?.cancel()
+        personaHighlightDismissalTask = nil
+        guard appState.settingsFocusTarget == .rulesOrganizationStyle else { return }
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            appState.settingsFocusTarget = nil
         }
     }
 
