@@ -13,6 +13,7 @@ struct AdvancedSettingsView: View {
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+    @State private var isShowingFinderRecommendation = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -27,7 +28,7 @@ struct AdvancedSettingsView: View {
             .animatedAppearance(delay: 0.0)
 
             SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
-                VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 8) {
                     SettingsToggle(
                         isOn: $automationManager.autoSelectOrganizedFolders,
                         title: "Automatically reveal organized folders",
@@ -36,11 +37,29 @@ struct AdvancedSettingsView: View {
                     )
                     .accessibilityIdentifier("FinderAutoRevealToggle")
 
-                    if !automationManager.autoSelectOrganizedFolders {
-                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        isShowingFinderRecommendation.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .onHover { isHovering in
+                        isShowingFinderRecommendation = isHovering
+                    }
+                    .popover(isPresented: $isShowingFinderRecommendation, arrowEdge: .trailing) {
+                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+                    .help("About automatically revealing organized folders")
+                    .accessibilityLabel("Automatically reveal organized folders recommendation")
                 }
             }
             .animatedAppearance(delay: 0.03)
