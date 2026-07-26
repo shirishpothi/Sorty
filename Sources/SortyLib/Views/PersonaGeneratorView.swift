@@ -485,8 +485,6 @@ private struct HoningOptionButton: View {
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered && !reduceMotion ? 1.008 : 1)
-        .offset(y: isHovered && !reduceMotion ? -1 : 0)
         .onHover { hovering in
             if hovering && !isHovered {
                 HapticFeedbackManager.shared.selection()
@@ -494,7 +492,7 @@ private struct HoningOptionButton: View {
             isHovered = hovering
         }
         .animation(
-            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6),
+            reduceMotion ? nil : .easeOut(duration: 0.15),
             value: isHovered
         )
         .animation(
