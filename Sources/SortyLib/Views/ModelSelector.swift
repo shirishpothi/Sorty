@@ -90,21 +90,27 @@ struct ModelSelectorCompactButton: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
 
+                Spacer(minLength: 10)
+
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
             .frame(maxWidth: 220)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(isHovering ? 0.1 : 0.06))
-            )
+            .background {
+                if #unavailable(macOS 26.0) {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.primary.opacity(isHovering ? 0.1 : 0.06))
+                }
+            }
+            .systemLiquidGlassBackground(cornerRadius: 12)
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(isHovering ? 0.2 : 0.1), lineWidth: 1)
             )
+            .shadow(color: .black.opacity(isHovering ? 0.09 : 0.05), radius: isHovering ? 6 : 3, y: 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
