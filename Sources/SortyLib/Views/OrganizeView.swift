@@ -841,6 +841,8 @@ struct ReadyToOrganizeView: View {
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var automationManager: AutomationManager
+    @EnvironmentObject var personaManager: PersonaManager
+    @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @StateObject private var sessionManager = AISessionManager.shared
     @StateObject private var steeringManager = SteeringPromptManager.shared
     @State private var hasAppeared = false
@@ -871,26 +873,51 @@ struct ReadyToOrganizeView: View {
         settingsViewModel.config.mode
     }
 
-    private var instructionSuggestions: [String] {
+    private var genericInstructionSuggestions: [String] {
         switch mode {
         case .organize:
             return [
                 "Use no more than 6 top-level folders and keep the hierarchy two levels deep.",
                 "Group files by project, then by year; keep loose files in General.",
                 "Separate RAW photos from edited images, then group both by event.",
+                "Keep recent work in Active, and move completed projects into an Archive by year.",
+                "Keep files with the same project or client name together, regardless of file type.",
+                "Put ambiguous files in Review instead of guessing where they belong.",
             ]
         case .organizeAndRename:
             return [
-                "Use no more than 6 top-level folders, then group by client and year.",
+                "Use no more than 6 top-level folders, group by client, and put confirmed dates first.",
                 "Group by project in a two-level hierarchy, then rename files with clear dates.",
                 "Separate invoices by client, then rename them with the date and vendor.",
+                "Keep source files beside their exports, and add Final only when the content confirms it.",
+                "Archive completed projects by year, and preserve version numbers when renaming files.",
+                "Put ambiguous files in Review, and rename them only from confirmed metadata.",
             ]
         case .renameOnly:
             return [
                 "Put dates first, use natural words, and preserve the original file extension.",
                 "Rename invoices with the date, vendor, and invoice number.",
                 "Use consistent names with spaces, and keep existing version numbers.",
+                "Use YYYY-MM-DD for confirmed dates, and leave uncertain dates out.",
+                "Remove filler such as copy, untitled, and repeated final labels.",
+                "Keep paired RAW and sidecar files on the same base name.",
             ]
+        }
+    }
+
+    private var personaInstructionSuggestions: [String] {
+        guard let personaID = personaManager.selectedCustomPersonaId,
+              let persona = customPersonaStore.customPersonas.first(where: { $0.id == personaID }) else {
+            return []
+        }
+
+        return persona.instructionSuggestions.suggestions(for: mode)
+    }
+
+    private var instructionSuggestions: [String] {
+        var seen = Set<String>()
+        return (personaInstructionSuggestions + genericInstructionSuggestions).filter {
+            seen.insert($0).inserted
         }
     }
 
@@ -1390,11 +1417,11 @@ struct ReadyToOrganizeView: View {
                         .padding(.trailing, 10)
                         .padding(.vertical, 9)
                         .allowsHitTesting(false)
-                        .task(id: mode) {
+                        .task(id: instructionSuggestions) {
                             instructionSuggestionIndex = 0
 
                             while !Task.isCancelled {
-                                try? await Task.sleep(for: .seconds(5))
+                                try? await Task.sleep(for: .seconds(3.5))
                                 guard !Task.isCancelled else { return }
                                 instructionSuggestionIndex =
                                     (instructionSuggestionIndex + 1) % instructionSuggestions.count
@@ -3065,6 +3092,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(OrganizePreviewObjects.idleOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
+        .environmentObject(PersonaManager.preview)
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
@@ -3078,6 +3106,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(OrganizePreviewObjects.scanningOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
+        .environmentObject(PersonaManager.preview)
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
@@ -3091,6 +3120,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(OrganizePreviewObjects.readyOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(OrganizePreviewObjects.readyAppState)
+        .environmentObject(PersonaManager.preview)
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
@@ -3104,6 +3134,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(OrganizePreviewObjects.errorOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
+        .environmentObject(PersonaManager.preview)
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)

@@ -16,6 +16,7 @@ struct PersonaEditorView: View {
     @State private var selectedIcon: String = "star.fill"
     @State private var description: String = ""
     @State private var promptModifier: String = ""
+    @State private var instructionSuggestions = PersonaInstructionSuggestions()
     @State private var showIconPicker: Bool = false
     @State private var showingGenerator: Bool = false
     @State private var showingChat: Bool = false
@@ -35,6 +36,7 @@ struct PersonaEditorView: View {
             _selectedIcon = State(initialValue: persona.icon)
             _description = State(initialValue: persona.description)
             _promptModifier = State(initialValue: persona.promptModifier)
+            _instructionSuggestions = State(initialValue: persona.instructionSuggestions)
         }
     }
     
@@ -198,6 +200,7 @@ struct PersonaEditorView: View {
                                     name = result.name
                                     selectedIcon = result.icon
                                     promptModifier = result.prompt
+                                    instructionSuggestions = result.suggestions
                                     showingGenerator = false
                                 } catch {
                                     // Error is handled by generator.error publishing
@@ -275,14 +278,21 @@ struct PersonaEditorView: View {
     
     private func savePersona() {
         if var existing = editingPersona {
-            existing.update(name: name, icon: selectedIcon, description: description, prompt: promptModifier)
+            existing.update(
+                name: name,
+                icon: selectedIcon,
+                description: description,
+                prompt: promptModifier,
+                instructionSuggestions: instructionSuggestions
+            )
             store.updatePersona(existing)
         } else {
             let newPersona = CustomPersona(
                 name: name,
                 icon: selectedIcon,
                 description: description,
-                promptModifier: promptModifier
+                promptModifier: promptModifier,
+                instructionSuggestions: instructionSuggestions
             )
             store.addPersona(newPersona)
         }

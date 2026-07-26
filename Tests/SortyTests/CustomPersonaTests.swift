@@ -55,11 +55,17 @@ final class CustomPersonaTests: XCTestCase {
     }
     
     func testCustomPersonaCodable() throws {
+        let suggestions = PersonaInstructionSuggestions(
+            organize: ["Group research by paper, then by source type."],
+            organizeAndRename: ["Group by paper, then put confirmed publication years first."],
+            renameOnly: ["Use author, year, and a shortened paper title."]
+        )
         let original = CustomPersona(
             name: "Codable Test",
             icon: "doc.fill",
             description: "Testing codable",
-            promptModifier: "Some prompt"
+            promptModifier: "Some prompt",
+            instructionSuggestions: suggestions
         )
         
         let encoder = JSONEncoder()
@@ -73,6 +79,27 @@ final class CustomPersonaTests: XCTestCase {
         XCTAssertEqual(decoded.icon, original.icon)
         XCTAssertEqual(decoded.description, original.description)
         XCTAssertEqual(decoded.promptModifier, original.promptModifier)
+        XCTAssertEqual(decoded.instructionSuggestions, suggestions)
+    }
+
+    func testLegacyPersonaWithoutInstructionSuggestionsStillDecodes() throws {
+        let original = CustomPersona(
+            name: "Legacy Persona",
+            icon: "folder.fill",
+            description: "Saved before suggestions",
+            promptModifier: "Keep projects together"
+        )
+        let encoded = try JSONEncoder().encode(original)
+        var legacyJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        legacyJSON.removeValue(forKey: "instructionSuggestions")
+
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyJSON)
+        let decoded = try JSONDecoder().decode(CustomPersona.self, from: legacyData)
+
+        XCTAssertEqual(decoded.name, original.name)
+        XCTAssertEqual(decoded.instructionSuggestions, PersonaInstructionSuggestions())
     }
     
     // MARK: - PersonaIconOptions Tests

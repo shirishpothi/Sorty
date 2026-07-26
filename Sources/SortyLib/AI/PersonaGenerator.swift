@@ -23,13 +23,14 @@ You are a world-class Information Architect designing a Sorty workflow persona. 
 Return ONLY valid JSON. No markdown code blocks, no explanations, no text outside the JSON.
 
 ```
-{"name": "ShortName", "icon": "sf.symbol.name", "prompt": "The system prompt text..."}
+{"name": "ShortName", "icon": "sf.symbol.name", "prompt": "The system prompt text...", "suggestions": {"organize": ["..."], "organizeAndRename": ["..."], "renameOnly": ["..."]}}
 ```
 
 ## Field Requirements
 - **name**: 3-20 characters, catchy, professional (e.g., "Code Vault", "Photo Archive", "Legal Desk", "Studio Flow")
 - **icon**: An SF Symbol name from the ICON SELECTION list below that best represents this persona's domain
 - **prompt**: 1500-3000 characters, richly detailed, domain-specific organization instructions
+- **suggestions**: Exactly 4 concise, ready-to-use instructions for EACH workflow: `organize`, `organizeAndRename`, and `renameOnly`
 
 # PROMPT GENERATION BLUEPRINT
 
@@ -93,6 +94,20 @@ Example for a Developer:
 When the persona's rules conflict with general organization heuristics, state which wins. List 2-3 explicit priority overrides.
 
 Example: "Project cohesion > file type grouping. A .png that belongs to a code project stays in that project's assets folder, NOT in a global Images folder. Workflow stage > alphabetical sorting."
+
+# SUGGESTION GENERATION
+
+Generate 4 domain-specific suggestions for each workflow mode. Each suggestion must:
+- Be a direct instruction the user can paste into Sorty's Instructions field without editing
+- Be one sentence between 45 and 120 characters
+- Add a concrete preference beyond the persona defaults, such as folder count, hierarchy depth, grouping axis, naming format, archive policy, or ambiguity handling
+- Make sense for its exact workflow: `organize` must not request renaming, and `renameOnly` must not request moving or folders
+- Vary meaningfully from the other suggestions instead of rephrasing the same rule
+
+Examples for a photography persona:
+- organize: "Keep each shoot together, with separate RAW, Edited, and Delivery subfolders."
+- organizeAndRename: "Group by shoot date, then rename confirmed photos as YYYY-MM-DD Event Subject."
+- renameOnly: "Use capture date first, preserve sequence numbers, and keep RAW sidecar names matched."
 
 # CRITICAL CONSTRAINTS
 
@@ -166,7 +181,16 @@ Bad behavior examples:
         "leaf.arrow.circlepath", "cpu.fill", "flask.fill"
     ]
 
-    public func generatePersona(from description: String, answers: [HoningAnswer] = [], config: AIConfig) async throws -> (name: String, icon: String, prompt: String) {
+    public func generatePersona(
+        from description: String,
+        answers: [HoningAnswer] = [],
+        config: AIConfig
+    ) async throws -> (
+        name: String,
+        icon: String,
+        prompt: String,
+        suggestions: PersonaInstructionSuggestions
+    ) {
         isGenerating = true
         error = nil
         
@@ -204,9 +228,9 @@ Bad behavior examples:
             
             // Basic JSON parsing
             guard let data = jsonString.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-                  let name = json["name"],
-                  let generatedPrompt = json["prompt"] else {
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let name = json["name"] as? String,
+                  let generatedPrompt = json["prompt"] as? String else {
                 
                 // Fallback extraction if JSON is buried in text
                 if let nameRange = jsonString.range(of: "\"name\": \""),
@@ -217,14 +241,29 @@ Bad behavior examples:
                     let extractedName = String(jsonString[nameRange.upperBound..<nameEnd.lowerBound])
                     let extractedPrompt = String(jsonString[promptRange.upperBound..<promptEnd.lowerBound])
                     let extractedIcon = extractIcon(from: jsonString)
-                    return (enforceNameLength(extractedName), extractedIcon, extractedPrompt)
+                    return (
+                        enforceNameLength(extractedName),
+                        extractedIcon,
+                        extractedPrompt,
+                        PersonaInstructionSuggestions()
+                    )
                 }
                 
-                return (enforceNameLength("Custom Persona"), "star.fill", jsonString)
+                return (
+                    enforceNameLength("Custom Persona"),
+                    "star.fill",
+                    jsonString,
+                    PersonaInstructionSuggestions()
+                )
             }
             
-            let icon = validateIcon(json["icon"])
-            return (enforceNameLength(name), icon, generatedPrompt)
+            let icon = validateIcon(json["icon"] as? String)
+            return (
+                enforceNameLength(name),
+                icon,
+                generatedPrompt,
+                extractSuggestions(from: json)
+            )
             
         } catch {
             self.error = error
@@ -244,6 +283,28 @@ Bad behavior examples:
             return validateIcon(extracted)
         }
         return "star.fill"
+    }
+
+    private func extractSuggestions(from json: [String: Any]) -> PersonaInstructionSuggestions {
+        guard let suggestions = json["suggestions"] as? [String: Any] else {
+            return PersonaInstructionSuggestions()
+        }
+
+        return PersonaInstructionSuggestions(
+            organize: sanitizedSuggestions(suggestions["organize"]),
+            organizeAndRename: sanitizedSuggestions(suggestions["organizeAndRename"]),
+            renameOnly: sanitizedSuggestions(suggestions["renameOnly"])
+        )
+    }
+
+    private func sanitizedSuggestions(_ value: Any?) -> [String] {
+        guard let suggestions = value as? [String] else { return [] }
+
+        return suggestions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(6)
+            .map { $0 }
     }
     
     private func enforceNameLength(_ name: String) -> String {

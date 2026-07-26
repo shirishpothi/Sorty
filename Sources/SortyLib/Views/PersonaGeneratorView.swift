@@ -251,7 +251,8 @@ struct PersonaGeneratorView: View {
                     name: result.name,
                     icon: result.icon,
                     description: prompt,
-                    promptModifier: result.prompt
+                    promptModifier: result.prompt,
+                    instructionSuggestions: result.suggestions
                 )
                 
                 await MainActor.run {

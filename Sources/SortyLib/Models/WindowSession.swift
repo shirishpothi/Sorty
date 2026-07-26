@@ -149,7 +149,8 @@ public final class WindowSession: ObservableObject {
                                     name: result.name,
                                     icon: result.icon,
                                     description: prompt,
-                                    promptModifier: result.prompt
+                                    promptModifier: result.prompt,
+                                    instructionSuggestions: result.suggestions
                                 )
                                 customPersonaStore.addPersona(newPersona)
                                 personaManager.selectCustomPersona(newPersona.id)

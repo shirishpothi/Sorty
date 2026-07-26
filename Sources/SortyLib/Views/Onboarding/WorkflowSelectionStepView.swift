@@ -390,7 +390,8 @@ public struct WorkflowSelectionStepView: View {
                     name: result.name,
                     icon: result.icon,
                     description: customDescription,
-                    promptModifier: result.prompt
+                    promptModifier: result.prompt,
+                    instructionSuggestions: result.suggestions
                 )
                 
                 await MainActor.run {

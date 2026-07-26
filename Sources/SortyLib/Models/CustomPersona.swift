@@ -10,6 +10,33 @@ import Combine
 
 // MARK: - Custom Persona Model
 
+public struct PersonaInstructionSuggestions: Codable, Hashable, Sendable {
+    public var organize: [String]
+    public var organizeAndRename: [String]
+    public var renameOnly: [String]
+
+    public init(
+        organize: [String] = [],
+        organizeAndRename: [String] = [],
+        renameOnly: [String] = []
+    ) {
+        self.organize = organize
+        self.organizeAndRename = organizeAndRename
+        self.renameOnly = renameOnly
+    }
+
+    public func suggestions(for mode: OrganizationMode) -> [String] {
+        switch mode {
+        case .organize:
+            return organize
+        case .organizeAndRename:
+            return organizeAndRename
+        case .renameOnly:
+            return renameOnly
+        }
+    }
+}
+
 /// A user-created organization persona
 public struct CustomPersona: Codable, Identifiable, Hashable, Sendable {
     public let id: String
@@ -17,6 +44,7 @@ public struct CustomPersona: Codable, Identifiable, Hashable, Sendable {
     public var icon: String
     public var description: String
     public var promptModifier: String
+    public var instructionSuggestions: PersonaInstructionSuggestions
     public let createdAt: Date
     public var modifiedAt: Date
     
@@ -25,23 +53,60 @@ public struct CustomPersona: Codable, Identifiable, Hashable, Sendable {
         name: String,
         icon: String = "star.fill",
         description: String = "",
-        promptModifier: String = ""
+        promptModifier: String = "",
+        instructionSuggestions: PersonaInstructionSuggestions = PersonaInstructionSuggestions()
     ) {
         self.id = id
         self.name = name
         self.icon = icon
         self.description = description
         self.promptModifier = promptModifier
+        self.instructionSuggestions = instructionSuggestions
         self.createdAt = Date()
         self.modifiedAt = Date()
     }
     
-    public mutating func update(name: String, icon: String, description: String, prompt: String) {
+    public mutating func update(
+        name: String,
+        icon: String,
+        description: String,
+        prompt: String,
+        instructionSuggestions: PersonaInstructionSuggestions? = nil
+    ) {
         self.name = name
         self.icon = icon
         self.description = description
         self.promptModifier = prompt
+        if let instructionSuggestions {
+            self.instructionSuggestions = instructionSuggestions
+        }
         self.modifiedAt = Date()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case icon
+        case description
+        case promptModifier
+        case instructionSuggestions
+        case createdAt
+        case modifiedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        icon = try container.decode(String.self, forKey: .icon)
+        description = try container.decode(String.self, forKey: .description)
+        promptModifier = try container.decode(String.self, forKey: .promptModifier)
+        instructionSuggestions = try container.decodeIfPresent(
+            PersonaInstructionSuggestions.self,
+            forKey: .instructionSuggestions
+        ) ?? PersonaInstructionSuggestions()
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
     }
 }
 
