@@ -14,13 +14,6 @@ public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @State private var hasAppeared = false
     @State private var isCreatingCustom = false
-    @State private var customDescription = ""
-    @State private var isGenerating = false
-    @State private var generationError: String?
-    @State private var generatedPersona: CustomPersona?
-    @State private var showingSuccess = false
-    
-    @StateObject private var generator = PersonaGenerator()
     
     public init() {}
     
@@ -125,7 +118,7 @@ public struct WorkflowSelectionStepView: View {
                     )
                     .frame(maxWidth: 420)
                 } else {
-                    CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
+                    GeneratePersonaButton(isCreatingCustom: $isCreatingCustom)
                         .frame(maxWidth: 420)
                 }
             }
@@ -136,27 +129,13 @@ public struct WorkflowSelectionStepView: View {
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
-        .overlay {
-            // Modal overlay for custom persona creation
-            if isCreatingCustom {
-                ZStack {
-                    // Dimmed background - click to dismiss
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            guard !isGenerating else { return }
-                            dismissCustomPersonaComposer()
-                        }
-                    
-                    // Modal content
-                    customPersonaCreationView
-                        .frame(maxWidth: 450)
-                        .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
-                }
-                .transition(.opacity)
-            }
+        .sheet(isPresented: $isCreatingCustom) {
+            PersonaGeneratorView(
+                store: customPersonaStore,
+                selectedPersonaId: $personaManager.selectedCustomPersonaId
+            )
+            .environmentObject(customPersonaStore)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isCreatingCustom)
         .onAppear {
             withAnimation { hasAppeared = true }
         }
@@ -184,250 +163,6 @@ public struct WorkflowSelectionStepView: View {
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var customPersonaCreationView: some View {
-        VStack(spacing: 20) {
-            if isGenerating {
-                // Generating state - animated loading
-                VStack(spacing: 24) {
-                    ZStack {
-                        Circle()
-                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
-                            .frame(width: 80, height: 80)
-                        
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 36))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .symbolEffect(.pulse, options: .repeating)
-                    }
-                    
-                    VStack(spacing: 8) {
-                        Text("Creating Your Persona")
-                            .font(.title3.bold())
-                        
-                        Text("Sorty is analyzing your workflow description...")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    SortyGradientLoadingBar(width: 180, height: 10)
-                        .padding(.top, 8)
-                }
-                .frame(minHeight: 200)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            } else if showingSuccess, let persona = generatedPersona {
-                // Success state - preview the generated workflow before saving it.
-                VStack(spacing: 20) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), Color.teal.opacity(0.18)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 82, height: 82)
-
-                        Image(systemName: persona.icon)
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    }
-                    
-                    VStack(spacing: 8) {
-                        Text("Your Custom Workflow Is Ready")
-                            .font(.title3.bold())
-                        
-                        Text("Review the generated persona, then use it as your default workflow for Sorty.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-
-                    OnboardingCustomPersonaCard(
-                        persona: persona,
-                        isSelected: true,
-                        action: {}
-                    )
-                    .allowsHitTesting(false)
-
-                    HStack(spacing: 12) {
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                showingSuccess = false
-                                generatedPersona = nil
-                                generationError = nil
-                            }
-                        } label: {
-                            Text("Edit Description")
-                                .frame(minWidth: 110)
-                        }
-                        .buttonStyle(.sortyBordered)
-
-                        Button {
-                            commitGeneratedPersona(persona)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text("Use This Workflow")
-                            }
-                        }
-                        .buttonStyle(.onboardingPill)
-                    }
-                }
-                .frame(minHeight: 320)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            } else {
-                // Input form state
-                VStack(spacing: 16) {
-                    // Header
-                    VStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.secondary.opacity(0.1))
-                                .frame(width: 60, height: 60)
-                            
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 28))
-                                .foregroundStyle(.primary)
-                        }
-                        
-                        Text("Create Custom Persona")
-                            .font(.headline)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Describe how you want your files organized:")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        
-                        TextEditor(text: $customDescription)
-                            .font(.body)
-                            .frame(height: 80)
-                            .scrollContentBackground(.hidden)
-                            .padding(10)
-                            .background(Color(nsColor: .textBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-                            )
-                        
-                        Text("Example: \"I'm a photographer. Organize my photos by year, then event name, with RAW files separate from JPEGs.\"")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .italic()
-                    }
-                    
-                    if let error = generationError {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                        .padding(12)
-                        .background(Color.orange.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                    HStack(spacing: 12) {
-                        Button {
-                            dismissCustomPersonaComposer()
-                        } label: {
-                            Text("Cancel")
-                                .frame(minWidth: 80)
-                        }
-                        .buttonStyle(.sortyBordered)
-                        
-                        Button {
-                            generateCustomPersona()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "sparkles")
-                                Text("Generate")
-                            }
-                        }
-                        .buttonStyle(.onboardingPill)
-                        .disabled(customDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-        }
-        .padding(.vertical, 24)
-        .padding(.horizontal, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-        )
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isGenerating)
-    }
-
-    
-    private func generateCustomPersona() {
-        isGenerating = true
-        generationError = nil
-        
-        Task {
-            do {
-                let result = try await generator.generatePersona(
-                    from: customDescription,
-                    answers: [],
-                    config: settingsViewModel.config
-                )
-                
-                let newPersona = CustomPersona(
-                    name: result.name,
-                    icon: result.icon,
-                    description: customDescription,
-                    promptModifier: result.prompt,
-                    instructionSuggestions: result.suggestions
-                )
-                
-                await MainActor.run {
-                    generatedPersona = newPersona
-                    isGenerating = false
-                    showingSuccess = true
-                    
-                    HapticFeedbackManager.shared.success()
-                }
-            } catch {
-                await MainActor.run {
-                    generationError = error.localizedDescription
-                    isGenerating = false
-                    HapticFeedbackManager.shared.error()
-                }
-            }
-        }
-    }
-
-    private func commitGeneratedPersona(_ persona: CustomPersona) {
-        customPersonaStore.addPersona(persona)
-        personaManager.selectCustomPersona(persona.id)
-        generatedPersona = nil
-
-        dismissCustomPersonaComposer(clearDescription: true)
-    }
-
-    private func dismissCustomPersonaComposer(clearDescription: Bool = true) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            isCreatingCustom = false
-            isGenerating = false
-            showingSuccess = false
-            generationError = nil
-            generatedPersona = nil
-            if clearDescription {
-                customDescription = ""
             }
         }
     }
@@ -541,6 +276,7 @@ struct OnboardingCustomPersonaCard: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    private let selectionAccent = Color.teal
 
     var body: some View {
         Button {
@@ -562,7 +298,7 @@ struct OnboardingCustomPersonaCard: View {
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(isHovered ? 0.13 : 0.08),
-                                (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.teal).opacity(isSelected ? 0.12 : 0.08)
+                                selectionAccent.opacity(isSelected ? 0.16 : 0.08)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -573,12 +309,12 @@ struct OnboardingCustomPersonaCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
-                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.62) : Color.primary.opacity(isHovered ? 0.18 : 0.09),
+                        isSelected ? selectionAccent.opacity(0.78) : Color.primary.opacity(isHovered ? 0.18 : 0.09),
                         lineWidth: isSelected ? 1.4 : 1
                     )
             )
             .shadow(
-                color: (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.black).opacity(isHovered || isSelected ? 0.10 : 0.025),
+                color: (isSelected ? selectionAccent : Color.black).opacity(isHovered || isSelected ? 0.14 : 0.025),
                 radius: isHovered || isSelected ? 16 : 7,
                 x: 0,
                 y: isHovered || isSelected ? 8 : 3
@@ -647,7 +383,7 @@ struct OnboardingCustomPersonaCard: View {
 
                     Image(systemName: persona.icon)
                         .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
+                        .foregroundStyle(isSelected ? selectionAccent : .primary)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -660,12 +396,12 @@ struct OnboardingCustomPersonaCard: View {
 
                         Text(isSelected ? "Selected" : "Custom")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
+                            .foregroundStyle(isSelected ? selectionAccent : .secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
                                 Capsule()
-                                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.14) : Color.secondary.opacity(0.12))
+                                    .fill(isSelected ? selectionAccent.opacity(0.16) : Color.secondary.opacity(0.12))
                             )
                     }
 
@@ -703,7 +439,7 @@ struct OnboardingCustomPersonaCard: View {
 
                 Image(systemName: persona.icon)
                     .font(.system(size: 21))
-                    .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
+                    .foregroundStyle(isSelected ? selectionAccent : .primary)
             }
 
             VStack(spacing: 2) {
@@ -725,7 +461,7 @@ struct OnboardingCustomPersonaCard: View {
 
     private var compactIconFill: AnyShapeStyle {
         if isSelected {
-            return AnyShapeStyle(SortyDesignSystem.Colors.resolvedAccent.opacity(0.18))
+            return AnyShapeStyle(selectionAccent.opacity(0.20))
         }
 
         return AnyShapeStyle(
@@ -738,14 +474,14 @@ struct OnboardingCustomPersonaCard: View {
     }
 }
 
-struct CreatePersonaButton: View {
+struct GeneratePersonaButton: View {
     let title: String
     let subtitle: String
     @Binding var isCreatingCustom: Bool
     @State private var isHovered = false
 
     init(
-        title: String = "Create Your Own",
+        title: String = "Generate Your Own",
         subtitle: String = "Describe your ideal organization style",
         isCreatingCustom: Binding<Bool>
     ) {
