@@ -305,7 +305,8 @@ struct ExclusionRulesView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(.orange.opacity(0.6))
                             .milestoneEmptyStateSliver(
-                                trigger: learningExclusionSliverTrigger
+                                trigger: learningExclusionSliverTrigger,
+                                tint: .orange
                             )
                             .onScrollVisibilityChange(threshold: 0.6) { isVisible in
                                 guard isVisible else { return }

@@ -216,8 +216,11 @@ extension View {
         modifier(AnimatedEmptyStateIconModifier(tint: tint))
     }
 
-    func milestoneEmptyStateSliver(trigger: Int) -> some View {
-        modifier(MilestoneEmptyStateSliverModifier(trigger: trigger))
+    func milestoneEmptyStateSliver(
+        trigger: Int,
+        tint: Color = SortyDesignSystem.Colors.resolvedAccent
+    ) -> some View {
+        modifier(MilestoneEmptyStateSliverModifier(trigger: trigger, tint: tint))
     }
 }
 
@@ -225,6 +228,7 @@ private let emptyStateSliverDuration: TimeInterval = 1.25
 
 private struct MilestoneEmptyStateSliverModifier: ViewModifier {
     let trigger: Int
+    let tint: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sweepProgress: CGFloat = 1
@@ -236,7 +240,7 @@ private struct MilestoneEmptyStateSliverModifier: ViewModifier {
                 EmptyStateIconSweep(
                     progress: reduceMotion ? 0.5 : sweepProgress,
                     reduceMotion: reduceMotion,
-                    tint: SortyDesignSystem.Colors.resolvedAccent
+                    tint: tint
                 )
             )
             .onAppear {
