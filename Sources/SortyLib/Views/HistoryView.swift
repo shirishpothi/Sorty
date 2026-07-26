@@ -519,7 +519,7 @@ struct HistoryHeader: View {
 
             Spacer(minLength: 12)
 
-            HistoryGlassFilterPicker(selection: $selectedFilter)
+            HistoryNavigatorPicker(selection: $selectedFilter)
 
             Spacer(minLength: 12)
 
@@ -561,77 +561,27 @@ struct HistoryHeader: View {
     }
 }
 
-private struct HistoryGlassFilterPicker: View {
+private struct HistoryNavigatorPicker: View {
     @Binding var selection: HistoryView.HistoryFilter
-    @Namespace private var selectionAnimation
 
     var body: some View {
-        Group {
-            if #available(macOS 26.0, *) {
-                GlassEffectContainer(spacing: 8) {
-                    navigatorBar
-                }
-            } else {
-                navigatorBar
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Filter history sessions")
-        .accessibilityIdentifier("HistoryFilterPicker")
-    }
-
-    private var navigatorBar: some View {
-        HStack(spacing: 2) {
+        Picker("Filter history sessions", selection: $selection) {
             ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Button {
-                    guard selection != filter else { return }
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                        selection = filter
-                    }
-                } label: {
-                    Image(systemName: filter.systemImage)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(selection == filter ? Color.white : Color.secondary)
-                        .frame(width: 34, height: 30)
-                        .background {
-                            if selection == filter {
-                                selectedGlass
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .help(filter.rawValue)
-                .accessibilityLabel(filter.rawValue)
-                .accessibilityAddTraits(selection == filter ? .isSelected : [])
+                Label(filter.rawValue, systemImage: filter.systemImage)
+                    .labelStyle(.iconOnly)
+                    .tag(filter)
+                    .accessibilityLabel(filter.rawValue)
+                    .help(filter.rawValue)
             }
         }
-        .padding(4)
-        .systemLiquidGlassBackground(cornerRadius: 13)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var selectedGlass: some View {
-        if #available(macOS 26.0, *) {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(.clear)
-                .glassEffect(
-                    .regular
-                        .tint(SortyDesignSystem.Colors.resolvedAccent.opacity(0.72))
-                        .interactive(),
-                    in: .rect(cornerRadius: 9)
-                )
-                .glassEffectID("HistoryFilterSelection", in: selectionAnimation)
-        } else {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(SortyDesignSystem.Colors.resolvedAccent)
-                .matchedGeometryEffect(
-                    id: "HistoryFilterSelection",
-                    in: selectionAnimation
-                )
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.large)
+        .fixedSize()
+        .onChange(of: selection) { _, _ in
+            HapticFeedbackManager.shared.selection()
         }
+        .accessibilityIdentifier("HistoryFilterPicker")
     }
 }
 
