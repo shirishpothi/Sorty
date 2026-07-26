@@ -126,6 +126,7 @@ struct SettingsCard<Content: View>: View {
     let title: String
     let icon: String
     let color: Color
+    let isExpanded: Binding<Bool>?
     let headerAccessory: AnyView?
     @ViewBuilder let content: Content
 
@@ -133,11 +134,13 @@ struct SettingsCard<Content: View>: View {
         title: String,
         icon: String,
         color: Color,
+        isExpanded: Binding<Bool>? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.color = color
+        self.isExpanded = isExpanded
         self.headerAccessory = nil
         self.content = content()
     }
@@ -146,34 +149,73 @@ struct SettingsCard<Content: View>: View {
         title: String,
         icon: String,
         color: Color,
+        isExpanded: Binding<Bool>? = nil,
         @ViewBuilder headerAccessory: () -> HeaderAccessory,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.icon = icon
         self.color = color
+        self.isExpanded = isExpanded
         self.headerAccessory = AnyView(headerAccessory())
         self.content = content()
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(color)
-                    .frame(width: 14)
-                Text(LocalizedStringKey(title))
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.secondary)
-                headerAccessory
+            if let isExpanded {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.wrappedValue.toggle()
+                    }
+                } label: {
+                    header(isExpanded: isExpanded.wrappedValue)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    Text(
+                        isExpanded.wrappedValue
+                            ? "\(title). Collapse section"
+                            : "\(title). Expand section"
+                    )
+                )
+                .help(isExpanded.wrappedValue ? "Collapse \(title)" : "Expand \(title)")
+            } else {
+                header()
             }
-            
-            content
+
+            if isExpanded?.wrappedValue != false {
+                content
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 12)
+    }
+
+    private func header(isExpanded: Bool? = nil) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 14)
+            Text(LocalizedStringKey(title))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+            headerAccessory
+
+            if let isExpanded {
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
