@@ -35,6 +35,138 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertEqual(totalSavings, 200)
     }
 
+    func testLargeUniqueSizeInventoryAvoidsHashWork() async {
+        let files = (0..<100_000).map { index in
+            FileItem(
+                path: "/virtual/\(index).bin",
+                name: "\(index)",
+                extension: "bin",
+                size: Int64(index + 1)
+            )
+        }
+
+        let result = await detector.findExactDuplicates(in: files)
+
+        XCTAssertEqual(result.candidateCount, 0)
+        XCTAssertEqual(result.sampledCount, 0)
+        XCTAssertEqual(result.hashedCount, 0)
+        XCTAssertTrue(result.groups.isEmpty)
+    }
+
+    func testLargeFilesUseSamplesBeforeFullHashing() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateSampleTests-\(UUID().uuidString)", isDirectory: true)
+        let originalURL = directory.appendingPathComponent("original.bin")
+        let copyURL = directory.appendingPathComponent("copy.bin")
+        let differentURL = directory.appendingPathComponent("different.bin")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let duplicateData = Data(repeating: 0x41, count: 256 * 1_024)
+        try duplicateData.write(to: originalURL)
+        try duplicateData.write(to: copyURL)
+        try Data(repeating: 0x42, count: duplicateData.count).write(to: differentURL)
+
+        let files = [originalURL, copyURL, differentURL].map { url in
+            FileItem(
+                path: url.path,
+                name: url.deletingPathExtension().lastPathComponent,
+                extension: "bin",
+                size: Int64(duplicateData.count)
+            )
+        }
+
+        let result = await detector.findExactDuplicates(in: files)
+
+        XCTAssertEqual(result.candidateCount, 3)
+        XCTAssertEqual(result.sampledCount, 3)
+        XCTAssertEqual(result.hashedCount, 2)
+        XCTAssertEqual(result.groups.count, 1)
+        XCTAssertEqual(result.groups.first?.files.count, 2)
+    }
+
+    func testStreamingHashStopsAfterCancellation() async throws {
+        let fileManager = FileManager.default
+        let fileURL = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateCancellationTests-\(UUID().uuidString).bin")
+
+        defer {
+            try? fileManager.removeItem(at: fileURL)
+        }
+
+        try Data(repeating: 0x5A, count: 16 * 1_024 * 1_024).write(to: fileURL)
+        let hashTask = Task(priority: .utility) {
+            HashUtility.computeSHA256(for: fileURL)
+        }
+        hashTask.cancel()
+
+        let hash = await hashTask.value
+
+        XCTAssertNil(hash)
+    }
+
+    func testDuplicateInventoryHonorsDepthWithoutRetainingUniqueFiles() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateInventoryTests-\(UUID().uuidString)", isDirectory: true)
+        let nestedDirectory = directory.appendingPathComponent("Nested", isDirectory: true)
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+        try Data("same".utf8).write(to: directory.appendingPathComponent("first.txt"))
+        try Data("same".utf8).write(to: directory.appendingPathComponent("second.txt"))
+        try Data("same".utf8).write(to: nestedDirectory.appendingPathComponent("third.txt"))
+
+        var settings = DuplicateSettings()
+        settings.maxScanDepth = 0
+        settings.includeSemanticDuplicates = false
+        let scanner = DirectoryScanner()
+
+        let inventory = try await scanner.scanDirectoryForDuplicates(
+            at: directory,
+            settings: settings
+        )
+
+        XCTAssertEqual(inventory.scannedFileCount, 2)
+        XCTAssertEqual(inventory.exactCandidates.count, 2)
+        XCTAssertTrue(inventory.semanticCandidates.isEmpty)
+    }
+
+    func testDuplicateInventorySkipsUnboundedSemanticAnalysis() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateSemanticLimitTests-\(UUID().uuidString)", isDirectory: true)
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        for index in 0..<3 {
+            try Data("file-\(index)".utf8).write(
+                to: directory.appendingPathComponent("\(index).txt")
+            )
+        }
+
+        let scanner = DirectoryScanner()
+        let inventory = try await scanner.scanDirectoryForDuplicates(
+            at: directory,
+            settings: DuplicateSettings(),
+            semanticFileLimit: 2
+        )
+
+        XCTAssertEqual(inventory.scannedFileCount, 3)
+        XCTAssertEqual(inventory.semanticSkippedFileCount, 3)
+        XCTAssertTrue(inventory.semanticCandidates.isEmpty)
+    }
+
     @MainActor
     func testManagerCompletesEmptyScanWithoutInvalidProgress() async {
         let manager = DuplicateDetectionManager()

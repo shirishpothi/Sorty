@@ -48,7 +48,7 @@ public struct DuplicateSettings: Codable, Sendable {
     public var normalizedSemanticSimilarityThreshold: Double {
         Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
     }
-    
+
     public init(
         comparisonMethod: ComparisonMethod = .exact,
         minFileSize: Int64 = 0,
@@ -69,6 +69,44 @@ public struct DuplicateSettings: Codable, Sendable {
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
         self.semanticSimilarityThreshold = Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
+    }
+}
+
+struct DuplicateScanFilter: Sendable {
+    private let minimumFileSize: Int64
+    private let includedExtensions: Set<String>
+    private let excludedValues: Set<String>
+
+    init(settings: DuplicateSettings) {
+        minimumFileSize = settings.minFileSize
+        includedExtensions = Set(settings.includeExtensions.map(Self.normalizedExtension))
+        excludedValues = Set(settings.excludeExtensions.map { $0.lowercased() })
+    }
+
+    func includes(
+        fileSize: Int64,
+        pathExtension: String,
+        displayName: String
+    ) -> Bool {
+        guard fileSize >= minimumFileSize else {
+            return false
+        }
+
+        let normalizedExtension = Self.normalizedExtension(pathExtension)
+        if !includedExtensions.isEmpty, !includedExtensions.contains(normalizedExtension) {
+            return false
+        }
+
+        let normalizedDisplayName = displayName.lowercased()
+        return !excludedValues.contains(normalizedDisplayName)
+            && !excludedValues.contains(normalizedExtension)
+            && !excludedValues.contains(".\(normalizedExtension)")
+    }
+
+    private static func normalizedExtension(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            .lowercased()
     }
 }
 

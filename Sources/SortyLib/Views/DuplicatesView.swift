@@ -71,11 +71,19 @@ struct DuplicatesView: View {
                 ZStack {
                     switch detectionManager.state {
                     case .preparing:
-                        ScanProgressViewNew(progress: 0, isPreparing: true)
+                        ScanProgressViewNew(
+                            progress: 0,
+                            isPreparing: true,
+                            stage: detectionManager.scanStage
+                        )
                             .transition(.sortyScaleAndFade)
 
                     case .scanning(let progress):
-                        ScanProgressViewNew(progress: progress, isPreparing: false)
+                        ScanProgressViewNew(
+                            progress: progress,
+                            isPreparing: false,
+                            stage: detectionManager.scanStage
+                        )
                             .transition(.sortyScaleAndFade)
 
                     case .idle:
@@ -329,6 +337,7 @@ struct DuplicatesView: View {
         guard let directory = effectiveDirectory else { return }
         let handoffPaths = handoffFilePaths
         handoffFilePaths = []
+        let settings = settingsManager.settings
         HapticFeedbackManager.shared.tap()
 
         // Cancel any in-flight scan
@@ -341,17 +350,27 @@ struct DuplicatesView: View {
         currentScanTask = Task {
             let scanner = DirectoryScanner()
             do {
-                let files = try await resolveFilesForScan(
+                let scanSource = try await resolveFilesForScan(
                     scanner: scanner,
                     directory: directory,
                     handoffPaths: handoffPaths,
-                    deepScan: settingsManager.settings.includeSemanticDuplicates
+                    settings: settings
                 )
 
                 // Verify directory hasn't changed since scan started
                 if capturedDirectory == effectiveDirectory && !Task.isCancelled {
-                    await detectionManager.scanForDuplicates(
-                        files: files, settings: settingsManager.settings)
+                    switch scanSource {
+                    case .inventory(let inventory):
+                        await detectionManager.scanForDuplicates(
+                            inventory: inventory,
+                            settings: settings
+                        )
+                    case .files(let files):
+                        await detectionManager.scanForDuplicates(
+                            files: files,
+                            settings: settings
+                        )
+                    }
 
                     if !Task.isCancelled {
                         // Auto-select first group
@@ -375,12 +394,16 @@ struct DuplicatesView: View {
         scanner: DirectoryScanner,
         directory: URL,
         handoffPaths: [String],
-        deepScan: Bool
-    ) async throws -> [FileItem] {
+        settings: DuplicateSettings
+    ) async throws -> ResolvedDuplicateScan {
         guard !handoffPaths.isEmpty else {
-            // Pass false for computeHashes because we compute them in detectionManager with progress.
-            return try await scanner.scanDirectory(
-                at: directory, deepScan: deepScan, computeHashes: false)
+            let inventory = try await scanner.scanDirectoryForDuplicates(
+                at: directory,
+                settings: settings
+            ) { scanned, stage in
+                self.detectionManager.scanStage = "\(stage) \(scanned.formatted()) scanned"
+            }
+            return .inventory(inventory)
         }
 
         var targetedFiles: [FileItem] = []
@@ -391,19 +414,32 @@ struct DuplicatesView: View {
             guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
 
             if let scannedFile = try? await scanner.scanFile(
-                at: fileURL, deepScan: deepScan, computeHashes: false), !scannedFile.isDirectory
+                at: fileURL,
+                deepScan: false,
+                computeHashes: false
+            ), !scannedFile.isDirectory
             {
                 targetedFiles.append(scannedFile)
             }
         }
 
         if targetedFiles.count >= 2 {
-            return targetedFiles
+            return .files(targetedFiles)
         }
 
         // Fallback when history paths no longer exist or are insufficient.
-        return try await scanner.scanDirectory(
-            at: directory, deepScan: deepScan, computeHashes: false)
+        let inventory = try await scanner.scanDirectoryForDuplicates(
+            at: directory,
+            settings: settings
+        ) { scanned, stage in
+            self.detectionManager.scanStage = "\(stage) \(scanned.formatted()) scanned"
+        }
+        return .inventory(inventory)
+    }
+
+    private enum ResolvedDuplicateScan {
+        case inventory(DuplicateScanInventory)
+        case files([FileItem])
     }
 
     private func cancelScan() {
@@ -652,6 +688,16 @@ private struct DuplicatesResultsSidebarHeader: View {
                 .numericTextTransition(animationValue: manager.unreadableFileCount)
             }
 
+            if manager.semanticSkippedFileCount > 0 {
+                Label(
+                    "Exact duplicate results are complete. Similarity matching was skipped for this large folder to keep resource use stable.",
+                    systemImage: "leaf"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             if manager.semanticGroupCount > 0 {
                 Label("Cleanup All only removes exact duplicates.", systemImage: "checkmark.shield")
                     .font(.caption)
@@ -681,8 +727,12 @@ private struct DuplicatesNerdStatsStrip: View {
                 stat("Candidates", value: "\(manager.hashCandidateCount)")
             }
             HStack(spacing: 8) {
-                stat("Hashed", value: "\(manager.hashedFileCount)")
+                stat("Sampled", value: "\(manager.sampledFileCount)")
+                stat("Full hashes", value: "\(manager.hashedFileCount)")
+            }
+            HStack(spacing: 8) {
                 stat("Cache hits", value: "\(manager.hashCacheHitCount)")
+                stat("Similar analyzed", value: "\(manager.semanticAnalyzedFileCount)")
             }
             if manager.unreadableFileCount > 0 {
                 stat("Unreadable", value: "\(manager.unreadableFileCount)")
@@ -693,7 +743,7 @@ private struct DuplicatesNerdStatsStrip: View {
         .systemLiquidGlassBackground(cornerRadius: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.hashedFileCount) files hashed. \(manager.hashCacheHitCount) cache hits. \(manager.unreadableFileCount) unreadable files. Duration \(formattedDuration)."
+            "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.sampledFileCount) files sampled. \(manager.hashedFileCount) files fully hashed. \(manager.hashCacheHitCount) cache hits. \(manager.semanticAnalyzedFileCount) files analyzed for similarity. \(manager.semanticSkippedFileCount) files skipped for similarity. \(manager.unreadableFileCount) unreadable files. Duration \(formattedDuration)."
         )
     }
 
@@ -1733,6 +1783,7 @@ private struct ScanningPulseIcon: View {
 struct ScanProgressViewNew: View {
     let progress: Double
     var isPreparing: Bool = false
+    var stage: String = ""
 
     @Environment(\.controlActiveState) private var controlActiveState
 
@@ -1749,11 +1800,19 @@ struct ScanProgressViewNew: View {
     }
 
     private var title: String {
-        isPreparing ? "Preparing Scan..." : "Computing File Hashes"
+        if isPreparing {
+            return "Preparing Scan..."
+        }
+        return stage.localizedCaseInsensitiveContains("semantic")
+            ? "Finding Similar Files"
+            : "Finding Exact Duplicates"
     }
 
     private var subtitle: String {
-        isPreparing
+        if !stage.isEmpty {
+            return stage
+        }
+        return isPreparing
             ? "Reading directory structure..." : "Comparing file content to find exact matches..."
     }
 

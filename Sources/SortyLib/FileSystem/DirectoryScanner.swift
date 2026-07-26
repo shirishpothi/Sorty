@@ -9,6 +9,14 @@ import CryptoKit
 import Foundation
 import os.log
 
+struct DuplicateScanInventory: Sendable {
+    let exactCandidates: [FileItem]
+    let semanticCandidates: [FileItem]
+    let scannedFileCount: Int
+    let semanticSkippedFileCount: Int
+    let unreadableFileCount: Int
+}
+
 actor DirectoryScanner {
     private var isScanning = false
     private var scannedCount = 0
@@ -25,6 +33,8 @@ actor DirectoryScanner {
     private var normalBatchSize = 50
     private var pressureBatchSize = 10
     private let pauseTimeout: Duration = .seconds(30)
+    private let duplicateScanBatchSize = 2_048
+    private let maximumCompleteSemanticFileCount = 5_000
 
     /// Whether the last scan was degraded due to memory pressure
     private(set) var lastScanWasDegraded = false
@@ -129,6 +139,291 @@ actor DirectoryScanner {
         return files
     }
 
+    /// Builds a low-memory inventory specifically for duplicate detection.
+    ///
+    /// The first pass records only file-size frequencies and retains a complete
+    /// semantic inventory while it remains safely bounded. Large directories
+    /// use a second metadata-only pass that materializes only files whose sizes
+    /// occur more than once, so unique files never enter the hashing pipeline.
+    func scanDirectoryForDuplicates(
+        at url: URL,
+        settings: DuplicateSettings,
+        includeHidden: Bool = false,
+        skipCloudPlaceholders: Bool = true,
+        semanticFileLimit: Int? = nil,
+        progressHandler: (@MainActor @Sendable (_ scanned: Int, _ stage: String) -> Void)? = nil
+    ) async throws -> DuplicateScanInventory {
+        guard !isScanning else {
+            throw ScannerError.alreadyScanning
+        }
+
+        isScanning = true
+        scannedCount = 0
+        cloudPlaceholdersSkipped = 0
+        isPaused = false
+        lastScanWasDegraded = false
+        degradationReason = nil
+
+        if !isMonitoringSetup {
+            setupMemoryPressureMonitoring()
+            isMonitoringSetup = true
+        }
+
+        defer {
+            isScanning = false
+            pauseTimeoutTask?.cancel()
+        }
+
+        let fileManager = FileManager.default
+        guard url.isFileURL else {
+            throw ScannerError.invalidURL
+        }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            throw ScannerError.pathNotFound
+        }
+        guard isDirectory.boolValue else {
+            throw ScannerError.notDirectory
+        }
+        guard fileManager.isReadableFile(atPath: url.path) else {
+            throw ScannerError.pathNotReadable
+        }
+
+        await checkMemoryPressure()
+
+        let resourceKeys: Set<URLResourceKey> = [
+            .isDirectoryKey,
+            .fileSizeKey,
+            .creationDateKey,
+            .contentModificationDateKey,
+            .ubiquitousItemIsDownloadingKey,
+            .ubiquitousItemDownloadingStatusKey,
+        ]
+        var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
+        if !includeHidden {
+            options.insert(.skipsHiddenFiles)
+        }
+
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(resourceKeys),
+            options: options
+        ) else {
+            throw ScannerError.enumerationFailed
+        }
+
+        let semanticLimit = max(0, semanticFileLimit ?? maximumCompleteSemanticFileCount)
+        let rootPathComponents = Set(
+            url.standardizedFileURL.pathComponents.map { $0.lowercased() }
+        )
+        let isCloudContainer = rootPathComponents.contains("cloudstorage")
+            || rootPathComponents.contains("dropbox")
+        let duplicateScanFilter = DuplicateScanFilter(settings: settings)
+        var singleSizes: Set<Int64> = []
+        var duplicateSizes: Set<Int64> = []
+        var semanticCandidates: [FileItem] = []
+        if settings.includeSemanticDuplicates {
+            semanticCandidates.reserveCapacity(min(semanticLimit, 1_024))
+        }
+        var semanticLimitExceeded = false
+        var eligibleFileCount = 0
+        var exactCandidateCount = 0
+        var unreadableFileCount = 0
+
+        while let fileURL = enumerator.nextObject() as? URL {
+            try Task.checkCancellation()
+
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys) else {
+                unreadableFileCount += 1
+                continue
+            }
+
+            let enumerationLevel = enumerator.level
+            if resourceValues.isDirectory == true {
+                if settings.maxScanDepth >= 0,
+                   enumerationLevel > settings.maxScanDepth {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            let fileDepth = max(0, enumerationLevel - 1)
+            if settings.maxScanDepth >= 0, fileDepth > settings.maxScanDepth {
+                continue
+            }
+
+            let fileSize = Int64(resourceValues.fileSize ?? 0)
+            let pathExtension = fileURL.pathExtension
+            guard duplicateScanFilter.includes(
+                fileSize: fileSize,
+                pathExtension: pathExtension,
+                displayName: fileURL.lastPathComponent
+            ) else {
+                continue
+            }
+
+            let hasCloudSignals = hasPotentialCloudSignals(
+                at: fileURL,
+                resourceValues: resourceValues,
+                pathExtension: pathExtension,
+                pathIsInCloudContainer: isCloudContainer
+            )
+            if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: fileURL) {
+                cloudPlaceholdersSkipped += 1
+                continue
+            }
+
+            eligibleFileCount += 1
+            scannedCount = eligibleFileCount
+
+            if duplicateSizes.contains(fileSize) {
+                exactCandidateCount += 1
+            } else {
+                if singleSizes.remove(fileSize) != nil {
+                    duplicateSizes.insert(fileSize)
+                    exactCandidateCount += 2
+                } else {
+                    singleSizes.insert(fileSize)
+                }
+            }
+
+            if settings.includeSemanticDuplicates, !semanticLimitExceeded {
+                if semanticCandidates.count < semanticLimit {
+                    semanticCandidates.append(
+                        makeDuplicateFileItem(
+                            at: fileURL,
+                            fileSize: fileSize,
+                            resourceValues: resourceValues
+                        )
+                    )
+                } else {
+                    semanticCandidates.removeAll(keepingCapacity: false)
+                    semanticLimitExceeded = true
+                }
+            }
+
+            if eligibleFileCount.isMultiple(of: duplicateScanBatchSize) {
+                await progressHandler?(eligibleFileCount, "Indexing files...")
+                await Task.yield()
+                await checkMemoryPressure()
+                try await waitIfPaused()
+            }
+        }
+
+        await progressHandler?(eligibleFileCount, "Preparing duplicate candidates...")
+        singleSizes.removeAll(keepingCapacity: false)
+
+        if duplicateSizes.isEmpty {
+            return DuplicateScanInventory(
+                exactCandidates: [],
+                semanticCandidates: semanticCandidates,
+                scannedFileCount: eligibleFileCount,
+                semanticSkippedFileCount: semanticLimitExceeded ? eligibleFileCount : 0,
+                unreadableFileCount: unreadableFileCount
+            )
+        }
+
+        if settings.includeSemanticDuplicates, !semanticLimitExceeded {
+            return DuplicateScanInventory(
+                exactCandidates: semanticCandidates.filter { duplicateSizes.contains($0.size) },
+                semanticCandidates: semanticCandidates,
+                scannedFileCount: eligibleFileCount,
+                semanticSkippedFileCount: 0,
+                unreadableFileCount: unreadableFileCount
+            )
+        }
+
+        guard let candidateEnumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(resourceKeys),
+            options: options
+        ) else {
+            throw ScannerError.enumerationFailed
+        }
+
+        var exactCandidates: [FileItem] = []
+        exactCandidates.reserveCapacity(exactCandidateCount)
+        var enumeratedFileCount = 0
+
+        while let fileURL = candidateEnumerator.nextObject() as? URL {
+            try Task.checkCancellation()
+
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys) else {
+                continue
+            }
+
+            let enumerationLevel = candidateEnumerator.level
+            if resourceValues.isDirectory == true {
+                if settings.maxScanDepth >= 0,
+                   enumerationLevel > settings.maxScanDepth {
+                    candidateEnumerator.skipDescendants()
+                }
+                continue
+            }
+
+            let fileDepth = max(0, enumerationLevel - 1)
+            if settings.maxScanDepth >= 0, fileDepth > settings.maxScanDepth {
+                continue
+            }
+
+            enumeratedFileCount += 1
+            if enumeratedFileCount.isMultiple(of: duplicateScanBatchSize) {
+                await progressHandler?(
+                    exactCandidates.count,
+                    "Collecting duplicate candidates..."
+                )
+                await Task.yield()
+                await checkMemoryPressure()
+                try await waitIfPaused()
+            }
+
+            let fileSize = Int64(resourceValues.fileSize ?? 0)
+            guard duplicateSizes.contains(fileSize) else {
+                continue
+            }
+
+            let pathExtension = fileURL.pathExtension
+            guard duplicateScanFilter.includes(
+                fileSize: fileSize,
+                pathExtension: pathExtension,
+                displayName: fileURL.lastPathComponent
+            ) else {
+                continue
+            }
+
+            let hasCloudSignals = hasPotentialCloudSignals(
+                at: fileURL,
+                resourceValues: resourceValues,
+                pathExtension: pathExtension,
+                pathIsInCloudContainer: isCloudContainer
+            )
+            if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: fileURL) {
+                continue
+            }
+
+            exactCandidates.append(
+                makeDuplicateFileItem(
+                    at: fileURL,
+                    fileSize: fileSize,
+                    resourceValues: resourceValues
+                )
+            )
+        }
+
+        logger.info(
+            "Duplicate inventory completed: \(eligibleFileCount) eligible files, \(exactCandidates.count) exact candidates"
+        )
+
+        return DuplicateScanInventory(
+            exactCandidates: exactCandidates,
+            semanticCandidates: [],
+            scannedFileCount: eligibleFileCount,
+            semanticSkippedFileCount: semanticLimitExceeded ? eligibleFileCount : 0,
+            unreadableFileCount: unreadableFileCount
+        )
+    }
+
     /// Scan a single file and return a FileItem
     func scanFile(
         at url: URL,
@@ -207,6 +502,22 @@ actor DirectoryScanner {
             cloudStatus: cloudStatus,
             finderComment: finderComment,
             finderTags: finderTags
+        )
+    }
+
+    private func makeDuplicateFileItem(
+        at url: URL,
+        fileSize: Int64,
+        resourceValues: URLResourceValues
+    ) -> FileItem {
+        FileItem(
+            path: url.path,
+            name: url.deletingPathExtension().lastPathComponent,
+            extension: url.pathExtension,
+            size: fileSize,
+            isDirectory: false,
+            creationDate: resourceValues.creationDate,
+            modificationDate: resourceValues.contentModificationDate
         )
     }
 
@@ -428,7 +739,8 @@ actor DirectoryScanner {
     private func hasPotentialCloudSignals(
         at url: URL,
         resourceValues: URLResourceValues?,
-        pathExtension: String
+        pathExtension: String,
+        pathIsInCloudContainer: Bool? = nil
     ) -> Bool {
         if resourceValues?.ubiquitousItemDownloadingStatus != nil
             || resourceValues?.ubiquitousItemIsDownloading == true
@@ -441,6 +753,10 @@ actor DirectoryScanner {
             || googleDriveNativeExtensions.contains(lowercasedExtension)
         {
             return true
+        }
+
+        if let pathIsInCloudContainer {
+            return pathIsInCloudContainer
         }
 
         let pathComponents = url.standardizedFileURL.pathComponents.map { $0.lowercased() }

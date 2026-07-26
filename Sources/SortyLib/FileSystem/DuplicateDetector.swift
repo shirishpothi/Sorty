@@ -170,9 +170,32 @@ public actor DuplicateDetector {
         let modificationDate: Date?
     }
 
+    private struct IndexBucket {
+        let firstIndex: Int
+        private(set) var duplicateIndices: [Int]?
+
+        init(firstIndex: Int) {
+            self.firstIndex = firstIndex
+            duplicateIndices = nil
+        }
+
+        mutating func append(_ index: Int) {
+            if duplicateIndices == nil {
+                duplicateIndices = [firstIndex, index]
+            } else {
+                duplicateIndices?.append(index)
+            }
+        }
+
+        var count: Int {
+            duplicateIndices?.count ?? 1
+        }
+    }
+
     public struct ExactScanResult: Sendable {
         public let groups: [DuplicateGroup]
         public let candidateCount: Int
+        public let sampledCount: Int
         public let hashedCount: Int
         public let cacheHitCount: Int
         public let unreadableCount: Int
@@ -180,113 +203,221 @@ public actor DuplicateDetector {
 
     private var hashCache: [HashCacheKey: String] = [:]
     private let maximumConcurrentHashers = 2
+    private let maximumCachedHashes = 50_000
+    private let cacheTrimCount = 5_000
     
     public init() {}
 
     /// Finds byte-identical files while avoiding unnecessary disk reads.
     /// Only files sharing the same size can be exact duplicates, so unique-size
-    /// files are discarded before hashing.
+    /// files are discarded before hashing. Large files are sampled at both ends
+    /// before a full SHA-256 pass, which avoids reading entire files that differ
+    /// immediately while preserving exact-match correctness.
     public func findExactDuplicates(
         in files: [FileItem],
-        progressHandler: (@Sendable (Int, Int) -> Void)? = nil
+        progressHandler: (@MainActor @Sendable (Int, Int) -> Void)? = nil
     ) async -> ExactScanResult {
-        let candidates = Dictionary(grouping: files.filter { !$0.isDirectory }, by: \.size)
-            .values
-            .filter { $0.count > 1 }
-            .flatMap { $0 }
+        var firstIndexBySize: [Int64: Int] = [:]
+        var duplicateIndicesBySize: [Int64: [Int]] = [:]
 
-        guard !candidates.isEmpty else {
+        for (index, file) in files.enumerated() where !file.isDirectory {
+            if duplicateIndicesBySize[file.size] != nil {
+                duplicateIndicesBySize[file.size, default: []].append(index)
+            } else if let firstIndex = firstIndexBySize.removeValue(forKey: file.size) {
+                duplicateIndicesBySize[file.size] = [firstIndex, index]
+            } else {
+                firstIndexBySize[file.size] = index
+            }
+        }
+
+        let candidateCount = duplicateIndicesBySize.values.reduce(0) { $0 + $1.count }
+
+        guard candidateCount > 0 else {
             return ExactScanResult(
                 groups: [],
                 candidateCount: 0,
+                sampledCount: 0,
                 hashedCount: 0,
                 cacheHitCount: 0,
                 unreadableCount: 0
             )
         }
 
-        let activeKeys = Set(candidates.map(Self.cacheKey(for:)))
-        hashCache = hashCache.filter { activeKeys.contains($0.key) }
+        var candidateIndices: [Int] = []
+        candidateIndices.reserveCapacity(candidateCount)
+        for indices in duplicateIndicesBySize.values {
+            candidateIndices.append(contentsOf: indices)
+        }
 
-        var resolvedFiles: [(file: FileItem, hash: String)] = []
-        var pendingFiles: [(file: FileItem, key: HashCacheKey)] = []
+        var indicesByHash: [String: IndexBucket] = [:]
+        var pendingSampleIndices: [Int] = []
+        pendingSampleIndices.reserveCapacity(candidateCount)
         var completedCount = 0
         var cacheHitCount = 0
+        var sampledCount = 0
         var hashedCount = 0
         var unreadableCount = 0
+        let progressStride = max(1, min(1_024, candidateCount / 200))
 
-        for file in candidates {
+        for index in candidateIndices {
             if Task.isCancelled {
                 break
             }
 
+            let file = files[index]
             if let existingHash = file.sha256Hash {
-                resolvedFiles.append((file, existingHash))
+                Self.record(index: index, for: existingHash, in: &indicesByHash)
                 completedCount += 1
-                progressHandler?(completedCount, candidates.count)
+                if completedCount.isMultiple(of: progressStride) || completedCount == candidateCount {
+                    await progressHandler?(completedCount, candidateCount)
+                }
                 continue
             }
 
             let key = Self.cacheKey(for: file)
             if let cachedHash = hashCache[key] {
-                resolvedFiles.append((file, cachedHash))
+                Self.record(index: index, for: cachedHash, in: &indicesByHash)
                 cacheHitCount += 1
                 completedCount += 1
-                progressHandler?(completedCount, candidates.count)
+                if completedCount.isMultiple(of: progressStride) || completedCount == candidateCount {
+                    await progressHandler?(completedCount, candidateCount)
+                }
             } else {
-                pendingFiles.append((file, key))
+                pendingSampleIndices.append(index)
             }
         }
 
-        let concurrencyLimit = min(maximumConcurrentHashers, pendingFiles.count)
-        var nextPendingIndex = 0
+        var sampledIndicesByDigest: [String: IndexBucket] = [:]
+        let sampleConcurrencyLimit = min(maximumConcurrentHashers, pendingSampleIndices.count)
+        var nextSampleIndex = 0
 
-        await withTaskGroup(of: (FileItem, HashCacheKey, String?).self) { group in
-            for _ in 0..<concurrencyLimit {
-                let pending = pendingFiles[nextPendingIndex]
-                nextPendingIndex += 1
+        await withTaskGroup(of: (Int, HashUtility.SampleFingerprint?).self) { group in
+            for _ in 0..<sampleConcurrencyLimit {
+                let index = pendingSampleIndices[nextSampleIndex]
+                nextSampleIndex += 1
                 group.addTask(priority: .utility) {
-                    let hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: pending.file.path))
-                    return (pending.file, pending.key, hash)
+                    let fingerprint = HashUtility.computeSampleFingerprint(
+                        for: URL(fileURLWithPath: files[index].path)
+                    )
+                    return (index, fingerprint)
                 }
             }
 
-            while let (file, key, hash) = await group.next() {
+            while let (index, fingerprint) = await group.next() {
+                if let fingerprint, fingerprint.isFullFileHash {
+                    let key = Self.cacheKey(for: files[index])
+                    storeCachedHash(fingerprint.digest, for: key)
+                    Self.record(
+                        index: index,
+                        for: fingerprint.digest,
+                        in: &indicesByHash
+                    )
+                    hashedCount += 1
+                    completedCount += 1
+                } else if let fingerprint {
+                    Self.record(
+                        index: index,
+                        for: fingerprint.digest,
+                        in: &sampledIndicesByDigest
+                    )
+                    sampledCount += 1
+                } else {
+                    unreadableCount += 1
+                    completedCount += 1
+                }
+
+                if completedCount.isMultiple(of: progressStride) || completedCount == candidateCount {
+                    await progressHandler?(completedCount, candidateCount)
+                }
+
+                if nextSampleIndex < pendingSampleIndices.count, !Task.isCancelled {
+                    let nextIndex = pendingSampleIndices[nextSampleIndex]
+                    nextSampleIndex += 1
+                    group.addTask(priority: .utility) {
+                        let fingerprint = HashUtility.computeSampleFingerprint(
+                            for: URL(fileURLWithPath: files[nextIndex].path)
+                        )
+                        return (nextIndex, fingerprint)
+                    }
+                } else if Task.isCancelled {
+                    group.cancelAll()
+                }
+            }
+        }
+
+        var pendingFullHashIndices: [Int] = []
+        for bucket in sampledIndicesByDigest.values {
+            if let duplicateIndices = bucket.duplicateIndices {
+                pendingFullHashIndices.append(contentsOf: duplicateIndices)
+            } else {
+                completedCount += bucket.count
+                if completedCount.isMultiple(of: progressStride) || completedCount == candidateCount {
+                    await progressHandler?(completedCount, candidateCount)
+                }
+            }
+        }
+
+        let fullHashConcurrencyLimit = min(maximumConcurrentHashers, pendingFullHashIndices.count)
+        var nextFullHashIndex = 0
+
+        await withTaskGroup(of: (Int, String?).self) { group in
+            for _ in 0..<fullHashConcurrencyLimit {
+                let index = pendingFullHashIndices[nextFullHashIndex]
+                nextFullHashIndex += 1
+                group.addTask(priority: .utility) {
+                    let hash = HashUtility.computeSHA256(
+                        for: URL(fileURLWithPath: files[index].path)
+                    )
+                    return (index, hash)
+                }
+            }
+
+            while let (index, hash) = await group.next() {
                 if let hash {
-                    hashCache[key] = hash
-                    resolvedFiles.append((file, hash))
+                    let key = Self.cacheKey(for: files[index])
+                    storeCachedHash(hash, for: key)
+                    Self.record(index: index, for: hash, in: &indicesByHash)
                     hashedCount += 1
                 } else {
                     unreadableCount += 1
                 }
 
                 completedCount += 1
-                progressHandler?(completedCount, candidates.count)
+                if completedCount.isMultiple(of: progressStride) || completedCount == candidateCount {
+                    await progressHandler?(completedCount, candidateCount)
+                }
 
-                if nextPendingIndex < pendingFiles.count, !Task.isCancelled {
-                    let pending = pendingFiles[nextPendingIndex]
-                    nextPendingIndex += 1
+                if nextFullHashIndex < pendingFullHashIndices.count, !Task.isCancelled {
+                    let nextIndex = pendingFullHashIndices[nextFullHashIndex]
+                    nextFullHashIndex += 1
                     group.addTask(priority: .utility) {
-                        let hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: pending.file.path))
-                        return (pending.file, pending.key, hash)
+                        let hash = HashUtility.computeSHA256(
+                            for: URL(fileURLWithPath: files[nextIndex].path)
+                        )
+                        return (nextIndex, hash)
                     }
+                } else if Task.isCancelled {
+                    group.cancelAll()
                 }
             }
         }
 
-        var groupsByHash: [String: [FileItem]] = [:]
-        for resolvedFile in resolvedFiles {
-            groupsByHash[resolvedFile.hash, default: []].append(resolvedFile.file)
-        }
-
-        let groups = groupsByHash
-            .filter { $0.value.count > 1 }
-            .map { DuplicateGroup(hash: $0.key, files: $0.value) }
+        let groups = indicesByHash
+            .compactMap { hash, bucket -> DuplicateGroup? in
+                guard let duplicateIndices = bucket.duplicateIndices else {
+                    return nil
+                }
+                return DuplicateGroup(
+                    hash: hash,
+                    files: duplicateIndices.map { files[$0] }
+                )
+            }
             .sorted { $0.potentialSavings > $1.potentialSavings }
 
         return ExactScanResult(
             groups: groups,
-            candidateCount: candidates.count,
+            candidateCount: candidateCount,
+            sampledCount: sampledCount,
             hashedCount: hashedCount,
             cacheHitCount: cacheHitCount,
             unreadableCount: unreadableCount
@@ -349,10 +480,33 @@ public actor DuplicateDetector {
 
     private static func cacheKey(for file: FileItem) -> HashCacheKey {
         HashCacheKey(
-            path: URL(fileURLWithPath: file.path).standardizedFileURL.path,
+            path: file.path,
             size: file.size,
             modificationDate: file.modificationDate
         )
+    }
+
+    private static func record(
+        index: Int,
+        for digest: String,
+        in buckets: inout [String: IndexBucket]
+    ) {
+        if buckets[digest] == nil {
+            buckets[digest] = IndexBucket(firstIndex: index)
+        } else {
+            buckets[digest]?.append(index)
+        }
+    }
+
+    private func storeCachedHash(_ hash: String, for key: HashCacheKey) {
+        if hashCache[key] == nil, hashCache.count >= maximumCachedHashes {
+            let removalCount = min(cacheTrimCount, hashCache.count)
+            let staleKeys = Array(hashCache.keys.prefix(removalCount))
+            for staleKey in staleKeys {
+                hashCache.removeValue(forKey: staleKey)
+            }
+        }
+        hashCache[key] = hash
     }
 }
 
@@ -396,9 +550,12 @@ public class DuplicateDetectionManager: ObservableObject {
     @Published public private(set) var semanticGroupCount: Int = 0
     @Published public private(set) var scannedFileCount: Int = 0
     @Published public private(set) var hashCandidateCount: Int = 0
+    @Published public private(set) var sampledFileCount: Int = 0
     @Published public private(set) var hashedFileCount: Int = 0
     @Published public private(set) var hashCacheHitCount: Int = 0
     @Published public private(set) var unreadableFileCount: Int = 0
+    @Published public private(set) var semanticAnalyzedFileCount: Int = 0
+    @Published public private(set) var semanticSkippedFileCount: Int = 0
     @Published public private(set) var scanDuration: TimeInterval = 0
     
     private let detector = DuplicateDetector()
@@ -430,6 +587,39 @@ public class DuplicateDetectionManager: ObservableObject {
     }
     
     public func scanForDuplicates(files: [FileItem], settings: DuplicateSettings) async {
+        let eligibleFiles = eligibleFiles(from: files, settings: settings)
+        await performScan(
+            exactCandidates: eligibleFiles,
+            semanticCandidates: eligibleFiles,
+            scannedFileCount: eligibleFiles.count,
+            semanticSkippedFileCount: 0,
+            preflightUnreadableFileCount: 0,
+            settings: settings
+        )
+    }
+
+    func scanForDuplicates(
+        inventory: DuplicateScanInventory,
+        settings: DuplicateSettings
+    ) async {
+        await performScan(
+            exactCandidates: inventory.exactCandidates,
+            semanticCandidates: inventory.semanticCandidates,
+            scannedFileCount: inventory.scannedFileCount,
+            semanticSkippedFileCount: inventory.semanticSkippedFileCount,
+            preflightUnreadableFileCount: inventory.unreadableFileCount,
+            settings: settings
+        )
+    }
+
+    private func performScan(
+        exactCandidates: [FileItem],
+        semanticCandidates: [FileItem],
+        scannedFileCount totalScannedFileCount: Int,
+        semanticSkippedFileCount skippedSemanticFileCount: Int,
+        preflightUnreadableFileCount: Int,
+        settings: DuplicateSettings
+    ) async {
         let scanStartedAt = Date()
         state = .scanning(progress: 0)
         isScanning = true
@@ -437,16 +627,17 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = "Preparing..."
         lastProgressUpdate = .distantPast
         
-        let eligibleFiles = eligibleFiles(from: files, settings: settings)
-        scannedFileCount = eligibleFiles.count
+        scannedFileCount = totalScannedFileCount
         hashCandidateCount = 0
+        sampledFileCount = 0
         hashedFileCount = 0
         hashCacheHitCount = 0
-        unreadableFileCount = 0
+        unreadableFileCount = preflightUnreadableFileCount
+        semanticAnalyzedFileCount = 0
+        semanticSkippedFileCount = skippedSemanticFileCount
         scanDuration = 0
 
-        let total = eligibleFiles.count
-        guard total > 0 else {
+        guard totalScannedFileCount > 0 else {
             duplicateGroups = []
             semanticGroups = []
             lastScanDate = Date()
@@ -462,19 +653,18 @@ public class DuplicateDetectionManager: ObservableObject {
         // this reliable without hashing every file in large directories.
         scanStage = "Comparing file contents..."
 
-        let exactResult = await detector.findExactDuplicates(in: eligibleFiles) { current, candidateTotal in
-            Task { @MainActor in
-                let candidateProgress = candidateTotal > 0
-                    ? Double(current) / Double(candidateTotal)
-                    : 1
-                self.publishScanProgress(candidateProgress * 0.7, force: current == candidateTotal)
-            }
+        let exactResult = await detector.findExactDuplicates(in: exactCandidates) { current, candidateTotal in
+            let candidateProgress = candidateTotal > 0
+                ? Double(current) / Double(candidateTotal)
+                : 1
+            self.publishScanProgress(candidateProgress * 0.7, force: current == candidateTotal)
         }
 
         hashCandidateCount = exactResult.candidateCount
+        sampledFileCount = exactResult.sampledCount
         hashedFileCount = exactResult.hashedCount
         hashCacheHitCount = exactResult.cacheHitCount
-        unreadableFileCount = exactResult.unreadableCount
+        unreadableFileCount += exactResult.unreadableCount
         
         if Task.isCancelled {
             isScanning = false
@@ -488,34 +678,47 @@ public class DuplicateDetectionManager: ObservableObject {
         
         // Step 3: Semantic duplicate detection (if enabled)
         if settings.includeSemanticDuplicates && !Task.isCancelled {
-            scanStage = "Semantic analysis..."
             let exactFileIDs = Set(groups.flatMap(\.files).map(\.id))
-            let semanticCandidates = eligibleFiles.filter { !exactFileIDs.contains($0.id) }
-            let semanticDetector = SemanticDuplicateDetector(
-                similarityThreshold: settings.normalizedSemanticSimilarityThreshold
-            )
-            let detectedSemanticGroups = await semanticDetector.findSemanticDuplicates(in: semanticCandidates) { current, total, stage in
-                Task { @MainActor in
-                    self.scanStage = stage
-                    let semanticProgress = total > 0 ? Double(current) / Double(total) : 1
-                    self.publishScanProgress(0.7 + semanticProgress * 0.3, force: current == total)
-                }
+            let remainingSemanticCandidates = semanticCandidates.filter {
+                !exactFileIDs.contains($0.id)
             }
-            let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
-            let promotedFileIDs = Set(promotedExactGroups.flatMap(\.files).map(\.id))
-            if !promotedExactGroups.isEmpty {
-                groups = mergeExactGroupsByHash(groups + promotedExactGroups)
-                duplicateGroups = groups
-            }
-            semanticGroups = detectedSemanticGroups.compactMap { group in
-                let remainingFiles = group.files.filter { !promotedFileIDs.contains($0.id) }
-                guard remainingFiles.count > 1 else { return nil }
-                return SemanticDuplicateGroup(
-                    groupType: group.groupType,
-                    files: remainingFiles,
-                    similarity: group.similarity,
-                    recommendation: group.recommendation
+            semanticAnalyzedFileCount = remainingSemanticCandidates.count
+
+            if !remainingSemanticCandidates.isEmpty {
+                scanStage = "Semantic analysis..."
+                let semanticDetector = SemanticDuplicateDetector(
+                    similarityThreshold: settings.normalizedSemanticSimilarityThreshold
                 )
+                let detectedSemanticGroups = await semanticDetector.findSemanticDuplicates(
+                    in: remainingSemanticCandidates
+                ) { current, total, stage in
+                    Task { @MainActor in
+                        self.scanStage = stage
+                        let semanticProgress = total > 0 ? Double(current) / Double(total) : 1
+                        self.publishScanProgress(
+                            0.7 + semanticProgress * 0.3,
+                            force: current == total
+                        )
+                    }
+                }
+                let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
+                let promotedFileIDs = Set(promotedExactGroups.flatMap(\.files).map(\.id))
+                if !promotedExactGroups.isEmpty {
+                    groups = mergeExactGroupsByHash(groups + promotedExactGroups)
+                    duplicateGroups = groups
+                }
+                semanticGroups = detectedSemanticGroups.compactMap { group in
+                    let remainingFiles = group.files.filter { !promotedFileIDs.contains($0.id) }
+                    guard remainingFiles.count > 1 else { return nil }
+                    return SemanticDuplicateGroup(
+                        groupType: group.groupType,
+                        files: remainingFiles,
+                        similarity: group.similarity,
+                        recommendation: group.recommendation
+                    )
+                }
+            } else {
+                semanticGroups = []
             }
         } else {
             semanticGroups = []
@@ -539,9 +742,12 @@ public class DuplicateDetectionManager: ObservableObject {
         state = .idle
         scannedFileCount = 0
         hashCandidateCount = 0
+        sampledFileCount = 0
         hashedFileCount = 0
         hashCacheHitCount = 0
         unreadableFileCount = 0
+        semanticAnalyzedFileCount = 0
+        semanticSkippedFileCount = 0
         scanDuration = 0
     }
 
@@ -549,27 +755,14 @@ public class DuplicateDetectionManager: ObservableObject {
         from files: [FileItem],
         settings: DuplicateSettings
     ) -> [FileItem] {
-        let includedExtensions = Set(settings.includeExtensions.map(Self.normalizedExtension))
-        let excludedExtensions = Set(settings.excludeExtensions.map(Self.normalizedExtension))
-
+        let duplicateScanFilter = DuplicateScanFilter(settings: settings)
         return files.filter { file in
-            guard !file.isDirectory, file.size >= settings.minFileSize else {
-                return false
-            }
-
-            let fileExtension = Self.normalizedExtension(file.extension)
-            if !includedExtensions.isEmpty, !includedExtensions.contains(fileExtension) {
-                return false
-            }
-            return !excludedExtensions.contains(fileExtension)
-                && !settings.excludeExtensions.contains(file.displayName)
+            !file.isDirectory && duplicateScanFilter.includes(
+                fileSize: file.size,
+                pathExtension: file.extension,
+                displayName: file.displayName
+            )
         }
-    }
-
-    private static func normalizedExtension(_ value: String) -> String {
-        value
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            .lowercased()
     }
 
     private func publishScanProgress(_ progress: Double, force: Bool = false) {

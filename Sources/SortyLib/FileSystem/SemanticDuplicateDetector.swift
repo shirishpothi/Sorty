@@ -93,6 +93,74 @@ public struct SemanticDuplicateGroup: Identifiable, Sendable {
 /// Actor for detecting semantically similar files
 public actor SemanticDuplicateDetector {
     private static let perceptualHashBitLength = 64
+    private static let maximumVibeCandidateCount = 500
+
+    private struct PerceptualHashRecord {
+        let file: FileItem
+        let value: UInt64
+    }
+
+    private struct HashSegmentKey: Hashable {
+        let segment: Int
+        let value: UInt64
+    }
+
+    private struct SemanticDisjointSet {
+        private var parents: [Int]
+        private var ranks: [UInt8]
+        private var maximumDistances: [Int]
+
+        init(count: Int) {
+            parents = Array(0..<count)
+            ranks = Array(repeating: 0, count: count)
+            maximumDistances = Array(repeating: 0, count: count)
+        }
+
+        mutating func union(_ first: Int, _ second: Int, distance: Int) {
+            var firstRoot = root(of: first)
+            var secondRoot = root(of: second)
+
+            if firstRoot == secondRoot {
+                maximumDistances[firstRoot] = max(maximumDistances[firstRoot], distance)
+                return
+            }
+
+            if ranks[firstRoot] < ranks[secondRoot] {
+                swap(&firstRoot, &secondRoot)
+            }
+
+            parents[secondRoot] = firstRoot
+            maximumDistances[firstRoot] = max(
+                distance,
+                max(maximumDistances[firstRoot], maximumDistances[secondRoot])
+            )
+            if ranks[firstRoot] == ranks[secondRoot] {
+                ranks[firstRoot] += 1
+            }
+        }
+
+        mutating func components() -> [(indices: [Int], maximumDistance: Int)] {
+            var indicesByRoot: [Int: [Int]] = [:]
+            for index in parents.indices {
+                let itemRoot = root(of: index)
+                indicesByRoot[itemRoot, default: []].append(index)
+            }
+
+            return indicesByRoot.compactMap { root, indices in
+                guard indices.count > 1 else { return nil }
+                return (indices, maximumDistances[root])
+            }
+        }
+
+        private mutating func root(of index: Int) -> Int {
+            var current = index
+            while parents[current] != current {
+                parents[current] = parents[parents[current]]
+                current = parents[current]
+            }
+            return current
+        }
+    }
 
     private let visionAnalyzer = VisionAnalyzer()
     private let similarityThreshold: Double
@@ -251,41 +319,76 @@ public actor SemanticDuplicateDetector {
     // MARK: - Perceptual Hash Comparison
 
     private func findSimilarImages(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
-        // Generate perceptual hashes for all images
-        var imageHashes: [(file: FileItem, hash: String)] = []
+        var imageHashes: [PerceptualHashRecord] = []
+        imageHashes.reserveCapacity(images.count)
 
         for file in images {
+            if Task.isCancelled {
+                return []
+            }
+
             guard let url = file.url else { continue }
 
+            let hash: String?
             if let existingHash = file.contentFingerprint {
-                imageHashes.append((file, existingHash))
-            } else if let hash = await visionAnalyzer.generatePerceptualHash(at: url) {
-                imageHashes.append((file, hash))
+                hash = existingHash
+            } else {
+                hash = await visionAnalyzer.generatePerceptualHash(at: url)
             }
+
+            guard let hash,
+                  let value = Self.perceptualHashValue(hash) else {
+                continue
+            }
+            imageHashes.append(PerceptualHashRecord(file: file, value: value))
         }
 
-        var links: [(Int, Int, Int)] = []
-        for i in 0..<imageHashes.count {
-            for j in (i + 1)..<imageHashes.count {
-                guard let distance = imageHashes[i].hash.hammingDistance(to: imageHashes[j].hash),
-                      distance <= hammingThreshold else {
-                    continue
+        guard imageHashes.count > 1 else {
+            return []
+        }
+
+        var disjointSet = SemanticDisjointSet(count: imageHashes.count)
+        var representativeByHash: [UInt64: Int] = [:]
+        var indicesBySegment: [HashSegmentKey: [Int]] = [:]
+
+        for (index, record) in imageHashes.enumerated() {
+            if Task.isCancelled {
+                return []
+            }
+
+            if let representative = representativeByHash[record.value] {
+                disjointSet.union(index, representative, distance: 0)
+                continue
+            }
+
+            let segmentKeys = Self.segmentKeys(
+                for: record.value,
+                maximumDistance: hammingThreshold
+            )
+            var candidateIndices: Set<Int> = []
+            for key in segmentKeys {
+                if let matchingIndices = indicesBySegment[key] {
+                    candidateIndices.formUnion(matchingIndices)
                 }
-                links.append((i, j, distance))
+            }
+
+            for candidateIndex in candidateIndices {
+                let distance = (record.value ^ imageHashes[candidateIndex].value).nonzeroBitCount
+                if distance <= hammingThreshold {
+                    disjointSet.union(index, candidateIndex, distance: distance)
+                }
+            }
+
+            representativeByHash[record.value] = index
+            for key in segmentKeys {
+                indicesBySegment[key, default: []].append(index)
             }
         }
 
-        return connectedSemanticGroups(
-            itemCount: imageHashes.count,
-            links: links.map { ($0.0, $0.1) }
-        ) { indexes in
-            let files = indexes.map { imageHashes[$0].file }
-            let worstDistance = links
-                .filter { indexes.contains($0.0) && indexes.contains($0.1) }
-                .map(\.2)
-                .max() ?? 0
+        return disjointSet.components().map { component in
+            let files = component.indices.map { imageHashes[$0].file }
             let similarity = Self.similarityForHammingDistance(
-                worstDistance,
+                component.maximumDistance,
                 hashBits: Self.perceptualHashBitLength
             )
             return SemanticDuplicateGroup(
@@ -297,11 +400,44 @@ public actor SemanticDuplicateDetector {
         }
     }
 
+    private static func perceptualHashValue(_ hash: String) -> UInt64? {
+        if hash.count == perceptualHashBitLength,
+           hash.allSatisfy({ $0 == "0" || $0 == "1" }) {
+            return UInt64(hash, radix: 2)
+        }
+        return UInt64(hash, radix: 16)
+    }
+
+    private static func segmentKeys(
+        for hash: UInt64,
+        maximumDistance: Int
+    ) -> [HashSegmentKey] {
+        let segmentCount = max(1, min(perceptualHashBitLength, maximumDistance + 1))
+        var keys: [HashSegmentKey] = []
+        keys.reserveCapacity(segmentCount)
+
+        for segment in 0..<segmentCount {
+            let lowerBit = segment * perceptualHashBitLength / segmentCount
+            let upperBit = (segment + 1) * perceptualHashBitLength / segmentCount
+            let width = upperBit - lowerBit
+            let mask = width == perceptualHashBitLength
+                ? UInt64.max
+                : (UInt64(1) << UInt64(width)) - 1
+            keys.append(
+                HashSegmentKey(
+                    segment: segment,
+                    value: (hash >> UInt64(lowerBit)) & mask
+                )
+            )
+        }
+
+        return keys
+    }
+
     // MARK: - Resolution Variant Detection
 
     private func findResolutionVariants(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
-        var processedIds: Set<UUID> = []
 
         // Group by similar filename patterns
         let baseNameGroups = Dictionary(grouping: images) { file -> String in
@@ -334,8 +470,19 @@ public actor SemanticDuplicateDetector {
         }
 
         for (_, filesInGroup) in baseNameGroups where filesInGroup.count > 1 {
-            // Filter to only those with dimension info
-            let withDimensions = filesInGroup.filter { $0.imageWidth != nil && $0.imageHeight != nil }
+            var withDimensions: [FileItem] = []
+            withDimensions.reserveCapacity(filesInGroup.count)
+            for var file in filesInGroup {
+                if file.imageWidth == nil || file.imageHeight == nil,
+                   let url = file.url,
+                   let dimensions = await visionAnalyzer.getImageDimensions(at: url) {
+                    file.imageWidth = dimensions.width
+                    file.imageHeight = dimensions.height
+                }
+                if file.imageWidth != nil, file.imageHeight != nil {
+                    withDimensions.append(file)
+                }
+            }
 
             guard withDimensions.count > 1 else { continue }
 
@@ -346,10 +493,6 @@ public actor SemanticDuplicateDetector {
             guard let first = sortedBySize.first?.totalPixels,
                   let last = sortedBySize.last?.totalPixels,
                   first != last else { continue }
-
-            for file in sortedBySize {
-                processedIds.insert(file.id)
-            }
 
             groups.append(SemanticDuplicateGroup(
                 groupType: .resolutionVariants,
@@ -477,8 +620,14 @@ public actor SemanticDuplicateDetector {
         var processedIds: Set<UUID> = []
 
         var featurePrints: [(file: FileItem, featurePrint: VNFeaturePrintObservation)] = []
+        let boundedImages = images
+            .sorted { $0.path < $1.path }
+            .prefix(Self.maximumVibeCandidateCount)
 
-        for file in images {
+        for file in boundedImages {
+            if Task.isCancelled {
+                return []
+            }
             guard let url = file.url else { continue }
             if let featurePrint = await generateFeaturePrint(at: url) {
                 featurePrints.append((file, featurePrint))
@@ -530,7 +679,10 @@ public actor SemanticDuplicateDetector {
         var groups: [SemanticDuplicateGroup] = []
         var processedIds: Set<UUID> = []
 
-        let withContent = documents.filter { $0.hasSemanticContent }
+        let withContent = documents
+            .filter { $0.hasSemanticContent }
+            .sorted { $0.path < $1.path }
+            .prefix(Self.maximumVibeCandidateCount)
 
         for i in 0..<withContent.count {
             guard !processedIds.contains(withContent[i].id),
@@ -589,12 +741,18 @@ public actor SemanticDuplicateDetector {
 
     private func loadCGImage(from url: URL) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            if let image = NSImage(contentsOf: url) {
-                return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            }
             return nil
         }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+        return CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 512,
+                kCGImageSourceShouldCacheImmediately: false,
+            ] as CFDictionary
+        )
     }
 
     // MARK: - Text Similarity (Jaccard Index)

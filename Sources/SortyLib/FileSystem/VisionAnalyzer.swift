@@ -275,7 +275,17 @@ public actor VisionAnalyzer {
     /// Generate a perceptual hash for near-duplicate detection
     /// Uses a simplified average hash algorithm
     public func generatePerceptualHash(at url: URL) async -> String? {
-        guard let cgImage = loadCGImage(from: url) else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 64,
+                    kCGImageSourceShouldCacheImmediately: false,
+                ] as CFDictionary
+              ) else {
             return nil
         }
 

@@ -9,6 +9,19 @@ import Foundation
 import CryptoKit
 
 public enum HashUtility {
+    public struct SampleFingerprint: Sendable {
+        public let digest: String
+        public let isFullFileHash: Bool
+
+        public init(digest: String, isFullFileHash: Bool) {
+            self.digest = digest
+            self.isFullFileHash = isFullFileHash
+        }
+    }
+
+    private static let streamingBufferSize = 1024 * 1024
+    private static let sampleSize = 64 * 1024
+
     /// Compute SHA-256 hash for a file at the given URL using streaming to avoid memory issues
     public static func computeSHA256(for url: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: url) else {
@@ -20,7 +33,6 @@ public enum HashUtility {
         }
         
         var hasher = SHA256()
-        let bufferSize = 1024 * 1024 // 1MB buffer
         
         while true {
             if Task.isCancelled {
@@ -28,7 +40,7 @@ public enum HashUtility {
             }
 
             do {
-                guard let data = try handle.read(upToCount: bufferSize), !data.isEmpty else {
+                guard let data = try handle.read(upToCount: streamingBufferSize), !data.isEmpty else {
                     break
                 }
                 hasher.update(data: data)
@@ -37,7 +49,76 @@ public enum HashUtility {
             }
         }
         
-        let digest = hasher.finalize()
-        return digest.map { String(format: "%02x", $0) }.joined()
+        return hexDigest(hasher.finalize())
+    }
+
+    /// Reads only the first and last 64 KiB of large files. Files at or below
+    /// 128 KiB are hashed completely, so that digest can be used as the final
+    /// exact-match hash without reading the file again.
+    public static func computeSampleFingerprint(for url: URL) -> SampleFingerprint? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return nil
+        }
+
+        defer {
+            try? handle.close()
+        }
+
+        do {
+            let fileSize = try handle.seekToEnd()
+            try handle.seek(toOffset: 0)
+
+            if fileSize <= UInt64(sampleSize * 2) {
+                var hasher = SHA256()
+                while true {
+                    if Task.isCancelled {
+                        return nil
+                    }
+
+                    guard let data = try handle.read(upToCount: streamingBufferSize),
+                          !data.isEmpty else {
+                        break
+                    }
+                    hasher.update(data: data)
+                }
+
+                return SampleFingerprint(
+                    digest: hexDigest(hasher.finalize()),
+                    isFullFileHash: true
+                )
+            }
+
+            guard !Task.isCancelled,
+                  let prefix = try handle.read(upToCount: sampleSize),
+                  prefix.count == sampleSize else {
+                return nil
+            }
+
+            try handle.seek(toOffset: fileSize - UInt64(sampleSize))
+            guard !Task.isCancelled,
+                  let suffix = try handle.read(upToCount: sampleSize),
+                  suffix.count == sampleSize else {
+                return nil
+            }
+
+            var hasher = SHA256()
+            var bigEndianFileSize = fileSize.bigEndian
+            withUnsafeBytes(of: &bigEndianFileSize) { bytes in
+                hasher.update(bufferPointer: bytes)
+            }
+            hasher.update(data: prefix)
+            hasher.update(data: suffix)
+
+            return SampleFingerprint(
+                digest: hexDigest(hasher.finalize()),
+                isFullFileHash: false
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private static func hexDigest<D: Digest>(_ digest: D) -> String {
+        digest.map { String(format: "%02x", $0) }.joined()
     }
 }
