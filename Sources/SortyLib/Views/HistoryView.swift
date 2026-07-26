@@ -605,7 +605,7 @@ struct HistoryHeader: View {
                     .tag(filter)
             }
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.palette)
         .labelsHidden()
         .frame(height: controlsHeight)
         .accessibilityLabel("Filter history sessions")
