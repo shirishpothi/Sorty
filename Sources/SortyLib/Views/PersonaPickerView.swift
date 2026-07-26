@@ -11,6 +11,7 @@ struct PersonaPickerView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var appState: AppState
     @State private var hoveringPersona: PersonaType?
     @State private var hoveringCustom: String?
     @State private var showingGenerator: Bool = false
@@ -111,7 +112,11 @@ struct PersonaPickerView: View {
         }
         .sheet(isPresented: $showingGenerator) {
             PersonaGeneratorView(
-                store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId
+                store: customStore,
+                selectedPersonaId: $personaManager.selectedCustomPersonaId,
+                onPersonaGenerated: {
+                    appState.settingsFocusTarget = .rulesOrganizationStyle
+                }
             )
             .environmentObject(customStore)
         }
@@ -735,6 +740,7 @@ struct CompactPersonaPicker: View {
         .environmentObject(PersonaManager())
         .environmentObject(CustomPersonaStore())
         .environmentObject(SettingsViewModel())
+        .environmentObject(AppState())
         .padding()
         .frame(width: 400)
 }
