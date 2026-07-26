@@ -245,7 +245,7 @@ struct SettingsCard<Content: View>: View {
 
     @ViewBuilder
     private var countBadge: some View {
-        if let count {
+        if let count, count > 0 {
             Text("\(count)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
