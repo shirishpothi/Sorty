@@ -1131,9 +1131,14 @@ struct ReadyToOrganizeView: View {
                 .accessibilityValue(showStorageLocations ? "Expanded" : "Collapsed")
 
                 Button(action: toggleStorageLocations) {
-                    Image(systemName: showStorageLocations ? "chevron.up" : "chevron.down")
+                    Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showStorageLocations ? 180 : 0))
+                        .animation(
+                            reduceMotion ? nil : .smooth(duration: 0.28),
+                            value: showStorageLocations
+                        )
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
