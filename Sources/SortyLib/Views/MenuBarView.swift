@@ -152,19 +152,16 @@ public struct MenuBarView: View {
             statusHeader
 
             Divider()
-                .padding(.vertical, 4)
 
             quickActions
 
             if !watchedFoldersManager.folders.isEmpty {
                 Divider()
-                    .padding(.vertical, 4)
 
                 watchedFoldersList
             }
 
             Divider()
-                .padding(.vertical, 4)
 
             backgroundToggle
 
@@ -385,7 +382,6 @@ public struct MenuBarView: View {
             }
 
             Divider()
-                .padding(.vertical, 4)
 
             if keepInBackground {
                 MenuBarButton(title: "Close Window", icon: "xmark.rectangle") {
