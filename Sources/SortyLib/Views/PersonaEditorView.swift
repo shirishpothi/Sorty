@@ -18,10 +18,11 @@ struct PersonaEditorView: View {
     @State private var promptModifier: String = ""
     @State private var instructionSuggestions = PersonaInstructionSuggestions()
     @State private var showIconPicker: Bool = false
+    @State private var automaticallySelectIcon: Bool
     @State private var showingGenerator: Bool = false
     @State private var showingChat: Bool = false
-    @State private var showingGuidingPrompt = false
     @State private var generationInput: String = ""
+    @State private var identityGenerationError: String?
     @StateObject private var generator = PersonaGenerator()
     
     // Edit mode
@@ -30,6 +31,7 @@ struct PersonaEditorView: View {
     init(store: CustomPersonaStore, editing persona: CustomPersona? = nil) {
         self.store = store
         self.editingPersona = persona
+        _automaticallySelectIcon = State(initialValue: persona == nil)
         
         if let persona = persona {
             _name = State(initialValue: persona.name)
@@ -68,92 +70,15 @@ struct PersonaEditorView: View {
             Divider()
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Name & Icon
-                    GroupBox("Identity") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Button(action: { showIconPicker = true }) {
-                                    Image(systemName: selectedIcon)
-                                        .font(.system(size: 28))
-                                        .frame(width: 50, height: 50)
-                                        .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.15))
-                                        .cornerRadius(10)
-                                }
-                                .buttonStyle(.plain)
-                                .popover(isPresented: $showIconPicker) {
-                                    iconPickerPopover
-                                }
-                                
-                                TextField("Persona Name", text: $name)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.title3)
-                            }
-                            
-                            TextField("Short description", text: $description)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    // Prompt Modifier
-                    GroupBox("Organization Instructions") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Define how Sorty should organize files with this persona:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            TextEditor(text: $promptModifier)
-                                .font(.system(.body, design: .monospaced))
-                                .frame(minHeight: 200)
-                                .padding(8)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(8)
-                            
-                            HStack {
-                                Button("Insert Template") {
-                                    insertTemplate()
-                                }
-                                .buttonStyle(.sortyBordered)
-                                
-                                Button(action: { showingGenerator = true }) {
-                                    Label("Generate with Sorty", systemImage: "sparkles")
-                                }
-                                .buttonStyle(.sortyBordered)
-                                .disabled(generator.isGenerating)
-                                
-                                Button(action: { showingChat = true }) {
-                                    Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
-                                }
-                                .buttonStyle(.sortyBordered)
-                                .disabled(promptModifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                
-                                Spacer()
-                                
-                                Text("\(promptModifier.count) characters")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .numericTextTransition(animationValue: promptModifier.count)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    // Tips
-                    GroupBox("Tips") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            tipRow(icon: "lightbulb.fill", text: "Use markdown headers like ## to structure your prompt")
-                            tipRow(icon: "folder.fill", text: "Define preferred folder structures explicitly")
-                            tipRow(icon: "doc.text.magnifyingglass", text: "Mention specific file types or patterns to look for")
-                            tipRow(icon: "arrow.triangle.branch", text: "Describe how to handle edge cases")
-                        }
-                        .padding(.vertical, 4)
-                    }
+                VStack(alignment: .leading, spacing: 16) {
+                    organizationInstructionsSection
+                    identitySection
+                    tipsSection
                 }
-                .padding()
+                .padding(16)
             }
         }
-        .frame(width: 600, height: 600)
+        .frame(width: 700, height: 680)
         .sheet(isPresented: $showingChat) {
             PersonaChatView(promptModifier: promptModifier)
                 .environmentObject(settingsViewModel)
@@ -198,7 +123,10 @@ struct PersonaEditorView: View {
                                 do {
                                     let result = try await generator.generatePersona(from: generationInput, config: settingsViewModel.config)
                                     name = result.name
-                                    selectedIcon = result.icon
+                                    if automaticallySelectIcon {
+                                        selectedIcon = result.icon
+                                    }
+                                    description = generationInput.trimmingCharacters(in: .whitespacesAndNewlines)
                                     promptModifier = result.prompt
                                     instructionSuggestions = result.suggestions
                                     showingGenerator = false
@@ -216,44 +144,291 @@ struct PersonaEditorView: View {
             .frame(width: 400)
         }
     }
-    
-    private var iconPickerPopover: some View {
-        VStack(spacing: 12) {
-            Text("Choose Icon")
-                .font(.headline)
-            
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(40)), count: 5), spacing: 8) {
-                ForEach(personaIconOptions, id: \.self) { icon in
-                    Button(action: {
-                        selectedIcon = icon
-                        showIconPicker = false
-                    }) {
-                        Image(systemName: icon)
-                            .font(.system(size: 20))
-                            .frame(width: 36, height: 36)
-                            .background(selectedIcon == icon ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.2) : Color.clear)
-                            .cornerRadius(8)
+
+    private var organizationInstructionsSection: some View {
+        editorSection(
+            title: "Organization Instructions",
+            icon: "text.alignleft"
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Define how Sorty should organize files with this persona. These instructions also power automatic identity and icon generation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ZStack(alignment: .topLeading) {
+                    if promptModifier.isEmpty {
+                        Text("Describe the grouping strategy, folder structure, file-type rules, naming preferences, and edge cases…")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 14)
+                            .allowsHitTesting(false)
                     }
-                    .buttonStyle(.plain)
+
+                    TextEditor(text: $promptModifier)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                }
+                .frame(minHeight: 210)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.18), lineWidth: 1)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Insert Template") {
+                        insertTemplate()
+                    }
+                    .buttonStyle(.sortyBordered)
+
+                    Button(action: { showingGenerator = true }) {
+                        Label("Generate Instructions…", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.sortyBordered)
+                    .disabled(generator.isGenerating)
+
+                    Button(action: { showingChat = true }) {
+                        Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .buttonStyle(.sortyBordered)
+                    .disabled(trimmedInstructions.isEmpty)
+
+                    Spacer()
+
+                    Text("\(promptModifier.count) characters")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: promptModifier.count)
                 }
             }
         }
-        .padding()
-        .frame(width: 240)
-        .systemLiquidGlassPopover(cornerRadius: 12)
     }
-    
-    private func tipRow(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(.accentColor)
-                .frame(width: 20)
-            Text(text)
-                .font(.caption)
-                .foregroundColor(.secondary)
+
+    private var identitySection: some View {
+        editorSection(
+            title: "Identity",
+            icon: "person.text.rectangle"
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 6) {
+                        Button {
+                            automaticallySelectIcon = false
+                            showIconPicker = true
+                        } label: {
+                            Image(systemName: selectedIcon)
+                                .font(.system(size: 30, weight: .semibold))
+                                .frame(width: 64, height: 64)
+                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                                .background(
+                                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showIconPicker) {
+                            iconPickerPopover
+                        }
+                        .help("Choose a persona icon")
+
+                        Text(automaticallySelectIcon ? "Automatic" : "Manual")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 76)
+
+                    VStack(spacing: 10) {
+                        TextField("Persona Name", text: $name)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.title3)
+
+                        TextField("Short description", text: $description)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    Toggle(
+                        "Select the most relevant icon when generating",
+                        isOn: $automaticallySelectIcon
+                    )
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+
+                    Spacer()
+
+                    Button {
+                        generateIdentityFromInstructions()
+                    } label: {
+                        HStack(spacing: 7) {
+                            if generator.isGenerating {
+                                SortyGradientCircularLoader(size: 11, lineWidth: 2)
+                            } else {
+                                Image(systemName: "sparkles")
+                            }
+                            Text(generator.isGenerating ? "Generating…" : "Generate from Instructions")
+                        }
+                    }
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .disabled(trimmedInstructions.isEmpty || generator.isGenerating)
+                }
+
+                if let identityGenerationError {
+                    Label(identityGenerationError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+
+    private var tipsSection: some View {
+        editorSection(title: "Useful details", icon: "lightbulb.fill") {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 260), spacing: 10)],
+                alignment: .leading,
+                spacing: 10
+            ) {
+                tipRow(icon: "text.badge.checkmark", text: "Use ## headers to separate distinct rules")
+                tipRow(icon: "folder.fill", text: "Show the folder hierarchy you want Sorty to create")
+                tipRow(icon: "doc.text.magnifyingglass", text: "Call out relevant file types and filename patterns")
+                tipRow(icon: "arrow.triangle.branch", text: "Explain how ambiguous files and edge cases should behave")
+            }
         }
     }
     
+    private var iconPickerPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Choose Icon")
+                    .font(.headline)
+
+                Text("\(personaIconOptions.count) icons available")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 40), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(personaIconOptions, id: \.self) { icon in
+                        Button {
+                            automaticallySelectIcon = false
+                            selectedIcon = icon
+                            showIconPicker = false
+                            HapticFeedbackManager.shared.selection()
+                        } label: {
+                            Image(systemName: icon)
+                                .font(.system(size: 18, weight: .medium))
+                                .frame(width: 38, height: 38)
+                                .foregroundStyle(
+                                    selectedIcon == icon
+                                        ? SortyDesignSystem.Colors.resolvedAccent
+                                        : Color.primary
+                                )
+                                .background(
+                                    selectedIcon == icon
+                                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.16)
+                                        : Color.primary.opacity(0.04),
+                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(icon)
+                        .accessibilityLabel(icon)
+                    }
+                }
+            }
+            .frame(maxHeight: 270)
+        }
+        .padding(16)
+        .frame(width: 390)
+        .systemLiquidGlassPopover(cornerRadius: 12)
+    }
+
+    private func editorSection<Content: View>(
+        title: LocalizedStringKey,
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(nsColor: .controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
+        }
+    }
+
+    private func tipRow(icon: String, text: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                .frame(width: 28, height: 28)
+                .background(
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+        .background(
+            Color.primary.opacity(0.035),
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+    }
+
+    private var trimmedInstructions: String {
+        promptModifier.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func generateIdentityFromInstructions() {
+        identityGenerationError = nil
+
+        Task {
+            do {
+                let result = try await generator.generateIdentity(
+                    from: trimmedInstructions,
+                    config: settingsViewModel.config
+                )
+                name = result.name
+                description = result.description
+                if automaticallySelectIcon {
+                    selectedIcon = result.icon
+                }
+                HapticFeedbackManager.shared.success()
+            } catch {
+                identityGenerationError = error.localizedDescription
+                HapticFeedbackManager.shared.error()
+            }
+        }
+    }
+
     private func insertTemplate() {
         promptModifier = """
         ## [Your Persona Name] Organization Strategy
