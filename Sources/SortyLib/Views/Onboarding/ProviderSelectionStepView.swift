@@ -1098,23 +1098,35 @@ struct OnboardingProviderRow: View {
             HStack(spacing: 9) {
                 ProviderLogoView(provider: provider, size: 20)
                     .frame(width: 28, height: 28)
+                    .overlay(alignment: .bottomTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white, SortyDesignSystem.Colors.resolvedAccent)
+                                .background(Circle().fill(SortyDesignSystem.Colors.resolvedAccent))
+                                .offset(x: 3, y: 3)
+                                .transition(.scale.combined(with: .opacity))
+                                .accessibilityHidden(true)
+                        }
+                    }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.displayName)
+                    Text(provider.selectorTitle)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
                         .foregroundColor(provider.isAvailable ? .primary : .secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.9)
+                        .minimumScaleFactor(0.88)
 
                     if let subtitle {
                         Text(LocalizedStringKey(subtitle))
                             .font(.caption2)
                             .foregroundStyle(subtitleColor)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.88)
                     }
                 }
-
-                Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
                 if !provider.isAvailable {
                     Text("Unavailable")
@@ -1123,11 +1135,6 @@ struct OnboardingProviderRow: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.secondary.opacity(0.1), in: Capsule())
-                } else if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
-                        .font(.system(size: 17))
-                        .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(.vertical, 8)
