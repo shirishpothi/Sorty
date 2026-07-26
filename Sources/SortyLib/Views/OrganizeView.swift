@@ -1054,7 +1054,7 @@ struct ReadyToOrganizeView: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.tertiary)
                             .frame(width: 16)
-                            .offset(x: 16)
+                            .offset(x: 16, y: -1)
                             .accessibilityHidden(true)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
