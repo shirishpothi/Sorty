@@ -186,6 +186,7 @@ struct ModelSelectionPopover: View {
     @State private var showCustomInput: Bool = false
     @State private var showFreeOnly: Bool = false
     @State private var showCodexOnly: Bool = false
+    @State private var isContextMessageVisible = true
 
     init(
         isPresented: Binding<Bool>,
@@ -266,7 +267,7 @@ struct ModelSelectionPopover: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if let contextMessage, !contextMessage.isEmpty {
+            if let contextMessage, !contextMessage.isEmpty, isContextMessageVisible {
                 contextMessageView(message: contextMessage)
                 Divider()
             }
@@ -304,6 +305,24 @@ struct ModelSelectionPopover: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
+
+            Button {
+                HapticFeedbackManager.shared.light()
+                if reduceMotion {
+                    isContextMessageVisible = false
+                } else {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isContextMessageVisible = false
+                    }
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss guidance")
+            .help("Dismiss")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
