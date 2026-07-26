@@ -5,6 +5,7 @@
 //  UI for generating personas from natural language
 //
 
+import Foundation
 import SwiftUI
 
 struct PersonaGeneratorView: View {
@@ -16,6 +17,8 @@ struct PersonaGeneratorView: View {
     
     @StateObject private var generator = PersonaGenerator()
     @State private var prompt: String = ""
+    @State private var promptSelection = NSRange(location: 0, length: 0)
+    @State private var promptSuggestionIndex: Int = 0
     @State private var generationStatusIndex: Int = 0
     
     @StateObject private var honingEngine = PersonaHoningEngine()
@@ -24,6 +27,13 @@ struct PersonaGeneratorView: View {
     @State private var isHoning: Bool = false
     @State private var isLoadingQuestions: Bool = false
     @State private var currentQuestionIndex: Int = 0
+
+    private let promptSuggestions = [
+        "Example: \"Organize my sci-fi ebook collection by author, then series.\"",
+        "Example: \"Group my photos by year and event, with RAW files separate from edits.\"",
+        "Example: \"Sort client work by project, then keep active and completed work separate.\"",
+        "Example: \"Organize school files by subject, unit, and assignment type.\"",
+    ]
 
     var body: some View {
         ZStack {
@@ -139,17 +149,70 @@ struct PersonaGeneratorView: View {
                 Text("I want to organize...")
                     .font(.headline)
                 
-                TextEditor(text: $prompt)
-                    .font(.body)
-                    .frame(height: 120)
-                    .padding(8)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                
-                Text("Example: \"Organize my sci-fi ebook collection by author, then series.\"")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                ZStack(alignment: .topLeading) {
+                    SubmittableTextEditor(
+                        text: $prompt,
+                        selectedRange: $promptSelection,
+                        onAcceptSuggestion: acceptCurrentPromptSuggestion
+                    ) {
+                        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                              !isLoadingQuestions
+                        else {
+                            return
+                        }
+                        startHoning()
+                    }
+
+                    if prompt.isEmpty {
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(currentPromptSuggestion)
+                                .font(.body)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
+                                .numericTextTransition(animationValue: promptSuggestionIndex)
+
+                            Spacer(minLength: 0)
+
+                            Text("Tab")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Color.secondary.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: 5)
+                                )
+                                .accessibilityHidden(true)
+                        }
+                        .padding(.leading, 18)
+                        .padding(.trailing, 10)
+                        .padding(.vertical, 9)
+                        .allowsHitTesting(false)
+                        .task {
+                            promptSuggestionIndex = 0
+
+                            while !Task.isCancelled {
+                                try? await Task.sleep(for: .seconds(3.5))
+                                guard !Task.isCancelled else { return }
+                                promptSuggestionIndex =
+                                    (promptSuggestionIndex + 1) % promptSuggestions.count
+                            }
+                        }
+                    }
+                }
+                .frame(height: 120)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
+                .accessibilityLabel("Persona description")
+                .accessibilityHint(
+                    prompt.isEmpty
+                        ? "Press Tab to use the suggested description"
+                        : "Press Command and Return to continue"
+                )
             }
             .padding(.horizontal, 30)
             
@@ -274,6 +337,22 @@ struct PersonaGeneratorView: View {
         guard answers[question.id] != option else { return }
         HapticFeedbackManager.shared.selection()
         answers[question.id] = option
+    }
+
+    private var currentPromptSuggestion: String {
+        promptSuggestions[promptSuggestionIndex % promptSuggestions.count]
+    }
+
+    private func acceptCurrentPromptSuggestion() -> Bool {
+        guard prompt.isEmpty else { return false }
+
+        prompt = currentPromptSuggestion
+        promptSelection = NSRange(
+            location: (currentPromptSuggestion as NSString).length,
+            length: 0
+        )
+        HapticFeedbackManager.shared.selection()
+        return true
     }
     
     private func startHoning() {
