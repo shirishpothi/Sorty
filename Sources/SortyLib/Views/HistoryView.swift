@@ -179,7 +179,6 @@ struct HistoryView: View {
                         .transition(TransitionStyles.slideFromRight)
                     }
                 }
-                .animation(.pageTransition, value: selectedFilter)
                 .opacity(contentOpacity)
             }
         }
@@ -315,41 +314,36 @@ struct HistoryView: View {
     @ViewBuilder
     private var watchedAutomationsSection: some View {
         if !watchedEntries.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(totalWatchedFilteredCount)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .numericTextTransition(animationValue: totalWatchedFilteredCount)
-                }
+            HStack {
+                Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
+                    .font(.headline)
+                Spacer()
+                Text("\(totalWatchedFilteredCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .numericTextTransition(animationValue: totalWatchedFilteredCount)
+            }
 
-                ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
-                    HistorySessionCard(
-                        entry: entry,
-                        isSelected: selectedEntry == entry,
-                        onSelect: {
-                            HapticFeedbackManager.shared.selection()
-                            selectEntry(entry)
-                        },
-                        onTryAgain: {
-                            redoModelEntry = entry
-                            showRedoModelPicker = true
-                        }
-                    )
-                    .animatedAppearance(delay: Double(index) * 0.02)
-                    .onAppear {
-                        if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                            loadMoreEntries()
-                        }
+            ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
+                HistorySessionCard(
+                    entry: entry,
+                    isSelected: selectedEntry == entry,
+                    onSelect: {
+                        HapticFeedbackManager.shared.selection()
+                        selectEntry(entry)
+                    },
+                    onTryAgain: {
+                        redoModelEntry = entry
+                        showRedoModelPicker = true
+                    }
+                )
+                .animatedAppearance(delay: Double(index) * 0.02)
+                .onAppear {
+                    if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                        loadMoreEntries()
                     }
                 }
             }
-            .padding(14)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
     }
 
