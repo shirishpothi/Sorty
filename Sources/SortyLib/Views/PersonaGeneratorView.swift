@@ -471,6 +471,8 @@ private struct PersonaGenerationBorderBeam: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
 
+    private let rotationDuration: TimeInterval = 2.4
+
     private var isAnimationActive: Bool {
         controlActiveState != .inactive
     }
@@ -488,6 +490,7 @@ private struct PersonaGenerationBorderBeam: View {
                 theme: .dark,
                 active: isAnimationActive,
                 cornerRadius: cornerRadius,
+                duration: rotationDuration,
                 strength: 1.0
             )
             .overlay {
@@ -500,7 +503,7 @@ private struct PersonaGenerationBorderBeam: View {
             .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
         ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = shouldAnimate ? time / 1.96 : 0
+            let phase = shouldAnimate ? time / rotationDuration : 0
 
             ZStack {
                 beamInteriorGlow(phase: phase)
