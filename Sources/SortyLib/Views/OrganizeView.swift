@@ -12,10 +12,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private enum ErrorViewTestRoute: String {
-    case credentials = "sorty-error-preview://velvet-key-7319"
-    case network = "sorty-error-preview://silent-modem-4826"
-    case permissions = "sorty-error-preview://paper-vault-9051"
-    case generic = "sorty-error-preview://crooked-compass-1643"
+    case credentials = "sorty-error-preview://credentials"
+    case network = "sorty-error-preview://network"
+    case permissions = "sorty-error-preview://permissions"
+    case generic = "sorty-error-preview://generic"
 
     init?(instructions: String) {
         let normalized = instructions
@@ -2384,6 +2384,7 @@ struct ErrorView: View {
                 Image(systemName: errorIcon)
                     .font(.system(size: 44, weight: .semibold))
                     .foregroundStyle(.red)
+                    .animatedEmptyStateIcon()
             }
 
             VStack(spacing: 8) {
