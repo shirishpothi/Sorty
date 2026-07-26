@@ -12,13 +12,12 @@ public final class LogManager: @unchecked Sendable {
     
     private let fileManager = FileManager.default
     private let queue = DispatchQueue(label: "com.sorty.logQueue")
-    private let maxLogFiles = 5
-    private let maxLogSize: UInt64 = 5 * 1024 * 1024 // 5MB
-    
-    // Sensitive keys to redact
-    private let sensitiveKeys = [
-        "apiKey", "access_token", "sk-", "ghp_", "gho_"
-    ]
+    private let maxArchivedLogFiles = 2
+    private let maxLogSize: UInt64 = 2 * 1024 * 1024
+    private var currentLogSize: UInt64 = 0
+    private var logFileHandle: FileHandle?
+    private let timestampFormatter = ISO8601DateFormatter()
+    private let userPathRegex = try? NSRegularExpression(pattern: "/Users/([^/]+)")
     
     private var logsDirectory: URL? {
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
@@ -40,18 +39,34 @@ public final class LogManager: @unchecked Sendable {
     
     private init() {
         rotateLogsIfNeeded()
+        if let logFile = currentLogFile,
+           let size = try? logFile.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            currentLogSize = UInt64(size)
+        }
     }
     
     // MARK: - Public API
     
-    public func log(_ message: String, level: LogLevel = .info, category: String = "General", data: [String: Any]? = nil) {
+    public func log(
+        _ message: @autoclosure () -> String,
+        level: LogLevel = .info,
+        category: String = "General",
+        data: [String: Any]? = nil
+    ) {
+        guard shouldPersist(level) else { return }
+        let resolvedMessage = message()
+
         queue.async {
-            self.writeLog(message, level: level, category: category, data: data)
+            self.writeLog(resolvedMessage, level: level, category: category, data: data)
         }
     }
     
     public func exportLogs() -> URL? {
         guard let logsDirectory = logsDirectory else { return nil }
+
+        queue.sync {
+            try? logFileHandle?.synchronize()
+        }
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
@@ -86,7 +101,7 @@ public final class LogManager: @unchecked Sendable {
     private func writeLog(_ message: String, level: LogLevel, category: String, data: [String: Any]?) {
         guard let logFile = currentLogFile else { return }
         
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = timestampFormatter.string(from: Date())
         let sanitizedMessage = sanitize(message)
         var contextString = ""
         
@@ -99,21 +114,42 @@ public final class LogManager: @unchecked Sendable {
         
         let logLine = "[\(timestamp)] [\(level.rawValue.uppercased())] [\(category)] \(sanitizedMessage)\(contextString)\n"
         
-        if let data = logLine.data(using: .utf8) {
+        guard let data = logLine.data(using: .utf8) else { return }
+
+        if logFileHandle == nil {
             if !fileManager.fileExists(atPath: logFile.path) {
-                try? data.write(to: logFile)
-            } else {
-                if let fileHandle = try? FileHandle(forWritingTo: logFile) {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    try? fileHandle.close()
-                }
+                fileManager.createFile(atPath: logFile.path, contents: nil)
             }
+            logFileHandle = try? FileHandle(forWritingTo: logFile)
+            try? logFileHandle?.seekToEnd()
         }
-        
-        checkRotation()
+
+        guard let logFileHandle else { return }
+
+        do {
+            try logFileHandle.write(contentsOf: data)
+            currentLogSize += UInt64(data.count)
+            if level >= .warning {
+                try logFileHandle.synchronize()
+            }
+        } catch {
+            try? logFileHandle.close()
+            self.logFileHandle = nil
+        }
+
+        if currentLogSize > maxLogSize {
+            rotateLogsIfNeeded(force: true)
+        }
     }
-    
+
+    private func shouldPersist(_ level: LogLevel) -> Bool {
+#if DEBUG
+        level >= .debug
+#else
+        level >= .info
+#endif
+    }
+
     private func sanitize(_ text: String) -> String {
         var result = text
         
@@ -125,7 +161,7 @@ public final class LogManager: @unchecked Sendable {
         // Redact User Paths
         // Matches /Users/username/ or /Users/username
         // We look for /Users/ followed by non-slash characters
-        if let regex = try? NSRegularExpression(pattern: "/Users/([^/]+)", options: []) {
+        if let regex = userPathRegex {
             let nsString = result as NSString
             let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: nsString.length))
             
@@ -146,36 +182,32 @@ public final class LogManager: @unchecked Sendable {
         return result
     }
     
-    private func checkRotation() {
-        guard let logFile = currentLogFile else { return }
-        
-        if let attrs = try? fileManager.attributesOfItem(atPath: logFile.path),
-           let size = attrs[.size] as? UInt64,
-           size > maxLogSize {
-            rotateLogsIfNeeded(force: true)
-        }
-    }
-    
     private func rotateLogsIfNeeded(force: Bool = false) {
         guard let logsDirectory = logsDirectory, let currentLog = currentLogFile else { return }
         
         // If current log exists and is too big, or if we just want to verify cleanup
         if force || (try? fileManager.attributesOfItem(atPath: currentLog.path)) != nil {
             if force {
+                try? logFileHandle?.close()
+                logFileHandle = nil
+
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
                 let timestamp = formatter.string(from: Date())
                 let archivedLog = logsDirectory.appendingPathComponent("sorty-\(timestamp).log")
                 
                 try? fileManager.moveItem(at: currentLog, to: archivedLog)
+                currentLogSize = 0
             }
             
             // Cleanup old logs
             do {
                 let fileURLs = try fileManager.contentsOfDirectory(at: logsDirectory, includingPropertiesForKeys: [.creationDateKey], options: .skipsHiddenFiles)
-                let logFiles = fileURLs.filter { $0.pathExtension == "log" }
+                let logFiles = fileURLs.filter {
+                    $0.pathExtension == "log" && $0 != currentLog
+                }
                 
-                if logFiles.count > maxLogFiles {
+                if logFiles.count > maxArchivedLogFiles {
                     let sortedFiles = logFiles.sorted {
                         let date0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
                         let date1 = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
@@ -183,7 +215,7 @@ public final class LogManager: @unchecked Sendable {
                     }
                     
                     // Delete oldest
-                    for i in 0..<(sortedFiles.count - maxLogFiles) {
+                    for i in 0..<(sortedFiles.count - maxArchivedLogFiles) {
                         try? fileManager.removeItem(at: sortedFiles[i])
                     }
                 }
@@ -194,10 +226,24 @@ public final class LogManager: @unchecked Sendable {
     }
 }
 
-public enum LogLevel: String {
+public enum LogLevel: String, Comparable {
     case debug
     case info
     case warning
     case error
     case fault
+
+    private var priority: Int {
+        switch self {
+        case .debug: 0
+        case .info: 1
+        case .warning: 2
+        case .error: 3
+        case .fault: 4
+        }
+    }
+
+    public static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+        lhs.priority < rhs.priority
+    }
 }

@@ -77,7 +77,7 @@ public class AISessionManager: ObservableObject {
             if sessionSignatures[provider] == currentSignature {
                 return existing
             }
-            LogManager.shared.log("Config changed for \(provider.displayName), recreating session", category: "AISessionManager")
+            LogManager.shared.log("Config changed for \(provider.displayName), recreating session", level: .debug, category: "AISessionManager")
             // Don't call invalidateAndCancel() here as it can cause crashes (NSGenericException)
             // if other concurrent tasks are still using this session or about to use it.
             // The session will be naturally deallocated once all tasks referencing it complete.
@@ -90,7 +90,7 @@ public class AISessionManager: ObservableObject {
         sessions[provider] = session
         sessionSignatures[provider] = currentSignature
         
-        LogManager.shared.log("Created new session for \(provider.displayName)", category: "AISessionManager")
+        LogManager.shared.log("Created new session for \(provider.displayName)", level: .debug, category: "AISessionManager")
         
         return session
     }
@@ -192,18 +192,18 @@ public class AISessionManager: ObservableObject {
                         let isSuccess = (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 404
 
                         if isSuccess {
-                            LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode) at \(url.absoluteString)", category: "AISessionManager")
+                            LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
                             isPrewarmed = true
                             prewarmError = nil
                             return
                         } else {
                             // Non-success status, try next URL
-                            LogManager.shared.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode) at \(url.absoluteString)", category: "AISessionManager")
+                            LogManager.shared.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
                         }
                     }
                 } catch {
                     // This URL failed, try the next one
-                    LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", category: "AISessionManager")
+                    LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
                     continue
                 }
             }
@@ -214,7 +214,7 @@ public class AISessionManager: ObservableObject {
 
         } catch {
             // Connection failed, but that's okay - we tried
-            LogManager.shared.log("Prewarm failed for \(provider.displayName): \(error.localizedDescription)", category: "AISessionManager")
+            LogManager.shared.log("Prewarm failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
             prewarmError = error.localizedDescription
             // Session is still created and may work when the actual request is made
             isPrewarmed = false

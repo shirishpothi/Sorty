@@ -9,8 +9,8 @@ import Foundation
 
 struct DebugLogger {
     /// Simple log convenience method
-    static func log(_ message: String) {
-        LogManager.shared.log(message, level: .debug, category: "DebugLogger")
+    static func log(_ message: @autoclosure () -> String) {
+        LogManager.shared.log(message(), level: .debug, category: "DebugLogger")
     }
     
     static func log(sessionId: String = "debug-session", runId: String = "run1", hypothesisId: String, location: String, message: String, data: [String: Any] = [:]) {
@@ -25,4 +25,3 @@ struct DebugLogger {
         LogManager.shared.log(message, level: .debug, category: "DebugLogger", data: context)
     }
 }
-

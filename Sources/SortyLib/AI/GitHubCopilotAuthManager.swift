@@ -235,7 +235,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
             self.authError = "Unable to open GitHub verification page. Use the code shown below at github.com/login/device."
         }
 
-        LogManager.shared.log("Starting polling for access token", category: "AuthManager")
+        LogManager.shared.log("Starting polling for access token", level: .debug, category: "AuthManager")
         // Start polling
         startPolling(interval: Double(codeResponse.interval), deviceCode: codeResponse.deviceCode)
     }
@@ -449,7 +449,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
                 throw GitHubAuthError.notAuthenticated
             }
             
-            LogManager.shared.log("Refreshing GitHub Copilot token...", category: "AuthManager")
+            LogManager.shared.log("Refreshing GitHub Copilot token", level: .debug, category: "AuthManager")
             
             let url = URL(string: "https://api.github.com/copilot_internal/v2/token")!
             guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
@@ -496,7 +496,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
             let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
             UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
             
-            LogManager.shared.log("Successfully refreshed GitHub Copilot token, expires at \(expiryDate)", category: "AuthManager")
+            LogManager.shared.log("Successfully refreshed GitHub Copilot token", level: .debug, category: "AuthManager")
             
             return tokenResponse.token
         }

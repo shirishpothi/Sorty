@@ -119,7 +119,11 @@ public class PersonaHoningEngine: ObservableObject {
         guard let data = jsonString.data(using: .utf8),
               let questions = try? JSONDecoder().decode([HoningQuestion].self, from: data) else {
             // Fallback if JSON fails (return empty to skip honing)
-            LogManager.shared.log("Failed to decode honing questions: \(jsonString)", level: .error, category: "PersonaHoning")
+            LogManager.shared.log(
+                "Failed to decode honing questions (response length: \(jsonString.count) characters)",
+                level: .error,
+                category: "PersonaHoning"
+            )
             return []
         }
         

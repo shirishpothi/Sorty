@@ -128,7 +128,7 @@ public class ContinuousLearningObserver: ObservableObject {
         }
 
         persistSessionUpdate(session, appendIfNeeded: true)
-        LogManager.shared.log("Started session \(session.id) for \(folderPath)", category: "LearningObserver")
+        LogManager.shared.log("Started learning session \(session.id)", level: .debug, category: "LearningObserver")
     }
     
     /// Record that a specific rule was applied to a file
@@ -157,7 +157,7 @@ public class ContinuousLearningObserver: ObservableObject {
                 )
             )
             persistSessionUpdate(session)
-            LogManager.shared.log("Ended session \(session.id)", category: "LearningObserver")
+            LogManager.shared.log("Ended learning session \(session.id)", level: .debug, category: "LearningObserver")
         }
     }
     
@@ -183,7 +183,7 @@ public class ContinuousLearningObserver: ObservableObject {
         learningsManager.recordGuidingInstruction(prompt)
         learningsManager.recordSteeringPrompt(prompt, folderPath: folderPath ?? currentSession?.folderPath, sessionId: currentSession?.id)
         
-        LogManager.shared.log("Recorded steering prompt: \(prompt.prefix(50))...", category: "LearningObserver")
+        LogManager.shared.log("Recorded steering prompt", level: .debug, category: "LearningObserver")
     }
     
     private func handleSteeringPrompt(_ notification: Notification) {
@@ -195,7 +195,7 @@ public class ContinuousLearningObserver: ObservableObject {
         if let exclusionPattern = parseExclusionFromPrompt(prompt) {
             Task {
                 await learningsManager.addLearningExclusion(exclusionPattern)
-                LogManager.shared.log("Added learning exclusion from steering prompt: \(exclusionPattern)", category: "LearningObserver")
+                LogManager.shared.log("Added learning exclusion from steering prompt", level: .info, category: "LearningObserver")
             }
         }
     }
@@ -328,7 +328,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect else { return }
         
         if learningsManager.isPathExcludedFromLearning(src) || learningsManager.isPathExcludedFromLearning(dst) {
-            LogManager.shared.log("Skipping learning for excluded path: \(src)", category: "LearningObserver")
+            LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
             return
         }
         
@@ -353,9 +353,7 @@ public class ContinuousLearningObserver: ObservableObject {
             
             if let aiOp = operations.first(where: { $0.destinationPath == src }) {
                 // Found the AI action that put the file here
-                LogManager.shared.log("Detected correction for \(aiOp.sourcePath)", category: "LearningObserver")
-                LogManager.shared.log("AI put it at: \(src)", category: "LearningObserver")
-                LogManager.shared.log("User moved it to: \(dst)", category: "LearningObserver")
+                LogManager.shared.log("Recorded a user correction to an AI placement", category: "LearningObserver")
                 
                 let change = DirectoryChange(
                     originalPath: src, 
@@ -442,7 +440,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect else { return }
         
         if learningsManager.isPathExcludedFromLearning(path) {
-            LogManager.shared.log("Skipping learning for excluded path: \(path)", category: "LearningObserver")
+            LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
             return
         }
         
@@ -456,7 +454,7 @@ public class ContinuousLearningObserver: ObservableObject {
             guard let operations = entry.operations else { continue }
             
             if let aiOp = operations.first(where: { $0.destinationPath == path }) {
-                LogManager.shared.log("Detected removal after AI placement: \(path)", category: "LearningObserver")
+                LogManager.shared.log("Recorded a removal after an AI placement", category: "LearningObserver")
                 learningsManager.recordRejection(originalPath: aiOp.sourcePath)
                 
                 // Track in session if within correlation window
@@ -505,7 +503,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect else { return }
         
         learningsManager.recordAdditionalInstruction(instruction, for: folderPath)
-        LogManager.shared.log("Recorded additional instruction for \(folderPath)", category: "LearningObserver")
+        LogManager.shared.log("Recorded an additional instruction", level: .debug, category: "LearningObserver")
     }
     
     /// Track when user provides guiding instructions for next attempt
@@ -513,7 +511,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect else { return }
         
         learningsManager.recordGuidingInstruction(instruction)
-        LogManager.shared.log("Recorded guiding instruction", category: "LearningObserver")
+        LogManager.shared.log("Recorded guiding instruction", level: .debug, category: "LearningObserver")
     }
     
     // MARK: - History Revert Tracking
@@ -523,7 +521,7 @@ public class ContinuousLearningObserver: ObservableObject {
               let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
               let operations = entry.operations else { return }
         
-        LogManager.shared.log("Learning from Revert of session", category: "LearningObserver")
+        LogManager.shared.log("Learning from a reverted session", category: "LearningObserver")
         
         // Find and update the relevant session
         if let idx = recentSessions.firstIndex(where: { $0.historyEntryId == entry.id.uuidString }) {
