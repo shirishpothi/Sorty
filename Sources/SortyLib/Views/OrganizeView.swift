@@ -1079,10 +1079,6 @@ struct ReadyToOrganizeView: View {
             
             if showStorageLocations {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Organize across these local, cloud, and external folders")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
                     if !storageLocationsManager.locations.isEmpty {
                         VStack(spacing: 6) {
                             ForEach(storageLocationsManager.locations) { location in
@@ -1095,6 +1091,10 @@ struct ReadyToOrganizeView: View {
                     }
                     
                     HStack(alignment: .center, spacing: 14) {
+                        if storageLocationsManager.locations.isEmpty {
+                            Spacer()
+                        }
+
                         Button {
                             HapticFeedbackManager.shared.tap()
                             suggestedLocationName = nil
@@ -1120,6 +1120,10 @@ struct ReadyToOrganizeView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .animation(
+                        storageLocationInsertionAnimation,
+                        value: storageLocationsManager.locations.isEmpty
+                    )
                     .padding(.top, 2)
                 }
                 .transition(.opacity)
