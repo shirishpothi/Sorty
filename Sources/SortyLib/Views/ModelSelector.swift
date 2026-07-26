@@ -64,6 +64,59 @@ struct ModelSelectorRow: View {
     }
 }
 
+// MARK: - Model Selector Compact Button (Inline Value + Trigger)
+
+/// A compact, menu-picker-sized trigger that shows the current selection and
+/// opens the model selection popover. Use in settings rows where the
+/// full-width `ModelSelectorRow` would be too heavy.
+struct ModelSelectorCompactButton: View {
+    let provider: AIProvider
+    let label: String
+    let onTap: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.light()
+            onTap()
+        } label: {
+            HStack(spacing: 6) {
+                ProviderLogoView(provider: provider, size: 12)
+
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: 220)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(isHovering ? 0.1 : 0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+        .accessibilityLabel("\(label). Change model")
+    }
+}
+
 private struct ModelSelectionTriggerBoundsPreferenceKey: PreferenceKey {
     static let defaultValue: Anchor<CGRect>? = nil
 
@@ -84,6 +137,8 @@ extension View {
         contextMessage: String? = nil,
         selectionActionTitle: String = "Select",
         isSelectionActionProminent: Bool = true,
+        resetActionTitle: String? = nil,
+        onReset: (() -> Void)? = nil,
         onSelect: @escaping (AIProvider, String) -> Void
     ) -> some View {
         modifier(
@@ -94,6 +149,8 @@ extension View {
                 contextMessage: contextMessage,
                 selectionActionTitle: selectionActionTitle,
                 isSelectionActionProminent: isSelectionActionProminent,
+                resetActionTitle: resetActionTitle,
+                onReset: onReset,
                 onSelect: onSelect
             )
         )
@@ -112,6 +169,8 @@ struct ModelSelectionPopover: View {
     let contextMessage: String?
     let selectionActionTitle: String
     let isSelectionActionProminent: Bool
+    let resetActionTitle: String?
+    let onReset: (() -> Void)?
     let popoverSize: CGSize
     let onSelect: (AIProvider, String) -> Void
 
@@ -135,6 +194,8 @@ struct ModelSelectionPopover: View {
         contextMessage: String? = nil,
         selectionActionTitle: String = "Select",
         isSelectionActionProminent: Bool = true,
+        resetActionTitle: String? = nil,
+        onReset: (() -> Void)? = nil,
         popoverSize: CGSize = CGSize(width: 500, height: 420),
         onSelect: @escaping (AIProvider, String) -> Void
     ) {
@@ -144,6 +205,8 @@ struct ModelSelectionPopover: View {
         self.contextMessage = contextMessage
         self.selectionActionTitle = selectionActionTitle
         self.isSelectionActionProminent = isSelectionActionProminent
+        self.resetActionTitle = resetActionTitle
+        self.onReset = onReset
         self.popoverSize = popoverSize
         self.onSelect = onSelect
     }
@@ -659,6 +722,15 @@ struct ModelSelectionPopover: View {
             
             Spacer()
             
+            if let resetActionTitle, let onReset {
+                Button(resetActionTitle) {
+                    HapticFeedbackManager.shared.selection()
+                    onReset()
+                    isPresented = false
+                }
+                .buttonStyle(.sortyBordered)
+            }
+
             Button("Cancel") {
                 isPresented = false
             }
@@ -790,6 +862,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let contextMessage: String?
     let selectionActionTitle: String
     let isSelectionActionProminent: Bool
+    let resetActionTitle: String?
+    let onReset: (() -> Void)?
     let onSelect: (AIProvider, String) -> Void
 
     private let contentPadding: CGFloat = 12
@@ -821,6 +895,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                 contextMessage: contextMessage,
                                 selectionActionTitle: selectionActionTitle,
                                 isSelectionActionProminent: isSelectionActionProminent,
+                                resetActionTitle: resetActionTitle,
+                                onReset: onReset,
                                 popoverSize: popoverSize,
                                 onSelect: onSelect
                             )

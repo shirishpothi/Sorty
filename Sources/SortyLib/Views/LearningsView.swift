@@ -282,6 +282,13 @@ struct LearningsView: View {
             currentModel: usesDedicatedLearningsModel
                 ? effectiveLearningsModel
                 : settingsViewModel.config.model,
+            contextMessage: usesDedicatedLearningsModel
+                ? "Organization uses \(organizationModelDisplay)."
+                : "Learnings uses the organization model (\(organizationModelDisplay)). Picking a different model creates a dedicated override for learnings analysis.",
+            resetActionTitle: usesDedicatedLearningsModel ? "Use Organization Model" : nil,
+            onReset: {
+                manager.clearLearningsModelOverride()
+            },
             onSelect: { provider, model in
                 HapticFeedbackManager.shared.selection()
                 if provider == settingsViewModel.config.provider
@@ -1229,56 +1236,37 @@ struct LearningsView: View {
 
                 Divider().padding(.leading, 40)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "wand.and.stars")
-                            .foregroundColor(.blue)
-                            .font(.body.bold())
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Learnings Model")
-                                .font(.subheadline)
-                            Text(
-                                usesDedicatedLearningsModel
-                                    ? "Dedicated to learnings analysis"
-                                    : "Using the same model as organization"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            if usesDedicatedLearningsModel {
-                                manager.clearLearningsModelOverride()
-                            }
-                        } label: {
-                            Text(usesDedicatedLearningsModel ? "Reset to Default" : "Using Default")
-                                .font(.caption2)
-                                .foregroundStyle(usesDedicatedLearningsModel ? .blue : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!usesDedicatedLearningsModel)
+                HStack(spacing: 12) {
+                    Image(systemName: "wand.and.stars")
+                        .foregroundColor(.blue)
+                        .font(.body.bold())
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Learnings Model")
+                            .font(.subheadline)
+                        Text(
+                            usesDedicatedLearningsModel
+                                ? "Dedicated model for learnings analysis"
+                                : "Same model as organization"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
-
-                    ModelSelectorRow(
+                    Spacer()
+                    ModelSelectorCompactButton(
                         provider: usesDedicatedLearningsModel
                             ? (manager.learningsModelSelection?.provider
                                 ?? settingsViewModel.config.provider)
                             : settingsViewModel.config.provider,
-                        model: usesDedicatedLearningsModel
-                            ? effectiveLearningsModel
-                            : settingsViewModel.config.model,
+                        label: usesDedicatedLearningsModel ? effectiveLearningsModel : "Default",
                         onTap: {
                             showLearningsModelPicker = true
                         }
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
                     .modelSelectorTriggerBounds()
                 }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
 
                 Divider().padding(.leading, 40)
 
@@ -1487,16 +1475,14 @@ struct LearningsView: View {
 
     // MARK: - Helpers
 
-    private var learningsModelOptions: [String] {
-        let configured = settingsViewModel.availableModels
-        let fallback = settingsViewModel.config.provider.recommendedModels
-        let options = configured.isEmpty ? fallback : configured
-        let currentModel = settingsViewModel.config.model
-        return ([currentModel] + options).orderedDeduplicated()
-    }
-
     private var effectiveLearningsModel: String {
         manager.effectiveAIConfig(from: settingsViewModel.config).model
+    }
+
+    private var organizationModelDisplay: String {
+        let provider = settingsViewModel.config.provider
+        let model = settingsViewModel.config.model
+        return "\(provider.displayName) / \(model.isEmpty ? provider.defaultModel : model)"
     }
 
     private func presentFileImporter(_ importer: ActiveFileImporter) {
@@ -1542,25 +1528,6 @@ struct LearningsView: View {
     private var usesDedicatedLearningsModel: Bool {
         guard let selection = manager.learningsModelSelection else { return false }
         return selection.provider == settingsViewModel.config.provider
-    }
-
-    private var learningsModelPickerSelection: Binding<String> {
-        Binding(
-            get: {
-                usesDedicatedLearningsModel ? effectiveLearningsModel : "__main__"
-            },
-            set: { newValue in
-                HapticFeedbackManager.shared.selection()
-                if newValue == "__main__" || newValue == settingsViewModel.config.model {
-                    manager.clearLearningsModelOverride()
-                } else {
-                    manager.setLearningsModelOverride(
-                        provider: settingsViewModel.config.provider,
-                        model: newValue
-                    )
-                }
-            }
-        )
     }
 
     // MARK: - Export / Import
