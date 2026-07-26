@@ -24,12 +24,60 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         var nextAttemptAt: Date
     }
 
-    private struct PersistedPendingWatchBatch: Codable {
+    private struct PersistedPendingWatchBatch: Codable, Sendable {
         var folderID: UUID
         var files: Set<String>
         var stabilityRetryAttempt: Int
         var operationRetryAttempt: Int
         var nextAttemptAt: Date
+    }
+
+    private actor PendingWorkPersistence {
+        private var latestRevision = 0
+        private var pendingBatches: [PersistedPendingWatchBatch] = []
+        private var pendingURL: URL?
+        private var flushTask: Task<Void, Never>?
+
+        func schedule(
+            batches: [PersistedPendingWatchBatch],
+            url: URL,
+            revision: Int
+        ) {
+            guard revision >= latestRevision else { return }
+            latestRevision = revision
+            pendingBatches = batches
+            pendingURL = url
+            flushTask?.cancel()
+            flushTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled else { return }
+                await self?.flush()
+            }
+        }
+
+        private func flush() {
+            guard let pendingURL else { return }
+            let batches = pendingBatches
+            flushTask = nil
+
+            do {
+                if batches.isEmpty {
+                    if FileManager.default.fileExists(atPath: pendingURL.path) {
+                        try FileManager.default.removeItem(at: pendingURL)
+                    }
+                    return
+                }
+
+                try FileManager.default.createDirectory(
+                    at: pendingURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                let data = try JSONEncoder().encode(batches)
+                try data.write(to: pendingURL, options: .atomic)
+            } catch {
+                print("Coordinator: Failed to persist watched-folder pending work: \(error)")
+            }
+        }
     }
 
     let folderWatcher = FolderWatcher()
@@ -49,6 +97,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var autoOrganizeTasks: [UUID: Task<Void, Never>] = [:]
     private var autoOrganizeTaskIDs: [UUID: UUID] = [:]
     private var retryTask: Task<Void, Never>?
+    private let pendingWorkPersistence = PendingWorkPersistence()
+    private var pendingWorkPersistenceRevision = 0
     private let candidateStabilityDelay: TimeInterval = 1.5
     private let retryBaseDelay: TimeInterval = 3
     private let maximumStabilityRetryDelay: TimeInterval = 60
@@ -692,7 +742,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
         
         let startTime = Date()
-        let existingHistoryEntryIDs = Set(organizer.history.entries.map(\.id))
+        let previousNewestHistoryEntryID = organizer.history.entries.first?.id
         
         do {
             watchedFoldersManager.markTriggered(executionFolder)
@@ -720,8 +770,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             
             let duration = Date().timeIntervalSince(startTime)
             print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
-            if let historyEntry = organizer.history.entries.first(where: {
-                $0.source == .watchedFolder && !existingHistoryEntryIDs.contains($0.id)
+            let newHistoryEntries = organizer.history.entries.prefix { entry in
+                previousNewestHistoryEntryID.map { entry.id != $0 } ?? true
+            }
+            if let historyEntry = newHistoryEntries.first(where: {
+                $0.source == .watchedFolder
             }) {
                 let stats = extractBatchStats(from: historyEntry, duration: duration)
                 notificationManager.showBatchSummary(stats: stats, isAutomated: true)
@@ -900,31 +953,23 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             }
         }
 
-        do {
-            if outstanding.isEmpty {
-                if FileManager.default.fileExists(atPath: pendingWorkURL.path) {
-                    try FileManager.default.removeItem(at: pendingWorkURL)
-                }
-                return
-            }
-
-            try FileManager.default.createDirectory(
-                at: pendingWorkURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+        let persisted = outstanding.map { folderID, batch in
+            PersistedPendingWatchBatch(
+                folderID: folderID,
+                files: batch.files,
+                stabilityRetryAttempt: batch.stabilityRetryAttempt,
+                operationRetryAttempt: batch.operationRetryAttempt,
+                nextAttemptAt: batch.nextAttemptAt
             )
-            let persisted = outstanding.map { folderID, batch in
-                PersistedPendingWatchBatch(
-                    folderID: folderID,
-                    files: batch.files,
-                    stabilityRetryAttempt: batch.stabilityRetryAttempt,
-                    operationRetryAttempt: batch.operationRetryAttempt,
-                    nextAttemptAt: batch.nextAttemptAt
-                )
-            }
-            let data = try JSONEncoder().encode(persisted)
-            try data.write(to: pendingWorkURL, options: .atomic)
-        } catch {
-            print("Coordinator: Failed to persist watched-folder pending work: \(error)")
+        }
+        pendingWorkPersistenceRevision &+= 1
+        let revision = pendingWorkPersistenceRevision
+        Task { [pendingWorkPersistence] in
+            await pendingWorkPersistence.schedule(
+                batches: persisted,
+                url: pendingWorkURL,
+                revision: revision
+            )
         }
     }
 
