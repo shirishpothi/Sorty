@@ -47,7 +47,6 @@ public enum SettingsFocusTarget: String, Sendable {
     case deeplinksOrganization = "settings.deeplinks.organization"
     case deeplinksAutomation = "settings.deeplinks.automation"
     case deeplinksFinder = "settings.deeplinks.finder"
-    case deeplinksCompatibility = "settings.deeplinks.compatibility"
     case finderIntegration = "settings.finder.integration"
     case finderOrganize = "settings.finder.organize"
     case finderWatch = "settings.finder.watch"
@@ -215,8 +214,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Core Deeplinks", summary: "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"]),
                 SettingsFeatureSnippet(title: "Organization Deeplinks", summary: "Copy links for organize, duplicates, scan, storage, and workspace-health workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"]),
                 SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"]),
-                SettingsFeatureSnippet(title: "Finder Deeplinks", summary: "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"]),
-                SettingsFeatureSnippet(title: "Legacy Path Deeplink", summary: "Open older path-only links such as sorty:///Users/me/Downloads.", keywords: ["legacy path", "sorty:///Users/me/Downloads", "downloads"])
+                SettingsFeatureSnippet(title: "Finder Deeplinks", summary: "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"])
             ]
         case .finder:
             return [
@@ -340,8 +338,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .deeplinksAutomation
         case (.deeplinks, "Finder Deeplinks"):
             return .deeplinksFinder
-        case (.deeplinks, "Legacy Path Deeplink"):
-            return .deeplinksCompatibility
         case (.finder, "Organize with Sorty"):
             return .finderOrganize
         case (.finder, "Watch with Sorty"):

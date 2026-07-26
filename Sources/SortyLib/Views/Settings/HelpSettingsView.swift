@@ -309,15 +309,6 @@ struct DeeplinkSettingsView: View {
                     DeeplinkEntry(title: "Exclude with Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
                     DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
                 ]
-            ),
-            DeeplinkGroup(
-                title: "Compatibility",
-                icon: "arrow.triangle.2.circlepath",
-                color: .secondary,
-                focusTarget: .deeplinksCompatibility,
-                entries: [
-                    DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink for older launchers.")
-                ]
             )
         ]
     }
