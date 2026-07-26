@@ -25,6 +25,84 @@ private struct MenuBarMascotIcon: View {
     }
 }
 
+// MARK: - Launch at Login Icon
+
+private struct LaunchAtLoginIcon: View {
+    let isEnabled: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepProgress: CGFloat = 1
+    @State private var sweepTask: Task<Void, Never>?
+
+    private let sweepDuration: TimeInterval = 1.25
+
+    private var symbol: some View {
+        Image(systemName: "sunrise.fill")
+            .frame(width: 16)
+    }
+
+    private var sweepColors: [Color] {
+        if isEnabled {
+            return [
+                .clear,
+                .yellow.opacity(0.75),
+                .orange,
+                .yellow,
+                .clear
+            ]
+        }
+
+        return [
+            .clear,
+            .orange.opacity(0.8),
+            .pink,
+            .purple.opacity(0.9),
+            .clear
+        ]
+    }
+
+    var body: some View {
+        symbol
+            .foregroundStyle(.primary)
+            .overlay {
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: sweepColors,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 12)
+                    .offset(
+                        x: -12 + sweepProgress * (geometry.size.width + 24)
+                    )
+                    .blur(radius: 0.4)
+                }
+                .mask(symbol)
+            }
+            .onChange(of: isEnabled) { _, _ in
+                runSweep()
+            }
+            .onDisappear {
+                sweepTask?.cancel()
+            }
+    }
+
+    private func runSweep() {
+        guard !reduceMotion else { return }
+
+        sweepTask?.cancel()
+        sweepProgress = 0
+        sweepTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.easeInOut(duration: sweepDuration)) {
+                sweepProgress = 1
+            }
+        }
+    }
+}
+
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
@@ -229,8 +307,7 @@ public struct MenuBarView: View {
                 }
             )) {
                 HStack(spacing: 8) {
-                    Image(systemName: "sunrise.fill")
-                        .frame(width: 16)
+                    LaunchAtLoginIcon(isEnabled: launchAtLogin)
                     Text("Launch at Login")
                     Spacer()
                 }
