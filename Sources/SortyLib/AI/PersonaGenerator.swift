@@ -229,13 +229,24 @@ Allowed icons:
             let generatedPrompt = generated.prompt
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let suggestions = sanitizedSuggestions(generated.suggestions)
+            let containsGenerationLeak = Self.containsGenerationLeak(generatedPrompt)
 
             guard generatedName.count >= 3,
                   (400...2000).contains(generatedPrompt.count),
-                  !Self.containsGenerationLeak(generatedPrompt),
-                  suggestions.organize.count == 4,
-                  suggestions.organizeAndRename.count == 4,
-                  suggestions.renameOnly.count == 4 else {
+                  !containsGenerationLeak else {
+                LogManager.shared.log(
+                    "Rejected generated persona after decoding.",
+                    level: .error,
+                    category: "PersonaGenerator",
+                    data: [
+                        "nameLength": generatedName.count,
+                        "promptLength": generatedPrompt.count,
+                        "containsGenerationLeak": containsGenerationLeak,
+                        "organizeSuggestionCount": suggestions.organize.count,
+                        "organizeAndRenameSuggestionCount": suggestions.organizeAndRename.count,
+                        "renameOnlySuggestionCount": suggestions.renameOnly.count
+                    ]
+                )
                 throw PersonaGeneratorError.invalidPersonaResponse
             }
 
@@ -320,13 +331,22 @@ Allowed icons:
         return markers.contains { normalized.contains($0) }
     }
 
-    private nonisolated static func decodeGeneratedPersona(
+    nonisolated static func decodeGeneratedPersona(
         from response: String
     ) throws -> GeneratedPersona {
         guard let json = extractJSONObject(from: response),
               let data = json.data(using: .utf8),
               let generated = try? JSONDecoder().decode(GeneratedPersona.self, from: data)
         else {
+            LogManager.shared.log(
+                "Failed to decode generated persona.",
+                level: .error,
+                category: "PersonaGenerator",
+                data: [
+                    "responseLength": response.count,
+                    "containsJSONObject": extractJSONObject(from: response) != nil
+                ]
+            )
             throw PersonaGeneratorError.invalidPersonaResponse
         }
         return generated
@@ -410,9 +430,27 @@ private struct GeneratedPersonaIdentity: Decodable {
     let icon: String
 }
 
-private struct GeneratedPersona: Decodable {
+struct GeneratedPersona: Decodable {
     let name: String
     let icon: String
     let prompt: String
     let suggestions: PersonaInstructionSuggestions
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case icon
+        case prompt
+        case suggestions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "star.fill"
+        prompt = try container.decode(String.self, forKey: .prompt)
+        suggestions = (try? container.decode(
+            PersonaInstructionSuggestions.self,
+            forKey: .suggestions
+        )) ?? PersonaInstructionSuggestions()
+    }
 }

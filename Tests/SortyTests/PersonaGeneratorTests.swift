@@ -294,6 +294,29 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertTrue(extracted?.contains("{RAW}") ?? false)
     }
 
+    func testDecodesPersonaWhenAuxiliarySuggestionsAreMissing() throws {
+        let response = """
+        {"name":"Release Desk","icon":"archivebox.fill","prompt":"Group release files by project code and version, preserve related assets together, and leave ambiguous files for review."}
+        """
+
+        let generated = try PersonaGenerator.decodeGeneratedPersona(from: response)
+
+        XCTAssertEqual(generated.name, "Release Desk")
+        XCTAssertEqual(generated.icon, "archivebox.fill")
+        XCTAssertEqual(generated.suggestions, PersonaInstructionSuggestions())
+    }
+
+    func testDecodesPersonaWhenAuxiliarySuggestionsAreIncomplete() throws {
+        let response = """
+        {"name":"Release Desk","icon":"archivebox.fill","prompt":"Group release files by project code and version, preserve related assets together, and leave ambiguous files for review.","suggestions":{"organize":["Group releases by project."]}}
+        """
+
+        let generated = try PersonaGenerator.decodeGeneratedPersona(from: response)
+
+        XCTAssertEqual(generated.name, "Release Desk")
+        XCTAssertEqual(generated.suggestions, PersonaInstructionSuggestions())
+    }
+
     func testRejectsKnownGenerationReasoningLeak() {
         XCTAssertTrue(
             PersonaGenerator.containsGenerationLeak(
