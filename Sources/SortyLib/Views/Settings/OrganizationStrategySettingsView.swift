@@ -19,6 +19,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var pendingPresetInstructions: String = ""
     @State private var editingPreset: NamingPreset? = nil
     @State private var showEditSheet: Bool = false
+    @State private var showingNamingInstructionsInfo: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -260,8 +261,35 @@ struct OrganizationStrategySettingsView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(viewModel.config.namingStyle == .custom ? "Custom Naming Instructions" : "Additional Naming Instructions")
-                            .font(.subheadline.weight(.medium))
+                        HStack(spacing: 6) {
+                            Text(viewModel.config.namingStyle == .custom ? "Custom Naming Instructions" : "Additional Naming Instructions")
+                                .font(.subheadline.weight(.medium))
+
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                showingNamingInstructionsInfo.toggle()
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showingNamingInstructionsInfo, arrowEdge: .bottom) {
+                                Text(
+                                    viewModel.config.namingStyle == .custom
+                                        ? "Describe exactly how Sorty should name files. These instructions define the Custom naming style."
+                                        : "Add rules that refine the selected naming template, such as “Use camelCase for subject names.”"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(14)
+                                .frame(width: 300, alignment: .leading)
+                                .systemLiquidGlassPopover(cornerRadius: 12)
+                            }
+                            .help("About naming instructions")
+                            .accessibilityLabel("Naming instruction information")
+                        }
 
                         TextEditor(text: Binding(
                             get: { viewModel.config.customNamingInstructions ?? "" },
@@ -340,12 +368,6 @@ struct OrganizationStrategySettingsView: View {
                             .buttonStyle(.onboardingPill(size: .small))
                             .padding(.top, 4)
                         }
-
-                        Text(viewModel.config.namingStyle == .custom
-                             ? "These instructions define how files are named when using Custom style."
-                             : "Extra rules for Sorty (e.g., 'Use camelCase for subjects')")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
                     }
                 }
             }

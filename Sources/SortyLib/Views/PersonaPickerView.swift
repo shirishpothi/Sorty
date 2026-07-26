@@ -16,6 +16,7 @@ struct PersonaPickerView: View {
     @State private var showingEditor: Bool = false
     @State private var editingPersona: CustomPersona?
     @State private var localPrompt: String = ""
+    @State private var showingInstructionsInfo: Bool = false
     @FocusState private var isEditorFocused: Bool
 
     var body: some View {
@@ -160,6 +161,11 @@ struct PersonaPickerView: View {
                         + Text(" System Prompt")
                         .font(.subheadline.weight(.medium))
 
+                    instructionsInfoButton(
+                        text: "These instructions are saved with \(custom.name) and apply whenever you use this persona. Use them for preferences such as folder count, hierarchy depth, or grouping rules.",
+                        accessibilityLabel: "\(custom.name) instruction information"
+                    )
+
                     Spacer()
 
                     Button {
@@ -195,16 +201,17 @@ struct PersonaPickerView: View {
                     )
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
                     .accessibilityLabel("\(custom.name) system prompt")
-
-                Text("Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with this persona.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 6) {
                     Text("Additional Instructions")
                         .font(.subheadline.weight(.medium))
+
+                    instructionsInfoButton(
+                        text: "These instructions are saved with \(personaManager.selectedPersona.displayName) and apply whenever you use this persona. Use them for preferences such as folder count, hierarchy depth, or grouping rules.",
+                        accessibilityLabel: "Additional instruction information"
+                    )
 
                     Spacer()
 
@@ -242,12 +249,34 @@ struct PersonaPickerView: View {
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
-
-                Text("Optional. Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with \(personaManager.selectedPersona.displayName).")
-                .font(.caption)
-                .foregroundColor(.secondary)
             }
         }
+    }
+
+    private func instructionsInfoButton(
+        text: LocalizedStringKey,
+        accessibilityLabel: LocalizedStringKey
+    ) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            showingInstructionsInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showingInstructionsInfo, arrowEdge: .bottom) {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(14)
+                .frame(width: 300, alignment: .leading)
+                .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+        .help("About these instructions")
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private func updateLocalPrompt() {
