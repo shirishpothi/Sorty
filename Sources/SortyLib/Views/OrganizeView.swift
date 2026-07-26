@@ -858,6 +858,7 @@ struct ReadyToOrganizeView: View {
     @State private var showStorageLocationsInfo = false
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
+    @State private var instructionSuggestionIndex = 0
     @State private var referenceRefreshTask: Task<Void, Never>?
     @State private var startCTACompression: CGFloat = 0
 
@@ -868,6 +869,33 @@ struct ReadyToOrganizeView: View {
 
     private var mode: OrganizationMode {
         settingsViewModel.config.mode
+    }
+
+    private var instructionSuggestions: [String] {
+        switch mode {
+        case .organize:
+            return [
+                "Use no more than 6 top-level folders and keep the hierarchy two levels deep.",
+                "Group files by project, then by year; keep loose files in General.",
+                "Separate RAW photos from edited images, then group both by event.",
+            ]
+        case .organizeAndRename:
+            return [
+                "Use no more than 6 top-level folders, then group by client and year.",
+                "Group by project in a two-level hierarchy, then rename files with clear dates.",
+                "Separate invoices by client, then rename them with the date and vendor.",
+            ]
+        case .renameOnly:
+            return [
+                "Put dates first, use natural words, and preserve the original file extension.",
+                "Rename invoices with the date, vendor, and invoice number.",
+                "Use consistent names with spaces, and keep existing version numbers.",
+            ]
+        }
+    }
+
+    private var currentInstructionSuggestion: String {
+        instructionSuggestions[instructionSuggestionIndex % instructionSuggestions.count]
     }
     
     private var isConnecting: Bool {
@@ -1332,7 +1360,8 @@ struct ReadyToOrganizeView: View {
                     SubmittableTextEditor(
                         text: $organizer.customInstructions,
                         isFocused: $isTextFieldFocused,
-                        selectedRange: $instructionSelection
+                        selectedRange: $instructionSelection,
+                        onAcceptSuggestion: acceptCurrentInstructionSuggestion
                     ) {
                         onStart()
                     }
@@ -1340,13 +1369,37 @@ struct ReadyToOrganizeView: View {
                     .padding(.vertical, 2)
                 }
                 if organizer.customInstructions.isEmpty {
-                    Text(mode.instructionPlaceholder)
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(currentInstructionSuggestion)
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(2)
+                            .numericTextTransition(animationValue: instructionSuggestionIndex)
+
+                        Spacer(minLength: 0)
+
+                        Text("Tab")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                            .accessibilityHidden(true)
+                    }
                         .padding(.leading, 18)
                         .padding(.trailing, 10)
                         .padding(.vertical, 9)
                         .allowsHitTesting(false)
+                        .task(id: mode) {
+                            instructionSuggestionIndex = 0
+
+                            while !Task.isCancelled {
+                                try? await Task.sleep(for: .seconds(5))
+                                guard !Task.isCancelled else { return }
+                                instructionSuggestionIndex =
+                                    (instructionSuggestionIndex + 1) % instructionSuggestions.count
+                            }
+                        }
                 }
             }
             .frame(minHeight: 60, maxHeight: 80)
@@ -1363,7 +1416,11 @@ struct ReadyToOrganizeView: View {
             }
             .accessibilityIdentifier("CustomInstructionsTextField")
             .accessibilityLabel("Additional instructions for \(mode.gerund)")
-            .accessibilityHint("Press Command+Enter to start \(mode.gerund), Enter for new line")
+            .accessibilityHint(
+                organizer.customInstructions.isEmpty
+                    ? "Press Tab to use the suggested instruction, Command+Enter to start \(mode.gerund), or Enter for a new line"
+                    : "Press Command+Enter to start \(mode.gerund), or Enter for a new line"
+            )
             .overlay(alignment: .bottomLeading) {
                 if let mention, shouldShowReferencePicker(for: mention) {
                     InstructionFileReferencePicker(
@@ -1379,12 +1436,6 @@ struct ReadyToOrganizeView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.16), value: mention?.query)
-
-            if mode != .renameOnly {
-                Text("Add a folder-count or hierarchy preference here when needed, then use Save to reuse these instructions.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
 
             HStack(alignment: .center, spacing: 0) {
                 // Improve with AI button
@@ -1518,6 +1569,18 @@ struct ReadyToOrganizeView: View {
                 }
             )
         }
+    }
+
+    private func acceptCurrentInstructionSuggestion() -> Bool {
+        guard organizer.customInstructions.isEmpty else { return false }
+
+        organizer.customInstructions = currentInstructionSuggestion
+        instructionSelection = NSRange(
+            location: (currentInstructionSuggestion as NSString).length,
+            length: 0
+        )
+        HapticFeedbackManager.shared.selection()
+        return true
     }
 
     private func improvePromptWithAI() async {
@@ -2779,17 +2842,20 @@ struct SubmittableTextEditor: NSViewRepresentable {
     @Binding var text: String
     var isFocused: Binding<Bool>?
     var selectedRange: Binding<NSRange>?
+    var onAcceptSuggestion: (() -> Bool)?
     var onSubmit: () -> Void
 
     init(
         text: Binding<String>,
         isFocused: Binding<Bool>? = nil,
         selectedRange: Binding<NSRange>? = nil,
+        onAcceptSuggestion: (() -> Bool)? = nil,
         onSubmit: @escaping () -> Void
     ) {
         self._text = text
         self.isFocused = isFocused
         self.selectedRange = selectedRange
+        self.onAcceptSuggestion = onAcceptSuggestion
         self.onSubmit = onSubmit
     }
     
@@ -2830,10 +2896,18 @@ struct SubmittableTextEditor: NSViewRepresentable {
             guard tv.window?.firstResponder === tv else { return event }
             
             let isReturn = event.keyCode == 36
+            let isTab = event.keyCode == 48
             let hasCommand = event.modifierFlags.contains(.command)
+            let hasTabModifier = !event.modifierFlags
+                .intersection([.command, .option, .control, .shift])
+                .isEmpty
             
             if isReturn && hasCommand {
                 context.coordinator.onSubmit()
+                return nil
+            }
+
+            if isTab, !hasTabModifier, context.coordinator.onAcceptSuggestion?() == true {
                 return nil
             }
             
@@ -2863,6 +2937,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         }
         
         context.coordinator.onSubmit = onSubmit
+        context.coordinator.onAcceptSuggestion = onAcceptSuggestion
         context.coordinator.isFocused = isFocused
         context.coordinator.selectedRange = selectedRange
 
@@ -2871,13 +2946,20 @@ struct SubmittableTextEditor: NSViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isFocused: isFocused, selectedRange: selectedRange, onSubmit: onSubmit)
+        Coordinator(
+            text: $text,
+            isFocused: isFocused,
+            selectedRange: selectedRange,
+            onAcceptSuggestion: onAcceptSuggestion,
+            onSubmit: onSubmit
+        )
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var isFocused: Binding<Bool>?
         var selectedRange: Binding<NSRange>?
+        var onAcceptSuggestion: (() -> Bool)?
         var onSubmit: () -> Void
         var eventMonitor: Any?
         var selectionObserver: NSObjectProtocol?
@@ -2886,11 +2968,13 @@ struct SubmittableTextEditor: NSViewRepresentable {
             text: Binding<String>,
             isFocused: Binding<Bool>?,
             selectedRange: Binding<NSRange>?,
+            onAcceptSuggestion: (() -> Bool)?,
             onSubmit: @escaping () -> Void
         ) {
             self.text = text
             self.isFocused = isFocused
             self.selectedRange = selectedRange
+            self.onAcceptSuggestion = onAcceptSuggestion
             self.onSubmit = onSubmit
         }
         
