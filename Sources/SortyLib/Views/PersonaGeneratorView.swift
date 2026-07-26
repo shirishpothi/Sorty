@@ -183,7 +183,7 @@ struct PersonaGeneratorView: View {
                             promptSuggestionIndex = 0
 
                             while !Task.isCancelled {
-                                try? await Task.sleep(for: .seconds(3.5))
+                                try? await Task.sleep(for: .seconds(2.5))
                                 guard !Task.isCancelled else { return }
                                 promptSuggestionIndex =
                                     (promptSuggestionIndex + 1) % promptSuggestions.count
