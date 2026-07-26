@@ -102,6 +102,17 @@ struct HistoryView: View {
         case watched = "Watched"
 
         var id: String { rawValue }
+
+        var systemImage: String {
+            switch self {
+            case .all: "tray.full"
+            case .success: "checkmark.diamond"
+            case .failed: "exclamationmark.triangle"
+            case .skipped: "forward"
+            case .manual: "hand.tap"
+            case .watched: "eye"
+            }
+        }
     }
 
     var body: some View {
@@ -601,7 +612,9 @@ struct HistoryHeader: View {
     private var filterPicker: some View {
         Picker("Filter history sessions", selection: $selectedFilter) {
             ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Text(LocalizedStringKey(filter.rawValue))
+                Label(LocalizedStringKey(filter.rawValue), systemImage: filter.systemImage)
+                    .labelStyle(.iconOnly)
+                    .help(filter.rawValue)
                     .tag(filter)
             }
         }
