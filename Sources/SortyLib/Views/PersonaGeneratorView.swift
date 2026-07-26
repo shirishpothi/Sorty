@@ -338,7 +338,8 @@ struct PersonaGeneratorView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 7)
                 .allowsHitTesting(false)
-                .numericTextTransition(animationValue: showsPlaceholder)
+                .contentTransition(reduceMotion ? .opacity : .numericText())
+                .animation(reduceMotion ? .easeOut(duration: 0.12) : .default, value: showsPlaceholder)
 
             TextField("", text: customAnswerBinding(for: question))
                 .focused($focusedCustomAnswerQuestionID, equals: question.id)
