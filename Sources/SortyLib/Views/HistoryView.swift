@@ -842,6 +842,7 @@ private enum HistoryCardActionState: Equatable {
 
 private struct HistorySessionCardHeader: View {
     let entry: OrganizationHistoryEntry
+    let generationMetadata: String?
     let statusColor: Color
     let isExpanded: Bool
 
@@ -856,7 +857,19 @@ private struct HistorySessionCardHeader: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                HistorySessionSummary(entry: entry, statusColor: statusColor)
+                HStack(spacing: 6) {
+                    HistorySessionSummary(entry: entry, statusColor: statusColor)
+
+                    if let generationMetadata {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                        Text(generationMetadata)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
             }
 
             Spacer()
@@ -909,7 +922,6 @@ private struct HistorySessionSummary: View {
 
 private struct HistorySessionExpandedContent: View {
     let entry: OrganizationHistoryEntry
-    let generationMetadata: String?
     let hasStorageMoves: Bool
     let operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int)
     let hasOperationsData: Bool
@@ -938,13 +950,6 @@ private struct HistorySessionExpandedContent: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
-
-            if let generationMetadata {
-                Label(generationMetadata, systemImage: "cpu")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Model and cost: \(generationMetadata)")
-            }
 
             if hasStorageMoves {
                 HStack(spacing: 8) {
@@ -1178,13 +1183,16 @@ struct HistorySessionCard: View {
             } label: {
                 HistorySessionCardHeader(
                     entry: entry,
+                    generationMetadata: generationMetadata,
                     statusColor: statusColor,
                     isExpanded: isExpanded
                 )
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue), \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))")
+            .accessibilityLabel(
+                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+            )
             .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
@@ -1196,7 +1204,6 @@ struct HistorySessionCard: View {
 
                 HistorySessionExpandedContent(
                     entry: entry,
-                    generationMetadata: generationMetadata,
                     hasStorageMoves: hasStorageMoves,
                     operationsBreakdown: operationsBreakdown,
                     hasOperationsData: hasOperationsData,
