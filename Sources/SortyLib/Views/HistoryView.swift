@@ -24,10 +24,6 @@ struct HistoryView: View {
     @State private var redoModelEntry: OrganizationHistoryEntry?
     @State private var activeNotificationRedoRequestID: UUID?
 
-    // Partial result state for inline undo
-    @State private var showPartialResultSheet = false
-    @State private var partialUndoResult: PartialUndoResult?
-
     // Lazy loading state
     @State private var displayedEntryCount: Int = 50
     @State private var isLoadingMore: Bool = false
@@ -217,14 +213,6 @@ struct HistoryView: View {
                 handleRedoWithModel(entry, provider: provider, model: model)
             }
         )
-        .sheet(isPresented: $showPartialResultSheet) {
-            if let result = partialUndoResult {
-                PartialUndoResultSheet(result: result) {
-                    showPartialResultSheet = false
-                    partialUndoResult = nil
-                }
-            }
-        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
@@ -288,12 +276,10 @@ struct HistoryView: View {
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry == entry,
-                    isProcessing: isProcessing,
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
                         selectEntry(entry)
-                    },
-                    onUndo: { handleUndo(entry) }
+                    }
                 )
                 .animatedAppearance(delay: Double(index) * 0.03)
                 .onAppear {
@@ -323,12 +309,10 @@ struct HistoryView: View {
                     HistorySessionCard(
                         entry: entry,
                         isSelected: selectedEntry == entry,
-                        isProcessing: isProcessing,
                         onSelect: {
                             HapticFeedbackManager.shared.selection()
                             selectEntry(entry)
-                        },
-                        onUndo: { handleUndo(entry) }
+                        }
                     )
                     .animatedAppearance(delay: Double(index) * 0.02)
                     .onAppear {
@@ -363,55 +347,6 @@ struct HistoryView: View {
             selectedEntry = entry
             showingDetail = true
         }
-    }
-
-    private func handleUndo(_ entry: OrganizationHistoryEntry) {
-        isProcessing = true
-        Task { @MainActor in
-            do {
-                let result = try await organizer.undoHistoryEntry(entry)
-                if result.hasIssues {
-                    HapticFeedbackManager.shared.tap()
-                    // Show detailed partial result sheet instead of generic alert
-                    partialUndoResult = PartialUndoResult(
-                        successCount: result.successfulOperations,
-                        missingFiles: result.missingFiles,
-                        failedOperationCount: result.retryableFailedOperationIDs.count,
-                        directoryPath: entry.directoryPath
-                    )
-                    isProcessing = false
-                    showPartialResultSheet = true
-                } else {
-                    HapticFeedbackManager.shared.success()
-                    alertMessage = "All \(result.successfulOperations) operations reversed successfully."
-                    showAlert = true
-                }
-            } catch {
-                HapticFeedbackManager.shared.error()
-                alertMessage = friendlyUndoErrorMessage(for: error)
-                showAlert = true
-            }
-            isProcessing = false
-        }
-    }
-
-    private func friendlyUndoErrorMessage(for error: Error) -> String {
-        let nsError = error as NSError
-
-        if nsError.domain == NSCocoaErrorDomain {
-            switch nsError.code {
-            case NSFileNoSuchFileError:
-                return "Some files were moved or deleted since this organization. Open the session details to undo individual operations."
-            case NSFileWriteNoPermissionError:
-                return "Permission denied. Check that Sorty has access to this folder in System Settings > Privacy & Security."
-            case NSFileWriteOutOfSpaceError:
-                return "Not enough disk space available. Free up some space and try again."
-            default:
-                break
-            }
-        }
-
-        return "Could not undo: \(error.localizedDescription)"
     }
 
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
@@ -738,13 +673,6 @@ private struct HistoryStatItem: View {
 
 // MARK: - History Session Card
 
-private enum HistoryCardActionState: Equatable {
-    case idle
-    case undoing
-
-    var isBusy: Bool { self != .idle }
-}
-
 private struct HistorySessionCardHeader: View {
     let entry: OrganizationHistoryEntry
     let generationMetadata: String?
@@ -817,14 +745,9 @@ private struct HistorySessionSummary: View {
 struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
-    let isProcessing: Bool
     let onSelect: () -> Void
-    let onUndo: () -> Void
 
     @State private var isHovered = false
-    @State private var actionState: HistoryCardActionState = .idle
-    @State private var swipeOffset: CGFloat = 0
-    @State private var hasCrossedSwipeThreshold = false
 
     private var generationMetadata: String? {
         guard let stats = entry.plan?.generationStats else { return nil }
@@ -847,14 +770,6 @@ struct HistorySessionCard: View {
         }
     }
 
-    private var canSwipeToRevert: Bool {
-        entry.success &&
-            !entry.isUndone &&
-            entry.status != .duplicatesCleanup &&
-            !isProcessing &&
-            !actionState.isBusy
-    }
-
     var body: some View {
         Button {
             onSelect()
@@ -873,8 +788,6 @@ struct HistorySessionCard: View {
         .accessibilityHint("Open session details")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
-        .background(swipeActionBackground)
-        .offset(x: swipeOffset)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
@@ -884,96 +797,8 @@ struct HistorySessionCard: View {
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: actionState)
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: swipeOffset)
-        .onChange(of: isProcessing) { _, newValue in
-            guard !newValue else { return }
-            resetActionState()
-            resetSwipe()
-        }
-        .onChange(of: entry.isUndone) { _, _ in
-            resetActionState()
-            resetSwipe()
-        }
         .onHover { hovering in
             isHovered = hovering
-        }
-        .simultaneousGesture(swipeToRevertGesture)
-    }
-
-    @ViewBuilder
-    private var swipeActionBackground: some View {
-        if canSwipeToRevert || swipeOffset < 0 {
-            HStack {
-                Spacer()
-
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.uturn.backward.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .symbolEffect(.bounce, value: hasCrossedSwipeThreshold)
-
-                    Text("Revert")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .frame(maxHeight: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.orange.gradient)
-                )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-    }
-
-    private var swipeToRevertGesture: some Gesture {
-        DragGesture(minimumDistance: 18, coordinateSpace: .local)
-            .onChanged { value in
-                guard canSwipeToRevert, abs(value.translation.width) > abs(value.translation.height) else { return }
-                let proposedOffset = min(0, value.translation.width)
-                swipeOffset = max(proposedOffset, -132)
-
-                let crossed = abs(swipeOffset) >= 96
-                if crossed && !hasCrossedSwipeThreshold {
-                    HapticFeedbackManager.shared.selection()
-                }
-                hasCrossedSwipeThreshold = crossed
-            }
-            .onEnded { _ in
-                guard canSwipeToRevert else {
-                    resetSwipe()
-                    return
-                }
-
-                if abs(swipeOffset) >= 96 {
-                    HapticFeedbackManager.shared.tap()
-                    beginUndo()
-                }
-                resetSwipe()
-            }
-    }
-
-    private func beginUndo() {
-        guard !isProcessing, !actionState.isBusy else { return }
-        HapticFeedbackManager.shared.tap()
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-            actionState = .undoing
-        }
-        onUndo()
-    }
-
-    private func resetActionState() {
-        guard actionState != .idle else { return }
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-            actionState = .idle
-        }
-    }
-
-    private func resetSwipe() {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
-            swipeOffset = 0
-            hasCrossedSwipeThreshold = false
         }
     }
 }
