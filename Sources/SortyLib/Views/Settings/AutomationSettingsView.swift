@@ -65,35 +65,23 @@ struct AutomationSettingsView: View {
 
                     automationOverrideNotice
                     
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Provider")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        Picker("", selection: $selectedProvider) {
-                            ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
-                                Text(provider.displayName).tag(provider)
-                            }
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Automation Model")
+                                .font(.subheadline)
+                            Text("Overrides the main organization model")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .onChange(of: selectedProvider) { _, newProvider in
-                            selectedModel = newProvider.defaultModel
-                            viewModel.config.automationProvider = newProvider
-                            viewModel.config.automationModel = selectedModel
-                        }
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Model")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        ModelSelectorRow(
+
+                        Spacer()
+
+                        ModelSelectorCompactButton(
                             provider: selectedProvider,
-                            model: selectedModel,
+                            label: selectedModelDisplay,
                             onTap: { showModelPicker = true }
                         )
+                        .modelSelectorTriggerBounds()
                     }
                     
                     Divider()
@@ -112,19 +100,22 @@ struct AutomationSettingsView: View {
             }
         }
         .settingsFocusable(.automationGlobalModel)
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: selectedProvider,
-                currentModel: selectedModel,
-                onSelect: { provider, model in
-                    selectedProvider = provider
-                    selectedModel = model
-                    viewModel.config.automationProvider = provider
-                    viewModel.config.automationModel = model
-                }
-            )
-        }
+        .modelSelectionOverlay(
+            isPresented: $showModelPicker,
+            currentProvider: selectedProvider,
+            currentModel: selectedModel,
+            contextMessage: "Choose the provider and model Sorty uses for watched-folder automation.",
+            onSelect: { provider, model in
+                selectedProvider = provider
+                selectedModel = model
+                viewModel.config.automationProvider = provider
+                viewModel.config.automationModel = model
+            }
+        )
+    }
+
+    private var selectedModelDisplay: String {
+        selectedModel.isEmpty ? selectedProvider.defaultModel : selectedModel
     }
 
     private var backgroundBehaviorSection: some View {

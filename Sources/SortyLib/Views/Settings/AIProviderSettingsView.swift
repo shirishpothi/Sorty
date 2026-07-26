@@ -109,6 +109,7 @@ struct AIProviderSettingsView: View {
             isPresented: $showModelPicker,
             currentProvider: viewModel.config.provider,
             currentModel: viewModel.config.model,
+            contextMessage: "Choose the provider and model Sorty uses for organization.",
             onSelect: { provider, model in
                 viewModel.config.provider = provider
                 viewModel.config.model = model
@@ -171,12 +172,11 @@ struct AIProviderSettingsView: View {
                     Spacer()
 
                     if !viewModel.availableModels.isEmpty {
-                        ModelSelectorRow(
+                        ModelSelectorCompactButton(
                             provider: .githubCopilot,
-                            model: viewModel.config.model,
+                            label: selectedModelDisplay,
                             onTap: { showModelPicker = true }
                         )
-                        .frame(width: 220)
                         .modelSelectorTriggerBounds()
                     } else if viewModel.isLoadingModels {
                         BouncingSpinner(size: 12, color: .secondary)
@@ -293,14 +293,20 @@ struct AIProviderSettingsView: View {
                     apiKeySection
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Model")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Model")
+                            .font(.subheadline)
+                        Text("Used for organization")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-                    ModelSelectorRow(
+                    Spacer()
+
+                    ModelSelectorCompactButton(
                         provider: viewModel.config.provider,
-                        model: viewModel.config.model,
+                        label: selectedModelDisplay,
                         onTap: { showModelPicker = true }
                     )
                     .modelSelectorTriggerBounds()
@@ -494,14 +500,20 @@ struct AIProviderSettingsView: View {
     private var appleConfigSection: some View {
         SettingsCard(title: "Apple Models", icon: "apple.logo", color: .gray) {
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Model")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Model")
+                            .font(.subheadline)
+                        Text("Runs privately on this Mac")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-                    ModelSelectorRow(
+                    Spacer()
+
+                    ModelSelectorCompactButton(
                         provider: .appleFoundationModel,
-                        model: viewModel.config.model,
+                        label: selectedModelDisplay,
                         onTap: { showModelPicker = true }
                     )
                     .modelSelectorTriggerBounds()
@@ -525,6 +537,11 @@ struct AIProviderSettingsView: View {
             }
         }
         .settingsFocusable(.providerConfiguration)
+    }
+
+    private var selectedModelDisplay: String {
+        let provider = viewModel.config.provider
+        return viewModel.config.model.isEmpty ? provider.defaultModel : viewModel.config.model
     }
 
     private var connectionSection: some View {

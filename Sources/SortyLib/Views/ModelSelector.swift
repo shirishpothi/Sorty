@@ -113,7 +113,7 @@ struct ModelSelectorCompactButton: View {
                 isHovering = hovering
             }
         }
-        .accessibilityLabel("\(label). Change model")
+        .accessibilityLabel("\(provider.displayName), \(label). Change model")
     }
 }
 
