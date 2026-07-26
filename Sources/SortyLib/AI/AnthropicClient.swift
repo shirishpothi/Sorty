@@ -34,7 +34,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let url = Self.messagesURL
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
 
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -74,7 +74,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let url = Self.messagesURL
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
 
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
         
         let userPrompt = PromptBuilder.buildOrganizationPrompt(

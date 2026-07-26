@@ -12,52 +12,6 @@ struct OrganizationRulesSettingsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            SettingsCard(title: "Organization Limits", icon: "folder.badge.questionmark", color: .purple) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Max Top-Level Folders")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(viewModel.config.maxTopLevelFolders)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                            .numericTextTransition(
-                                animationValue: viewModel.config.maxTopLevelFolders
-                            )
-                    }
-                    
-                    NoTickSlider(
-                        value: Binding(
-                            get: { Double(viewModel.config.maxTopLevelFolders) },
-                            set: { viewModel.config.maxTopLevelFolders = Int($0) }
-                        ),
-                        in: 3...20,
-                        step: 1
-                    )
-                    .onChange(of: viewModel.config.maxTopLevelFolders) { _, _ in
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    
-                    HStack {
-                        Text("Minimal (3)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("Detailed (20)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Text("Limits how many main folders Sorty creates. Subfolders are not limited.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 4)
-
-                }
-            }
-            .settingsFocusable(.rulesOrganizationLimits)
-            .animatedAppearance(delay: 0.05)
-            
             SettingsCard(title: "Content Rules", icon: "checklist", color: .orange) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
@@ -68,7 +22,7 @@ struct OrganizationRulesSettingsView: View {
                 }
             }
             .settingsFocusable(.rulesContentRules)
-            .animatedAppearance(delay: 0.1)
+            .animatedAppearance(delay: 0.05)
 
             SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -101,14 +55,14 @@ struct OrganizationRulesSettingsView: View {
                     }
                 }
             }
-            .animatedAppearance(delay: 0.2)
+            .animatedAppearance(delay: 0.1)
 
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
                 PersonaPickerView()
             }
             .settingsFocusable(.rulesOrganizationStyle)
-            .animatedAppearance(delay: 0.25)
+            .animatedAppearance(delay: 0.15)
         }
     }
 }

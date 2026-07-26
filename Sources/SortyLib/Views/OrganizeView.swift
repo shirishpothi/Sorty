@@ -1380,6 +1380,12 @@ struct ReadyToOrganizeView: View {
             }
             .animation(.easeInOut(duration: 0.16), value: mention?.query)
 
+            if mode != .renameOnly {
+                Text("Add a folder-count or hierarchy preference here when needed, then use Save to reuse these instructions.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(alignment: .center, spacing: 0) {
                 // Improve with AI button
                 if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

@@ -444,4 +444,23 @@ final class FolderSuggestionTests: XCTestCase {
             )
         )
     }
+
+    func testValidationAllowsContextSupportedPlansWithManyTopLevelFolders() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let suggestions = try (1...24).map { index in
+            let fileURL = rootURL.appendingPathComponent("source-\(index).txt")
+            try Data("test".utf8).write(to: fileURL)
+            let file = FileItem(path: fileURL.path, name: "source-\(index)", extension: "txt")
+            return FolderSuggestion(folderName: "Category \(index)", files: [file])
+        }
+        let plan = OrganizationPlan(suggestions: suggestions)
+
+        XCTAssertNoThrow(
+            try FileOrganizationValidator.validate(plan, at: rootURL)
+        )
+    }
 }

@@ -23,7 +23,6 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     ) async throws -> OrganizationPlan {
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
             personaInfo: personaPrompt ?? "",
-            maxTopLevelFolders: config.maxTopLevelFolders,
             mode: config.mode,
             enableTagging: config.enableFileTagging
         )
@@ -77,7 +76,6 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
             personaInfo: personaPrompt ?? "",
-            maxTopLevelFolders: config.maxTopLevelFolders,
             mode: config.mode,
             enableTagging: config.enableFileTagging
         )

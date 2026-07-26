@@ -54,7 +54,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         try ensureNetworkAllowed(url)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             mode: config.mode,
@@ -104,7 +104,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         try ensureNetworkAllowed(url)
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             mode: config.mode,

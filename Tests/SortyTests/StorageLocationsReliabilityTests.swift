@@ -45,8 +45,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -115,8 +114,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -152,8 +150,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -185,8 +182,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -225,8 +221,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -271,8 +266,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
             )
         )
     }
@@ -302,8 +296,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: cloudDir.path)],
-                maxTopLevelFolders: 10
+                allowedStorageLocations: [StorageLocation(path: cloudDir.path)]
             )
         )
     }

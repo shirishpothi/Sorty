@@ -3653,6 +3653,108 @@
         }
       }
     },
+    "Add a folder-count or hierarchy preference here when needed, then use Save to reuse these instructions.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge hier bei Bedarf eine Präferenz für Ordneranzahl oder Hierarchie hinzu und verwende dann „Speichern“, um diese Anweisungen wiederzuverwenden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade aquí una preferencia de número de carpetas o jerarquía cuando la necesites y usa Guardar para reutilizar estas instrucciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez ici une préférence de nombre de dossiers ou de hiérarchie si nécessaire, puis utilisez Enregistrer pour réutiliser ces instructions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必要に応じてフォルダ数や階層の希望をここに追加し、「保存」でこの指示を再利用できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要时在此添加文件夹数量或层级偏好，然后使用“保存”重复使用这些指令。"
+          }
+        }
+      }
+    },
+    "Optional. Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Lege hier dauerhafte Präferenzen fest, einschließlich der bevorzugten Ordneranzahl oder Hierarchie. Sorty speichert sie mit %1$@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opcional. Añade aquí preferencias permanentes, incluido el número de carpetas o la jerarquía. Sorty las guarda con %1$@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Facultatif. Ajoutez ici vos préférences permanentes, notamment le nombre de dossiers ou la hiérarchie. Sorty les enregistre avec %1$@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任意。希望するフォルダ数や階層などの継続的な設定をここに追加します。Sorty は %1$@ と一緒に保存します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选。在此添加持久偏好，包括首选文件夹数量或层级。Sorty 会将其保存到 %1$@。"
+          }
+        }
+      }
+    },
+    "Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with this persona.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lege hier dauerhafte Präferenzen fest, einschließlich der bevorzugten Ordneranzahl oder Hierarchie. Sorty speichert sie mit dieser Persona."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade aquí preferencias permanentes, incluido el número de carpetas o la jerarquía. Sorty las guarda con esta persona."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez ici vos préférences permanentes, notamment le nombre de dossiers ou la hiérarchie. Sorty les enregistre avec cette persona."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "希望するフォルダ数や階層などの継続的な設定をここに追加します。Sorty はこのペルソナと一緒に保存します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此添加持久偏好，包括首选文件夹数量或层级。Sorty 会将其保存到此角色。"
+          }
+        }
+      }
+    },
     "Add a folder that Sorty can organize with": {
       "localizations": {
         "de": {
@@ -10335,40 +10437,6 @@
         }
       }
     },
-    "Detailed (20)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detailliert (20)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detallado (20)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Détail (20)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "詳細（20）"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "详细（20）"
-          }
-        }
-      }
-    },
     "Details": {
       "localizations": {
         "de": {
@@ -11561,40 +11629,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "编辑建议名称"
-          }
-        }
-      }
-    },
-    "Edit the custom persona system prompt Sorty uses for organization.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bearbeite die benutzerdefinierte Perso-System-Prompt, den Sorty verwendet, um organisiert zu werden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar el sistema de prompt personalizado que utiliza Sorty para la organización."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Éditez le prompt personnalisé du système de personnage que Sorty utilise pour l'organisation."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "カスタム人間像システムプロンプトを編集してください。これはSortyが整理のために使用するプロンプトです。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "编辑Sorty用于组织的自定义角色提示系统。"
           }
         }
       }
@@ -16807,40 +16841,6 @@
         }
       }
     },
-    "Limits how many main folders Sorty creates. Subfolders are not limited.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Begrenzt die Anzahl der Hauptordner, die Sorty erstellt. Unterverzeichnisse sind nicht begrenzt."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limita la cantidad de carpetas principales que crea Sorty. Las carpetas secundarias no están limitadas."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limite le nombre de dossiers principaux que Sorty crée. Les sous-dossiers ne sont pas limités."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sortyが作成する主要フォルダの数を制限します。サブフォルダは制限されません."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "限制Sorty创建的主要文件夹数量。子文件夹不受限制。"
-          }
-        }
-      }
-    },
     "Liquid Metal Configuration": {
       "localizations": {
         "de": {
@@ -17483,74 +17483,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "最大长度"
-          }
-        }
-      }
-    },
-    "Max Top-Level Folders": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maximale Hauptordner"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nivel máximo de carpetas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nombre maximal de dossiers de niveau supérieur"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "トップレベルのフォルダの最大数"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最高级文件夹最大数"
-          }
-        }
-      }
-    },
-    "Minimal (3)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minimale (3)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mínimo (3)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minimal (3)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最小 (3)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最小（3）"
           }
         }
       }
@@ -20413,40 +20345,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "可选"
-          }
-        }
-      }
-    },
-    "Optional. Leave empty to use %@'s built-in behavior.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Optional. Lassen Sie leer, um %1$@s integriertes Verhalten zu verwenden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opcional. Dejar en blanco para usar el comportamiento integrado de %1$@."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Optionnel. Laisser vide pour utiliser le comportement intégré de %1$@."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オプション。空欄に残すと %1$@ の組み込み動作を使用します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可选。留空以使用%1$@的内置行为。"
           }
         }
       }
@@ -42933,41 +42831,6 @@
         }
       }
     },
-    "Organization Limits": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Organisationsgrenzen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Límites de organización"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Limites d'organisation"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "組織制限"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "组织限制"
-          }
-        }
-      }
-    },
     "Content Rules": {
       "extractionState": "manual",
       "localizations": {
@@ -44889,41 +44752,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择命名模板、分隔符、大小写、日期策略、输出语言、最大长度和自定义预设。"
-          }
-        }
-      }
-    },
-    "Set max top-level folders to control output structure.": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maximale Anzahl oberster Ordner festlegen, um die Ausgabestruktur zu kontrollieren."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Establecer el número máximo de carpetas de nivel superior para controlar la estructura de salida."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fixez le nombre de dossiers de niveau supérieur pour contrôler la structure de sortie."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "トップレベルのフォルダ数を設定して出力構造を制御します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设置顶级文件夹的最大数量以控制输出结构。"
           }
         }
       }

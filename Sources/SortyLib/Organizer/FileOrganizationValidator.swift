@@ -12,7 +12,6 @@ struct FileOrganizationValidator {
         _ plan: OrganizationPlan,
         at baseURL: URL,
         allowedStorageLocations: [StorageLocation] = [],
-        maxTopLevelFolders: Int = 10,
         mode: OrganizationMode = .organize
     ) throws {
         let fileManager = FileManager.default
@@ -23,12 +22,8 @@ struct FileOrganizationValidator {
         }
         
         if mode != .renameOnly {
-            // These limits protect AI-created destinations. Rename-only destinations
+            // These checks protect AI-created destinations. Rename-only destinations
             // are derived from existing source folders by OrganizationModePlanEnforcer.
-            if plan.suggestions.count > maxTopLevelFolders {
-                throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
-            }
-
             try validateDestinations(plan, at: baseURL, allowedLocations: allowedStorageLocations)
             try checkConflicts(plan, at: baseURL)
         }
@@ -37,7 +32,7 @@ struct FileOrganizationValidator {
         try validateFileExistence(plan)
         
         // Large operations are allowed. We keep validation focused on correctness
-        // constraints (conflicts, missing files, storage safety, folder limits).
+        // constraints (conflicts, missing files, and storage safety).
     }
 
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
@@ -150,7 +145,6 @@ enum ValidationError: LocalizedError {
     case pathExists(String)
     case fileNotFound(String)
     case largeOperation(Int)
-    case tooManyFolders(Int, max: Int)
     case invalidStorageLocation(String)
     
     var errorDescription: String? {
@@ -165,8 +159,6 @@ enum ValidationError: LocalizedError {
             return "File not found: \(path)"
         case .largeOperation(let count):
             return "Large operation detected (\(count) files). Please review carefully."
-        case .tooManyFolders(let count, let max):
-            return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
         case .invalidStorageLocation(let path):
             return "Invalid storage location: \(path). Sorty suggested a path that is not in your approved storage locations list."
         }

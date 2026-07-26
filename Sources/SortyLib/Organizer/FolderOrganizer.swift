@@ -1523,8 +1523,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
 
-        var instructions = customPrompt ?? customInstructions
-        if let referenceContext = fileReferenceContext(from: instructions, in: directory) {
+        let directInstructions = customPrompt ?? customInstructions
+        var instructions = PromptBuilder.wrapDirectUserInstructions(directInstructions)
+        if let referenceContext = fileReferenceContext(from: directInstructions, in: directory) {
             instructions += "\n\n" + referenceContext
         }
         if !duplicateContext.isEmpty {
@@ -1838,13 +1839,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.clientNotConfigured
         }
 
-        let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedInputPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
-            try validator.validate(normalizedInputPlan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
+            try validator.validate(normalizedInputPlan, at: directory, allowedStorageLocations: allowedLocations)
         } catch let validationError as ValidationError {
             if let retryPlan = await retryWithValidationEnhancement(
                 files: files,
@@ -1855,7 +1855,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 personaPrompt: personaPrompt,
                 temperature: temperature,
                 imagePayload: imagePayload,
-                maxTopLevelFolders: maxFolders,
                 allowedStorageLocations: allowedLocations
             ) {
                 validatedPlanFromRetry = retryPlan
@@ -2287,20 +2286,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         personaPrompt: String?,
         temperature: Double?,
         imagePayload: [String: Data],
-        maxTopLevelFolders: Int,
         allowedStorageLocations: [StorageLocation]
     ) async -> OrganizationPlan? {
         let enhancement: String
         switch validationError {
-        case .tooManyFolders(let count, let max):
-            LogManager.shared.log("Retrying: too many folders (\(count) > \(max))", category: "FolderOrganizer")
-            enhancement = """
-            
-            CRITICAL CORRECTION REQUIRED:
-            Your previous response created \(count) top-level folders, but the maximum allowed is \(max).
-            You MUST consolidate categories to produce at most \(max) top-level folders.
-            Merge related categories together. For example, combine "Work Documents" and "Reports" into "Work", or group smaller categories into a single "Misc" folder.
-            """
         case .pathExists(let path):
             let fileName = URL(fileURLWithPath: path).lastPathComponent
             LogManager.shared.log("Retrying: path exists conflict (\(fileName))", category: "FolderOrganizer")
@@ -2366,8 +2355,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try validator.validate(
                 normalizedRetryPlan,
                 at: directory,
-                allowedStorageLocations: allowedStorageLocations,
-                maxTopLevelFolders: maxTopLevelFolders
+                allowedStorageLocations: allowedStorageLocations
             )
             LogManager.shared.log("Validation retry succeeded", category: "FolderOrganizer")
             return normalizedRetryPlan
@@ -2617,7 +2605,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 """
             }
 
-            let prompt = (customPrompt ?? customInstructions) + "\n\n" + contextPrompt
+            let prompt = PromptBuilder.wrapDirectUserInstructions(customPrompt ?? customInstructions) + "\n\n" + contextPrompt
             
             // Add Learnings context
             var finalPrompt = prompt
@@ -2659,7 +2647,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            let maxTopLevelFolders = mode == .renameOnly ? 100 : operationConfig.maxTopLevelFolders
             var planAfterValidation = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             planAfterValidation = OrganizationModePlanEnforcer.enforce(
                 planAfterValidation,
@@ -2671,7 +2658,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     planAfterValidation,
                     at: directory,
                     allowedStorageLocations: allowedLocations,
-                    maxTopLevelFolders: maxTopLevelFolders,
                     mode: mode
                 )
             } catch let validationError as ValidationError {
@@ -2684,7 +2670,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     personaPrompt: personaPrompt,
                     temperature: temperature,
                     imagePayload: [:],
-                    maxTopLevelFolders: maxTopLevelFolders,
                     allowedStorageLocations: allowedLocations
                 ) {
                     planAfterValidation = OrganizationModePlanEnforcer.enforce(
@@ -2865,7 +2850,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             4. Focus only on the selected files - do not touch other files in the folder.
             """
 
-            let prompt = (customPrompt ?? customInstructions) + "\n\n" + contextPrompt
+            let prompt = PromptBuilder.wrapDirectUserInstructions(customPrompt ?? customInstructions) + "\n\n" + contextPrompt
 
             // Add Learnings context
             var finalPrompt = prompt
@@ -2898,14 +2883,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Validate selected-files plan before apply.
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
             var validatedPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
                 try validator.validate(
                     validatedPlan,
                     at: directory,
-                    allowedStorageLocations: allowedLocations,
-                    maxTopLevelFolders: maxTopLevelFolders
+                    allowedStorageLocations: allowedLocations
                 )
             } catch let validationError as ValidationError {
                 if let retryPlan = await retryWithValidationEnhancement(
@@ -2917,7 +2900,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     personaPrompt: personaPrompt,
                     temperature: temperature,
                     imagePayload: [:],
-                    maxTopLevelFolders: maxTopLevelFolders,
                     allowedStorageLocations: allowedLocations
                 ) {
                     validatedPlan = retryPlan
@@ -2970,9 +2952,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let operationMode = modeOverride ?? operationConfig?.mode ?? .organize
 
-        let maxFolders = operationConfig?.mode == .renameOnly
-            ? 100
-            : (operationConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
         let normalizedRenamePlan = normalizeRenameSuggestions(
@@ -2989,7 +2968,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             planToApply,
             at: baseURL,
             allowedStorageLocations: allowedLocations,
-            maxTopLevelFolders: maxFolders,
             mode: operationMode
         )
 
@@ -3178,7 +3156,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
         
         let isRenameOnly = tempConfig.mode == .renameOnly
-        var instructions = customInstructions ?? self.customInstructions
+        var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions ?? self.customInstructions)
         if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
         }
@@ -3538,7 +3516,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Generate new plan
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
             
-            var instructions = customInstructions
+            var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions)
             if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 instructions += "\n\n" + learnedContext
             }

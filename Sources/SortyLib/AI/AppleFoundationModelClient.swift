@@ -142,7 +142,10 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             )
 
             if let instructions = customInstructions, !instructions.isEmpty {
-                prompts.user = "USER INSTRUCTIONS: \(instructions)\n\n" + prompts.user
+                let heading = instructions.contains("<user_instructions>")
+                    ? "TASK INSTRUCTIONS AND SUPPORTING CONTEXT: Follow <user_instructions> before persona and labeled supporting context."
+                    : "USER INSTRUCTIONS:"
+                prompts.user = "\(heading) \(instructions)\n\n" + prompts.user
             }
 
             DebugLogger.log("AFM Strategy: \(strategy) compaction for \(files.count) files")

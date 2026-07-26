@@ -582,9 +582,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var storeDuplicateMetadata: Bool // Save original metadata for duplicates (opt-in)
     public var strictExclusions: Bool // Higher-level screening for exclusions
     
-    // Organization limits (user-configurable)
-    public var maxTopLevelFolders: Int // Maximum number of top-level folders AI can create (3-20)
-    
     // Vision & Multimodal
     public var enableVision: Bool // Use AI vision to analyze image content
     public var namingStyle: NamingStyle // Preferred naming convention
@@ -627,7 +624,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         showStatsForNerds: Bool = false,
         storeDuplicateMetadata: Bool = true,
         strictExclusions: Bool = true,
-        maxTopLevelFolders: Int = 10,
         enableVision: Bool = true,
         namingStyle: NamingStyle = .descriptive,
         renameNamingOptions: RenameNamingOptions = .default,
@@ -666,7 +662,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.showStatsForNerds = showStatsForNerds
         self.storeDuplicateMetadata = storeDuplicateMetadata
         self.strictExclusions = strictExclusions
-        self.maxTopLevelFolders = maxTopLevelFolders
         self.enableVision = enableVision
         self.namingStyle = namingStyle
         self.renameNamingOptions = renameNamingOptions
@@ -707,7 +702,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case showStatsForNerds
         case storeDuplicateMetadata
         case strictExclusions
-        case maxTopLevelFolders
         case enableVision
         case namingStyle
         case renameNamingOptions
@@ -752,7 +746,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         showStatsForNerds = try container.decodeIfPresent(Bool.self, forKey: .showStatsForNerds) ?? false
         storeDuplicateMetadata = try container.decodeIfPresent(Bool.self, forKey: .storeDuplicateMetadata) ?? true
         strictExclusions = try container.decodeIfPresent(Bool.self, forKey: .strictExclusions) ?? true
-        maxTopLevelFolders = try container.decodeIfPresent(Int.self, forKey: .maxTopLevelFolders) ?? 10
         enableVision = try container.decodeIfPresent(Bool.self, forKey: .enableVision) ?? true
         namingStyle = try container.decodeIfPresent(NamingStyle.self, forKey: .namingStyle) ?? .descriptive
         renameNamingOptions = try container.decodeIfPresent(RenameNamingOptions.self, forKey: .renameNamingOptions) ?? .default
@@ -794,7 +787,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encode(showStatsForNerds, forKey: .showStatsForNerds)
         try container.encode(storeDuplicateMetadata, forKey: .storeDuplicateMetadata)
         try container.encode(strictExclusions, forKey: .strictExclusions)
-        try container.encode(maxTopLevelFolders, forKey: .maxTopLevelFolders)
         try container.encode(enableVision, forKey: .enableVision)
         try container.encode(namingStyle, forKey: .namingStyle)
         try container.encode(renameNamingOptions, forKey: .renameNamingOptions)
@@ -834,7 +826,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         showStatsForNerds: false,
         storeDuplicateMetadata: true,
         strictExclusions: true,
-        maxTopLevelFolders: 10,
         enableVision: true,
         namingStyle: .descriptive,
         renameNamingOptions: .default,

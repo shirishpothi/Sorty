@@ -25,7 +25,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
         
         // Use custom system prompt if provided, otherwise use default
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             mode: config.mode,
@@ -78,7 +78,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             mode: config.mode,

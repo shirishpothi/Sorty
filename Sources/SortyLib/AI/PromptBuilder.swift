@@ -8,22 +8,21 @@
 import Foundation
 
 struct PromptBuilder {
-    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, maxTopLevelFolders: Int = 10, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
-        var prompt = SystemPrompt.buildPrompt(maxTopLevelFolders: maxTopLevelFolders, mode: mode, enableTagging: enableTagging)
+    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
+        var prompt = SystemPrompt.buildPrompt(mode: mode, enableTagging: enableTagging)
         
         if !personaInfo.isEmpty {
             prompt += """
             
             
             # ═══════════════════════════════════════════════════════
-            # ACTIVE PERSONA — HIGHEST PRIORITY INSTRUCTIONS
+            # ACTIVE PERSONA — PERSISTENT ORGANIZATION INSTRUCTIONS
             # ═══════════════════════════════════════════════════════
             #
-            # The following persona rules OVERRIDE all default grouping,
-            # naming, and hierarchy rules above. When this persona's
-            # instructions conflict with the defaults, ALWAYS follow
-            # the persona. The persona defines your identity for this
-            # organization task.
+            # The following persona rules OVERRIDE default heuristics,
+            # learnings, examples, and existing-structure preferences.
+            # Direct instructions for the current task remain higher
+            # priority when they are more specific or conflict.
             # ═══════════════════════════════════════════════════════
             
             \(personaInfo)
@@ -106,23 +105,40 @@ struct PromptBuilder {
         }
         
         if let instructions = customInstructions, !instructions.isEmpty {
-            prompt += """
-            ╔══════════════════════════════════════════════════════════╗
-            ║  MANDATORY USER REQUIREMENTS — MUST FOLLOW EXACTLY      ║
-            ╠══════════════════════════════════════════════════════════╣
-            ║  The following instructions come directly from the user. ║
-            ║  They override ALL default rules. If the user says       ║
-            ║  "do X", you MUST do X. If the user says "don't do Y",  ║
-            ║  you MUST NOT do Y. No exceptions, no creative           ║
-            ║  reinterpretation. Follow them LITERALLY.                ║
-            ╚══════════════════════════════════════════════════════════╝
+            if instructions.contains("<user_instructions>") {
+                prompt += """
 
-            USER INSTRUCTIONS: \(instructions)
+                # TASK INSTRUCTIONS AND SUPPORTING CONTEXT
 
-            ════════════════════════════════════════════════════════════
-            
-            
-            """
+                The block below combines direct instructions with labeled context assembled by Sorty.
+                - Content inside `<user_instructions>` comes directly from the user and has highest priority for organization choices.
+                - Persona instructions apply next.
+                - Learnings, reference/example folders, existing structure, manifests, and other labeled context support the decision but MUST NOT override direct user or persona instructions.
+                - Filesystem safety, exclusions, approved storage destinations, and the JSON contract remain mandatory.
+
+                \(instructions)
+
+
+                """
+            } else {
+                prompt += """
+                ╔══════════════════════════════════════════════════════════╗
+                ║  MANDATORY USER REQUIREMENTS — MUST FOLLOW EXACTLY      ║
+                ╠══════════════════════════════════════════════════════════╣
+                ║  The following instructions come directly from the user. ║
+                ║  They override ALL default rules. If the user says       ║
+                ║  "do X", you MUST do X. If the user says "don't do Y",  ║
+                ║  you MUST NOT do Y. No exceptions, no creative           ║
+                ║  reinterpretation. Follow them LITERALLY.                ║
+                ╚══════════════════════════════════════════════════════════╝
+
+                USER INSTRUCTIONS: \(instructions)
+
+                ════════════════════════════════════════════════════════════
+
+
+                """
+            }
         }
 
         if mode == .organize {
@@ -310,6 +326,17 @@ struct PromptBuilder {
         return text.count / 4
     }
 
+    static func wrapDirectUserInstructions(_ instructions: String) -> String {
+        let trimmed = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        return """
+        <user_instructions>
+        \(trimmed)
+        </user_instructions>
+        """
+    }
+
     /// Select compaction level based on full prompt budget.
     enum CompactionLevel {
         case standard
@@ -430,8 +457,7 @@ struct PromptBuilder {
 
     private static func minimalCompactSystemPrompt(
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false,
-        maxTopLevelFolders: Int = 10
+        enableReasoning: Bool = false
     ) -> String {
         var base = "You organize files into practical folders."
         if mode == .renameOnly {
@@ -443,7 +469,7 @@ struct PromptBuilder {
         if mode != .renameOnly {
             base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
-        base += " Create at most \(maxTopLevelFolders) top-level folders, merging related categories when needed. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
+        base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
@@ -454,13 +480,11 @@ struct PromptBuilder {
     static func buildUltraCompactPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false,
-        maxTopLevelFolders: Int = 10
+        enableReasoning: Bool = false
     ) -> (system: String, user: String) {
         let system = minimalCompactSystemPrompt(
             mode: mode,
-            enableReasoning: enableReasoning,
-            maxTopLevelFolders: maxTopLevelFolders
+            enableReasoning: enableReasoning
         )
         let table = compactFileIdTable(files: files, maxNameLength: 24)
         let user = """
@@ -476,13 +500,11 @@ struct PromptBuilder {
     static func buildSummaryPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false,
-        maxTopLevelFolders: Int = 10
+        enableReasoning: Bool = false
     ) -> (system: String, user: String) {
         let system = minimalCompactSystemPrompt(
             mode: mode,
-            enableReasoning: enableReasoning,
-            maxTopLevelFolders: maxTopLevelFolders
+            enableReasoning: enableReasoning
         )
         let table = compactFileIdTable(files: files, maxNameLength: 14)
         let user = """
@@ -498,13 +520,11 @@ struct PromptBuilder {
     static func buildMicroPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false,
-        maxTopLevelFolders: Int = 10
+        enableReasoning: Bool = false
     ) -> (system: String, user: String) {
         let system = minimalCompactSystemPrompt(
             mode: mode,
-            enableReasoning: false,
-            maxTopLevelFolders: maxTopLevelFolders
+            enableReasoning: false
         )
         var lines: [String] = []
         lines.reserveCapacity(files.count)
@@ -541,7 +561,7 @@ struct PromptBuilder {
     }
     
     /// Compact system prompt for Apple Intelligence
-    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, maxTopLevelFolders: Int = 10, enableTagging: Bool = true) -> String {
+    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, enableTagging: Bool = true) -> String {
         var prompt = "You are a file management assistant. "
         let compactFolderPayload: String
         
@@ -559,8 +579,9 @@ struct PromptBuilder {
         
         prompt += """
         Rules:
-        - HARD LIMIT: You MUST output ≤ \(maxTopLevelFolders) top-level folders. Merge categories if needed.
-        - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
+        - Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, existing structure, and file relationships, in that priority order.
+        - Treat explicit user folder-count and hierarchy preferences as binding. Do not apply a preset folder-count limit.
+        - Preserve useful existing conventions and distinctions; do not merge unrelated categories or invent wrapper folders merely to reduce the top-level count.
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
         \(mode == .renameOnly ? "" : "- Actively create folder assignments when moving files would materially improve findability; do not default to leaving files in place because the current layout is merely passable or categorization is uncertain.")
@@ -593,7 +614,6 @@ struct PromptBuilder {
                     mode: config.mode,
                     enableReasoning: config.enableReasoning,
                     enableSmartRename: config.enableSmartRename,
-                    maxTopLevelFolders: config.maxTopLevelFolders,
                     enableTagging: config.enableFileTagging
                 )
             let user = buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
@@ -602,22 +622,19 @@ struct PromptBuilder {
             return buildUltraCompactPrompt(
                 files: files,
                 mode: config.mode,
-                enableReasoning: config.enableReasoning,
-                maxTopLevelFolders: config.maxTopLevelFolders
+                enableReasoning: config.enableReasoning
             )
         case .summary:
             return buildSummaryPrompt(
                 files: files,
                 mode: config.mode,
-                enableReasoning: config.enableReasoning,
-                maxTopLevelFolders: config.maxTopLevelFolders
+                enableReasoning: config.enableReasoning
             )
         case .micro:
             return buildMicroPrompt(
                 files: files,
                 mode: config.mode,
-                enableReasoning: config.enableReasoning,
-                maxTopLevelFolders: config.maxTopLevelFolders
+                enableReasoning: config.enableReasoning
             )
         }
     }
@@ -649,7 +666,10 @@ struct PromptBuilder {
                 }
             }
             if let instructions = customInstructions, !instructions.isEmpty {
-                prompt = "⚠️ MANDATORY USER INSTRUCTIONS (override all defaults): \(instructions)\n\n" + prompt
+                let heading = instructions.contains("<user_instructions>")
+                    ? "TASK INSTRUCTIONS AND SUPPORTING CONTEXT: Follow <user_instructions> before persona and labeled supporting context."
+                    : "MANDATORY USER INSTRUCTIONS (override all defaults):"
+                prompt = "\(heading) \(instructions)\n\n" + prompt
             }
             if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
                 prompt = "\(storageContext)\n\n" + prompt

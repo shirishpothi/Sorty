@@ -33,7 +33,6 @@ public enum SettingsFocusTarget: String, Sendable {
     case strategyFastMode = "settings.strategy.fast-mode"
     case strategyVision = "settings.strategy.vision"
     case strategyRenaming = "settings.strategy.renaming"
-    case rulesOrganizationLimits = "settings.rules.organization-limits"
     case rulesContentRules = "settings.rules.content-rules"
     case rulesOrganizationStyle = "settings.rules.organization-style"
     case automationGlobalModel = "settings.automation.global-model"
@@ -171,7 +170,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .rules:
             return [
-                SettingsFeatureSnippet(title: "Organization Limits", summary: "Set max top-level folders to control output structure."),
                 SettingsFeatureSnippet(title: "Duplicate Handling", summary: "Use the duplicate detection dropdown in preview to control how duplicates are scanned.", keywords: ["duplicates", "duplicate detection"]),
                 SettingsFeatureSnippet(title: "Enable File Tagging", summary: "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"]),
                 SettingsFeatureSnippet(title: "AI Temperature", summary: "Adjust creativity vs determinism in generation output."),
@@ -285,8 +283,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .strategyVision
         case (.strategy, "Renaming"):
             return .strategyRenaming
-        case (.rules, "Organization Limits"):
-            return .rulesOrganizationLimits
         case (.rules, "Duplicate Handling"), (.rules, "Enable File Tagging"):
             return .rulesContentRules
         case (.rules, "Organization Style"):

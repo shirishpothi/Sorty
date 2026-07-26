@@ -196,7 +196,7 @@ struct PersonaPickerView: View {
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
                     .accessibilityLabel("\(custom.name) system prompt")
 
-                Text("Edit the custom persona system prompt Sorty uses for organization.")
+                Text("Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with this persona.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -243,9 +243,7 @@ struct PersonaPickerView: View {
                     )
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
 
-                Text(
-                    "Optional. Leave empty to use \(personaManager.selectedPersona.displayName)'s built-in behavior."
-                )
+                Text("Optional. Put persistent preferences here, including preferred folder count or hierarchy. Sorty saves them with \(personaManager.selectedPersona.displayName).")
                 .font(.caption)
                 .foregroundColor(.secondary)
             }

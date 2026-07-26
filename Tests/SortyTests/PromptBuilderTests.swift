@@ -29,7 +29,6 @@ final class PromptBuilderTests: XCTestCase {
     func testSystemPromptUsesOneJSONOnlyContract() {
         let prompt = PromptBuilder.buildSystemPrompt(
             personaInfo: "",
-            maxTopLevelFolders: 8,
             mode: .organizeAndRename,
             enableTagging: true
         )
@@ -44,7 +43,6 @@ final class PromptBuilderTests: XCTestCase {
     func testSystemPromptAllowsApprovedAbsoluteStoragePaths() {
         let prompt = PromptBuilder.buildSystemPrompt(
             personaInfo: "",
-            maxTopLevelFolders: 8,
             mode: .organize,
             enableTagging: true
         )
@@ -72,19 +70,20 @@ final class PromptBuilderTests: XCTestCase {
         }
     }
 
-    func testEverySystemPromptUsesConfiguredTopLevelFolderLimitWithoutFixedDepth() {
-        var config = AIConfig(mode: .organize)
-        config.maxTopLevelFolders = 17
+    func testEverySystemPromptDelegatesHierarchyToContextWithoutHiddenFolderCap() {
+        let config = AIConfig(mode: .organize)
         let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
 
         let fullPrompt = PromptBuilder.buildSystemPrompt(
             personaInfo: "",
-            maxTopLevelFolders: config.maxTopLevelFolders,
             mode: .organize,
             enableTagging: true
         )
-        XCTAssertTrue(fullPrompt.contains("17 top-level folders"))
-        XCTAssertFalse(fullPrompt.localizedCaseInsensitiveContains("3 levels"))
+        XCTAssertTrue(fullPrompt.contains("There is no preset target or default maximum"))
+        XCTAssertTrue(fullPrompt.contains("Direct instructions for the current task"))
+        XCTAssertTrue(fullPrompt.contains("Relevant learned preferences"))
+        XCTAssertTrue(fullPrompt.contains("Reference or example folders and the existing folder structure"))
+        XCTAssertFalse(fullPrompt.localizedCaseInsensitiveContains("hard limit: you must output"))
 
         for level in [
             PromptBuilder.CompactionLevel.standard,
@@ -93,9 +92,42 @@ final class PromptBuilderTests: XCTestCase {
             .micro
         ] {
             let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
-            XCTAssertTrue(prompt.contains("17 top-level folders"), "Missing Settings limit in \(level)")
-            XCTAssertFalse(prompt.localizedCaseInsensitiveContains("3 levels"), "Fixed depth leaked into \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("do not apply a preset folder-count limit"), "Missing hierarchy discretion in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("direct user instructions"), "Missing user priority in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("learnings"), "Missing learnings context in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("existing structure"), "Missing existing-folder context in \(level)")
         }
+    }
+
+    func testCustomHierarchyInstructionsArePreservedAsMandatoryRequirements() {
+        let instructions = "Create exactly 24 top-level folders and keep the hierarchy flat."
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")],
+            customInstructions: instructions
+        )
+
+        XCTAssertTrue(prompt.contains("MANDATORY USER REQUIREMENTS"))
+        XCTAssertTrue(prompt.contains("USER INSTRUCTIONS: \(instructions)"))
+        XCTAssertTrue(prompt.contains("Follow them LITERALLY"))
+    }
+
+    func testDirectInstructionsAreDistinguishedFromSupportingOrganizationContext() {
+        let directInstructions = "Use no more than four top-level folders."
+        let assembledContext = """
+        \(PromptBuilder.wrapDirectUserInstructions(directInstructions))
+
+        <learnings_context>
+        Prefer detailed project folders.
+        </learnings_context>
+        """
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")],
+            customInstructions: assembledContext
+        )
+
+        XCTAssertTrue(prompt.contains("<user_instructions>\n\(directInstructions)\n</user_instructions>"))
+        XCTAssertTrue(prompt.contains("Content inside `<user_instructions>` comes directly from the user and has highest priority"))
+        XCTAssertTrue(prompt.contains("MUST NOT override direct user or persona instructions"))
     }
     
     // MARK: - Empty Input
