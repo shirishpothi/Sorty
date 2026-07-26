@@ -14,6 +14,7 @@ struct PersonaGeneratorView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @ObservedObject var store: CustomPersonaStore
     @Binding var selectedPersonaId: String?
+    var onPersonaGenerated: (() -> Void)? = nil
     
     @StateObject private var generator = PersonaGenerator()
     @State private var prompt: String = ""
@@ -439,6 +440,7 @@ struct PersonaGeneratorView: View {
                 await MainActor.run {
                     store.addPersona(newPersona)
                     selectedPersonaId = newPersona.id
+                    onPersonaGenerated?()
                     HapticFeedbackManager.shared.success()
                     NotificationManager.shared.showHUDInfo(
                         title: "Persona Ready",

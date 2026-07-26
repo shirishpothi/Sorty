@@ -167,7 +167,6 @@
 		AABBCC220002000000000082 /* OrganizingMascotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000082 /* OrganizingMascotView.swift */; };
 		AABBCC220002000000000083 /* ParameterTuningSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */; };
 		AABBCC220002000000000084 /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000084 /* PermissionsStepView.swift */; };
-		AABBCC220002000000000085 /* PersonaChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000085 /* PersonaChatView.swift */; };
 		AABBCC220002000000000087 /* PreviewActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000087 /* PreviewActionsView.swift */; };
 		AABBCC220002000000000088 /* PreviewHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000088 /* PreviewHeaderView.swift */; };
 		AABBCC220002000000000089 /* PreviewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000089 /* PreviewListView.swift */; };
@@ -519,7 +518,6 @@
 		AABBCC110001000000000082 /* OrganizingMascotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizingMascotView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterTuningSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000084 /* PermissionsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsStepView.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000085 /* PersonaChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaChatView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000087 /* PreviewActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewActionsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000088 /* PreviewHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHeaderView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000089 /* PreviewListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewListView.swift; sourceTree = "<group>"; };
@@ -847,7 +845,6 @@
 				AABBCC11000100000000002D /* OnboardingView.swift */,
 				AABBCC110001000000000069 /* ConflictResolutionSheet.swift */,
 				AABBCC110001000000000077 /* MenuBarView.swift */,
-				AABBCC110001000000000085 /* PersonaChatView.swift */,
 				AABBCC11000100000000008F /* ScheduleEditorView.swift */,
 			);
 			path = Sources/SortyLib/Views;

@@ -240,7 +240,7 @@ public let personaIconOptions: [String] = [
     "cube.fill",
     "calendar",
     "globe",
-    "gavel.fill",
+    "hammer.circle.fill",
     "theatermasks.fill",
     "sportscourt.fill",
     "pawprint.fill",

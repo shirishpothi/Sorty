@@ -14,7 +14,6 @@ struct PersonaPickerView: View {
     @State private var hoveringPersona: PersonaType?
     @State private var hoveringCustom: String?
     @State private var showingGenerator: Bool = false
-    @State private var showingChat: Bool = false
     @State private var showingIconPicker: Bool = false
     @State private var showingDeleteConfirmation: Bool = false
     @State private var personaPendingDeletion: CustomPersona?
@@ -115,10 +114,6 @@ struct PersonaPickerView: View {
                 store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId
             )
             .environmentObject(customStore)
-        }
-        .sheet(isPresented: $showingChat) {
-            PersonaChatView(promptModifier: localPrompt)
-                .environmentObject(settingsViewModel)
         }
         .alert("Delete Persona?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
@@ -288,15 +283,6 @@ struct PersonaPickerView: View {
                 )
                 .help("Clean up and structure this prompt")
 
-                Button {
-                    saveChangesIfNeeded()
-                    HapticFeedbackManager.shared.tap()
-                    showingChat = true
-                } label: {
-                    Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
-                }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                .disabled(localPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
             ZStack(alignment: .topLeading) {
