@@ -112,6 +112,31 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertTrue(matcher.shouldExclude(file))
     }
 
+    func testCompiledDateMatcherRefreshesOnlyAfterBoundedAge() {
+        let referenceDate = Date(timeIntervalSince1970: 2_000_000_000)
+        let matcher = ExclusionMatcher(
+            rules: [
+                ExclusionRule(
+                    type: .creationDate,
+                    numericValue: 30,
+                    comparisonGreater: true
+                )
+            ],
+            referenceDate: referenceDate
+        )
+
+        XCTAssertFalse(
+            matcher.needsRefresh(at: referenceDate.addingTimeInterval(59))
+        )
+        XCTAssertTrue(
+            matcher.needsRefresh(at: referenceDate.addingTimeInterval(60))
+        )
+
+        let refreshedAt = referenceDate.addingTimeInterval(120)
+        let refreshed = matcher.refreshed(at: refreshedAt)
+        XCTAssertFalse(refreshed.needsRefresh(at: refreshedAt))
+    }
+
     func testCompiledMatcherHandlesHundredThousandFilesAcrossConcurrentConsumers() async {
         let matcher = ExclusionMatcher(rules: [
             ExclusionRule(type: .regex, pattern: "^skip_"),
