@@ -69,6 +69,33 @@ struct HistoryView: View {
         }
     }
 
+    private enum HistorySectionKind: Equatable {
+        case manual
+        case watched
+
+        var title: String {
+            switch self {
+            case .manual: "Manual Sessions"
+            case .watched: "Watched Folder Automations"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .manual: "person.fill"
+            case .watched: "bolt.horizontal.circle"
+            }
+        }
+    }
+
+    private var primarySectionKind: HistorySectionKind {
+        selectedFilter == .watched || manualEntries.isEmpty ? .watched : .manual
+    }
+
+    private var showsSecondaryWatchedSection: Bool {
+        primarySectionKind == .manual && !watchedEntries.isEmpty
+    }
+
     enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "All"
         case undoable = "Undoable"
@@ -260,8 +287,11 @@ struct HistoryView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("History Summary")
 
-                manualSessionsSection
-                watchedAutomationsSection
+                historySessionsSection(primarySectionKind)
+
+                if showsSecondaryWatchedSection {
+                    historySessionsSection(.watched)
+                }
 
                 if hasMoreEntries {
                     LoadMoreButton(isLoading: isLoadingMore) {
@@ -276,19 +306,22 @@ struct HistoryView: View {
     }
 
     @ViewBuilder
-    private var manualSessionsSection: some View {
-        if !manualEntries.isEmpty {
+    private func historySessionsSection(_ kind: HistorySectionKind) -> some View {
+        let entries = kind == .manual ? manualEntries : watchedEntries
+        let totalCount = kind == .manual ? totalManualFilteredCount : totalWatchedFilteredCount
+
+        if !entries.isEmpty {
             HStack {
-                Label("Manual Sessions", systemImage: "person.fill")
+                Label(kind.title, systemImage: kind.systemImage)
                     .font(.headline)
                 Spacer()
-                Text("\(totalManualFilteredCount)")
+                Text("\(totalCount)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .numericTextTransition(animationValue: totalManualFilteredCount)
+                    .numericTextTransition(animationValue: totalCount)
             }
 
-            ForEach(Array(manualEntries.enumerated()), id: \.element.id) { index, entry in
+            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry == entry,
@@ -301,45 +334,9 @@ struct HistoryView: View {
                         showRedoModelPicker = true
                     }
                 )
-                .animatedAppearance(delay: Double(index) * 0.03)
+                .animatedAppearance(delay: Double(index) * (kind == .manual ? 0.03 : 0.02))
                 .onAppear {
-                    if index >= manualEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                        loadMoreEntries()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var watchedAutomationsSection: some View {
-        if !watchedEntries.isEmpty {
-            HStack {
-                Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
-                    .font(.headline)
-                Spacer()
-                Text("\(totalWatchedFilteredCount)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .numericTextTransition(animationValue: totalWatchedFilteredCount)
-            }
-
-            ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
-                HistorySessionCard(
-                    entry: entry,
-                    isSelected: selectedEntry == entry,
-                    onSelect: {
-                        HapticFeedbackManager.shared.selection()
-                        selectEntry(entry)
-                    },
-                    onTryAgain: {
-                        redoModelEntry = entry
-                        showRedoModelPicker = true
-                    }
-                )
-                .animatedAppearance(delay: Double(index) * 0.02)
-                .onAppear {
-                    if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                    if index >= entries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
                         loadMoreEntries()
                     }
                 }
