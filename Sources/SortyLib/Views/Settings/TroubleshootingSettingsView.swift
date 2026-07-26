@@ -96,27 +96,13 @@ struct TroubleshootingSettingsView: View {
     }
     
     private func getCacheSizeAsync() async -> Int64 {
-        var totalSize: Int64 = 0
         let fileManager = FileManager.default
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
-        
-        // Sorty-specific caches directory
-        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
-            if fileManager.fileExists(atPath: sortyCaches.path) {
-                totalSize += directorySize(at: sortyCaches)
+
+        return cacheDirectories.reduce(into: 0) { totalSize, cacheDirectory in
+            if fileManager.fileExists(atPath: cacheDirectory.path) {
+                totalSize += directorySize(at: cacheDirectory)
             }
         }
-        
-        // App support directory for Sorty
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
-            if fileManager.fileExists(atPath: sortySupport.path) {
-                totalSize += directorySize(at: sortySupport)
-            }
-        }
-        
-        return totalSize
     }
     
     private func directorySize(at url: URL) -> Int64 {
@@ -151,26 +137,50 @@ struct TroubleshootingSettingsView: View {
     
     private func clearCache() {
         let fileManager = FileManager.default
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
-        
-        // Clear only Sorty-specific caches directory (not the entire Mac cache)
-        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
-            try? fileManager.removeItem(at: sortyCaches)
-            try? fileManager.createDirectory(at: sortyCaches, withIntermediateDirectories: true)
+        var deletionErrors: [Error] = []
+
+        for cacheDirectory in cacheDirectories where fileManager.fileExists(atPath: cacheDirectory.path) {
+            do {
+                try fileManager.removeItem(at: cacheDirectory)
+            } catch {
+                deletionErrors.append(error)
+            }
         }
-        
-        // Clear Sorty data in app support (preserving the directory structure)
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
-            // Only clear cache subdirectory, not user data
-            let cacheDir = sortySupport.appendingPathComponent("Cache")
-            try? fileManager.removeItem(at: cacheDir)
-        }
-        
-        // Recalculate size
+
+        FileThumbnailProvider.shared.clearCache()
+        FolderThumbnailProvider.shared.clearCache()
         calculateCacheSize()
-        HapticFeedbackManager.shared.success()
+
+        if let error = deletionErrors.first {
+            HapticFeedbackManager.shared.error()
+            NotificationManager.shared.showError(
+                message: "Some cached data could not be cleared: \(error.localizedDescription)"
+            )
+        } else {
+            HapticFeedbackManager.shared.success()
+        }
+    }
+
+    private var cacheDirectories: [URL] {
+        let fileManager = FileManager.default
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+        var directories: [URL] = []
+
+        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            directories.append(cachesURL.appendingPathComponent(bundleId, isDirectory: true))
+            directories.append(cachesURL.appendingPathComponent("Sorty", isDirectory: true))
+        }
+
+        if let appSupportURL = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first {
+            let sortySupport = appSupportURL.appendingPathComponent("Sorty", isDirectory: true)
+            directories.append(sortySupport.appendingPathComponent("Cache", isDirectory: true))
+            directories.append(sortySupport.appendingPathComponent("ModelCache", isDirectory: true))
+        }
+
+        return directories
     }
 }
 
@@ -219,16 +229,16 @@ private struct MaintenanceActionTile: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(height: 32, alignment: .center)
+                    .frame(minHeight: 32, alignment: .center)
 
                 Label(buttonTitle, systemImage: buttonIcon)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isHovered ? color : .secondary)
                     .padding(.top, 1)
             }
-            .frame(maxWidth: .infinity, minHeight: 108)
+            .frame(maxWidth: .infinity, minHeight: 124)
             .padding(.horizontal, 10)
             .padding(.vertical, 12)
             .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
