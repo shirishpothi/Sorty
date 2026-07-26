@@ -22,7 +22,7 @@ struct HistoryDetailHeaderSection: View {
                 StatusBadge(status: entry.status)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(directoryName), \(entry.status.rawValue), \(entry.timestamp.formatted())")
+            .accessibilityLabel("\(directoryName), \(entry.status.displayName), \(entry.timestamp.formatted())")
 
             Label {
                 PrivacySensitivePathText(path: entry.directoryPath)

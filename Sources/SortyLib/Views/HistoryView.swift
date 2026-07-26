@@ -720,7 +720,7 @@ private struct HistorySessionCardHeader: View {
             Spacer()
 
             if showsStatus {
-                Text(entry.status.rawValue.capitalized)
+                Text(entry.status.displayName)
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -808,7 +808,7 @@ struct HistorySessionCard: View {
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
-                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+                "\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.displayName)\(generationMetadata.map { ", model and cost \($0)" } ?? ""), \(entry.filesOrganized) files, \(entry.foldersCreated) folders, \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
             )
             .accessibilityHint("Open session details")
             .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
@@ -2048,14 +2048,14 @@ struct StatusBadge: View {
     }
 
     var body: some View {
-        Text(status.rawValue.uppercased())
+        Text(status.displayName.uppercased())
             .font(.system(size: 12, weight: .bold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(color.opacity(0.15))
             .foregroundColor(color)
             .cornerRadius(6)
-            .accessibilityLabel("Status: \(status.rawValue)")
+            .accessibilityLabel("Status: \(status.displayName)")
     }
 }
 

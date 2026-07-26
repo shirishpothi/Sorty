@@ -16,6 +16,18 @@ public enum OrganizationStatus: String, Codable, Sendable {
     case undo // Reverted
     case partiallyUndone // Partially reverted (some files could not be restored)
     case duplicatesCleanup // New: Duplicate removal session
+
+    public var displayName: String {
+        switch self {
+        case .completed: "Completed"
+        case .failed: "Failed"
+        case .cancelled: "Cancelled"
+        case .skipped: "Skipped"
+        case .undo: "Undo"
+        case .partiallyUndone: "Partially Undone"
+        case .duplicatesCleanup: "Duplicates Cleanup"
+        }
+    }
 }
 
 public enum OrganizationEntrySource: String, Codable, Sendable {
