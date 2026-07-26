@@ -488,9 +488,14 @@ struct PersonaPickerView: View {
     private func deletePendingPersona() {
         guard let persona = personaPendingDeletion else { return }
 
+        let fallbackPersonaID = customStore.selectionAfterDeletingPersona(id: persona.id)
         customStore.deletePersona(id: persona.id)
         if personaManager.selectedCustomPersonaId == persona.id {
-            personaManager.selectedCustomPersonaId = nil
+            if let fallbackPersonaID {
+                personaManager.selectCustomPersona(fallbackPersonaID)
+            } else {
+                personaManager.selectPersona(personaManager.selectedPersona)
+            }
         }
         personaPendingDeletion = nil
         HapticFeedbackManager.shared.error()

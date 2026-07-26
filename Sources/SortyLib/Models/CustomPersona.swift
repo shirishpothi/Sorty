@@ -168,6 +168,19 @@ public class CustomPersonaStore: ObservableObject {
         customPersonas.removeAll { $0.id == id }
         savePersonas()
     }
+
+    public func selectionAfterDeletingPersona(id: String) -> String? {
+        guard let index = customPersonas.firstIndex(where: { $0.id == id }) else {
+            return nil
+        }
+
+        if index > customPersonas.startIndex {
+            return customPersonas[customPersonas.index(before: index)].id
+        }
+
+        let nextIndex = customPersonas.index(after: index)
+        return nextIndex < customPersonas.endIndex ? customPersonas[nextIndex].id : nil
+    }
     
     public func persona(named name: String) -> CustomPersona? {
         customPersonas.first { $0.name.lowercased() == name.lowercased() }

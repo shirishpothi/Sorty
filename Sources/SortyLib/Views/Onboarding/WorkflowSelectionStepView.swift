@@ -150,9 +150,15 @@ public struct WorkflowSelectionStepView: View {
                     isSelected: personaManager.selectedCustomPersonaId == persona.id,
                     compact: true,
                     onDelete: {
+                        let fallbackPersonaID = customPersonaStore
+                            .selectionAfterDeletingPersona(id: persona.id)
                         customPersonaStore.deletePersona(id: persona.id)
                         if personaManager.selectedCustomPersonaId == persona.id {
-                            personaManager.selectedCustomPersonaId = nil
+                            if let fallbackPersonaID {
+                                personaManager.selectCustomPersona(fallbackPersonaID)
+                            } else {
+                                personaManager.selectPersona(personaManager.selectedPersona)
+                            }
                         }
                     }
                 ) {
