@@ -27,6 +27,7 @@ struct PersonaGeneratorView: View {
     @State private var isHoning: Bool = false
     @State private var isLoadingQuestions: Bool = false
     @State private var currentQuestionIndex: Int = 0
+    @FocusState private var focusedCustomAnswerQuestionID: String?
 
     private let promptSuggestions = [
         "Organize my sci-fi ebook collection by author, then series.",
@@ -271,16 +272,7 @@ struct PersonaGeneratorView: View {
                     }
                 }
 
-                TextField(
-                    "Or type exactly what you want…",
-                    text: customAnswerBinding(for: question)
-                )
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    guard answers[question.id] != nil else { return }
-                    advance(from: question)
-                }
-                .accessibilityLabel("Custom answer")
+                customAnswerField(for: question)
             }
             .padding(.horizontal, 30)
 
@@ -338,6 +330,29 @@ struct PersonaGeneratorView: View {
                 }
             }
         )
+    }
+
+    private func customAnswerField(for question: HoningQuestion) -> some View {
+        let answer = customAnswers[question.id] ?? ""
+        let showsPlaceholder = answer.isEmpty
+            && focusedCustomAnswerQuestionID != question.id
+
+        return ZStack(alignment: .leading) {
+            Text(showsPlaceholder ? "Or type exactly what you want…" : "")
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 7)
+                .allowsHitTesting(false)
+                .numericTextTransition(animationValue: showsPlaceholder)
+
+            TextField("", text: customAnswerBinding(for: question))
+                .focused($focusedCustomAnswerQuestionID, equals: question.id)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    guard answers[question.id] != nil else { return }
+                    advance(from: question)
+                }
+                .accessibilityLabel("Custom answer")
+        }
     }
 
     private func advance(from question: HoningQuestion) {
