@@ -6,9 +6,44 @@
 //  Enhanced with micro-animations, haptic feedback, and state transitions
 //
 
-import SwiftUI
+import Foundation
 import AppKit
+import SwiftUI
 import UniformTypeIdentifiers
+
+private enum ErrorViewTestRoute: String {
+    case credentials = "sorty-error-preview://velvet-key-7319"
+    case network = "sorty-error-preview://silent-modem-4826"
+    case permissions = "sorty-error-preview://paper-vault-9051"
+    case generic = "sorty-error-preview://crooked-compass-1643"
+
+    init?(instructions: String) {
+        let normalized = instructions
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        self.init(rawValue: normalized)
+    }
+
+    var error: Error {
+        let message: String
+        switch self {
+        case .credentials:
+            message = "Authentication failed because the API key is missing or invalid."
+        case .network:
+            message = "The network request timed out. Check your internet connection and try again."
+        case .permissions:
+            message = "Sorty doesn't have permission to access this folder."
+        case .generic:
+            message = "Sorty couldn't turn the model response into an organization plan."
+        }
+
+        return NSError(
+            domain: "com.sorty.app.error-preview",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+}
 
 struct OrganizeView: View {
     @EnvironmentObject var organizer: FolderOrganizer
@@ -31,6 +66,7 @@ struct OrganizeView: View {
     @State private var liveOrganizationStartedAt: Date?
     @State private var keepsLiveOrganizationVisible = false
     @State private var readyPreviewHandoffTask: Task<Void, Never>?
+    @State private var errorViewTestRoute: ErrorViewTestRoute?
 
     private let minimumLiveOrganizationPresentation: TimeInterval = 1.0
 
@@ -122,6 +158,7 @@ struct OrganizeView: View {
             handleStateChange(to: newValue)
         }
         .onChange(of: appState.selectedDirectory) { oldValue, newValue in
+            errorViewTestRoute = nil
             // Prewarm AI connection when user selects a folder
             if newValue != nil {
                 Task {
@@ -295,6 +332,20 @@ struct OrganizeView: View {
 
     @ViewBuilder
     private var stateContentSwitch: some View {
+        if let errorViewTestRoute {
+            ErrorView(
+                error: errorViewTestRoute.error,
+                onCancel: dismissErrorViewTestRoute,
+                onRetry: dismissErrorViewTestRoute,
+                onRetryWithSmarterModel: dismissErrorViewTestRoute
+            )
+        } else {
+            organizerStateContent
+        }
+    }
+
+    @ViewBuilder
+    private var organizerStateContent: some View {
         switch organizer.state {
         case .idle:
             if needsSetupRepair {
@@ -341,6 +392,10 @@ struct OrganizeView: View {
         case .error(let error):
             ErrorView(
                 error: error,
+                onCancel: {
+                    organizer.reset()
+                    appState.selectedDirectory = nil
+                },
                 onRetry: {
                     HapticFeedbackManager.shared.tap()
                     withAnimation(.pageTransition) {
@@ -521,6 +576,14 @@ struct OrganizeView: View {
 
     private func startOrganization() {
         guard let directory = appState.selectedDirectory else { return }
+        if let testRoute = ErrorViewTestRoute(instructions: organizer.customInstructions) {
+            resetLiveOrganizationPresentation()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                errorViewTestRoute = testRoute
+            }
+            HapticFeedbackManager.shared.error()
+            return
+        }
         guard !needsSetupRepair else {
             HapticFeedbackManager.shared.error()
             appState.startSetupRepair(
@@ -546,6 +609,12 @@ struct OrganizeView: View {
             } catch {
                 organizer.state = .error(error)
             }
+        }
+    }
+
+    private func dismissErrorViewTestRoute() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            errorViewTestRoute = nil
         }
     }
 
@@ -2224,6 +2293,7 @@ struct StorageLocationsInfoPopover: View {
 
 struct ErrorView: View {
     let error: Error
+    let onCancel: () -> Void
     let onRetry: () -> Void
     let onRetryWithSmarterModel: () -> Void
 
@@ -2241,8 +2311,7 @@ struct ErrorView: View {
     @State private var actionFeedbackResetTask: Task<Void, Never>?
     
     @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var organizer: FolderOrganizer
-    
+
     private enum ErrorCategory {
         case apiKey
         case network
@@ -2339,8 +2408,7 @@ struct ErrorView: View {
                 Button {
                     HapticFeedbackManager.shared.tap()
                     animateActionFeedback(.cancel)
-                    organizer.reset()
-                    appState.selectedDirectory = nil
+                    onCancel()
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark")

@@ -19,6 +19,17 @@ Optimized workflows for rapid iteration on Sorty.
 
 The preview harness launches the app with minimal dependency initialization, targeting a specific view for rapid visual feedback.
 
+## Mid-generation error previews
+
+To inspect an error screen without producing a real failure, select a folder, enter one of these exact phrases in the Instructions box, and submit normally:
+
+- `sorty-error-preview://velvet-key-7319` — credentials
+- `sorty-error-preview://silent-modem-4826` — network
+- `sorty-error-preview://paper-vault-9051` — permissions
+- `sorty-error-preview://crooked-compass-1643` — generic
+
+These routes only replace the workflow content with the existing `ErrorView`. They do not start analysis, contact the configured provider, record an error, or transition `FolderOrganizer` into its error state.
+
 ### Usage
 
 ```bash
