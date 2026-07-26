@@ -115,6 +115,7 @@ struct PersonaGeneratorView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .animatedEmptyStateIcon()
                 
                 Text("Generate Persona")
                     .font(.title2)
