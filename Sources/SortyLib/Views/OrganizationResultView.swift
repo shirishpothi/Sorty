@@ -63,6 +63,7 @@ struct GenerationStatsView: View {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
+                        .symbolReplaceTransition(animationValue: isExpanded)
                 }
                 .contentShape(Rectangle())
             }

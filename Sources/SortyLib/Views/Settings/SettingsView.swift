@@ -214,10 +214,12 @@ struct SettingsView: View {
                 .font(.title2)
                 .foregroundStyle(selectedCategory.color)
                 .frame(width: 32, height: 32)
+                .symbolReplaceTransition(animationValue: selectedCategory)
                 .background(selectedCategory.color.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             Text(LocalizedStringKey(selectedCategory.rawValue))
                 .font(.title2.bold())
+                .numericTextTransition(animationValue: selectedCategory)
             Spacer()
         }
         .padding(.bottom, 4)
@@ -241,6 +243,9 @@ struct SettingsView: View {
             Text("\"\(trimmedSearchText)\" matched \(results.count) \(results.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .numericTextTransition(
+                    animationValue: "\(trimmedSearchText)-\(results.count)-\(uniqueCategoryCount)"
+                )
         }
         .padding(.bottom, 2)
     }

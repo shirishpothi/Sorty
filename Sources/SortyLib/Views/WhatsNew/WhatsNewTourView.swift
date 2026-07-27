@@ -497,6 +497,7 @@ public struct WhatsNewTourView: View {
             Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .frame(width: 156, height: 24)
+                .numericTextTransition(animationValue: currentPage)
         }
         .buttonStyle(.onboardingPill)
         .overlay {

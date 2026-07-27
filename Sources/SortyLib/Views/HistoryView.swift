@@ -659,7 +659,6 @@ struct HistoryHeader: View {
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .contentTransition(.numericText())
                 .numericTextTransition(animationValue: totalSessions)
                 .accessibilityLabel("\(totalSessions) runs recorded")
         }
@@ -687,7 +686,6 @@ struct HistoryHeader: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .contentTransition(.numericText())
                     .numericTextTransition(animationValue: totalSessions)
             }
         }
@@ -1285,10 +1283,12 @@ private struct QuickFeedbackButtons: View {
                     Image(systemName: feedbackGiven == .useful ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(feedbackGiven == .useful ? .green : .orange)
+                        .symbolReplaceTransition(animationValue: feedbackGiven)
 
                     Text(feedbackGiven == .useful ? "Thanks!" : "Noted")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: feedbackGiven)
                 }
                 .transition(.scale.combined(with: .opacity))
             }
@@ -1368,6 +1368,7 @@ private struct OperationsBreakdownBar: View {
                         Text("\(moves) moved")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: moves)
                     }
                 }
                 if renames > 0 {
@@ -1378,6 +1379,7 @@ private struct OperationsBreakdownBar: View {
                         Text("\(renames) renamed")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: renames)
                     }
                 }
                 if folderCreates > 0 {
@@ -1388,6 +1390,7 @@ private struct OperationsBreakdownBar: View {
                         Text("\(folderCreates) folders")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: folderCreates)
                     }
                 }
             }
@@ -1849,6 +1852,7 @@ struct HistoryDetailSheet: View {
                     Image(systemName: showRawAIResponse ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .symbolReplaceTransition(animationValue: showRawAIResponse)
                     Text("Raw AI Response")
                         .font(.headline)
                     Spacer()
@@ -2328,6 +2332,7 @@ struct ProcessingOverlay: View {
                 Text(stage)
                     .font(.body)
                     .foregroundColor(.primary)
+                    .numericTextTransition(animationValue: stage)
             }
             .padding(24)
             .background(.regularMaterial)
@@ -2515,6 +2520,7 @@ struct FolderHistoryDetailRow: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .symbolReplaceTransition(animationValue: isExpanded)
                         .accessibilityHidden(true)
 
                     CompactFolderThumbnail(
@@ -2778,6 +2784,7 @@ struct HistoryLiquidGlassLearningsCard: View {
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundStyle(.white)
+                        .numericTextTransition(animationValue: fileContexts.count)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Color.teal))
@@ -2833,6 +2840,7 @@ struct HistoryLiquidGlassLearningsCard: View {
                     Text("\(fileContexts.count) file\(fileContexts.count == 1 ? "" : "s") with learnings context")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .numericTextTransition(animationValue: fileContexts.count)
                 }
 
                 Spacer()
@@ -3048,6 +3056,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundStyle(.white)
+                        .numericTextTransition(animationValue: totalDuplicateCount)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(.red))
@@ -3102,6 +3111,9 @@ struct HistoryLiquidGlassDuplicateCard: View {
                     Text("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s"), \(totalDuplicateCount) duplicate\(totalDuplicateCount == 1 ? "" : "s")")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .numericTextTransition(
+                            animationValue: "\(duplicateGroups.count)-\(totalDuplicateCount)"
+                        )
                 }
 
                 Spacer()
@@ -3185,6 +3197,7 @@ struct HistoryDuplicateGroupRow: View {
                     Text("\(group.duplicateCount + 1) copies")
                         .font(.caption2)
                         .foregroundStyle(.white)
+                        .numericTextTransition(animationValue: group.duplicateCount)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(.red))
@@ -3338,6 +3351,7 @@ struct PartialUndoResultSheet: View {
                     Text("\(result.successCount)")
                         .font(.title.bold())
                         .foregroundStyle(.green)
+                        .numericTextTransition(animationValue: result.successCount)
                     Text("Restored")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -3350,6 +3364,7 @@ struct PartialUndoResultSheet: View {
                     Text("\(result.missingFiles.count)")
                         .font(.title.bold())
                         .foregroundStyle(.orange)
+                        .numericTextTransition(animationValue: result.missingFiles.count)
                     Text("Missing")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -3363,6 +3378,9 @@ struct PartialUndoResultSheet: View {
                         Text("\(result.failedOperationCount)")
                             .font(.title.bold())
                             .foregroundStyle(.red)
+                            .numericTextTransition(
+                                animationValue: result.failedOperationCount
+                            )
                         Text("Failed")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -3383,6 +3401,9 @@ struct PartialUndoResultSheet: View {
                         Text("\(result.missingFiles.count) file\(result.missingFiles.count == 1 ? "" : "s")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(
+                                animationValue: result.missingFiles.count
+                            )
                     }
 
                     Text("These files may have been moved, renamed, or deleted:")

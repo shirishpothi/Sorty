@@ -34,7 +34,7 @@ public struct CopyButtonWithAnimation: View {
                 Image(systemName: showCheckmark ? "checkmark" : copyIcon)
                     .font(.system(size: iconSize))
                     .foregroundStyle(showCheckmark ? .green : .secondary)
-                    .contentTransition(.symbolEffect(.replace))
+                    .symbolReplaceTransition(animationValue: showCheckmark)
                 
                 if let label {
                     Text(label)

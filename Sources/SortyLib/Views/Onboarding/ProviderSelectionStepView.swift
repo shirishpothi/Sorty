@@ -89,6 +89,9 @@ public struct ProviderSelectionStepView: View {
                     Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                        .numericTextTransition(
+                            animationValue: providerSetupStatus.isReady
+                        )
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
@@ -113,14 +116,23 @@ public struct ProviderSelectionStepView: View {
                             Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
                                 .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
                                 .font(.system(size: 16, weight: .semibold))
+                                .symbolReplaceTransition(
+                                    animationValue: providerSetupStatus.isReady
+                                )
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Configure \(settingsViewModel.config.provider.displayName)")
                                     .font(.subheadline.weight(.semibold))
+                                    .numericTextTransition(
+                                        animationValue: settingsViewModel.config.provider
+                                    )
 
                                 Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .numericTextTransition(
+                                        animationValue: providerSetupStatus.isReady
+                                    )
                             }
 
                             Spacer()
@@ -321,6 +333,7 @@ public struct ProviderSelectionStepView: View {
                             } label: {
                                 Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
                                     .frame(width: 20, height: 20)
+                                    .symbolReplaceTransition(animationValue: hasCopiedCode)
                             }
                             .buttonStyle(.borderless)
                             .help("Copy code")
@@ -471,6 +484,7 @@ public struct ProviderSelectionStepView: View {
                     Image(systemName: isShowingAPIKey ? "eye.slash" : "eye")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .symbolReplaceTransition(animationValue: isShowingAPIKey)
                 }
                 .buttonStyle(.plain)
                 .help(isShowingAPIKey ? "Hide API Key" : "Show API Key")
@@ -503,6 +517,9 @@ public struct ProviderSelectionStepView: View {
                 Text(settingsViewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key at")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .numericTextTransition(
+                        animationValue: settingsViewModel.config.provider
+                    )
 
                 Link(destination: url) {
                     Text(settingsViewModel.config.provider.apiKeyLinkLabel)
@@ -1024,17 +1041,20 @@ private struct ProviderReadinessStatusView: View {
             Image(systemName: status.isReady ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(statusColor)
                 .font(.body)
+                .symbolReplaceTransition(animationValue: status.isReady)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(LocalizedStringKey(status.title))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                    .numericTextTransition(animationValue: status.title)
 
                 Text(status.message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .numericTextTransition(animationValue: status.message)
 
                 if let recoverySuggestion = status.recoverySuggestion {
                     Text(recoverySuggestion)

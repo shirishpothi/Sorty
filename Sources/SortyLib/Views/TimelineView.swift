@@ -200,19 +200,23 @@ struct SelectedEntryCard: View {
                 Image(systemName: entry.isUndone ? "arrow.uturn.backward" : "folder.badge.gear")
                     .font(.title3)
                     .foregroundColor(entry.isUndone ? .orange : .blue)
+                    .symbolReplaceTransition(animationValue: entry.isUndone)
             }
             
             // Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.isUndone ? "Reverted State" : "Organization Snapshot")
                     .font(.headline)
+                    .numericTextTransition(animationValue: entry.isUndone)
                 
                 Text(entry.timestamp.formatted(date: .long, time: .shortened))
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .numericTextTransition(animationValue: entry.timestamp)
                 
                 HStack(spacing: 12) {
                     Label("\(entry.filesOrganized) files moved", systemImage: "arrow.right.doc.on.clipboard")
+                        .numericTextTransition(animationValue: entry.filesOrganized)
                     Label("\(entry.foldersCreated) folders", systemImage: "folder.badge.plus")
                 }
                 .font(.caption)

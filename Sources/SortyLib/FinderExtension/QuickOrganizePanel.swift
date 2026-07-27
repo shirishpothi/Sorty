@@ -300,6 +300,7 @@ struct QuickOrganizeView: View {
                     Spacer()
                     Image(systemName: showAdvancedOptions ? "chevron.up" : "chevron.down")
                         .font(.caption2)
+                        .symbolReplaceTransition(animationValue: showAdvancedOptions)
                 }
                 .foregroundColor(.secondary)
             }
@@ -329,14 +330,17 @@ struct QuickOrganizeView: View {
                 Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .foregroundColor(result.success ? .green : .red)
                     .font(.title2)
+                    .symbolReplaceTransition(animationValue: result.success)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(result.success ? "Organization Complete" : "Organization Failed")
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .numericTextTransition(animationValue: result.success)
                     Text(result.message)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .numericTextTransition(animationValue: result.message)
                 }
                 
                 Spacer()

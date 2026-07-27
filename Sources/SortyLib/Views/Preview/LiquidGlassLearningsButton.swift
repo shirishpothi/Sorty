@@ -83,6 +83,7 @@ struct LiquidGlassLearningsButton: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
+                            .numericTextTransition(animationValue: displayFileName)
                     }
 
                     if !learningRows.isEmpty {
@@ -124,12 +125,14 @@ struct LiquidGlassLearningsButton: View {
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
+                    .numericTextTransition(animationValue: row.title)
 
                 Text(displayDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                    .numericTextTransition(animationValue: displayDetail)
             }
         }
     }

@@ -217,6 +217,7 @@ struct PersonaPickerView: View {
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.purple)
                         .frame(width: 52, height: 52)
+                        .symbolReplaceTransition(animationValue: localIcon)
                         .background(
                             Color.purple.opacity(0.12),
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -672,12 +673,14 @@ struct CompactPersonaPicker: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     .frame(width: 18)
+                    .symbolReplaceTransition(animationValue: currentIcon)
                     .accessibilityHidden(true)
 
                 Text(currentName)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .numericTextTransition(animationValue: currentName)
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))

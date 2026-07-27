@@ -68,6 +68,7 @@ struct DuplicateSettingsView: View {
                                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                             .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(isSelected ? SortyDesignSystem.Colors.primary : SortyDesignSystem.Colors.textTertiary)
+                                            .symbolReplaceTransition(animationValue: isSelected)
 
                                         VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxs) {
                                             Text(strategy.displayName)

@@ -89,7 +89,7 @@ struct PersonaGeneratorView: View {
                     .multilineTextAlignment(.center)
                     .frame(width: 360)
                     .frame(minHeight: 42)
-                    .id(currentGenerationStatus)
+                    .numericTextTransition(animationValue: currentGenerationStatus)
                     .transition(
                         .asymmetric(
                             insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -236,7 +236,7 @@ struct PersonaGeneratorView: View {
                 Text("Question \(currentQuestionIndex + 1) of \(questions.count)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .contentTransition(reduceMotion ? .opacity : .numericText())
+                    .numericTextTransition(animationValue: currentQuestionIndex)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 5)
                     .background(
@@ -623,7 +623,7 @@ private struct HoningOptionButton: View {
                             ? accent
                             : Color.secondary.opacity(isHovered ? 0.72 : 0.36)
                     )
-                    .contentTransition(.symbolEffect(.replace))
+                    .symbolReplaceTransition(animationValue: isSelected)
             }
             .contentShape(Rectangle())
             .padding(.horizontal, 16)

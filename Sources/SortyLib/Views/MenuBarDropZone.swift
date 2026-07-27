@@ -306,6 +306,7 @@ public struct MenuBarDropZoneView: View {
                 Image(systemName: isTargeted ? "tray.and.arrow.down.fill" : "tray.and.arrow.down")
                     .font(.system(size: 14))
                     .foregroundColor(isTargeted ? .blue : .primary)
+                    .symbolReplaceTransition(animationValue: isTargeted)
             }
         }
         .frame(width: 22, height: 22)

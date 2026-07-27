@@ -65,6 +65,7 @@ struct RuleReasoningBadge: View {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 8))
                     .foregroundColor(.secondary)
+                    .symbolReplaceTransition(animationValue: isExpanded)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 3)

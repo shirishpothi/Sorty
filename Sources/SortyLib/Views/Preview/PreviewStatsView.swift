@@ -37,6 +37,7 @@ struct PreviewStatsView: View {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.tertiary)
+                            .symbolReplaceTransition(animationValue: isExpanded)
                         }
                     }
                     .buttonStyle(.plain)

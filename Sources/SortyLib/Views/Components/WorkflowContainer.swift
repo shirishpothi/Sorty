@@ -442,15 +442,14 @@ struct WorkflowStepIndicator: View {
                     .fill(isActive ? SortyDesignSystem.Colors.resolvedAccent : (isCompleted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.2) : Color.secondary.opacity(0.1)))
                     .frame(width: 32, height: 32)
                 
-                if isCompleted {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                } else {
-                    Image(systemName: step.icon)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(isActive ? .white : .secondary)
-                }
+                Image(systemName: isCompleted ? "checkmark" : step.icon)
+                    .font(.system(size: 12, weight: isCompleted ? .semibold : .medium))
+                    .foregroundStyle(
+                        isCompleted
+                            ? SortyDesignSystem.Colors.resolvedAccent
+                            : (isActive ? .white : .secondary)
+                    )
+                    .symbolReplaceTransition(animationValue: isCompleted)
             }
             
             Text(LocalizedStringKey(step.title))

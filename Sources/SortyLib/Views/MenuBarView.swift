@@ -559,6 +559,7 @@ private struct WatchedFolderMenuItem: View {
                         Image(systemName: statusIcon)
                             .font(.system(size: 8))
                             .foregroundStyle(statusColor)
+                            .symbolReplaceTransition(animationValue: statusIcon)
                             .background(
                                 Circle()
                                     .fill(.background)

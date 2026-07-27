@@ -425,7 +425,7 @@ struct SimulatedDemoAnimationView: View {
         HStack(spacing: 8) {
             Image(systemName: thoughtIcon)
                 .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                .contentTransition(.interpolate)
+                .symbolReplaceTransition(animationValue: thoughtIcon)
             
             Text(currentThought)
                 .font(.subheadline)
@@ -433,7 +433,7 @@ struct SimulatedDemoAnimationView: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
                 .multilineTextAlignment(.leading)
-                .contentTransition(.interpolate)
+                .numericTextTransition(animationValue: currentThought)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -443,7 +443,6 @@ struct SimulatedDemoAnimationView: View {
                 .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), lineWidth: 1)
         )
         .opacity(thoughtOpacity)
-        .animation(.easeInOut(duration: 0.3), value: currentThought)
     }
     
     private var thoughtIcon: String {

@@ -224,6 +224,7 @@ struct AIProviderSettingsView: View {
                             } label: {
                                 Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
                                     .foregroundColor(hasCopiedCode ? .green : .primary)
+                                    .symbolReplaceTransition(animationValue: hasCopiedCode)
                             }
                             .buttonStyle(.sortyBordered)
                         }
@@ -393,6 +394,9 @@ struct AIProviderSettingsView: View {
                     Text(viewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key from")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .numericTextTransition(
+                            animationValue: viewModel.config.provider
+                        )
                     Link(destination: url) {
                         Text(viewModel.config.provider.apiKeyLinkLabel)
                             .font(.caption)
@@ -531,6 +535,9 @@ struct AIProviderSettingsView: View {
                             Text(viewModel.appleModelStatus)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .numericTextTransition(
+                                    animationValue: viewModel.appleModelStatus
+                                )
                         }
                     }
                 }
@@ -972,7 +979,7 @@ private struct CodexDeviceAuthSheet: View {
                             Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(isCodeCopied ? .green : .secondary)
-                                .contentTransition(.symbolEffect(.replace))
+                                .symbolReplaceTransition(animationValue: isCodeCopied)
                         }
                         .frame(maxWidth: .infinity, minHeight: 44)
                     }
@@ -1076,6 +1083,7 @@ private struct CodexDeviceAuthStatusView: View {
                     BouncingSpinner(size: 14, color: .primary)
                     Text(isWaiting ? "Waiting for authorization" : "Starting authorization")
                         .font(.subheadline.weight(.semibold))
+                        .numericTextTransition(animationValue: isWaiting)
                 }
                 Text("Refreshing automatically")
                     .font(.caption)

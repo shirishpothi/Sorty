@@ -27,15 +27,18 @@ struct FinderIntegrationSettingsView: View {
                             .font(.title3)
                             .foregroundStyle(overallStatusColor)
                             .frame(width: 24, height: 24)
+                            .symbolReplaceTransition(animationValue: overallStatusIcon)
                             .accessibilityHidden(true)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(overallStatusTitle)
                                 .font(.subheadline.weight(.semibold))
+                                .numericTextTransition(animationValue: overallStatusTitle)
                             Text(overallStatusSubtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .numericTextTransition(animationValue: overallStatusSubtitle)
                         }
 
                         Spacer()
@@ -159,6 +162,7 @@ struct FinderIntegrationSettingsView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .numericTextTransition(animationValue: message)
                             }
                             .transition(.scale.combined(with: .opacity))
                         }
@@ -190,6 +194,7 @@ struct FinderIntegrationSettingsView: View {
             Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(isHealthy ? .green : .orange)
                 .font(.caption)
+                .symbolReplaceTransition(animationValue: isHealthy)
                 .accessibilityHidden(true)
             Text(label)
                 .font(.caption.weight(.medium))
@@ -221,6 +226,7 @@ struct FinderIntegrationSettingsView: View {
             Text(finderSyncActive ? "Repair Extension" : "Activate Extension")
                 .fixedSize(horizontal: !expands, vertical: false)
                 .frame(maxWidth: expands ? .infinity : nil)
+                .numericTextTransition(animationValue: finderSyncActive)
         }
         .buttonStyle(.sortyPrimary(size: .regular))
     }

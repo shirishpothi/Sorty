@@ -37,13 +37,16 @@ struct NotificationPermissionCard: View {
                     Image(systemName: statusInfo.icon)
                         .font(.title2)
                         .foregroundStyle(statusInfo.color)
+                        .symbolReplaceTransition(animationValue: statusInfo.icon)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LocalizedStringKey(statusInfo.title))
                             .font(.subheadline.weight(.medium))
+                            .numericTextTransition(animationValue: statusInfo.title)
                         Text(LocalizedStringKey(statusInfo.description))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: statusInfo.description)
                     }
                     
                     Spacer()

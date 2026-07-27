@@ -175,6 +175,7 @@ private struct HUDNotificationHeader: View {
                 .font(.title3)
                 .foregroundStyle(notification.iconColor)
                 .frame(width: 28, height: 28)
+                .symbolReplaceTransition(animationValue: notification.icon)
                 .systemLiquidGlassBackground(cornerRadius: 14)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -183,11 +184,13 @@ private struct HUDNotificationHeader: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
+                    .numericTextTransition(animationValue: notification.title)
 
                 Text(notification.message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .numericTextTransition(animationValue: notification.message)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

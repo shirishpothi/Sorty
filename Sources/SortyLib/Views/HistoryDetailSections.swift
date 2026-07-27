@@ -471,6 +471,7 @@ struct HistoryFileOperationsSection: View {
                     Text("\(operations.count) operation\(operations.count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: operations.count)
                 }
 
                 LazyVStack(spacing: 6) {

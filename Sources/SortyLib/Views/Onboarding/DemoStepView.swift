@@ -197,15 +197,18 @@ public struct DemoStepView: View {
                         Image(systemName: demoState == .simulatedDemo ? "sparkles" : "wand.and.stars")
                             .font(.system(size: 48))
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .symbolReplaceTransition(animationValue: demoState)
                             .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
 
                         Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .numericTextTransition(animationValue: demoState)
 
                         Text(leftPanelDescription)
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .numericTextTransition(animationValue: leftPanelDescription)
 
                         VStack(alignment: .leading, spacing: 12) {
                             DemoFeatureRow(icon: "lock.shield", activeIcon: "lock.shield.fill", text: "On-device privacy scanning", isActive: demoState == .simulatedDemo || demoState == .analyzing)
@@ -430,10 +433,12 @@ public struct DemoStepView: View {
                             Image(systemName: isDropTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                                 .font(.system(size: 40))
                                 .foregroundStyle(isDropTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary)
+                                .symbolReplaceTransition(animationValue: isDropTargeted)
                             
                             Text(isDropTargeted ? "Drop to select" : "Drop a folder here")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .numericTextTransition(animationValue: isDropTargeted)
                         }
                     }
                     
@@ -471,12 +476,14 @@ public struct DemoStepView: View {
             VStack(spacing: 8) {
                 Text(statusText)
                     .font(.title3.bold())
+                    .numericTextTransition(animationValue: statusText)
                 
                 Text(statusDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)
+                    .numericTextTransition(animationValue: statusDescription)
             }
             
             // Progress steps
@@ -642,6 +649,7 @@ struct DemoFeatureRow: View {
                 Image(systemName: isActive ? activeIcon : icon)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isActive ? .green : .secondary)
+                    .symbolReplaceTransition(animationValue: isActive)
             }
             
             Text(text)

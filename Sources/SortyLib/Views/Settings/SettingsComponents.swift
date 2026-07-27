@@ -375,9 +375,7 @@ struct SettingsSecureField: View {
                         Image(systemName: isShowingText ? "eye.slash" : "eye")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                            .contentTransition(
-                                reduceMotion ? .opacity : .symbolEffect(.replace)
-                            )
+                            .symbolReplaceTransition(animationValue: isShowingText)
                     }
                     .buttonStyle(.plain)
                     .help(visibilityButtonLabel)
@@ -496,6 +494,7 @@ struct URLSchemeRow: View {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .font(.caption2)
                     .foregroundStyle(copied ? .green : .secondary)
+                    .symbolReplaceTransition(animationValue: copied)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Copy \(scheme)")

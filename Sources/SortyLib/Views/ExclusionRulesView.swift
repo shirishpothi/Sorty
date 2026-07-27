@@ -1001,6 +1001,7 @@ struct AddExclusionRuleView: View {
                                             systemName: isMatch
                                                 ? "checkmark.circle.fill" : "xmark.circle.fill")
                                         Text(isMatch ? "Matches" : "No match")
+                                            .numericTextTransition(animationValue: isMatch)
                                     }
                                     .font(.caption)
                                     .foregroundColor(isMatch ? .green : .secondary)

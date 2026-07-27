@@ -241,6 +241,7 @@ public struct OnboardingView: View {
                                             BouncingSpinner(size: 10, color: .white)
                                         }
                                         Text(currentStep == .permissions ? "Continue" : "Next")
+                                            .numericTextTransition(animationValue: currentStep)
                                         Image(systemName: "chevron.right")
                                             .font(.system(size: 12, weight: .semibold))
                                     }

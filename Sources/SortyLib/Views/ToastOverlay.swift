@@ -52,6 +52,7 @@ struct ToastOverlay: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(kind.color)
                 .frame(width: 28, height: 28)
+                .symbolReplaceTransition(animationValue: kind.icon)
                 .systemLiquidGlassBackground(cornerRadius: 14)
                 .accessibilityHidden(true)
 
@@ -59,6 +60,7 @@ struct ToastOverlay: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
+                .numericTextTransition(animationValue: message)
 
             if let label = actionLabel, let action = action {
                 Spacer()

@@ -399,6 +399,7 @@ struct OnboardingCustomPersonaCard: View {
                         Text(isSelected ? "Selected" : "Custom")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(isSelected ? selectionAccent : .secondary)
+                            .numericTextTransition(animationValue: isSelected)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
@@ -411,6 +412,7 @@ struct OnboardingCustomPersonaCard: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .numericTextTransition(animationValue: isSelected)
                 }
             }
 
@@ -425,6 +427,7 @@ struct OnboardingCustomPersonaCard: View {
             HStack(spacing: 10) {
                 Label("Sorty-generated persona", systemImage: "sparkles")
                 Label(isSelected ? "Default workflow" : "Ready to select", systemImage: isSelected ? "checkmark.circle.fill" : "arrow.up.right.circle")
+                    .symbolReplaceTransition(animationValue: isSelected)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -455,6 +458,7 @@ struct OnboardingCustomPersonaCard: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
+                    .numericTextTransition(animationValue: isSelected)
             }
         }
         .frame(maxWidth: .infinity)

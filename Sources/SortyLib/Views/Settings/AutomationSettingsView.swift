@@ -213,6 +213,10 @@ struct AutomationSettingsView: View {
         Label(backgroundStatusTitle, systemImage: loginItemManager.isBackgroundAgentEnabled ? "checkmark.circle.fill" : "circle")
             .font(.caption.weight(.medium))
             .foregroundStyle(loginItemManager.isBackgroundAgentEnabled ? .green : .secondary)
+            .symbolReplaceTransition(
+                animationValue: loginItemManager.isBackgroundAgentEnabled
+            )
+            .numericTextTransition(animationValue: backgroundStatusTitle)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background((loginItemManager.isBackgroundAgentEnabled ? Color.green : Color.secondary).opacity(0.08))

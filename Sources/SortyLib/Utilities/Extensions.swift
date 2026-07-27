@@ -36,6 +36,24 @@ private struct NumericTextTransitionModifier<Value: Equatable>: ViewModifier {
     }
 }
 
+private struct SymbolReplaceTransitionModifier<Value: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let animationValue: Value
+    let animation: Animation
+
+    func body(content: Content) -> some View {
+        content
+            .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace))
+            .transaction(value: animationValue) { transaction in
+                transaction.disablesAnimations = false
+                transaction.animation = reduceMotion
+                    ? .easeOut(duration: 0.12)
+                    : animation
+            }
+    }
+}
+
 extension KeyEquivalent {
     static let cancelAction = KeyEquivalent("\u{1b}") // Escape
     static let defaultAction = KeyEquivalent("\r") // Return
@@ -84,6 +102,18 @@ extension View {
     ) -> some View {
         modifier(
             NumericTextTransitionModifier(
+                animationValue: animationValue,
+                animation: animation
+            )
+        )
+    }
+
+    func symbolReplaceTransition<Value: Equatable>(
+        animationValue: Value,
+        animation: Animation = .spring(response: 0.28, dampingFraction: 0.78)
+    ) -> some View {
+        modifier(
+            SymbolReplaceTransitionModifier(
                 animationValue: animationValue,
                 animation: animation
             )

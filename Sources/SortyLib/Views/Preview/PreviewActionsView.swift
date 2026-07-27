@@ -353,6 +353,7 @@ private struct PreviewProgressStatus: View {
                 Text(stage)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .numericTextTransition(animationValue: stage)
 
                 if showsAILoadingIndicator {
                     LoadingDotsView(dotCount: 3, dotSize: 4, color: .secondary)

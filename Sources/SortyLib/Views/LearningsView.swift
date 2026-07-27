@@ -698,6 +698,7 @@ struct LearningsView: View {
                 Text(statusLabel)
                     .font(.caption.bold())
                     .foregroundColor(manager.consentManager.hasConsented ? .primary : .secondary)
+                    .numericTextTransition(animationValue: statusLabel)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
@@ -861,15 +862,18 @@ struct LearningsView: View {
                     Image(systemName: heroIcon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(heroAccentColor)
+                        .symbolReplaceTransition(animationValue: heroIcon)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(heroTitle)
                         .font(.headline)
+                        .numericTextTransition(animationValue: heroTitle)
                     if let subtitle = heroSubtitle {
                         Text(LocalizedStringKey(subtitle))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: subtitle)
                     }
                 }
             }
@@ -1634,6 +1638,7 @@ private struct LearningInsightRow: View {
                 .font(.body.bold())
                 .foregroundColor(rule.isEnabled ? confidenceColor : .gray)
                 .frame(width: 24)
+                .symbolReplaceTransition(animationValue: rule.isEnabled)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.explanation)
@@ -1766,6 +1771,7 @@ private struct SessionTimelineRow: View {
                         .font(.body.bold())
                         .foregroundColor(reactionColor)
                         .frame(width: 24)
+                        .symbolReplaceTransition(animationValue: reactionIcon)
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
@@ -1786,6 +1792,9 @@ private struct SessionTimelineRow: View {
                                 Text("\(session.filesMoved.count) files")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .numericTextTransition(
+                                        animationValue: session.filesMoved.count
+                                    )
                             }
                             if !session.userCorrections.isEmpty {
                                 Text(
@@ -1807,6 +1816,7 @@ private struct SessionTimelineRow: View {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                            .symbolReplaceTransition(animationValue: isExpanded)
                     }
                 }
                 .contentShape(Rectangle())
@@ -1879,7 +1889,7 @@ struct ModelDirectoryRow: View {
         HStack(spacing: 12) {
             Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
                 .font(.body.bold())
-                .contentTransition(.symbolEffect(.replace))
+                .symbolReplaceTransition(animationValue: directory.isAccessible)
                 .foregroundColor(
                     directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange
                 )

@@ -38,10 +38,14 @@ struct ModelSelectorRow: View {
                     Text(provider.displayName)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .numericTextTransition(animationValue: provider)
                     Text(model.isEmpty ? provider.defaultModel : model)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)
+                        .numericTextTransition(
+                            animationValue: model.isEmpty ? provider.defaultModel : model
+                        )
                 }
 
                 Spacer()
@@ -521,6 +525,7 @@ struct ModelSelectionPopover: View {
                         Text(showAllModels ? "Show Less" : "Show All")
                             .font(.system(size: 10))
                             .foregroundColor(.accentColor)
+                            .numericTextTransition(animationValue: showAllModels)
                     }
                     .buttonStyle(.plain)
                 }
@@ -738,6 +743,9 @@ struct ModelSelectionPopover: View {
                     Text("\(selectedProvider.displayName) / \(selectedModel)")
                         .font(.system(size: 12))
                         .lineLimit(1)
+                        .numericTextTransition(
+                            animationValue: "\(selectedProvider.rawValue)-\(selectedModel)"
+                        )
                 }
             } else {
                 Text("Select a model")

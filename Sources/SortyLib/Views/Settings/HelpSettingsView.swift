@@ -114,10 +114,10 @@ struct HelpSettingsView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: copiedIssueDetails ? "checkmark" : "doc.on.doc")
-                                .contentTransition(.symbolEffect(.replace))
+                                .symbolReplaceTransition(animationValue: copiedIssueDetails)
 
                             Text(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details")
-                                .contentTransition(.opacity)
+                                .numericTextTransition(animationValue: copiedIssueDetails)
                         }
                             .frame(maxWidth: .infinity)
                     }
@@ -519,8 +519,7 @@ private struct DeeplinkEntryRow: View {
                     Circle()
                         .fill(copied ? .green.opacity(0.14) : color.opacity(0.08))
                 )
-                .contentTransition(.symbolEffect(.replace))
-                .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: copied)
+                .symbolReplaceTransition(animationValue: copied)
         }
         .buttonStyle(.plain)
         .help("Copy \(entry.title) deeplink")

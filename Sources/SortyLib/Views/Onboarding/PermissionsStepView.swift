@@ -613,7 +613,7 @@ struct PermissionRow: View {
             Image(systemName: state == .granted ? "checkmark" : type.icon)
                 .font(.system(size: state == .granted ? 18 : 19, weight: .semibold))
                 .foregroundStyle(iconTint)
-                .contentTransition(.symbolEffect(.replace))
+                .symbolReplaceTransition(animationValue: state)
         }
         .frame(width: 46, height: 46)
         .accessibilityHidden(true)
@@ -667,8 +667,10 @@ struct PermissionRow: View {
         HStack(spacing: 6) {
             Image(systemName: state.symbol)
                 .font(.system(size: 11, weight: .bold))
+                .symbolReplaceTransition(animationValue: state)
             Text(state.title(for: type))
                 .font(.caption.weight(.semibold))
+                .numericTextTransition(animationValue: state)
         }
         .foregroundStyle(state.tint)
         .padding(.horizontal, 10)
@@ -758,6 +760,7 @@ struct PermissionEducationView: View {
                         }
                     } label: {
                         Label(currentPage == pages.count - 1 ? "Done" : "Continue", systemImage: currentPage == pages.count - 1 ? "checkmark" : "chevron.right")
+                            .symbolReplaceTransition(animationValue: currentPage)
                     }
                     .buttonStyle(.sortyPrimary(size: .regular))
                     .keyboardShortcut(.defaultAction)

@@ -34,6 +34,7 @@ struct LiquidGlassReasoningButton: View {
             } label: {
                 Image(systemName: isRule ? "sparkles" : "brain")
                     .font(.caption2)
+                    .symbolReplaceTransition(animationValue: isRule)
                     .foregroundStyle(
                         showPopover
                             ? (isRule ? Color.orange : Color.purple)
@@ -71,11 +72,13 @@ struct LiquidGlassReasoningPopover: View {
                 Image(systemName: isRule ? "sparkles" : "brain")
                     .font(.caption)
                     .foregroundStyle(accentColor)
+                    .symbolReplaceTransition(animationValue: isRule)
 
                 Text(isRule ? "Learned Rule" : "AI Reasoning")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
+                    .numericTextTransition(animationValue: isRule)
 
                 Spacer()
 

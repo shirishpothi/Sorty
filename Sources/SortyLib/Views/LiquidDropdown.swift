@@ -51,6 +51,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
 
             Text(LocalizedStringKey(selection.rawValue))
                 .fontWeight(.medium)
+                .numericTextTransition(animationValue: selection.rawValue)
 
             Image(systemName: "chevron.down")
                 .font(.caption2)
@@ -92,6 +93,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 11))
                     .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .symbolReplaceTransition(animationValue: isSelected)
 
                 Text(LocalizedStringKey(option.rawValue))
                     .font(.system(size: 13))

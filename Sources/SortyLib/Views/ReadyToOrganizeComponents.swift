@@ -97,6 +97,7 @@ struct ReadyToOrganizeKeyboardHint: View {
                 .font(.caption2.weight(.medium))
             Text(isConnecting ? "Waiting..." : actionVerb)
                 .font(.caption2)
+                .numericTextTransition(animationValue: isConnecting)
         }
         .foregroundStyle(.quaternary)
         .opacity(hasAppeared ? 1 : 0)

@@ -76,6 +76,7 @@ struct DuplicateHandlingPicker: View {
                 Image(systemName: selection == mode ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selection == mode ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary)
                     .font(.caption)
+                    .symbolReplaceTransition(animationValue: selection)
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 2) {

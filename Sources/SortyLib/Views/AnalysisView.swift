@@ -1360,6 +1360,7 @@ private struct RenameFileIcon: View {
             Image(systemName: isUnchanged ? "equal.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(isUnchanged ? Color.secondary : Color.green)
+                .symbolReplaceTransition(animationValue: isUnchanged)
                 .background(Circle().fill(Color(NSColor.windowBackgroundColor)))
                 .offset(x: 3, y: 3)
         }
@@ -1381,6 +1382,7 @@ private struct RenameShiftIndicator: View {
             Image(systemName: isUnchanged ? "equal" : "arrow.right")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(isUnchanged ? Color.secondary : Color.purple)
+                .symbolReplaceTransition(animationValue: isUnchanged)
                 .scaleEffect(isActive && pulse ? 1.12 : 1)
 
             Capsule()
@@ -1788,6 +1790,7 @@ private struct AIReasoningStatus: View {
             Image(systemName: isRenameOnly ? "text.cursor" : "folder.badge.gearshape")
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
+                .symbolReplaceTransition(animationValue: isRenameOnly)
                 .accessibilityLabel(isRenameOnly ? "Preparing names" : "Scanning files")
         } else if case .organizing = state {
             if isEstablishingConnection {
@@ -1798,6 +1801,7 @@ private struct AIReasoningStatus: View {
                 Image(systemName: isRenameOnly ? "textformat" : "sparkles")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
+                    .symbolReplaceTransition(animationValue: isRenameOnly)
                     .symbolEffect(.variableColor.iterative, options: .repeating)
                     .accessibilityLabel(isRenameOnly ? "Renaming files" : "Organizing files")
             }

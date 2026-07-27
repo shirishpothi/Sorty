@@ -49,6 +49,7 @@ struct PreviewHeaderView: View {
 
                 Text(version == 1 ? "Preview" : "Preview \(version)")
                     .font(.headline)
+                    .numericTextTransition(animationValue: version)
 
                 if totalVersions > 1 {
                     Button {

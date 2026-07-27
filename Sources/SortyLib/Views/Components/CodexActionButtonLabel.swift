@@ -99,6 +99,7 @@ struct CodexActionButtonLabel: View {
                     Image(systemName: resolvedSymbol)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.white)
+                        .symbolReplaceTransition(animationValue: resolvedSymbol)
                 }
             }
 
@@ -106,6 +107,7 @@ struct CodexActionButtonLabel: View {
                 .font(.system(.caption, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(.white)
+                .numericTextTransition(animationValue: resolvedTitle)
 
             Spacer(minLength: 6)
 

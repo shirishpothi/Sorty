@@ -239,6 +239,9 @@ struct OrganizationStrategySettingsView: View {
                             Text(selectedPreset.instructions)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                                .numericTextTransition(
+                                    animationValue: selectedPreset.instructions
+                                )
                                 .padding(8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color(NSColor.controlBackgroundColor))
@@ -284,6 +287,9 @@ struct OrganizationStrategySettingsView: View {
                         HStack(spacing: 6) {
                             Text(viewModel.config.namingStyle == .custom ? "Custom Naming Instructions" : "Additional Naming Instructions")
                                 .font(.subheadline.weight(.medium))
+                                .numericTextTransition(
+                                    animationValue: viewModel.config.namingStyle
+                                )
 
                             Button {
                                 HapticFeedbackManager.shared.tap()

@@ -138,7 +138,7 @@ struct OrganizationCompleteView: View {
                                 Image(systemName: statusIcon)
                                     .font(.system(size: 30, weight: .bold))
                                     .foregroundStyle(.white)
-                                    .contentTransition(.symbolEffect(.replace))
+                                    .symbolReplaceTransition(animationValue: statusIcon)
                             }
                             .scaleEffect(iconAppeared ? 1 : 0.3)
 
@@ -152,7 +152,7 @@ struct OrganizationCompleteView: View {
                                 .font(.title.bold())
                                 .opacity(titleAppeared ? 1 : 0)
                                 .offset(y: titleAppeared ? 0 : 10)
-                                .contentTransition(.opacity)
+                                .numericTextTransition(animationValue: statusTitle)
 
                             Text(statusMessage)
                                 .font(.subheadline)
@@ -160,7 +160,7 @@ struct OrganizationCompleteView: View {
                                 .multilineTextAlignment(.center)
                                 .opacity(titleAppeared ? 1 : 0)
                                 .offset(y: titleAppeared ? 0 : 10)
-                                .contentTransition(.opacity)
+                                .numericTextTransition(animationValue: statusMessage)
 
                             let effectiveTimeSaved: TimeInterval = {
                                 if let stats = stats, stats.estimatedTimeSaved > 0 {
@@ -176,6 +176,9 @@ struct OrganizationCompleteView: View {
                                     Text("You saved approximately **\(timeSavedString(effectiveTimeSaved))** of manual work!")
                                         .font(.callout)
                                         .foregroundStyle(.secondary)
+                                        .numericTextTransition(
+                                            animationValue: effectiveTimeSaved
+                                        )
                                 }
                                 .padding(.top, 4)
                                 .opacity(timeSavedAppeared ? 1 : 0)
