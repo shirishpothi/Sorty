@@ -451,7 +451,16 @@ struct SettingsToggle: View {
             Spacer()
             
             if let previewAction {
-                Button(action: previewAction) {
+                Button {
+                    AnalyticsManager.shared.captureFeature(
+                        feature: "settings",
+                        subfeature: "preview",
+                        action: "preview_clicked",
+                        outcome: "started",
+                        properties: ["control": title]
+                    )
+                    previewAction()
+                } label: {
                     Image(systemName: previewIcon)
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
@@ -469,8 +478,12 @@ struct SettingsToggle: View {
         }
         .padding(.vertical, 4)
         .settingsFocusableSetting(focusTarget)
-        .onChange(of: isOn) { _, _ in
+        .onChange(of: isOn) { _, newValue in
             HapticFeedbackManager.shared.selection()
+            AnalyticsManager.shared.captureSettingChanged(
+                title,
+                isEnabled: newValue
+            )
         }
     }
 }

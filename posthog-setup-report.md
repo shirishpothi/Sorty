@@ -29,7 +29,7 @@ Both clients disable person profiles and IP collection. Session replay, heatmaps
 | `web:interaction` | Navigation, downloads, FAQ, source/support links, and analytics preferences | `action`, `component`, `location`, `target`, `outcome` |
 | `app:session_started` | Each opted-in Mac analytics session | `launch_source` |
 | `app:screen_viewed` | Main app screens and Settings sections | `screen`, `section`, `source` |
-| `app:feature_used` | Features and sub-features with outcomes | `feature`, `subfeature`, `action`, `outcome` |
+| `app:feature_used` | Features, settings controls, and bucketed persona inventory with outcomes | `feature`, `subfeature`, `action`, `outcome`, `control`, `selection_kind`, `count_bucket` |
 | `app:workflow_progressed` | Organize, apply, regenerate, undo, duplicate scan, and cleanup stages | `workflow`, `stage`, `outcome`, `count_bucket`, `duration_bucket` |
 | `app:important_button_clicked` | Small allowlist of decision-critical controls | `button`, `screen`, `feature` |
 | `$exception` | Sanitized website errors and opted-in Mac errors/crashes | `platform_surface`, `feature`, `operation`, `error_type`, `error_category`, `error_cause`, `severity`, `recoverable` |
@@ -40,7 +40,7 @@ All events include `platform_surface` and `$geoip_disable`. The website addition
 
 Website instrumentation covers `/`, `/changelog`, `/privacy-policy`, `/terms`, unknown routes, the main homepage sections, navigation and mobile-menu actions, downloads and download outcomes, pricing/support/source links, FAQ toggles, and sanitized handled and unhandled errors.
 
-Mac instrumentation covers app sessions; main screens; individual Settings sections; directory selection and organization mode; watched-folder add, remove, toggle, and trigger actions; organize start, empty result, plan ready, cancellation, and failure; apply start, success, partial completion, and failure; regeneration variants; undo; duplicate scan and cleanup; and the most important preview and cleanup decision buttons.
+Mac instrumentation covers app sessions; main screens; individual Settings sections; shared settings toggles and notification previews; background automation controls; bucketed custom-persona inventory and built-in-versus-custom selection; directory selection and organization mode; watched-folder add, remove, toggle, and trigger actions; organize start, empty result, plan ready, cancellation, and failure; apply start, success, partial completion, and failure; regeneration variants; undo; duplicate scan and cleanup; and the most important preview and cleanup decision buttons. Persona names, IDs, descriptions, prompts, and instructions remain excluded.
 
 ## Dashboard
 

@@ -188,6 +188,38 @@ public final class AnalyticsManager: ObservableObject {
         )
     }
 
+    public func captureSettingChanged(
+        _ control: String,
+        isEnabled: Bool,
+        section: String = "settings"
+    ) {
+        captureFeature(
+            feature: "settings",
+            subfeature: section,
+            action: "toggle_changed",
+            outcome: isEnabled ? "enabled" : "disabled",
+            properties: ["control": control]
+        )
+    }
+
+    public func capturePersonaInventory(
+        action: String,
+        customPersonaCount: Int,
+        selectionKind: String? = nil
+    ) {
+        var properties: [String: Any] = [
+            "count_bucket": Self.countBucket(customPersonaCount),
+        ]
+        properties["selection_kind"] = selectionKind
+        captureFeature(
+            feature: "personas",
+            subfeature: "custom_personas",
+            action: action,
+            outcome: "success",
+            properties: properties
+        )
+    }
+
     public func capture(
         error: Error,
         feature: String,
@@ -346,6 +378,7 @@ public final class AnalyticsManager: ObservableObject {
             "$session_id",
             "action",
             "button",
+            "control",
             "count_bucket",
             "duration_bucket",
             "entry_source",
@@ -363,6 +396,7 @@ public final class AnalyticsManager: ObservableObject {
             "result_kind",
             "screen",
             "section",
+            "selection_kind",
             "semantic_enabled",
             "severity",
             "source",

@@ -20,6 +20,7 @@ struct AutomationSettingsView: View {
     @State private var showModelPicker = false
     @State private var showAutomationModelInfo = false
     @State private var showBackgroundInfo = false
+    @State private var isLoadingSettings = true
     
     var body: some View {
         VStack(spacing: 16) {
@@ -31,6 +32,10 @@ struct AutomationSettingsView: View {
         }
         .onAppear {
             loadAutomationSettings()
+            Task { @MainActor in
+                await Task.yield()
+                isLoadingSettings = false
+            }
         }
     }
     
@@ -87,6 +92,13 @@ struct AutomationSettingsView: View {
                         }
                         viewModel.config.automationProvider = selectedProvider
                         viewModel.config.automationModel = selectedModel
+                    }
+                    if !isLoadingSettings {
+                        AnalyticsManager.shared.captureSettingChanged(
+                            "Use separate model for automation",
+                            isEnabled: newValue,
+                            section: "automation"
+                        )
                     }
                 }
                 
@@ -148,6 +160,13 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationLaunchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        AnalyticsManager.shared.captureSettingChanged(
+                            "Launch at Login",
+                            isEnabled: newValue,
+                            section: "automation"
+                        )
+                    }
 
                     Toggle(isOn: $keepInBackground) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -191,6 +210,13 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationKeepInBackground)
+                    .onChange(of: keepInBackground) { _, newValue in
+                        AnalyticsManager.shared.captureSettingChanged(
+                            "Keep in Background",
+                            isEnabled: newValue,
+                            section: "automation"
+                        )
+                    }
 
                     @AppStorage("hideDockIcon") var hideDockIcon = false
                     Toggle(isOn: $hideDockIcon) {
@@ -204,6 +230,13 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationHideDockIcon)
+                    .onChange(of: hideDockIcon) { _, newValue in
+                        AnalyticsManager.shared.captureSettingChanged(
+                            "Hide Dock Icon",
+                            isEnabled: newValue,
+                            section: "automation"
+                        )
+                    }
                 }
 
             }

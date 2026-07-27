@@ -21,16 +21,17 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 | `web:interaction` | Website | Important links, downloads, navigation, FAQ toggles, and bounded outcomes |
 | `app:session_started` | Mac | An opted-in app analytics session |
 | `app:screen_viewed` | Mac | Main screens and individual Settings sections |
-| `app:feature_used` | Mac | Feature and sub-feature actions with stable outcomes |
+| `app:feature_used` | Mac | Feature and sub-feature actions, including settings changes and bucketed persona inventory, with stable outcomes |
 | `app:workflow_progressed` | Mac | Organize, apply, regenerate, undo, duplicate-scan, and cleanup stages |
 | `app:important_button_clicked` | Mac | A small allowlist of decision-critical buttons |
 | `$exception` | Both | Sanitized handled errors and opted-in Mac crashes |
 
-Do not create a new event for every button or state. Prefer an existing canonical event with low-cardinality `feature`, `subfeature`, `action`, `stage`, `outcome`, `screen`, or `button` properties. Counts and durations must use `AnalyticsManager.countBucket` and `durationBucket`; paths, identifiers, model names, and free text are not acceptable dimensions.
+Do not create a new event for every button or state. Prefer an existing canonical event with low-cardinality `feature`, `subfeature`, `action`, `stage`, `outcome`, `screen`, `control`, `selection_kind`, or `button` properties. Counts and durations must use `AnalyticsManager.countBucket` and `durationBucket`; paths, identifiers, persona names or contents, model names, and free text are not acceptable dimensions.
 
 ## Implementation map
 
 - Mac SDK setup, consent, allowlists, bucketing, and error classification: `Sources/SortyLib/Analytics/AnalyticsManager.swift`
+- Mac settings toggles, notification previews, automation controls, and persona inventory: `Sources/SortyLib/Views/Settings/SettingsComponents.swift`, `Sources/SortyLib/Views/Settings/AutomationSettingsView.swift`, and `Sources/SortyLib/Views/PersonaPickerView.swift`
 - Mac one-time permission UI: `Sources/SortyLib/Analytics/AnalyticsConsentView.swift`
 - Website initialization, sanitization, route events, and error classification: `website/lib/analytics.ts`
 - Website route/section/action listeners and preferences UI: `website/components/analytics-provider.tsx`

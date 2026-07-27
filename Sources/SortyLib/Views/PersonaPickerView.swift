@@ -58,6 +58,11 @@ struct PersonaPickerView: View {
                             personaManager.selectedCustomPersonaId = nil
                             updateLocalPrompt()
                         }
+                        AnalyticsManager.shared.capturePersonaInventory(
+                            action: "persona_selected",
+                            customPersonaCount: customStore.customPersonas.count,
+                            selectionKind: "built_in"
+                        )
                     }
                     .onHover { hovering in
                         hoveringPersona = hovering ? persona : nil
@@ -84,6 +89,11 @@ struct PersonaPickerView: View {
                                     personaManager.selectedCustomPersonaId = custom.id
                                     updateLocalPrompt()
                                 }
+                                AnalyticsManager.shared.capturePersonaInventory(
+                                    action: "persona_selected",
+                                    customPersonaCount: customStore.customPersonas.count,
+                                    selectionKind: "custom"
+                                )
                             },
                             onDelete: {
                                 requestDeletion(of: custom)
@@ -126,6 +136,11 @@ struct PersonaPickerView: View {
         }
         .onAppear {
             updateLocalPrompt()
+            AnalyticsManager.shared.capturePersonaInventory(
+                action: "inventory_viewed",
+                customPersonaCount: customStore.customPersonas.count,
+                selectionKind: selectedCustomPersona == nil ? "built_in" : "custom"
+            )
         }
         .onChange(of: focusedField) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue {
@@ -137,6 +152,12 @@ struct PersonaPickerView: View {
         }
         .onChange(of: customStore.customPersonas) { _, _ in
             updateLocalPrompt()
+        }
+        .onChange(of: customStore.customPersonas.count) { _, count in
+            AnalyticsManager.shared.capturePersonaInventory(
+                action: "inventory_changed",
+                customPersonaCount: count
+            )
         }
         .onDisappear {
             saveChangesIfNeeded()
@@ -641,6 +662,11 @@ struct CompactPersonaPicker: View {
                     Button {
                         personaManager.selectPersona(persona)
                         personaManager.selectedCustomPersonaId = nil
+                        AnalyticsManager.shared.capturePersonaInventory(
+                            action: "persona_selected",
+                            customPersonaCount: customStore.customPersonas.count,
+                            selectionKind: "built_in"
+                        )
                     } label: {
                         Label {
                             VStack(alignment: .leading) {
@@ -661,6 +687,11 @@ struct CompactPersonaPicker: View {
                     ForEach(customStore.customPersonas) { custom in
                         Button {
                             personaManager.selectedCustomPersonaId = custom.id
+                            AnalyticsManager.shared.capturePersonaInventory(
+                                action: "persona_selected",
+                                customPersonaCount: customStore.customPersonas.count,
+                                selectionKind: "custom"
+                            )
                         } label: {
                             Label(custom.name, systemImage: custom.icon)
                         }
