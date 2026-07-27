@@ -2786,7 +2786,7 @@ struct ErrorView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(.rotate, value: retryAnimationTrigger)
+                            .symbolEffect(.rotate, options: .speed(1.5), value: retryAnimationTrigger)
                         Text("Retry")
                             .font(.caption.bold())
                     }

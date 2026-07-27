@@ -125,7 +125,7 @@ struct PermissionsSettingsView: View {
                                 Text("Refresh Status")
                             } icon: {
                                 Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(.rotate, value: refreshStatusAnimationTrigger)
+                                    .symbolEffect(.rotate, options: .speed(1.5), value: refreshStatusAnimationTrigger)
                             }
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
