@@ -1874,6 +1874,7 @@ struct ScanProgressViewNew: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .numericTextTransition(animationValue: subtitle)
                 }
 
                 Spacer(minLength: 0)
