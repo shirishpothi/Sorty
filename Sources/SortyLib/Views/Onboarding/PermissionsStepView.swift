@@ -522,6 +522,7 @@ struct PermissionRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var grantFlash = false
+    @State private var grantAnimationTrigger = 0
 
     init(
         type: PermissionType,
@@ -611,7 +612,8 @@ struct PermissionRow: View {
             }
         }
         .onChange(of: state) { _, newState in
-            guard newState == .granted else { return }
+            guard newState == .granted || newState == .restartRequired else { return }
+            grantAnimationTrigger += 1
             playApprovalAnimation()
         }
         .contextMenu {
@@ -690,10 +692,13 @@ struct PermissionRow: View {
     private var permissionIcon: some View {
         Group {
             if usesSupportCardStyle {
-                Image(systemName: state == .granted ? "checkmark" : type.icon)
-                    .font(.system(size: 25, weight: .semibold))
+                PermissionAnimatedIcon(
+                    type: type,
+                    state: state,
+                    grantAnimationTrigger: grantAnimationTrigger,
+                    size: 25
+                )
                     .foregroundStyle(isHovering ? iconTint : .secondary)
-                    .symbolReplaceTransition(animationValue: state)
                     .frame(height: 34)
             } else {
                 ZStack {
@@ -704,10 +709,13 @@ struct PermissionRow: View {
                                 .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
                         }
 
-                    Image(systemName: state == .granted ? "checkmark" : type.icon)
-                        .font(.system(size: state == .granted ? 18 : 19, weight: .semibold))
+                    PermissionAnimatedIcon(
+                        type: type,
+                        state: state,
+                        grantAnimationTrigger: grantAnimationTrigger,
+                        size: 19
+                    )
                         .foregroundStyle(iconTint)
-                        .symbolReplaceTransition(animationValue: state)
                 }
                 .frame(width: 46, height: 46)
             }

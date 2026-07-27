@@ -932,12 +932,16 @@ private struct PermissionSettingsCard: View {
     }
 }
 
-private struct PermissionAnimatedIcon: View {
+struct PermissionAnimatedIcon: View {
     let type: PermissionType
     let state: PermissionState
     let grantAnimationTrigger: Int
+    var size: CGFloat = 23
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var folderFlapRotation = 0.0
+    @State private var folderBackOpacity = 0.0
+    @State private var folderOpenTask: Task<Void, Never>?
     @State private var gearRotation = 0.0
     @State private var bellRotation = 0.0
     @State private var bellRingTask: Task<Void, Never>?
@@ -951,17 +955,27 @@ private struct PermissionAnimatedIcon: View {
         Group {
             switch type {
             case .filesAndFolders:
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 23, weight: .semibold))
-                    .symbolEffect(
-                        .bounce.up.byLayer,
-                        options: .speed(0.85),
-                        value: reduceMotion ? 0 : grantAnimationTrigger
-                    )
+                ZStack {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: size, weight: .semibold))
+                        .opacity(folderBackOpacity)
+                        .scaleEffect(x: 0.96, y: 0.88, anchor: .bottom)
+                        .offset(y: -1)
+
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: size, weight: .semibold))
+                        .rotation3DEffect(
+                            .degrees(folderFlapRotation),
+                            axis: (x: 1, y: 0, z: 0),
+                            anchor: .bottom,
+                            perspective: 0.6
+                        )
+                }
+                .frame(width: size * 1.18, height: size * 1.18)
 
             case .fullDiskAccess:
                 Image(systemName: isReady ? "lock.fill" : "lock.open.fill")
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: size, weight: .semibold))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(
                         .bounce,
@@ -976,20 +990,20 @@ private struct PermissionAnimatedIcon: View {
             case .automation:
                 ZStack {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: size * 0.65, weight: .semibold))
                         .rotationEffect(.degrees(gearRotation))
-                        .offset(x: -5, y: 4)
+                        .offset(x: size * -0.22, y: size * 0.17)
 
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: size * 0.52, weight: .semibold))
                         .rotationEffect(.degrees(-gearRotation * 1.25))
-                        .offset(x: 6, y: -5)
+                        .offset(x: size * 0.26, y: size * -0.22)
                 }
-                .frame(width: 27, height: 27)
+                .frame(width: size * 1.18, height: size * 1.18)
 
             case .notifications:
                 Image(systemName: "bell.fill")
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: size, weight: .semibold))
                     .rotationEffect(.degrees(bellRotation), anchor: .top)
             }
         }
@@ -998,12 +1012,16 @@ private struct PermissionAnimatedIcon: View {
             playGrantAnimation()
         }
         .onDisappear {
+            folderOpenTask?.cancel()
             bellRingTask?.cancel()
         }
     }
 
     private func playGrantAnimation() {
         switch type {
+        case .filesAndFolders:
+            openAndCloseFolder()
+
         case .automation:
             withAnimation(.easeInOut(duration: 0.72)) {
                 gearRotation += 360
@@ -1012,8 +1030,26 @@ private struct PermissionAnimatedIcon: View {
         case .notifications:
             ringBell()
 
-        case .filesAndFolders, .fullDiskAccess:
+        case .fullDiskAccess:
             break
+        }
+    }
+
+    private func openAndCloseFolder() {
+        folderOpenTask?.cancel()
+        folderOpenTask = Task { @MainActor in
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.68)) {
+                folderFlapRotation = -42
+                folderBackOpacity = 0.48
+            }
+
+            try? await Task.sleep(for: .milliseconds(280))
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                folderFlapRotation = 0
+                folderBackOpacity = 0
+            }
         }
     }
 
