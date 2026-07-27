@@ -327,7 +327,7 @@ struct OrganizeView: View {
         if let errorViewTestRoute {
             ErrorView(
                 error: errorViewTestRoute.error,
-                onCancel: returnToDirectorySelection,
+                onCancel: dismissErrorViewTestRoute,
                 onRetry: dismissErrorViewTestRoute,
                 onRetryWithSmarterModel: dismissErrorViewTestRoute
             )
