@@ -22,7 +22,6 @@ struct PreviewHeaderView: View {
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
-    @State private var isPopoverButtonHovered = false
 
     var body: some View {
         HStack {
@@ -193,39 +192,6 @@ struct PreviewHeaderView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Divider()
-
-                    Button {
-                        showDropHelpPopover = false
-                    } label: {
-                        Label("Got it", systemImage: "checkmark")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(
-                                isPopoverButtonHovered
-                                    ? SortyDesignSystem.Colors.resolvedAccent
-                                    : Color.secondary
-                            )
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .systemLiquidGlassBackground(cornerRadius: 8)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(
-                                        SortyDesignSystem.Colors.resolvedAccent.opacity(
-                                            isPopoverButtonHovered ? 0.35 : 0
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isPopoverButtonHovered = $0 }
-                    .animation(
-                        .easeInOut(duration: 0.16),
-                        value: isPopoverButtonHovered
-                    )
                 }
                 .padding(12)
                 .frame(width: 260)
