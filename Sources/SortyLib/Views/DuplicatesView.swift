@@ -1863,8 +1863,8 @@ struct ScanProgressViewNew: View {
                 Image(systemName: scanIcon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 30)
                     .symbolReplaceTransition(animationValue: scanIcon)
+                    .frame(width: 30)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
