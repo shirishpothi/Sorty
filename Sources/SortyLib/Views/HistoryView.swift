@@ -596,7 +596,6 @@ struct HistoryHeader: View {
     private var populatedHeader: some View {
         ViewThatFits(in: .horizontal) {
             populatedHeaderRow
-            compactPopulatedHeader
             narrowPopulatedHeader
         }
     }
@@ -613,34 +612,6 @@ struct HistoryHeader: View {
                 .layoutPriority(1)
 
             Spacer(minLength: 4)
-
-            clearHistoryButton
-                .fixedSize()
-        }
-    }
-
-    private var compactPopulatedHeader: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.blue.gradient)
-                .frame(width: 24, height: 34)
-                .padding(.trailing, 8)
-                .accessibilityLabel("History, \(totalSessions) runs")
-
-            HistoryNavigatorControl(selection: $selectedFilter)
-                .frame(width: HistoryNavigatorControl.preferredWidth)
-
-            Spacer(minLength: 4)
-
-            Text("\(totalSessions) runs")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .contentTransition(.numericText())
-                .numericTextTransition(animationValue: totalSessions)
-                .accessibilityLabel("\(totalSessions) runs recorded")
 
             clearHistoryButton
                 .fixedSize()
