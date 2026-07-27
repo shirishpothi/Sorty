@@ -20,6 +20,7 @@ struct AIProviderSettingsView: View {
     @State private var isTestingConnection = false
     @State private var connectionTestID: UUID?
     @State private var hasCopiedCode = false
+    @State private var hasCopiedConnectionError = false
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
@@ -635,13 +636,31 @@ struct AIProviderSettingsView: View {
                                         pb.clearContents()
                                         pb.setString(status.replacingOccurrences(of: "Error: ", with: ""), forType: .string)
                                         HapticFeedbackManager.shared.tap()
+                                        hasCopiedConnectionError = true
+                                        Task { @MainActor in
+                                            try? await Task.sleep(nanoseconds: 1_250_000_000)
+                                            guard !Task.isCancelled else { return }
+                                            hasCopiedConnectionError = false
+                                        }
                                     } label: {
-                                        Image(systemName: "doc.on.doc")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
+                                        Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(hasCopiedConnectionError ? .green : .secondary)
+                                            .frame(width: 28, height: 28)
+                                            .background(
+                                                Circle()
+                                                    .fill(
+                                                        hasCopiedConnectionError
+                                                            ? Color.green.opacity(0.14)
+                                                            : Color.secondary.opacity(0.08)
+                                                    )
+                                            )
+                                            .symbolReplaceTransition(animationValue: hasCopiedConnectionError)
                                     }
                                     .buttonStyle(.plain)
-                                    .help("Copy error message")
+                                    .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
+                                    .accessibilityLabel("Copy error message")
+                                    .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
                                 }
                                 .frame(maxWidth: 620, alignment: .center)
 
@@ -736,6 +755,7 @@ struct AIProviderSettingsView: View {
         testConnectionDetails = nil
         isDetailsExpanded = false
         isInternetAccessBlocked = false
+        hasCopiedConnectionError = false
         let testedConfig = viewModel.config
         let testID = UUID()
         connectionTestID = testID
@@ -814,6 +834,7 @@ struct AIProviderSettingsView: View {
         testConnectionDetails = nil
         isDetailsExpanded = false
         isInternetAccessBlocked = false
+        hasCopiedConnectionError = false
     }
 
     @MainActor
