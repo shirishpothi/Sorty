@@ -2,6 +2,13 @@ diff --git a/dist/index.cjs b/dist/index.cjs
 index d32314e84c8df12ef04408bc075046fc6226143a..ae01537275b86d65d222709fd58fce396f2d3905 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs	
+@@ -1081,6 +1081,5 @@ function collectRangeRects(range, scope) {
+   const texts = [];
+   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n);
+-  if (texts.length <= 1) return rectArray(range.getClientRects());
+   const out = [];
+   for (const text of texts) {
+     const start = text === range.startContainer ? range.startOffset : 0;
 @@ -1195,8 +1195,8 @@ function rangesToLineRects(ranges, anchor, originTop = 0, options) {
      width: rect.width,
      height: rect.height,
@@ -29,6 +36,13 @@ diff --git a/dist/index.js b/dist/index.js
 index a5e704c193f4c5e8120b8c30b290d405cdd660ed..44f1932e61f40defab1c3acc4981e55a0c72fdad 100644
 --- a/dist/index.js
 +++ b/dist/index.js	
+@@ -330,6 +330,5 @@ function collectRangeRects(range, scope) {
+   const texts = [];
+   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n);
+-  if (texts.length <= 1) return rectArray(range.getClientRects());
+   const out = [];
+   for (const text of texts) {
+     const start = text === range.startContainer ? range.startOffset : 0;
 @@ -444,8 +444,8 @@ function rangesToLineRects(ranges, anchor, originTop = 0, options) {
      width: rect.width,
      height: rect.height,
