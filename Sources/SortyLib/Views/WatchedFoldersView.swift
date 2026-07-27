@@ -812,6 +812,7 @@ struct WatchedFolderConfigView: View {
                             Text(LocalizedStringKey(selectedMode.description))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .numericTextTransition(animationValue: selectedMode)
                         }
                     }
 
@@ -819,17 +820,18 @@ struct WatchedFolderConfigView: View {
                     ConfigSection(title: "Actions", icon: "play", color: .blue) {
                         Button(action: openFullOrganization) {
                             HStack {
-                                Image(systemName: "wand.and.stars")
+                                Image(systemName: selectedMode.iconName)
                                     .foregroundStyle(.blue)
+                                    .contentTransition(.symbolEffect(.replace))
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Run Full Organization")
+                                    Text(LocalizedStringKey(selectedModeManualAction.title))
                                         .foregroundStyle(.primary)
-                                    Text(
-                                        "Set up the folder structure you prefer. New files will then be placed into that structure without rearranging the whole folder."
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                        .numericTextTransition(animationValue: selectedMode)
+                                    Text(LocalizedStringKey(selectedModeManualAction.description))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .numericTextTransition(animationValue: selectedMode)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -1196,6 +1198,26 @@ struct WatchedFolderConfigView: View {
 
     private var currentInstructionSuggestion: String {
         instructionSuggestions[instructionSuggestionIndex % instructionSuggestions.count]
+    }
+
+    private var selectedModeManualAction: (title: String, description: String) {
+        switch selectedMode {
+        case .organize:
+            return (
+                "Run Organization",
+                "Organize the files already in this folder without changing their names."
+            )
+        case .organizeAndRename:
+            return (
+                "Run Organization & Rename",
+                "Organize the files already in this folder and improve their names."
+            )
+        case .renameOnly:
+            return (
+                "Run Rename",
+                "Improve the names of files already in this folder without moving them."
+            )
+        }
     }
 
     private func acceptCurrentInstructionSuggestion() -> Bool {
