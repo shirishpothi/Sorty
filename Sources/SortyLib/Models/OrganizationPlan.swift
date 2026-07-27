@@ -182,6 +182,10 @@ enum OrganizationModePlanEnforcer {
 
 
 public struct GenerationStats: Codable, Sendable, Hashable {
+    /// A manual pass includes inspecting the file, deciding where it belongs,
+    /// moving or renaming it, and checking the result.
+    public static let estimatedManualSecondsPerFile: TimeInterval = 20
+
     public let duration: TimeInterval
     public let tps: Double
     public let ttft: TimeInterval
@@ -200,9 +204,11 @@ public struct GenerationStats: Codable, Sendable, Hashable {
     
     /// User productivity metrics
     public var estimatedTimeSaved: TimeInterval {
-        // Assume 4 seconds saved per file organized (browsing, clicking, dragging, verifying)
-        // This is a conservative estimate for manual organization effort.
-        Double(filesScanned ?? 0) * 4.0
+        Self.estimatedTimeSaved(forFileCount: filesScanned ?? 0)
+    }
+
+    public static func estimatedTimeSaved(forFileCount fileCount: Int) -> TimeInterval {
+        Double(max(fileCount, 0)) * estimatedManualSecondsPerFile
     }
     
     /// Automatically calculated cost based on model and tokens if estimatedCost is nil

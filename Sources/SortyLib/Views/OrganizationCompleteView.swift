@@ -167,7 +167,7 @@ struct OrganizationCompleteView: View {
                                 if let stats = stats, stats.estimatedTimeSaved > 0 {
                                     return stats.estimatedTimeSaved
                                 }
-                                return Double(totalFiles) * 4.0
+                                return GenerationStats.estimatedTimeSaved(forFileCount: totalFiles)
                             }()
                             
                             if effectiveTimeSaved > 0 && undoState == .idle {

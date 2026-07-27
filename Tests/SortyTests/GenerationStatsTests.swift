@@ -29,6 +29,21 @@ final class GenerationStatsTests: XCTestCase {
         XCTAssertNil(stats.totalContextTokens)
     }
 
+    func testEstimatedTimeSavedReflectsFullManualOrganizationWork() {
+        let stats = GenerationStats(
+            duration: 1,
+            tps: 10,
+            ttft: 0.2,
+            totalTokens: 150,
+            model: "gpt-5.4",
+            filesScanned: 12
+        )
+
+        XCTAssertEqual(stats.estimatedTimeSaved, 240)
+        XCTAssertEqual(GenerationStats.estimatedTimeSaved(forFileCount: 3), 60)
+        XCTAssertEqual(GenerationStats.estimatedTimeSaved(forFileCount: -1), 0)
+    }
+
     func testHasBillableCostReflectsComputedCost() {
         let zeroCost = GenerationStats(
             duration: 1,
