@@ -66,6 +66,14 @@ struct FlatFolderRowContextMenu: View {
 }
 
 struct FlatFileRowContent: View {
+    private enum Column {
+        static let renameActionsWidth: CGFloat = 84
+        static let tagsWidth: CGFloat = 72
+        static let commentWidth: CGFloat = 14
+        static let sizeWidth: CGFloat = 44
+        static let dragHandleWidth: CGFloat = 12
+    }
+
     let file: FileItem
     let renameMapping: FileRenameMapping?
     let renameHelpText: String?
@@ -116,31 +124,40 @@ struct FlatFileRowContent: View {
 
             Spacer()
 
-            if let renameMapping, renameMapping.hasRename {
-                Image(systemName: "wand.and.stars")
-                    .font(.caption)
-                    .foregroundColor(.purple)
-                    .help(renameMapping.renameReason ?? "Sorty suggested rename")
+            Group {
+                if let renameMapping, renameMapping.hasRename {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption)
+                            .foregroundColor(.purple)
+                            .help(renameMapping.renameReason ?? "Sorty suggested rename")
 
-                RenameActionGlassCluster(
-                    isRegenerating: isRegeneratingName,
-                    onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
-                    onRegenerate: onRegenerate,
-                    onReject: onReject
-                )
+                        RenameActionGlassCluster(
+                            isRegenerating: isRegeneratingName,
+                            onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
+                            onRegenerate: onRegenerate,
+                            onReject: onReject
+                        )
+                    }
+                } else if let unchangedReason {
+                    RenameReasoningPopoverButton(reason: unchangedReason)
+                }
             }
+            .frame(width: Column.renameActionsWidth, alignment: .trailing)
 
-            if let unchangedReason {
-                RenameReasoningPopoverButton(reason: unchangedReason)
+            Group {
+                if !fileTags.isEmpty {
+                    TagDotsView(tags: fileTags)
+                }
             }
+            .frame(width: Column.tagsWidth, alignment: .leading)
 
-            if !fileTags.isEmpty {
-                TagDotsView(tags: fileTags)
+            Group {
+                if let fileComment, !fileComment.isEmpty {
+                    CommentBubbleButton(comment: fileComment)
+                }
             }
-
-            if let fileComment, !fileComment.isEmpty {
-                CommentBubbleButton(comment: fileComment)
-            }
+            .frame(width: Column.commentWidth, alignment: .center)
 
             if let parentSuggestion {
                 LiquidGlassLearningsButton(
@@ -161,10 +178,13 @@ struct FlatFileRowContent: View {
             Text(file.formattedSize)
                 .font(.caption2)
                 .foregroundColor(.secondary)
+                .monospacedDigit()
+                .frame(width: Column.sizeWidth, alignment: .trailing)
 
             Image(systemName: "line.3.horizontal")
                 .font(.caption2)
                 .foregroundColor(.secondary.opacity(0.6))
+                .frame(width: Column.dragHandleWidth)
                 .accessibilityHidden(true)
         }
     }
