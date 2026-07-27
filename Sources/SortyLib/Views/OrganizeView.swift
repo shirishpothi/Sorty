@@ -60,9 +60,9 @@ struct OrganizeView: View {
     @State private var showSavedPromptsSheet = false
     @State private var isReturningToStart = false
     @State private var isShowingReturnToStartContent = false
-    @State private var returnsToDirectorySelection = false
-    @State private var keepsReadyContentVisibleAfterReturn = false
     @State private var keepsDirectorySelectionVisibleAfterReturn = false
+    @State private var workflowContentIsVisible = false
+    @State private var workflowEntranceTask: Task<Void, Never>?
     @State private var showsCompletionContent = false
     @State private var liveOrganizationStartedAt: Date?
     @State private var keepsLiveOrganizationVisible = false
@@ -72,74 +72,78 @@ struct OrganizeView: View {
     private let minimumLiveOrganizationPresentation: TimeInterval = 1.0
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with selected directory
+        ZStack {
+            DirectorySelectionView(
+                selectedDirectory: $appState.selectedDirectory,
+                startsVisible: keepsDirectorySelectionVisibleAfterReturn
+            )
+            .opacity(workflowContentIsVisible ? 0 : 1)
+            .offset(x: reduceMotion || !workflowContentIsVisible ? 0 : -10)
+            .allowsHitTesting(!workflowContentIsVisible)
+            .accessibilityHidden(workflowContentIsVisible)
+
             if let directory = appState.selectedDirectory {
-                DirectoryHeader(
-                    url: directory,
-                    mode: settingsViewModel.config.mode,
-                    onBack: {
-                        HapticFeedbackManager.shared.tap()
-                        switch organizer.state {
-                        case .scanning, .organizing, .ready, .applying, .completed:
-                            returnToStartAfterCancellation()
-                        default:
-                            returnToDirectorySelection()
-                        }
-                    },
-                    onClear: {
-                        HapticFeedbackManager.shared.tap()
-                        let panel = NSOpenPanel()
-                        panel.canChooseDirectories = true
-                        panel.canChooseFiles = false
-                        panel.allowsMultipleSelection = false
-                        panel.message = "Select a directory to organize"
-                        panel.prompt = "Select"
-                        if panel.runModal() == .OK, let url = panel.url {
-                            withAnimation(.pageTransition) {
-                                organizer.reset()
-                                appState.selectedDirectory = url
+                VStack(spacing: 0) {
+                    // Header with selected directory
+                    DirectoryHeader(
+                        url: directory,
+                        mode: settingsViewModel.config.mode,
+                        onBack: {
+                            HapticFeedbackManager.shared.tap()
+                            switch organizer.state {
+                            case .scanning, .organizing, .ready, .applying, .completed:
+                                returnToStartAfterCancellation()
+                            default:
+                                returnToDirectorySelection()
                             }
-                            HapticFeedbackManager.shared.success()
+                        },
+                        onClear: {
+                            HapticFeedbackManager.shared.tap()
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Select a directory to organize"
+                            panel.prompt = "Select"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                withAnimation(.pageTransition) {
+                                    organizer.reset()
+                                    appState.selectedDirectory = url
+                                }
+                                HapticFeedbackManager.shared.success()
+                            }
                         }
-                    }
-                )
-                .id(settingsViewModel.config.mode)
-                .transition(directoryHeaderTransition)
-                .animation(directoryHeaderModeAnimation, value: settingsViewModel.config.mode)
-            }
-
-            // Main content area with animated transitions.
-            ZStack {
-                WorkflowGradientBackground()
-                    .opacity(persistentWorkflowGradientOpacity)
-                    .animation(persistentWorkflowGradientAnimation, value: persistentWorkflowGradientOpacity)
-                    .allowsHitTesting(false)
-
-                if appState.selectedDirectory == nil {
-                    DirectorySelectionView(
-                        selectedDirectory: $appState.selectedDirectory,
-                        startsVisible: isShowingReturnToStartContent
-                            || keepsDirectorySelectionVisibleAfterReturn
                     )
-                        .transition(TransitionStyles.scaleAndFade)
-                } else {
-                    stateContent
-                        .environment(\.workflowGradientHidden, true)
-                        .opacity(stateContentOpacity)
-                        .scaleEffect(stateContentScale)
-                        .blur(radius: stateContentBlur)
-                        .offset(y: stateContentOffset)
 
-                    if isShowingReturnToStartContent {
-                        returnToStartContent
+                    // Main content area with animated transitions.
+                    ZStack {
+                        WorkflowGradientBackground()
+                            .opacity(persistentWorkflowGradientOpacity)
+                            .animation(
+                                persistentWorkflowGradientAnimation,
+                                value: persistentWorkflowGradientOpacity
+                            )
+                            .allowsHitTesting(false)
+
+                        stateContent
                             .environment(\.workflowGradientHidden, true)
-                            .opacity(returnToStartContentOpacity)
-                            .scaleEffect(returnToStartContentScale)
-                            .offset(y: returnToStartContentOffset)
-                            .transition(.identity)
+                            .opacity(stateContentOpacity)
+                            .transition(.opacity)
+
+                        if isShowingReturnToStartContent {
+                            returnToStartContent
+                                .environment(\.workflowGradientHidden, true)
+                                .opacity(returnToStartContentOpacity)
+                                .scaleEffect(returnToStartContentScale)
+                                .offset(y: returnToStartContentOffset)
+                                .transition(.identity)
+                        }
                     }
                 }
+                .opacity(workflowContentIsVisible ? 1 : 0)
+                .offset(x: reduceMotion || workflowContentIsVisible ? 0 : 12)
+                .allowsHitTesting(workflowContentIsVisible)
+                .accessibilityHidden(!workflowContentIsVisible)
             }
         }
         .navigationTitle(settingsViewModel.config.mode.workflowTitle)
@@ -149,6 +153,7 @@ struct OrganizeView: View {
         .onAppear {
             configureOrganizer()
             presentSteeringPromptsIfRequested()
+            presentWorkflowContentIfNeeded()
         }
         .onChange(of: appState.shouldPresentSteeringPrompts) { _, _ in
             presentSteeringPromptsIfRequested()
@@ -163,6 +168,10 @@ struct OrganizeView: View {
             errorViewTestRoute = nil
             if newValue != nil {
                 keepsDirectorySelectionVisibleAfterReturn = false
+                presentWorkflowContentIfNeeded()
+            } else {
+                workflowEntranceTask?.cancel()
+                workflowContentIsVisible = false
             }
             // Prewarm AI connection when user selects a folder
             if newValue != nil {
@@ -196,6 +205,9 @@ struct OrganizeView: View {
         .onChange(of: activeSetupRepairMessage) {
             updateSetupRepairHUD()
         }
+        .onDisappear {
+            workflowEntranceTask?.cancel()
+        }
     }
 
     @ViewBuilder
@@ -211,34 +223,18 @@ struct OrganizeView: View {
     }
 
     private var persistentWorkflowGradientAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.52)
+        reduceMotion ? .easeOut(duration: 0.08) : .easeInOut(duration: 0.22)
     }
 
-    private var directoryHeaderTransition: AnyTransition {
-        reduceMotion ? .opacity : .headerBlurReplace
-    }
-
-    private var directoryHeaderModeAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.4, dampingFraction: 0.85)
+    private var workflowNavigationAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.1)
+            : .spring(response: 0.38, dampingFraction: 0.86)
     }
 
     private var stateContentOpacity: Double {
         if isReturningToStart { return 0 }
         return 1
-    }
-
-    private var stateContentScale: CGFloat {
-        1
-    }
-
-    private var stateContentBlur: CGFloat {
-        // Blur during transitions is expensive on macOS and was producing a
-        // visible "reload" wobble when returning from a cancelled run.
-        0
-    }
-
-    private var stateContentOffset: CGFloat {
-        0
     }
 
     private var returnToStartContentOpacity: Double {
@@ -254,16 +250,7 @@ struct OrganizeView: View {
     }
 
     private var returnToStartContent: some View {
-        Group {
-            if returnsToDirectorySelection {
-                DirectorySelectionView(
-                    selectedDirectory: $appState.selectedDirectory,
-                    startsVisible: true
-                )
-            } else {
-                ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
-            }
-        }
+        ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
     }
 
     @ViewBuilder
@@ -367,9 +354,7 @@ struct OrganizeView: View {
             } else {
                 ReadyToOrganizeView(
                     onStart: startOrganization,
-                    startsVisible: isShowingReturnToStartContent
-                        || keepsReadyContentVisibleAfterReturn
-                        || appState.hasPresentedReadyToOrganize
+                    startsVisible: true
                 )
             }
         case .scanning, .organizing, .applying:
@@ -412,24 +397,19 @@ struct OrganizeView: View {
     }
 
     private var returnToStartExitAnimation: Animation {
-        .easeOut(duration: reduceMotion ? 0.08 : 0.14)
+        reduceMotion ? .easeOut(duration: 0.08) : .easeInOut(duration: 0.18)
     }
 
     private func returnToStartAfterCancellation() {
         guard !isReturningToStart else { return }
 
-        let stateAtReturnStart = organizer.state
-        let isReturningFromCompletion: Bool
-        if case .completed = stateAtReturnStart {
-            isReturningFromCompletion = true
-        } else {
-            isReturningFromCompletion = false
+        if case .completed = organizer.state {
+            returnToDirectorySelection()
+            return
         }
-        returnsToDirectorySelection = isReturningFromCompletion
+
         isShowingReturnToStartContent = true
-        if !isReturningFromCompletion {
-            organizer.prepareForReturnToStartTransition()
-        }
+        organizer.prepareForReturnToStartTransition()
 
         withAnimation(returnToStartExitAnimation, completionCriteria: .logicallyComplete) {
             isReturningToStart = true
@@ -437,18 +417,10 @@ struct OrganizeView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if isReturningFromCompletion {
-                    organizer.pinsCompletionView = false
-                    organizer.reset()
-                    appState.selectedDirectory = nil
-                } else {
-                    organizer.cancel()
-                }
+                organizer.cancel()
                 showsCompletionContent = false
-                keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
-                keepsDirectorySelectionVisibleAfterReturn = isReturningFromCompletion
+                keepsDirectorySelectionVisibleAfterReturn = false
                 isShowingReturnToStartContent = false
-                returnsToDirectorySelection = false
                 isReturningToStart = false
             }
         }
@@ -457,23 +429,42 @@ struct OrganizeView: View {
     private func returnToDirectorySelection() {
         guard !isReturningToStart else { return }
 
-        returnsToDirectorySelection = true
-        isShowingReturnToStartContent = true
-        withAnimation(returnToStartExitAnimation, completionCriteria: .logicallyComplete) {
+        workflowEntranceTask?.cancel()
+        keepsDirectorySelectionVisibleAfterReturn = true
+        errorViewTestRoute = nil
+
+        withAnimation(workflowNavigationAnimation, completionCriteria: .logicallyComplete) {
             isReturningToStart = true
+            workflowContentIsVisible = false
         } completion: {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
+                organizer.pinsCompletionView = false
                 organizer.reset()
                 appState.selectedDirectory = nil
                 showsCompletionContent = false
-                keepsReadyContentVisibleAfterReturn = false
-                keepsDirectorySelectionVisibleAfterReturn = true
-                errorViewTestRoute = nil
                 isShowingReturnToStartContent = false
-                returnsToDirectorySelection = false
                 isReturningToStart = false
+            }
+        }
+    }
+
+    private func presentWorkflowContentIfNeeded() {
+        guard appState.selectedDirectory != nil else { return }
+
+        workflowEntranceTask?.cancel()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            workflowContentIsVisible = false
+        }
+
+        workflowEntranceTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled, appState.selectedDirectory != nil else { return }
+            withAnimation(workflowNavigationAnimation) {
+                workflowContentIsVisible = true
             }
         }
     }
@@ -599,7 +590,6 @@ struct OrganizeView: View {
 
         HapticFeedbackManager.shared.tap()
         resetLiveOrganizationPresentation()
-        keepsReadyContentVisibleAfterReturn = false
 
         // Apply default steering prompt if no custom instructions provided
         if organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,

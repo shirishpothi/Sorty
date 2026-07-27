@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
@@ -287,8 +288,16 @@ struct DirectorySelectionView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             HapticFeedbackManager.shared.success()
-            selectedDirectory = url
+            withAnimation(workflowNavigationAnimation) {
+                selectedDirectory = url
+            }
         }
+    }
+
+    private var workflowNavigationAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.1)
+            : .spring(response: 0.38, dampingFraction: 0.86)
     }
 
     private func triggerBrowseBeamPress() {
@@ -324,7 +333,9 @@ struct DirectorySelectionView: View {
             {
                 Task { @MainActor in
                     HapticFeedbackManager.shared.success()
-                    selectedDirectory = url
+                    withAnimation(workflowNavigationAnimation) {
+                        selectedDirectory = url
+                    }
                 }
             }
         }
