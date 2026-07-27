@@ -633,6 +633,15 @@ struct HistoryHeader: View {
 
             Spacer(minLength: 4)
 
+            Text("\(totalSessions) runs")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .contentTransition(.numericText())
+                .numericTextTransition(animationValue: totalSessions)
+                .accessibilityLabel("\(totalSessions) runs recorded")
+
             clearHistoryButton
                 .fixedSize()
         }
