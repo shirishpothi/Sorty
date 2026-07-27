@@ -25,9 +25,9 @@ const SORTY_SELECTION_HIGHLIGHT: HighlightOptions = {
   speed: {
     enabled: true,
     sensitivity: 0.65,
-    minDeposit: 0.7,
-    smoothing: 0.8,
-    resolution: 16,
+    minDeposit: 0.55,
+    smoothing: 1,
+    resolution: 24,
     dryoutBoost: 0.15,
     streakBoost: 0.05,
     featherReduce: 0.35,
@@ -49,8 +49,8 @@ const SORTY_SELECTION_HIGHLIGHT: HighlightOptions = {
     spread: 4,
     color: '#6ea2ff',
   },
-  snap: 'glyph',
-  fadeOnClear: false,
+  snap: 'none',
+  fadeOnClear: true,
   animation: {
     draw: false,
   },
