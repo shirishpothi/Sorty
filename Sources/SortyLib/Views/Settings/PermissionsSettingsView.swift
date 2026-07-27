@@ -50,11 +50,6 @@ struct PermissionsSettingsView: View {
                 }
             ) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Review the macOS access Sorty uses for folder organization, Finder actions, and notifications. Optional permissions can stay off until you need their features.")
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     LazyVGrid(
                         columns: [
                             GridItem(.flexible(), spacing: 10),
@@ -180,7 +175,7 @@ struct PermissionsSettingsView: View {
                     )
                     permissionNote(
                         icon: "lock.open",
-                        text: "Full Disk Access is optional and only helps with protected folders you explicitly select."
+                        text: "Full Disk Access is optional, but it avoids separate access prompts for each folder, making it faster to organize multiple folders."
                     )
                     permissionNote(
                         icon: "hand.raised",
