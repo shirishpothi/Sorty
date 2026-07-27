@@ -333,6 +333,7 @@ print_build_complete_summary() {
 
 INTERACTIVE_BUILD_PRESENTATION_ACTIVE=false
 INTERACTIVE_BUILD_TRANSCRIPT=""
+INTERACTIVE_BUILD_PIPE=""
 INTERACTIVE_BUILD_TEE_PID=""
 INTERACTIVE_BUILD_START_LINE_COUNT=11
 
@@ -342,6 +343,13 @@ begin_interactive_build_presentation() {
     fi
 
     if ! INTERACTIVE_BUILD_TRANSCRIPT=$(mktemp "${TMPDIR:-/tmp}/sorty-build-output.XXXXXX"); then
+        return
+    fi
+    INTERACTIVE_BUILD_PIPE="${INTERACTIVE_BUILD_TRANSCRIPT}.pipe"
+    if ! mkfifo "${INTERACTIVE_BUILD_PIPE}"; then
+        rm -f "${INTERACTIVE_BUILD_TRANSCRIPT}"
+        INTERACTIVE_BUILD_TRANSCRIPT=""
+        INTERACTIVE_BUILD_PIPE=""
         return
     fi
 
@@ -354,8 +362,9 @@ capture_interactive_build_progress() {
         return
     fi
 
-    exec > >(tee "${INTERACTIVE_BUILD_TRANSCRIPT}" >&3) 2>&1
+    tee "${INTERACTIVE_BUILD_TRANSCRIPT}" < "${INTERACTIVE_BUILD_PIPE}" >&3 &
     INTERACTIVE_BUILD_TEE_PID=$!
+    exec > "${INTERACTIVE_BUILD_PIPE}" 2>&1
 }
 
 restore_interactive_build_presentation() {
@@ -383,10 +392,11 @@ restore_interactive_build_presentation() {
         fi
     fi
 
-    rm -f "${INTERACTIVE_BUILD_TRANSCRIPT}"
+    rm -f "${INTERACTIVE_BUILD_TRANSCRIPT}" "${INTERACTIVE_BUILD_PIPE}"
     exec 3>&- 4>&-
     INTERACTIVE_BUILD_PRESENTATION_ACTIVE=false
     INTERACTIVE_BUILD_TRANSCRIPT=""
+    INTERACTIVE_BUILD_PIPE=""
     INTERACTIVE_BUILD_TEE_PID=""
 }
 
