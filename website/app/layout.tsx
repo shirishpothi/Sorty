@@ -9,6 +9,7 @@ import {
   SITE_URL,
 } from '@/lib/site-metadata'
 import { SelectionHighlighter } from '@/components/selection-highlighter'
+import { RouteScrollReset } from '@/components/route-scroll-reset'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -109,6 +110,7 @@ export default function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
+        <RouteScrollReset />
         <SelectionHighlighter />
         {children}
       </body>
