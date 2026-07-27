@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
+import { Highlight, type HighlightOptions } from '@highlighters/react'
 import { Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
@@ -17,6 +18,54 @@ const TRUST_ITEMS = [
   { icon: Cpu, label: 'Apple Silicon & Intel' },
   { icon: UserX, label: 'No account required' },
 ]
+
+const SORTY_HIGHLIGHT: HighlightOptions = {
+  markType: 'highlight',
+  color: '#4f8cff',
+  opacity: 0.52,
+  vivid: true,
+  tip: {
+    type: 'chisel',
+    angle: 8,
+    overshoot: 4,
+    overshootJitter: 1,
+  },
+  ink: {
+    flow: 0.42,
+    viscosity: 0.62,
+    feathering: 0.08,
+    streakiness: 0.18,
+    dryout: 0.03,
+    startEndBuildup: 0.08,
+    flowFade: 0.24,
+  },
+  edge: {
+    waviness: 0.6,
+    frequency: 28,
+    roughness: 0.08,
+    cap: 'round',
+    radius: 4,
+  },
+  paper: {
+    absorbency: 0.05,
+  },
+  glow: {
+    enabled: true,
+    intensity: 0.16,
+    spread: 5,
+    color: '#6ea2ff',
+  },
+  snap: 'word',
+  semantic: true,
+  animation: {
+    draw: true,
+    duration: 620,
+    easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+    direction: 'left-to-right',
+    trigger: 'immediate',
+    repeat: false,
+  },
+}
 
 export function Hero() {
   const screenshotRef = useRef<HTMLDivElement>(null)
@@ -101,9 +150,12 @@ export function Hero() {
         <Reveal delay={80}>
           <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
             AI folder{' '}
-            <span className="highlight-pill highlight-in inline-block rounded-2xl px-3 py-1">
+            <Highlight
+              options={SORTY_HIGHLIGHT}
+              className="relative inline-block px-1 text-white"
+            >
               organization
-            </span>{' '}
+            </Highlight>{' '}
             for your{' '}
             <span className="mac-heading-lockup highlight-in" aria-label="Mac">
               <Image

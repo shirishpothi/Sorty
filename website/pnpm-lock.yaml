@@ -21,6 +21,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.5.0
         version: 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.1.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@highlighters/react':
+        specifier: ^1.2.0
+        version: 1.2.0(react@19.2.4)
       border-beam:
         specifier: ^1.2.0
         version: 1.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -323,6 +326,16 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@highlighters/core@1.2.0':
+    resolution: {integrity: sha512-+mUjhN+S0fFPBx8RFWg03rwR9SmcAZzkSx820iz/Vl44jSnUdeGxL7rt8YgIoH3KeBTBNqWQlBlmwB8xnOfI6A==}
+    engines: {node: '>=18'}
+
+  '@highlighters/react@1.2.0':
+    resolution: {integrity: sha512-JRVewzXOO+8k94M0S+CpWe6nirrhX402CfAE/zmX2qCgCpLFkTrKan/apLhykeZ227OSrrr7zO5bvySaOCBmpw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=18.0.0'
 
   '@hono/node-server@2.0.10':
     resolution: {integrity: sha512-ZcnNVhKTmyDJeg0UlnZjvM73JBsTAuhrH/J4fjwGOw59PwOW51r4J+p6CsKZWXdKSme4MFqU62CZMOsdDrU4CA==}
@@ -3357,6 +3370,13 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
 
   '@floating-ui/utils@0.2.11': {}
+
+  '@highlighters/core@1.2.0': {}
+
+  '@highlighters/react@1.2.0(react@19.2.4)':
+    dependencies:
+      '@highlighters/core': 1.2.0
+      react: 19.2.4
 
   '@hono/node-server@2.0.10(hono@4.12.27)':
     dependencies:
