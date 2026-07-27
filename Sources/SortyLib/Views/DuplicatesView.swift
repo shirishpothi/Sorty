@@ -267,12 +267,11 @@ struct DuplicatesView: View {
 
                 Divider()
 
-                List(selection: $appState.duplicateSelectedGroup) {
+                List {
                     if !exactGroups.isEmpty {
                         Section {
                             ForEach(exactGroups) { group in
-                                UnifiedDuplicateGroupRow(group: group)
-                                    .tag(group)
+                                duplicateGroupRow(group)
                             }
                         } header: {
                             Text("Exact duplicates")
@@ -282,8 +281,7 @@ struct DuplicatesView: View {
                     if !similarGroups.isEmpty {
                         Section {
                             ForEach(similarGroups) { group in
-                                UnifiedDuplicateGroupRow(group: group)
-                                    .tag(group)
+                                duplicateGroupRow(group)
                             }
                         } header: {
                             Text("Similarity matches")
@@ -323,6 +321,19 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    private func duplicateGroupRow(_ group: UnifiedDuplicateGroup) -> some View {
+        let isSelected = appState.duplicateSelectedGroup?.id == group.id
+
+        return Button {
+            HapticFeedbackManager.shared.selection()
+            appState.duplicateSelectedGroup = group
+        } label: {
+            UnifiedDuplicateGroupRow(group: group, isSelected: isSelected)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
     }
 
     private var exactGroups: [UnifiedDuplicateGroup] {
@@ -816,6 +827,7 @@ struct DuplicateGroupRow: View {
 
 struct UnifiedDuplicateGroupRow: View {
     let group: UnifiedDuplicateGroup
+    let isSelected: Bool
 
     private var firstFileURL: URL? {
         guard let path = group.files.first?.path else { return nil }
@@ -907,9 +919,21 @@ struct UnifiedDuplicateGroupRow: View {
             .frame(width: 48, alignment: .trailing)
         }
         .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: 64)
-        .contentShape(Rectangle())
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isSelected
+                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5)
+                        : Color.clear,
+                    lineWidth: 1
+                )
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
