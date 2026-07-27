@@ -43,6 +43,7 @@ export function LegalPage({
           <Reveal immediate animateOnEnter>
             <Link
               href="/"
+              scroll={false}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               ← Back to Sorty

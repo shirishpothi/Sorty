@@ -50,6 +50,7 @@ export function SiteNav() {
             <Link
               key={link.href}
               href={link.href}
+              scroll={link.href.includes('#') ? undefined : false}
               className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {link.label}
@@ -120,14 +121,15 @@ export function SiteNav() {
         )}
       >
         {LINKS.map((link) => (
-          <a
+          <Link
             key={link.href}
             href={link.href}
+            scroll={link.href.includes('#') ? undefined : false}
             onClick={() => setOpen(false)}
             className="block rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             {link.label}
-          </a>
+          </Link>
         ))}
         <a
           href={GITHUB_URL}
