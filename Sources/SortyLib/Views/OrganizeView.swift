@@ -11,6 +11,8 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+import Permiso
+
 private enum ErrorViewTestRoute: String {
     case credentials = "sorty-error-preview://credentials"
     case network = "sorty-error-preview://network"
@@ -330,7 +332,8 @@ struct OrganizeView: View {
                 onCancel: dismissErrorViewTestRoute,
                 onRetry: dismissErrorViewTestRoute,
                 onRetryWithSmarterModel: dismissErrorViewTestRoute,
-                onGrantPermission: dismissErrorViewTestRoute
+                onGrantPermission: dismissErrorViewTestRoute,
+                onGrantFullDiskAccess: dismissErrorViewTestRoute
             )
         } else {
             organizerStateContent
@@ -393,7 +396,8 @@ struct OrganizeView: View {
                 onRetryWithSmarterModel: {
                     showSmarterRetryModelPicker = true
                 },
-                onGrantPermission: grantFolderPermissionAndContinue
+                onGrantPermission: grantFolderPermissionAndContinue,
+                onGrantFullDiskAccess: openFullDiskAccessSettings
             )
         }
     }
@@ -630,6 +634,10 @@ struct OrganizeView: View {
         }
         HapticFeedbackManager.shared.success()
         startOrganization()
+    }
+
+    private func openFullDiskAccessSettings() {
+        PermisoAssistant.shared.present(panel: .fullDiskAccess)
     }
 
     private func dismissErrorViewTestRoute() {
@@ -2530,12 +2538,14 @@ struct ErrorView: View {
     let onRetry: () -> Void
     let onRetryWithSmarterModel: () -> Void
     let onGrantPermission: () -> Void
+    let onGrantFullDiskAccess: () -> Void
 
     private enum ErrorActionFeedback {
         case cancel
         case retry
         case settings
         case grantPermission
+        case grantFullDiskAccess
         case copy
         case helpSupport
     }
@@ -2847,6 +2857,31 @@ struct ErrorView: View {
                         "Opens the folder picker, then continues organization after access is granted"
                     )
                     .accessibilityIdentifier("ErrorGrantPermissionButton")
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.grantFullDiskAccess)
+                        onGrantFullDiskAccess()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.open.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .symbolEffect(
+                                    .bounce,
+                                    value: activeActionFeedback == .grantFullDiskAccess
+                                )
+                            Text("Full Disk Access")
+                                .font(.caption.bold())
+                        }
+                    }
+                    .buttonStyle(.tintedPill(.purple, size: .small))
+                    .scaleEffect(activeActionFeedback == .grantFullDiskAccess ? 1.04 : 1.0)
+                    .help("Open macOS Full Disk Access settings")
+                    .accessibilityLabel("Grant Full Disk Access")
+                    .accessibilityHint(
+                        "Opens macOS Privacy and Security settings; Sorty may need to relaunch"
+                    )
+                    .accessibilityIdentifier("ErrorGrantFullDiskAccessButton")
                 }
 
                 if category == .generic {
