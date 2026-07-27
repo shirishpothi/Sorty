@@ -2478,6 +2478,7 @@ struct ErrorView: View {
 
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
+    @State private var isHoveringCancel = false
     @State private var isHoveringSettings = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
@@ -2557,6 +2558,10 @@ struct ErrorView: View {
 
     private var showsSettingsChevron: Bool {
         isHoveringSettings || activeActionFeedback == .settings
+    }
+
+    private var showsCancelCircle: Bool {
+        isHoveringCancel || activeActionFeedback == .cancel
     }
 
     private var privacySafeSupportDetails: String {
@@ -2657,9 +2662,14 @@ struct ErrorView: View {
                     onCancel()
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "xmark")
+                        Image(systemName: showsCancelCircle ? "xmark.circle.fill" : "xmark")
                             .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(.bounce, value: activeActionFeedback == .cancel)
+                            .contentTransition(.symbolEffect(.replace))
+                            .transaction { transaction in
+                                if reduceMotion {
+                                    transaction.disablesAnimations = true
+                                }
+                            }
                         Text("Cancel")
                             .font(.caption.bold())
                     }
@@ -2668,6 +2678,11 @@ struct ErrorView: View {
                 .scaleEffect(activeActionFeedback == .cancel ? 1.04 : 1.0)
                 .help("Return to folder selection")
                 .accessibilityIdentifier("ErrorBackToFolderPickerButton")
+                .onHover { hovering in
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                        isHoveringCancel = hovering
+                    }
+                }
 
                 Button {
                     HapticFeedbackManager.shared.tap()
