@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { ShieldCheck } from 'lucide-react'
+import { Reveal } from '@/components/reveal'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
 import { sitePath } from '@/lib/site-paths'
@@ -39,65 +40,71 @@ export function LegalPage({
           }}
         />
         <div className="mx-auto max-w-3xl">
-          <a
-            href={sitePath('/')}
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            ← Back to Sorty
-          </a>
-          <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
-            {title}
-          </h1>
-          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Last updated {updated}
-            </p>
-          </div>
-
-          {summary && (
-            <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10"
-                style={{
-                  background:
-                    'radial-gradient(600px 220px at 50% 0%, color-mix(in oklch, var(--brand) 22%, transparent), transparent 70%)',
-                }}
-              />
-              <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
-                <ShieldCheck className="size-3.5" />
-                The short version
-              </span>
-              <p className="mt-4 text-pretty text-base leading-relaxed text-foreground/90">
-                {summary}
+          <Reveal>
+            <a
+              href={sitePath('/')}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              ← Back to Sorty
+            </a>
+            <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+              {title}
+            </h1>
+            <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Last updated {updated}
               </p>
             </div>
+          </Reveal>
+
+          {summary && (
+            <Reveal delay={80}>
+              <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -z-10"
+                  style={{
+                    background:
+                      'radial-gradient(600px 220px at 50% 0%, color-mix(in oklch, var(--brand) 22%, transparent), transparent 70%)',
+                  }}
+                />
+                <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
+                  <ShieldCheck className="size-3.5" />
+                  The short version
+                </span>
+                <p className="mt-4 text-pretty text-base leading-relaxed text-foreground/90">
+                  {summary}
+                </p>
+              </div>
+            </Reveal>
           )}
 
           {toc && toc.length > 0 && (
-            <nav
-              aria-label="On this page"
-              className="mt-8 rounded-3xl border border-border bg-card/30 p-5 backdrop-blur-md"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                On this page
-              </p>
-              <ol className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-                {toc.map((item, i) => (
-                  <li key={item.id}>
-                    <a
-                      href={`#${item.id}`}
-                      className="flex gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <span className="text-primary/70 tabular-nums">
-                        {i + 1}.
-                      </span>
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </nav>
+            <Reveal delay={140}>
+              <nav
+                aria-label="On this page"
+                className="mt-8 rounded-3xl border border-border bg-card/30 p-5 backdrop-blur-md"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  On this page
+                </p>
+                <ol className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                  {toc.map((item, i) => (
+                    <li key={item.id}>
+                      <a
+                        href={`#${item.id}`}
+                        className="flex gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <span className="text-primary/70 tabular-nums">
+                          {i + 1}.
+                        </span>
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            </Reveal>
           )}
 
           <div className="legal-prose mt-12 space-y-10 text-sm leading-relaxed text-muted-foreground">
@@ -119,8 +126,10 @@ interface SectionProps {
 export function LegalSection({ id, heading, children }: SectionProps) {
   return (
     <div id={id} className="scroll-mt-28">
-      <h2 className="text-lg font-medium text-foreground">{heading}</h2>
-      <div className="mt-3 space-y-3">{children}</div>
+      <Reveal>
+        <h2 className="text-lg font-medium text-foreground">{heading}</h2>
+        <div className="mt-3 space-y-3">{children}</div>
+      </Reveal>
     </div>
   )
 }
