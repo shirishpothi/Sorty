@@ -1949,6 +1949,7 @@ struct SavedPromptsSheet: View {
 
     @State private var editingSession: SavedPromptEditingSession?
     @State private var isEmptyStateVisible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1977,6 +1978,7 @@ struct SavedPromptsSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close saved prompts")
             }
             .padding(20)
 
@@ -2004,7 +2006,7 @@ struct SavedPromptsSheet: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .contentMargins(.vertical, 14, for: .scrollContent)
+                .contentMargins(.vertical, 16, for: .scrollContent)
 
                 if isEmptyStateVisible && editingSession?.isDraft != true {
                     VStack(spacing: 16) {
@@ -2016,9 +2018,10 @@ struct SavedPromptsSheet: View {
                                 .frame(width: 72, height: 72)
 
                             Image(systemName: "text.badge.plus")
-                                .font(.system(size: 28, weight: .medium))
+                                .font(.title)
                                 .foregroundStyle(Color.accentColor)
                                 .symbolRenderingMode(.hierarchical)
+                                .accessibilityHidden(true)
                         }
 
                         VStack(spacing: 6) {
@@ -2044,7 +2047,10 @@ struct SavedPromptsSheet: View {
                     )
                 }
             }
-            .animation(.spring(response: 0.42, dampingFraction: 0.88), value: steeringManager.prompts.count)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.88),
+                value: steeringManager.prompts.count
+            )
 
             Divider()
 
@@ -2069,11 +2075,11 @@ struct SavedPromptsSheet: View {
         .frame(width: 520, height: 500)
         .onChange(of: steeringManager.prompts.isEmpty) { _, isEmpty in
             if isEmpty {
-                withAnimation(.easeOut(duration: 0.24).delay(0.16)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24).delay(0.16)) {
                     isEmptyStateVisible = true
                 }
             } else {
-                withAnimation(.easeOut(duration: 0.14)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.14)) {
                     isEmptyStateVisible = false
                 }
             }
@@ -2097,32 +2103,21 @@ struct SavedPromptsSheet: View {
                     onApplyPrompt(prompt.prompt)
                 },
                 onEdit: {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                        editingSession = SavedPromptEditingSession(prompt: prompt)
-                    }
+                    beginEditing(prompt)
                 },
                 onToggleDefault: {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                        if prompt.isDefault {
-                            steeringManager.clearDefault()
-                        } else {
-                            steeringManager.setDefault(id: prompt.id)
-                        }
-                    }
-                    HapticFeedbackManager.shared.selection()
+                    toggleDefault(prompt)
                 },
                 onDelete: {
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                        steeringManager.deletePrompt(id: prompt.id)
-                    }
-                    HapticFeedbackManager.shared.tap()
+                    deletePrompt(prompt)
                 }
             )
         }
     }
 
     private var savedPromptTransition: AnyTransition {
-        .asymmetric(
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
             insertion: .opacity
                 .combined(with: .scale(scale: 0.97, anchor: .top))
                 .combined(with: .offset(y: -6)),
@@ -2143,7 +2138,7 @@ struct SavedPromptsSheet: View {
         }
 
         let newPrompt = SavedSteeringPrompt(name: name, prompt: "")
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82)) {
             editingSession = SavedPromptEditingSession(prompt: newPrompt, isDraft: true)
             isEmptyStateVisible = false
         }
@@ -2174,7 +2169,7 @@ struct SavedPromptsSheet: View {
 
     private func cancelEditing(_ session: SavedPromptEditingSession) {
         var didSaveDraft = false
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
             didSaveDraft = saveDraftIfNeeded(session)
             editingSession = nil
             if steeringManager.prompts.isEmpty {
@@ -2192,7 +2187,7 @@ struct SavedPromptsSheet: View {
         prompt.prompt = session.text
 
         var didSave = false
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
             didSave = session.isDraft
                 ? steeringManager.addPrompt(prompt)
                 : steeringManager.updatePrompt(prompt)
@@ -2202,6 +2197,30 @@ struct SavedPromptsSheet: View {
         }
         guard didSave else { return }
         HapticFeedbackManager.shared.success()
+    }
+
+    private func beginEditing(_ prompt: SavedSteeringPrompt) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+            editingSession = SavedPromptEditingSession(prompt: prompt)
+        }
+    }
+
+    private func toggleDefault(_ prompt: SavedSteeringPrompt) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+            if prompt.isDefault {
+                steeringManager.clearDefault()
+            } else {
+                steeringManager.setDefault(id: prompt.id)
+            }
+        }
+        HapticFeedbackManager.shared.selection()
+    }
+
+    private func deletePrompt(_ prompt: SavedSteeringPrompt) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) {
+            steeringManager.deletePrompt(id: prompt.id)
+        }
+        HapticFeedbackManager.shared.tap()
     }
 }
 
@@ -2232,7 +2251,7 @@ private struct SavedPromptDisplayCard: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -2240,9 +2259,9 @@ private struct SavedPromptDisplayCard: View {
                             .font(.subheadline.weight(.semibold))
                         if prompt.isDefault {
                             Text("Default")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.caption2.weight(.bold))
                                 .foregroundColor(.green)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, 4)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(Color.green.opacity(0.15)))
                         }
@@ -2272,6 +2291,7 @@ private struct SavedPromptDisplayCard: View {
                     Image(systemName: "trash")
                 }
                 .controlSize(.small)
+                .accessibilityLabel("Delete \(prompt.name)")
             }
         }
         .savedPromptCardSurface()
@@ -2286,6 +2306,7 @@ private struct SavedPromptEditorCard: View {
     let onSave: (SavedPromptEditingSession) -> Void
 
     @FocusState private var isEditTextFocused: Bool
+    @State private var improveTask: Task<Void, Never>?
 
     var body: some View {
         let hasDuplicateName = steeringManager.hasPrompt(
@@ -2293,7 +2314,7 @@ private struct SavedPromptEditorCard: View {
             excluding: session.prompt.id
         )
 
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             TextField("Prompt name", text: $session.name)
                 .textFieldStyle(.roundedBorder)
                 .font(.subheadline.weight(.medium))
@@ -2321,7 +2342,7 @@ private struct SavedPromptEditorCard: View {
 
             HStack(spacing: 8) {
                 Button {
-                    Task { await improveInstructions() }
+                    startImprovingInstructions()
                 } label: {
                     if session.isImproving {
                         SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
@@ -2367,6 +2388,16 @@ private struct SavedPromptEditorCard: View {
             }
         }
         .savedPromptCardSurface()
+        .onDisappear {
+            improveTask?.cancel()
+        }
+    }
+
+    private func startImprovingInstructions() {
+        improveTask?.cancel()
+        improveTask = Task {
+            await improveInstructions()
+        }
     }
 
     private func improveInstructions() async {
@@ -2376,12 +2407,14 @@ private struct SavedPromptEditorCard: View {
         defer { session.isImproving = false }
 
         do {
+            try Task.checkCancellation()
             let client = try AIClientFactory.createClient(config: settingsConfig)
             let outcome = try await ImproveInstructionsTool.run(
                 client: client,
                 originalInstructions: original,
                 workflow: "organization"
             )
+            try Task.checkCancellation()
 
             switch outcome {
             case .replacement(let replacement):
@@ -2393,6 +2426,8 @@ private struct SavedPromptEditorCard: View {
                 session.showImprovePromptRequest = true
                 HapticFeedbackManager.shared.tap()
             }
+        } catch is CancellationError {
+            return
         } catch {
             HapticFeedbackManager.shared.error()
         }
@@ -2401,7 +2436,7 @@ private struct SavedPromptEditorCard: View {
 
 private extension View {
     func savedPromptCardSurface() -> some View {
-        padding(14)
+        padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(NSColor.controlBackgroundColor))
@@ -2413,7 +2448,7 @@ private extension View {
     }
 
     func savedPromptListRow() -> some View {
-        listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+        listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
     }
