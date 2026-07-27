@@ -822,7 +822,31 @@
   }
 }
 
-/* Entrance for the Finder lockup beside the drawn hero highlight. */
+/* Animated gradient highlight for the hero keyword */
+@keyframes highlight-sheen {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+.highlight-pill {
+  position: relative;
+  background-image: linear-gradient(
+    100deg,
+    var(--brand) 0%,
+    var(--brand-bright) 45%,
+    var(--brand) 90%
+  );
+  background-size: 200% 100%;
+  color: var(--primary-foreground);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 25%) inset,
+    0 14px 34px -10px oklch(0.62 0.19 256 / 65%);
+  animation: highlight-sheen 6s linear infinite alternate;
+}
+/* Entrance for the highlight: blur + expand in */
 @keyframes highlight-in {
   from {
     opacity: 0;
@@ -879,7 +903,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .highlight-in {
+  .highlight-in,
+  .highlight-pill {
     animation: none;
+  }
+}
+
+/* Fine pointers get the drawn selection overlay; touch keeps native selection. */
+@media (pointer: fine) {
+  ::selection {
+    color: inherit;
+    background: transparent;
   }
 }

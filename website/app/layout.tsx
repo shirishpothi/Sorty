@@ -8,6 +8,7 @@ import {
   SITE_NAME,
   SITE_URL,
 } from '@/lib/site-metadata'
+import { SelectionHighlighter } from '@/components/selection-highlighter'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -108,6 +109,7 @@ export default function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
+        <SelectionHighlighter />
         {children}
       </body>
     </html>
