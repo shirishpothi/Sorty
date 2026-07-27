@@ -41,6 +41,15 @@ struct DuplicatesView: View {
         }
     }
 
+    private var isPreparingScan: Bool {
+        detectionManager.state == .preparing
+    }
+
+    private var duplicateScanProgress: Double {
+        guard case .scanning(let progress) = detectionManager.state else { return 0 }
+        return progress
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if effectiveDirectory == nil {
@@ -70,18 +79,10 @@ struct DuplicatesView: View {
 
                 ZStack {
                     switch detectionManager.state {
-                    case .preparing:
+                    case .preparing, .scanning:
                         ScanProgressViewNew(
-                            progress: 0,
-                            isPreparing: true,
-                            stage: detectionManager.scanStage
-                        )
-                            .transition(.sortyScaleAndFade)
-
-                    case .scanning(let progress):
-                        ScanProgressViewNew(
-                            progress: progress,
-                            isPreparing: false,
+                            progress: duplicateScanProgress,
+                            isPreparing: isPreparingScan,
                             stage: detectionManager.scanStage
                         )
                             .transition(.sortyScaleAndFade)
