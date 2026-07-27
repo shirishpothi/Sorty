@@ -896,6 +896,7 @@ struct WatchedFolderConfigView: View {
                                             .accessibilityLabel(
                                                 "Separate watched folder model information"
                                             )
+                                            .onHover { showFolderModelInfo = $0 }
                                             .popover(
                                                 isPresented: $showFolderModelInfo,
                                                 arrowEdge: .trailing
