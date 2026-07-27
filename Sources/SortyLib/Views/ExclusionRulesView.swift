@@ -664,56 +664,63 @@ struct RuleGroupCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
+            HStack(spacing: 8) {
+                Button(action: toggleExpanded) {
+                    HStack(spacing: 8) {
+                        Text(LocalizedStringKey(title))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text("\(rules.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: rules.count)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
                 }
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                HStack {
-                    Text(LocalizedStringKey(title))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
 
-                    Text("\(rules.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .numericTextTransition(animationValue: rules.count)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Capsule())
-
-                    if let infoText {
+                if let infoText {
+                    Button {
+                        isShowingInfo.toggle()
+                    } label: {
                         Image(systemName: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .onHover { isShowingInfo = $0 }
-                            .popover(isPresented: $isShowingInfo, arrowEdge: .trailing) {
-                                Text(infoText)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(14)
-                                    .frame(width: 280, alignment: .leading)
-                                    .systemLiquidGlassPopover(cornerRadius: 12)
-                            }
-                            .accessibilityLabel("About \(title)")
-                            .help("About \(title)")
                     }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $isShowingInfo, arrowEdge: .trailing) {
+                        Text(infoText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+                    .accessibilityLabel("About \(title)")
+                    .help("About \(title)")
                 }
-                .contentShape(Rectangle())
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+
+                Button(action: toggleExpanded) {
+                    HStack {
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
 
             if isExpanded {
                 Divider()
@@ -732,6 +739,13 @@ struct RuleGroupCard: View {
             }
         }
         .systemLiquidGlassBackground(cornerRadius: 12)
+    }
+
+    private func toggleExpanded() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isExpanded.toggle()
+        }
+        HapticFeedbackManager.shared.tap()
     }
 }
 
