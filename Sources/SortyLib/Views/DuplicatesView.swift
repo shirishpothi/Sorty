@@ -1829,6 +1829,10 @@ struct ScanProgressViewNew: View {
             : "Finding Exact Duplicates"
     }
 
+    private var scanIcon: String {
+        isPreparing ? "folder.badge.gearshape" : "doc.text.magnifyingglass"
+    }
+
     private var subtitle: String {
         if !stage.isEmpty {
             return stage
@@ -1854,12 +1858,12 @@ struct ScanProgressViewNew: View {
 
     private var progressCard: some View {
         ZStack {
-            HStack(alignment: .center, spacing: 0) {
-                Image(systemName: "doc.text.magnifyingglass")
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: scanIcon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: isPreparing ? 0 : 30)
-                    .opacity(isPreparing ? 0 : 1)
+                    .frame(width: 30)
+                    .symbolReplaceTransition(animationValue: scanIcon)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1891,7 +1895,6 @@ struct ScanProgressViewNew: View {
                         .truncationMode(.tail)
                         .numericTextTransition(animationValue: subtitle)
                 }
-                .padding(.leading, isPreparing ? 0 : 14)
 
                 Spacer(minLength: 0)
 
