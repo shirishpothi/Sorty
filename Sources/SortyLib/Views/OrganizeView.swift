@@ -2877,10 +2877,7 @@ struct ErrorView: View {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.settings)
-                        appState.openSettingsWindow(
-                            section: .permissions,
-                            focusTarget: .permissionsFullDiskAccess
-                        )
+                        appState.openSettingsWindow(section: .permissions)
                         appState.navigatedFromSettings = true
                     } label: {
                         HStack(spacing: 4) {
@@ -2898,7 +2895,7 @@ struct ErrorView: View {
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Review all permissions in Sorty Settings")
                     .accessibilityHint(
-                        "Opens the Permissions page focused on Full Disk Access"
+                        "Opens the Permissions page at the permission status overview"
                     )
                     .accessibilityIdentifier("ErrorOpenPermissionsButton")
                 }
