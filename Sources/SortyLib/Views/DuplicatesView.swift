@@ -292,7 +292,7 @@ struct DuplicatesView: View {
                 }
                 .listStyle(.sidebar)
             }
-            .frame(minWidth: 260, idealWidth: 340, maxWidth: 420)
+            .frame(minWidth: 340, idealWidth: 340, maxWidth: 420)
 
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
@@ -303,7 +303,7 @@ struct DuplicatesView: View {
                         showDeleteConfirmation = true
                     }
                 )
-                .frame(minWidth: 360, maxWidth: .infinity)
+                .frame(minWidth: 300, maxWidth: .infinity)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
@@ -881,30 +881,17 @@ struct UnifiedDuplicateGroupRow: View {
             }
             .layoutPriority(1)
 
-            Group {
-                if group.isExact {
-                    EmptyView()
-                } else {
-                    Text(group.isExact ? "Exact" : "Similarity")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(badgeColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(badgeColor.opacity(0.12), in: Capsule())
-                }
-            }
-            .frame(width: 92, alignment: .leading)
-
-            Group {
-                if group.isExact {
-                    EmptyView()
-                } else {
+            if !group.isExact {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text(group.similarityPercentage ?? "")
                         .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(badgeColor)
+
+                    Text("Similarity")
+                        .font(.caption2.weight(.semibold))
                 }
+                .foregroundStyle(badgeColor)
+                .fixedSize(horizontal: true, vertical: false)
             }
-            .frame(width: 48, alignment: .trailing)
         }
         .padding(.vertical, 7)
         .frame(minHeight: 64)
@@ -1158,9 +1145,7 @@ struct UnifiedDuplicateGroupDetailView: View {
     private var metricsGrid: some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(minimum: 92), spacing: 8),
-                GridItem(.flexible(minimum: 92), spacing: 8),
-                GridItem(.flexible(minimum: 92), spacing: 8)
+                GridItem(.adaptive(minimum: 104), spacing: 8)
             ],
             alignment: .leading,
             spacing: 8
@@ -1181,16 +1166,16 @@ struct UnifiedDuplicateGroupDetailView: View {
 
     private var overviewTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                if !group.isExact {
-                    Text(group.groupTypeLabel)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1), in: Capsule())
+            if !group.isExact || group.confidenceLevel != .high {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        overviewBadges
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        overviewBadges
+                    }
                 }
-                confidenceBadge
             }
 
             Text(group.displayName)
@@ -1199,6 +1184,22 @@ struct UnifiedDuplicateGroupDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .layoutPriority(1)
+    }
+
+    @ViewBuilder
+    private var overviewBadges: some View {
+        if !group.isExact {
+            Text(group.groupTypeLabel)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1), in: Capsule())
+        }
+
+        if group.confidenceLevel != .high {
+            confidenceBadge
+        }
     }
 
     private var confidenceBadge: some View {
@@ -1448,21 +1449,19 @@ struct UnifiedFileDetailRow: View {
 
     private var fileSummary: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(file.displayName)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(file.displayName)
+                .font(.headline)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .fixedSize(horizontal: false, vertical: true)
 
-                if let label = recommendation {
-                    Text(label)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.blue))
-                }
+            if let label = recommendation {
+                Text(label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.blue))
             }
 
             revealButton
@@ -1505,26 +1504,29 @@ struct UnifiedFileDetailRow: View {
     private var fileMetadata: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 5) {
-                metadataContent
+                Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+                if let date = file.creationDate {
+                    Text("•")
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                }
+                if let pixels = file.totalPixels, pixels > 0 {
+                    Text("•")
+                    Text("\(formatPixels(pixels))")
+                        .foregroundStyle(.blue)
+                }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                metadataContent
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+                if let date = file.creationDate {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                }
+                if let pixels = file.totalPixels, pixels > 0 {
+                    Text("\(formatPixels(pixels))")
+                        .foregroundStyle(.blue)
+                }
             }
         }
-    }
-
-    @ViewBuilder
-    private var metadataContent: some View {
-            Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
-            if let date = file.creationDate {
-                Text("•")
-                Text(date.formatted(date: .abbreviated, time: .shortened))
-            }
-            if let pixels = file.totalPixels, pixels > 0 {
-                Text("•")
-                Text("\(formatPixels(pixels))")
-                    .foregroundStyle(.blue)
-            }
     }
 
     private var deleteButton: some View {
