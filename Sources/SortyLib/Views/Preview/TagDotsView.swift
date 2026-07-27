@@ -8,6 +8,8 @@ import SwiftUI
 struct TagDotsView: View {
     let tags: [String]
 
+    @State private var isShowingHoverPopover = false
+
     private var colorTags: [(String, Color)] {
         tags.compactMap { tag -> (String, Color)? in
             guard let color = finderTagColor(tag) else { return nil }
@@ -34,9 +36,20 @@ struct TagDotsView: View {
                     .frame(width: 8, height: 8)
             }
         }
-        .frame(minWidth: 8, minHeight: 16)
+        .frame(minWidth: 12, minHeight: 20)
         .contentShape(Rectangle())
-        .help(hoverText)
+        .onHover { isHovering in
+            isShowingHoverPopover = isHovering
+        }
+        .popover(isPresented: $isShowingHoverPopover, arrowEdge: .bottom) {
+            Text(hoverText)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .fixedSize()
+                .systemLiquidGlassPopover(cornerRadius: 10)
+        }
         .accessibilityLabel("Tags: \(hoverText)")
     }
 
