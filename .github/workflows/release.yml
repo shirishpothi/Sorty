@@ -211,18 +211,22 @@ jobs:
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
 
       - name: Upload PostHog macOS symbols
-        if: ${{ secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
         env:
           POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
           POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
           POSTHOG_CLI_HOST: https://us.posthog.com
-        run: >-
-          npx --yes @posthog/cli@0.9.1 dsym upload
-          --directory .build/DerivedData
-          --main-dsym Sorty.app.dSYM
-          --release-name sorty-macos
-          --release-version "${{ needs.prepare-release.outputs.version }}"
-          --build "${{ needs.prepare-release.outputs.build_num }}"
+        run: |
+          if [[ -z "${POSTHOG_CLI_API_KEY}" || -z "${POSTHOG_CLI_PROJECT_ID}" ]]; then
+            echo "PostHog CLI credentials are unavailable; skipping dSYM upload."
+            exit 0
+          fi
+
+          npx --yes @posthog/cli@0.9.1 dsym upload \
+            --directory .build/DerivedData \
+            --main-dsym Sorty.app.dSYM \
+            --release-name sorty-macos \
+            --release-version "${{ needs.prepare-release.outputs.version }}" \
+            --build "${{ needs.prepare-release.outputs.build_num }}"
 
       - name: Package universal ZIP
         run: |

@@ -61,7 +61,6 @@ jobs:
         run: pnpm build
 
       - name: Inject PostHog source-map identifiers
-        if: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN != '' && secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
         working-directory: website
         run: >-
           pnpm exec posthog-cli sourcemap inject
@@ -70,18 +69,23 @@ jobs:
           --release-version "${GITHUB_SHA}"
 
       - name: Upload PostHog source maps
-        if: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN != '' && secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
         working-directory: website
         env:
           POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
           POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
           POSTHOG_CLI_HOST: https://us.posthog.com
-        run: >-
-          pnpm exec posthog-cli sourcemap upload
-          --directory out/_next/static
-          --release-name sorty-website
-          --release-version "${GITHUB_SHA}"
-          --delete-after
+        run: |
+          if [[ -z "${POSTHOG_CLI_API_KEY}" || -z "${POSTHOG_CLI_PROJECT_ID}" ]]; then
+            echo "PostHog CLI credentials are unavailable; skipping source-map upload."
+            find out/_next/static -type f -name '*.map' -delete
+            exit 0
+          fi
+
+          pnpm exec posthog-cli sourcemap upload \
+            --directory out/_next/static \
+            --release-name sorty-website \
+            --release-version "${GITHUB_SHA}" \
+            --delete-after
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

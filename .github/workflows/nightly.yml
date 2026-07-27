@@ -88,18 +88,22 @@ jobs:
           ./scripts/build.sh
 
       - name: Upload PostHog nightly symbols
-        if: ${{ secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
         env:
           POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
           POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
           POSTHOG_CLI_HOST: https://us.posthog.com
-        run: >-
-          npx --yes @posthog/cli@0.9.1 dsym upload
-          --directory .build/DerivedData
-          --main-dsym Sorty.app.dSYM
-          --release-name sorty-macos
-          --release-version "${{ steps.nightly.outputs.base_version }}-nightly"
-          --build "${{ steps.nightly.outputs.build_num }}"
+        run: |
+          if [[ -z "${POSTHOG_CLI_API_KEY}" || -z "${POSTHOG_CLI_PROJECT_ID}" ]]; then
+            echo "PostHog CLI credentials are unavailable; skipping dSYM upload."
+            exit 0
+          fi
+
+          npx --yes @posthog/cli@0.9.1 dsym upload \
+            --directory .build/DerivedData \
+            --main-dsym Sorty.app.dSYM \
+            --release-name sorty-macos \
+            --release-version "${{ steps.nightly.outputs.base_version }}-nightly" \
+            --build "${{ steps.nightly.outputs.build_num }}"
 
       - name: Upload nightly build logs
         if: failure()
