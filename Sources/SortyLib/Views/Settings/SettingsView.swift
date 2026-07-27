@@ -63,6 +63,13 @@ struct SettingsView: View {
                 selectedCategory = firstCategory
             }
         }
+        .task(id: appState.settingsFocusTarget) {
+            guard let target = appState.settingsFocusTarget else { return }
+
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled, appState.settingsFocusTarget == target else { return }
+            appState.settingsFocusTarget = nil
+        }
         .onDisappear {
             windowLinkHoverState.clearAllHover()
         }
@@ -140,6 +147,10 @@ struct SettingsView: View {
                             Group {
                                 categoryContent
                                     .settingsFocusTarget(appState.settingsFocusTarget)
+                                    .settingsFocusDismissAction { target in
+                                        guard appState.settingsFocusTarget == target else { return }
+                                        appState.settingsFocusTarget = nil
+                                    }
                             }
                         }
                     }

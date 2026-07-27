@@ -11,15 +11,25 @@ private struct SettingsFocusTargetKey: EnvironmentKey {
     static let defaultValue: SettingsFocusTarget? = nil
 }
 
+private struct SettingsFocusDismissActionKey: EnvironmentKey {
+    static let defaultValue: @MainActor (SettingsFocusTarget) -> Void = { _ in }
+}
+
 extension EnvironmentValues {
     var settingsFocusTarget: SettingsFocusTarget? {
         get { self[SettingsFocusTargetKey.self] }
         set { self[SettingsFocusTargetKey.self] = newValue }
     }
+
+    var settingsFocusDismissAction: @MainActor (SettingsFocusTarget) -> Void {
+        get { self[SettingsFocusDismissActionKey.self] }
+        set { self[SettingsFocusDismissActionKey.self] = newValue }
+    }
 }
 
 private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.settingsFocusDismissAction) private var dismissFocus
     @Environment(\.settingsFocusTarget) private var focusTarget
     @State private var isBreathing = false
 
@@ -75,6 +85,12 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
             .onChange(of: reduceMotion) { _, _ in
                 updateBreathingAnimation(isFocused)
             }
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    guard isFocused else { return }
+                    dismissFocus(target)
+                }
+            )
     }
 
     private func updateBreathingAnimation(_ shouldBreathe: Bool) {
@@ -523,6 +539,12 @@ extension View {
 
     func settingsFocusTarget(_ target: SettingsFocusTarget?) -> some View {
         environment(\.settingsFocusTarget, target)
+    }
+
+    func settingsFocusDismissAction(
+        _ action: @escaping @MainActor (SettingsFocusTarget) -> Void
+    ) -> some View {
+        environment(\.settingsFocusDismissAction, action)
     }
 
     func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
