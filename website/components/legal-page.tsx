@@ -28,7 +28,7 @@ export function LegalPage({
   children,
 }: LegalPageProps) {
   return (
-    <main className="relative min-h-screen overflow-x-hidden">
+    <main className="relative min-h-screen overflow-x-clip">
       <SiteNav />
       <section className="relative px-4 pt-36 pb-12 sm:pt-44">
         <div
