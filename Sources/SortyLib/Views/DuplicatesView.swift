@@ -1867,11 +1867,15 @@ struct ScanProgressViewNew: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(LocalizedStringKey(title))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .truncationMode(.tail)
+                            .layoutPriority(1)
+                            .numericTextTransition(animationValue: title)
 
                         if !isPreparing {
                             Text("\(percent)%")
                                 .monospacedDigit()
+                                .fixedSize(horizontal: true, vertical: false)
                                 .numericTextTransition(
                                     animationValue: percent,
                                     animation: .easeInOut(duration: 0.3)
