@@ -813,15 +813,7 @@ struct WatchedFolderConfigView: View {
 
                     // Actions Section
                     ConfigSection(title: "Actions", icon: "play", color: .blue) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            let updatedFolder = currentFolderConfiguration
-                            withAnimation {
-                                watchedFoldersManager.updateFolder(updatedFolder)
-                            }
-                            appState.calibrateAction?(updatedFolder)
-                            dismiss()
-                        } label: {
+                        Button(action: openFullOrganization) {
                             HStack {
                                 Image(systemName: "wand.and.stars")
                                     .foregroundStyle(.blue)
@@ -1194,6 +1186,28 @@ struct WatchedFolderConfigView: View {
         }
 
         return updated
+    }
+
+    private func openFullOrganization() {
+        HapticFeedbackManager.shared.tap()
+
+        let updatedFolder = currentFolderConfiguration
+        withAnimation {
+            watchedFoldersManager.updateFolder(updatedFolder)
+        }
+
+        var config = settingsViewModel.config
+        config.enableSmartRename = true
+        config.mode = updatedFolder.effectiveOrganizationMode
+        settingsViewModel.config = config
+
+        appState.organizer?.reset()
+        appState.organizer?.customInstructions = updatedFolder.customPrompt ?? ""
+        withAnimation(.pageTransition) {
+            appState.selectedDirectory = updatedFolder.url
+            appState.currentView = .organize
+        }
+        dismiss()
     }
 
     private func save() {
