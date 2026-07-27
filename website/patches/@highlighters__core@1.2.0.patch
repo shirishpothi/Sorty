@@ -2,6 +2,16 @@ diff --git a/dist/index.cjs b/dist/index.cjs
 index d32314e84c8df12ef04408bc075046fc6226143a..ae01537275b86d65d222709fd58fce396f2d3905 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs	
+@@ -1195,8 +1195,8 @@ function rangesToLineRects(ranges, anchor, originTop = 0, options) {
+     width: rect.width,
+     height: rect.height,
+     // Seed off `originTop` (container's document origin), not the selection's min-top: min-top moves
+     // when an upward drag adds a line above, re-rolling every seed and re-randomizing painted shapes.
+-    seed: Math.round((rect.top - originTop) * SEED_SCALE),
++    seed: (Math.imul(Math.round((rect.top - originTop) * SEED_SCALE), 73856093) ^ Math.imul(Math.round(rect.left * SEED_SCALE), 19349663)) >>> 0,
+     isFirst: index === 0,
+     isLast: index === lines.length - 1
+   }));
 @@ -1334,12 +1334,6 @@ function findSelectionAnchor(node) {
    if (!hasWindow() || typeof getComputedStyle === "undefined") {
      return document.body ?? document.documentElement;
@@ -19,6 +29,16 @@ diff --git a/dist/index.js b/dist/index.js
 index a5e704c193f4c5e8120b8c30b290d405cdd660ed..44f1932e61f40defab1c3acc4981e55a0c72fdad 100644
 --- a/dist/index.js
 +++ b/dist/index.js	
+@@ -444,8 +444,8 @@ function rangesToLineRects(ranges, anchor, originTop = 0, options) {
+     width: rect.width,
+     height: rect.height,
+     // Seed off `originTop` (container's document origin), not the selection's min-top: min-top moves
+     // when an upward drag adds a line above, re-rolling every seed and re-randomizing painted shapes.
+-    seed: Math.round((rect.top - originTop) * SEED_SCALE),
++    seed: (Math.imul(Math.round((rect.top - originTop) * SEED_SCALE), 73856093) ^ Math.imul(Math.round(rect.left * SEED_SCALE), 19349663)) >>> 0,
+     isFirst: index === 0,
+     isLast: index === lines.length - 1
+   }));
 @@ -583,12 +583,6 @@ function findSelectionAnchor(node) {
    if (!hasWindow() || typeof getComputedStyle === "undefined") {
      return document.body ?? document.documentElement;
