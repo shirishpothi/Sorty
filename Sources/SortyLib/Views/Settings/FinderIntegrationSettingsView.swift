@@ -97,53 +97,30 @@ struct FinderIntegrationSettingsView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        HStack(spacing: 8) {
-                            Button(finderSyncActive ? "Repair Extension" : "Activate Extension") {
-                                HapticFeedbackManager.shared.tap()
-                                Task {
-                                    let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
-                                    finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
-                                    finderSyncMessage = repair.message
-                                    if repair.success {
-                                        HapticFeedbackManager.shared.success()
-                                    } else {
-                                        HapticFeedbackManager.shared.error()
-                                    }
-                                }
-                            }
-                            .buttonStyle(.sortyPrimary(size: .regular))
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 8) {
+                                finderExtensionButton()
+                                openExtensionsButton()
 
-                            Button("Open macOS Extensions") {
-                                HapticFeedbackManager.shared.tap()
-                                ExtensionCommunication.openFinderExtensionSettings()
-                            }
-                            .buttonStyle(.sortySecondary(size: .regular))
-
-                            if !areFinderMenuActionsInstalled {
-                                Button("Repair Menu Actions") {
-                                    HapticFeedbackManager.shared.tap()
-                                    Task {
-                                        let result = await ExtensionCommunication.ensureQuickActionInstalledAsync(forceRefreshServices: true)
-                                        await refreshIntegrationStatus()
-                                        watchActionMessage = result.message
-                                        if result.installed {
-                                            HapticFeedbackManager.shared.success()
-                                        } else {
-                                            HapticFeedbackManager.shared.error()
-                                        }
-                                    }
+                                if !areFinderMenuActionsInstalled {
+                                    repairMenuActionsButton()
                                 }
-                                .buttonStyle(.sortySecondary(size: .regular))
+
+                                runFullCheckButton()
                             }
 
-                            Button("Run Full Check") {
-                                HapticFeedbackManager.shared.tap()
-                                Task {
-                                    await refreshIntegrationStatus()
-                                    refreshFinderContext()
+                            VStack(spacing: 8) {
+                                finderExtensionButton(expands: true)
+
+                                HStack(spacing: 8) {
+                                    openExtensionsButton(expands: true)
+                                    runFullCheckButton(expands: true)
+                                }
+
+                                if !areFinderMenuActionsInstalled {
+                                    repairMenuActionsButton(expands: true)
                                 }
                             }
-                            .buttonStyle(.sortySecondary(size: .regular))
                         }
 
                         if automationManager.automationStatus != .granted {
@@ -225,6 +202,75 @@ struct FinderIntegrationSettingsView: View {
 
     private func refreshFinderContext() {
         automationManager.checkPermissions(enableChecksIfNeeded: true)
+    }
+
+    private func finderExtensionButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
+                finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
+                finderSyncMessage = repair.message
+                if repair.success {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        } label: {
+            Text(finderSyncActive ? "Repair Extension" : "Activate Extension")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+        }
+        .buttonStyle(.sortyPrimary(size: .regular))
+    }
+
+    private func openExtensionsButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            ExtensionCommunication.openFinderExtensionSettings()
+        } label: {
+            Text("Open macOS Extensions")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+        }
+        .buttonStyle(.sortySecondary(size: .regular))
+    }
+
+    private func repairMenuActionsButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                let result = await ExtensionCommunication.ensureQuickActionInstalledAsync(forceRefreshServices: true)
+                await refreshIntegrationStatus()
+                watchActionMessage = result.message
+                if result.installed {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        } label: {
+            Text("Repair Menu Actions")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+        }
+        .buttonStyle(.sortySecondary(size: .regular))
+    }
+
+    private func runFullCheckButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                await refreshIntegrationStatus()
+                refreshFinderContext()
+            }
+        } label: {
+            Text("Run Full Check")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+        }
+        .buttonStyle(.sortySecondary(size: .regular))
     }
 
     private var shouldShowTroubleshooting: Bool {
