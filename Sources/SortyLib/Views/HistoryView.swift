@@ -664,8 +664,7 @@ struct HistoryHeader: View {
 }
 
 private struct HistoryNavigatorControl: NSViewRepresentable {
-    private static let segmentWidth: CGFloat = 70
-    static let preferredWidth = segmentWidth * CGFloat(HistoryView.HistoryFilter.allCases.count)
+    static let preferredWidth: CGFloat = 520
 
     @Binding var selection: HistoryView.HistoryFilter
 
@@ -715,10 +714,9 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
             control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
         }
 
-        control.segmentDistribution = .fillEqually
+        control.segmentDistribution = .fillProportionally
 
         for (index, filter) in filters.enumerated() {
-            control.setWidth(Self.segmentWidth, forSegment: index)
             control.setLabel(filter.rawValue, forSegment: index)
             control.setImageScaling(.scaleNone, forSegment: index)
             control.setToolTip(filter.rawValue, forSegment: index)
