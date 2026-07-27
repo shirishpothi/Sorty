@@ -726,6 +726,7 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var customPrompt: String
@@ -1003,9 +1004,21 @@ struct WatchedFolderConfigView: View {
                                     )
                                     .modelSelectorTriggerBounds()
                                 }
+                                .transition(
+                                    reduceMotion
+                                        ? .opacity
+                                        : .move(edge: .top)
+                                            .combined(with: .opacity)
+                                            .combined(with: .scale(scale: 0.98, anchor: .top))
+                                )
                             }
                         }
-                        .animation(.easeInOut(duration: 0.2), value: useCustomModel)
+                        .animation(
+                            reduceMotion
+                                ? .easeOut(duration: 0.15)
+                                : .spring(response: 0.35, dampingFraction: 0.82),
+                            value: useCustomModel
+                        )
                     }
 
                     // Folder Info
