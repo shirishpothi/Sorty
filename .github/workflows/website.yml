@@ -86,6 +86,7 @@ jobs:
             --release-name sorty-website \
             --release-version "${GITHUB_SHA}" \
             --delete-after
+          find out/_next/static -type f -name '*.map' -delete
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
