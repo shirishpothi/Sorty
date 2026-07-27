@@ -1889,7 +1889,7 @@ struct ScanProgressViewNew: View {
             .padding(.horizontal, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 390, height: 94)
+        .frame(width: 420, height: 94)
         .background {
             beamSurface
         }
