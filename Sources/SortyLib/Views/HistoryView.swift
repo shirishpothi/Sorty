@@ -984,20 +984,20 @@ private struct HistoryStatItem: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: isEmphasized ? 22 : 19, weight: .semibold))
+                .font(.system(size: isEmphasized ? 20 : 19, weight: .semibold))
                 .foregroundStyle(color.gradient)
-                .frame(width: 30, height: 24)
+                .frame(width: 28, height: 24)
                 .accessibilityHidden(true)
 
             Text(value)
-                .font(.system(size: isEmphasized ? 24 : 20, weight: .bold, design: .rounded))
+                .font(.system(size: isEmphasized ? 22 : 20, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isEmphasized ? color : .primary)
+                .foregroundStyle(.primary)
                 .numericTextTransition(animationValue: value)
 
             Text(LocalizedStringKey(title))
                 .font(.system(size: 12, weight: isEmphasized ? .semibold : .medium, design: .rounded))
-                .foregroundStyle(isEmphasized ? color : .secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
@@ -1005,12 +1005,12 @@ private struct HistoryStatItem: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 88)
         .background(
-            isEmphasized ? color.opacity(0.12) : Color.secondary.opacity(0.06),
+            Color.secondary.opacity(isEmphasized ? 0.085 : 0.06),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isEmphasized ? color.opacity(0.24) : .clear, lineWidth: 1)
+                .stroke(Color.primary.opacity(isEmphasized ? 0.12 : 0), lineWidth: 1)
         )
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(.subtleBounce, value: isHovered)
