@@ -250,7 +250,6 @@ struct HistoryView: View {
                     )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(contentOpacity)
             } else {
                 // Header - matches DuplicatesView style
                 HistoryHeader(
@@ -274,12 +273,12 @@ struct HistoryView: View {
                         .transition(TransitionStyles.slideFromRight)
                     }
                 }
-                .opacity(contentOpacity)
             }
         }
         .emptyStateWorkflowGradient(isVisible: cachedEntries.isEmpty)
         .animation(.pageTransition, value: cachedEntries.isEmpty)
         .navigationTitle("History")
+        .opacity(contentOpacity)
         .disabled(isProcessing)
         .overlay {
             if isProcessing {
