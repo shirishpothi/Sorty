@@ -605,22 +605,28 @@ struct AIProviderSettingsView: View {
                         VStack(alignment: .center, spacing: 8) {
                             let isSuccessful = status.contains("Success")
 
-                            Label(
-                                isSuccessful
-                                    ? "Connected"
-                                    : isInternetAccessBlocked
-                                        ? "Internet Access Blocked"
-                                        : "Connection Failed",
-                                systemImage: isSuccessful
-                                    ? "checkmark.circle.fill"
-                                    : isInternetAccessBlocked
-                                        ? "network.slash"
-                                        : "xmark.circle.fill"
-                            )
-                            .foregroundColor(
-                                isSuccessful ? .green : isInternetAccessBlocked ? .orange : .red
-                            )
-                            .contentTransition(.symbolEffect(.replace))
+                            HStack(spacing: 8) {
+                                Label(
+                                    isSuccessful
+                                        ? "Connected"
+                                        : isInternetAccessBlocked
+                                            ? "Internet Access Blocked"
+                                            : "Connection Failed",
+                                    systemImage: isSuccessful
+                                        ? "checkmark.circle.fill"
+                                        : isInternetAccessBlocked
+                                            ? "network.slash"
+                                            : "xmark.circle.fill"
+                                )
+                                .foregroundColor(
+                                    isSuccessful ? .green : isInternetAccessBlocked ? .orange : .red
+                                )
+                                .contentTransition(.symbolEffect(.replace))
+
+                                if isInternetAccessBlocked {
+                                    copyConnectionErrorButton(status: status)
+                                }
+                            }
 
                             if !isSuccessful {
                                 HStack(alignment: .top, spacing: 6) {
@@ -633,36 +639,9 @@ struct AIProviderSettingsView: View {
                                         .fixedSize(horizontal: false, vertical: true)
                                         .textSelection(.enabled)
 
-                                    Button {
-                                        let pb = NSPasteboard.general
-                                        pb.clearContents()
-                                        pb.setString(status.replacingOccurrences(of: "Error: ", with: ""), forType: .string)
-                                        HapticFeedbackManager.shared.tap()
-                                        hasCopiedConnectionError = true
-                                        Task { @MainActor in
-                                            try? await Task.sleep(nanoseconds: 1_250_000_000)
-                                            guard !Task.isCancelled else { return }
-                                            hasCopiedConnectionError = false
-                                        }
-                                    } label: {
-                                        Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(hasCopiedConnectionError ? .green : .secondary)
-                                            .frame(width: 28, height: 28)
-                                            .background(
-                                                Circle()
-                                                    .fill(
-                                                        hasCopiedConnectionError
-                                                            ? Color.green.opacity(0.14)
-                                                            : Color.secondary.opacity(0.08)
-                                                    )
-                                            )
-                                            .symbolReplaceTransition(animationValue: hasCopiedConnectionError)
+                                    if !isInternetAccessBlocked {
+                                        copyConnectionErrorButton(status: status)
                                     }
-                                    .buttonStyle(.plain)
-                                    .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
-                                    .accessibilityLabel("Copy error message")
-                                    .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
                                 }
                                 .fixedSize(horizontal: true, vertical: false)
                                 .frame(maxWidth: 700, alignment: .center)
@@ -762,6 +741,39 @@ struct AIProviderSettingsView: View {
             }
         }
         .settingsFocusable(.providerConnection)
+    }
+
+    private func copyConnectionErrorButton(status: String) -> some View {
+        Button {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(status.replacingOccurrences(of: "Error: ", with: ""), forType: .string)
+            HapticFeedbackManager.shared.tap()
+            hasCopiedConnectionError = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_250_000_000)
+                guard !Task.isCancelled else { return }
+                hasCopiedConnectionError = false
+            }
+        } label: {
+            Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(hasCopiedConnectionError ? .green : .secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(
+                            hasCopiedConnectionError
+                                ? Color.green.opacity(0.14)
+                                : Color.secondary.opacity(0.08)
+                        )
+                )
+                .symbolReplaceTransition(animationValue: hasCopiedConnectionError)
+        }
+        .buttonStyle(.plain)
+        .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
+        .accessibilityLabel("Copy error message")
+        .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
     }
 
     private func testConnection() {
