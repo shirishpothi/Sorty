@@ -84,6 +84,7 @@ private struct HistorySessionRecord: Equatable {
 }
 
 struct HistoryView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
@@ -148,6 +149,15 @@ struct HistoryView: View {
 
     private var showsSecondaryWatchedSection: Bool {
         primarySectionKind == .manual && !watchedEntries.isEmpty
+    }
+
+    private var historyCardTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
+            removal: .opacity
+        )
+        .animation(.easeInOut(duration: 0.18))
     }
 
     private var filterSelection: Binding<HistoryFilter> {
@@ -395,8 +405,7 @@ struct HistoryView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                let pageIndex = index % pageSize
+            ForEach(entries) { entry in
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry?.id == entry.id,
@@ -408,9 +417,22 @@ struct HistoryView: View {
                         prepareTryAgain(id: entry.id)
                     }
                 )
-                .animatedAppearance(
-                    delay: Double(pageIndex) * (kind == .manual ? 0.03 : 0.02)
-                )
+                .transition(historyCardTransition)
+                .scrollTransition(
+                    topLeading: .identity,
+                    bottomTrailing: reduceMotion
+                        ? .identity
+                        : .interactive(timingCurve: .easeOut)
+                            .threshold(.visible(0.12)),
+                    axis: .vertical
+                ) { content, phase in
+                    content
+                        .opacity(!reduceMotion && phase == .bottomTrailing ? 0.86 : 1)
+                        .scaleEffect(
+                            !reduceMotion && phase == .bottomTrailing ? 0.988 : 1,
+                            anchor: .top
+                        )
+                }
                 .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -637,7 +659,7 @@ struct HistoryHeader: View {
 }
 
 private struct HistoryNavigatorControl: NSViewRepresentable {
-    private static let segmentWidth: CGFloat = 52
+    private static let segmentWidth: CGFloat = 70
 
     @Binding var selection: HistoryView.HistoryFilter
 
@@ -648,8 +670,8 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
     func makeNSView(context: Context) -> NSSegmentedControl {
         let filters = HistoryView.HistoryFilter.allCases
         let symbolConfiguration = NSImage.SymbolConfiguration(
-            pointSize: 16,
-            weight: .regular
+            pointSize: 12,
+            weight: .medium
         )
         let images = filters.map { filter in
             let symbol = NSImage(
@@ -667,6 +689,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
             target: context.coordinator,
             action: #selector(Coordinator.filterChanged(_:))
         )
+        control.font = .systemFont(ofSize: 11, weight: .medium)
         control.setAccessibilityLabel("Filter history sessions")
         control.setAccessibilityIdentifier("HistoryFilterPicker")
 
@@ -688,6 +711,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 
         for (index, filter) in filters.enumerated() {
             control.setWidth(Self.segmentWidth, forSegment: index)
+            control.setLabel(filter.rawValue, forSegment: index)
             control.setImageScaling(.scaleNone, forSegment: index)
             control.setToolTip(filter.rawValue, forSegment: index)
         }
