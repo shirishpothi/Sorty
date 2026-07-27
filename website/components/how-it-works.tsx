@@ -82,7 +82,6 @@ export function HowItWorks() {
                 strength={0.9}
                 duration={2.4}
                 active={hoveredStep === i}
-                borderRadius={24}
                 className="min-w-0 flex-1"
                 onMouseEnter={() => setHoveredStep(i)}
                 onMouseLeave={() =>
