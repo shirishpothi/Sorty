@@ -292,7 +292,7 @@ struct DuplicatesView: View {
                 }
                 .listStyle(.sidebar)
             }
-            .frame(minWidth: 340, idealWidth: 340, maxWidth: 420)
+            .frame(width: 340)
 
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
@@ -533,6 +533,7 @@ struct DuplicatesHeaderNew: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             headerLayout(spacing: 20, showsFullControls: true)
+                .frame(minWidth: 760)
             headerLayout(spacing: 12, showsFullControls: false)
         }
         .padding(.horizontal, 24)
@@ -650,6 +651,8 @@ struct DuplicatesHeaderNew: View {
                     }
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
         }
     }
 }

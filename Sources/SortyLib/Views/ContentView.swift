@@ -103,7 +103,8 @@ public struct ContentView: View {
             }
             .navigationTitle("Sorty")
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
+            .frame(width: 220)
+            .navigationSplitViewColumnWidth(220)
         } detail: {
             ZStack {
                 // Keep the detail view lightweight during navigation: only render the active page.
