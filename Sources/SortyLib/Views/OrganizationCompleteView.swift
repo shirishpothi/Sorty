@@ -113,6 +113,22 @@ struct OrganizationCompleteView: View {
     private var secondaryStatTarget: Int {
         mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
     }
+
+    private var combinedModeHighlightValue: Int {
+        renameCount > 0 ? renameCount : totalFiles + totalFolders
+    }
+
+    private var combinedModeHighlightLabel: String {
+        if renameCount > 0 {
+            return renameCount == 1 ? "Name Improved" : "Names Improved"
+        }
+
+        return combinedModeHighlightValue == 1 ? "Action Completed" : "Actions Completed"
+    }
+
+    private var combinedModeHighlightIcon: String {
+        renameCount > 0 ? "pencil.line" : "checkmark.circle.fill"
+    }
     
     var body: some View {
         GeometryReader { proxy in
@@ -231,10 +247,10 @@ struct OrganizationCompleteView: View {
                                 SummaryStatDivider()
 
                                 SummaryStatItem(
-                                    value: "\(shouldShowFinalCounts ? renameCount : 0)",
-                                    label: renameCount == 1 ? "Name Improved" : "Names Improved",
-                                    icon: "pencil.line",
-                                    color: SortyDesignSystem.Colors.accent
+                                    value: "\(shouldShowFinalCounts ? combinedModeHighlightValue : 0)",
+                                    label: combinedModeHighlightLabel,
+                                    icon: combinedModeHighlightIcon,
+                                    color: renameCount > 0 ? SortyDesignSystem.Colors.accent : .green
                                 )
                             }
                         }
