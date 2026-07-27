@@ -789,7 +789,6 @@ public struct ProviderSelectionStepView: View {
             if let defaultURL = provider.defaultAPIURL {
                 settingsViewModel.config.apiURL = defaultURL
             }
-            settingsViewModel.config.model = provider.defaultModel
             settingsViewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
             connectionStatus = .idle
             connectionError = nil
