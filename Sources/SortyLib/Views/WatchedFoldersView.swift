@@ -732,6 +732,7 @@ struct WatchedFolderConfigView: View {
     @State private var selectedModel: String
     @State private var selectedMode: OrganizationMode
     @State private var showModelPicker = false
+    @State private var showFolderModelInfo = false
     @State private var showSavedPromptsSheet = false
     @State private var showSavePromptDialog = false
     @State private var savePromptName = ""
@@ -881,12 +882,52 @@ struct WatchedFolderConfigView: View {
                                 }
                             }
                             .toggleStyle(.switch)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                             if useCustomModel {
                                 HStack(spacing: 12) {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("Folder Model")
-                                            .font(.subheadline)
+                                        HStack(spacing: 6) {
+                                            Text("Folder Model")
+                                                .font(.subheadline)
+
+                                            Button {
+                                                HapticFeedbackManager.shared.tap()
+                                                showFolderModelInfo.toggle()
+                                            } label: {
+                                                Image(systemName: "info.circle")
+                                                    .font(.caption)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .foregroundStyle(.secondary)
+                                            .help("About using a separate watched folder model")
+                                            .accessibilityLabel(
+                                                "Separate watched folder model information"
+                                            )
+                                            .popover(
+                                                isPresented: $showFolderModelInfo,
+                                                arrowEdge: .trailing
+                                            ) {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    Text("Separate Watched Folder Model")
+                                                        .font(.headline)
+
+                                                    Text(
+                                                        "The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna."
+                                                    )
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .fixedSize(
+                                                        horizontal: false,
+                                                        vertical: true
+                                                    )
+                                                }
+                                                .padding(14)
+                                                .frame(width: 300, alignment: .leading)
+                                                .systemLiquidGlassPopover(cornerRadius: 12)
+                                            }
+                                        }
+
                                         Text("Used only for this watched folder")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -903,18 +944,6 @@ struct WatchedFolderConfigView: View {
                                     )
                                     .modelSelectorTriggerBounds()
                                 }
-
-                                HStack(spacing: 8) {
-                                    Image(systemName: "info.circle")
-                                    Text(
-                                        "Tip: Use cheaper models like gpt-4o-mini, claude-3-haiku, or local Ollama for cost-effective background automation."
-                                    )
-                                    .font(.caption)
-                                }
-                                .foregroundStyle(.secondary)
-                                .padding(10)
-                                .background(Color.purple.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         }
                         .animation(.easeInOut(duration: 0.2), value: useCustomModel)
