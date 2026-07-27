@@ -27,6 +27,8 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         />
       </button>
       <div
+        aria-hidden={!open}
+        data-highlight-exclude={open ? undefined : ''}
         className={cn(
           'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
           open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
