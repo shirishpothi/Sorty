@@ -1439,6 +1439,7 @@ public class AppState: ObservableObject {
     public func deleteUsageData() {
         var deletionFailures: [Error] = []
 
+        AnalyticsManager.shared.resetConsentAndData()
         if !KeychainManager.deleteAll() {
             deletionFailures.append(UsageDataDeletionError.keychain)
         }

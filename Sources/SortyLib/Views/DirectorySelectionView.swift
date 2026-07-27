@@ -51,6 +51,11 @@ struct DirectorySelectionView: View {
 
                 Button {
                     HapticFeedbackManager.shared.tap()
+                    AnalyticsManager.shared.captureImportantButton(
+                        "browse_for_folder",
+                        screen: "organize",
+                        feature: "folder_selection"
+                    )
                     triggerBrowseBeamPress()
                 } label: {
                     HStack(spacing: 8) {
@@ -137,6 +142,13 @@ struct DirectorySelectionView: View {
                         settingsViewModel.config.mode = mode
                     }
                     HapticFeedbackManager.shared.tap()
+                    AnalyticsManager.shared.captureFeature(
+                        feature: "organize",
+                        subfeature: "organization_mode",
+                        action: "select",
+                        outcome: "success",
+                        properties: ["mode": mode.rawValue]
+                    )
                 }
             }
         }
@@ -288,6 +300,13 @@ struct DirectorySelectionView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             HapticFeedbackManager.shared.success()
+            AnalyticsManager.shared.captureFeature(
+                feature: "organize",
+                subfeature: "folder_selection",
+                action: "select",
+                outcome: "success",
+                properties: ["source": "folder_picker"]
+            )
             withAnimation(workflowNavigationAnimation) {
                 selectedDirectory = url
             }
@@ -333,6 +352,13 @@ struct DirectorySelectionView: View {
             {
                 Task { @MainActor in
                     HapticFeedbackManager.shared.success()
+                    AnalyticsManager.shared.captureFeature(
+                        feature: "organize",
+                        subfeature: "folder_selection",
+                        action: "select",
+                        outcome: "success",
+                        properties: ["source": "drag_and_drop"]
+                    )
                     withAnimation(workflowNavigationAnimation) {
                         selectedDirectory = url
                     }

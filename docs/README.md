@@ -16,6 +16,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [App Deeplinks](#app-deeplinks)
 - [CLI Tool](#cli-tool)
+- [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)
 - [Uninstalling Sorty](#uninstalling-sorty)
 - [FAQ](#faq)

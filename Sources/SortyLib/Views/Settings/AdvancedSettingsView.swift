@@ -13,7 +13,22 @@ struct AdvancedSettingsView: View {
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+    @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var isShowingFinderRecommendation = false
+
+    private var analyticsEnabled: Binding<Bool> {
+        Binding(
+            get: { analytics.consent == .granted },
+            set: { analytics.setConsent($0 ? .granted : .denied) }
+        )
+    }
+
+    private var analyticsDescription: String {
+        if analytics.consent == .granted, internetPrivacyModeEnabled {
+            return "Allowed, but paused while Block Internet Connections is on"
+        }
+        return "Share anonymous feature usage and sanitized reliability data; never file names, paths, contents, prompts, or AI responses"
+    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -86,6 +101,19 @@ struct AdvancedSettingsView: View {
                         focusTarget: .advancedInternetPrivacy
                     )
                     .accessibilityIdentifier("InternetPrivacyModeToggle")
+                    .onChange(of: internetPrivacyModeEnabled) { _, isEnabled in
+                        analytics.networkPrivacyDidChange(isEnabled: isEnabled)
+                    }
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: analyticsEnabled,
+                        title: "Share Anonymous Analytics",
+                        description: analyticsDescription,
+                        focusTarget: .advancedAnalytics
+                    )
+                    .accessibilityIdentifier("AnonymousAnalyticsToggle")
                 }
             }
             .animatedAppearance(delay: 0.04)

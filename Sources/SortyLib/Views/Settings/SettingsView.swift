@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var selectedCategory: SettingsCategory = .rules
     @State private var contentOpacity: Double = 0
     @State private var searchText = ""
@@ -46,9 +47,17 @@ struct SettingsView: View {
             if let section = appState.selectedSettingsSection {
                 selectedCategory = section
             }
+            captureSettingsScreen(selectedCategory)
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
+        }
+        .onChange(of: selectedCategory) { _, category in
+            captureSettingsScreen(category)
+        }
+        .onChange(of: analytics.consent) { _, consent in
+            guard consent == .granted else { return }
+            captureSettingsScreen(selectedCategory, source: "consent")
         }
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {
@@ -222,6 +231,36 @@ struct SettingsView: View {
     
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
         category != .tuning
+    }
+
+    private func analyticsSectionName(_ category: SettingsCategory) -> String {
+        switch category {
+        case .provider: return "ai_provider"
+        case .strategy: return "analysis_and_naming"
+        case .rules: return "organize_rules"
+        case .tuning: return "parameter_tuning"
+        case .automation: return "automation"
+        case .deeplinks: return "deeplinks"
+        case .finder: return "finder_integration"
+        case .notifications: return "notifications"
+        case .permissions: return "permissions"
+        case .advanced: return "advanced"
+        case .troubleshooting: return "troubleshooting"
+        case .help: return "help_and_support"
+        case .experimental: return "experimental"
+        }
+    }
+
+    private func captureSettingsScreen(
+        _ category: SettingsCategory,
+        source: String = "settings_navigation"
+    ) {
+        let section = analyticsSectionName(category)
+        analytics.captureScreen(
+            "settings_\(section)",
+            section: section,
+            source: source
+        )
     }
 
     private var categoryHeader: some View {

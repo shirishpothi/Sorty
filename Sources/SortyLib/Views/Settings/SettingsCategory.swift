@@ -100,6 +100,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case advancedFinderWorkflow = "settings.advanced.finder-workflow"
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
     case advancedInternetPrivacy = "settings.advanced.internet-privacy"
+    case advancedAnalytics = "settings.advanced.analytics"
     case advancedTimeouts = "settings.advanced.timeouts"
     case advancedRequestTimeout = "settings.advanced.request-timeout"
     case advancedResourceTimeout = "settings.advanced.resource-timeout"
@@ -186,7 +187,7 @@ public extension SettingsFocusTarget {
             return .permissions
 
         case .advancedMenuBar, .advancedFinderWorkflow, .advancedPrivacyMode,
-             .advancedInternetPrivacy, .advancedTimeouts, .advancedRequestTimeout,
+             .advancedInternetPrivacy, .advancedAnalytics, .advancedTimeouts, .advancedRequestTimeout,
              .advancedResourceTimeout, .advancedDeveloper, .advancedStats, .advancedErrorLogs:
             return .advanced
 
@@ -421,6 +422,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
                 feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
                 feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),
+                feature("Share Anonymous Analytics", "Choose whether Sorty shares anonymous feature usage and sanitized reliability data.", keywords: ["analytics", "telemetry", "posthog", "crash reporting"], target: .advancedAnalytics),
                 feature("Timeouts", "Tune request timeout and maximum total request duration.", target: .advancedTimeouts),
                 feature("Request Timeout", "Set how long Sorty waits for the initial AI response.", keywords: ["initial response", "seconds"], target: .advancedRequestTimeout),
                 feature("Resource Timeout", "Set the maximum total duration of an AI request.", keywords: ["total request duration", "seconds"], target: .advancedResourceTimeout),

@@ -578,6 +578,7 @@ struct SortyApp: App {
             return
         }
 
+        AnalyticsManager.shared.startIfAuthorized()
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         syncLoginItemState()
 

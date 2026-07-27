@@ -78,6 +78,7 @@ export function Pricing() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <DownloadButton
                 href={DOWNLOAD_URL}
+                analyticsLocation="pricing"
                 className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium"
               >
                 <span
@@ -93,6 +94,10 @@ export function Pricing() {
                 target="_blank"
                 rel="noreferrer"
                 className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 motion-reduce:transition-none"
+                data-analytics-action="source_opened"
+                data-analytics-component="cta"
+                data-analytics-location="pricing"
+                data-analytics-target="build_from_source"
               >
                 <span className="relative size-4" aria-hidden="true">
                   <GithubIcon className="absolute inset-0 size-4 transition-all duration-200 group-hover:scale-75 group-hover:opacity-0 motion-reduce:transition-none" />
@@ -105,6 +110,10 @@ export function Pricing() {
                 target="_blank"
                 rel="noreferrer"
                 className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+                data-analytics-action="support_opened"
+                data-analytics-component="cta"
+                data-analytics-location="pricing"
+                data-analytics-target="github_sponsors"
               >
                 <Heart className="support-heart-icon size-4" />
                 Donate

@@ -621,6 +621,15 @@ public class DuplicateDetectionManager: ObservableObject {
         settings: DuplicateSettings
     ) async {
         let scanStartedAt = Date()
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "duplicate_scan",
+            stage: "started",
+            outcome: "started",
+            properties: [
+                "count_bucket": AnalyticsManager.countBucket(totalScannedFileCount),
+                "semantic_enabled": settings.includeSemanticDuplicates,
+            ]
+        )
         state = .scanning(progress: 0)
         isScanning = true
         scanProgress = 0
@@ -646,6 +655,17 @@ public class DuplicateDetectionManager: ObservableObject {
             scanStage = ""
             scanDuration = Date().timeIntervalSince(scanStartedAt)
             state = .completed(count: 0)
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "duplicate_scan",
+                stage: "completed",
+                outcome: "empty",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(0),
+                    "duration_bucket": AnalyticsManager.durationBucket(scanDuration),
+                    "result_kind": "no_files",
+                    "semantic_enabled": settings.includeSemanticDuplicates,
+                ]
+            )
             return
         }
         
@@ -670,6 +690,17 @@ public class DuplicateDetectionManager: ObservableObject {
             isScanning = false
             state = .idle
             scanStage = ""
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "duplicate_scan",
+                stage: "scanning",
+                outcome: "cancelled",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(scanStartedAt)
+                    ),
+                    "semantic_enabled": settings.includeSemanticDuplicates,
+                ]
+            )
             return
         }
         
@@ -730,6 +761,17 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = ""
         scanDuration = Date().timeIntervalSince(scanStartedAt)
         state = .completed(count: allGroups.count)
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "duplicate_scan",
+            stage: "completed",
+            outcome: "success",
+            properties: [
+                "count_bucket": AnalyticsManager.countBucket(allGroups.count),
+                "duration_bucket": AnalyticsManager.durationBucket(scanDuration),
+                "result_kind": allGroups.isEmpty ? "no_duplicates" : "duplicates_found",
+                "semantic_enabled": settings.includeSemanticDuplicates,
+            ]
+        )
     }
     
     public func clearResults() {

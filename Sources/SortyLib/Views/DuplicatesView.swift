@@ -130,6 +130,11 @@ struct DuplicatesView: View {
             }
             Button("Delete", role: .destructive) {
                 HapticFeedbackManager.shared.error()
+                AnalyticsManager.shared.captureImportantButton(
+                    "confirm_duplicate_cleanup",
+                    screen: "duplicates",
+                    feature: "duplicate_cleanup"
+                )
                 deleteFiles(filesToDelete)
             }
         } message: {
@@ -402,6 +407,16 @@ struct DuplicatesView: View {
                     detectionManager.state = .failed(error.localizedDescription)
                     HapticFeedbackManager.shared.error()
                     DebugLogger.log("Duplicate scan failed: \(error)")
+                    AnalyticsManager.shared.captureWorkflow(
+                        workflow: "duplicate_scan",
+                        stage: "preparing",
+                        outcome: "failed"
+                    )
+                    AnalyticsManager.shared.capture(
+                        error: error,
+                        feature: "duplicates",
+                        operation: "scan_directory"
+                    )
                 }
             }
         }
@@ -460,6 +475,11 @@ struct DuplicatesView: View {
     }
 
     private func cancelScan() {
+        AnalyticsManager.shared.captureImportantButton(
+            "cancel_duplicate_scan",
+            screen: "duplicates",
+            feature: "duplicate_scan"
+        )
         currentScanTask?.cancel()
         currentScanTask = nil
         detectionManager.isScanning = false
@@ -493,9 +513,32 @@ struct DuplicatesView: View {
             }
 
             HapticFeedbackManager.shared.success()
+            AnalyticsManager.shared.captureFeature(
+                feature: "duplicates",
+                subfeature: "cleanup",
+                action: "move_to_trash",
+                outcome: "success",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(totalDeleted),
+                ]
+            )
         } catch {
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
+            AnalyticsManager.shared.captureFeature(
+                feature: "duplicates",
+                subfeature: "cleanup",
+                action: "move_to_trash",
+                outcome: "failed",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(files.count),
+                ]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "duplicates",
+                operation: "move_to_trash"
+            )
         }
 
         // Refresh the scan

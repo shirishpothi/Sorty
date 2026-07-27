@@ -21,6 +21,8 @@ permissions:
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+  NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
 
 jobs:
   build-and-deploy:
@@ -57,6 +59,29 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /Sorty
         run: pnpm build
+
+      - name: Inject PostHog source-map identifiers
+        if: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN != '' && secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
+        working-directory: website
+        run: >-
+          pnpm exec posthog-cli sourcemap inject
+          --directory out/_next/static
+          --release-name sorty-website
+          --release-version "${GITHUB_SHA}"
+
+      - name: Upload PostHog source maps
+        if: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN != '' && secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
+        working-directory: website
+        env:
+          POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+          POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
+          POSTHOG_CLI_HOST: https://us.posthog.com
+        run: >-
+          pnpm exec posthog-cli sourcemap upload
+          --directory out/_next/static
+          --release-name sorty-website
+          --release-version "${GITHUB_SHA}"
+          --delete-after
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

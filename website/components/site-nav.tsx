@@ -41,7 +41,14 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <Link href="/#top" className="shrink-0">
+        <Link
+          href="/#top"
+          className="shrink-0"
+          data-analytics-action="navigation_opened"
+          data-analytics-component="logo"
+          data-analytics-location="navigation"
+          data-analytics-target="home"
+        >
           <SortyLogo />
         </Link>
 
@@ -52,6 +59,10 @@ export function SiteNav() {
               href={link.href}
               scroll={link.href.includes('#') ? undefined : false}
               className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              data-analytics-action="navigation_opened"
+              data-analytics-component="text_link"
+              data-analytics-location="navigation"
+              data-analytics-target={link.label}
             >
               {link.label}
             </Link>
@@ -64,6 +75,10 @@ export function SiteNav() {
             target="_blank"
             rel="noreferrer"
             className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:flex"
+            data-analytics-action="source_opened"
+            data-analytics-component="text_link"
+            data-analytics-location="navigation"
+            data-analytics-target="github"
           >
             <GithubIcon className="size-4" />
             GitHub
@@ -73,12 +88,17 @@ export function SiteNav() {
             target="_blank"
             rel="noreferrer"
             className="btn-support hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium lg:flex"
+            data-analytics-action="support_opened"
+            data-analytics-component="text_link"
+            data-analytics-location="navigation"
+            data-analytics-target="github_sponsors"
           >
             <Heart className="support-heart-icon size-4" />
             Donate
           </a>
           <DownloadButton
             href={DOWNLOAD_URL}
+            analyticsLocation="navigation"
             className="gap-1.5 px-4 py-2 text-sm font-medium"
           >
             <span
@@ -94,6 +114,10 @@ export function SiteNav() {
             onClick={() => setOpen((v) => !v)}
             className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground md:hidden"
             aria-label={open ? 'Close menu' : 'Open menu'}
+            data-analytics-action="mobile_menu_toggled"
+            data-analytics-component="menu_button"
+            data-analytics-location="navigation"
+            data-analytics-target={open ? 'closed' : 'opened'}
           >
             <Menu
               className={cn(
@@ -127,6 +151,10 @@ export function SiteNav() {
             scroll={link.href.includes('#') ? undefined : false}
             onClick={() => setOpen(false)}
             className="block rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            data-analytics-action="navigation_opened"
+            data-analytics-component="mobile_text_link"
+            data-analytics-location="mobile_navigation"
+            data-analytics-target={link.label}
           >
             {link.label}
           </Link>
@@ -136,6 +164,10 @@ export function SiteNav() {
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          data-analytics-action="source_opened"
+          data-analytics-component="mobile_text_link"
+          data-analytics-location="mobile_navigation"
+          data-analytics-target="github"
         >
           <GithubIcon className="size-4" />
           View source on GitHub
@@ -145,6 +177,10 @@ export function SiteNav() {
           target="_blank"
           rel="noreferrer"
           className="btn-support mt-2 flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium"
+          data-analytics-action="support_opened"
+          data-analytics-component="mobile_text_link"
+          data-analytics-location="mobile_navigation"
+          data-analytics-target="github_sponsors"
         >
           <Heart className="support-heart-icon size-4" />
           Donate to support Sorty

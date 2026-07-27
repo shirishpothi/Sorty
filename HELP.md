@@ -580,6 +580,8 @@ View the full changelog at:
 | File content | ✓ (Deep Scan only) | ✗ |
 | Organization history | ✓ | ✗ |
 | Settings | ✓ | ✗ |
+| Anonymous feature and screen analytics | ✓ (choice and queue) | ✓ (PostHog, opt-in only) |
+| Sanitized crash reports | ✓ (queued after a crash) | ✓ (PostHog, opt-in only) |
 
 ### AI Providers
 
@@ -593,6 +595,19 @@ All data is stored locally:
 - Organization history: `~/Library/Preferences/`
 - Safe deletion metadata: Local database
 - Settings: UserDefaults
+
+### Anonymous Analytics
+
+Sorty asks once after onboarding before starting anonymous product analytics or
+crash reporting. Declining keeps the PostHog SDK dormant and the decision is not
+reported. If enabled, Sorty records named screens, feature and workflow actions,
+important buttons, coarse count and duration buckets, and sanitized error or
+crash context; it never sends file names, paths, contents, prompts, AI
+responses, or API keys.
+
+Change the choice at any time in **Settings → Advanced → Privacy**. Turning on
+**Block Internet Connections** also suspends analytics, and deleting all usage
+data clears the local analytics queue and consent preference.
 
 ### Clearing Data
 

@@ -199,7 +199,7 @@ jobs:
           SKIP_TESTS=true \
           BUILD_ARCHS="arm64 x86_64" \
           APP_ICON_VARIANT=release \
-          XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
+          XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf-with-dsym ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
 
           ICON_RESOURCE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' releases/Sorty.app/Contents/Info.plist)
@@ -209,6 +209,20 @@ jobs:
             "releases/Sorty.app/Contents/Resources/${ICON_RESOURCE}.icns"
           test ! -e "releases/Sorty.app/Contents/Resources/AppIcon.icns"
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
+
+      - name: Upload PostHog macOS symbols
+        if: ${{ secrets.POSTHOG_CLI_API_KEY != '' && vars.POSTHOG_CLI_PROJECT_ID != '' }}
+        env:
+          POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+          POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
+          POSTHOG_CLI_HOST: https://us.posthog.com
+        run: >-
+          npx --yes @posthog/cli@0.9.1 dsym upload
+          --directory .build/DerivedData
+          --main-dsym Sorty.app.dSYM
+          --release-name sorty-macos
+          --release-version "${{ needs.prepare-release.outputs.version }}"
+          --build "${{ needs.prepare-release.outputs.build_num }}"
 
       - name: Package universal ZIP
         run: |

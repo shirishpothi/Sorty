@@ -6,8 +6,8 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const POINTS = [
   {
     icon: ShieldOff,
-    title: 'No servers. No accounts. No telemetry.',
-    body: 'Sorty has no backend. There is nothing to sign up for and nothing phones home. The developers literally cannot see your files, your folder names, your activity, or anything else — because none of it is ever sent to us.',
+    title: 'No accounts. No file telemetry.',
+    body: 'Sorty has no file-processing backend and never sends us file names, paths, contents, prompts, provider responses, or API keys. Anonymous app analytics and crash reports only start if you explicitly allow them, and a denial is never reported.',
   },
   {
     icon: EyeOff,
@@ -17,7 +17,7 @@ const POINTS = [
   {
     icon: Server,
     title: 'Or keep everything 100% on-device',
-    body: 'Point Sorty through Ollama and absolutely nothing leaves your Mac — not even file names. Full organization, zero network.',
+    body: 'Use Ollama or Apple Foundation Models, keep anonymous analytics off, and your organization workflow stays on your Mac. Block Internet Connections can enforce that choice.',
   },
   {
     icon: KeyRound,
@@ -39,10 +39,11 @@ export function Privacy() {
             Your files never reach us. Ever.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Sorty has no servers and no account system, so your files and folder
-            data never touch the developers. The only party that ever sees
-            anything is the AI provider you choose — and only file contents, only
-            if you switch on Deep Scan.
+            Sorty has no file-processing servers or account system, so your
+            files and folder data never touch the developers. Cloud AI data
+            goes directly to the provider you choose. Separately, you can opt
+            in to tightly scoped anonymous app analytics that never includes
+            file or AI content.
           </p>
         </Reveal>
 
@@ -67,7 +68,8 @@ export function Privacy() {
               <span className="text-primary">zero visibility</span> into your
               files. Cloud AI providers only see contents when{' '}
               <span className="text-primary">Deep Scan</span> is on — your call,
-              every time.
+              every time. Website measurement is cookieless and anonymous, and
+              app analytics stays off until you choose otherwise.
             </p>
           </div>
         </Reveal>
@@ -102,6 +104,10 @@ export function Privacy() {
               target="_blank"
               rel="noreferrer"
               className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+              data-analytics-action="source_opened"
+              data-analytics-component="text_link"
+              data-analytics-location="privacy"
+              data-analytics-target="github"
             >
               open source
             </a>{' '}

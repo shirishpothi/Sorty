@@ -6,6 +6,7 @@ import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { trackWebInteraction } from '@/lib/analytics'
 
 const XATTR_COMMAND = 'sudo xattr -cr /Applications/Sorty.app'
 
@@ -18,12 +19,14 @@ type DownloadButtonProps = Omit<
   href: string
   children: ReactNode
   className?: string
+  analyticsLocation: string
 }
 
 export function DownloadButton({
   href,
   children,
   className,
+  analyticsLocation,
   onClick,
   ...props
 }: DownloadButtonProps) {
@@ -175,8 +178,22 @@ export function DownloadButton({
 
     try {
       await writeClipboardText(XATTR_COMMAND)
+      trackWebInteraction({
+        action: 'terminal_command_copied',
+        component: 'download_notice',
+        location: analyticsLocation,
+        target: 'quarantine_command',
+        outcome: 'succeeded',
+      })
     } catch {
       showCopyFeedback('failed')
+      trackWebInteraction({
+        action: 'terminal_command_copied',
+        component: 'download_notice',
+        location: analyticsLocation,
+        target: 'quarantine_command',
+        outcome: 'failed',
+      })
     }
   }
 
@@ -188,6 +205,12 @@ export function DownloadButton({
 
     setCopyFeedback('idle')
     setShowNotice(true)
+    trackWebInteraction({
+      action: 'download_started',
+      component: 'download_button',
+      location: analyticsLocation,
+      target: 'sorty_zip',
+    })
   }
 
   const copySucceeded = copyFeedback === 'copied'

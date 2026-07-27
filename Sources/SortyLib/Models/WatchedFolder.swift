@@ -123,6 +123,13 @@ public class WatchedFoldersManager: ObservableObject {
         if Self.hasAccessIssue(normalizedFolder) {
             accessIssueFolderCount += 1
         }
+        AnalyticsManager.shared.captureFeature(
+            feature: "watched_folders",
+            subfeature: "folder_management",
+            action: "add",
+            outcome: "success",
+            properties: ["mode": normalizedFolder.effectiveOrganizationMode.rawValue]
+        )
     }
 
     public func clearAll() {
@@ -158,6 +165,12 @@ public class WatchedFoldersManager: ObservableObject {
         if Self.hasAccessIssue(removedFolder) {
             accessIssueFolderCount = max(accessIssueFolderCount - 1, 0)
         }
+        AnalyticsManager.shared.captureFeature(
+            feature: "watched_folders",
+            subfeature: "folder_management",
+            action: "remove",
+            outcome: "success"
+        )
     }
     
     public func updateFolder(_ folder: WatchedFolder) {
@@ -202,6 +215,12 @@ public class WatchedFoldersManager: ObservableObject {
             updated.isEnabled.toggle()
             updated.autoOrganize = updated.isEnabled
             updateFolder(updated)
+            AnalyticsManager.shared.captureFeature(
+                feature: "watched_folders",
+                subfeature: "monitoring",
+                action: updated.isEnabled ? "enable" : "disable",
+                outcome: "success"
+            )
         }
     }
     
@@ -209,6 +228,13 @@ public class WatchedFoldersManager: ObservableObject {
         if var updated = self.folder(withID: folder.id) {
             updated.lastTriggered = Date()
             updateFolder(updated, affectsMonitoring: false)
+            AnalyticsManager.shared.captureFeature(
+                feature: "watched_folders",
+                subfeature: "automatic_organization",
+                action: "trigger",
+                outcome: "started",
+                properties: ["mode": updated.effectiveOrganizationMode.rawValue]
+            )
         }
     }
     

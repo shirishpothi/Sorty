@@ -6,6 +6,7 @@ const nextConfig = {
   trailingSlash: true,
   basePath,
   assetPrefix: basePath,
+  productionBrowserSourceMaps: true,
   typescript: {
     ignoreBuildErrors: true,
   },

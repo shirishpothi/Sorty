@@ -5,16 +5,29 @@ import { Heart, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reveal } from '@/components/reveal'
 import { FAQS } from '@/components/faq-data'
+import { trackWebInteraction } from '@/lib/analytics'
 
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
-function FaqItem({ q, a }: { q: string; a: string }) {
+function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
   const [open, setOpen] = useState(false)
+  const toggle = () => {
+    const nextOpen = !open
+    setOpen(nextOpen)
+    trackWebInteraction({
+      action: 'faq_toggled',
+      component: 'faq_item',
+      location: 'faq',
+      target: `question_${index + 1}`,
+      outcome: nextOpen ? 'opened' : 'closed',
+    })
+  }
+
   return (
     <div className="rounded-3xl border border-border bg-card/60 transition-colors hover:border-primary/30">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
         aria-expanded={open}
       >
@@ -61,7 +74,7 @@ export function Faq() {
         <div className="mt-12 space-y-3">
           {FAQS.map((item, i) => (
             <Reveal key={item.q} delay={(i % 4) * 60}>
-              <FaqItem {...item} />
+              <FaqItem {...item} index={i} />
             </Reveal>
           ))}
         </div>
@@ -72,6 +85,10 @@ export function Faq() {
             target="_blank"
             rel="noreferrer"
             className="btn-support inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
+            data-analytics-action="support_opened"
+            data-analytics-component="cta"
+            data-analytics-location="faq"
+            data-analytics-target="github_sponsors"
           >
             <Heart className="support-heart-icon size-4" />
             Support the developer

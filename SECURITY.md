@@ -60,7 +60,11 @@ For maximum privacy, use local options:
 - All API calls use HTTPS with TLS 1.2+
 - API keys are never logged or transmitted outside AI provider endpoints
 - Update checks fetch Sparkle appcasts and release archives from GitHub Releases over HTTPS
-- No telemetry or analytics data is collected
+- Anonymous product analytics and crash reports are sent to PostHog only after
+  explicit opt-in; file names, paths, contents, prompts, AI responses, and API
+  keys are excluded
+- **Block Internet Connections** disables analytics along with other non-local
+  network access
 
 ### Supply Chain Security
 

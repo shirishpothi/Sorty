@@ -109,6 +109,11 @@ struct PreviewActionsView: View {
             // Prominent Cancel Button with keyboard shortcut
             Button {
                 HapticFeedbackManager.shared.tap()
+                AnalyticsManager.shared.captureImportantButton(
+                    "cancel_preview",
+                    screen: "organize_preview",
+                    feature: "organize"
+                )
                 onCancel()
             } label: {
                 HStack(spacing: 4) {
@@ -129,6 +134,11 @@ struct PreviewActionsView: View {
             if hasEdits {
                 Button {
                     HapticFeedbackManager.shared.tap()
+                    AnalyticsManager.shared.captureImportantButton(
+                        "reset_preview_edits",
+                        screen: "organize_preview",
+                        feature: "organize"
+                    )
                     onReset()
                 } label: {
                     HStack(spacing: 4) {
@@ -153,6 +163,11 @@ struct PreviewActionsView: View {
             // Regenerate button
             Button {
                 HapticFeedbackManager.shared.tap()
+                AnalyticsManager.shared.captureImportantButton(
+                    "regenerate_plan",
+                    screen: "organize_preview",
+                    feature: "organize"
+                )
                 onRegenerate()
             } label: {
                 HStack(spacing: 5) {
@@ -180,6 +195,11 @@ struct PreviewActionsView: View {
             // Choose Model button
             Button {
                 HapticFeedbackManager.shared.tap()
+                AnalyticsManager.shared.captureImportantButton(
+                    "choose_regeneration_model",
+                    screen: "organize_preview",
+                    feature: "organize"
+                )
                 onChooseModel()
             } label: {
                 HStack(spacing: 4) {
@@ -202,6 +222,11 @@ struct PreviewActionsView: View {
     private var applyButton: some View {
         Button {
             HapticFeedbackManager.shared.tap()
+            AnalyticsManager.shared.captureImportantButton(
+                "apply_plan",
+                screen: "organize_preview",
+                feature: "organize"
+            )
             onApply()
         } label: {
             HStack(spacing: 6) {

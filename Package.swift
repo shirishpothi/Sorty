@@ -19,6 +19,10 @@ let package = Package(
         // package variant that preserves the same overlay UI on macOS 15.
         .package(path: "Packages/Permiso"),
         .package(url: "https://github.com/tornikegomareli/beam.git", from: "0.1.0"),
+        .package(
+            url: "https://github.com/PostHog/posthog-ios.git",
+            exact: "3.68.2"
+        ),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
@@ -27,6 +31,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Permiso", package: "Permiso"),
                 .product(name: "Beam", package: "beam"),
+                .product(name: "PostHog", package: "posthog-ios"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",

@@ -141,6 +141,7 @@ export function Hero() {
             <DownloadButton
               id="download"
               href={DOWNLOAD_URL}
+              analyticsLocation="hero"
               className="w-full justify-center gap-2 px-6 py-3 text-sm font-medium sm:w-auto"
             >
               <span className="download-apple-mark" aria-hidden="true">
@@ -153,6 +154,10 @@ export function Hero() {
               target="_blank"
               rel="noreferrer"
               className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
+              data-analytics-action="source_opened"
+              data-analytics-component="cta"
+              data-analytics-location="hero"
+              data-analytics-target="github_star"
             >
               <span className="relative size-4" aria-hidden="true">
                 <GithubIcon className="absolute inset-0 size-4 transition-all duration-200 group-hover:scale-75 group-hover:opacity-0" />
@@ -165,6 +170,10 @@ export function Hero() {
               target="_blank"
               rel="noreferrer"
               className="btn-support flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium sm:w-auto"
+              data-analytics-action="support_opened"
+              data-analytics-component="cta"
+              data-analytics-location="hero"
+              data-analytics-target="github_sponsors"
             >
               <Heart className="support-heart-icon size-4" />
               Support the dev

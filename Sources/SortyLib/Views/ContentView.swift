@@ -18,6 +18,7 @@ public struct ContentView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
+    @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var previousView: AppState.AppView?
     @State private var displayedView: AppState.AppView = .organize
     @State private var showCommandNumbers = false
@@ -55,6 +56,10 @@ public struct ContentView: View {
             }
 
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
+
+            if appState.hasCompletedOnboarding, analytics.consent == .undecided {
+                AnalyticsConsentView()
+            }
         }
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
             windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
@@ -62,6 +67,10 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
             personaHighlightDismissalTask?.cancel()
+        }
+        .onChange(of: analytics.consent) { _, newConsent in
+            guard newConsent == .granted, appState.hasCompletedOnboarding else { return }
+            captureMainScreen(appState.currentView, source: "consent")
         }
         .animation(.easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
@@ -141,6 +150,7 @@ public struct ContentView: View {
         .onAppear {
             displayedView = appState.currentView
             columnVisibility = appState.showingSidebar ? .all : .detailOnly
+            captureMainScreen(appState.currentView)
         }
         .onChange(of: columnVisibility) { _, newValue in
             let isShowingSidebar = newValue != .detailOnly
@@ -158,6 +168,7 @@ public struct ContentView: View {
             if oldValue != newValue {
                 previousView = oldValue
                 displayedView = newValue
+                captureMainScreen(newValue)
             }
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
@@ -212,6 +223,26 @@ public struct ContentView: View {
 
     private var sidebarItems: [SidebarNavigationItem] {
         SidebarNavigationItem.mainItems
+    }
+
+    private func captureMainScreen(
+        _ view: AppState.AppView,
+        source: String = "navigation"
+    ) {
+        guard let screen = analyticsScreenName(for: view) else { return }
+        analytics.captureScreen(screen, source: source)
+    }
+
+    private func analyticsScreenName(for view: AppState.AppView) -> String? {
+        switch view {
+        case .settings: return nil
+        case .organize: return "organize"
+        case .history: return "history"
+        case .duplicates: return "duplicates"
+        case .exclusions: return "exclusions"
+        case .watchedFolders: return "watched_folders"
+        case .learnings: return "learnings"
+        }
     }
 
     private func showPersonaGenerationHighlight() {

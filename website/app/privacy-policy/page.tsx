@@ -51,15 +51,14 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      updated="June 2026"
+      updated="July 28, 2026"
       toc={TOC}
       summary={
         <>
-          Sorty does not collect telemetry, analytics, or personal data. Your
-          files stay on your Mac. When you use a cloud AI provider, only file
-          names and metadata are sent for analysis — never file contents unless
-          you explicitly enable Deep Scan. Your Learnings profile is encrypted
-          with AES-256 and protected by Touch ID or Face ID.
+          Sorty never sends us your files, folder names, paths, prompts, AI
+          responses, or API keys. The Mac app only sends anonymous product
+          analytics and crash reports after you explicitly opt in. This website
+          uses cookieless aggregate analytics with a persistent opt-out.
         </>
       }
     >
@@ -67,7 +66,7 @@ export default function PrivacyPolicyPage() {
         name="Sorty Privacy Policy"
         description="How Sorty handles files, metadata, AI providers, and local storage."
         path="/privacy-policy"
-        dateModified="2026-06-01"
+        dateModified="2026-07-28"
         breadcrumbs={[{ name: 'Sorty', path: '/' }, { name: 'Privacy Policy', path: '/privacy-policy' }]}
       />
       <LegalSection id="overview" heading="1. Overview">
@@ -86,19 +85,52 @@ export default function PrivacyPolicyPage() {
           you use it.
         </p>
         <p>
-          Sorty is built privacy-first. The App runs entirely on your device,
-          within the macOS App Sandbox, and is designed so that the smallest
-          amount of information necessary leaves your computer — and only when
-          you choose a cloud-based AI provider. We do not operate any servers
-          that process your files or personal data.
+          Sorty is built privacy-first. File scanning and organization run on
+          your device, and the App is designed so that the smallest amount of
+          information necessary leaves your computer. We do not operate servers
+          that process your files. Cloud AI requests go directly to the provider
+          you choose, and anonymous app analytics only starts after an explicit
+          opt-in.
         </p>
       </LegalSection>
 
       <LegalSection id="data-we-collect" heading="2. Data We Collect">
         <p>
-          We do not collect, transmit, or store any telemetry, usage analytics,
-          crash reports, or personal data. There is no Sorty account, and we
-          have no database of user information.
+          There is no Sorty account and we do not collect names, email
+          addresses, advertising identifiers, file names, folder names, file
+          paths, file contents, prompts, custom instructions, AI responses, API
+          keys, or the names of files involved in an error.
+        </p>
+        <h3 className="pt-1 text-base font-medium text-foreground">
+          Optional Mac app analytics
+        </h3>
+        <p>
+          After onboarding, the Mac app asks once and does not initialize its analytics SDK until you choose
+          &quot;Share Anonymous Analytics.&quot; If you decline, no analytics or
+          crash report is sent and the denial itself is not reported. You can
+          change this choice later in Settings → Advanced → Privacy.
+        </p>
+        <p>
+          When enabled, the App sends a random anonymous installation
+          identifier, app and macOS versions, named screen visits, feature and
+          sub-feature actions, a small allowlist of important button actions,
+          coarse count and duration buckets, workflow outcomes, and sanitized
+          errors. Crash reports may include exception types, signal names,
+          function names, and stack frames needed to diagnose the crash. Sorty
+          does not create a PostHog person profile or identify you.
+        </p>
+        <h3 className="pt-1 text-base font-medium text-foreground">
+          Cookieless website analytics
+        </h3>
+        <p>
+          This website measures page visits, section visibility, meaningful
+          links and buttons, coarse traffic-source categories, and sanitized
+          technical errors through PostHog. It uses cookieless mode, does not
+          create a person profile, does not record sessions or page contents,
+          strips query strings and full referrer URLs, and instructs PostHog to
+          discard IP addresses. You can disable it at any time through
+          &quot;Analytics preferences&quot; in the footer. Global Privacy
+          Control and Do Not Track are honored automatically.
         </p>
         <p>The following is handled locally on your device only:</p>
         <ul className="list-disc space-y-1.5 pl-5">
@@ -109,7 +141,9 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="text-foreground">Settings &amp; preferences</strong>{' '}
-            — stored in standard macOS UserDefaults.
+            — stored in standard macOS UserDefaults, including your app
+            analytics choice. The website stores only its analytics preference
+            in local storage.
           </li>
           <li>
             <strong className="text-foreground">Watched Folders</strong> —
@@ -228,8 +262,9 @@ export default function PrivacyPolicyPage() {
             once per 24 hours) or manually via the menu.
           </li>
           <li>
-            No telemetry or analytics are included in these or any other
-            requests.
+            Update and AI-provider requests do not include Sorty analytics.
+            When you opt in, anonymous analytics is sent separately to PostHog
+            over HTTPS.
           </li>
           <li>
             You can disable automatic update checks in Settings → Updates →
@@ -281,6 +316,18 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <a
+              href="https://posthog.com/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              <strong>PostHog</strong>
+            </a>{' '}
+            — processes cookieless website events and explicitly opted-in,
+            anonymous Mac app analytics and crash reports in the United States.
+          </li>
+          <li>
+            <a
               href="https://github.com/sorty-organizer/Sorty/releases"
               target="_blank"
               rel="noreferrer"
@@ -319,20 +366,31 @@ export default function PrivacyPolicyPage() {
         <p>
           Sorty is a general-purpose developer and productivity tool and is not
           directed at children under 16. We do not knowingly collect personal
-          data from anyone. The App collects no personal data regardless of age.
+          data from children. Sorty analytics is deliberately anonymous and
+          excludes user and file content.
         </p>
       </LegalSection>
 
       <LegalSection id="your-rights" heading="9. Your Rights & Controls">
         <p>
-          Because Sorty stores everything locally and collects nothing, you are
-          always in control:
+          Sorty keeps file-related data local and provides direct controls over
+          the limited anonymous analytics described above:
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
             <strong className="text-foreground">Delete your data</strong> — use
             Settings → Troubleshooting → Delete All Data to wipe usage history,
-            watched folders, and local caches.
+            watched folders, local caches, and queued analytics data.
+          </li>
+          <li>
+            <strong className="text-foreground">Control app analytics</strong> —
+            decline during onboarding or turn off Share Anonymous Analytics in
+            Settings. Turning it off closes the SDK and clears its local queue.
+          </li>
+          <li>
+            <strong className="text-foreground">Control website analytics</strong>{' '}
+            — use Analytics preferences in the website footer. The site also
+            honors browser privacy signals.
           </li>
           <li>
             <strong className="text-foreground">Reset everything</strong> —
@@ -353,6 +411,12 @@ export default function PrivacyPolicyPage() {
             minimize network exposure.
           </li>
         </ul>
+        <p>
+          Because analytics records are anonymous and are not linked to a Sorty
+          account, we cannot reliably locate or delete an individual&apos;s
+          previously transmitted records. Turning analytics off prevents future
+          collection from that device.
+        </p>
       </LegalSection>
 
       <LegalSection id="changes" heading="10. Changes to This Policy">

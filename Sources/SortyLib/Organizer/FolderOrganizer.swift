@@ -1348,6 +1348,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
 
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "organize",
+            stage: "started",
+            outcome: "started",
+            properties: [
+                "has_custom_instructions": !(customPrompt?.isEmpty ?? true),
+                "mode": aiConfig?.mode.rawValue ?? "organize",
+            ]
+        )
+
         // Cancel any existing task first
         cancelInternal()
         try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature)
@@ -1393,8 +1403,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     private func performOrganization(directory: URL, customPrompt: String?, temperature: Double?) async throws {
+        let analyticsStartedAt = Date()
         guard let client = aiClient else {
-            throw OrganizationError.clientNotConfigured
+            let error = OrganizationError.clientNotConfigured
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "generate_plan"
+            )
+            throw error
         }
 
         let activity = ProcessInfo.processInfo.beginActivity(
@@ -1423,6 +1440,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         folderName: directory.lastPathComponent,
                         folderPath: directory.path
                     )
+                )
+                AnalyticsManager.shared.captureWorkflow(
+                    workflow: "organize",
+                    stage: "plan_ready",
+                    outcome: "empty",
+                    properties: [
+                        "count_bucket": AnalyticsManager.countBucket(0),
+                        "duration_bucket": AnalyticsManager.durationBucket(
+                            Date().timeIntervalSince(analyticsStartedAt)
+                        ),
+                        "result_kind": "empty_directory",
+                    ]
                 )
 
                 return
@@ -1463,27 +1492,95 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 recordPlanRules(plan, observer: learningsObserver)
             }
 
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_ready",
+                outcome: "success",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(files.count),
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                    "result_kind": "organization_plan",
+                ]
+            )
+
         } catch is CancellationError {
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_generation",
+                outcome: "cancelled",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                ]
+            )
             throw CancellationError()
         } catch let error as OrganizationError where error == .cancelled {
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_generation",
+                outcome: "cancelled",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                ]
+            )
             throw CancellationError()
         } catch let error as AIClientError where error.isCancellation {
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_generation",
+                outcome: "cancelled",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                ]
+            )
             throw CancellationError()
         } catch where (error as NSError).code == NSURLErrorCancelled || 
                       error.localizedDescription.lowercased().contains("cancelled") ||
                       error.localizedDescription.lowercased().contains("canceled") {
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_generation",
+                outcome: "cancelled",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                ]
+            )
             throw CancellationError()
         } catch {
             stopTimeoutTimer()
             handleOrganizationError(error, directory: directory)
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "plan_generation",
+                outcome: "failed",
+                properties: [
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                ]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "generate_plan"
+            )
             throw error
         }
     }
@@ -2509,6 +2606,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Cancel any ongoing operation - RELIABLE cancellation
     public func cancel(source: OrganizationEntrySource = .manual) {
         DebugLogger.log("Cancel requested by user")
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "organize",
+            stage: "cancel_requested",
+            outcome: "cancelled",
+            properties: ["entry_source": source.rawValue]
+        )
         AISessionManager.shared.clearErrors()
         cancelInternal()
         resetToIdle(source: source)
@@ -3382,6 +3485,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
+        let analyticsStartedAt = Date()
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "organize",
+            stage: "apply_started",
+            outcome: "started",
+            properties: [
+                "count_bucket": AnalyticsManager.countBucket(currentPlan.totalFiles),
+                "entry_source": source.rawValue,
+                "mode": (modeOverride ?? aiConfig?.mode ?? .organize).rawValue,
+            ]
+        )
 
         // Reset cancellation flag for new apply operation
         isCancellationRequested = false
@@ -3511,6 +3625,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
 
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "applied",
+                outcome: "success",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(operations.count),
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                    "entry_source": source.rawValue,
+                    "mode": operationMode.rawValue,
+                ]
+            )
+
         } catch {
             let partialOperations: [FileSystemManager.FileOperation]?
             if case FileSystemError.partialApplyFailure(let operations, _) = error {
@@ -3538,6 +3666,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 history.addEntry(failedEntry)
             }
 
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "apply",
+                outcome: partialOperations == nil ? "failed" : "partially_completed",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(partialOperations?.count ?? 0),
+                    "duration_bucket": AnalyticsManager.durationBucket(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ),
+                    "entry_source": source.rawValue,
+                    "mode": operationMode.rawValue,
+                ]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "apply_plan",
+                recoverable: partialOperations == nil
+            )
             throw error
         }
     }
@@ -3701,6 +3848,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Regenerate preview with a specific provider
     public func regenerateWithProvider(_ provider: AIProvider) async throws {
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "regenerate",
+            stage: "started",
+            outcome: "started",
+            properties: ["variant": "provider"]
+        )
         var files = getFilesFromCurrentPlan()
         guard !files.isEmpty else {
             throw OrganizationError.noCurrentPlan
@@ -3756,17 +3909,40 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_ready",
+                outcome: "success",
+                properties: ["variant": "provider"]
+            )
         } catch {
             await MainActor.run {
                 transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_generation",
+                outcome: "failed",
+                properties: ["variant": "provider"]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "regenerate_with_provider"
+            )
             throw error
         }
     }
 
     /// Regenerate preview with a specific provider and model
     public func regenerateWithModel(provider: AIProvider, model: String) async throws {
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "regenerate",
+            stage: "started",
+            outcome: "started",
+            properties: ["variant": "model"]
+        )
         if state == .scanning || state == .organizing {
             guard let directory = currentDirectory else {
                 throw OrganizationError.noCurrentPlan
@@ -3859,12 +4035,29 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_ready",
+                outcome: "success",
+                properties: ["variant": "model"]
+            )
         } catch {
             stopTimeoutTimer()
             await MainActor.run {
                 transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_generation",
+                outcome: "failed",
+                properties: ["variant": "model"]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "regenerate_with_model"
+            )
             throw error
         }
     }
@@ -3872,6 +4065,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Regenerate Preview
 
     public func regeneratePreview() async throws {
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "regenerate",
+            stage: "started",
+            outcome: "started",
+            properties: ["variant": "same_configuration"]
+        )
         guard let currentPlan = currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
@@ -4012,6 +4211,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_ready",
+                outcome: "success",
+                properties: ["variant": "same_configuration"]
+            )
 
         } catch {
             stopTimeoutTimer()
@@ -4031,6 +4236,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 history.addEntry(failedEntry)
             }
 
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "regenerate",
+                stage: "plan_generation",
+                outcome: "failed",
+                properties: ["variant": "same_configuration"]
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "organize",
+                operation: "regenerate_preview"
+            )
             throw error
         }
     }
@@ -4167,8 +4383,36 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
     @discardableResult
     public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
-        try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
-            try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "undo",
+            stage: "started",
+            outcome: "started"
+        )
+        do {
+            let result = try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
+                try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)
+            }
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "undo",
+                stage: "completed",
+                outcome: result.hasIssues ? "partially_completed" : "success",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(result.successfulOperations),
+                ]
+            )
+            return result
+        } catch {
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "undo",
+                stage: "restore",
+                outcome: "failed"
+            )
+            AnalyticsManager.shared.capture(
+                error: error,
+                feature: "history",
+                operation: "undo_organization"
+            )
+            throw error
         }
     }
 

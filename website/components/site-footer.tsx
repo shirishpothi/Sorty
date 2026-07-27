@@ -2,6 +2,7 @@ import { Heart } from 'lucide-react'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DiaGradient } from '@/components/dia-gradient'
+import { AnalyticsPreferencesButton } from '@/components/analytics-provider'
 import { sitePath } from '@/lib/site-paths'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
@@ -38,7 +39,10 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="relative isolate overflow-visible px-4 pt-14">
+    <footer
+      data-analytics-section="footer"
+      className="relative isolate overflow-visible px-4 pt-14"
+    >
       {/* Blue aurora rising from the floor. It intentionally extends above the
           footer so the glow blends into the previous section instead of ending
           at a visible rectangular edge. */}
@@ -60,6 +64,10 @@ export function SiteFooter() {
               rel="noreferrer"
               className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
               aria-label="GitHub"
+              data-analytics-action="source_opened"
+              data-analytics-component="icon_link"
+              data-analytics-location="footer"
+              data-analytics-target="github"
             >
               <GithubIcon className="size-4" />
             </a>
@@ -69,6 +77,10 @@ export function SiteFooter() {
               rel="noreferrer"
               className="btn-support flex size-9 items-center justify-center rounded-full"
               aria-label="Donate to support Sorty"
+              data-analytics-action="support_opened"
+              data-analytics-component="icon_link"
+              data-analytics-location="footer"
+              data-analytics-target="github_sponsors"
             >
               <Heart className="support-heart-icon size-4" />
             </a>
@@ -84,6 +96,10 @@ export function SiteFooter() {
                   <a
                     href={link.href}
                     className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    data-analytics-action="footer_link_opened"
+                    data-analytics-component="text_link"
+                    data-analytics-location="footer"
+                    data-analytics-target={link.label}
                   >
                     {link.label}
                   </a>
@@ -96,7 +112,11 @@ export function SiteFooter() {
 
       <div className="mx-auto mt-12 flex max-w-5xl flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
         <p>© {new Date().getFullYear()} Sorty. Released under the GPL v3.</p>
-        <p>Made for people with too many files.</p>
+        <div className="flex items-center gap-3">
+          <AnalyticsPreferencesButton className="underline-offset-4 transition-colors hover:text-foreground hover:underline" />
+          <span aria-hidden>·</span>
+          <p>Made for people with too many files.</p>
+        </div>
       </div>
 
       {/* Oversized faded brand wordmark */}
