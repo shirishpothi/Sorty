@@ -129,7 +129,10 @@ struct ExclusionRulesView: View {
                                 RuleGroupCard(
                                     title: group.0,
                                     rules: group.1,
-                                    rulesManager: rulesManager
+                                    rulesManager: rulesManager,
+                                    infoText: group.0 == "Pattern Rules"
+                                        ? "These rules match file extensions, names, folder names, paths, or regular expressions. Matching items are left untouched and aren't used for learnings."
+                                        : nil
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.05)
                             }
@@ -653,8 +656,10 @@ struct RuleGroupCard: View {
     let title: String
     let rules: [ExclusionRule]
     @ObservedObject var rulesManager: ExclusionRulesManager
+    let infoText: String?
 
     @State private var isExpanded = true
+    @State private var isShowingInfo = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -678,6 +683,24 @@ struct RuleGroupCard: View {
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(Capsule())
+
+                    if let infoText {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .onHover { isShowingInfo = $0 }
+                            .popover(isPresented: $isShowingInfo, arrowEdge: .trailing) {
+                                Text(infoText)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(14)
+                                    .frame(width: 280, alignment: .leading)
+                                    .systemLiquidGlassPopover(cornerRadius: 12)
+                            }
+                            .accessibilityLabel("About \(title)")
+                            .help("About \(title)")
+                    }
 
                     Spacer()
 
