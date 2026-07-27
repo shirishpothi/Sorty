@@ -23,7 +23,6 @@ struct OrganizationCompleteView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var iconAppeared = false
-    @State private var ringExpanded = false
     @State private var titleAppeared = false
     @State private var timeSavedAppeared = false
     @State private var summaryAppeared = false
@@ -120,16 +119,9 @@ struct OrganizationCompleteView: View {
                 VStack(spacing: 28) {
                     VStack(spacing: 16) {
                         ZStack {
-                            Circle()
-                                .fill(statusColor.opacity(0.1))
-                                .frame(width: 100, height: 100)
-                                .scaleEffect(iconAppeared ? 1 : 0.5)
+                            CompletionBadgeGlow(color: statusColor)
+                                .scaleEffect(iconAppeared ? 1 : 0.7)
                                 .opacity(iconAppeared ? 1 : 0)
-
-                            Circle()
-                                .stroke(statusColor.opacity(ringExpanded ? 0 : 0.5), lineWidth: 3)
-                                .frame(width: 100, height: 100)
-                                .scaleEffect(ringExpanded ? 2 : 1)
 
                             if showParticles {
                                 ConfettiParticlesView()
@@ -383,11 +375,7 @@ struct OrganizationCompleteView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
                 iconAppeared = true
             }
-            
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6).delay(0.3)) {
-                ringExpanded = true
-            }
-            
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 if !reduceMotion {
                     showParticles = true
@@ -507,7 +495,6 @@ struct OrganizationCompleteView: View {
                     undoSkippedCount = result.missingFiles.count
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         undoState = .completed
-                        ringExpanded = false
                     }
                     HapticFeedbackManager.shared.success()
                     showUndoCompleteHUD()
@@ -586,7 +573,6 @@ struct OrganizationCompleteView: View {
                 await MainActor.run {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         undoState = .idle
-                        ringExpanded = true
                     }
                     lastUndoneEntry = nil
                     undoRestoredCount = 0
@@ -683,6 +669,62 @@ private struct TimeSavedHighlight: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Estimated manual time saved: \(value)")
+    }
+}
+
+private struct CompletionBadgeGlow: View {
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isOrbiting = false
+    @State private var isBreathing = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.24))
+                .frame(width: 72, height: 72)
+                .blur(radius: 18)
+                .scaleEffect(isBreathing ? 1.14 : 0.94)
+                .opacity(isBreathing ? 0.95 : 0.65)
+
+            Circle()
+                .fill(color.opacity(0.12))
+                .frame(width: 92, height: 92)
+                .blur(radius: 24)
+
+            Circle()
+                .trim(from: 0.04, to: 0.2)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            color.opacity(0),
+                            color.opacity(0.75),
+                            color,
+                            .white.opacity(0.9)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+                .frame(width: 92, height: 92)
+                .rotationEffect(.degrees(isOrbiting ? 360 : 0))
+                .shadow(color: color.opacity(0.8), radius: 5)
+        }
+        .frame(width: 108, height: 108)
+        .accessibilityHidden(true)
+        .onAppear {
+            guard !reduceMotion else { return }
+
+            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                isOrbiting = true
+            }
+
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
     }
 }
 
