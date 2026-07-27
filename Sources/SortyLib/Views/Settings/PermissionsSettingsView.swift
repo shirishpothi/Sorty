@@ -22,7 +22,7 @@ struct PermissionsSettingsView: View {
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
     @State private var activeAlert: PermissionsSettingsAlert?
-    @State private var isRefreshingPermissions = false
+    @State private var refreshStatusAnimationTrigger = 0
 
     private var readyPermissionCount: Int {
         PermissionType.allCases.filter { type in
@@ -110,17 +110,14 @@ struct PermissionsSettingsView: View {
                     HStack(spacing: 10) {
                         Button {
                             HapticFeedbackManager.shared.tap()
-                            refreshPermissions(animated: true)
+                            refreshPermissions()
+                            refreshStatusAnimationTrigger += 1
                         } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(
-                                        .rotate,
-                                        options: .repeat(.continuous),
-                                        isActive: isRefreshingPermissions
-                                    )
-
+                            Label {
                                 Text("Refresh Status")
+                            } icon: {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(.rotate, value: refreshStatusAnimationTrigger)
                             }
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
@@ -203,11 +200,7 @@ struct PermissionsSettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func refreshPermissions(animated: Bool = false) {
-        if animated {
-            isRefreshingPermissions = true
-        }
-
+    private func refreshPermissions() {
         permissionStates[.filesAndFolders] = filesAndFoldersState
         permissionStates[.fullDiskAccess] = fullDiskAccessState()
 
@@ -219,10 +212,6 @@ struct PermissionsSettingsView: View {
             permissionStates[.notifications] = notificationState(
                 for: notificationManager.notificationPermissionStatus
             )
-
-            if animated {
-                isRefreshingPermissions = false
-            }
         }
     }
 

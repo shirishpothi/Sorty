@@ -2569,6 +2569,7 @@ struct ErrorView: View {
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
+    @State private var retryAnimationTrigger = 0
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var appState: AppState
@@ -2777,12 +2778,15 @@ struct ErrorView: View {
                 Button {
                     HapticFeedbackManager.shared.tap()
                     animateActionFeedback(.retry)
+                    if !reduceMotion {
+                        retryAnimationTrigger += 1
+                    }
                     showRetryOptions = true
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(.bounce, value: activeActionFeedback == .retry)
+                            .symbolEffect(.rotate, value: retryAnimationTrigger)
                         Text("Retry")
                             .font(.caption.bold())
                     }
