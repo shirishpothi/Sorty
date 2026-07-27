@@ -62,6 +62,7 @@ struct OrganizeView: View {
     @State private var isShowingReturnToStartContent = false
     @State private var returnsToDirectorySelection = false
     @State private var keepsReadyContentVisibleAfterReturn = false
+    @State private var keepsDirectorySelectionVisibleAfterReturn = false
     @State private var showsCompletionContent = false
     @State private var liveOrganizationStartedAt: Date?
     @State private var keepsLiveOrganizationVisible = false
@@ -119,6 +120,7 @@ struct OrganizeView: View {
                     DirectorySelectionView(
                         selectedDirectory: $appState.selectedDirectory,
                         startsVisible: isShowingReturnToStartContent
+                            || keepsDirectorySelectionVisibleAfterReturn
                     )
                         .transition(TransitionStyles.scaleAndFade)
                 } else {
@@ -159,6 +161,9 @@ struct OrganizeView: View {
         }
         .onChange(of: appState.selectedDirectory) { oldValue, newValue in
             errorViewTestRoute = nil
+            if newValue != nil {
+                keepsDirectorySelectionVisibleAfterReturn = false
+            }
             // Prewarm AI connection when user selects a folder
             if newValue != nil {
                 Task {
@@ -335,7 +340,7 @@ struct OrganizeView: View {
         if let errorViewTestRoute {
             ErrorView(
                 error: errorViewTestRoute.error,
-                onCancel: dismissErrorViewTestRoute,
+                onCancel: returnToDirectorySelection,
                 onRetry: dismissErrorViewTestRoute,
                 onRetryWithSmarterModel: dismissErrorViewTestRoute
             )
@@ -392,10 +397,7 @@ struct OrganizeView: View {
         case .error(let error):
             ErrorView(
                 error: error,
-                onCancel: {
-                    organizer.reset()
-                    appState.selectedDirectory = nil
-                },
+                onCancel: returnToDirectorySelection,
                 onRetry: {
                     HapticFeedbackManager.shared.tap()
                     withAnimation(.pageTransition) {
@@ -444,6 +446,7 @@ struct OrganizeView: View {
                 }
                 showsCompletionContent = false
                 keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
+                keepsDirectorySelectionVisibleAfterReturn = isReturningFromCompletion
                 isShowingReturnToStartContent = false
                 returnsToDirectorySelection = false
                 isReturningToStart = false
@@ -466,6 +469,8 @@ struct OrganizeView: View {
                 appState.selectedDirectory = nil
                 showsCompletionContent = false
                 keepsReadyContentVisibleAfterReturn = false
+                keepsDirectorySelectionVisibleAfterReturn = true
+                errorViewTestRoute = nil
                 isShowingReturnToStartContent = false
                 returnsToDirectorySelection = false
                 isReturningToStart = false
