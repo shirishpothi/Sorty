@@ -600,7 +600,7 @@ struct AIProviderSettingsView: View {
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
 
                     if let status = testConnectionStatus {
-                        VStack(alignment: .center, spacing: 4) {
+                        VStack(alignment: .center, spacing: 8) {
                             let isSuccessful = status.contains("Success")
 
                             Label(
@@ -626,6 +626,7 @@ struct AIProviderSettingsView: View {
                                         .font(.caption)
                                         .fontWeight(.semibold)
                                         .foregroundColor(isInternetAccessBlocked ? .orange : .red)
+                                        .multilineTextAlignment(.center)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .textSelection(.enabled)
 
@@ -642,7 +643,7 @@ struct AIProviderSettingsView: View {
                                     .buttonStyle(.plain)
                                     .help("Copy error message")
                                 }
-                                .frame(maxWidth: .infinity, alignment: .center)
+                                .frame(maxWidth: 620, alignment: .center)
 
                                 if let details = testConnectionDetails, !details.isEmpty {
                                     VStack(spacing: 6) {
@@ -693,7 +694,7 @@ struct AIProviderSettingsView: View {
                                                 .transition(.move(edge: .top).combined(with: .opacity))
                                         }
                                     }
-                                    .frame(maxWidth: 400)
+                                    .frame(maxWidth: 620)
                                 }
 
                                 if isInternetAccessBlocked {
@@ -718,6 +719,7 @@ struct AIProviderSettingsView: View {
                             }
                         }
                         .font(.subheadline)
+                        .frame(maxWidth: 620, alignment: .center)
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
