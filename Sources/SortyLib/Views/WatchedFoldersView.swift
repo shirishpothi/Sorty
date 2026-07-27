@@ -1007,7 +1007,7 @@ struct WatchedFolderConfigView: View {
                                 .transition(
                                     reduceMotion
                                         ? .opacity
-                                        : .blurReplace
+                                        : AnyTransition(.blurReplace)
                                 )
                             }
                         }
