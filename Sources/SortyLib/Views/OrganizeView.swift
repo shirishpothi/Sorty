@@ -2479,6 +2479,7 @@ struct ErrorView: View {
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
     @State private var isHoveringHelpSupport = false
+    @State private var isHoveringSettings = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
@@ -2557,6 +2558,10 @@ struct ErrorView: View {
 
     private var showsHelpSupportChevron: Bool {
         isHoveringHelpSupport || activeActionFeedback == .helpSupport
+    }
+
+    private var showsSettingsChevron: Bool {
+        isHoveringSettings || activeActionFeedback == .settings
     }
 
     private var privacySafeSupportDetails: String {
@@ -2721,9 +2726,14 @@ struct ErrorView: View {
                         appState.navigatedFromSettings = true
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "gearshape")
+                            Image(systemName: showsSettingsChevron ? "arrow.up.right" : "gearshape")
                                 .font(.system(size: 10, weight: .semibold))
-                                .symbolEffect(.bounce, value: activeActionFeedback == .settings)
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
                             Text("Settings")
                                 .font(.caption.bold())
                         }
@@ -2732,6 +2742,11 @@ struct ErrorView: View {
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Settings to resolve this issue")
                     .accessibilityIdentifier("ErrorOpenSettingsButton")
+                    .onHover { hovering in
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            isHoveringSettings = hovering
+                        }
+                    }
                 }
 
                 if category == .permissions {
