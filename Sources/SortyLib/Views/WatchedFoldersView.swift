@@ -723,6 +723,8 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var personaManager: PersonaManager
+    @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @Environment(\.dismiss) var dismiss
     @StateObject private var steeringManager = SteeringPromptManager.shared
 
@@ -739,7 +741,9 @@ struct WatchedFolderConfigView: View {
     @State private var isImprovingPrompt = false
     @State private var showImprovePromptRequest = false
     @State private var improvePromptRequestMessage = ""
-    @FocusState private var isPromptFocused: Bool
+    @State private var isPromptFocused = false
+    @State private var instructionSuggestionIndex = 0
+    @State private var instructionSelection = NSRange(location: 0, length: 0)
 
     init(folder: WatchedFolder) {
         self.folder = folder
@@ -840,22 +844,82 @@ struct WatchedFolderConfigView: View {
                     ConfigSection(title: "Custom Instructions", icon: "text.bubble", color: .purple)
                     {
                         VStack(alignment: .leading, spacing: 8) {
-                            TextEditor(text: $customPrompt)
-                                .font(.system(.body, design: .default))
-                                .frame(height: 80)
-                                .scrollContentBackground(.hidden)
-                                .focused($isPromptFocused)
-                                .padding(10)
-                                .background(Color(NSColor.textBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                            ZStack(alignment: .topLeading) {
+                                SubmittableTextEditor(
+                                    text: $customPrompt,
+                                    isFocused: $isPromptFocused,
+                                    selectedRange: $instructionSelection,
+                                    onAcceptSuggestion: acceptCurrentInstructionSuggestion,
+                                    onSubmit: {}
                                 )
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
 
-                            Text(selectedMode.instructionPlaceholder)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                if customPrompt.isEmpty {
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Text(currentInstructionSuggestion)
+                                            .font(.body)
+                                            .foregroundStyle(.tertiary)
+                                            .lineLimit(2)
+                                            .numericTextTransition(
+                                                animationValue: instructionSuggestionIndex
+                                            )
+
+                                        Spacer(minLength: 0)
+
+                                        Text("Tab")
+                                            .font(
+                                                .system(
+                                                    size: 10,
+                                                    weight: .semibold,
+                                                    design: .rounded
+                                                )
+                                            )
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                Color.secondary.opacity(0.10),
+                                                in: RoundedRectangle(cornerRadius: 5)
+                                            )
+                                            .accessibilityHidden(true)
+                                    }
+                                    .padding(.leading, 18)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 9)
+                                    .allowsHitTesting(false)
+                                    .task(id: instructionSuggestions) {
+                                        instructionSuggestionIndex = 0
+
+                                        while !Task.isCancelled {
+                                            try? await Task.sleep(for: .seconds(3.5))
+                                            guard !Task.isCancelled else { return }
+                                            instructionSuggestionIndex =
+                                                (instructionSuggestionIndex + 1)
+                                                % instructionSuggestions.count
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(height: 80)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(NSColor.textBackgroundColor))
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+
+                                FocusedInstructionBeamBorder(active: isPromptFocused)
+                            }
+                            .accessibilityIdentifier("WatchedFolderCustomInstructionsTextField")
+                            .accessibilityLabel("Custom instructions for this watched folder")
+                            .accessibilityHint(
+                                customPrompt.isEmpty
+                                    ? "Press Tab to use the suggested instruction"
+                                    : "Enter adds a new line"
+                            )
 
                             instructionActions
                         }
@@ -1120,6 +1184,30 @@ struct WatchedFolderConfigView: View {
 
     private var trimmedCustomPrompt: String {
         customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var instructionSuggestions: [String] {
+        InstructionSuggestionCatalog.suggestions(
+            for: selectedMode,
+            personaManager: personaManager,
+            customPersonaStore: customPersonaStore
+        )
+    }
+
+    private var currentInstructionSuggestion: String {
+        instructionSuggestions[instructionSuggestionIndex % instructionSuggestions.count]
+    }
+
+    private func acceptCurrentInstructionSuggestion() -> Bool {
+        guard customPrompt.isEmpty else { return false }
+
+        customPrompt = currentInstructionSuggestion
+        instructionSelection = NSRange(
+            location: (currentInstructionSuggestion as NSString).length,
+            length: 0
+        )
+        HapticFeedbackManager.shared.selection()
+        return true
     }
 
     private func improvePromptWithAI() async {

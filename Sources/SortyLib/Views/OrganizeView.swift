@@ -873,52 +873,12 @@ struct ReadyToOrganizeView: View {
         settingsViewModel.config.mode
     }
 
-    private var genericInstructionSuggestions: [String] {
-        switch mode {
-        case .organize:
-            return [
-                "Use no more than 6 top-level folders and keep the hierarchy two levels deep.",
-                "Group files by project, then by year; keep loose files in General.",
-                "Separate RAW photos from edited images, then group both by event.",
-                "Keep recent work in Active, and move completed projects into an Archive by year.",
-                "Keep files with the same project or client name together, regardless of file type.",
-                "Put ambiguous files in Review instead of guessing where they belong.",
-            ]
-        case .organizeAndRename:
-            return [
-                "Use no more than 6 top-level folders, group by client, and put confirmed dates first.",
-                "Group by project in a two-level hierarchy, then rename files with clear dates.",
-                "Separate invoices by client, then rename them with the date and vendor.",
-                "Keep source files beside their exports, and add Final only when the content confirms it.",
-                "Archive completed projects by year, and preserve version numbers when renaming files.",
-                "Put ambiguous files in Review, and rename them only from confirmed metadata.",
-            ]
-        case .renameOnly:
-            return [
-                "Put dates first, use natural words, and preserve the original file extension.",
-                "Rename invoices with the date, vendor, and invoice number.",
-                "Use consistent names with spaces, and keep existing version numbers.",
-                "Use YYYY-MM-DD for confirmed dates, and leave uncertain dates out.",
-                "Remove filler such as copy, untitled, and repeated final labels.",
-                "Keep paired RAW and sidecar files on the same base name.",
-            ]
-        }
-    }
-
-    private var personaInstructionSuggestions: [String] {
-        guard let personaID = personaManager.selectedCustomPersonaId,
-              let persona = customPersonaStore.customPersonas.first(where: { $0.id == personaID }) else {
-            return []
-        }
-
-        return persona.instructionSuggestions.suggestions(for: mode)
-    }
-
     private var instructionSuggestions: [String] {
-        var seen = Set<String>()
-        return (personaInstructionSuggestions + genericInstructionSuggestions).filter {
-            seen.insert($0).inserted
-        }
+        InstructionSuggestionCatalog.suggestions(
+            for: mode,
+            personaManager: personaManager,
+            customPersonaStore: customPersonaStore
+        )
     }
 
     private var currentInstructionSuggestion: String {
@@ -2898,7 +2858,7 @@ struct ErrorView: View {
     }
 }
 
-private struct FocusedInstructionBeamBorder: View {
+struct FocusedInstructionBeamBorder: View {
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -3114,6 +3074,59 @@ struct SubmittableTextEditor: NSViewRepresentable {
             if selectedRange.wrappedValue != currentRange {
                 selectedRange.wrappedValue = currentRange
             }
+        }
+    }
+}
+
+enum InstructionSuggestionCatalog {
+    static func suggestions(
+        for mode: OrganizationMode,
+        personaManager: PersonaManager,
+        customPersonaStore: CustomPersonaStore
+    ) -> [String] {
+        let personaSuggestions: [String]
+        if let personaID = personaManager.selectedCustomPersonaId,
+           let persona = customPersonaStore.customPersonas.first(where: { $0.id == personaID }) {
+            personaSuggestions = persona.instructionSuggestions.suggestions(for: mode)
+        } else {
+            personaSuggestions = []
+        }
+
+        var seen = Set<String>()
+        return (personaSuggestions + genericSuggestions(for: mode)).filter {
+            seen.insert($0).inserted
+        }
+    }
+
+    private static func genericSuggestions(for mode: OrganizationMode) -> [String] {
+        switch mode {
+        case .organize:
+            return [
+                "Use no more than 6 top-level folders and keep the hierarchy two levels deep.",
+                "Group files by project, then by year; keep loose files in General.",
+                "Separate RAW photos from edited images, then group both by event.",
+                "Keep recent work in Active, and move completed projects into an Archive by year.",
+                "Keep files with the same project or client name together, regardless of file type.",
+                "Put ambiguous files in Review instead of guessing where they belong.",
+            ]
+        case .organizeAndRename:
+            return [
+                "Use no more than 6 top-level folders, group by client, and put confirmed dates first.",
+                "Group by project in a two-level hierarchy, then rename files with clear dates.",
+                "Separate invoices by client, then rename them with the date and vendor.",
+                "Keep source files beside their exports, and add Final only when the content confirms it.",
+                "Archive completed projects by year, and preserve version numbers when renaming files.",
+                "Put ambiguous files in Review, and rename them only from confirmed metadata.",
+            ]
+        case .renameOnly:
+            return [
+                "Put dates first, use natural words, and preserve the original file extension.",
+                "Rename invoices with the date, vendor, and invoice number.",
+                "Use consistent names with spaces, and keep existing version numbers.",
+                "Use YYYY-MM-DD for confirmed dates, and leave uncertain dates out.",
+                "Remove filler such as copy, untitled, and repeated final labels.",
+                "Keep paired RAW and sidecar files on the same base name.",
+            ]
         }
     }
 }
