@@ -621,14 +621,17 @@ struct HistoryHeader: View {
 
     private var compactPopulatedHeader: some View {
         HStack(spacing: 8) {
-            compactHistoryIdentity
+            historyIdentity
 
-            HistoryNavigatorControl(selection: $selectedFilter)
-                .frame(width: HistoryNavigatorControl.preferredWidth)
+            HistoryNavigatorControl(
+                selection: $selectedFilter,
+                usesCompactWidths: true
+            )
+            .frame(width: HistoryNavigatorControl.compactPreferredWidth)
 
             Spacer(minLength: 4)
 
-            compactClearHistoryButton
+            clearHistoryButton
                 .fixedSize()
         }
     }
@@ -641,8 +644,11 @@ struct HistoryHeader: View {
                 .frame(width: 24, height: 34)
                 .accessibilityLabel("History, \(totalSessions) runs")
 
-            HistoryNavigatorControl(selection: $selectedFilter)
-                .frame(width: HistoryNavigatorControl.preferredWidth)
+            HistoryNavigatorControl(
+                selection: $selectedFilter,
+                usesCompactWidths: true
+            )
+            .frame(width: HistoryNavigatorControl.compactPreferredWidth)
 
             Spacer(minLength: 4)
 
@@ -744,18 +750,35 @@ struct HistoryHeader: View {
 
 private struct HistoryNavigatorControl: NSViewRepresentable {
     static let preferredWidth: CGFloat = 520
+    static let compactPreferredWidth: CGFloat = 425
 
     @Binding var selection: HistoryView.HistoryFilter
+    var usesCompactWidths = false
 
-    private static func segmentWidth(for filter: HistoryView.HistoryFilter) -> CGFloat {
-        switch filter {
-        case .all: 55
-        case .undoable: 82
-        case .failed: 68
-        case .skipped: 76
-        case .cancelled: 88
-        case .manual: 72
-        case .watched: 79
+    private static func segmentWidth(
+        for filter: HistoryView.HistoryFilter,
+        usesCompactWidths: Bool
+    ) -> CGFloat {
+        if usesCompactWidths {
+            switch filter {
+            case .all: 45
+            case .undoable: 67
+            case .failed: 56
+            case .skipped: 62
+            case .cancelled: 72
+            case .manual: 59
+            case .watched: 64
+            }
+        } else {
+            switch filter {
+            case .all: 55
+            case .undoable: 82
+            case .failed: 68
+            case .skipped: 76
+            case .cancelled: 88
+            case .manual: 72
+            case .watched: 79
+            }
         }
     }
 
@@ -808,7 +831,13 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
         control.segmentDistribution = .fit
 
         for (index, filter) in filters.enumerated() {
-            control.setWidth(Self.segmentWidth(for: filter), forSegment: index)
+            control.setWidth(
+                Self.segmentWidth(
+                    for: filter,
+                    usesCompactWidths: usesCompactWidths
+                ),
+                forSegment: index
+            )
             control.setLabel(filter.rawValue, forSegment: index)
             control.setImageScaling(.scaleNone, forSegment: index)
             control.setToolTip(filter.rawValue, forSegment: index)
@@ -821,6 +850,16 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
         context.coordinator.selection = $selection
         let filters = HistoryView.HistoryFilter.allCases
         nsView.selectedSegment = filters.firstIndex(of: selection) ?? 0
+
+        for (index, filter) in filters.enumerated() {
+            nsView.setWidth(
+                Self.segmentWidth(
+                    for: filter,
+                    usesCompactWidths: usesCompactWidths
+                ),
+                forSegment: index
+            )
+        }
     }
 
     @MainActor
