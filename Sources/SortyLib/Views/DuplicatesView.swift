@@ -258,74 +258,86 @@ struct DuplicatesView: View {
     }
 
     private var resultsView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                DuplicatesResultsSidebarHeader(
-                    manager: detectionManager,
-                    showsStats: settingsViewModel.config.showStatsForNerds
-                )
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    DuplicatesResultsSidebarHeader(
+                        manager: detectionManager,
+                        showsStats: settingsViewModel.config.showStatsForNerds
+                    )
+
+                    Divider()
+
+                    List(selection: $appState.duplicateSelectedGroup) {
+                        if !exactGroups.isEmpty {
+                            Section {
+                                ForEach(exactGroups) { group in
+                                    UnifiedDuplicateGroupRow(group: group)
+                                        .tag(group)
+                                }
+                            } header: {
+                                Text("Exact duplicates")
+                            }
+                        }
+
+                        if !similarGroups.isEmpty {
+                            Section {
+                                ForEach(similarGroups) { group in
+                                    UnifiedDuplicateGroupRow(group: group)
+                                        .tag(group)
+                                }
+                            } header: {
+                                Text("Similarity matches")
+                            }
+                        }
+                    }
+                    .listStyle(.sidebar)
+                }
+                .frame(width: 340, height: geometry.size.height, alignment: .topLeading)
 
                 Divider()
 
-                List(selection: $appState.duplicateSelectedGroup) {
-                    if !exactGroups.isEmpty {
-                        Section {
-                            ForEach(exactGroups) { group in
-                                UnifiedDuplicateGroupRow(group: group)
-                                    .tag(group)
-                            }
-                        } header: {
-                            Text("Exact duplicates")
+                if let group = appState.duplicateSelectedGroup {
+                    UnifiedDuplicateGroupDetailView(
+                        group: group,
+                        settings: settingsManager.settings,
+                        onDelete: { files in
+                            filesToDelete = files
+                            showDeleteConfirmation = true
                         }
-                    }
-
-                    if !similarGroups.isEmpty {
-                        Section {
-                            ForEach(similarGroups) { group in
-                                UnifiedDuplicateGroupRow(group: group)
-                                    .tag(group)
-                            }
-                        } header: {
-                            Text("Similarity matches")
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-            }
-            .frame(width: 340)
-
-            Divider()
-
-            if let group = appState.duplicateSelectedGroup {
-                UnifiedDuplicateGroupDetailView(
-                    group: group,
-                    settings: settingsManager.settings,
-                    onDelete: { files in
-                        filesToDelete = files
-                        showDeleteConfirmation = true
-                    }
-                )
-                .frame(minWidth: 0, maxWidth: .infinity)
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                    Text("Choose a group")
-                        .font(.headline)
-                    Text(
-                        "Review exact duplicates first. Similarity matches stay separate and need individual confirmation."
                     )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 340)
+                    .frame(
+                        minWidth: 0,
+                        maxWidth: .infinity,
+                        minHeight: 0,
+                        maxHeight: .infinity,
+                        alignment: .topLeading
+                    )
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text("Choose a group")
+                            .font(.headline)
+                        Text(
+                            "Review exact duplicates first. Similarity matches stay separate and need individual confirmation."
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 340)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(
+                width: geometry.size.width,
+                height: geometry.size.height,
+                alignment: .topLeading
+            )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var exactGroups: [UnifiedDuplicateGroup] {
