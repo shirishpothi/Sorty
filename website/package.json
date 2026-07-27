@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:pages": "NEXT_PUBLIC_BASE_PATH=/Sorty next build",
     "build:sites": "next build && node scripts/package-sites.mjs",
+    "preview:pages": "node scripts/preview-pages.mjs",
     "start": "next start",
     "lint": "eslint ."
   },

@@ -14,5 +14,6 @@ node_modules
 .next/
 dist/
 out/
+.pages-preview/
 tsconfig.tsbuildinfo
 .DS_Store
