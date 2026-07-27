@@ -816,7 +816,7 @@ private struct PermissionSettingsCard: View {
             if isRequired {
                 Text("Required")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.red.opacity(0.18), in: Capsule(style: .continuous))
