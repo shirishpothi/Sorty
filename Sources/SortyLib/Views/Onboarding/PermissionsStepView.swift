@@ -360,7 +360,7 @@ public struct PermissionsStepView: View {
 
 // MARK: - Supporting Types
 
-enum PermissionType: String, CaseIterable, Identifiable {
+enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     case filesAndFolders = "Files & Folders"
     case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
@@ -456,7 +456,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
     }
 }
 
-enum PermissionState {
+enum PermissionState: Sendable {
     case unknown
     case pending
     case granted
@@ -515,10 +515,30 @@ struct PermissionRow: View {
     let isRequired: Bool
     let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
+    let removePermissionTitle: String
+    let onRemovePermission: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
     @State private var grantFlash = false
+
+    init(
+        type: PermissionType,
+        state: PermissionState,
+        isRequired: Bool,
+        onExplain: @escaping () -> Void,
+        onRequest: @escaping (CGRect?) -> Void,
+        removePermissionTitle: String = "Remove Permission…",
+        onRemovePermission: (() -> Void)? = nil
+    ) {
+        self.type = type
+        self.state = state
+        self.isRequired = isRequired
+        self.onExplain = onExplain
+        self.onRequest = onRequest
+        self.removePermissionTitle = removePermissionTitle
+        self.onRemovePermission = onRemovePermission
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -573,7 +593,21 @@ struct PermissionRow: View {
             guard newState == .granted else { return }
             playApprovalAnimation()
         }
+        .contextMenu {
+            if canRemovePermission, let onRemovePermission {
+                Button(role: .destructive) {
+                    HapticFeedbackManager.shared.tap()
+                    onRemovePermission()
+                } label: {
+                    Label(LocalizedStringKey(removePermissionTitle), systemImage: "minus.circle")
+                }
+            }
+        }
         .accessibilityElement(children: .contain)
+    }
+
+    private var canRemovePermission: Bool {
+        state == .granted || state == .restartRequired
     }
 
     private var iconTint: Color {

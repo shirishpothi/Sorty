@@ -285,6 +285,15 @@ public final class AutomationManager: ObservableObject {
         }
         statusMessage = "Automation state refreshed"
     }
+
+    /// Updates Sorty's in-memory state after its Finder Automation TCC decision is reset.
+    public func markAutomationPermissionReset() {
+        stopSelectionMonitoring()
+        automationStatus = .unknown
+        statusMessage = "Finder automation permission removed"
+        lastPermissionError = nil
+        UserDefaults.standard.removeObject(forKey: "automation.previouslyGranted")
+    }
     
     // MARK: - Notification Handler
     

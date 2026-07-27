@@ -15,12 +15,13 @@ struct PermissionsSettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var automationManager: AutomationManager
     @ObservedObject private var notificationManager = NotificationManager.shared
+    @ObservedObject private var notificationSettings = NotificationSettingsManager.shared
 
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
-    @State private var isFullDiskAccessConfirmationPresented = false
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
+    @State private var activeAlert: PermissionsSettingsAlert?
 
     private var readyPermissionCount: Int {
         PermissionType.allCases.filter { type in
@@ -50,7 +51,9 @@ struct PermissionsSettingsView: View {
                         state: permissionStates[.filesAndFolders] ?? .unknown,
                         isRequired: true,
                         onExplain: { selectedEducationPermission = .filesAndFolders },
-                        onRequest: { _ in requestFilesAndFoldersPermission() }
+                        onRequest: { _ in requestFilesAndFoldersPermission() },
+                        removePermissionTitle: "Remove Current Folder Access…",
+                        onRemovePermission: { activeAlert = .revoke(.filesAndFolders) }
                     )
                     .settingsFocusableSetting(.permissionsFilesAndFolders)
 
@@ -61,8 +64,9 @@ struct PermissionsSettingsView: View {
                         onExplain: { selectedEducationPermission = .fullDiskAccess },
                         onRequest: { sourceFrame in
                             fullDiskAccessSourceFrameInScreen = sourceFrame
-                            isFullDiskAccessConfirmationPresented = true
-                        }
+                            activeAlert = .fullDiskAccessSetup
+                        },
+                        onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) }
                     )
                     .settingsFocusableSetting(.permissionsFullDiskAccess)
 
@@ -71,7 +75,8 @@ struct PermissionsSettingsView: View {
                         state: permissionStates[.automation] ?? .unknown,
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .automation },
-                        onRequest: { _ in requestAutomationPermission() }
+                        onRequest: { _ in requestAutomationPermission() },
+                        onRemovePermission: { activeAlert = .revoke(.automation) }
                     )
                     .settingsFocusableSetting(.permissionsAutomation)
 
@@ -80,7 +85,9 @@ struct PermissionsSettingsView: View {
                         state: permissionStates[.notifications] ?? .unknown,
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .notifications },
-                        onRequest: { _ in requestNotificationPermission() }
+                        onRequest: { _ in requestNotificationPermission() },
+                        removePermissionTitle: "Disable & Open Notification Settings…",
+                        onRemovePermission: { activeAlert = .revoke(.notifications) }
                     )
                     .settingsFocusableSetting(.permissionsNotifications)
 
@@ -137,15 +144,8 @@ struct PermissionsSettingsView: View {
                 selectedEducationPermission = nil
             }
         }
-        .alert("Set up Full Disk Access?", isPresented: $isFullDiskAccessConfirmationPresented) {
-            Button("Cancel", role: .cancel) {
-                fullDiskAccessSourceFrameInScreen = nil
-            }
-            Button("Open System Settings") {
-                openFullDiskAccessSettings()
-            }
-        } message: {
-            Text("Full Disk Access is optional and only needed for protected folders. macOS may relaunch Sorty after you turn it on.")
+        .alert(item: $activeAlert) { alert in
+            permissionAlert(for: alert)
         }
     }
 
@@ -213,7 +213,7 @@ struct PermissionsSettingsView: View {
     }
 
     private var filesAndFoldersState: PermissionState {
-        appState.hasCompletedOnboarding || appState.selectedDirectory != nil ? .granted : .unknown
+        appState.selectedDirectory != nil ? .granted : .unknown
     }
 
     private func openFullDiskAccessSettings() {
@@ -267,6 +267,132 @@ struct PermissionsSettingsView: View {
                 HapticFeedbackManager.shared.error()
             }
         }
+    }
+
+    private func permissionAlert(for alert: PermissionsSettingsAlert) -> Alert {
+        switch alert {
+        case .fullDiskAccessSetup:
+            return Alert(
+                title: Text("Set up Full Disk Access?"),
+                message: Text("Full Disk Access is optional and only needed for protected folders. macOS may relaunch Sorty after you turn it on."),
+                primaryButton: .default(Text("Open System Settings")) {
+                    openFullDiskAccessSettings()
+                },
+                secondaryButton: .cancel {
+                    fullDiskAccessSourceFrameInScreen = nil
+                }
+            )
+
+        case .revoke(let type):
+            return Alert(
+                title: Text(revocationTitle(for: type)),
+                message: Text(revocationMessage(for: type)),
+                primaryButton: .destructive(Text(revocationButtonTitle(for: type))) {
+                    revokePermission(type)
+                },
+                secondaryButton: .cancel()
+            )
+
+        case .failure(let message):
+            return Alert(
+                title: Text("Permission Couldn’t Be Removed"),
+                message: Text(message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    private func revocationTitle(for type: PermissionType) -> String {
+        switch type {
+        case .filesAndFolders:
+            return "Remove Current Folder Access?"
+        case .fullDiskAccess:
+            return "Remove Full Disk Access?"
+        case .automation:
+            return "Remove Finder Automation?"
+        case .notifications:
+            return "Disable System Notifications?"
+        }
+    }
+
+    private func revocationMessage(for type: PermissionType) -> String {
+        switch type {
+        case .filesAndFolders:
+            return "Sorty will release the currently selected folder and reset its macOS access decisions for protected folders and external volumes. Your files won’t be changed."
+        case .fullDiskAccess:
+            return "macOS requires Sorty to quit before the revoked Full Disk Access takes effect. Your files and settings won’t be changed."
+        case .automation:
+            return "Sorty will no longer be able to read Finder selections. macOS will ask again the next time you enable Finder Automation."
+        case .notifications:
+            return "Sorty will stop sending system notifications immediately, clear its pending and delivered notifications, and open macOS Settings so you can turn off the system authorization."
+        }
+    }
+
+    private func revocationButtonTitle(for type: PermissionType) -> String {
+        switch type {
+        case .fullDiskAccess:
+            return "Remove & Quit Sorty"
+        case .notifications:
+            return "Disable & Open Settings"
+        default:
+            return "Remove Permission"
+        }
+    }
+
+    private func revokePermission(_ type: PermissionType) {
+        if type == .notifications {
+            disableSystemNotifications()
+            return
+        }
+
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+        Task { @MainActor in
+            let result = await SystemPermissionRevoker.revoke(
+                type,
+                bundleIdentifier: bundleIdentifier
+            )
+
+            guard result.succeeded else {
+                HapticFeedbackManager.shared.error()
+                activeAlert = .failure(result.message)
+                return
+            }
+
+            switch type {
+            case .filesAndFolders:
+                if let selectedDirectory = appState.selectedDirectory {
+                    selectedDirectory.stopAccessingSecurityScopedResource()
+                }
+                appState.selectedDirectory = nil
+                permissionStates[.filesAndFolders] = .unknown
+                HapticFeedbackManager.shared.success()
+
+            case .fullDiskAccess:
+                permissionStates[.fullDiskAccess] = .unknown
+                HapticFeedbackManager.shared.success()
+                NSApp.terminate(nil)
+
+            case .automation:
+                automationManager.markAutomationPermissionReset()
+                permissionStates[.automation] = .unknown
+                HapticFeedbackManager.shared.success()
+
+            case .notifications:
+                break
+            }
+        }
+    }
+
+    private func disableSystemNotifications() {
+        notificationSettings.settings.systemNotifications = false
+
+        let notificationCenter = UNUserNotificationCenter.current()
+        notificationCenter.removeAllPendingNotificationRequests()
+        notificationCenter.removeAllDeliveredNotifications()
+        notificationCenter.setNotificationCategories([])
+
+        HapticFeedbackManager.shared.success()
+        openNotificationSettings()
     }
 
     private func fullDiskAccessState() -> PermissionState {
@@ -339,6 +465,102 @@ struct PermissionsSettingsView: View {
         }
 
         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+    }
+}
+
+private enum PermissionsSettingsAlert: Identifiable {
+    case fullDiskAccessSetup
+    case revoke(PermissionType)
+    case failure(String)
+
+    var id: String {
+        switch self {
+        case .fullDiskAccessSetup:
+            return "full-disk-access-setup"
+        case .revoke(let type):
+            return "revoke-\(type.id)"
+        case .failure(let message):
+            return "failure-\(message)"
+        }
+    }
+}
+
+private enum SystemPermissionRevoker {
+    struct Result: Sendable {
+        let succeeded: Bool
+        let message: String
+    }
+
+    static func revoke(
+        _ type: PermissionType,
+        bundleIdentifier: String
+    ) async -> Result {
+        let services: [String]
+        switch type {
+        case .filesAndFolders:
+            services = [
+                "SystemPolicyDesktopFolder",
+                "SystemPolicyDocumentsFolder",
+                "SystemPolicyDownloadsFolder",
+                "SystemPolicyNetworkVolumes",
+                "SystemPolicyRemovableVolumes"
+            ]
+        case .fullDiskAccess:
+            services = ["SystemPolicyAllFiles"]
+        case .automation:
+            services = ["AppleEvents"]
+        case .notifications:
+            return Result(
+                succeeded: false,
+                message: "macOS requires notification authorization to be changed in System Settings."
+            )
+        }
+
+        return await Task.detached(priority: .userInitiated) {
+            var failures: [String] = []
+
+            for service in services {
+                if let failure = reset(service: service, bundleIdentifier: bundleIdentifier) {
+                    failures.append(failure)
+                }
+            }
+
+            if failures.isEmpty {
+                return Result(succeeded: true, message: "")
+            }
+
+            return Result(
+                succeeded: false,
+                message: failures.joined(separator: "\n")
+            )
+        }.value
+    }
+
+    private static func reset(
+        service: String,
+        bundleIdentifier: String
+    ) -> String? {
+        let process = Process()
+        let errorPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", service, bundleIdentifier]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = errorPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus != 0 else { return nil }
+            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let detail = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return detail?.isEmpty == false
+                ? detail!
+                : "macOS couldn’t reset \(service)."
+        } catch {
+            return "macOS couldn’t run the permission reset: \(error.localizedDescription)"
+        }
     }
 }
 
