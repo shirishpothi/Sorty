@@ -12,21 +12,50 @@ public struct SavedSteeringPrompt: Codable, Identifiable, Sendable {
     public let id: UUID
     public var name: String
     public var prompt: String
-    public var isDefault: Bool
+    public var isPinned: Bool
     public let dateCreated: Date
 
     public init(
         id: UUID = UUID(),
         name: String,
         prompt: String,
-        isDefault: Bool = false,
+        isPinned: Bool = false,
         dateCreated: Date = Date()
     ) {
         self.id = id
         self.name = name
         self.prompt = prompt
-        self.isDefault = isDefault
+        self.isPinned = isPinned
         self.dateCreated = dateCreated
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case prompt
+        case isPinned
+        case isDefault
+        case dateCreated
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned)
+            ?? container.decodeIfPresent(Bool.self, forKey: .isDefault)
+            ?? false
+        dateCreated = try container.decode(Date.self, forKey: .dateCreated)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(prompt, forKey: .prompt)
+        try container.encode(isPinned, forKey: .isPinned)
+        try container.encode(dateCreated, forKey: .dateCreated)
     }
 }
 
@@ -59,12 +88,6 @@ public class SteeringPromptManager: ObservableObject {
         var prompt = prompt
         prompt.name = normalizedName
 
-        // If new prompt is default, clear default on all others
-        if prompt.isDefault {
-            for i in prompts.indices {
-                prompts[i].isDefault = false
-            }
-        }
         prompts.append(prompt)
         save()
         return true
@@ -84,12 +107,6 @@ public class SteeringPromptManager: ObservableObject {
         var prompt = prompt
         prompt.name = normalizedName
 
-        // If this prompt is being set as default, clear others
-        if prompt.isDefault {
-            for i in prompts.indices {
-                prompts[i].isDefault = false
-            }
-        }
         prompts[index] = prompt
         save()
         return true
@@ -106,6 +123,10 @@ public class SteeringPromptManager: ObservableObject {
         }
     }
 
+    public func prompt(id: UUID) -> SavedSteeringPrompt? {
+        prompts.first { $0.id == id }
+    }
+
     public func deletePrompt(id: UUID) {
         prompts.removeAll { $0.id == id }
         save()
@@ -116,23 +137,12 @@ public class SteeringPromptManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: SteeringPromptManager.storageKey)
     }
 
-    public func setDefault(id: UUID) {
-        for i in prompts.indices {
-            prompts[i].isDefault = (prompts[i].id == id)
-        }
+    public func setPinned(_ isPinned: Bool, id: UUID) {
+        guard let index = prompts.firstIndex(where: { $0.id == id }) else { return }
+        var updatedPrompts = prompts
+        updatedPrompts[index].isPinned = isPinned
+        prompts = updatedPrompts
         save()
-    }
-
-    public func clearDefault() {
-        for i in prompts.indices {
-            prompts[i].isDefault = false
-        }
-        save()
-    }
-
-    /// The currently active default prompt, if any
-    public var defaultPrompt: SavedSteeringPrompt? {
-        prompts.first(where: { $0.isDefault })
     }
 
     // MARK: - Persistence

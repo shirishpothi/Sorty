@@ -593,11 +593,7 @@ struct OrganizeView: View {
         HapticFeedbackManager.shared.tap()
         resetLiveOrganizationPresentation()
 
-        // Apply default steering prompt if no custom instructions provided
-        if organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           let defaultPrompt = SteeringPromptManager.shared.defaultPrompt {
-            organizer.customInstructions = defaultPrompt.prompt
-        }
+
 
         Task {
             do {
@@ -1985,28 +1981,39 @@ struct SavedPromptsSheet: View {
             Divider()
 
             ZStack {
-                List {
-                    ForEach(steeringManager.prompts) { prompt in
-                        savedPromptRow(prompt)
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(savedPromptRows) { row in
+                            SavedPromptListRow(
+                                row: row,
+                                editingSession: editingSession?.prompt.id == row.id
+                                    ? editingSession
+                                    : nil,
+                                steeringManager: steeringManager,
+                                settingsConfig: settingsConfig,
+                                showsPinControls: showsPinControls,
+                                onAction: handleRowAction,
+                                onCancelEditing: cancelEditing,
+                                onSaveEditing: saveEditingPrompt
+                            )
                             .transition(savedPromptTransition)
-                            .savedPromptListRow()
-                    }
+                        }
 
-                    if let editingSession, editingSession.isDraft {
-                        SavedPromptEditorCard(
-                            session: editingSession,
-                            steeringManager: steeringManager,
-                            settingsConfig: settingsConfig,
-                            onCancel: cancelEditing,
-                            onSave: saveEditingPrompt
-                        )
-                        .transition(savedPromptTransition)
-                        .savedPromptListRow()
+                        if let editingSession, editingSession.isDraft {
+                            SavedPromptEditorCard(
+                                session: editingSession,
+                                steeringManager: steeringManager,
+                                settingsConfig: settingsConfig,
+                                onCancel: cancelEditing,
+                                onSave: saveEditingPrompt
+                            )
+                            .transition(savedPromptTransition)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .contentMargins(.vertical, 16, for: .scrollContent)
+                .scrollIndicators(.visible)
 
                 if isEmptyStateVisible && editingSession?.isDraft != true {
                     VStack(spacing: 16) {
@@ -2047,10 +2054,6 @@ struct SavedPromptsSheet: View {
                     )
                 }
             }
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.88),
-                value: steeringManager.prompts.count
-            )
 
             Divider()
 
@@ -2086,33 +2089,14 @@ struct SavedPromptsSheet: View {
         }
     }
 
-    @ViewBuilder
-    private func savedPromptRow(_ prompt: SavedSteeringPrompt) -> some View {
-        if let editingSession, editingSession.prompt.id == prompt.id {
-            SavedPromptEditorCard(
-                session: editingSession,
-                steeringManager: steeringManager,
-                settingsConfig: settingsConfig,
-                onCancel: cancelEditing,
-                onSave: saveEditingPrompt
-            )
-        } else {
-            SavedPromptDisplayCard(
-                prompt: prompt,
-                onUse: {
-                    onApplyPrompt(prompt.prompt)
-                },
-                onEdit: {
-                    beginEditing(prompt)
-                },
-                onToggleDefault: {
-                    toggleDefault(prompt)
-                },
-                onDelete: {
-                    deletePrompt(prompt)
-                }
-            )
-        }
+    private var showsPinControls: Bool {
+        steeringManager.prompts.count > 10
+    }
+
+    private var savedPromptRows: [SavedPromptRowContent] {
+        let rows = steeringManager.prompts.map(SavedPromptRowContent.init)
+        guard showsPinControls else { return rows }
+        return rows.filter(\.isPinned) + rows.filter { !$0.isPinned }
     }
 
     private var savedPromptTransition: AnyTransition {
@@ -2199,26 +2183,38 @@ struct SavedPromptsSheet: View {
         HapticFeedbackManager.shared.success()
     }
 
-    private func beginEditing(_ prompt: SavedSteeringPrompt) {
+    private func handleRowAction(_ action: SavedPromptRowAction) {
+        switch action {
+        case .use(let id):
+            guard let prompt = steeringManager.prompt(id: id) else { return }
+            onApplyPrompt(prompt.prompt)
+        case .edit(let id):
+            beginEditing(id: id)
+        case .togglePin(let id):
+            togglePin(id: id)
+        case .delete(let id):
+            deletePrompt(id: id)
+        }
+    }
+
+    private func beginEditing(id: UUID) {
+        guard let prompt = steeringManager.prompt(id: id) else { return }
         withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
             editingSession = SavedPromptEditingSession(prompt: prompt)
         }
     }
 
-    private func toggleDefault(_ prompt: SavedSteeringPrompt) {
+    private func togglePin(id: UUID) {
+        guard showsPinControls, let prompt = steeringManager.prompt(id: id) else { return }
         withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
-            if prompt.isDefault {
-                steeringManager.clearDefault()
-            } else {
-                steeringManager.setDefault(id: prompt.id)
-            }
+            steeringManager.setPinned(!prompt.isPinned, id: id)
         }
         HapticFeedbackManager.shared.selection()
     }
 
-    private func deletePrompt(_ prompt: SavedSteeringPrompt) {
+    private func deletePrompt(id: UUID) {
         withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) {
-            steeringManager.deletePrompt(id: prompt.id)
+            steeringManager.deletePrompt(id: id)
         }
         HapticFeedbackManager.shared.tap()
     }
@@ -2243,58 +2239,179 @@ private final class SavedPromptEditingSession: ObservableObject {
     }
 }
 
+private struct SavedPromptRowContent: Identifiable, Equatable {
+    let id: UUID
+    let name: String
+    let preview: String
+    let isPinned: Bool
+
+    init(prompt: SavedSteeringPrompt) {
+        id = prompt.id
+        name = Self.bounded(prompt.name, maximumCharacterCount: 120)
+        preview = Self.bounded(prompt.prompt, maximumCharacterCount: 360)
+        isPinned = prompt.isPinned
+    }
+
+    private static func bounded(_ text: String, maximumCharacterCount: Int) -> String {
+        guard let endIndex = text.index(
+            text.startIndex,
+            offsetBy: maximumCharacterCount,
+            limitedBy: text.endIndex
+        ), endIndex != text.endIndex else {
+            return text
+        }
+
+        return String(text[..<endIndex]) + "…"
+    }
+}
+
+private enum SavedPromptRowAction {
+    case use(UUID)
+    case edit(UUID)
+    case togglePin(UUID)
+    case delete(UUID)
+}
+
+private struct SavedPromptListRow: View {
+    let row: SavedPromptRowContent
+    let editingSession: SavedPromptEditingSession?
+    let steeringManager: SteeringPromptManager
+    let settingsConfig: AIConfig
+    let showsPinControls: Bool
+    let onAction: (SavedPromptRowAction) -> Void
+    let onCancelEditing: (SavedPromptEditingSession) -> Void
+    let onSaveEditing: (SavedPromptEditingSession) -> Void
+
+    var body: some View {
+        Group {
+            if let editingSession {
+                SavedPromptEditorCard(
+                    session: editingSession,
+                    steeringManager: steeringManager,
+                    settingsConfig: settingsConfig,
+                    onCancel: onCancelEditing,
+                    onSave: onSaveEditing
+                )
+            } else {
+                SavedPromptDisplayCard(
+                    row: row,
+                    showsPinControls: showsPinControls,
+                    onAction: onAction
+                )
+            }
+        }
+    }
+}
+
 private struct SavedPromptDisplayCard: View {
-    let prompt: SavedSteeringPrompt
-    let onUse: () -> Void
-    let onEdit: () -> Void
-    let onToggleDefault: () -> Void
-    let onDelete: () -> Void
+    let row: SavedPromptRowContent
+    let showsPinControls: Bool
+    let onAction: (SavedPromptRowAction) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(prompt.name)
-                            .font(.subheadline.weight(.semibold))
-                        if prompt.isDefault {
-                            Text("Default")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(.green)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.green.opacity(0.15)))
-                        }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(row.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    if showsPinControls && row.isPinned {
+                        Label("Pinned", systemImage: "pin.fill")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.secondary.opacity(0.12)))
                     }
-                    Text(prompt.prompt)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
                 }
-                Spacer()
+
+                Text(verbatim: row.preview)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3, reservesSpace: true)
             }
 
             HStack(spacing: 8) {
-                Button("Use", action: onUse)
-                    .buttonStyle(.sortyProminent)
-                    .controlSize(.small)
+                Button("Use") {
+                    onAction(.use(row.id))
+                }
+                .buttonStyle(SavedPromptRowButtonStyle(isProminent: true))
 
-                Button("Edit", action: onEdit)
-                    .controlSize(.small)
+                Button("Edit") {
+                    onAction(.edit(row.id))
+                }
+                .buttonStyle(SavedPromptRowButtonStyle())
 
-                Button(prompt.isDefault ? "Unset Default" : "Set Default", action: onToggleDefault)
-                    .controlSize(.small)
+                if showsPinControls {
+                    Button(row.isPinned ? "Unpin" : "Pin") {
+                        onAction(.togglePin(row.id))
+                    }
+                    .buttonStyle(SavedPromptRowButtonStyle())
+                }
 
                 Spacer()
 
-                Button(role: .destructive, action: onDelete) {
+                Button(role: .destructive) {
+                    onAction(.delete(row.id))
+                } label: {
                     Image(systemName: "trash")
                 }
-                .controlSize(.small)
-                .accessibilityLabel("Delete \(prompt.name)")
+                .buttonStyle(SavedPromptRowButtonStyle())
+                .accessibilityLabel("Delete \(row.name)")
             }
         }
         .savedPromptCardSurface()
+    }
+}
+
+private struct SavedPromptRowButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    var isProminent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let isDestructive = configuration.role == .destructive
+        let foregroundColor: Color = if isProminent {
+            .white
+        } else if isDestructive {
+            SortyDesignSystem.Colors.error
+        } else {
+            .primary
+        }
+
+        configuration.label
+            .font(.caption.weight(isProminent ? .semibold : .medium))
+            .lineLimit(1)
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(
+                        isProminent
+                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(configuration.isPressed ? 0.78 : 0.9)
+                            : Color(NSColor.controlBackgroundColor).opacity(configuration.isPressed ? 0.7 : 0.42)
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        isProminent
+                            ? Color.white.opacity(0.24)
+                            : foregroundColor.opacity(0.22),
+                        lineWidth: 1
+                    )
+            }
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(isEnabled ? 1 : 0.52)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                value: configuration.isPressed
+            )
     }
 }
 
@@ -2447,11 +2564,6 @@ private extension View {
             )
     }
 
-    func savedPromptListRow() -> some View {
-        listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-    }
 }
 
 // MARK: - Compact Storage Location Row
