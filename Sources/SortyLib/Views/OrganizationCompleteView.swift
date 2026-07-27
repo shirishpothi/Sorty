@@ -30,6 +30,7 @@ struct OrganizationCompleteView: View {
     @State private var historyLinkAppeared = false
     @State private var isHoveringHistoryLink = false
     @State private var showParticles = false
+    @State private var glowPulseID = 0
     @State private var undoState: UndoPresentationState = .idle
     @State private var undoRestoredCount = 0
     @State private var undoSkippedCount = 0
@@ -120,6 +121,21 @@ struct OrganizationCompleteView: View {
                     VStack(spacing: 16) {
                         ZStack {
                             CompletionBadgeGlow(color: statusColor)
+                                .phaseAnimator([false, true, false], trigger: glowPulseID) { content, isIntensified in
+                                    content
+                                        .scaleEffect(!reduceMotion && isIntensified ? 1.12 : 1)
+                                        .brightness(isIntensified ? 0.08 : 0)
+                                        .shadow(
+                                            color: statusColor.opacity(isIntensified ? 0.65 : 0),
+                                            radius: isIntensified ? 20 : 0
+                                        )
+                                } animation: { isIntensified in
+                                    reduceMotion
+                                        ? .linear(duration: 0.01)
+                                        : isIntensified
+                                            ? .spring(response: 0.2, dampingFraction: 0.68)
+                                            : .easeOut(duration: 0.48)
+                                }
                                 .scaleEffect(iconAppeared ? 1 : 0.7)
                                 .opacity(iconAppeared ? 1 : 0)
 
@@ -140,6 +156,12 @@ struct OrganizationCompleteView: View {
                             .scaleEffect(iconAppeared ? 1 : 0.3)
                             .shadow(color: statusColor.opacity(0.42), radius: 12)
                         }
+                        .contentShape(Circle())
+                        .onTapGesture {
+                            glowPulseID += 1
+                            HapticFeedbackManager.shared.light()
+                        }
+                        .help("Click to intensify the glow")
                         
                         VStack(spacing: 8) {
                             Text(statusTitle)
