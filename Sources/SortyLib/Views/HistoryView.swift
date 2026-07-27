@@ -574,10 +574,17 @@ struct HistoryView: View {
 // MARK: - History Header
 
 struct HistoryHeader: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let totalSessions: Int
     @Binding var selectedFilter: HistoryView.HistoryFilter
     var showsControls: Bool = true
     let onClearHistory: () -> Void
+
+    @State private var stacksRunCount = false
+
+    // Includes the fixed-width navigator, compact Clear action, and both safety gaps.
+    private static let stackedRunCountThreshold: CGFloat = 780
 
     var body: some View {
         Group {
@@ -597,7 +604,11 @@ struct HistoryHeader: View {
         ViewThatFits(in: .horizontal) {
             populatedHeaderRow
             compactPopulatedHeader
-            narrowPopulatedHeader
+        }
+        .onGeometryChange(for: Bool.self) { proxy in
+            proxy.size.width < Self.stackedRunCountThreshold
+        } action: { shouldStack in
+            stacksRunCount = shouldStack
         }
     }
 
@@ -621,23 +632,7 @@ struct HistoryHeader: View {
 
     private var compactPopulatedHeader: some View {
         HStack(spacing: 8) {
-            historyIdentity
-
-            Spacer(minLength: 4)
-
-            HistoryNavigatorControl(selection: $selectedFilter)
-                .frame(width: HistoryNavigatorControl.preferredWidth)
-
-            Spacer(minLength: 12)
-
-            compactClearHistoryButton
-                .fixedSize()
-        }
-    }
-
-    private var narrowPopulatedHeader: some View {
-        HStack(spacing: 8) {
-            stackedHistoryIdentity
+            adaptiveHistoryIdentity
 
             Spacer(minLength: 4)
 
@@ -673,13 +668,17 @@ struct HistoryHeader: View {
         .accessibilityLabel("History, \(totalSessions) runs")
     }
 
-    private var stackedHistoryIdentity: some View {
+    private var adaptiveHistoryIdentity: some View {
+        let textLayout = stacksRunCount
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 1))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
+
         HStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.blue.gradient)
 
-            VStack(alignment: .leading, spacing: 1) {
+            textLayout {
                 Text("History")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .lineLimit(1)
@@ -695,6 +694,10 @@ struct HistoryHeader: View {
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("History, \(totalSessions) runs")
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.2),
+            value: stacksRunCount
+        )
     }
 
     private var emptyStateTitleRow: some View {
