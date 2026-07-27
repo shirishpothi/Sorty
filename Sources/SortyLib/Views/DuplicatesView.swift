@@ -1098,8 +1098,8 @@ struct UnifiedDuplicateGroupDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.35))
         }
+        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             selectedKeepFileId = preferredKeepFileId()
         }
@@ -1150,7 +1150,6 @@ struct UnifiedDuplicateGroupDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .systemLiquidGlassBackground(cornerRadius: 0)
         .overlay(alignment: .bottom) {
             Divider()
         }
