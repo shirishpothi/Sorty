@@ -128,6 +128,7 @@ public struct WorkflowSelectionStepView: View {
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .onAppear {
             withAnimation { hasAppeared = true }
         }
