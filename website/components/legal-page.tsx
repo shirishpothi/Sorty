@@ -45,6 +45,10 @@ export function LegalPage({
               href="/"
               scroll={false}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              data-analytics-action="legal_navigation_opened"
+              data-analytics-component="back_link"
+              data-analytics-location="legal_page"
+              data-analytics-target="home"
             >
               ← Back to Sorty
             </Link>
@@ -95,6 +99,10 @@ export function LegalPage({
                       <a
                         href={`#${item.id}`}
                         className="flex gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        data-analytics-action="legal_section_opened"
+                        data-analytics-component="table_of_contents"
+                        data-analytics-location="legal_page"
+                        data-analytics-target={item.id}
                       >
                         <span className="text-primary/70 tabular-nums">
                           {i + 1}.

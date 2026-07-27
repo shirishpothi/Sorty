@@ -141,11 +141,31 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function openAnalyticsPreferences() {
+    setIsOpen(true)
+    trackWebInteraction({
+      action: 'analytics_preferences_opened',
+      component: 'analytics_preferences',
+      location: 'footer',
+      outcome: isWebsiteAnalyticsEnabled() ? 'enabled' : 'disabled',
+    })
+  }
+
+  function dismissAnalyticsPreferences() {
+    setIsOpen(false)
+    trackWebInteraction({
+      action: 'analytics_preferences_dismissed',
+      component: 'analytics_preferences',
+      location: 'footer',
+      target: 'backdrop',
+    })
+  }
+
   const isEnabled = isWebsiteAnalyticsEnabled()
 
   return (
     <AnalyticsPreferencesContext.Provider
-      value={{ openPreferences: () => setIsOpen(true) }}
+      value={{ openPreferences: openAnalyticsPreferences }}
     >
       {children}
       {isOpen && (
@@ -153,7 +173,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
           className="fixed inset-0 z-[120] grid place-items-end bg-black/50 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
-              setIsOpen(false)
+              dismissAnalyticsPreferences()
             }
           }}
         >

@@ -38,7 +38,7 @@ All events include `platform_surface` and `$geoip_disable`. The website addition
 
 ## Product coverage
 
-Website instrumentation covers `/`, `/changelog`, `/privacy-policy`, `/terms`, unknown routes, the main homepage sections, navigation and mobile-menu actions, downloads and download outcomes, pricing/support/source links, FAQ toggles, and sanitized handled and unhandled errors.
+Website instrumentation covers `/`, `/changelog`, `/privacy-policy`, `/terms`, unknown routes, the main homepage sections, navigation and mobile-menu actions, downloads and download outcomes, fixed-command copy success or failure, download-notice exits, pricing/support/source links, FAQ toggles, analytics-preference opens, legal-page table-of-contents navigation, changelog release-history exits, 404 recovery, and sanitized handled and unhandled errors.
 
 Mac instrumentation covers app sessions; main screens; individual Settings sections; shared settings toggles and notification previews; background automation controls; bucketed custom-persona inventory and built-in-versus-custom selection; directory selection and organization mode; watched-folder add, remove, toggle, and trigger actions; organize start, empty result, plan ready, cancellation, and failure; apply start, success, partial completion, and failure; regeneration variants; undo; duplicate scan and cleanup; and the most important preview and cleanup decision buttons. Persona names, IDs, descriptions, prompts, and instructions remain excluded.
 

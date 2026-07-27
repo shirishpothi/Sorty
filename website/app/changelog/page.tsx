@@ -360,6 +360,10 @@ export default function ChangelogPage() {
                         target="_blank"
                         rel="noreferrer"
                         className="mt-8 inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-background/65 px-4 py-2 text-sm font-medium text-foreground/85 transition-colors hover:border-primary/40 hover:text-foreground"
+                        data-analytics-action="release_history_opened"
+                        data-analytics-component="cta"
+                        data-analytics-location="changelog"
+                        data-analytics-target="github_releases"
                       >
                         GitHub releases
                         <ArrowUpRight className="size-4" />

@@ -3,7 +3,7 @@
 import { BorderBeam } from 'border-beam'
 import { Check, Copy, Download, Terminal, X } from 'lucide-react'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { trackWebInteraction } from '@/lib/analytics'
@@ -43,6 +43,20 @@ export function DownloadButton({
     .filter((token) => /^(?:\w+:)*w-/.test(token))
     .join(' ')
 
+  const dismissDownloadNotice = useCallback(
+    (source: 'backdrop' | 'close_button' | 'done_button' | 'escape_key') => {
+      setShowNotice(false)
+      trackWebInteraction({
+        action: 'download_notice_dismissed',
+        component: 'download_notice',
+        location: analyticsLocation,
+        target: source,
+        outcome: copyFeedback === 'copied' ? 'command_copied' : 'not_copied',
+      })
+    },
+    [analyticsLocation, copyFeedback],
+  )
+
   useEffect(() => {
     if (!showNotice) {
       return
@@ -51,7 +65,7 @@ export function DownloadButton({
     const previousOverflow = document.documentElement.style.overflow
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setShowNotice(false)
+        dismissDownloadNotice('escape_key')
       }
     }
 
@@ -63,7 +77,7 @@ export function DownloadButton({
       document.documentElement.style.overflow = previousOverflow
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showNotice])
+  }, [dismissDownloadNotice, showNotice])
 
   useEffect(() => {
     return () => {
@@ -224,7 +238,7 @@ export function DownloadButton({
         className="download-modal-backdrop fixed inset-0 z-[100] grid place-items-end bg-black/45 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
-            setShowNotice(false)
+            dismissDownloadNotice('backdrop')
           }
         }}
       >
@@ -270,7 +284,7 @@ export function DownloadButton({
 
               <button
                 type="button"
-                onClick={() => setShowNotice(false)}
+                onClick={() => dismissDownloadNotice('close_button')}
                 className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label="Dismiss download notice"
               >
@@ -361,7 +375,7 @@ export function DownloadButton({
               </p>
               <button
                 type="button"
-                onClick={() => setShowNotice(false)}
+                onClick={() => dismissDownloadNotice('done_button')}
                 className="modal-action-highlight relative justify-self-start overflow-hidden rounded-full border border-border bg-secondary/55 px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:justify-self-end"
               >
                 <span className="relative z-10">Done</span>

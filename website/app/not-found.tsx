@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { FileIconField } from '@/components/file-icon-field'
 import { SortyLogo } from '@/components/sorty-logo'
 import { cn } from '@/lib/utils'
+import { trackWebInteraction } from '@/lib/analytics'
 import { sitePath } from '@/lib/site-paths'
 
 export default function NotFound() {
@@ -18,6 +19,13 @@ export default function NotFound() {
     if (collapsing) {
       return
     }
+
+    trackWebInteraction({
+      action: 'not_found_returned_home',
+      component: 'return_button',
+      location: 'not_found',
+      target: 'home',
+    })
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       router.push(sitePath('/'))
@@ -47,7 +55,15 @@ export default function NotFound() {
       />
 
       <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16 text-center">
-        <a href={sitePath('/')} className="absolute top-6 left-6" data-file-bounce>
+        <a
+          href={sitePath('/')}
+          className="absolute top-6 left-6"
+          data-file-bounce
+          data-analytics-action="not_found_returned_home"
+          data-analytics-component="logo"
+          data-analytics-location="not_found"
+          data-analytics-target="home"
+        >
           <SortyLogo />
         </a>
 

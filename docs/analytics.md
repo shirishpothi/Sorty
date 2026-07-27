@@ -18,7 +18,7 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 |---|---|---|
 | `$pageview` | Website | Visits to each public route, using a stable page name and sanitized path |
 | `web:section_viewed` | Website | Meaningfully visible named homepage sections |
-| `web:interaction` | Website | Important links, downloads, navigation, FAQ toggles, and bounded outcomes |
+| `web:interaction` | Website | Important links, downloads, fixed-command copy outcomes, modal exits, navigation, FAQ and menu toggles, preference controls, legal-section choices, and bounded recovery actions |
 | `app:session_started` | Mac | An opted-in app analytics session |
 | `app:screen_viewed` | Mac | Main screens and individual Settings sections |
 | `app:feature_used` | Mac | Feature and sub-feature actions, including settings changes and bucketed persona inventory, with stable outcomes |
