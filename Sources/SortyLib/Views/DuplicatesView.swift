@@ -849,6 +849,7 @@ struct UnifiedDuplicateGroupRow: View {
                     .overlay {
                         Image(systemName: group.isExact ? "doc.on.doc.fill" : "waveform.path")
                             .foregroundStyle(badgeColor)
+                            .symbolReplaceTransition(animationValue: group.isExact)
                     }
                     .accessibilityHidden(true)
             }
@@ -888,6 +889,7 @@ struct UnifiedDuplicateGroupRow: View {
 
                     Text("Similarity")
                         .font(.caption2.weight(.semibold))
+                        .numericTextTransition(animationValue: group.isExact)
                 }
                 .foregroundStyle(badgeColor)
                 .fixedSize(horizontal: true, vertical: false)

@@ -159,6 +159,7 @@ struct DirectorySelectionView: View {
                 Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                     .font(.system(size: 34, weight: .light))
                     .foregroundStyle(isTargeted ? folderAccent : folderAccent.opacity(0.9))
+                    .symbolReplaceTransition(animationValue: isTargeted)
                     .animatedEmptyStateIcon()
                     .scaleEffect(iconBounce ? 1.1 : 1.0)
             }
@@ -168,6 +169,7 @@ struct DirectorySelectionView: View {
             Text(isTargeted ? "Drop to select" : "Drop folder here")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(isTargeted ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
+                .numericTextTransition(animationValue: isTargeted)
         }
         .frame(width: 220, height: dropZoneHeight)
 
@@ -373,9 +375,11 @@ struct OrganizationModeSegment: View {
             HStack(spacing: 7) {
                 Image(systemName: mode.iconName)
                     .font(.system(size: 12, weight: .semibold))
+                    .symbolReplaceTransition(animationValue: mode)
                 Text(mode.displayName)
                     .font(.system(size: 12, weight: .semibold))
                     .fixedSize()
+                    .numericTextTransition(animationValue: mode)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 7)

@@ -717,11 +717,13 @@ struct DirectoryHeader: View {
                     Image(systemName: mode.iconName)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .symbolReplaceTransition(animationValue: mode)
                         .accessibilityHidden(true)
 
                     Text(mode.workflowTitle)
                         .font(.headline)
                         .lineLimit(1)
+                        .numericTextTransition(animationValue: mode)
                 }
                 Text(url.lastPathComponent)
                     .font(.caption)
@@ -1118,6 +1120,9 @@ struct ReadyToOrganizeView: View {
                                 selectedStorageLocationCount > 0
                                     ? SortyDesignSystem.Colors.resolvedAccent
                                     : Color.secondary
+                            )
+                            .symbolReplaceTransition(
+                                animationValue: selectedStorageLocationCount > 0
                             )
                             .frame(width: 22, height: 22)
                             .background {
@@ -1870,11 +1875,13 @@ private struct PreviewHandoffView: View {
                 Image(systemName: mode == .renameOnly ? "text.badge.checkmark" : "checkmark.circle")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .symbolReplaceTransition(animationValue: mode)
                     .scaleEffect(appeared ? 1 : 0.88)
             }
 
             Text(mode == .renameOnly ? "Preparing name preview" : "Preparing preview")
                 .font(.subheadline.weight(.semibold))
+                .numericTextTransition(animationValue: mode)
 
             HStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { index in
@@ -2266,11 +2273,13 @@ struct CompactStorageLocationRow: View {
                 Image(systemName: location.isEnabled ? "externaldrive.fill" : "externaldrive")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.blue)
+                    .symbolReplaceTransition(animationValue: location.isEnabled)
 
                 if needsAttention {
                     Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")
                         .font(.system(size: 8))
                         .foregroundStyle(!location.exists ? .red : .orange)
+                        .symbolReplaceTransition(animationValue: location.exists)
                         .offset(x: 5, y: 4)
                         .accessibilityHidden(true)
                 }
@@ -2730,11 +2739,11 @@ struct ErrorView: View {
                     HStack(spacing: 4) {
                         Image(systemName: showCopiedFeedback ? "checkmark.circle.fill" : "doc.on.doc")
                             .font(.system(size: 10, weight: .semibold))
-                            .contentTransition(.symbolEffect(.replace))
+                            .symbolReplaceTransition(animationValue: showCopiedFeedback)
                             .symbolEffect(.bounce, value: activeActionFeedback == .copy)
                         Text(showCopiedFeedback ? "Copied" : "Copy")
                             .font(.caption.bold())
-                            .contentTransition(.opacity)
+                            .numericTextTransition(animationValue: showCopiedFeedback)
                     }
                 }
                 .buttonStyle(.tintedPill(.orange, size: .small))

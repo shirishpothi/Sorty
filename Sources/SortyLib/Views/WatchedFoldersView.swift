@@ -406,6 +406,7 @@ struct WatchedFolderCard: View {
             Image(systemName: statusIcon)
                 .font(.system(size: 14))
                 .foregroundStyle(statusColor)
+                .symbolReplaceTransition(animationValue: statusIcon)
                 .background(
                     Circle()
                         .fill(Color(NSColor.controlBackgroundColor))
@@ -485,6 +486,7 @@ struct WatchedFolderCard: View {
                     Text(modelOverride)
                         .font(.caption2)
                         .lineLimit(1)
+                        .numericTextTransition(animationValue: modelOverride)
                 }
                 .foregroundStyle(.purple)
             }
@@ -495,9 +497,14 @@ struct WatchedFolderCard: View {
         HStack(spacing: 4) {
             Image(systemName: folder.effectiveOrganizationMode.iconName)
                 .font(.caption2)
-                .contentTransition(.symbolEffect(.replace))
+                .symbolReplaceTransition(
+                    animationValue: folder.effectiveOrganizationMode
+                )
             Text(folder.effectiveOrganizationMode.displayName)
                 .font(.caption2)
+                .numericTextTransition(
+                    animationValue: folder.effectiveOrganizationMode
+                )
         }
         .foregroundStyle(.blue)
     }
@@ -823,7 +830,7 @@ struct WatchedFolderConfigView: View {
                             HStack {
                                 Image(systemName: selectedMode.iconName)
                                     .foregroundStyle(.blue)
-                                    .contentTransition(.symbolEffect(.replace))
+                                    .symbolReplaceTransition(animationValue: selectedMode)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey(selectedModeManualAction.title))
                                         .foregroundStyle(.primary)
