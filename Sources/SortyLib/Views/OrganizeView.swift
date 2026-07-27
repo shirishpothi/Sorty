@@ -1991,7 +1991,7 @@ struct SavedPromptsSheet: View {
 
             ZStack {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    LazyVStack(spacing: 12) {
                         ForEach(steeringManager.prompts) { prompt in
                             savedPromptCard(prompt)
                                 .transition(
