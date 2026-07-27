@@ -114,20 +114,28 @@ struct OrganizationCompleteView: View {
         mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
     }
 
-    private var combinedModeHighlightValue: Int {
-        renameCount > 0 ? renameCount : totalFiles + totalFolders
-    }
-
-    private var combinedModeHighlightLabel: String {
+    private var combinedModeHighlight: (value: String, label: String, icon: String, color: Color)? {
         if renameCount > 0 {
-            return renameCount == 1 ? "Name Improved" : "Names Improved"
+            return (
+                "\(shouldShowFinalCounts ? renameCount : 0)",
+                renameCount == 1 ? "Name Improved" : "Names Improved",
+                "pencil.line",
+                SortyDesignSystem.Colors.accent
+            )
         }
 
-        return combinedModeHighlightValue == 1 ? "Action Completed" : "Actions Completed"
-    }
+        guard let totalFileSize = stats?.totalFileSize, totalFileSize > 0 else {
+            return nil
+        }
 
-    private var combinedModeHighlightIcon: String {
-        renameCount > 0 ? "pencil.line" : "checkmark.circle.fill"
+        return (
+            shouldShowFinalCounts
+                ? ByteCountFormatter.string(fromByteCount: totalFileSize, countStyle: .file)
+                : "0 KB",
+            "Data Organised",
+            "internaldrive.fill",
+            .green
+        )
     }
     
     var body: some View {
@@ -243,14 +251,16 @@ struct OrganizationCompleteView: View {
                                 color: .purple
                             )
 
-                            if mode == .organizeAndRename && undoState != .completed {
+                            if mode == .organizeAndRename,
+                               undoState != .completed,
+                               let combinedModeHighlight {
                                 SummaryStatDivider()
 
                                 SummaryStatItem(
-                                    value: "\(shouldShowFinalCounts ? combinedModeHighlightValue : 0)",
-                                    label: combinedModeHighlightLabel,
-                                    icon: combinedModeHighlightIcon,
-                                    color: renameCount > 0 ? SortyDesignSystem.Colors.accent : .green
+                                    value: combinedModeHighlight.value,
+                                    label: combinedModeHighlight.label,
+                                    icon: combinedModeHighlight.icon,
+                                    color: combinedModeHighlight.color
                                 )
                             }
                         }
