@@ -117,7 +117,11 @@ export default function PrivacyPolicyPage() {
           coarse count and duration buckets, workflow outcomes, and sanitized
           errors. Crash reports may include exception types, signal names,
           function names, and stack frames needed to diagnose the crash. Sorty
-          does not create a PostHog person profile or identify you.
+          does not create a PostHog person profile, identify you, or send a
+          name, email address, account identifier, advertising identifier, or
+          other information linked to you. This is the lightweight product and
+          reliability telemetry commonly used by apps, limited here to the
+          documented anonymous events.
         </p>
         <h3 className="pt-1 text-base font-medium text-foreground">
           Cookieless website analytics
@@ -131,6 +135,13 @@ export default function PrivacyPolicyPage() {
           discard IP addresses. You can disable it at any time through
           &quot;Analytics preferences&quot; in the footer. Global Privacy
           Control and Do Not Track are honored automatically.
+        </p>
+        <p>
+          PostHog never receives file or folder names, paths, file contents,
+          prompts, custom instructions, AI responses, API keys, or other
+          user-entered content. If you explicitly enable Deep Scan with a cloud
+          AI provider, any content needed for that request goes directly to the
+          provider you selected, never to Sorty or PostHog.
         </p>
         <p>The following is handled locally on your device only:</p>
         <ul className="list-disc space-y-1.5 pl-5">

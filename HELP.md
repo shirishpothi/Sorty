@@ -598,12 +598,21 @@ All data is stored locally:
 
 ### Anonymous Analytics
 
-Sorty asks once after onboarding before starting anonymous product analytics or
-crash reporting. Declining keeps the PostHog SDK dormant and the decision is not
-reported. If enabled, Sorty records named screens, feature and workflow actions,
-important buttons, coarse count and duration buckets, and sanitized error or
-crash context; it never sends file names, paths, contents, prompts, AI
-responses, or API keys.
+Sorty uses PostHog for the lightweight product and reliability telemetry that is
+normal for most apps, such as understanding which screens and features are used
+and diagnosing failures. It asks once after onboarding before starting anonymous
+analytics or crash reporting. Declining keeps the PostHog SDK dormant and the
+decision is not reported. If enabled, Sorty records named screens, feature and
+workflow actions, important buttons, coarse count and duration buckets, and
+sanitized error or crash context. It does not create a person profile or send a
+name, email address, account identifier, advertising identifier, or any other
+information linked to you. It never sends file names, paths, contents, prompts,
+AI responses, or API keys to PostHog; file contents are never transmitted to
+PostHog.
+
+This is separate from AI processing. If you explicitly enable Deep Scan with a
+cloud AI provider, content may be sent directly to that provider for the
+organization plan, never to Sorty or PostHog.
 
 Change the choice at any time in **Settings → Advanced → Privacy**. Turning on
 **Block Internet Connections** also suspends analytics, and deleting all usage

@@ -1,6 +1,6 @@
 # Sorty Analytics
 
-Sorty uses one PostHog project for the public website and Mac app. The implementation is deliberately broad enough to answer product and reliability questions, but it keeps the event namespace small and excludes user content.
+Sorty uses PostHog for the same lightweight product and reliability telemetry that is normal for most apps: understanding which screens and features are useful, where workflows fail, and whether releases are reliable. It uses one project for the public website and Mac app, keeps the event namespace small, and never uses analytics to inspect user content.
 
 ## Consent and privacy
 
@@ -8,7 +8,9 @@ The Mac app is opt-in. `AnalyticsManager` does not initialize PostHog until the 
 
 The website uses anonymous, cookieless aggregate measurement by default. The footer provides a persistent opt-out, and Global Privacy Control or Do Not Track disables capture automatically. It uses no person profiles, session replay, heatmaps, surveys, automatic click capture, full referrers, query strings, console logs, or form text.
 
-Both clients instruct PostHog to discard IP addresses. Neither client may send file or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, user-entered text, or raw handled-error messages.
+Both clients instruct PostHog to discard IP addresses and never create a person profile. Analytics is anonymous: the Mac app uses a random installation identifier only to group its own events, and neither client sends a name, email address, account identifier, advertising identifier, or other information linked to a person. Neither client may send file or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, user-entered text, or raw handled-error messages. File contents are never transmitted to PostHog.
+
+This boundary is separate from AI-provider requests. If a user explicitly enables Deep Scan with a cloud provider, content may be sent directly to that selected provider to produce an organization plan; it is never routed through Sorty or included in PostHog analytics.
 
 ## Event taxonomy
 
