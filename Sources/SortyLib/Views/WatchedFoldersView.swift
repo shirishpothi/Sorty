@@ -1007,16 +1007,14 @@ struct WatchedFolderConfigView: View {
                                 .transition(
                                     reduceMotion
                                         ? .opacity
-                                        : .move(edge: .top)
-                                            .combined(with: .opacity)
-                                            .combined(with: .scale(scale: 0.98, anchor: .top))
+                                        : .blurReplace
                                 )
                             }
                         }
                         .animation(
                             reduceMotion
                                 ? .easeOut(duration: 0.15)
-                                : .spring(response: 0.35, dampingFraction: 0.82),
+                                : .easeInOut(duration: 0.25),
                             value: useCustomModel
                         )
                     }
