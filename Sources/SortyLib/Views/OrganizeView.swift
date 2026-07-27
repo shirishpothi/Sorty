@@ -11,8 +11,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-import Permiso
-
 private enum ErrorViewTestRoute: String {
     case credentials = "sorty-error-preview://credentials"
     case network = "sorty-error-preview://network"
@@ -332,8 +330,7 @@ struct OrganizeView: View {
                 onCancel: dismissErrorViewTestRoute,
                 onRetry: dismissErrorViewTestRoute,
                 onRetryWithSmarterModel: dismissErrorViewTestRoute,
-                onGrantPermission: dismissErrorViewTestRoute,
-                onGrantFullDiskAccess: dismissErrorViewTestRoute
+                onGrantPermission: dismissErrorViewTestRoute
             )
         } else {
             organizerStateContent
@@ -396,8 +393,7 @@ struct OrganizeView: View {
                 onRetryWithSmarterModel: {
                     showSmarterRetryModelPicker = true
                 },
-                onGrantPermission: grantFolderPermissionAndContinue,
-                onGrantFullDiskAccess: openFullDiskAccessSettings
+                onGrantPermission: grantFolderPermissionAndContinue
             )
         }
     }
@@ -634,10 +630,6 @@ struct OrganizeView: View {
         }
         HapticFeedbackManager.shared.success()
         startOrganization()
-    }
-
-    private func openFullDiskAccessSettings() {
-        PermisoAssistant.shared.present(panel: .fullDiskAccess)
     }
 
     private func dismissErrorViewTestRoute() {
@@ -2559,14 +2551,12 @@ struct ErrorView: View {
     let onRetry: () -> Void
     let onRetryWithSmarterModel: () -> Void
     let onGrantPermission: () -> Void
-    let onGrantFullDiskAccess: () -> Void
 
     private enum ErrorActionFeedback {
         case cancel
         case retry
         case settings
         case grantPermission
-        case grantFullDiskAccess
         case copy
         case helpSupport
     }
@@ -2886,28 +2876,31 @@ struct ErrorView: View {
 
                     Button {
                         HapticFeedbackManager.shared.tap()
-                        animateActionFeedback(.grantFullDiskAccess)
-                        onGrantFullDiskAccess()
+                        animateActionFeedback(.settings)
+                        appState.openSettingsWindow(
+                            section: .permissions,
+                            focusTarget: .permissionsFullDiskAccess
+                        )
+                        appState.navigatedFromSettings = true
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "lock.open.fill")
+                            Image(systemName: "hand.raised.fill")
                                 .font(.system(size: 10, weight: .semibold))
                                 .symbolEffect(
                                     .bounce,
-                                    value: activeActionFeedback == .grantFullDiskAccess
+                                    value: activeActionFeedback == .settings
                                 )
-                            Text("Full Disk Access")
+                            Text("Permissions")
                                 .font(.caption.bold())
                         }
                     }
                     .buttonStyle(.tintedPill(.purple, size: .small))
-                    .scaleEffect(activeActionFeedback == .grantFullDiskAccess ? 1.04 : 1.0)
-                    .help("Open macOS Full Disk Access settings")
-                    .accessibilityLabel("Grant Full Disk Access")
+                    .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
+                    .help("Review all permissions in Sorty Settings")
                     .accessibilityHint(
-                        "Opens macOS Privacy and Security settings; Sorty may need to relaunch"
+                        "Opens the Permissions page focused on Full Disk Access"
                     )
-                    .accessibilityIdentifier("ErrorGrantFullDiskAccessButton")
+                    .accessibilityIdentifier("ErrorOpenPermissionsButton")
                 }
 
                 if category == .generic {
