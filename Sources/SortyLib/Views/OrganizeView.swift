@@ -2157,14 +2157,15 @@ struct SavedPromptsSheet: View {
                     Spacer()
 
                     Button("Cancel") {
+                        let didSaveDraft = isDraft && saveDraftIfNeeded()
                         withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                            if isDraft {
-                                draftPrompt = nil
-                                if steeringManager.prompts.isEmpty {
-                                    isEmptyStateVisible = true
-                                }
+                            if steeringManager.prompts.isEmpty {
+                                isEmptyStateVisible = true
                             }
                             editingPromptId = nil
+                        }
+                        if didSaveDraft {
+                            HapticFeedbackManager.shared.success()
                         }
                     }
                     .controlSize(.small)
@@ -2279,9 +2280,29 @@ struct SavedPromptsSheet: View {
     }
 
     private func closeSheet() {
-        draftPrompt = nil
+        let didSaveDraft = saveDraftIfNeeded()
         editingPromptId = nil
         dismiss()
+        if didSaveDraft {
+            HapticFeedbackManager.shared.success()
+        }
+    }
+
+    @discardableResult
+    private func saveDraftIfNeeded() -> Bool {
+        guard let draftPrompt else { return false }
+        guard !editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            self.draftPrompt = nil
+            return false
+        }
+
+        var savedPrompt = draftPrompt
+        savedPrompt.name = editName
+        savedPrompt.prompt = editText
+        guard steeringManager.addPrompt(savedPrompt) else { return false }
+
+        self.draftPrompt = nil
+        return true
     }
 
     private func saveEditingPrompt(_ prompt: SavedSteeringPrompt, isDraft: Bool) {
