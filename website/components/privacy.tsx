@@ -1,6 +1,5 @@
 import { Lock, ShieldOff, Server, KeyRound, EyeOff } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
-import { Squircle } from '@/components/squircle'
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
@@ -49,8 +48,7 @@ export function Privacy() {
 
         {/* headline emphasis banner */}
         <Reveal delay={80} className="mt-12">
-          <Squircle radius={28}>
-          <div className="relative overflow-hidden border border-primary/30 bg-card/50 p-6 text-center backdrop-blur-xl sm:p-8">
+          <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 text-center backdrop-blur-xl sm:p-8">
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 -z-10"
@@ -72,7 +70,6 @@ export function Privacy() {
               every time.
             </p>
           </div>
-          </Squircle>
         </Reveal>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -80,22 +77,19 @@ export function Privacy() {
             <Reveal
               key={p.title}
               delay={(i % 2) * 80}
+              className="rounded-3xl border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40"
             >
-              <Squircle radius={24}>
-                <div className="h-full border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40">
-                  <div className="flex items-start gap-4">
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                      <p.icon className="size-5" />
-                    </span>
-                    <div>
-                      <h3 className="text-lg font-medium">{p.title}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        {p.body}
-                      </p>
-                    </div>
-                  </div>
+              <div className="flex items-start gap-4">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                  <p.icon className="size-5" />
+                </span>
+                <div>
+                  <h3 className="text-lg font-medium">{p.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {p.body}
+                  </p>
                 </div>
-              </Squircle>
+              </div>
             </Reveal>
           ))}
         </div>

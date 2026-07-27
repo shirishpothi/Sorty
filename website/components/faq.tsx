@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Heart, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reveal } from '@/components/reveal'
-import { Squircle } from '@/components/squircle'
 import { FAQS } from '@/components/faq-data'
 
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
@@ -12,8 +11,7 @@ const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <Squircle radius={24}>
-    <div className="border border-border bg-card/60 transition-colors hover:border-primary/30">
+    <div className="rounded-3xl border border-border bg-card/60 transition-colors hover:border-primary/30">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -41,7 +39,6 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         </div>
       </div>
     </div>
-    </Squircle>
   )
 }
 

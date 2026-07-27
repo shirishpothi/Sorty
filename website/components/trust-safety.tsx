@@ -1,6 +1,5 @@
 import { Eye, Undo2, HardDrive, ShieldCheck } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
-import { Squircle } from '@/components/squircle'
 
 const ITEMS = [
   { icon: Eye, label: 'Preview before applying' },
@@ -13,8 +12,7 @@ export function TrustSafety() {
   return (
     <section className="px-4 py-8">
       <Reveal className="mx-auto max-w-5xl">
-        <Squircle radius={24}>
-        <div className="grid grid-cols-2 gap-3 border border-border bg-card/30 p-3 backdrop-blur-md md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 rounded-3xl border border-border bg-card/30 p-3 backdrop-blur-md md:grid-cols-4">
           {ITEMS.map(({ icon: Icon, label }) => (
             <div
               key={label}
@@ -27,7 +25,6 @@ export function TrustSafety() {
             </div>
           ))}
         </div>
-        </Squircle>
       </Reveal>
     </section>
   )

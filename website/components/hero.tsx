@@ -4,7 +4,6 @@ import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 import { Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
-import { Squircle } from '@/components/squircle'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 import { sitePath } from '@/lib/site-paths'
@@ -190,25 +189,23 @@ export function Hero() {
 
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-12 max-w-5xl">
-        <Squircle radius={28}>
+        <div
+          ref={screenshotRef}
+          className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
+        >
           <div
-            ref={screenshotRef}
-            className="hero-screenshot-card relative border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-3"
-          >
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
-            />
-            <Image
-              src={sitePath('/sorty-app.webp?v=lossless-1')}
-              alt="The Sorty app prompting the user to select a directory to organize."
-              width={1102}
-              height={754}
-              className="w-full rounded-xl sm:rounded-2xl"
-              priority
-            />
-          </div>
-        </Squircle>
+            aria-hidden
+            className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
+          />
+          <Image
+            src={sitePath('/sorty-app.webp?v=lossless-1')}
+            alt="The Sorty app prompting the user to select a directory to organize."
+            width={1102}
+            height={754}
+            className="w-full rounded-xl sm:rounded-2xl"
+            priority
+          />
+        </div>
       </Reveal>
     </section>
   )
