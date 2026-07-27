@@ -192,8 +192,10 @@ struct NotificationPermissionCard: View {
     }
     
     private func openSystemSettings() {
-        // Open System Settings > Notifications
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         let candidateURLs = [
+            "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleIdentifier)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(bundleIdentifier)",
             "x-apple.systempreferences:com.apple.preference.notifications",
             "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
         ]
