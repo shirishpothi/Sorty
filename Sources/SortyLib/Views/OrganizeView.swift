@@ -1950,6 +1950,7 @@ struct SavedPromptsSheet: View {
     @State private var editingPromptId: UUID? = nil
     @State private var editName = ""
     @State private var editText = ""
+    @State private var draftPrompt: SavedSteeringPrompt?
     @State private var improvingPromptId: UUID? = nil
     @State private var showImprovePromptRequest = false
     @State private var improvePromptRequestMessage = ""
@@ -1976,7 +1977,7 @@ struct SavedPromptsSheet: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 Button {
-                    dismiss()
+                    closeSheet()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3)
@@ -2004,11 +2005,20 @@ struct SavedPromptsSheet: View {
                                     )
                                 )
                         }
+
+                        if let draftPrompt {
+                            savedPromptCard(draftPrompt, isDraft: true)
+                                .transition(
+                                    .opacity
+                                        .combined(with: .scale(scale: 0.97, anchor: .top))
+                                        .combined(with: .offset(y: -6))
+                                )
+                        }
                     }
                     .padding(20)
                 }
 
-                if isEmptyStateVisible {
+                if isEmptyStateVisible && draftPrompt == nil {
                     VStack(spacing: 16) {
                         Spacer()
 
@@ -2056,11 +2066,12 @@ struct SavedPromptsSheet: View {
                     addNewPrompt()
                 }
                 .buttonStyle(.sortyBordered)
+                .disabled(editingPromptId != nil)
 
                 Spacer()
 
                 Button("Done") {
-                    dismiss()
+                    closeSheet()
                 }
                 .buttonStyle(.sortyProminent)
                 .keyboardShortcut(.cancelAction)
@@ -2082,7 +2093,7 @@ struct SavedPromptsSheet: View {
     }
 
     @ViewBuilder
-    private func savedPromptCard(_ prompt: SavedSteeringPrompt) -> some View {
+    private func savedPromptCard(_ prompt: SavedSteeringPrompt, isDraft: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if editingPromptId == prompt.id {
                 // Editing mode
@@ -2139,20 +2150,19 @@ struct SavedPromptsSheet: View {
 
                     Button("Cancel") {
                         withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+                            if isDraft {
+                                draftPrompt = nil
+                                if steeringManager.prompts.isEmpty {
+                                    isEmptyStateVisible = true
+                                }
+                            }
                             editingPromptId = nil
                         }
                     }
                     .controlSize(.small)
 
                     Button("Save") {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                            var updated = prompt
-                            updated.name = editName.isEmpty ? "Untitled" : editName
-                            updated.prompt = editText
-                            steeringManager.updatePrompt(updated)
-                            editingPromptId = nil
-                        }
-                        HapticFeedbackManager.shared.success()
+                        saveEditingPrompt(prompt, isDraft: isDraft)
                     }
                     .buttonStyle(.sortyProminent)
                     .controlSize(.small)
@@ -2240,6 +2250,8 @@ struct SavedPromptsSheet: View {
     }
 
     private func addNewPrompt() {
+        guard draftPrompt == nil else { return }
+
         var name = "New Prompt"
         var suffix = 2
         while steeringManager.hasPrompt(named: name) {
@@ -2249,12 +2261,38 @@ struct SavedPromptsSheet: View {
 
         let newPrompt = SavedSteeringPrompt(name: name, prompt: "")
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-            steeringManager.addPrompt(newPrompt)
+            draftPrompt = newPrompt
             editingPromptId = newPrompt.id
             editName = newPrompt.name
             editText = newPrompt.prompt
+            isEmptyStateVisible = false
         }
         HapticFeedbackManager.shared.tap()
+    }
+
+    private func closeSheet() {
+        draftPrompt = nil
+        editingPromptId = nil
+        dismiss()
+    }
+
+    private func saveEditingPrompt(_ prompt: SavedSteeringPrompt, isDraft: Bool) {
+        var updated = prompt
+        updated.name = editName
+        updated.prompt = editText
+
+        let didSave = isDraft
+            ? steeringManager.addPrompt(updated)
+            : steeringManager.updatePrompt(updated)
+        guard didSave else { return }
+
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+            if isDraft {
+                draftPrompt = nil
+            }
+            editingPromptId = nil
+        }
+        HapticFeedbackManager.shared.success()
     }
 
     private func improveEditingPrompt(_ prompt: SavedSteeringPrompt) async {
@@ -2811,28 +2849,30 @@ struct ErrorView: View {
                     .accessibilityIdentifier("ErrorGrantPermissionButton")
                 }
 
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    animateActionFeedback(.helpSupport)
-                    appState.openSettingsWindow(section: .help)
-                    appState.navigatedFromSettings = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "questionmark.circle.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(
-                                .bounce,
-                                value: activeActionFeedback == .helpSupport
-                            )
-                        Text("Help & Support")
-                            .font(.caption.bold())
+                if category == .generic {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.helpSupport)
+                        appState.openSettingsWindow(section: .help)
+                        appState.navigatedFromSettings = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .symbolEffect(
+                                    .bounce,
+                                    value: activeActionFeedback == .helpSupport
+                                )
+                            Text("Help & Support")
+                                .font(.caption.bold())
+                        }
                     }
+                    .buttonStyle(.tintedPill(.green, size: .small))
+                    .scaleEffect(activeActionFeedback == .helpSupport ? 1.04 : 1.0)
+                    .help("Open Help & Support")
+                    .accessibilityHint("Opens the Help and Support settings page")
+                    .accessibilityIdentifier("ErrorHelpSupportButton")
                 }
-                .buttonStyle(.tintedPill(.green, size: .small))
-                .scaleEffect(activeActionFeedback == .helpSupport ? 1.04 : 1.0)
-                .help("Open Help & Support")
-                .accessibilityHint("Opens the Help and Support settings page")
-                .accessibilityIdentifier("ErrorHelpSupportButton")
 
                 Button {
                     NSPasteboard.general.clearContents()
