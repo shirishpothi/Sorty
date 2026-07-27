@@ -44,6 +44,7 @@ struct OrganizationRulesSettingsView: View {
                             HapticFeedbackManager.shared.selection()
                         }
                         .accessibilityIdentifier("TemperatureSlider")
+                        .settingsFocusableSetting(.rulesTemperatureSlider)
 
                     HStack {
                         Text("Focused")

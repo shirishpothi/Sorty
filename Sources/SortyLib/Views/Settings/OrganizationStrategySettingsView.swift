@@ -165,6 +165,7 @@ struct OrganizationStrategySettingsView: View {
                             }
                             .pickerStyle(.menu)
                             .tint(.primary)
+                            .settingsFocusableSetting(.strategyNamingSeparator)
 
                             Picker("Case", selection: $viewModel.config.renameNamingOptions.caseStyle) {
                                 ForEach(RenameCaseStyle.allCases, id: \.self) { style in
@@ -173,6 +174,7 @@ struct OrganizationStrategySettingsView: View {
                             }
                             .pickerStyle(.menu)
                             .tint(.primary)
+                            .settingsFocusableSetting(.strategyNamingCase)
                         }
 
                         HStack(spacing: 12) {
@@ -183,6 +185,7 @@ struct OrganizationStrategySettingsView: View {
                             }
                             .pickerStyle(.menu)
                             .tint(.primary)
+                            .settingsFocusableSetting(.strategyNamingDatePolicy)
 
                             TextField(
                                 "Language",
@@ -192,6 +195,7 @@ struct OrganizationStrategySettingsView: View {
                                 )
                             )
                             .textFieldStyle(.roundedBorder)
+                            .settingsFocusableSetting(.strategyNamingLanguage)
                         }
 
                         HStack {
@@ -213,6 +217,7 @@ struct OrganizationStrategySettingsView: View {
                                 )
                                 .frame(width: 32, alignment: .trailing)
                         }
+                        .settingsFocusableSetting(.strategyMaxFilenameLength)
 
                         HStack(spacing: 8) {
                             Image(systemName: "sparkles")

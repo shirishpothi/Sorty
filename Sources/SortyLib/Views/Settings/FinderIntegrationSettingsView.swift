@@ -51,6 +51,12 @@ struct FinderIntegrationSettingsView: View {
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
                         .accessibilityIdentifier("FinderIntegrationRefreshButton")
+                        .settingsFocusable(
+                            .finderCheckStatus,
+                            shape: Capsule(style: .continuous),
+                            horizontalRingPadding: 4,
+                            verticalRingPadding: 4
+                        )
                     }
 
                     Divider()

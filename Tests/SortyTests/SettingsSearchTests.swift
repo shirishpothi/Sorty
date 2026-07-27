@@ -94,7 +94,27 @@ final class SettingsSearchTests: XCTestCase {
     func testExpandedSettingsIndexFindsSpecificControls() {
         XCTAssertEqual(
             SettingsCategory.strategy.featureMatches(query: "max filename length").first?.snippet.title,
-            "Filename Format"
+            "Maximum Filename Length"
+        )
+        XCTAssertEqual(
+            SettingsCategory.strategy.featureMatches(query: "filename separator").first?.snippet.title,
+            "Filename Separator"
+        )
+        XCTAssertEqual(
+            SettingsCategory.provider.featureMatches(query: "ollama").first?.snippet.title,
+            "Ollama"
+        )
+        XCTAssertEqual(
+            SettingsCategory.automation.featureMatches(query: "separate automation model").first?.snippet.title,
+            "Use Separate Automation Model"
+        )
+        XCTAssertEqual(
+            SettingsCategory.finder.featureMatches(query: "check finder status").first?.snippet.title,
+            "Check Finder Status"
+        )
+        XCTAssertEqual(
+            SettingsCategory.permissions.featureMatches(query: "Open Privacy & Security").first?.snippet.title,
+            "Open Privacy & Security"
         )
         XCTAssertEqual(
             SettingsCategory.notifications.featureMatches(query: "processing errors").first?.snippet.title,

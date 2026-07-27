@@ -76,6 +76,7 @@ struct AutomationSettingsView: View {
                     }
                 }
                 .toggleStyle(.switch)
+                .settingsFocusableSetting(.automationSeparateModel)
                 .onChange(of: useSeparateModel) { _, newValue in
                     if !newValue {
                         viewModel.config.automationProvider = nil

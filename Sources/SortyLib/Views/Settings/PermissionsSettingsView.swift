@@ -194,6 +194,7 @@ struct PermissionsSettingsView: View {
                             }
                         }
                     }
+                    .settingsFocusableSetting(.permissionsStatusActions)
                 }
             }
 
@@ -220,6 +221,7 @@ struct PermissionsSettingsView: View {
                     )
                 }
             }
+            .settingsFocusable(.permissionsUsage)
         }
         .task {
             await refreshPermissions(animateNewGrants: false)

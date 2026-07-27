@@ -305,7 +305,7 @@ struct SettingsView: View {
                                 Button {
                                     openSearchResult(result)
                                 } label: {
-                                    Label("Show Setting", systemImage: "scope")
+                                    Label("Show Setting", systemImage: "arrow.right.circle")
                                         .font(.caption)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 4)

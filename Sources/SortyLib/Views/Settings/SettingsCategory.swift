@@ -40,17 +40,34 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case providerSelect = "settings.provider.select"
     case providerConfiguration = "settings.provider.configuration"
     case providerConnection = "settings.provider.connection"
+    case providerOpenAI = "settings.provider.openai"
+    case providerGitHubCopilot = "settings.provider.github-copilot"
+    case providerGroq = "settings.provider.groq"
+    case providerCompatibleAPI = "settings.provider.compatible-api"
+    case providerOpenRouter = "settings.provider.openrouter"
+    case providerOllama = "settings.provider.ollama"
+    case providerAnthropic = "settings.provider.anthropic"
+    case providerGemini = "settings.provider.gemini"
+    case providerApple = "settings.provider.apple"
+    case providerTestConnection = "settings.provider.test-connection"
     case strategyFastMode = "settings.strategy.fast-mode"
     case strategyVision = "settings.strategy.vision"
     case strategyRenaming = "settings.strategy.renaming"
     case strategyNamingTemplate = "settings.strategy.naming-template"
     case strategyNamingOptions = "settings.strategy.naming-options"
+    case strategyNamingSeparator = "settings.strategy.naming-separator"
+    case strategyNamingCase = "settings.strategy.naming-case"
+    case strategyNamingDatePolicy = "settings.strategy.naming-date-policy"
+    case strategyNamingLanguage = "settings.strategy.naming-language"
+    case strategyMaxFilenameLength = "settings.strategy.max-filename-length"
     case strategyNamingInstructions = "settings.strategy.naming-instructions"
     case rulesContentRules = "settings.rules.content-rules"
     case rulesFileTagging = "settings.rules.file-tagging"
     case rulesTemperature = "settings.rules.temperature"
+    case rulesTemperatureSlider = "settings.rules.temperature-slider"
     case rulesOrganizationStyle = "settings.rules.organization-style"
     case automationGlobalModel = "settings.automation.global-model"
+    case automationSeparateModel = "settings.automation.separate-model"
     case automationLaunchAtLogin = "settings.automation.launch-at-login"
     case automationKeepInBackground = "settings.automation.keep-in-background"
     case automationHideDockIcon = "settings.automation.hide-dock-icon"
@@ -59,6 +76,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case deeplinksAutomation = "settings.deeplinks.automation"
     case deeplinksFinder = "settings.deeplinks.finder"
     case finderIntegration = "settings.finder.integration"
+    case finderCheckStatus = "settings.finder.check-status"
     case finderOrganize = "settings.finder.organize"
     case finderWatch = "settings.finder.watch"
     case finderExclude = "settings.finder.exclude"
@@ -76,6 +94,8 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case permissionsFullDiskAccess = "settings.permissions.full-disk-access"
     case permissionsAutomation = "settings.permissions.automation"
     case permissionsNotifications = "settings.permissions.notifications"
+    case permissionsStatusActions = "settings.permissions.status-actions"
+    case permissionsUsage = "settings.permissions.usage"
     case advancedMenuBar = "settings.advanced.menu-bar"
     case advancedFinderWorkflow = "settings.advanced.finder-workflow"
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
@@ -102,26 +122,56 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
 }
 
 public extension SettingsFocusTarget {
+    static func providerChoice(_ provider: AIProvider) -> SettingsFocusTarget {
+        switch provider {
+        case .openAI:
+            return .providerOpenAI
+        case .githubCopilot:
+            return .providerGitHubCopilot
+        case .groq:
+            return .providerGroq
+        case .openAICompatible:
+            return .providerCompatibleAPI
+        case .openRouter:
+            return .providerOpenRouter
+        case .ollama:
+            return .providerOllama
+        case .anthropic:
+            return .providerAnthropic
+        case .gemini:
+            return .providerGemini
+        case .appleFoundationModel:
+            return .providerApple
+        }
+    }
+
     var category: SettingsCategory {
         switch self {
-        case .providerSelect, .providerConfiguration, .providerConnection:
+        case .providerSelect, .providerConfiguration, .providerConnection,
+             .providerOpenAI, .providerGitHubCopilot, .providerGroq,
+             .providerCompatibleAPI, .providerOpenRouter, .providerOllama,
+             .providerAnthropic, .providerGemini, .providerApple,
+             .providerTestConnection:
             return .provider
 
         case .strategyFastMode, .strategyVision, .strategyRenaming,
-             .strategyNamingTemplate, .strategyNamingOptions, .strategyNamingInstructions:
+             .strategyNamingTemplate, .strategyNamingOptions, .strategyNamingSeparator,
+             .strategyNamingCase, .strategyNamingDatePolicy, .strategyNamingLanguage,
+             .strategyMaxFilenameLength, .strategyNamingInstructions:
             return .strategy
 
-        case .rulesContentRules, .rulesFileTagging, .rulesTemperature, .rulesOrganizationStyle:
+        case .rulesContentRules, .rulesFileTagging, .rulesTemperature,
+             .rulesTemperatureSlider, .rulesOrganizationStyle:
             return .rules
 
-        case .automationGlobalModel, .automationLaunchAtLogin,
+        case .automationGlobalModel, .automationSeparateModel, .automationLaunchAtLogin,
              .automationKeepInBackground, .automationHideDockIcon:
             return .automation
 
         case .deeplinksCore, .deeplinksOrganization, .deeplinksAutomation, .deeplinksFinder:
             return .deeplinks
 
-        case .finderIntegration, .finderOrganize, .finderWatch, .finderExclude,
+        case .finderIntegration, .finderCheckStatus, .finderOrganize, .finderWatch, .finderExclude,
              .finderExtension, .finderAutomationPermission:
             return .finder
 
@@ -131,7 +181,8 @@ public extension SettingsFocusTarget {
             return .notifications
 
         case .permissionsFilesAndFolders, .permissionsFullDiskAccess,
-             .permissionsAutomation, .permissionsNotifications:
+             .permissionsAutomation, .permissionsNotifications,
+             .permissionsStatusActions, .permissionsUsage:
             return .permissions
 
         case .advancedMenuBar, .advancedFinderWorkflow, .advancedPrivacyMode,
@@ -280,7 +331,17 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("API Configuration", "Set endpoint URL and API key/token details for your selected provider.", keywords: ["api key", "endpoint", "token", "authentication"], target: .providerConfiguration),
                 feature("Model Catalog", "Search and pick models available for each provider.", keywords: ["model picker", "model selection"], target: .providerConfiguration),
                 feature("Connection Testing", "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection", "connection status"], target: .providerConnection),
-                feature("GitHub Copilot", "Select GitHub Copilot and configure its subscription connection.", keywords: ["copilot", "subscription"], target: .providerSelect)
+                feature("OpenAI", "Use OpenAI with an API key or ChatGPT subscription.", keywords: ["gpt", "chatgpt", "codex"], target: .providerOpenAI),
+                feature("GitHub Copilot", "Use models through a GitHub Copilot subscription.", keywords: ["copilot", "subscription"], target: .providerGitHubCopilot),
+                feature("Groq", "Use Groq for fast hosted inference.", keywords: ["fast inference"], target: .providerGroq),
+                feature("OpenAI-Compatible API", "Connect Sorty to a custom OpenAI-compatible endpoint.", keywords: ["compatible api", "custom endpoint"], target: .providerCompatibleAPI),
+                feature("OpenRouter", "Use OpenRouter’s multi-provider model catalog.", keywords: ["model router"], target: .providerOpenRouter),
+                feature("Ollama", "Use local models running through Ollama.", keywords: ["local models", "localhost"], target: .providerOllama),
+                feature("Anthropic Claude", "Use Anthropic Claude models.", keywords: ["claude"], target: .providerAnthropic),
+                feature("Google Gemini", "Use Google Gemini models.", keywords: ["gemini"], target: .providerGemini),
+                feature("Apple Foundation Model", "Use Apple’s private on-device foundation model.", keywords: ["apple intelligence", "on device"], target: .providerApple),
+                feature("Organization Model", "Choose the model used to organize files.", keywords: ["model picker", "model selection"], target: .providerConfiguration),
+                feature("Test Connection", "Test the selected provider’s credentials and endpoint.", keywords: ["connection test", "validate provider"], target: .providerTestConnection)
             ]
         case .strategy:
             return [
@@ -289,13 +350,18 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Renaming", "Control how Sorty names organized files.", keywords: ["rename", "filename"], target: .strategyRenaming),
                 feature("Naming Template", "Choose a built-in or custom naming preset.", keywords: ["naming preset", "template"], target: .strategyNamingTemplate),
                 feature("Filename Format", "Set separators, letter case, dates, output language, and maximum filename length.", keywords: ["separator", "case", "date policy", "language", "max length"], target: .strategyNamingOptions),
+                feature("Filename Separator", "Choose spaces, underscores, hyphens, or another filename separator.", keywords: ["separator", "spaces", "underscores", "hyphens"], target: .strategyNamingSeparator),
+                feature("Filename Letter Case", "Choose the capitalization style used for renamed files.", keywords: ["case", "capitalization", "camel case", "title case"], target: .strategyNamingCase),
+                feature("Filename Dates", "Choose whether renamed files include dates.", keywords: ["date policy", "dates"], target: .strategyNamingDatePolicy),
+                feature("Filename Language", "Set the output language used for renamed files.", keywords: ["output language", "language"], target: .strategyNamingLanguage),
+                feature("Maximum Filename Length", "Set the maximum character length for renamed files.", keywords: ["max length", "filename length", "slider"], target: .strategyMaxFilenameLength),
                 feature("Naming Instructions", "Add custom rules or generate a reusable naming template.", keywords: ["custom naming instructions", "additional naming instructions", "generate naming template"], target: .strategyNamingInstructions)
             ]
         case .rules:
             return [
                 feature("Content Rules", "Control AI suggestions that affect organized files.", keywords: ["rules", "organization controls"], target: .rulesContentRules),
                 feature("Enable File Tagging", "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"], target: .rulesFileTagging),
-                feature("AI Temperature", "Adjust creativity vs determinism in generation output.", keywords: ["creativity", "focused", "balanced", "creative"], target: .rulesTemperature),
+                feature("AI Temperature", "Adjust creativity vs determinism in generation output.", keywords: ["creativity", "focused", "balanced", "creative", "slider"], target: .rulesTemperatureSlider),
                 feature("Organization Style", "Pick personas and style preferences for folder structures.", keywords: ["persona", "folder style"], target: .rulesOrganizationStyle)
             ]
         case .tuning:
@@ -307,6 +373,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .automation:
             return [
                 feature("Global Automation Model", "Use one dedicated model for watched-folder automation, overriding folder-specific model picks while enabled.", keywords: ["custom model", "watched folder model override"], target: .automationGlobalModel),
+                feature("Use Separate Automation Model", "Turn the dedicated watched-folder automation model on or off.", keywords: ["separate model", "automation override"], target: .automationSeparateModel),
                 feature("Launch at Login", "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"], target: .automationLaunchAtLogin),
                 feature("Keep in Background", "Continue monitoring folders even when all windows are closed.", keywords: ["background activity", "background app", "folder watching"], target: .automationKeepInBackground),
                 feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .automationHideDockIcon)
@@ -321,6 +388,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder:
             return [
                 feature("Organize with Sorty", "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"], target: .finderOrganize),
+                feature("Check Finder Status", "Refresh Finder Integration status and permission checks.", keywords: ["check now", "refresh finder"], target: .finderCheckStatus),
                 feature("Watch with Sorty", "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"], target: .finderWatch),
                 feature("Exclude with Sorty", "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"], target: .finderExclude),
                 feature("Finder Extension", "Activate or repair the Finder Sync extension and jump to macOS Extensions settings.", keywords: ["finder sync", "extensions"], target: .finderExtension),
@@ -342,7 +410,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Files & Folders", "Choose the folders Sorty can scan and organize.", keywords: ["folder picker", "grant access"], target: .permissionsFilesAndFolders),
                 feature("Full Disk Access", "Allow access to protected folders you explicitly choose.", keywords: ["privacy and security", "protected folders"], target: .permissionsFullDiskAccess),
                 feature("Finder Automation", "Allow Sorty to read Finder selections for Finder Integration.", keywords: ["automation permission", "apple events"], target: .permissionsAutomation),
-                feature("Notifications", "Allow Sorty to deliver alerts through macOS Notification Center.", keywords: ["notification permission", "alerts"], target: .permissionsNotifications)
+                feature("Notifications", "Allow Sorty to deliver alerts through macOS Notification Center.", keywords: ["notification permission", "alerts"], target: .permissionsNotifications),
+                feature("Refresh Permission Status", "Recheck every permission shown by Sorty.", keywords: ["refresh status", "check permissions"], target: .permissionsStatusActions),
+                feature("Open Privacy & Security", "Open the macOS Privacy & Security settings page.", keywords: ["system settings", "privacy settings"], target: .permissionsStatusActions),
+                feature("How Sorty Uses Access", "Review how folder, disk, and system permissions are used and revoked.", keywords: ["privacy", "revoke", "source code", "terms"], target: .permissionsUsage)
             ]
         case .advanced:
             return [
