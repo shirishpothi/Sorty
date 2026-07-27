@@ -15,13 +15,21 @@ interface RevealProps {
   className?: string
   /** Delay in ms before the element animates in. */
   delay?: number
+  /** Render visible immediately for content already in the initial viewport. */
+  immediate?: boolean
   as?: ElementType
 }
 
-export function Reveal({ children, className, delay = 0, as }: RevealProps) {
+export function Reveal({
+  children,
+  className,
+  delay = 0,
+  immediate = false,
+  as,
+}: RevealProps) {
   const Tag = (as ?? 'div') as ElementType
   const ref = useRef<HTMLElement>(null)
-  const [visible, setVisible] = useState(false)
+  const [visible, setVisible] = useState(immediate)
 
   useLayoutEffect(() => {
     const node = ref.current

@@ -1,18 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Heart, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
-import { sitePath } from '@/lib/site-paths'
 
 const LINKS = [
-  { label: 'Features', href: sitePath('/#features') },
-  { label: 'Changelog', href: sitePath('/changelog') },
-  { label: 'Privacy', href: sitePath('/privacy-policy') },
-  { label: 'Terms', href: sitePath('/terms') },
+  { label: 'Features', href: '/#features' },
+  { label: 'Changelog', href: '/changelog' },
+  { label: 'Privacy', href: '/privacy-policy' },
+  { label: 'Terms', href: '/terms' },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
@@ -41,24 +41,24 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <a href={sitePath('/#top')} className="shrink-0">
+        <Link href="/#top" className="shrink-0">
           <SortyLogo />
-        </a>
+        </Link>
 
         <div className="hidden items-center gap-1 md:flex">
           {LINKS.map((link) => (
-            <a
+            <Link
               key={link.href}
               href={link.href}
               className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </div>
 
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
@@ -66,7 +66,7 @@ export function SiteNav() {
           >
             <GithubIcon className="size-4" />
             GitHub
-          </a>
+          </Link>
           <a
             href={SPONSOR_URL}
             target="_blank"

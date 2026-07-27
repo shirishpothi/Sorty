@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 import { ShieldCheck } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
-import { sitePath } from '@/lib/site-paths'
 
 interface TocItem {
   id: string
@@ -40,13 +40,13 @@ export function LegalPage({
           }}
         />
         <div className="mx-auto max-w-3xl">
-          <Reveal>
-            <a
-              href={sitePath('/')}
+          <Reveal immediate>
+            <Link
+              href="/"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               ← Back to Sorty
-            </a>
+            </Link>
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
               {title}
             </h1>
@@ -58,7 +58,7 @@ export function LegalPage({
           </Reveal>
 
           {summary && (
-            <Reveal delay={80}>
+            <Reveal immediate>
               <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">
                 <div
                   aria-hidden
@@ -80,7 +80,7 @@ export function LegalPage({
           )}
 
           {toc && toc.length > 0 && (
-            <Reveal delay={140}>
+            <Reveal immediate>
               <nav
                 aria-label="On this page"
                 className="mt-8 rounded-3xl border border-border bg-card/30 p-5 backdrop-blur-md"
