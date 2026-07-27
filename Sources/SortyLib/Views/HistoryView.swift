@@ -723,7 +723,7 @@ struct HistoryHeader: View {
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.red)
                 .padding(.horizontal, 12)
-                .frame(height: 34)
+                .frame(height: 24)
                 .systemLiquidGlassBackground(cornerRadius: 999)
                 .clipShape(Capsule())
         }
@@ -742,7 +742,7 @@ struct HistoryHeader: View {
                 .labelStyle(.iconOnly)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.red)
-                .frame(width: 34, height: 34)
+                .frame(width: 24, height: 24)
                 .systemLiquidGlassBackground(cornerRadius: 999)
                 .clipShape(Circle())
         }
