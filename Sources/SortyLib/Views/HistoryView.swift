@@ -625,6 +625,7 @@ struct HistoryHeader: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.blue.gradient)
                 .frame(width: 24, height: 34)
+                .padding(.trailing, 8)
                 .accessibilityLabel("History, \(totalSessions) runs")
 
             HistoryNavigatorControl(selection: $selectedFilter)
