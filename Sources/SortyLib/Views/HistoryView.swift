@@ -596,6 +596,7 @@ struct HistoryHeader: View {
     private var populatedHeader: some View {
         ViewThatFits(in: .horizontal) {
             populatedHeaderRow
+            compactPopulatedHeader
             narrowPopulatedHeader
         }
     }
@@ -618,9 +619,23 @@ struct HistoryHeader: View {
         }
     }
 
-    private var narrowPopulatedHeader: some View {
+    private var compactPopulatedHeader: some View {
         HStack(spacing: 8) {
             historyIdentity
+
+            Spacer(minLength: 4)
+
+            HistoryNavigatorControl(selection: $selectedFilter)
+                .frame(width: HistoryNavigatorControl.preferredWidth)
+
+            compactClearHistoryButton
+                .fixedSize()
+        }
+    }
+
+    private var narrowPopulatedHeader: some View {
+        HStack(spacing: 8) {
+            stackedHistoryIdentity
 
             Spacer(minLength: 4)
 
@@ -648,6 +663,30 @@ struct HistoryHeader: View {
                 .contentTransition(.numericText())
                 .numericTextTransition(animationValue: totalSessions)
                 .accessibilityLabel("\(totalSessions) runs recorded")
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("History, \(totalSessions) runs")
+    }
+
+    private var stackedHistoryIdentity: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.blue.gradient)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("History")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+
+                Text("\(totalSessions) runs")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+                    .numericTextTransition(animationValue: totalSessions)
+            }
         }
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .combine)
