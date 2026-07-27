@@ -51,7 +51,14 @@ public class SteeringPromptManager: ObservableObject {
 
     // MARK: - CRUD
 
-    public func addPrompt(_ prompt: SavedSteeringPrompt) {
+    @discardableResult
+    public func addPrompt(_ prompt: SavedSteeringPrompt) -> Bool {
+        let normalizedName = prompt.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty, !hasPrompt(named: normalizedName) else { return false }
+
+        var prompt = prompt
+        prompt.name = normalizedName
+
         // If new prompt is default, clear default on all others
         if prompt.isDefault {
             for i in prompts.indices {
@@ -60,10 +67,23 @@ public class SteeringPromptManager: ObservableObject {
         }
         prompts.append(prompt)
         save()
+        return true
     }
 
-    public func updatePrompt(_ prompt: SavedSteeringPrompt) {
-        guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else { return }
+    @discardableResult
+    public func updatePrompt(_ prompt: SavedSteeringPrompt) -> Bool {
+        let normalizedName = prompt.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !normalizedName.isEmpty,
+            !hasPrompt(named: normalizedName, excluding: prompt.id),
+            let index = prompts.firstIndex(where: { $0.id == prompt.id })
+        else {
+            return false
+        }
+
+        var prompt = prompt
+        prompt.name = normalizedName
+
         // If this prompt is being set as default, clear others
         if prompt.isDefault {
             for i in prompts.indices {
@@ -72,6 +92,18 @@ public class SteeringPromptManager: ObservableObject {
         }
         prompts[index] = prompt
         save()
+        return true
+    }
+
+    public func hasPrompt(named name: String, excluding promptId: UUID? = nil) -> Bool {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else { return false }
+
+        return prompts.contains {
+            $0.id != promptId
+                && $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .localizedCaseInsensitiveCompare(normalizedName) == .orderedSame
+        }
     }
 
     public func deletePrompt(id: UUID) {

@@ -1499,6 +1499,12 @@ struct ReadyToOrganizeView: View {
                             TextField("Prompt name", text: $savePromptName)
                                 .textFieldStyle(.roundedBorder)
 
+                            if steeringManager.hasPrompt(named: savePromptName) {
+                                Text("A prompt with this name already exists.")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+
                             HStack {
                                 Button("Cancel") {
                                     showSavePromptDialog = false
@@ -1517,7 +1523,10 @@ struct ReadyToOrganizeView: View {
                                     HapticFeedbackManager.shared.success()
                                 }
                                 .buttonStyle(.sortyProminent)
-                                .disabled(savePromptName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                .disabled(
+                                    savePromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                        || steeringManager.hasPrompt(named: savePromptName)
+                                )
                             }
                         }
                         .padding(16)
@@ -2081,6 +2090,12 @@ struct SavedPromptsSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.subheadline.weight(.medium))
 
+                if steeringManager.hasPrompt(named: editName, excluding: prompt.id) {
+                    Text("A prompt with this name already exists.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
                 TextEditor(text: $editText)
                     .font(.body)
                     .focused($isEditTextFocused)
@@ -2141,6 +2156,10 @@ struct SavedPromptsSheet: View {
                     }
                     .buttonStyle(.sortyProminent)
                     .controlSize(.small)
+                    .disabled(
+                        editName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || steeringManager.hasPrompt(named: editName, excluding: prompt.id)
+                    )
                 }
             } else {
                 // Display mode
@@ -2221,7 +2240,14 @@ struct SavedPromptsSheet: View {
     }
 
     private func addNewPrompt() {
-        let newPrompt = SavedSteeringPrompt(name: "New Prompt", prompt: "")
+        var name = "New Prompt"
+        var suffix = 2
+        while steeringManager.hasPrompt(named: name) {
+            name = "New Prompt \(suffix)"
+            suffix += 1
+        }
+
+        let newPrompt = SavedSteeringPrompt(name: name, prompt: "")
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
             steeringManager.addPrompt(newPrompt)
             editingPromptId = newPrompt.id

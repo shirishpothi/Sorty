@@ -1177,6 +1177,12 @@ struct WatchedFolderConfigView: View {
             TextField("Prompt name", text: $savePromptName)
                 .textFieldStyle(.roundedBorder)
 
+            if steeringManager.hasPrompt(named: savePromptName) {
+                Text("A prompt with this name already exists.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
             HStack {
                 Button("Cancel") {
                     showSavePromptDialog = false
@@ -1193,7 +1199,10 @@ struct WatchedFolderConfigView: View {
                     HapticFeedbackManager.shared.success()
                 }
                 .buttonStyle(.sortyProminent)
-                .disabled(savePromptName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(
+                    savePromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || steeringManager.hasPrompt(named: savePromptName)
+                )
             }
         }
         .padding(16)
