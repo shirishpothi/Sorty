@@ -235,9 +235,9 @@ struct OrganizationCompleteView: View {
                     VStack(spacing: 12) {
                         Button {
                             HapticFeedbackManager.shared.tap()
-                            NSWorkspace.shared.open(directoryURL)
+                            returnToStart()
                         } label: {
-                            Label(mode == .renameOnly ? "Show Renamed Files" : "View in Finder", systemImage: "folder.fill")
+                            Label("Organise Another", systemImage: "arrow.counterclockwise")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.sortyPrimary(size: .large))
@@ -246,8 +246,8 @@ struct OrganizationCompleteView: View {
                                 HapticFeedbackManager.shared.selection()
                             }
                         }
-                        .help(mode == .renameOnly ? "Open the folder containing renamed files" : "Open the organized folder in Finder")
-                        .accessibilityHint(mode == .renameOnly ? "Shows your renamed files in Finder" : "Shows your organized files in Finder")
+                        .help("Return to the folder picker to organise another folder")
+                        .accessibilityHint("Returns to the folder picker to organise another folder")
                         .disabled(undoState.isBusy)
 
                         HStack(spacing: 12) {
@@ -301,9 +301,9 @@ struct OrganizationCompleteView: View {
 
                             Button {
                                 HapticFeedbackManager.shared.tap()
-                                returnToStart()
+                                NSWorkspace.shared.open(directoryURL)
                             } label: {
-                                Label("Organise Another", systemImage: "arrow.counterclockwise")
+                                Label(mode == .renameOnly ? "Show Renamed Files" : "View in Finder", systemImage: "folder.fill")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.sortyBordered(size: .regular))
@@ -312,8 +312,8 @@ struct OrganizationCompleteView: View {
                                     HapticFeedbackManager.shared.selection()
                                 }
                             }
-                            .help("Return to the folder picker to organise another folder")
-                            .accessibilityHint("Returns to the folder picker to organise another folder")
+                            .help(mode == .renameOnly ? "Open the folder containing renamed files" : "Open the organized folder in Finder")
+                            .accessibilityHint(mode == .renameOnly ? "Shows your renamed files in Finder" : "Shows your organized files in Finder")
                             .disabled(undoState.isBusy)
                         }
                     }
