@@ -29,6 +29,7 @@ struct OrganizationCompleteView: View {
     @State private var summaryAppeared = false
     @State private var buttonsAppeared = false
     @State private var historyLinkAppeared = false
+    @State private var isHoveringHistoryLink = false
     @State private var showParticles = false
     @State private var undoState: UndoPresentationState = .idle
     @State private var undoRestoredCount = 0
@@ -324,12 +325,39 @@ struct OrganizationCompleteView: View {
                         HapticFeedbackManager.shared.tap()
                         appState.currentView = .history
                     } label: {
-                        Label("View History", systemImage: "clock.arrow.circlepath")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock.arrow.circlepath")
+
+                            Text("View History")
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .frame(width: 10)
+                                .opacity(isHoveringHistoryLink ? 1 : 0)
+                                .offset(
+                                    x: reduceMotion || isHoveringHistoryLink ? 0 : -3,
+                                    y: reduceMotion || isHoveringHistoryLink ? 0 : 3
+                                )
+                                .scaleEffect(
+                                    reduceMotion || isHoveringHistoryLink ? 1 : 0.75
+                                )
+                                .accessibilityHidden(true)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(
+                            isHoveringHistoryLink
+                                ? SortyDesignSystem.Colors.accent
+                                : SortyDesignSystem.Colors.textSecondary
+                        )
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                        value: isHoveringHistoryLink
+                    )
                     .onHover { hovering in
+                        isHoveringHistoryLink = hovering
                         if hovering {
                             HapticFeedbackManager.shared.selection()
                         }
