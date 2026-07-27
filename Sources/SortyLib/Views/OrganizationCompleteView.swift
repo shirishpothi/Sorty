@@ -130,6 +130,10 @@ struct OrganizationCompleteView: View {
                                 .frame(width: 100, height: 100)
                                 .scaleEffect(ringExpanded ? 2 : 1)
 
+                            if showParticles {
+                                ConfettiParticlesView()
+                            }
+
                             ZStack {
                                 Circle()
                                     .fill(statusColor)
@@ -141,10 +145,6 @@ struct OrganizationCompleteView: View {
                                     .symbolReplaceTransition(animationValue: statusIcon)
                             }
                             .scaleEffect(iconAppeared ? 1 : 0.3)
-
-                            if showParticles {
-                                ConfettiParticlesView()
-                            }
                         }
                         
                         VStack(spacing: 8) {
