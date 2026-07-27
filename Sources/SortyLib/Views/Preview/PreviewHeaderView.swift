@@ -159,46 +159,46 @@ struct PreviewHeaderView: View {
             Spacer()
 
             // Drag hint
-            if isDragging {
-                Button {
-                    HapticFeedbackManager.shared.light()
-                    showDropHelpPopover.toggle()
-                } label: {
-                    HStack(spacing: 4) {
+            Button {
+                HapticFeedbackManager.shared.light()
+                showDropHelpPopover.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "hand.draw")
+                        .font(.caption)
+                    Text("Drop in a folder")
+                        .font(.caption)
+                }
+                .foregroundColor(
+                    isDragging ? SortyDesignSystem.Colors.resolvedAccent : .secondary
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .systemLiquidGlassBackground(cornerRadius: 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Drop in a folder")
+            .accessibilityHint("Explain how to move files between folders")
+            .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: "hand.draw")
                             .font(.caption)
-                        Text("Drop in a folder")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .systemLiquidGlassBackground(cornerRadius: 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Drop in a folder")
-                .accessibilityHint("Explain how to move files between folders")
-                .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "hand.draw")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            Text("Move files between folders")
-                                .font(.caption.weight(.semibold))
-                        }
-
-                        Text("Drag any file in the preview and drop it onto another folder to move it there.")
-                            .font(.callout)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("Move files between folders")
+                            .font(.caption.weight(.semibold))
                     }
-                    .padding(12)
-                    .frame(width: 260)
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+
+                    Text("Drag any file in the preview and drop it onto another folder to move it there.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(12)
+                .frame(width: 260)
+                .systemLiquidGlassPopover(cornerRadius: 12)
             }
 
             Text("\(totalFiles) files • \(totalFolders) folders")
