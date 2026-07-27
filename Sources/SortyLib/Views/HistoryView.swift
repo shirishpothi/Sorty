@@ -594,27 +594,16 @@ struct HistoryHeader: View {
     }
 
     private var populatedHeader: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.blue.gradient)
-                Text("History")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .lineLimit(1)
+        ViewThatFits(in: .horizontal) {
+            populatedHeaderRow
+            compactPopulatedHeader
+        }
+    }
 
-                Text("\(totalSessions) runs")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-                    .numericTextTransition(animationValue: totalSessions)
-                    .accessibilityLabel("\(totalSessions) runs recorded")
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            .layoutPriority(2)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("History, \(totalSessions) runs")
+    private var populatedHeaderRow: some View {
+        HStack(spacing: 12) {
+            historyIdentity
+                .layoutPriority(2)
 
             Spacer(minLength: 4)
 
@@ -627,6 +616,45 @@ struct HistoryHeader: View {
             clearHistoryButton
                 .fixedSize()
         }
+    }
+
+    private var compactPopulatedHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                historyIdentity
+
+                Spacer(minLength: 4)
+
+                clearHistoryButton
+                    .fixedSize()
+            }
+
+            HistoryNavigatorControl(selection: $selectedFilter)
+                .frame(width: HistoryNavigatorControl.preferredWidth)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var historyIdentity: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.blue.gradient)
+            Text("History")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .lineLimit(1)
+
+            Text("\(totalSessions) runs")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentTransition(.numericText())
+                .numericTextTransition(animationValue: totalSessions)
+                .accessibilityLabel("\(totalSessions) runs recorded")
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("History, \(totalSessions) runs")
     }
 
     private var emptyStateTitleRow: some View {
@@ -812,7 +840,9 @@ private struct HistorySummaryCard: View {
     }
 
     private var gridColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(minimum: 132), spacing: 10), count: 5)
+        [
+            GridItem(.adaptive(minimum: 112), spacing: 10)
+        ]
     }
 
     var body: some View {
