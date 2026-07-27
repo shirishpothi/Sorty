@@ -1854,14 +1854,13 @@ struct ScanProgressViewNew: View {
 
     private var progressCard: some View {
         ZStack {
-            HStack(alignment: .center, spacing: 14) {
-                if !isPreparing {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 30)
-                        .accessibilityHidden(true)
-                }
+            HStack(alignment: .center, spacing: 0) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: isPreparing ? 0 : 30)
+                    .opacity(isPreparing ? 0 : 1)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -1892,6 +1891,7 @@ struct ScanProgressViewNew: View {
                         .truncationMode(.tail)
                         .numericTextTransition(animationValue: subtitle)
                 }
+                .padding(.leading, isPreparing ? 0 : 14)
 
                 Spacer(minLength: 0)
 
