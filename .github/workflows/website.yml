@@ -60,14 +60,6 @@ jobs:
           NEXT_PUBLIC_BASE_PATH: /Sorty
         run: pnpm build
 
-      - name: Inject PostHog source-map identifiers
-        working-directory: website
-        run: >-
-          pnpm exec posthog-cli sourcemap inject
-          --directory out/_next/static
-          --release-name sorty-website
-          --release-version "${GITHUB_SHA}"
-
       - name: Upload PostHog source maps
         working-directory: website
         env:
@@ -80,6 +72,11 @@ jobs:
             find out/_next/static -type f -name '*.map' -delete
             exit 0
           fi
+
+          pnpm exec posthog-cli sourcemap inject \
+            --directory out/_next/static \
+            --release-name sorty-website \
+            --release-version "${GITHUB_SHA}"
 
           pnpm exec posthog-cli sourcemap upload \
             --directory out/_next/static \
