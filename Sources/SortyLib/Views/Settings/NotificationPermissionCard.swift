@@ -13,6 +13,14 @@ struct NotificationPermissionCard: View {
     @ObservedObject private var notificationManager = NotificationManager.shared
     @State private var isRequestingPermission = false
     @State private var isShowingPermissionInfo = false
+    @State private var isHoveringMacOSSettings = false
+    @State private var isOpeningMacOSSettings = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var showsMacOSSettingsChevron: Bool {
+        isHoveringMacOSSettings || isOpeningMacOSSettings
+    }
     
     private var statusInfo: (icon: String, color: Color, title: String, description: String) {
         switch notificationManager.notificationPermissionStatus {
@@ -93,13 +101,42 @@ struct NotificationPermissionCard: View {
                         
                     case .authorized, .provisional:
                         Button {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                isOpeningMacOSSettings = true
+                            }
                             openSystemSettings()
+
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(0.35))
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                    isOpeningMacOSSettings = false
+                                }
+                            }
                         } label: {
-                            Label("macOS Settings", systemImage: "gearshape")
+                            Label {
+                                Text("macOS Settings")
+                            } icon: {
+                                Image(
+                                    systemName: showsMacOSSettingsChevron
+                                        ? "arrow.up.right"
+                                        : "gearshape"
+                                )
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
+                            }
                         }
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Open macOS notification settings")
+                        .onHover { hovering in
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                isHoveringMacOSSettings = hovering
+                            }
+                        }
                         
                     default:
                         EmptyView()
