@@ -22,8 +22,7 @@ struct PreviewHeaderView: View {
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
-    @State private var isDropHelpHovered = false
-    @State private var isDismissHelpHovered = false
+    @State private var isPopoverButtonHovered = false
 
     var body: some View {
         HStack {
@@ -170,32 +169,13 @@ struct PreviewHeaderView: View {
                     Text("Drop in a folder")
                         .font(.caption)
                 }
-                .foregroundColor(
-                    isDropHelpHovered
-                        ? SortyDesignSystem.Colors.resolvedAccent
-                        : .secondary
-                )
+                .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .systemLiquidGlassBackground(cornerRadius: 6)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(
-                                isDropHelpHovered ? 0.45 : 0
-                            ),
-                            lineWidth: 1
-                        )
-                }
-                .scaleEffect(isDropHelpHovered ? 1.02 : 1)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { isDropHelpHovered = $0 }
-            .animation(
-                .spring(response: 0.24, dampingFraction: 0.82),
-                value: isDropHelpHovered
-            )
             .accessibilityLabel("Drop in a folder")
             .accessibilityHint("Explain how to move files between folders")
             .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
@@ -219,10 +199,10 @@ struct PreviewHeaderView: View {
                     Button {
                         showDropHelpPopover = false
                     } label: {
-                        Label("Don't show again", systemImage: "eye.slash")
+                        Label("Got it", systemImage: "checkmark")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(
-                                isDismissHelpHovered
+                                isPopoverButtonHovered
                                     ? SortyDesignSystem.Colors.resolvedAccent
                                     : Color.secondary
                             )
@@ -234,17 +214,17 @@ struct PreviewHeaderView: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .stroke(
                                         SortyDesignSystem.Colors.resolvedAccent.opacity(
-                                            isDismissHelpHovered ? 0.35 : 0
+                                            isPopoverButtonHovered ? 0.35 : 0
                                         ),
                                         lineWidth: 1
                                     )
                             }
                     }
                     .buttonStyle(.plain)
-                    .onHover { isDismissHelpHovered = $0 }
+                    .onHover { isPopoverButtonHovered = $0 }
                     .animation(
                         .easeInOut(duration: 0.16),
-                        value: isDismissHelpHovered
+                        value: isPopoverButtonHovered
                     )
                 }
                 .padding(12)
