@@ -597,6 +597,7 @@ struct HistoryHeader: View {
         ViewThatFits(in: .horizontal) {
             populatedHeaderRow
             compactPopulatedHeader
+            narrowPopulatedHeader
         }
     }
 
@@ -619,20 +620,50 @@ struct HistoryHeader: View {
     }
 
     private var compactPopulatedHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                historyIdentity
-
-                Spacer(minLength: 4)
-
-                clearHistoryButton
-                    .fixedSize()
-            }
+        HStack(spacing: 8) {
+            compactHistoryIdentity
 
             HistoryNavigatorControl(selection: $selectedFilter)
                 .frame(width: HistoryNavigatorControl.preferredWidth)
+
+            Spacer(minLength: 4)
+
+            compactClearHistoryButton
+                .fixedSize()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var narrowPopulatedHeader: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.blue.gradient)
+                .frame(width: 24, height: 34)
+                .accessibilityLabel("History, \(totalSessions) runs")
+
+            HistoryNavigatorControl(selection: $selectedFilter)
+                .frame(width: HistoryNavigatorControl.preferredWidth)
+
+            Spacer(minLength: 4)
+
+            compactClearHistoryButton
+                .fixedSize()
+        }
+    }
+
+    private var compactHistoryIdentity: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.blue.gradient)
+
+            Text("History")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("History, \(totalSessions) runs")
     }
 
     private var historyIdentity: some View {
@@ -686,6 +717,26 @@ struct HistoryHeader: View {
         }
         .buttonStyle(.plain)
         .disabled(totalSessions == 0)
+        .accessibilityLabel("Clear all history")
+        .accessibilityIdentifier("ClearHistoryButton")
+    }
+
+    private var compactClearHistoryButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            onClearHistory()
+        } label: {
+            Label("Clear History", systemImage: "trash")
+                .labelStyle(.iconOnly)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.red)
+                .frame(width: 34, height: 34)
+                .systemLiquidGlassBackground(cornerRadius: 999)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(totalSessions == 0)
+        .help("Clear History")
         .accessibilityLabel("Clear all history")
         .accessibilityIdentifier("ClearHistoryButton")
     }
