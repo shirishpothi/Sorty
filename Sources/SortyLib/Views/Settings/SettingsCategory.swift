@@ -58,6 +58,10 @@ public enum SettingsFocusTarget: String, Sendable {
     case notificationsSystem = "settings.notifications.system"
     case notificationsTypes = "settings.notifications.types"
     case notificationsCompletionSound = "settings.notifications.completion-sound"
+    case permissionsFilesAndFolders = "settings.permissions.files-and-folders"
+    case permissionsFullDiskAccess = "settings.permissions.full-disk-access"
+    case permissionsAutomation = "settings.permissions.automation"
+    case permissionsNotifications = "settings.permissions.notifications"
     case advancedMenuBar = "settings.advanced.menu-bar"
     case advancedFinderWorkflow = "settings.advanced.finder-workflow"
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
@@ -88,6 +92,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     case deeplinks = "Deeplinks"
     case finder = "Finder Integration"
     case notifications = "Notifications"
+    case permissions = "Permissions"
     case advanced = "Advanced"
     case troubleshooting = "Troubleshooting"
     case help = "Help & Support"
@@ -101,7 +106,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .aiAndOrganization
         case .automation, .deeplinks, .finder, .notifications:
             return .features
-        case .advanced, .troubleshooting, .help, .experimental:
+        case .permissions, .advanced, .troubleshooting, .help, .experimental:
             return .system
         }
     }
@@ -120,6 +125,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .deeplinks: return "link.badge.plus"
         case .finder: return "folder.badge.plus"
         case .notifications: return "bell"
+        case .permissions: return "hand.raised.fill"
         case .advanced: return "gearshape.2"
         case .troubleshooting: return "wrench.and.screwdriver"
         case .help: return "questionmark.circle"
@@ -137,6 +143,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .deeplinks: return .cyan
         case .finder: return .cyan
         case .notifications: return .pink
+        case .permissions: return .blue
         case .advanced: return .gray
         case .troubleshooting: return .red
         case .help: return .teal
@@ -162,6 +169,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return ["finder", "quick action", "organize action", "watch action", "exclude action", "extension", "service", "automation permission", "repair"]
         case .notifications:
             return ["notification", "notifications", "alerts", "sound", "banner", "hud", "in app hud", "notificli", "completion", "foreground", "permissions", "notification center"]
+        case .permissions:
+            return ["permission", "permissions", "privacy", "security", "files and folders", "full disk access", "finder automation", "notifications", "system settings", "folder access"]
         case .advanced:
             return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "logs", "error logs", "red logs"]
         case .troubleshooting:
@@ -231,6 +240,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "System Notifications", summary: "Show notifications in macOS Notification Center.", keywords: ["delivery method", "notification center", "system notification"]),
                 SettingsFeatureSnippet(title: "Notification Types", summary: "Control processing complete, preview ready, and processing error notifications."),
                 SettingsFeatureSnippet(title: "Completion Sound", summary: "Play a sound when organization finishes.", keywords: ["sounds"])
+            ]
+        case .permissions:
+            return [
+                SettingsFeatureSnippet(title: "Files & Folders", summary: "Choose the folders Sorty can scan and organize.", keywords: ["folder picker", "grant access"]),
+                SettingsFeatureSnippet(title: "Full Disk Access", summary: "Allow access to protected folders you explicitly choose.", keywords: ["privacy and security", "protected folders"]),
+                SettingsFeatureSnippet(title: "Finder Automation", summary: "Allow Sorty to read Finder selections for Finder Integration.", keywords: ["automation permission", "apple events"]),
+                SettingsFeatureSnippet(title: "Notifications", summary: "Allow Sorty to deliver alerts through macOS Notification Center.", keywords: ["notification permission", "alerts"])
             ]
         case .advanced:
             return [
@@ -358,6 +374,14 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .notificationsTypes
         case (.notifications, "Completion Sound"):
             return .notificationsCompletionSound
+        case (.permissions, "Files & Folders"):
+            return .permissionsFilesAndFolders
+        case (.permissions, "Full Disk Access"):
+            return .permissionsFullDiskAccess
+        case (.permissions, "Finder Automation"):
+            return .permissionsAutomation
+        case (.permissions, "Notifications"):
+            return .permissionsNotifications
         case (.advanced, "Show Menu Bar Icon"):
             return .advancedMenuBar
         case (.advanced, "Finder Workflow"):
@@ -405,6 +429,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .finderIntegration
         case .notifications:
             return .notificationsPermission
+        case .permissions:
+            return .permissionsFilesAndFolders
         case .advanced:
             return .advancedMenuBar
         case .troubleshooting:

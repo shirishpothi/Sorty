@@ -511,6 +511,7 @@
 		AABBCC11000100000000007A /* NamingPresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingPresetManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007C /* NotificationPermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCard.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
+		D727A0010000000000000001 /* PermissionsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007E /* OnboardingAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAudioManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007F /* OnboardingStepProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepProtocol.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationRulesSettingsView.swift; sourceTree = "<group>"; };
@@ -975,6 +976,7 @@
 				AABBCC110001000000000074 /* HelpSettingsView.swift */,
 				AABBCC11000100000000007C /* NotificationPermissionCard.swift */,
 				AABBCC11000100000000007D /* NotificationsSettingsView.swift */,
+				D727A0010000000000000001 /* PermissionsSettingsView.swift */,
 				AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */,
 				AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */,
 				AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */,

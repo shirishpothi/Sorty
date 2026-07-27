@@ -346,6 +346,9 @@ struct SettingsView: View {
             FinderIntegrationSettingsView()
         case .notifications:
             NotificationsSettingsView()
+        case .permissions:
+            PermissionsSettingsView()
+                .environmentObject(appState)
         case .advanced:
             AdvancedSettingsView().environmentObject(viewModel)
         case .troubleshooting:
