@@ -44,6 +44,9 @@
       "js-yaml": "4.3.0",
       "postcss": "8.5.18",
       "sharp": "0.35.0"
+    },
+    "patchedDependencies": {
+      "@highlighters/core@1.2.0": "patches/@highlighters__core@1.2.0.patch"
     }
   }
 }

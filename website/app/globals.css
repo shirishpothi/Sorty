@@ -909,11 +909,10 @@
   }
 }
 
-/* Keep a quiet native layer beneath the drawn ink so every valid range remains
-   visible when a browser or complex control cannot host the organic overlay. */
+/* Fine pointers use the drawn overlay exclusively; touch keeps native selection. */
 @media (pointer: fine) {
   ::selection {
     color: inherit;
-    background: color-mix(in srgb, #4f8cff 18%, transparent);
+    background: transparent;
   }
 }

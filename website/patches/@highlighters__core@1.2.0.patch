@@ -1,0 +1,34 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index d32314e84c8df12ef04408bc075046fc6226143a..ae01537275b86d65d222709fd58fce396f2d3905 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs	
+@@ -1334,12 +1334,6 @@ function findSelectionAnchor(node) {
+   if (!hasWindow() || typeof getComputedStyle === "undefined") {
+     return document.body ?? document.documentElement;
+   }
+-  let el = node instanceof Element ? node : node.parentElement;
+-  while (el && el !== document.body && el !== document.documentElement) {
+-    const position = getComputedStyle(el).position;
+-    if (position && position !== "static") return el;
+-    el = el.parentElement;
+-  }
+   const contentRoot = document.querySelector("article") ?? document.querySelector("main");
+   return contentRoot ?? document.body;
+ }
+diff --git a/dist/index.js b/dist/index.js
+index a5e704c193f4c5e8120b8c30b290d405cdd660ed..44f1932e61f40defab1c3acc4981e55a0c72fdad 100644
+--- a/dist/index.js
++++ b/dist/index.js	
+@@ -583,12 +583,6 @@ function findSelectionAnchor(node) {
+   if (!hasWindow() || typeof getComputedStyle === "undefined") {
+     return document.body ?? document.documentElement;
+   }
+-  let el = node instanceof Element ? node : node.parentElement;
+-  while (el && el !== document.body && el !== document.documentElement) {
+-    const position = getComputedStyle(el).position;
+-    if (position && position !== "static") return el;
+-    el = el.parentElement;
+-  }
+   const contentRoot = document.querySelector("article") ?? document.querySelector("main");
+   return contentRoot ?? document.body;
+ }

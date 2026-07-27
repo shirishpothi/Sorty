@@ -14,6 +14,11 @@ overrides:
   postcss: 8.5.18
   sharp: 0.35.0
 
+patchedDependencies:
+  '@highlighters/core@1.2.0':
+    hash: 3c15e7a9171c12a2b8983d38012f6329378dded500c5c34622f823fab386cb11
+    path: patches/@highlighters__core@1.2.0.patch
+
 importers:
 
   .:
@@ -23,7 +28,7 @@ importers:
         version: 1.5.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.1.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@highlighters/core':
         specifier: ^1.2.0
-        version: 1.2.0
+        version: 1.2.0(patch_hash=3c15e7a9171c12a2b8983d38012f6329378dded500c5c34622f823fab386cb11)
       border-beam:
         specifier: ^1.2.0
         version: 1.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3365,7 +3370,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@highlighters/core@1.2.0': {}
+  '@highlighters/core@1.2.0(patch_hash=3c15e7a9171c12a2b8983d38012f6329378dded500c5c34622f823fab386cb11)': {}
 
   '@hono/node-server@2.0.10(hono@4.12.27)':
     dependencies:
