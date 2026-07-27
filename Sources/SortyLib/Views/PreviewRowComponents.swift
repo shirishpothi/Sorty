@@ -67,8 +67,6 @@ struct FlatFolderRowContextMenu: View {
 
 struct FlatFileRowContent: View {
     private enum Column {
-        static let tagsWidth: CGFloat = 72
-        static let commentWidth: CGFloat = 14
         static let sizeWidth: CGFloat = 44
         static let dragHandleWidth: CGFloat = 12
     }
@@ -121,47 +119,43 @@ struct FlatFileRowContent: View {
 
                 Spacer(minLength: 12)
 
-                Group {
+                HStack(spacing: 6) {
                     if !fileTags.isEmpty {
                         TagDotsView(tags: fileTags)
                     }
-                }
-                .frame(width: Column.tagsWidth, alignment: .leading)
 
-                Group {
+                    if let parentSuggestion {
+                        LiquidGlassLearningsButton(
+                            file: file,
+                            suggestion: parentSuggestion,
+                            learningsManager: learningsManager
+                        )
+                    }
+
                     if let fileComment, !fileComment.isEmpty {
                         CommentBubbleButton(comment: fileComment)
                     }
+
+                    if let duplicateInfo {
+                        LiquidGlassDuplicateButton(
+                            duplicateInfo: duplicateInfo,
+                            handoffDirectory: handoffDirectory,
+                            highlightedFileID: $highlightedFileID
+                        )
+                    }
+
+                    Text(file.formattedSize)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .frame(width: Column.sizeWidth, alignment: .leading)
+
+                    Image(systemName: "line.3.horizontal")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .frame(width: Column.dragHandleWidth)
+                        .accessibilityHidden(true)
                 }
-                .frame(width: Column.commentWidth, alignment: .center)
-
-                if let parentSuggestion {
-                    LiquidGlassLearningsButton(
-                        file: file,
-                        suggestion: parentSuggestion,
-                        learningsManager: learningsManager
-                    )
-                }
-
-                if let duplicateInfo {
-                    LiquidGlassDuplicateButton(
-                        duplicateInfo: duplicateInfo,
-                        handoffDirectory: handoffDirectory,
-                        highlightedFileID: $highlightedFileID
-                    )
-                }
-
-                Text(file.formattedSize)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-                    .frame(width: Column.sizeWidth, alignment: .trailing)
-
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .frame(width: Column.dragHandleWidth)
-                    .accessibilityHidden(true)
             }
 
             if let renameMapping, renameMapping.hasRename, !isEditingName {

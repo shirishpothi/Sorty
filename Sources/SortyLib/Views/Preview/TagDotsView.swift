@@ -15,8 +15,9 @@ struct TagDotsView: View {
         }
     }
 
-    private var descriptiveTags: [String] {
-        tags.filter { finderTagColor($0) == nil }
+    private var hoverText: String {
+        let descriptiveTags = tags.filter { finderTagColor($0) == nil }
+        return (descriptiveTags.isEmpty ? tags : descriptiveTags).joined(separator: ", ")
     }
 
     var body: some View {
@@ -26,14 +27,17 @@ struct TagDotsView: View {
                     .fill(color)
                     .frame(width: 8, height: 8)
             }
-            if let firstDescriptive = descriptiveTags.first {
-                Text(firstDescriptive)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+
+            if colorTags.isEmpty, !tags.isEmpty {
+                Circle()
+                    .fill(.secondary)
+                    .frame(width: 8, height: 8)
             }
         }
-        .help(tags.joined(separator: ", "))
+        .frame(minWidth: 8, minHeight: 16)
+        .contentShape(Rectangle())
+        .help(hoverText)
+        .accessibilityLabel("Tags: \(hoverText)")
     }
 
     private func finderTagColor(_ tag: String) -> Color? {
