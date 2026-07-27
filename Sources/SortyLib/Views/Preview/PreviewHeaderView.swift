@@ -14,7 +14,6 @@ struct PreviewHeaderView: View {
     let totalFiles: Int
     let totalFolders: Int
     let renameCount: Int
-    let isDragging: Bool
     var onBack: (() -> Void)? = nil
     var totalVersions: Int = 1
     var isViewingHistory: Bool = false
@@ -23,6 +22,7 @@ struct PreviewHeaderView: View {
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
+    @AppStorage("preview.hideDragHelp") private var hideDragHelp = false
 
     var body: some View {
         HStack {
@@ -159,46 +159,56 @@ struct PreviewHeaderView: View {
             Spacer()
 
             // Drag hint
-            Button {
-                HapticFeedbackManager.shared.light()
-                showDropHelpPopover.toggle()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "hand.draw")
-                        .font(.caption)
-                    Text("Drop in a folder")
-                        .font(.caption)
-                }
-                .foregroundColor(
-                    isDragging ? SortyDesignSystem.Colors.resolvedAccent : .secondary
-                )
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .systemLiquidGlassBackground(cornerRadius: 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Drop in a folder")
-            .accessibilityHint("Explain how to move files between folders")
-            .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
+            if !hideDragHelp {
+                Button {
+                    HapticFeedbackManager.shared.light()
+                    showDropHelpPopover.toggle()
+                } label: {
+                    HStack(spacing: 4) {
                         Image(systemName: "hand.draw")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Text("Move files between folders")
-                            .font(.caption.weight(.semibold))
+                        Text("Drop in a folder")
+                            .font(.caption)
                     }
-
-                    Text("Drag any file in the preview and drop it onto another folder to move it there.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .systemLiquidGlassBackground(cornerRadius: 6)
+                    .contentShape(Rectangle())
                 }
-                .padding(12)
-                .frame(width: 260)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Drop in a folder")
+                .accessibilityHint("Explain how to move files between folders")
+                .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.draw")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text("Move files between folders")
+                                .font(.caption.weight(.semibold))
+                        }
+
+                        Text("Drag any file in the preview and drop it onto another folder to move it there.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        Button("Don't show again") {
+                            showDropHelpPopover = false
+                            hideDragHelp = true
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .frame(width: 260)
+                    .systemLiquidGlassPopover(cornerRadius: 12)
+                }
             }
 
             Text("\(totalFiles) files • \(totalFolders) folders")
@@ -238,8 +248,7 @@ struct PreviewHeaderView: View {
         notes: "Organized by file type",
         totalFiles: 42,
         totalFolders: 5,
-        renameCount: 0,
-        isDragging: false
+        renameCount: 0
     )
     .frame(width: 800)
 }
@@ -252,7 +261,6 @@ struct PreviewHeaderView: View {
         totalFiles: 156,
         totalFolders: 12,
         renameCount: 8,
-        isDragging: true,
         totalVersions: 3,
         isViewingHistory: false
     )

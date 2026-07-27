@@ -72,7 +72,6 @@ struct PreviewView: View {
                 totalFiles: displayedPlan.totalFiles,
                 totalFolders: displayedPlan.totalFolders,
                 renameCount: isViewingHistory ? 0 : renameCount,
-                isDragging: dragDropManager.draggedFile != nil,
                 totalVersions: totalVersions,
                 isViewingHistory: isViewingHistory,
                 onPreviousVersion: {
