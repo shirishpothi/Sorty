@@ -3084,6 +3084,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
 }
 
 enum InstructionSuggestionCatalog {
+    @MainActor
     static func suggestions(
         for mode: OrganizationMode,
         personaManager: PersonaManager,
