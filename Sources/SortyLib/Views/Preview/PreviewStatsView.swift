@@ -49,6 +49,16 @@ struct PreviewStatsView: View {
 
                     // Summary pills
                     HStack(spacing: 12) {
+                        if stats.estimatedTimeSaved > 0 {
+                            NerdStatPill(
+                                title: "Estimated Time Saved",
+                                icon: "clock.arrow.circlepath",
+                                value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
+                                unit: nil,
+                                color: .orange
+                            )
+                        }
+
                         if let fileCount = stats.filesScanned ?? (totalFiles > 0 ? totalFiles : nil) {
                             NerdStatPill(title: "Files Reviewed", icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: .indigo)
                         }
@@ -60,10 +70,6 @@ struct PreviewStatsView: View {
                         }
 
                         NerdStatPill(title: "AI Time", icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
-
-                        if stats.tps > 0 {
-                            NerdStatPill(title: "Throughput", icon: "bolt.fill", value: String(format: "%.0f", stats.tps), unit: "tok/s", color: .orange)
-                        }
 
                         if stats.hasBillableCost {
                             NerdStatPill(title: "Estimated Cost", icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
@@ -157,6 +163,7 @@ struct PreviewStatsView: View {
         if let scanDuration = stats.scanDuration { lines.append("Scan duration: \(GenerationStats.formatDuration(scanDuration))") }
         if let retryCount = stats.retryCount, retryCount > 0 { lines.append("Retries: \(retryCount)") }
         if stats.hasBillableCost { lines.append("Estimated cost: \(GenerationStats.formatCost(stats.computedCost))") }
+        if stats.estimatedTimeSaved > 0 { lines.append("Estimated time saved: \(GenerationStats.formatDuration(stats.estimatedTimeSaved))") }
         return lines.joined(separator: "\n")
     }
     

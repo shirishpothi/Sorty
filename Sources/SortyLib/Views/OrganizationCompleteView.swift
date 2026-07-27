@@ -171,17 +171,11 @@ struct OrganizationCompleteView: View {
                             }()
                             
                             if effectiveTimeSaved > 0 && undoState == .idle {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "hourglass.badge.plus")
-                                        .foregroundStyle(.blue)
-                                    Text("You saved approximately **\(timeSavedString(effectiveTimeSaved))** of manual work!")
-                                        .font(.callout)
-                                        .foregroundStyle(.secondary)
-                                        .numericTextTransition(
-                                            animationValue: effectiveTimeSaved
-                                        )
-                                }
-                                .padding(.top, 4)
+                                TimeSavedHighlight(
+                                    value: timeSavedString(effectiveTimeSaved),
+                                    animationValue: effectiveTimeSaved
+                                )
+                                .padding(.top, 8)
                                 .opacity(timeSavedAppeared ? 1 : 0)
                                 .offset(y: timeSavedAppeared ? 0 : 10)
                             }
@@ -643,6 +637,51 @@ struct OrganizationCompleteView: View {
         } else {
             return String(format: "%.0f seconds", seconds)
         }
+    }
+}
+
+private struct TimeSavedHighlight: View {
+    let value: String
+    let animationValue: TimeInterval
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 38, height: 38)
+                .background(Color.orange.opacity(0.14), in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                    .numericTextTransition(animationValue: animationValue)
+
+                Text("Estimated manual time saved")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.orange.opacity(0.8))
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: 360)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Estimated manual time saved: \(value)")
     }
 }
 

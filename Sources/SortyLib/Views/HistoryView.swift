@@ -928,7 +928,8 @@ private struct HistorySummaryCard: View {
                     title: timeSavedLabel,
                     value: timeSavedValue,
                     icon: "clock.arrow.circlepath",
-                    color: .orange
+                    color: .orange,
+                    isEmphasized: true
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(timeSavedLabel): \(timeSavedValue)")
@@ -976,31 +977,41 @@ private struct HistoryStatItem: View {
     let value: String
     let icon: String
     let color: Color
+    var isEmphasized = false
 
     @State private var isHovered = false
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.system(size: isEmphasized ? 22 : 19, weight: .semibold))
                 .foregroundStyle(color.gradient)
+                .frame(width: 30, height: 24)
                 .accessibilityHidden(true)
 
             Text(value)
-                .font(.title3.weight(.bold))
+                .font(.system(size: isEmphasized ? 24 : 20, weight: .bold, design: .rounded))
                 .monospacedDigit()
+                .foregroundStyle(isEmphasized ? color : .primary)
                 .numericTextTransition(animationValue: value)
 
             Text(LocalizedStringKey(title))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: isEmphasized ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(isEmphasized ? color : .secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 88)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            isEmphasized ? color.opacity(0.12) : Color.secondary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isEmphasized ? color.opacity(0.24) : .clear, lineWidth: 1)
+        )
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
