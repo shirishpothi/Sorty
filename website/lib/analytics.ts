@@ -262,18 +262,38 @@ export function initializeWebsiteAnalytics(): void {
     capture_exceptions: false,
     capture_performance: false,
     capture_dead_clicks: false,
-    cookieless_mode: 'always',
     person_profiles: 'never',
     persistence: 'memory',
+    disable_persistence: true,
     disable_session_recording: true,
     enable_heatmaps: false,
     disable_surveys: true,
     advanced_disable_feature_flags: true,
     disable_external_dependency_loading: true,
     respect_dnt: true,
-    request_batching: true,
+    request_batching: false,
     before_send: sanitizeEvent,
   })
+}
+
+export function applyWebsiteAnalyticsPreference(
+  preference: WebsiteAnalyticsPreference,
+): void {
+  if (preference === 'denied') {
+    if (isInitialized) {
+      posthog.opt_out_capturing()
+    }
+    return
+  }
+
+  if (!isWebsiteAnalyticsEnabled()) {
+    return
+  }
+
+  initializeWebsiteAnalytics()
+  if (isInitialized) {
+    posthog.opt_in_capturing({ captureEventName: false })
+  }
 }
 
 function capture(event: string, properties: Properties): void {

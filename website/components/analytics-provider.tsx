@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { usePathname } from 'next/navigation'
 import {
+  applyWebsiteAnalyticsPreference,
   captureWebsiteException,
   isWebsiteAnalyticsEnabled,
   trackPageView,
@@ -126,6 +127,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
   function setAnalyticsPreference(next: WebsiteAnalyticsPreference) {
     window.localStorage.setItem(WEBSITE_ANALYTICS_PREFERENCE_KEY, next)
+    applyWebsiteAnalyticsPreference(next)
     setPreference(next)
     setIsOpen(false)
 
