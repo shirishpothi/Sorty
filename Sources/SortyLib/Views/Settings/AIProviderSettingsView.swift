@@ -683,19 +683,19 @@ struct AIProviderSettingsView: View {
                                         .buttonStyle(.plain)
                                         .accessibilityIdentifier("ProviderConnectionDetailsDisclosure")
 
+                                        if isDetailsExpanded {
+                                            Text(details)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .padding(10)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .background(Color.secondary.opacity(0.1))
+                                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .textSelection(.enabled)
+                                                .transition(.move(edge: .top).combined(with: .opacity))
+                                        }
                                     }
                                     .frame(maxWidth: 620)
-                                    .popover(
-                                        isPresented: $isDetailsExpanded,
-                                        attachmentAnchor: .point(.bottom),
-                                        arrowEdge: .top
-                                    ) {
-                                        Text(details)
-                                            .font(.system(.caption, design: .monospaced))
-                                            .padding(10)
-                                            .frame(width: 420, alignment: .leading)
-                                            .textSelection(.enabled)
-                                    }
                                 }
 
                                 if isInternetAccessBlocked {
