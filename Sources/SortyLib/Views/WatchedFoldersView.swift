@@ -724,6 +724,7 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
+    @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var customPrompt: String
     @State private var useCustomModel: Bool
@@ -731,6 +732,13 @@ struct WatchedFolderConfigView: View {
     @State private var selectedModel: String
     @State private var selectedMode: OrganizationMode
     @State private var showModelPicker = false
+    @State private var showSavedPromptsSheet = false
+    @State private var showSavePromptDialog = false
+    @State private var savePromptName = ""
+    @State private var isImprovingPrompt = false
+    @State private var showImprovePromptRequest = false
+    @State private var improvePromptRequestMessage = ""
+    @FocusState private var isPromptFocused: Bool
 
     init(folder: WatchedFolder) {
         self.folder = folder
@@ -843,6 +851,7 @@ struct WatchedFolderConfigView: View {
                                 .font(.system(.body, design: .default))
                                 .frame(height: 80)
                                 .scrollContentBackground(.hidden)
+                                .focused($isPromptFocused)
                                 .padding(10)
                                 .background(Color(NSColor.textBackgroundColor))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -854,6 +863,8 @@ struct WatchedFolderConfigView: View {
                             Text(selectedMode.instructionPlaceholder)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+
+                            instructionActions
                         }
                     }
 
@@ -952,6 +963,169 @@ struct WatchedFolderConfigView: View {
                 selectedModel = model
             }
         )
+        .sheet(isPresented: $showSavedPromptsSheet) {
+            SavedPromptsSheet(
+                steeringManager: steeringManager,
+                settingsConfig: settingsViewModel.config,
+                onApplyPrompt: { prompt in
+                    customPrompt = prompt
+                    showSavedPromptsSheet = false
+                    HapticFeedbackManager.shared.tap()
+                }
+            )
+        }
+    }
+
+    private var instructionActions: some View {
+        HStack(alignment: .center, spacing: 0) {
+            if !trimmedCustomPrompt.isEmpty {
+                Button {
+                    Task { await improvePromptWithAI() }
+                } label: {
+                    Label("Improve", systemImage: "wand.and.stars")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.teal)
+                .disabled(isImprovingPrompt)
+                .help("Improve instructions with Sorty")
+                .accessibilityHint("Rewrites this watched folder's prompt to be clearer and more specific")
+                .alert("Sorty needs more detail", isPresented: $showImprovePromptRequest) {
+                    Button("Edit Instructions") {
+                        isPromptFocused = true
+                    }
+                } message: {
+                    Text("\(improvePromptRequestMessage)\n\nEdit the instructions above, then click Improve again.")
+                }
+
+                Button {
+                    savePromptName = ""
+                    showSavePromptDialog.toggle()
+                } label: {
+                    Label("Save", systemImage: "bookmark")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .help("Save current instructions for reuse")
+                .accessibilityHint("Stores this prompt in your saved prompts list")
+                .popover(isPresented: $showSavePromptDialog) {
+                    savePromptPopover
+                }
+            }
+
+            Button {
+                showSavedPromptsSheet.toggle()
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+
+                    Text(
+                        steeringManager.prompts.isEmpty
+                            ? "Saved Prompts"
+                            : "Saved Prompts (\(steeringManager.prompts.count))"
+                    )
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .systemLiquidGlassBackground(cornerRadius: 12)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
+                            lineWidth: 1
+                        )
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("Open your saved instruction prompts")
+            .accessibilityHint("View, edit, and apply saved prompts")
+
+            Spacer()
+
+            CompactPersonaPicker()
+        }
+        .font(.caption2)
+        .foregroundStyle(.quaternary)
+    }
+
+    private var savePromptPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save Prompt")
+                .font(.headline)
+
+            TextField("Prompt name", text: $savePromptName)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Cancel") {
+                    showSavePromptDialog = false
+                }
+                .buttonStyle(.sortyBordered)
+
+                Spacer()
+
+                Button("Save") {
+                    steeringManager.addPrompt(
+                        SavedSteeringPrompt(name: savePromptName, prompt: customPrompt)
+                    )
+                    showSavePromptDialog = false
+                    HapticFeedbackManager.shared.success()
+                }
+                .buttonStyle(.sortyProminent)
+                .disabled(savePromptName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 280)
+        .foregroundStyle(.primary)
+        .systemLiquidGlassPopover(cornerRadius: 12)
+    }
+
+    private var trimmedCustomPrompt: String {
+        customPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func improvePromptWithAI() async {
+        guard !trimmedCustomPrompt.isEmpty else { return }
+        isImprovingPrompt = true
+        defer { isImprovingPrompt = false }
+
+        do {
+            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let outcome = try await ImproveInstructionsTool.run(
+                client: client,
+                originalInstructions: trimmedCustomPrompt,
+                workflow: selectedMode.gerund
+            )
+
+            switch outcome {
+            case .replacement(let improved):
+                customPrompt = improved
+                showImprovePromptRequest = false
+                HapticFeedbackManager.shared.success()
+            case .needsUserInput(let message):
+                improvePromptRequestMessage = message
+                showImprovePromptRequest = true
+                HapticFeedbackManager.shared.selection()
+            }
+        } catch {
+            HapticFeedbackManager.shared.error()
+        }
     }
 
     private var globalAutomationSelection: (provider: AIProvider, model: String) {
