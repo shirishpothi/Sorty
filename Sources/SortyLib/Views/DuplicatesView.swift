@@ -293,6 +293,7 @@ struct DuplicatesView: View {
                         }
                     }
                     .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
                 }
                 .frame(width: 340, height: geometry.size.height, alignment: .topLeading)
 
