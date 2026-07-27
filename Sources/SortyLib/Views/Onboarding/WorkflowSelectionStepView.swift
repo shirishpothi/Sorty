@@ -103,8 +103,9 @@ public struct WorkflowSelectionStepView: View {
                                 ScrollView(.vertical) {
                                     customPersonaGrid
                                 }
+                                .contentMargins(.vertical, 10, for: .scrollContent)
                                 .scrollIndicators(.visible)
-                                .frame(height: 104)
+                                .frame(height: 124)
 
                                 Label(
                                     "Scroll to see \(customPersonaStore.customPersonas.count - 2) more",
