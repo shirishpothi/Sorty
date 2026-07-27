@@ -290,7 +290,7 @@ final class GitHubContributorsFetcher: ObservableObject {
                 request.setValue(etag, forHTTPHeaderField: "If-None-Match")
             }
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkPrivacyPolicy.sharedSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return fallbackResult(from: endpointCache)
             }

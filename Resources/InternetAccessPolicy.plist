@@ -5,7 +5,7 @@
     <key>DeveloperName</key>
     <string>Sorty</string>
     <key>ApplicationDescription</key>
-    <string>Sorty organizes files and folders using AI providers and storage locations you configure. It can also sign in to GitHub Copilot, check for app updates, and optionally load contributor data.</string>
+    <string>Sorty organizes files and folders using AI providers and storage locations you configure. It can also sign in to AI subscriptions, check for app updates, and optionally load contributor data.</string>
     <key>Website</key>
     <string>https://github.com/shirishpothi/Sorty</string>
     <key>Connections</key>
@@ -28,9 +28,19 @@
             <key>Relevance</key>
             <string>Essential</string>
             <key>Purpose</key>
-            <string>Sorty sends AI requests to OpenAI when you choose OpenAI.</string>
+            <string>Sorty sends AI requests to OpenAI when you choose an OpenAI API key.</string>
             <key>DenyConsequences</key>
-            <string>If you deny these connections, OpenAI-powered organization and model checks will fail.</string>
+            <string>If you deny these connections, OpenAI API-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>chatgpt.com,auth.openai.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty invokes Codex CLI for ChatGPT subscription inference and account authorization when you choose subscription authentication.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, ChatGPT subscription sign-in and organization will fail.</string>
         </dict>
         <dict>
             <key>Host</key>
@@ -98,9 +108,9 @@
             <key>Relevance</key>
             <string>Essential</string>
             <key>Purpose</key>
-            <string>Sorty uses GitHub sign-in endpoints for GitHub Copilot authentication and also checks/downloading app updates hosted on GitHub Releases.</string>
+            <string>Sorty uses GitHub sign-in endpoints for GitHub Copilot authentication and also checks for and downloads app updates hosted on GitHub Releases.</string>
             <key>DenyConsequences</key>
-            <string>If you deny these connections, GitHub Copilot sign-in and in-app update delivery may fail.</string>
+            <string>If you deny these connections, GitHub Copilot sign-in and in-app update delivery will fail.</string>
         </dict>
         <dict>
             <key>Host</key>

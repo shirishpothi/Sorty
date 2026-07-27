@@ -152,6 +152,7 @@ struct OrganizationStrategySettingsView: View {
                     .pickerStyle(.menu)
                     .tint(.primary)
                     .labelsHidden()
+                    .settingsFocusableSetting(.strategyNamingTemplate)
 
                     Divider()
 
@@ -231,6 +232,8 @@ struct OrganizationStrategySettingsView: View {
                         .background(Color(NSColor.controlBackgroundColor))
                         .cornerRadius(6)
                     }
+                    .settingsFocusableSetting(.strategyNamingOptions)
+
                     // Preview of selected preset instructions
                     if let selectedId = viewModel.config.selectedNamingPresetId,
                        let selectedPreset = presetManager.preset(for: selectedId),
@@ -395,6 +398,7 @@ struct OrganizationStrategySettingsView: View {
                             .padding(.top, 4)
                         }
                     }
+                    .settingsFocusableSetting(.strategyNamingInstructions)
                 }
             }
             .settingsFocusable(.strategyRenaming)

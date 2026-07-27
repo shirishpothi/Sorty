@@ -98,7 +98,8 @@ struct AdvancedSettingsView: View {
                         value: $viewModel.config.requestTimeout,
                         sliderMin: 30,
                         defaultMax: 600,
-                        step: 10
+                        step: 10,
+                        focusTarget: .advancedRequestTimeout
                     )
 
                     Divider()
@@ -109,7 +110,8 @@ struct AdvancedSettingsView: View {
                         value: $viewModel.config.resourceTimeout,
                         sliderMin: 60,
                         defaultMax: 1800,
-                        step: 60
+                        step: 60,
+                        focusTarget: .advancedResourceTimeout
                     )
                 }
             }
@@ -121,7 +123,8 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.showStatsForNerds,
                         title: "Stats for Nerds",
-                        description: "Show live AI metrics — tokens, throughput, timing, and cost — in preview, results, and history"
+                        description: "Show live AI metrics — tokens, throughput, timing, and cost — in preview, results, and history",
+                        focusTarget: .advancedStats
                     )
                     
                     Divider()
@@ -141,6 +144,7 @@ struct AdvancedSettingsView: View {
                         }
                     }
                     .buttonStyle(.sortyProminent(intent: .destructive))
+                    .settingsFocusableSetting(.advancedErrorLogs)
                     .accessibilityIdentifier("ShowErrorLogsButton")
                     .onHover { hovering in
                         if hovering {
@@ -164,6 +168,7 @@ private struct TimeoutSliderRow: View {
     let sliderMin: Double
     let defaultMax: Double
     let step: Double
+    let focusTarget: SettingsFocusTarget
 
     @State private var editingMax = false
     @State private var maxText = ""
@@ -232,6 +237,7 @@ private struct TimeoutSliderRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+        .settingsFocusableSetting(focusTarget)
     }
     
     private func commitMax() {

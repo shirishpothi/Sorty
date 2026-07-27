@@ -31,21 +31,24 @@ struct HelpSettingsView: View {
                             title: "Documentation",
                             icon: "doc.text",
                             color: .blue,
-                            url: docsURL
+                            url: docsURL,
+                            focusTarget: .helpDocumentation
                         )
 
                         HelpIconLink(
                             title: "Report Issue",
                             icon: "exclamationmark.bubble",
                             color: .red,
-                            url: issuesURL
+                            url: issuesURL,
+                            focusTarget: .helpReportIssue
                         )
 
                         HelpIconLink(
                             title: "View Changelog",
                             icon: "clock.arrow.circlepath",
                             color: .purple,
-                            url: changelogURL
+                            url: changelogURL,
+                            focusTarget: .helpChangelog
                         )
                     }
 
@@ -56,14 +59,16 @@ struct HelpSettingsView: View {
                             title: "Privacy Policy",
                             icon: "hand.raised",
                             color: .green,
-                            url: privacyPolicyURL
+                            url: privacyPolicyURL,
+                            focusTarget: .helpPrivacy
                         )
 
                         HelpIconLink(
                             title: "Terms of Service",
                             icon: "doc.text",
                             color: .indigo,
-                            url: termsOfServiceURL
+                            url: termsOfServiceURL,
+                            focusTarget: .helpTerms
                         )
                     }
                     .settingsFocusable(.helpLegal)
@@ -363,6 +368,7 @@ private struct HelpIconLink: View {
     let icon: String
     let color: Color
     let url: URL
+    let focusTarget: SettingsFocusTarget
 
     @State private var isHovered = false
 
@@ -392,6 +398,10 @@ private struct HelpIconLink: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .settingsFocusable(
+            focusTarget,
+            shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
         .trackHoveredURL(url)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {

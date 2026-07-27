@@ -53,7 +53,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.processingComplete,
                         title: "Processing Complete",
                         description: "When file processing finishes successfully",
-                        previewAction: { playPreviewSound("Glass") }
+                        previewAction: { playPreviewSound("Glass") },
+                        focusTarget: .notificationsProcessingComplete
                     )
                     
                     Divider()
@@ -62,7 +63,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.previewReady,
                         title: "Preview Ready",
                         description: "When Sorty has finished generating the organization plan",
-                        previewAction: { playPreviewSound("Ping") }
+                        previewAction: { playPreviewSound("Ping") },
+                        focusTarget: .notificationsPreviewReady
                     )
                     
                     Divider()
@@ -71,7 +73,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.processingErrors,
                         title: "Processing Errors",
                         description: "When errors occur during processing",
-                        previewAction: { playPreviewSound("Basso") }
+                        previewAction: { playPreviewSound("Basso") },
+                        focusTarget: .notificationsProcessingErrors
                     )
 
                     Divider()

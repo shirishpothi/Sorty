@@ -81,6 +81,62 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         XCTAssertNoThrow(try AIRequestSupport.makeJSONRequest(url: local, method: "GET"))
     }
 
+    func testSessionDelegateBlocksRedirectFromLoopbackToRemoteHost() throws {
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+
+        let local = URL(string: "http://localhost:11434/redirect")!
+        let remote = URL(string: "https://api.openai.com/v1/models")!
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let task = session.dataTask(with: local)
+        let response = HTTPURLResponse(
+            url: local,
+            statusCode: 302,
+            httpVersion: nil,
+            headerFields: ["Location": remote.absoluteString]
+        )!
+        var redirectedRequest: URLRequest?
+
+        NetworkPrivacyURLSessionDelegate().urlSession(
+            session,
+            task: task,
+            willPerformHTTPRedirection: response,
+            newRequest: URLRequest(url: remote)
+        ) { request in
+            redirectedRequest = request
+        }
+
+        XCTAssertNil(redirectedRequest)
+    }
+
+    func testCodexSubscriptionHealthCheckIsBlockedBeforeLaunchingCLI() async {
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        let client = CodexSubscriptionClient(config: .default)
+
+        do {
+            try await client.checkHealth()
+            XCTFail("Expected privacy mode to block Codex subscription access")
+        } catch let AIClientError.apiError(statusCode, message) {
+            XCTAssertEqual(statusCode, 403)
+            XCTAssertEqual(message, NetworkPrivacyPolicy.blockedMessage)
+        } catch {
+            XCTFail("Expected API privacy error, got: \(error)")
+        }
+    }
+
+    @MainActor
+    func testSparkleUpdateCheckStopsBeforeStartingNetworkAccess() {
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        let updateManager = SparkleUpdateManager()
+
+        updateManager.checkForUpdates()
+
+        XCTAssertEqual(
+            updateManager.updateState,
+            .error(NetworkPrivacyPolicy.blockedMessage)
+        )
+    }
+
     func testTransientHTTPRetryInspectsStatusBeforeReturning() async throws {
         let url = URL(string: "https://example.com/v1/chat/completions")!
         var attempts = 0

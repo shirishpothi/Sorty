@@ -146,13 +146,18 @@ struct SettingsView: View {
                     .padding(24)
                 }
                 .onAppear {
-                    scrollToFocusedSetting(using: proxy)
+                    routeToFocusedSetting(using: proxy)
                 }
                 .onChange(of: appState.settingsFocusTarget) { _, _ in
-                    scrollToFocusedSetting(using: proxy)
+                    routeToFocusedSetting(using: proxy)
                 }
                 .onChange(of: selectedCategory) { _, _ in
-                    scrollToFocusedSetting(using: proxy)
+                    routeToFocusedSetting(using: proxy)
+                }
+                .onChange(of: isSearching) { _, isSearching in
+                    if !isSearching {
+                        routeToFocusedSetting(using: proxy)
+                    }
                 }
             }
         }
@@ -298,15 +303,9 @@ struct SettingsView: View {
                                 Spacer()
 
                                 Button {
-                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                        selectedCategory = result.category
-                                        searchText = ""
-                                    }
-                                    appState.selectedSettingsSection = result.category
-                                    appState.settingsFocusTarget = result.category.focusTarget(for: result.snippet)
-                                    HapticFeedbackManager.shared.selection()
+                                    openSearchResult(result)
                                 } label: {
-                                    Label("Open Section", systemImage: "arrow.right.circle")
+                                    Label("Show Setting", systemImage: "scope")
                                         .font(.caption)
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 4)
@@ -321,6 +320,21 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func openSearchResult(_ result: SettingsFeatureMatch) {
+        let target = result.category.focusTarget(for: result.snippet)
+        let destinationCategory = target?.category ?? result.category
+
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            selectedCategory = destinationCategory
+            searchText = ""
+        }
+        appState.openSettingsWindow(
+            section: destinationCategory,
+            focusTarget: target
+        )
+        HapticFeedbackManager.shared.selection()
     }
 
     @ViewBuilder
@@ -360,13 +374,40 @@ struct SettingsView: View {
         }
     }
 
-    private func scrollToFocusedSetting(using proxy: ScrollViewProxy) {
+    private func routeToFocusedSetting(using proxy: ScrollViewProxy) {
         guard !isSearching else { return }
         guard let target = appState.settingsFocusTarget else { return }
 
+        let targetCategory = target.category
+        if selectedCategory != targetCategory {
+            selectedCategory = targetCategory
+        }
+        if appState.selectedSettingsSection != targetCategory {
+            appState.selectedSettingsSection = targetCategory
+        }
+
         DispatchQueue.main.async {
+            guard !isSearching,
+                  appState.settingsFocusTarget == target,
+                  selectedCategory == targetCategory
+            else {
+                return
+            }
+
             withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                proxy.scrollTo(target.rawValue, anchor: .top)
+                proxy.scrollTo(target.rawValue, anchor: .center)
+            }
+
+            // A second layout turn covers category swaps, conditional settings,
+            // and grid targets that materialize after the first scroll request.
+            DispatchQueue.main.async {
+                guard !isSearching,
+                      appState.settingsFocusTarget == target,
+                      selectedCategory == targetCategory
+                else {
+                    return
+                }
+                proxy.scrollTo(target.rawValue, anchor: .center)
             }
         }
     }

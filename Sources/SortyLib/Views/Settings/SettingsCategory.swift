@@ -11,13 +11,20 @@ public struct SettingsFeatureSnippet: Identifiable, Hashable {
     public let title: String
     public let summary: String
     public let keywords: [String]
+    public let focusTarget: SettingsFocusTarget?
 
     public var id: String { "\(title)|\(summary)" }
 
-    public init(title: String, summary: String, keywords: [String] = []) {
+    public init(
+        title: String,
+        summary: String,
+        keywords: [String] = [],
+        focusTarget: SettingsFocusTarget? = nil
+    ) {
         self.title = title
         self.summary = summary
         self.keywords = keywords
+        self.focusTarget = focusTarget
     }
 }
 
@@ -29,14 +36,18 @@ public struct SettingsFeatureMatch: Identifiable, Hashable {
     public var id: String { "\(category.rawValue)|\(snippet.id)" }
 }
 
-public enum SettingsFocusTarget: String, Sendable {
+public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case providerSelect = "settings.provider.select"
     case providerConfiguration = "settings.provider.configuration"
     case providerConnection = "settings.provider.connection"
     case strategyFastMode = "settings.strategy.fast-mode"
     case strategyVision = "settings.strategy.vision"
     case strategyRenaming = "settings.strategy.renaming"
+    case strategyNamingTemplate = "settings.strategy.naming-template"
+    case strategyNamingOptions = "settings.strategy.naming-options"
+    case strategyNamingInstructions = "settings.strategy.naming-instructions"
     case rulesContentRules = "settings.rules.content-rules"
+    case rulesFileTagging = "settings.rules.file-tagging"
     case rulesTemperature = "settings.rules.temperature"
     case rulesOrganizationStyle = "settings.rules.organization-style"
     case automationGlobalModel = "settings.automation.global-model"
@@ -57,6 +68,9 @@ public enum SettingsFocusTarget: String, Sendable {
     case notificationsInAppHUD = "settings.notifications.in-app-hud"
     case notificationsSystem = "settings.notifications.system"
     case notificationsTypes = "settings.notifications.types"
+    case notificationsProcessingComplete = "settings.notifications.processing-complete"
+    case notificationsPreviewReady = "settings.notifications.preview-ready"
+    case notificationsProcessingErrors = "settings.notifications.processing-errors"
     case notificationsCompletionSound = "settings.notifications.completion-sound"
     case permissionsFilesAndFolders = "settings.permissions.files-and-folders"
     case permissionsFullDiskAccess = "settings.permissions.full-disk-access"
@@ -67,15 +81,76 @@ public enum SettingsFocusTarget: String, Sendable {
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
     case advancedInternetPrivacy = "settings.advanced.internet-privacy"
     case advancedTimeouts = "settings.advanced.timeouts"
+    case advancedRequestTimeout = "settings.advanced.request-timeout"
+    case advancedResourceTimeout = "settings.advanced.resource-timeout"
     case advancedDeveloper = "settings.advanced.developer"
+    case advancedStats = "settings.advanced.stats"
+    case advancedErrorLogs = "settings.advanced.error-logs"
     case troubleshootingMaintenance = "settings.troubleshooting.maintenance"
     case troubleshootingCache = "settings.troubleshooting.cache"
     case troubleshootingLearnings = "settings.troubleshooting.learnings"
     case troubleshootingReset = "settings.troubleshooting.reset"
     case helpSupport = "settings.help.support"
     case helpLegal = "settings.help.legal"
+    case helpDocumentation = "settings.help.documentation"
+    case helpReportIssue = "settings.help.report-issue"
+    case helpChangelog = "settings.help.changelog"
+    case helpPrivacy = "settings.help.privacy"
+    case helpTerms = "settings.help.terms"
     case helpIssueDetails = "settings.help.issue-details"
     case experimentalEmptyState = "settings.experimental.empty-state"
+}
+
+public extension SettingsFocusTarget {
+    var category: SettingsCategory {
+        switch self {
+        case .providerSelect, .providerConfiguration, .providerConnection:
+            return .provider
+
+        case .strategyFastMode, .strategyVision, .strategyRenaming,
+             .strategyNamingTemplate, .strategyNamingOptions, .strategyNamingInstructions:
+            return .strategy
+
+        case .rulesContentRules, .rulesFileTagging, .rulesTemperature, .rulesOrganizationStyle:
+            return .rules
+
+        case .automationGlobalModel, .automationLaunchAtLogin,
+             .automationKeepInBackground, .automationHideDockIcon:
+            return .automation
+
+        case .deeplinksCore, .deeplinksOrganization, .deeplinksAutomation, .deeplinksFinder:
+            return .deeplinks
+
+        case .finderIntegration, .finderOrganize, .finderWatch, .finderExclude,
+             .finderExtension, .finderAutomationPermission:
+            return .finder
+
+        case .notificationsPermission, .notificationsInAppHUD, .notificationsSystem,
+             .notificationsTypes, .notificationsProcessingComplete, .notificationsPreviewReady,
+             .notificationsProcessingErrors, .notificationsCompletionSound:
+            return .notifications
+
+        case .permissionsFilesAndFolders, .permissionsFullDiskAccess,
+             .permissionsAutomation, .permissionsNotifications:
+            return .permissions
+
+        case .advancedMenuBar, .advancedFinderWorkflow, .advancedPrivacyMode,
+             .advancedInternetPrivacy, .advancedTimeouts, .advancedRequestTimeout,
+             .advancedResourceTimeout, .advancedDeveloper, .advancedStats, .advancedErrorLogs:
+            return .advanced
+
+        case .troubleshootingMaintenance, .troubleshootingCache,
+             .troubleshootingLearnings, .troubleshootingReset:
+            return .troubleshooting
+
+        case .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
+             .helpChangelog, .helpPrivacy, .helpTerms, .helpIssueDetails:
+            return .help
+
+        case .experimentalEmptyState:
+            return .experimental
+        }
+    }
 }
 
 public enum SettingsCategoryGroup: String, CaseIterable {
@@ -184,27 +259,44 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     }
 
     public var featureSnippets: [SettingsFeatureSnippet] {
+        func feature(
+            _ title: String,
+            _ summary: String,
+            keywords: [String] = [],
+            target: SettingsFocusTarget
+        ) -> SettingsFeatureSnippet {
+            SettingsFeatureSnippet(
+                title: title,
+                summary: summary,
+                keywords: keywords,
+                focusTarget: target
+            )
+        }
+
         switch self {
         case .provider:
             return [
-                SettingsFeatureSnippet(title: "Select Provider", summary: "Choose OpenAI, Anthropic, Gemini, Copilot, Ollama, or OpenAI-compatible APIs."),
-                SettingsFeatureSnippet(title: "API Configuration", summary: "Set endpoint URL and API key/token details for your selected provider.", keywords: ["api key", "endpoint", "token"]),
-                SettingsFeatureSnippet(title: "Model Catalog", summary: "Search and pick models available for each provider."),
-                SettingsFeatureSnippet(title: "Connection Testing", summary: "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection"]),
-                SettingsFeatureSnippet(title: "GitHub Copilot", summary: "Configure Copilot integration and model options.", keywords: ["copilot"])
+                feature("Select Provider", "Choose OpenAI, Anthropic, Gemini, Copilot, Ollama, or OpenAI-compatible APIs.", target: .providerSelect),
+                feature("API Configuration", "Set endpoint URL and API key/token details for your selected provider.", keywords: ["api key", "endpoint", "token", "authentication"], target: .providerConfiguration),
+                feature("Model Catalog", "Search and pick models available for each provider.", keywords: ["model picker", "model selection"], target: .providerConfiguration),
+                feature("Connection Testing", "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection", "connection status"], target: .providerConnection),
+                feature("GitHub Copilot", "Select GitHub Copilot and configure its subscription connection.", keywords: ["copilot", "subscription"], target: .providerSelect)
             ]
         case .strategy:
             return [
-                SettingsFeatureSnippet(title: "Fast Mode", summary: "Skip content analysis for faster organization when filenames and folder context are enough.", keywords: ["deep scanning"]),
-                SettingsFeatureSnippet(title: "AI Vision for Images", summary: "Use image understanding to classify screenshots and photos.", keywords: ["vision"]),
-                SettingsFeatureSnippet(title: "Renaming", summary: "Choose naming templates, separators, case, date policy, output language, max length, and custom presets.", keywords: ["naming preset", "template", "separator", "language", "max length", "custom naming instructions"])
+                feature("Fast Mode", "Skip content analysis for faster organization when filenames and folder context are enough.", keywords: ["deep scanning", "scan content"], target: .strategyFastMode),
+                feature("AI Vision for Images", "Use image understanding to classify screenshots and photos.", keywords: ["vision", "image analysis"], target: .strategyVision),
+                feature("Renaming", "Control how Sorty names organized files.", keywords: ["rename", "filename"], target: .strategyRenaming),
+                feature("Naming Template", "Choose a built-in or custom naming preset.", keywords: ["naming preset", "template"], target: .strategyNamingTemplate),
+                feature("Filename Format", "Set separators, letter case, dates, output language, and maximum filename length.", keywords: ["separator", "case", "date policy", "language", "max length"], target: .strategyNamingOptions),
+                feature("Naming Instructions", "Add custom rules or generate a reusable naming template.", keywords: ["custom naming instructions", "additional naming instructions", "generate naming template"], target: .strategyNamingInstructions)
             ]
         case .rules:
             return [
-                SettingsFeatureSnippet(title: "Duplicate Handling", summary: "Use the duplicate detection dropdown in preview to control how duplicates are scanned.", keywords: ["duplicates", "duplicate detection"]),
-                SettingsFeatureSnippet(title: "Enable File Tagging", summary: "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"]),
-                SettingsFeatureSnippet(title: "AI Temperature", summary: "Adjust creativity vs determinism in generation output."),
-                SettingsFeatureSnippet(title: "Organization Style", summary: "Pick personas and style preferences for folder structures.")
+                feature("Content Rules", "Control AI suggestions that affect organized files.", keywords: ["rules", "organization controls"], target: .rulesContentRules),
+                feature("Enable File Tagging", "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"], target: .rulesFileTagging),
+                feature("AI Temperature", "Adjust creativity vs determinism in generation output.", keywords: ["creativity", "focused", "balanced", "creative"], target: .rulesTemperature),
+                feature("Organization Style", "Pick personas and style preferences for folder structures.", keywords: ["persona", "folder style"], target: .rulesOrganizationStyle)
             ]
         case .tuning:
             return [
@@ -214,69 +306,75 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .automation:
             return [
-                SettingsFeatureSnippet(title: "Global Automation Model", summary: "Use one dedicated model for watched-folder automation, overriding folder-specific model picks while enabled.", keywords: ["custom model", "watched folder model override"]),
-                SettingsFeatureSnippet(title: "Launch at Login", summary: "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"]),
-                SettingsFeatureSnippet(title: "Keep in Background", summary: "Continue monitoring folders even when all windows are closed.", keywords: ["background activity", "background app", "folder watching"]),
-                SettingsFeatureSnippet(title: "Hide Dock Icon", summary: "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"])
+                feature("Global Automation Model", "Use one dedicated model for watched-folder automation, overriding folder-specific model picks while enabled.", keywords: ["custom model", "watched folder model override"], target: .automationGlobalModel),
+                feature("Launch at Login", "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"], target: .automationLaunchAtLogin),
+                feature("Keep in Background", "Continue monitoring folders even when all windows are closed.", keywords: ["background activity", "background app", "folder watching"], target: .automationKeepInBackground),
+                feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .automationHideDockIcon)
             ]
         case .deeplinks:
             return [
-                SettingsFeatureSnippet(title: "Core Deeplinks", summary: "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"]),
-                SettingsFeatureSnippet(title: "Organization Deeplinks", summary: "Copy links for organize, duplicates, scan, storage, and workspace-health workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"]),
-                SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"]),
-                SettingsFeatureSnippet(title: "Finder Deeplinks", summary: "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"])
+                feature("Core Deeplinks", "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"], target: .deeplinksCore),
+                feature("Organization Deeplinks", "Copy links for organize, duplicates, scan, and storage workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"], target: .deeplinksOrganization),
+                feature("Automation Deeplinks", "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"], target: .deeplinksAutomation),
+                feature("Finder Deeplinks", "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"], target: .deeplinksFinder)
             ]
         case .finder:
             return [
-                SettingsFeatureSnippet(title: "Organize with Sorty", summary: "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"]),
-                SettingsFeatureSnippet(title: "Watch with Sorty", summary: "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"]),
-                SettingsFeatureSnippet(title: "Exclude with Sorty", summary: "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"]),
-                SettingsFeatureSnippet(title: "Finder Extension", summary: "Activate or repair the Finder Sync extension and jump to macOS Extensions settings."),
-                SettingsFeatureSnippet(title: "Automation Permission", summary: "Grant and recover Finder automation permission required for workflow controls.")
+                feature("Organize with Sorty", "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"], target: .finderOrganize),
+                feature("Watch with Sorty", "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"], target: .finderWatch),
+                feature("Exclude with Sorty", "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"], target: .finderExclude),
+                feature("Finder Extension", "Activate or repair the Finder Sync extension and jump to macOS Extensions settings.", keywords: ["finder sync", "extensions"], target: .finderExtension),
+                feature("Automation Permission", "Grant and recover Finder automation permission required for workflow controls.", keywords: ["apple events", "recover permission"], target: .finderAutomationPermission)
             ]
         case .notifications:
             return [
-                SettingsFeatureSnippet(title: "Notification Permission", summary: "Check macOS notification authorization status.", keywords: ["system notification permission", "settings gear"]),
-                SettingsFeatureSnippet(title: "In-App HUD", summary: "Show notifications as subtle bottom-left overlays.", keywords: ["delivery method", "hud", "overlay"]),
-                SettingsFeatureSnippet(title: "System Notifications", summary: "Show notifications in macOS Notification Center.", keywords: ["delivery method", "notification center", "system notification"]),
-                SettingsFeatureSnippet(title: "Notification Types", summary: "Control processing complete, preview ready, and processing error notifications."),
-                SettingsFeatureSnippet(title: "Completion Sound", summary: "Play a sound when organization finishes.", keywords: ["sounds"])
+                feature("Notification Permission", "Check macOS notification authorization status.", keywords: ["system notification permission", "settings gear"], target: .notificationsPermission),
+                feature("In-App HUD", "Show notifications as subtle bottom-left overlays.", keywords: ["delivery method", "hud", "overlay"], target: .notificationsInAppHUD),
+                feature("System Notifications", "Show notifications in macOS Notification Center.", keywords: ["delivery method", "notification center", "system notification"], target: .notificationsSystem),
+                feature("Notification Types", "Control which organization events send notifications.", target: .notificationsTypes),
+                feature("Processing Complete", "Notify when file processing finishes successfully.", keywords: ["finished", "success"], target: .notificationsProcessingComplete),
+                feature("Preview Ready", "Notify when Sorty finishes generating an organization plan.", keywords: ["plan ready"], target: .notificationsPreviewReady),
+                feature("Processing Errors", "Notify when organization encounters an error.", keywords: ["failure", "failed"], target: .notificationsProcessingErrors),
+                feature("Completion Sound", "Play a sound when organization finishes.", keywords: ["sounds", "audio"], target: .notificationsCompletionSound)
             ]
         case .permissions:
             return [
-                SettingsFeatureSnippet(title: "Files & Folders", summary: "Choose the folders Sorty can scan and organize.", keywords: ["folder picker", "grant access"]),
-                SettingsFeatureSnippet(title: "Full Disk Access", summary: "Allow access to protected folders you explicitly choose.", keywords: ["privacy and security", "protected folders"]),
-                SettingsFeatureSnippet(title: "Finder Automation", summary: "Allow Sorty to read Finder selections for Finder Integration.", keywords: ["automation permission", "apple events"]),
-                SettingsFeatureSnippet(title: "Notifications", summary: "Allow Sorty to deliver alerts through macOS Notification Center.", keywords: ["notification permission", "alerts"])
+                feature("Files & Folders", "Choose the folders Sorty can scan and organize.", keywords: ["folder picker", "grant access"], target: .permissionsFilesAndFolders),
+                feature("Full Disk Access", "Allow access to protected folders you explicitly choose.", keywords: ["privacy and security", "protected folders"], target: .permissionsFullDiskAccess),
+                feature("Finder Automation", "Allow Sorty to read Finder selections for Finder Integration.", keywords: ["automation permission", "apple events"], target: .permissionsAutomation),
+                feature("Notifications", "Allow Sorty to deliver alerts through macOS Notification Center.", keywords: ["notification permission", "alerts"], target: .permissionsNotifications)
             ]
         case .advanced:
             return [
-                SettingsFeatureSnippet(title: "Show Menu Bar Icon", summary: "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"]),
-                SettingsFeatureSnippet(title: "Finder Workflow", summary: "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"]),
-                SettingsFeatureSnippet(title: "Privacy Mode", summary: "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"]),
-                SettingsFeatureSnippet(title: "Block Internet Connections", summary: "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"]),
-                SettingsFeatureSnippet(title: "Timeouts", summary: "Tune request timeout and maximum total request duration."),
-                SettingsFeatureSnippet(title: "Stats for Nerds", summary: "Show detailed generation metrics.", keywords: ["developer", "metrics"]),
-                SettingsFeatureSnippet(title: "Show Error Logs", summary: "Export and reveal diagnostic logs for debugging.", keywords: ["developer tools", "red logs", "error logs", "logs"])
+                feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .advancedMenuBar),
+                feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
+                feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
+                feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),
+                feature("Timeouts", "Tune request timeout and maximum total request duration.", target: .advancedTimeouts),
+                feature("Request Timeout", "Set how long Sorty waits for the initial AI response.", keywords: ["initial response", "seconds"], target: .advancedRequestTimeout),
+                feature("Resource Timeout", "Set the maximum total duration of an AI request.", keywords: ["total request duration", "seconds"], target: .advancedResourceTimeout),
+                feature("Stats for Nerds", "Show detailed generation metrics.", keywords: ["developer", "metrics", "tokens", "throughput", "cost"], target: .advancedStats),
+                feature("Show Error Logs", "Export and reveal diagnostic logs for debugging.", keywords: ["developer tools", "red logs", "error logs", "logs"], target: .advancedErrorLogs)
             ]
         case .troubleshooting:
             return [
-                SettingsFeatureSnippet(title: "Cache", summary: "Clear cached data and recover from stale state."),
-                SettingsFeatureSnippet(title: "Learnings Data", summary: "Inspect or reset learning signals and history."),
-                SettingsFeatureSnippet(title: "Reset Sorty", summary: "Perform a full reset of app configuration.")
+                feature("Cache", "Clear cached data and recover from stale state.", keywords: ["clear cache"], target: .troubleshootingCache),
+                feature("Learnings Data", "Inspect or reset learning signals and history.", keywords: ["delete learnings"], target: .troubleshootingLearnings),
+                feature("Reset Sorty", "Perform a full reset of app configuration.", keywords: ["erase all data", "factory reset"], target: .troubleshootingReset)
             ]
         case .help:
             return [
-                SettingsFeatureSnippet(title: "Support Links", summary: "Open docs, changelog, and issue reporting links."),
-                SettingsFeatureSnippet(title: "Copy Issue Details", summary: "Copy app, build, macOS, and device details for GitHub issue reports.", keywords: ["support data", "diagnostics", "bug report"])
+                feature("Support Links", "Open documentation, changelog, issue reporting, privacy, and terms.", target: .helpSupport),
+                feature("Documentation", "Open Sorty’s help and usage documentation.", keywords: ["help guide", "readme"], target: .helpDocumentation),
+                feature("Report Issue", "Open GitHub Issues to report a bug or request a feature.", keywords: ["bug report", "github issue"], target: .helpReportIssue),
+                feature("View Changelog", "Review recent Sorty releases and product changes.", keywords: ["release notes", "what's new"], target: .helpChangelog),
+                feature("Privacy Policy", "Read Sorty’s privacy policy.", keywords: ["legal", "data"], target: .helpPrivacy),
+                feature("Terms of Service", "Read Sorty’s terms of service.", keywords: ["legal", "terms"], target: .helpTerms),
+                feature("Copy Issue Details", "Copy app, build, macOS, and device details for GitHub issue reports.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
             ]
         case .experimental:
             return [
-                SettingsFeatureSnippet(
-                    title: "Experimental Features",
-                    summary: "See whether any labs or beta features are currently available.",
-                    keywords: ["experimental", "labs", "beta", "feature flags"]
-                )
+                feature("Experimental Features", "See whether any labs or beta features are currently available.", keywords: ["experimental", "labs", "beta", "feature flags"], target: .experimentalEmptyState)
             ]
         }
     }
@@ -320,96 +418,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     }
 
     public func focusTarget(for snippet: SettingsFeatureSnippet) -> SettingsFocusTarget? {
-        switch (self, snippet.title) {
-        case (.provider, "Select Provider"), (.provider, "GitHub Copilot"):
-            return .providerSelect
-        case (.provider, "API Configuration"), (.provider, "Model Catalog"):
-            return .providerConfiguration
-        case (.provider, "Connection Testing"):
-            return .providerConnection
-        case (.strategy, "Fast Mode"):
-            return .strategyFastMode
-        case (.strategy, "AI Vision for Images"):
-            return .strategyVision
-        case (.strategy, "Renaming"):
-            return .strategyRenaming
-        case (.rules, "Duplicate Handling"), (.rules, "Enable File Tagging"):
-            return .rulesContentRules
-        case (.rules, "AI Temperature"):
-            return .rulesTemperature
-        case (.rules, "Organization Style"):
-            return .rulesOrganizationStyle
-        case (.automation, "Global Automation Model"):
-            return .automationGlobalModel
-        case (.automation, "Launch at Login"):
-            return .automationLaunchAtLogin
-        case (.automation, "Keep in Background"):
-            return .automationKeepInBackground
-        case (.automation, "Hide Dock Icon"):
-            return .automationHideDockIcon
-        case (.deeplinks, "Core Deeplinks"):
-            return .deeplinksCore
-        case (.deeplinks, "Organization Deeplinks"):
-            return .deeplinksOrganization
-        case (.deeplinks, "Automation Deeplinks"):
-            return .deeplinksAutomation
-        case (.deeplinks, "Finder Deeplinks"):
-            return .deeplinksFinder
-        case (.finder, "Organize with Sorty"):
-            return .finderOrganize
-        case (.finder, "Watch with Sorty"):
-            return .finderWatch
-        case (.finder, "Exclude with Sorty"):
-            return .finderExclude
-        case (.finder, "Finder Extension"):
-            return .finderExtension
-        case (.finder, "Automation Permission"):
-            return .finderAutomationPermission
-        case (.notifications, "Notification Permission"):
-            return .notificationsPermission
-        case (.notifications, "In-App HUD"):
-            return .notificationsInAppHUD
-        case (.notifications, "System Notifications"):
-            return .notificationsSystem
-        case (.notifications, "Notification Types"):
-            return .notificationsTypes
-        case (.notifications, "Completion Sound"):
-            return .notificationsCompletionSound
-        case (.permissions, "Files & Folders"):
-            return .permissionsFilesAndFolders
-        case (.permissions, "Full Disk Access"):
-            return .permissionsFullDiskAccess
-        case (.permissions, "Finder Automation"):
-            return .permissionsAutomation
-        case (.permissions, "Notifications"):
-            return .permissionsNotifications
-        case (.advanced, "Show Menu Bar Icon"):
-            return .advancedMenuBar
-        case (.advanced, "Finder Workflow"):
-            return .advancedFinderWorkflow
-        case (.advanced, "Privacy Mode"):
-            return .advancedPrivacyMode
-        case (.advanced, "Block Internet Connections"):
-            return .advancedInternetPrivacy
-        case (.advanced, "Timeouts"):
-            return .advancedTimeouts
-        case (.advanced, "Stats for Nerds"), (.advanced, "Show Error Logs"):
-            return .advancedDeveloper
-        case (.troubleshooting, "Cache"):
-            return .troubleshootingCache
-        case (.troubleshooting, "Learnings Data"):
-            return .troubleshootingLearnings
-        case (.troubleshooting, "Reset Sorty"):
-            return .troubleshootingReset
-        case (.help, "Support Links"):
-            return .helpSupport
-        case (.help, "Copy Issue Details"):
-            return .helpIssueDetails
-        case (.experimental, "Experimental Features"):
-            return .experimentalEmptyState
-        default:
-            return snippet.title == rawValue ? fallbackFocusTarget : nil
-        }
+        snippet.focusTarget ?? (snippet.title == rawValue ? fallbackFocusTarget : nil)
     }
 
     private var fallbackFocusTarget: SettingsFocusTarget? {
@@ -458,13 +467,19 @@ private extension SettingsFeatureSnippet {
 
         var score = 0
 
-        if normalizedTitle.contains(normalizedQuery) {
+        if normalizedTitle == normalizedQuery {
+            score += 48
+        } else if normalizedTitle.hasPrefix(normalizedQuery) {
+            score += 32
+        } else if normalizedTitle.contains(normalizedQuery) {
             score += 24
         }
         if normalizedSummary.contains(normalizedQuery) {
             score += 14
         }
-        if normalizedKeywords.contains(where: { $0.contains(normalizedQuery) }) {
+        if normalizedKeywords.contains(normalizedQuery) {
+            score += 18
+        } else if normalizedKeywords.contains(where: { $0.contains(normalizedQuery) }) {
             score += 10
         }
 
@@ -482,7 +497,9 @@ private extension SettingsFeatureSnippet {
             }
         }
 
-        if queryTerms.count > 1 && matchedTermCount == queryTerms.count {
+        guard matchedTermCount == queryTerms.count else { return 0 }
+
+        if queryTerms.count > 1 {
             score += 8
         }
 

@@ -86,7 +86,7 @@ public class AISessionManager: ObservableObject {
         }
         
         let sessionConfig = createSessionConfiguration(for: provider, aiConfig: config)
-        let session = URLSession(configuration: sessionConfig)
+        let session = NetworkPrivacyPolicy.makeSession(configuration: sessionConfig)
         sessions[provider] = session
         sessionSignatures[provider] = currentSignature
         

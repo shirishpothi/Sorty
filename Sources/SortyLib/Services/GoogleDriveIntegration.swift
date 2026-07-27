@@ -8,7 +8,7 @@ public struct URLSessionProviderTransport: ProviderHTTPTransport {
     public init() {}
 
     public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await NetworkPrivacyPolicy.sharedSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw CloudProviderIntegrationError.invalidResponse
         }

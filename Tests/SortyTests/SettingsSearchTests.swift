@@ -61,8 +61,8 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testRulesFocusTargetMappingsForKnownSnippets() {
-        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Duplicate Handling")), .rulesContentRules)
-        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Enable File Tagging")), .rulesContentRules)
+        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Content Rules")), .rulesContentRules)
+        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Enable File Tagging")), .rulesFileTagging)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Organization Style")), .rulesOrganizationStyle)
         XCTAssertEqual(SettingsCategory.notifications.focusTarget(for: snippet(in: .notifications, titled: "System Notifications")), .notificationsSystem)
         XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Block Internet Connections")), .advancedInternetPrivacy)
@@ -82,11 +82,42 @@ final class SettingsSearchTests: XCTestCase {
     func testEveryVisibleFeatureSnippetHasAFocusTarget() {
         for category in SettingsCategory.allCases where category != .tuning {
             for snippet in category.featureSnippets {
-                XCTAssertNotNil(
-                    category.focusTarget(for: snippet),
-                    "Missing focus target for \(category.rawValue) > \(snippet.title)"
+                XCTAssertEqual(
+                    category.focusTarget(for: snippet)?.category,
+                    category,
+                    "Misdirected focus target for \(category.rawValue) > \(snippet.title)"
                 )
             }
+        }
+    }
+
+    func testExpandedSettingsIndexFindsSpecificControls() {
+        XCTAssertEqual(
+            SettingsCategory.strategy.featureMatches(query: "max filename length").first?.snippet.title,
+            "Filename Format"
+        )
+        XCTAssertEqual(
+            SettingsCategory.notifications.featureMatches(query: "processing errors").first?.snippet.title,
+            "Processing Errors"
+        )
+        XCTAssertEqual(
+            SettingsCategory.advanced.featureMatches(query: "request timeout").first?.snippet.title,
+            "Request Timeout"
+        )
+        XCTAssertEqual(
+            SettingsCategory.help.featureMatches(query: "privacy policy").first?.snippet.title,
+            "Privacy Policy"
+        )
+    }
+
+    func testEveryFocusTargetRoutesToAVisibleCategory() {
+        let visibleCategories = Set(SettingsCategory.allCases.filter { $0 != .tuning })
+
+        for target in SettingsFocusTarget.allCases {
+            XCTAssertTrue(
+                visibleCategories.contains(target.category),
+                "\(target.rawValue) routes to a hidden category"
+            )
         }
     }
 

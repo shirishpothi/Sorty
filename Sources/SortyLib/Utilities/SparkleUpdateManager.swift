@@ -246,6 +246,8 @@ public class SparkleUpdateManager: ObservableObject {
 
     /// Check for updates immediately
     public func checkForUpdates() {
+        guard allowInternetUpdateAction() else { return }
+
         #if canImport(Sparkle)
         guard let updater else {
             LogManager.shared.log("Cannot check for updates - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
@@ -268,6 +270,8 @@ public class SparkleUpdateManager: ObservableObject {
 
     /// Check for updates in the background (no UI)
     public func checkForUpdatesInBackground() {
+        guard allowInternetUpdateAction() else { return }
+
         #if canImport(Sparkle)
         guard let updater = self.updater as? SPUUpdater else {
             LogManager.shared.log("Cannot check for updates in background - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
@@ -287,6 +291,7 @@ public class SparkleUpdateManager: ObservableObject {
     public func checkOnLaunchIfNeeded(minimumInterval: TimeInterval = 0) {
         guard !hasRequestedLaunchCheck else { return }
         hasRequestedLaunchCheck = true
+        guard allowInternetUpdateAction() else { return }
 
         // Skip if Sparkle is disabled
         #if canImport(Sparkle)
@@ -316,6 +321,8 @@ public class SparkleUpdateManager: ObservableObject {
     /// Sparkle continues to own download, validation, installation, and relaunch.
     @discardableResult
     public func installAvailableUpdate() -> Bool {
+        guard allowInternetUpdateAction() else { return false }
+
         #if canImport(Sparkle)
         if userDriver.installPendingUpdate() {
             return true
@@ -331,9 +338,25 @@ public class SparkleUpdateManager: ObservableObject {
 
     /// Brings Sparkle's current download or installation status window forward.
     public func showUpdateInFocus() {
+        guard allowInternetUpdateAction() else { return }
+
         #if canImport(Sparkle)
         updater?.checkForUpdates()
         #endif
+    }
+
+    private func allowInternetUpdateAction() -> Bool {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            updateState = .error(NetworkPrivacyPolicy.blockedMessage)
+            LogManager.shared.log(
+                "Skipped update network access because Block Internet Connections is enabled",
+                level: .warning,
+                category: "SparkleUpdateManager"
+            )
+            return false
+        }
+
+        return true
     }
 
     private func recordCheckDate() {
@@ -354,6 +377,33 @@ public class SparkleUpdateManager: ObservableObject {
 @MainActor
 private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     var stateCallback: ((SparkleUpdateManager.UpdateState) -> Void)?
+
+    nonisolated func updater(
+        _ updater: SPUUpdater,
+        mayPerform updateCheck: SPUUpdateCheck
+    ) throws {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            throw NSError(
+                domain: "com.sorty.app.network-privacy",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: NetworkPrivacyPolicy.blockedMessage]
+            )
+        }
+    }
+
+    nonisolated func updater(
+        _ updater: SPUUpdater,
+        shouldProceedWithUpdate updateItem: SUAppcastItem,
+        updateCheck: SPUUpdateCheck
+    ) throws {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            throw NSError(
+                domain: "com.sorty.app.network-privacy",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: NetworkPrivacyPolicy.blockedMessage]
+            )
+        }
+    }
 
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         LogManager.shared.log(

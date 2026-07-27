@@ -103,7 +103,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
     @Published public var isPolling = false
     @Published public var authError: String?
     
-    private let session = URLSession.shared
+    private let session = NetworkPrivacyPolicy.sharedSession
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<String, Error>?
     private var authenticationCheckTask: Task<Void, Never>?

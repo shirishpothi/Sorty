@@ -12,6 +12,7 @@ public enum NetworkPrivacyPolicy {
     public static let internetPrivacyModeKey = "internetPrivacyModeEnabled"
     private static let testDefaultsSuiteLock = NSLock()
     private nonisolated(unsafe) static var testDefaultsSuiteName: String?
+    public static let sharedSession = makeSession()
 
     /// Dedicated privacy mode for network traffic.
     /// When enabled, only loopback hosts are allowed.
@@ -33,6 +34,16 @@ public enum NetworkPrivacyPolicy {
     public static func isRequestAllowed(url: URL) -> Bool {
         guard isInternetPrivacyModeEnabled else { return true }
         return isLoopbackURL(url)
+    }
+
+    public static func makeSession(
+        configuration: URLSessionConfiguration = .default
+    ) -> URLSession {
+        URLSession(
+            configuration: configuration,
+            delegate: NetworkPrivacyURLSessionDelegate(),
+            delegateQueue: nil
+        )
     }
 
     private static func activeDefaults() -> UserDefaults {
@@ -81,5 +92,23 @@ public enum NetworkPrivacyPolicy {
         }
 
         return false
+    }
+}
+
+final class NetworkPrivacyURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        guard let url = request.url,
+              NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            completionHandler(nil)
+            return
+        }
+
+        completionHandler(request)
     }
 }

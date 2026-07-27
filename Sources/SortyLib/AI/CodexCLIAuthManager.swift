@@ -218,6 +218,11 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     func openTerminalWithLogin() {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            authError = NetworkPrivacyPolicy.blockedMessage
+            return
+        }
+
         do {
             let scriptURL = try prepareLoginScript()
             guard NSWorkspace.shared.open(scriptURL) else {
@@ -232,6 +237,12 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     func startDeviceAuth() {
         cancelDeviceAuth()
+
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            deviceAuthSession = CodexDeviceAuthSession(status: .failed(NetworkPrivacyPolicy.blockedMessage))
+            authError = NetworkPrivacyPolicy.blockedMessage
+            return
+        }
 
         guard let codexExecutablePath = resolveCodexExecutablePath() else {
             deviceAuthSession = CodexDeviceAuthSession(status: .failed("Codex CLI not found. Install with: npm i -g @openai/codex"))

@@ -17,7 +17,8 @@ struct OrganizationRulesSettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableFileTagging,
                         title: "Enable File Tagging",
-                        description: "Allow Sorty to suggest and apply Finder tags to files"
+                        description: "Allow Sorty to suggest and apply Finder tags to files",
+                        focusTarget: .rulesFileTagging
                     )
                 }
             }

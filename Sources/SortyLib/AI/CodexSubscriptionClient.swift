@@ -139,6 +139,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     }
 
     public func checkHealth() async throws {
+        guard let serviceURL = URL(string: "https://api.openai.com") else {
+            throw AIClientError.invalidURL
+        }
+        try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
+
         guard Self.resolveCodexExecutablePath() != nil else {
             throw AIClientError.apiError(
                 statusCode: 501,

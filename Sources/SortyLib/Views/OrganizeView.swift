@@ -1947,15 +1947,8 @@ struct SavedPromptsSheet: View {
     let settingsConfig: AIConfig
     let onApplyPrompt: (String) -> Void
 
-    @State private var editingPromptId: UUID? = nil
-    @State private var editName = ""
-    @State private var editText = ""
-    @State private var draftPrompt: SavedSteeringPrompt?
-    @State private var improvingPromptId: UUID? = nil
-    @State private var showImprovePromptRequest = false
-    @State private var improvePromptRequestMessage = ""
+    @State private var editingSession: SavedPromptEditingSession?
     @State private var isEmptyStateVisible: Bool
-    @FocusState private var isEditTextFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -1990,35 +1983,30 @@ struct SavedPromptsSheet: View {
             Divider()
 
             ZStack {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(steeringManager.prompts) { prompt in
-                            savedPromptCard(prompt)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .opacity
-                                            .combined(with: .scale(scale: 0.97, anchor: .top))
-                                            .combined(with: .offset(y: -6)),
-                                        removal: .opacity
-                                            .combined(with: .scale(scale: 0.97, anchor: .top))
-                                            .combined(with: .offset(y: -6))
-                                    )
-                                )
-                        }
-
-                        if let draftPrompt {
-                            savedPromptCard(draftPrompt, isDraft: true)
-                                .transition(
-                                    .opacity
-                                        .combined(with: .scale(scale: 0.97, anchor: .top))
-                                        .combined(with: .offset(y: -6))
-                                )
-                        }
+                List {
+                    ForEach(steeringManager.prompts) { prompt in
+                        savedPromptRow(prompt)
+                            .transition(savedPromptTransition)
+                            .savedPromptListRow()
                     }
-                    .padding(20)
-                }
 
-                if isEmptyStateVisible && draftPrompt == nil {
+                    if let editingSession, editingSession.isDraft {
+                        SavedPromptEditorCard(
+                            session: editingSession,
+                            steeringManager: steeringManager,
+                            settingsConfig: settingsConfig,
+                            onCancel: cancelEditing,
+                            onSave: saveEditingPrompt
+                        )
+                        .transition(savedPromptTransition)
+                        .savedPromptListRow()
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .contentMargins(.vertical, 14, for: .scrollContent)
+
+                if isEmptyStateVisible && editingSession?.isDraft != true {
                     VStack(spacing: 16) {
                         Spacer()
 
@@ -2056,7 +2044,7 @@ struct SavedPromptsSheet: View {
                     )
                 }
             }
-            .animation(.spring(response: 0.42, dampingFraction: 0.88), value: steeringManager.prompts.map(\.id))
+            .animation(.spring(response: 0.42, dampingFraction: 0.88), value: steeringManager.prompts.count)
 
             Divider()
 
@@ -2066,7 +2054,7 @@ struct SavedPromptsSheet: View {
                     addNewPrompt()
                 }
                 .buttonStyle(.sortyBordered)
-                .disabled(editingPromptId != nil)
+                .disabled(editingSession != nil)
 
                 Spacer()
 
@@ -2093,165 +2081,59 @@ struct SavedPromptsSheet: View {
     }
 
     @ViewBuilder
-    private func savedPromptCard(_ prompt: SavedSteeringPrompt, isDraft: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if editingPromptId == prompt.id {
-                // Editing mode
-                TextField("Prompt name", text: $editName)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.subheadline.weight(.medium))
-
-                if steeringManager.hasPrompt(named: editName, excluding: prompt.id) {
-                    Text("A prompt with this name already exists.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-
-                TextEditor(text: $editText)
-                    .font(.body)
-                    .focused($isEditTextFocused)
-                    .frame(minHeight: 100, maxHeight: 160)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(NSColor.textBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                    )
-
-                HStack(spacing: 8) {
-                    // Improve with AI button
-                    Button {
-                        Task { await improveEditingPrompt(prompt) }
-                    } label: {
-                        if improvingPromptId == prompt.id {
-                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                        } else {
-                            Label("Improve with Sorty", systemImage: "wand.and.stars")
-                        }
+    private func savedPromptRow(_ prompt: SavedSteeringPrompt) -> some View {
+        if let editingSession, editingSession.prompt.id == prompt.id {
+            SavedPromptEditorCard(
+                session: editingSession,
+                steeringManager: steeringManager,
+                settingsConfig: settingsConfig,
+                onCancel: cancelEditing,
+                onSave: saveEditingPrompt
+            )
+        } else {
+            SavedPromptDisplayCard(
+                prompt: prompt,
+                onUse: {
+                    onApplyPrompt(prompt.prompt)
+                },
+                onEdit: {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+                        editingSession = SavedPromptEditingSession(prompt: prompt)
                     }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-                    .disabled(editText.trimmingCharacters(in: .whitespaces).isEmpty || improvingPromptId == prompt.id)
-                    .alert("Sorty needs more detail", isPresented: $showImprovePromptRequest) {
-                        Button("Edit Instructions") {
-                            isEditTextFocused = true
-                        }
-                    } message: {
-                        Text(
-                            "\(improvePromptRequestMessage)\n\nEdit the instructions above, then click Improve again."
-                        )
-                    }
-
-                    Spacer()
-
-                    Button("Cancel") {
-                        let didSaveDraft = isDraft && saveDraftIfNeeded()
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                            if steeringManager.prompts.isEmpty {
-                                isEmptyStateVisible = true
-                            }
-                            editingPromptId = nil
-                        }
-                        if didSaveDraft {
-                            HapticFeedbackManager.shared.success()
-                        }
-                    }
-                    .controlSize(.small)
-
-                    Button("Save") {
-                        saveEditingPrompt(prompt, isDraft: isDraft)
-                    }
-                    .buttonStyle(.sortyProminent)
-                    .controlSize(.small)
-                    .disabled(
-                        editName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || steeringManager.hasPrompt(named: editName, excluding: prompt.id)
-                    )
-                }
-            } else {
-                // Display mode
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(prompt.name)
-                                .font(.subheadline.weight(.semibold))
-                            if prompt.isDefault {
-                                Text("Default")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundColor(.green)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.green.opacity(0.15)))
-                            }
-                        }
-                        Text(prompt.prompt)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
-                    Spacer()
-                }
-
-                HStack(spacing: 8) {
-                    Button("Use") {
-                        onApplyPrompt(prompt.prompt)
-                    }
-                    .buttonStyle(.sortyProminent)
-                    .controlSize(.small)
-
-                    Button("Edit") {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-                            editingPromptId = prompt.id
-                            editName = prompt.name
-                            editText = prompt.prompt
-                        }
-                    }
-                    .controlSize(.small)
-
-                    Button(prompt.isDefault ? "Unset Default" : "Set Default") {
+                },
+                onToggleDefault: {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
                         if prompt.isDefault {
                             steeringManager.clearDefault()
                         } else {
                             steeringManager.setDefault(id: prompt.id)
                         }
-                        HapticFeedbackManager.shared.selection()
                     }
-                    .controlSize(.small)
-
-                    Spacer()
-
-                    Button(role: .destructive) {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            if editingPromptId == prompt.id {
-                                editingPromptId = nil
-                            }
-                            steeringManager.deletePrompt(id: prompt.id)
-                        }
-                        HapticFeedbackManager.shared.tap()
-                    } label: {
-                        Image(systemName: "trash")
+                    HapticFeedbackManager.shared.selection()
+                },
+                onDelete: {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                        steeringManager.deletePrompt(id: prompt.id)
                     }
-                    .controlSize(.small)
+                    HapticFeedbackManager.shared.tap()
                 }
-            }
+            )
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+    }
+
+    private var savedPromptTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity
+                .combined(with: .scale(scale: 0.97, anchor: .top))
+                .combined(with: .offset(y: -6)),
+            removal: .opacity
+                .combined(with: .scale(scale: 0.97, anchor: .top))
+                .combined(with: .offset(y: -6))
         )
     }
 
     private func addNewPrompt() {
-        guard draftPrompt == nil else { return }
+        guard editingSession == nil else { return }
 
         var name = "New Prompt"
         var suffix = 2
@@ -2262,18 +2144,15 @@ struct SavedPromptsSheet: View {
 
         let newPrompt = SavedSteeringPrompt(name: name, prompt: "")
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-            draftPrompt = newPrompt
-            editingPromptId = newPrompt.id
-            editName = newPrompt.name
-            editText = newPrompt.prompt
+            editingSession = SavedPromptEditingSession(prompt: newPrompt, isDraft: true)
             isEmptyStateVisible = false
         }
         HapticFeedbackManager.shared.tap()
     }
 
     private func closeSheet() {
-        let didSaveDraft = saveDraftIfNeeded()
-        editingPromptId = nil
+        let didSaveDraft = saveDraftIfNeeded(editingSession)
+        editingSession = nil
         dismiss()
         if didSaveDraft {
             HapticFeedbackManager.shared.success()
@@ -2281,46 +2160,220 @@ struct SavedPromptsSheet: View {
     }
 
     @discardableResult
-    private func saveDraftIfNeeded() -> Bool {
-        guard let draftPrompt else { return false }
-        guard !editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            self.draftPrompt = nil
+    private func saveDraftIfNeeded(_ session: SavedPromptEditingSession?) -> Bool {
+        guard let session, session.isDraft else { return false }
+        guard !session.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return false
         }
 
-        var savedPrompt = draftPrompt
-        savedPrompt.name = editName
-        savedPrompt.prompt = editText
-        guard steeringManager.addPrompt(savedPrompt) else { return false }
-
-        self.draftPrompt = nil
-        return true
+        var prompt = session.prompt
+        prompt.name = session.name
+        prompt.prompt = session.text
+        return steeringManager.addPrompt(prompt)
     }
 
-    private func saveEditingPrompt(_ prompt: SavedSteeringPrompt, isDraft: Bool) {
-        var updated = prompt
-        updated.name = editName
-        updated.prompt = editText
-
-        let didSave = isDraft
-            ? steeringManager.addPrompt(updated)
-            : steeringManager.updatePrompt(updated)
-        guard didSave else { return }
-
+    private func cancelEditing(_ session: SavedPromptEditingSession) {
+        var didSaveDraft = false
         withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
-            if isDraft {
-                draftPrompt = nil
+            didSaveDraft = saveDraftIfNeeded(session)
+            editingSession = nil
+            if steeringManager.prompts.isEmpty {
+                isEmptyStateVisible = true
             }
-            editingPromptId = nil
         }
+        if didSaveDraft {
+            HapticFeedbackManager.shared.success()
+        }
+    }
+
+    private func saveEditingPrompt(_ session: SavedPromptEditingSession) {
+        var prompt = session.prompt
+        prompt.name = session.name
+        prompt.prompt = session.text
+
+        var didSave = false
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.9)) {
+            didSave = session.isDraft
+                ? steeringManager.addPrompt(prompt)
+                : steeringManager.updatePrompt(prompt)
+            if didSave {
+                editingSession = nil
+            }
+        }
+        guard didSave else { return }
         HapticFeedbackManager.shared.success()
     }
+}
 
-    private func improveEditingPrompt(_ prompt: SavedSteeringPrompt) async {
-        let original = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+@MainActor
+private final class SavedPromptEditingSession: ObservableObject {
+    let prompt: SavedSteeringPrompt
+    let isDraft: Bool
+
+    @Published var name: String
+    @Published var text: String
+    @Published var isImproving = false
+    @Published var showImprovePromptRequest = false
+    @Published var improvePromptRequestMessage = ""
+
+    init(prompt: SavedSteeringPrompt, isDraft: Bool = false) {
+        self.prompt = prompt
+        self.isDraft = isDraft
+        name = prompt.name
+        text = prompt.prompt
+    }
+}
+
+private struct SavedPromptDisplayCard: View {
+    let prompt: SavedSteeringPrompt
+    let onUse: () -> Void
+    let onEdit: () -> Void
+    let onToggleDefault: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(prompt.name)
+                            .font(.subheadline.weight(.semibold))
+                        if prompt.isDefault {
+                            Text("Default")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.green.opacity(0.15)))
+                        }
+                    }
+                    Text(prompt.prompt)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                Button("Use", action: onUse)
+                    .buttonStyle(.sortyProminent)
+                    .controlSize(.small)
+
+                Button("Edit", action: onEdit)
+                    .controlSize(.small)
+
+                Button(prompt.isDefault ? "Unset Default" : "Set Default", action: onToggleDefault)
+                    .controlSize(.small)
+
+                Spacer()
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .controlSize(.small)
+            }
+        }
+        .savedPromptCardSurface()
+    }
+}
+
+private struct SavedPromptEditorCard: View {
+    @ObservedObject var session: SavedPromptEditingSession
+    let steeringManager: SteeringPromptManager
+    let settingsConfig: AIConfig
+    let onCancel: (SavedPromptEditingSession) -> Void
+    let onSave: (SavedPromptEditingSession) -> Void
+
+    @FocusState private var isEditTextFocused: Bool
+
+    var body: some View {
+        let hasDuplicateName = steeringManager.hasPrompt(
+            named: session.name,
+            excluding: session.prompt.id
+        )
+
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Prompt name", text: $session.name)
+                .textFieldStyle(.roundedBorder)
+                .font(.subheadline.weight(.medium))
+
+            if hasDuplicateName {
+                Text("A prompt with this name already exists.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            TextEditor(text: $session.text)
+                .font(.body)
+                .focused($isEditTextFocused)
+                .frame(minHeight: 100, maxHeight: 160)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(NSColor.textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+
+            HStack(spacing: 8) {
+                Button {
+                    Task { await improveInstructions() }
+                } label: {
+                    if session.isImproving {
+                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                    } else {
+                        Label("Improve with Sorty", systemImage: "wand.and.stars")
+                    }
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.small)
+                .disabled(
+                    session.text.trimmingCharacters(in: .whitespaces).isEmpty
+                        || session.isImproving
+                )
+                .alert(
+                    "Sorty needs more detail",
+                    isPresented: $session.showImprovePromptRequest
+                ) {
+                    Button("Edit Instructions") {
+                        isEditTextFocused = true
+                    }
+                } message: {
+                    Text(
+                        "\(session.improvePromptRequestMessage)\n\nEdit the instructions above, then click Improve again."
+                    )
+                }
+
+                Spacer()
+
+                Button("Cancel") {
+                    onCancel(session)
+                }
+                .controlSize(.small)
+
+                Button("Save") {
+                    onSave(session)
+                }
+                .buttonStyle(.sortyProminent)
+                .controlSize(.small)
+                .disabled(
+                    session.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || hasDuplicateName
+                )
+            }
+        }
+        .savedPromptCardSurface()
+    }
+
+    private func improveInstructions() async {
+        let original = session.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !original.isEmpty else { return }
-        improvingPromptId = prompt.id
-        defer { improvingPromptId = nil }
+        session.isImproving = true
+        defer { session.isImproving = false }
 
         do {
             let client = try AIClientFactory.createClient(config: settingsConfig)
@@ -2332,17 +2385,37 @@ struct SavedPromptsSheet: View {
 
             switch outcome {
             case .replacement(let replacement):
-                editText = replacement
-                showImprovePromptRequest = false
+                session.text = replacement
+                session.showImprovePromptRequest = false
                 HapticFeedbackManager.shared.success()
             case .needsUserInput(let message):
-                improvePromptRequestMessage = message
-                showImprovePromptRequest = true
+                session.improvePromptRequestMessage = message
+                session.showImprovePromptRequest = true
                 HapticFeedbackManager.shared.tap()
             }
         } catch {
             HapticFeedbackManager.shared.error()
         }
+    }
+}
+
+private extension View {
+    func savedPromptCardSurface() -> some View {
+        padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+            )
+    }
+
+    func savedPromptListRow() -> some View {
+        listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }
 

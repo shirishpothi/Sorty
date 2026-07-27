@@ -60,7 +60,7 @@ public final class ModelCatalog: ObservableObject {
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive"
         ]
-        self.session = URLSession(configuration: config)
+        self.session = NetworkPrivacyPolicy.makeSession(configuration: config)
         loadCacheFromDisk()
     }
     

@@ -690,7 +690,10 @@ struct PermissionsSettingsView: View {
     }
 
     private func openNotificationSettings() {
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         openFirstAvailableSettingsURL([
+            "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleIdentifier)",
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(bundleIdentifier)",
             "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
             "x-apple.systempreferences:com.apple.preference.notifications"
         ])

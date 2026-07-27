@@ -772,7 +772,7 @@ public class AppState: ObservableObject {
         section: SettingsCategory? = nil,
         focusTarget: SettingsFocusTarget? = nil
     ) {
-        selectedSettingsSection = section
+        selectedSettingsSection = focusTarget?.category ?? section
         settingsFocusTarget = focusTarget
         withAnimation(.pageTransition) {
             currentView = .settings
