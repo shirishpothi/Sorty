@@ -6,6 +6,7 @@
 //  Enhanced with haptic feedback, micro-animations, and full ARIA accessibility
 //
 
+import AppKit
 import SwiftUI
 
 private struct HistoryImpactSummary: Equatable {
@@ -573,7 +574,8 @@ struct HistoryHeader: View {
 
             Spacer(minLength: 12)
 
-            HistoryNavigatorPicker(selection: $selectedFilter)
+            HistoryNavigatorControl(selection: $selectedFilter)
+                .fixedSize()
 
             Spacer(minLength: 12)
 
@@ -615,38 +617,85 @@ struct HistoryHeader: View {
     }
 }
 
-private struct HistoryNavigatorPicker: View {
+private struct HistoryNavigatorControl: NSViewRepresentable {
+    private static let segmentWidth: CGFloat = 52
+
     @Binding var selection: HistoryView.HistoryFilter
 
-    private var animatedSelection: Binding<HistoryView.HistoryFilter> {
-        Binding(
-            get: { selection },
-            set: { newSelection in
-                guard newSelection != selection else { return }
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                    selection = newSelection
-                }
-                HapticFeedbackManager.shared.selection()
-            }
-        )
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
     }
 
-    var body: some View {
-        Picker("Filter history sessions", selection: animatedSelection) {
-            ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Label(filter.rawValue, systemImage: filter.systemImage)
-                    .labelStyle(.iconOnly)
-                    .tag(filter)
-                    .accessibilityLabel(filter.rawValue)
-                    .help(filter.rawValue)
-            }
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let filters = HistoryView.HistoryFilter.allCases
+        let images = filters.map { filter in
+            let image = NSImage(
+                systemSymbolName: filter.systemImage,
+                accessibilityDescription: filter.rawValue
+            ) ?? NSImage()
+            image.isTemplate = true
+            return image
         }
-        .pickerStyle(.palette)
-        .buttonStyle(.accessoryBar)
-        .labelsHidden()
-        .controlSize(.large)
-        .fixedSize()
-        .accessibilityIdentifier("HistoryFilterPicker")
+
+        let control = NSSegmentedControl(
+            images: images,
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.filterChanged(_:))
+        )
+        control.setAccessibilityLabel("Filter history sessions")
+        control.setAccessibilityIdentifier("HistoryFilterPicker")
+
+        if #available(macOS 26.0, *) {
+            control.controlSize = .extraLarge
+            control.borderShape = .capsule
+        } else {
+            control.controlSize = .large
+        }
+
+        // `role` is public API in the macOS 27 SDK (`NSSegmentedControl.Role.tabs`).
+        // Sorty currently builds against the macOS 26 SDK, so set it via KVC when the
+        // runtime supports it. Tabs role gives the Xcode navigator-bar treatment:
+        // glass rail, morphing glass thumb, and continuous drag tracking between tabs.
+        // TODO: Replace with `control.role = .tabs` once CI builds with the macOS 27 SDK.
+        if control.responds(to: NSSelectorFromString("setRole:")) {
+            control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
+        }
+
+        for (index, filter) in filters.enumerated() {
+            control.setWidth(Self.segmentWidth, forSegment: index)
+            control.setToolTip(filter.rawValue, forSegment: index)
+        }
+
+        return control
+    }
+
+    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        context.coordinator.selection = $selection
+        let filters = HistoryView.HistoryFilter.allCases
+        nsView.selectedSegment = filters.firstIndex(of: selection) ?? 0
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var selection: Binding<HistoryView.HistoryFilter>
+
+        init(selection: Binding<HistoryView.HistoryFilter>) {
+            self.selection = selection
+        }
+
+        @objc
+        func filterChanged(_ sender: NSSegmentedControl) {
+            let filters = HistoryView.HistoryFilter.allCases
+            guard filters.indices.contains(sender.selectedSegment) else { return }
+
+            let newSelection = filters[sender.selectedSegment]
+            guard newSelection != selection.wrappedValue else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                selection.wrappedValue = newSelection
+            }
+            HapticFeedbackManager.shared.selection()
+        }
     }
 }
 
