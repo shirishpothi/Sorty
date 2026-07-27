@@ -964,11 +964,6 @@ private struct HistorySummaryCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 18)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
     }
 }
 
