@@ -2478,7 +2478,6 @@ struct ErrorView: View {
 
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
-    @State private var isHoveringHelpSupport = false
     @State private var isHoveringSettings = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
@@ -2554,10 +2553,6 @@ struct ErrorView: View {
         case .generic:
             return "Choose a smarter model, then retry."
         }
-    }
-
-    private var showsHelpSupportChevron: Bool {
-        isHoveringHelpSupport || activeActionFeedback == .helpSupport
     }
 
     private var showsSettingsChevron: Bool {
@@ -2776,6 +2771,29 @@ struct ErrorView: View {
                 }
 
                 Button {
+                    HapticFeedbackManager.shared.tap()
+                    animateActionFeedback(.helpSupport)
+                    appState.openSettingsWindow(section: .help)
+                    appState.navigatedFromSettings = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "questionmark.circle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .symbolEffect(
+                                .bounce,
+                                value: activeActionFeedback == .helpSupport
+                            )
+                        Text("Help & Support")
+                            .font(.caption.bold())
+                    }
+                }
+                .buttonStyle(.tintedPill(.green, size: .small))
+                .scaleEffect(activeActionFeedback == .helpSupport ? 1.04 : 1.0)
+                .help("Open Help & Support")
+                .accessibilityHint("Opens the Help and Support settings page")
+                .accessibilityIdentifier("ErrorHelpSupportButton")
+
+                Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(privacySafeSupportDetails, forType: .string)
                     HapticFeedbackManager.shared.selection()
@@ -2846,58 +2864,7 @@ struct ErrorView: View {
 
                 Text("If it still fails, simplify your Instructions or Persona, then review Learnings, workflow, and organization rules.")
 
-                HStack(spacing: 3) {
-                    Text("Still stuck? Copy the details and open")
-
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        animateActionFeedback(.helpSupport)
-                        appState.openSettingsWindow(section: .help)
-                        appState.navigatedFromSettings = true
-                    } label: {
-                        HStack(spacing: 3) {
-                            Text("Help & Support")
-
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 8, weight: .semibold))
-                                .frame(width: 9)
-                                .opacity(showsHelpSupportChevron ? 1 : 0)
-                                .offset(
-                                    x: reduceMotion || showsHelpSupportChevron ? 0 : -3,
-                                    y: reduceMotion || showsHelpSupportChevron ? 0 : 3
-                                )
-                                .scaleEffect(
-                                    reduceMotion || showsHelpSupportChevron ? 1 : 0.75
-                                )
-                                .symbolEffect(
-                                    .bounce,
-                                    value: activeActionFeedback == .helpSupport
-                                )
-                                .accessibilityHidden(true)
-                        }
-                        .foregroundStyle(
-                            showsHelpSupportChevron
-                                ? SortyDesignSystem.Colors.accent
-                                : SortyDesignSystem.Colors.textTertiary
-                        )
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
-                        value: showsHelpSupportChevron
-                    )
-                    .onHover { hovering in
-                        isHoveringHelpSupport = hovering
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                    .help("Open Help & Support")
-                    .accessibilityLabel("Open Help and Support")
-                    .accessibilityHint("Opens the Help and Support settings page")
-                    .accessibilityIdentifier("ErrorHelpSupportLink")
-                }
+                Text("Still stuck? Copy the details and open Help & Support.")
             }
             .font(.caption)
             .foregroundStyle(.tertiary)
