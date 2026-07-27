@@ -1,5 +1,6 @@
 import { Code2, Cpu, FolderOpen, Hammer, Heart, Infinity, UsersRound } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { Squircle } from '@/components/squircle'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
 
@@ -49,7 +50,8 @@ export function Pricing() {
         </Reveal>
 
         <Reveal delay={120} className="mt-12">
-          <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-8 backdrop-blur-xl sm:p-10">
+          <Squircle radius={28}>
+          <div className="relative overflow-hidden border border-primary/30 bg-card/50 p-8 backdrop-blur-xl sm:p-10">
             <div
               aria-hidden
               className="pointer-events-none absolute -top-24 left-1/2 h-44 w-[28rem] -translate-x-1/2 rounded-[999px] bg-primary/15 blur-3xl"
@@ -116,6 +118,7 @@ export function Pricing() {
               external drives · Donations are optional
             </p>
           </div>
+          </Squircle>
         </Reveal>
       </div>
     </section>

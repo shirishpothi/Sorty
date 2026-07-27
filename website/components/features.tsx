@@ -12,6 +12,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
+import { Squircle } from '@/components/squircle'
 import { sitePath } from '@/lib/site-paths'
 
 const FEATURES = [
@@ -143,15 +144,18 @@ export function Features() {
             <Reveal
               key={f.title}
               delay={(i % 3) * 80}
-              className="rounded-3xl border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40"
             >
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                <f.icon className="size-5" />
-              </span>
-              <h3 className="mt-5 text-lg font-medium">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {f.body}
-              </p>
+              <Squircle radius={24}>
+                <div className="h-full border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40">
+                  <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <f.icon className="size-5" />
+                  </span>
+                  <h3 className="mt-5 text-lg font-medium">{f.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {f.body}
+                  </p>
+                </div>
+              </Squircle>
             </Reveal>
           ))}
         </div>
@@ -184,26 +188,29 @@ export function Features() {
             <Reveal
               key={shot.title}
               delay={i * 100}
-              className="overflow-hidden rounded-3xl border border-border bg-card/40 backdrop-blur-md"
             >
-              <div className="border-b border-border p-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                    <shot.icon className="size-4" />
-                  </span>
-                  <h3 className="text-lg font-medium">{shot.title}</h3>
+              <Squircle radius={24}>
+                <div className="overflow-hidden border border-border bg-card/40 backdrop-blur-md">
+                  <div className="border-b border-border p-6">
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                        <shot.icon className="size-4" />
+                      </span>
+                      <h3 className="text-lg font-medium">{shot.title}</h3>
+                    </div>
+                    <p className="mt-1.5 text-sm text-muted-foreground">{shot.body}</p>
+                  </div>
+                  <div className="p-3">
+                    <Image
+                      src={sitePath(shot.src)}
+                      alt={shot.alt}
+                      width={1200}
+                      height={800}
+                      className="w-full rounded-2xl border border-border"
+                    />
+                  </div>
                 </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">{shot.body}</p>
-              </div>
-              <div className="p-3">
-                <Image
-                  src={sitePath(shot.src)}
-                  alt={shot.alt}
-                  width={1200}
-                  height={800}
-                  className="w-full rounded-2xl border border-border"
-                />
-              </div>
+              </Squircle>
             </Reveal>
           ))}
         </div>

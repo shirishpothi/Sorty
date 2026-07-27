@@ -4,6 +4,7 @@ import { BorderBeam } from 'border-beam'
 import { FolderOpen, ScanSearch, Sparkles, ListChecks, Check } from 'lucide-react'
 import { useState } from 'react'
 import { Reveal } from '@/components/reveal'
+import { Squircle } from '@/components/squircle'
 
 const STEPS = [
   {
@@ -89,12 +90,14 @@ export function HowItWorks() {
                   setHoveredStep((current) => (current === i ? null : current))
                 }
               >
-                <div className="h-full rounded-3xl border border-border bg-card/40 p-5 backdrop-blur-md transition-colors hover:border-white/25 sm:p-6">
-                  <h3 className="text-lg font-medium">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {step.body}
-                  </p>
-                </div>
+                <Squircle radius={24}>
+                  <div className="h-full border border-border bg-card/40 p-5 backdrop-blur-md transition-colors hover:border-white/25 sm:p-6">
+                    <h3 className="text-lg font-medium">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {step.body}
+                    </p>
+                  </div>
+                </Squircle>
               </BorderBeam>
             </Reveal>
           ))}
