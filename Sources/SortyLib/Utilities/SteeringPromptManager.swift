@@ -40,7 +40,23 @@ public class SteeringPromptManager: ObservableObject {
 
     private init() {
         load()
+        if prompts.count < 1_000 {
+            let existingNames = Set(prompts.map(\.name))
+            prompts.append(contentsOf: Self.placeholderPrompts.filter {
+                !existingNames.contains($0.name)
+            }.prefix(max(0, 1_000 - prompts.count)))
+        }
         setupNotificationObservers()
+    }
+
+    /// Temporary data for exercising long saved-instruction lists during local UI work.
+    private static var placeholderPrompts: [SavedSteeringPrompt] {
+        (1...1_000).map { index in
+            SavedSteeringPrompt(
+                name: "Placeholder Instruction \(index)",
+                prompt: "Use placeholder instruction \(index) while testing long saved-instruction lists."
+            )
+        }
     }
 
     private func setupNotificationObservers() {
