@@ -25,6 +25,7 @@ struct AIProviderSettingsView: View {
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
     @State private var isInternetAccessBlocked = false
+    @State private var isHoveringInternetSettings = false
     @State private var isHoveringCodexTerminalButton = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
@@ -628,6 +629,7 @@ struct AIProviderSettingsView: View {
                                         .fontWeight(.semibold)
                                         .foregroundColor(isInternetAccessBlocked ? .orange : .red)
                                         .multilineTextAlignment(.center)
+                                        .frame(maxWidth: 560)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .textSelection(.enabled)
 
@@ -662,7 +664,8 @@ struct AIProviderSettingsView: View {
                                     .accessibilityLabel("Copy error message")
                                     .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
                                 }
-                                .frame(maxWidth: 620, alignment: .center)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .frame(maxWidth: 700, alignment: .center)
 
                                 if let details = testConnectionDetails, !details.isEmpty {
                                     VStack(spacing: 6) {
@@ -701,19 +704,19 @@ struct AIProviderSettingsView: View {
                                         .buttonStyle(.plain)
                                         .accessibilityIdentifier("ProviderConnectionDetailsDisclosure")
 
-                                        if isDetailsExpanded {
-                                            Text(details)
-                                                .font(.system(.caption, design: .monospaced))
-                                                .padding(6)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .background(Color.secondary.opacity(0.1))
-                                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                                .fixedSize(horizontal: false, vertical: true)
-                                                .textSelection(.enabled)
-                                                .transition(.move(edge: .top).combined(with: .opacity))
-                                        }
                                     }
                                     .frame(maxWidth: 620)
+                                    .popover(
+                                        isPresented: $isDetailsExpanded,
+                                        attachmentAnchor: .point(.bottom),
+                                        arrowEdge: .top
+                                    ) {
+                                        Text(details)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .padding(10)
+                                            .frame(width: 420, alignment: .leading)
+                                            .textSelection(.enabled)
+                                    }
                                 }
 
                                 if isInternetAccessBlocked {
@@ -725,8 +728,12 @@ struct AIProviderSettingsView: View {
                                         )
                                         appState.navigatedFromSettings = true
                                     } label: {
-                                        Label("Open Internet Settings", systemImage: "arrow.up.right")
-                                            .font(.caption.bold())
+                                        Label(
+                                            "Open Internet Settings",
+                                            systemImage: isHoveringInternetSettings ? "arrow.up.right" : "network"
+                                        )
+                                        .font(.caption.bold())
+                                        .contentTransition(.symbolEffect(.replace))
                                     }
                                     .buttonStyle(.tintedPill(.orange, size: .small))
                                     .help("Open Advanced Settings and focus Block Internet Connections")
@@ -734,6 +741,15 @@ struct AIProviderSettingsView: View {
                                         "Opens the setting that prevents Sorty from contacting cloud providers"
                                     )
                                     .accessibilityIdentifier("ProviderOpenInternetSettingsButton")
+                                    .onHover { hovering in
+                                        withAnimation(
+                                            reduceMotion
+                                                ? nil
+                                                : .spring(response: 0.24, dampingFraction: 0.82)
+                                        ) {
+                                            isHoveringInternetSettings = hovering
+                                        }
+                                    }
                                 }
                             }
                         }
