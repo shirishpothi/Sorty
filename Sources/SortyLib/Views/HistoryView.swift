@@ -903,9 +903,10 @@ private struct HistorySummaryCard: View {
     }
 
     private var gridColumns: [GridItem] {
-        [
-            GridItem(.adaptive(minimum: 112), spacing: 10)
-        ]
+        Array(
+            repeating: GridItem(.flexible(minimum: 112), spacing: 10),
+            count: 5
+        )
     }
 
     var body: some View {
