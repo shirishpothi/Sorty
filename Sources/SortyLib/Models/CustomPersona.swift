@@ -132,8 +132,27 @@ public class CustomPersonaStore: ObservableObject {
     
     public init() {
         loadPersonas()
+#if DEBUG
+        if customPersonas.isEmpty {
+            customPersonas = Self.debugPersonas
+        }
+#endif
         setupNotificationObservers()
     }
+
+#if DEBUG
+    /// Temporary data for exercising long persona lists during local UI work.
+    private static var debugPersonas: [CustomPersona] {
+        (1...100).map { index in
+            CustomPersona(
+                name: "Placeholder Persona \(index)",
+                icon: personaIconOptions[(index - 1) % personaIconOptions.count],
+                description: "Temporary persona for list and scroll testing.",
+                promptModifier: "Use placeholder organization preferences for persona \(index)."
+            )
+        }
+    }
+#endif
     
     private func setupNotificationObservers() {
         clearUsageObserver = NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
