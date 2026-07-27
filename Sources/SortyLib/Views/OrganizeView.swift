@@ -3091,7 +3091,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.orange, size: .small))
+                    .buttonStyle(.tintedPill(.indigo, size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Advanced Settings and focus Block Internet Connections")
                     .accessibilityHint(
