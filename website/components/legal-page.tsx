@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import Link from 'next/link'
 import { ShieldCheck } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { SiteNav } from '@/components/site-nav'
@@ -42,12 +41,12 @@ export function LegalPage({
         />
         <div className="mx-auto max-w-3xl">
           <Reveal>
-            <Link
+            <a
               href={sitePath('/')}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               ← Back to Sorty
-            </Link>
+            </a>
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
               {title}
             </h1>

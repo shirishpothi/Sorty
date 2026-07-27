@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Heart, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SortyLogo } from '@/components/sorty-logo'
@@ -42,19 +41,19 @@ export function SiteNav() {
             : 'border-transparent bg-background/30 backdrop-blur-md',
         )}
       >
-        <Link href={sitePath('/#top')} className="shrink-0">
+        <a href={sitePath('/#top')} className="shrink-0">
           <SortyLogo />
-        </Link>
+        </a>
 
         <div className="hidden items-center gap-1 md:flex">
           {LINKS.map((link) => (
-            <Link
+            <a
               key={link.href}
               href={link.href}
               className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {link.label}
-            </Link>
+            </a>
           ))}
         </div>
 
@@ -121,14 +120,14 @@ export function SiteNav() {
         )}
       >
         {LINKS.map((link) => (
-          <Link
+          <a
             key={link.href}
             href={link.href}
             onClick={() => setOpen(false)}
             className="block rounded-2xl px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             {link.label}
-          </Link>
+          </a>
         ))}
         <a
           href={GITHUB_URL}
