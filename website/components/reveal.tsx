@@ -1,6 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, type ElementType, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ElementType,
+  type ReactNode,
+} from 'react'
 import { cn } from '@/lib/utils'
 
 interface RevealProps {
@@ -16,7 +23,19 @@ export function Reveal({ children, className, delay = 0, as }: RevealProps) {
   const ref = useRef<HTMLElement>(null)
   const [visible, setVisible] = useState(false)
 
+  useLayoutEffect(() => {
+    const node = ref.current
+    if (!node) return
+
+    const bounds = node.getBoundingClientRect()
+    if (bounds.top < window.innerHeight && bounds.bottom > 0) {
+      setVisible(true)
+    }
+  }, [])
+
   useEffect(() => {
+    if (visible) return
+
     const node = ref.current
     if (!node) return
 
@@ -34,7 +53,7 @@ export function Reveal({ children, className, delay = 0, as }: RevealProps) {
 
     observer.observe(node)
     return () => observer.disconnect()
-  }, [])
+  }, [visible])
 
   return (
     <Tag
