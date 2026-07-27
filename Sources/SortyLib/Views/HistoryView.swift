@@ -649,34 +649,16 @@ struct HistoryHeader: View {
 
     private var narrowPopulatedHeader: some View {
         HStack(spacing: 8) {
-            compactHistoryIdentity
+            historyIdentity
+
+            Spacer(minLength: 4)
 
             HistoryNavigatorControl(selection: $selectedFilter)
                 .frame(width: HistoryNavigatorControl.preferredWidth)
 
-            Spacer(minLength: 4)
-
             compactClearHistoryButton
                 .fixedSize()
         }
-    }
-
-    private var compactHistoryIdentity: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("History")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .lineLimit(1)
-
-            Text("\(totalSessions) runs")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .contentTransition(.numericText())
-                .numericTextTransition(animationValue: totalSessions)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("History, \(totalSessions) runs")
     }
 
     private var historyIdentity: some View {
