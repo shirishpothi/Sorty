@@ -815,13 +815,15 @@ private struct PermissionSettingsCard: View {
 
             if isRequired {
                 Text("Required")
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
-                        in: Capsule(style: .continuous)
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.red.opacity(0.18), in: Capsule(style: .continuous))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(Color.red.opacity(0.38), lineWidth: 0.75)
                     )
             }
         }
