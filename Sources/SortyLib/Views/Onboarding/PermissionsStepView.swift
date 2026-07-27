@@ -517,7 +517,6 @@ struct PermissionRow: View {
     let onRequest: (CGRect?) -> Void
     let removePermissionTitle: String
     let onRemovePermission: (() -> Void)?
-    let usesSupportCardStyle: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
@@ -531,8 +530,7 @@ struct PermissionRow: View {
         onExplain: @escaping () -> Void,
         onRequest: @escaping (CGRect?) -> Void,
         removePermissionTitle: String = "Remove Permission…",
-        onRemovePermission: (() -> Void)? = nil,
-        usesSupportCardStyle: Bool = false
+        onRemovePermission: (() -> Void)? = nil
     ) {
         self.type = type
         self.state = state
@@ -541,75 +539,56 @@ struct PermissionRow: View {
         self.onRequest = onRequest
         self.removePermissionTitle = removePermissionTitle
         self.onRemovePermission = onRemovePermission
-        self.usesSupportCardStyle = usesSupportCardStyle
     }
 
     var body: some View {
-        Group {
-            if usesSupportCardStyle {
-                VStack(spacing: 10) {
-                    permissionIcon
+        HStack(spacing: 14) {
+            permissionIcon
 
-                    title
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Text(LocalizedStringKey(type.rawValue))
+                        .font(.headline)
 
-                    Text(type.description(for: state))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 2)
-
-                    trailingControl
-                }
-                .frame(maxWidth: .infinity, minHeight: 154)
-            } else {
-                HStack(spacing: 14) {
-                    permissionIcon
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-
-                        Text(type.description(for: state))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if isRequired {
+                        Text("Required")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Capsule(style: .continuous))
                     }
-
-                    Spacer()
-
-                    trailingControl
                 }
+
+                Text(type.description(for: state))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer()
+
+            trailingControl
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(rowFill)
         )
-        .modifier(PermissionCardSurfaceModifier(usesSupportCardStyle: usesSupportCardStyle))
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .overlay(
-            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
         )
-        .shadow(
-            color: .black.opacity(usesSupportCardStyle ? 0 : (colorScheme == .dark ? 0.12 : 0.05)),
-            radius: isHovering ? 12 : 7,
-            x: 0,
-            y: isHovering ? 6 : 3
-        )
-        .scaleEffect(grantFlash ? 1.012 : (isHovering && !usesSupportCardStyle ? 1.006 : 1))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 6 : 3)
+        .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
         .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
         .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
         .onHover { hovering in
             isHovering = hovering
-            if hovering, usesSupportCardStyle {
-                HapticFeedbackManager.shared.selection()
-            }
         }
         .onChange(of: state) { _, newState in
             guard newState == .granted || newState == .restartRequired else { return }
@@ -629,29 +608,6 @@ struct PermissionRow: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var title: some View {
-        HStack(spacing: 7) {
-            Text(LocalizedStringKey(type.rawValue))
-                .font(.system(size: usesSupportCardStyle ? 14 : 17, weight: .bold, design: .rounded))
-
-            if isRequired {
-                Text("Required")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
-                        in: Capsule(style: .continuous)
-                    )
-            }
-        }
-    }
-
-    private var cardCornerRadius: CGFloat {
-        usesSupportCardStyle ? 8 : 14
-    }
-
     private var canRemovePermission: Bool {
         state == .granted || state == .restartRequired
     }
@@ -661,10 +617,6 @@ struct PermissionRow: View {
     }
 
     private var rowFill: Color {
-        if usesSupportCardStyle {
-            return isHovering ? type.color.opacity(0.14) : Color.secondary.opacity(0.045)
-        }
-
         if state == .granted {
             return Color.green.opacity(colorScheme == .dark ? 0.12 : 0.08)
         }
@@ -674,10 +626,6 @@ struct PermissionRow: View {
     }
 
     private var rowStroke: Color {
-        if usesSupportCardStyle {
-            return isHovering ? type.color.opacity(0.32) : Color.secondary.opacity(0.08)
-        }
-
         if grantFlash || state == .granted {
             return Color.green.opacity(grantFlash ? 0.72 : 0.34)
         }
@@ -690,36 +638,23 @@ struct PermissionRow: View {
     }
 
     private var permissionIcon: some View {
-        Group {
-            if usesSupportCardStyle {
-                PermissionAnimatedIcon(
-                    type: type,
-                    state: state,
-                    grantAnimationTrigger: grantAnimationTrigger,
-                    size: 25
-                )
-                    .foregroundStyle(isHovering ? iconTint : .secondary)
-                    .frame(height: 34)
-            } else {
-                ZStack {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
+                .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
-                        }
-
-                    PermissionAnimatedIcon(
-                        type: type,
-                        state: state,
-                        grantAnimationTrigger: grantAnimationTrigger,
-                        size: 19
-                    )
-                        .foregroundStyle(iconTint)
+                        .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
                 }
-                .frame(width: 46, height: 46)
-            }
+
+            PermissionAnimatedIcon(
+                type: type,
+                state: state,
+                grantAnimationTrigger: grantAnimationTrigger,
+                size: 19
+            )
+                .foregroundStyle(iconTint)
         }
+        .frame(width: 46, height: 46)
         .accessibilityHidden(true)
     }
 
@@ -796,19 +731,6 @@ struct PermissionRow: View {
             withAnimation(.easeOut(duration: 0.24)) {
                 grantFlash = false
             }
-        }
-    }
-}
-
-private struct PermissionCardSurfaceModifier: ViewModifier {
-    let usesSupportCardStyle: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if usesSupportCardStyle {
-            content
-        } else {
-            content.systemLiquidGlassBackground(cornerRadius: 14)
         }
     }
 }

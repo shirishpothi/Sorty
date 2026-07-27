@@ -332,6 +332,7 @@ struct WatchedFolderCard: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
     @State private var showingConfig = false
+    @State private var pendingFullOrganization: WatchedFolder?
     @State private var isHovered = false
     @State private var highlightPulse = false
 
@@ -704,8 +705,13 @@ struct WatchedFolderCard: View {
                 }
             }
         }
-        .sheet(isPresented: $showingConfig) {
-            WatchedFolderConfigView(folder: folder)
+        .sheet(isPresented: $showingConfig, onDismiss: openPendingFullOrganization) {
+            WatchedFolderConfigView(
+                folder: folder,
+                onOpenFullOrganization: { updatedFolder in
+                    pendingFullOrganization = updatedFolder
+                }
+            )
                 .modalBounce()
         }
 
@@ -721,14 +727,24 @@ struct WatchedFolderCard: View {
             highlightPulse = false
         }
     }
+
+    private func openPendingFullOrganization() {
+        guard let updatedFolder = pendingFullOrganization else { return }
+        pendingFullOrganization = nil
+
+        organizer.reset()
+        organizer.customInstructions = updatedFolder.customPrompt ?? ""
+        appState.selectedDirectory = updatedFolder.url
+        appState.currentView = .organize
+    }
 }
 
 // MARK: - Watched Folder Config View
 
 struct WatchedFolderConfigView: View {
     let folder: WatchedFolder
+    let onOpenFullOrganization: (WatchedFolder) -> Void
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
@@ -753,8 +769,12 @@ struct WatchedFolderConfigView: View {
     @State private var instructionSuggestionIndex = 0
     @State private var instructionSelection = NSRange(location: 0, length: 0)
 
-    init(folder: WatchedFolder) {
+    init(
+        folder: WatchedFolder,
+        onOpenFullOrganization: @escaping (WatchedFolder) -> Void
+    ) {
         self.folder = folder
+        self.onOpenFullOrganization = onOpenFullOrganization
         _customPrompt = State(initialValue: folder.customPrompt ?? "")
         _useCustomModel = State(initialValue: folder.modelOverride != nil)
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
@@ -1330,21 +1350,14 @@ struct WatchedFolderConfigView: View {
         HapticFeedbackManager.shared.tap()
 
         let updatedFolder = currentFolderConfiguration
-        withAnimation {
-            watchedFoldersManager.updateFolder(updatedFolder)
-        }
+        watchedFoldersManager.updateFolder(updatedFolder)
 
         var config = settingsViewModel.config
         config.enableSmartRename = true
         config.mode = updatedFolder.effectiveOrganizationMode
         settingsViewModel.config = config
 
-        appState.organizer?.reset()
-        appState.organizer?.customInstructions = updatedFolder.customPrompt ?? ""
-        withAnimation(.pageTransition) {
-            appState.selectedDirectory = updatedFolder.url
-            appState.currentView = .organize
-        }
+        onOpenFullOrganization(updatedFolder)
         dismiss()
     }
 
