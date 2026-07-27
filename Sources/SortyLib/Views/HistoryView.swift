@@ -668,6 +668,18 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 
     @Binding var selection: HistoryView.HistoryFilter
 
+    private static func segmentWidth(for filter: HistoryView.HistoryFilter) -> CGFloat {
+        switch filter {
+        case .all: 55
+        case .undoable: 82
+        case .failed: 68
+        case .skipped: 76
+        case .cancelled: 88
+        case .manual: 72
+        case .watched: 79
+        }
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(selection: $selection)
     }
@@ -714,9 +726,10 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
             control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
         }
 
-        control.segmentDistribution = .fillProportionally
+        control.segmentDistribution = .fit
 
         for (index, filter) in filters.enumerated() {
+            control.setWidth(Self.segmentWidth(for: filter), forSegment: index)
             control.setLabel(filter.rawValue, forSegment: index)
             control.setImageScaling(.scaleNone, forSegment: index)
             control.setToolTip(filter.rawValue, forSegment: index)
