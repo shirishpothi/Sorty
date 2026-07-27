@@ -329,7 +329,8 @@ struct OrganizeView: View {
                 error: errorViewTestRoute.error,
                 onCancel: dismissErrorViewTestRoute,
                 onRetry: dismissErrorViewTestRoute,
-                onRetryWithSmarterModel: dismissErrorViewTestRoute
+                onRetryWithSmarterModel: dismissErrorViewTestRoute,
+                onGrantPermission: dismissErrorViewTestRoute
             )
         } else {
             organizerStateContent
@@ -391,7 +392,8 @@ struct OrganizeView: View {
                 },
                 onRetryWithSmarterModel: {
                     showSmarterRetryModelPicker = true
-                }
+                },
+                onGrantPermission: grantFolderPermissionAndContinue
             )
         }
     }
@@ -605,6 +607,29 @@ struct OrganizeView: View {
                 organizer.state = .error(error)
             }
         }
+    }
+
+    private func grantFolderPermissionAndContinue() {
+        guard let directory = appState.selectedDirectory else { return }
+
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.directoryURL = directory.deletingLastPathComponent()
+        panel.nameFieldStringValue = directory.lastPathComponent
+        panel.message = "Select \(directory.lastPathComponent) to grant Sorty access and continue organizing."
+        panel.prompt = "Grant Access"
+
+        guard panel.runModal() == .OK, let authorizedDirectory = panel.url else { return }
+
+        _ = authorizedDirectory.startAccessingSecurityScopedResource()
+        appState.selectedDirectory = authorizedDirectory
+        withAnimation(.pageTransition) {
+            organizer.reset()
+        }
+        HapticFeedbackManager.shared.success()
+        startOrganization()
     }
 
     private func dismissErrorViewTestRoute() {
@@ -2440,11 +2465,13 @@ struct ErrorView: View {
     let onCancel: () -> Void
     let onRetry: () -> Void
     let onRetryWithSmarterModel: () -> Void
+    let onGrantPermission: () -> Void
 
     private enum ErrorActionFeedback {
         case cancel
         case retry
         case settings
+        case grantPermission
         case copy
         case helpSupport
     }
@@ -2686,13 +2713,11 @@ struct ErrorView: View {
                     .accessibilityIdentifier("ErrorOpenTimeoutSettingsButton")
                 }
 
-                if category == .apiKey || category == .permissions {
+                if category == .apiKey {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.settings)
-                        appState.openSettingsWindow(
-                            section: category == .apiKey ? .provider : .troubleshooting
-                        )
+                        appState.openSettingsWindow(section: .provider)
                         appState.navigatedFromSettings = true
                     } label: {
                         HStack(spacing: 4) {
@@ -2707,6 +2732,32 @@ struct ErrorView: View {
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Settings to resolve this issue")
                     .accessibilityIdentifier("ErrorOpenSettingsButton")
+                }
+
+                if category == .permissions {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.grantPermission)
+                        onGrantPermission()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 10, weight: .semibold))
+                                .symbolEffect(
+                                    .bounce,
+                                    value: activeActionFeedback == .grantPermission
+                                )
+                            Text("Grant Permission")
+                                .font(.caption.bold())
+                        }
+                    }
+                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .scaleEffect(activeActionFeedback == .grantPermission ? 1.04 : 1.0)
+                    .help("Grant access to this folder and continue organizing")
+                    .accessibilityHint(
+                        "Opens the folder picker, then continues organization after access is granted"
+                    )
+                    .accessibilityIdentifier("ErrorGrantPermissionButton")
                 }
 
                 Button {
