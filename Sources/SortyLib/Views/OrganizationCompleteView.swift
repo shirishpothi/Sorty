@@ -197,27 +197,55 @@ struct OrganizationCompleteView: View {
                         }
                     }
                     
-                    HStack(spacing: 40) {
-                        SummaryStatItem(
-                            value: primaryStatValue,
-                            label: primaryStatLabel,
-                            icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
-                            color: .blue
-                        )
-                        
-                        SummaryStatItem(
-                            value: secondaryStatValue,
-                            label: secondaryStatLabel,
-                            icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
-                            color: .purple
-                        )
+                    VStack(spacing: 18) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(statusColor)
+
+                            Text(undoState == .completed ? "Undo summary" : "Run summary")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+                        }
+
+                        HStack(spacing: 0) {
+                            SummaryStatItem(
+                                value: primaryStatValue,
+                                label: primaryStatLabel,
+                                icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
+                                color: .blue
+                            )
+
+                            SummaryStatDivider()
+
+                            SummaryStatItem(
+                                value: secondaryStatValue,
+                                label: secondaryStatLabel,
+                                icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
+                                color: .purple
+                            )
+
+                            if mode == .organizeAndRename && undoState != .completed {
+                                SummaryStatDivider()
+
+                                SummaryStatItem(
+                                    value: "\(shouldShowFinalCounts ? renameCount : 0)",
+                                    label: renameCount == 1 ? "Name Improved" : "Names Improved",
+                                    icon: "pencil.line",
+                                    color: SortyDesignSystem.Colors.accent
+                                )
+                            }
+                        }
                     }
-                    .padding(24)
-                    .frame(maxWidth: 420)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: 560)
                     .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(16)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                     )
                     .opacity(summaryAppeared ? 1 : 0)
@@ -829,6 +857,18 @@ private struct SummaryStatItem: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value) \(label)")
+    }
+}
+
+private struct SummaryStatDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.09))
+            .frame(width: 1, height: 54)
+            .accessibilityHidden(true)
     }
 }
 
