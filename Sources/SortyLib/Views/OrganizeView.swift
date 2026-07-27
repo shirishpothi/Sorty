@@ -2574,6 +2574,7 @@ struct ErrorView: View {
     @State private var showRetryOptions = false
     @State private var showCopiedFeedback = false
     @State private var isHoveringCancel = false
+    @State private var isHoveringHelpSupport = false
     @State private var isHoveringSettings = false
     @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
@@ -2657,6 +2658,10 @@ struct ErrorView: View {
 
     private var showsCancelCircle: Bool {
         isHoveringCancel || activeActionFeedback == .cancel
+    }
+
+    private var showsHelpSupportChevron: Bool {
+        isHoveringHelpSupport || activeActionFeedback == .helpSupport
     }
 
     private var privacySafeSupportDetails: String {
@@ -2913,12 +2918,18 @@ struct ErrorView: View {
                         appState.navigatedFromSettings = true
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "questionmark.circle.fill")
+                            Image(
+                                systemName: showsHelpSupportChevron
+                                    ? "arrow.up.right"
+                                    : "questionmark.circle.fill"
+                            )
                                 .font(.system(size: 10, weight: .semibold))
-                                .symbolEffect(
-                                    .bounce,
-                                    value: activeActionFeedback == .helpSupport
-                                )
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
                             Text("Help & Support")
                                 .font(.caption.bold())
                         }
@@ -2928,6 +2939,11 @@ struct ErrorView: View {
                     .help("Open Help & Support")
                     .accessibilityHint("Opens the Help and Support settings page")
                     .accessibilityIdentifier("ErrorHelpSupportButton")
+                    .onHover { hovering in
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            isHoveringHelpSupport = hovering
+                        }
+                    }
                 }
 
                 Button {
