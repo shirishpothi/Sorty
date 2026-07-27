@@ -40,7 +40,7 @@ export function LegalPage({
           }}
         />
         <div className="mx-auto max-w-3xl">
-          <Reveal immediate>
+          <Reveal immediate animateOnEnter>
             <Link
               href="/"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -58,7 +58,7 @@ export function LegalPage({
           </Reveal>
 
           {summary && (
-            <Reveal immediate>
+            <Reveal immediate animateOnEnter delay={80}>
               <div className="relative mt-8 overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 backdrop-blur-xl sm:p-7">
                 <div
                   aria-hidden
@@ -80,7 +80,7 @@ export function LegalPage({
           )}
 
           {toc && toc.length > 0 && (
-            <Reveal immediate>
+            <Reveal immediate animateOnEnter delay={140}>
               <nav
                 aria-label="On this page"
                 className="mt-8 rounded-3xl border border-border bg-card/30 p-5 backdrop-blur-md"

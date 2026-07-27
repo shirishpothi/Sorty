@@ -301,7 +301,7 @@ export default function ChangelogPage() {
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_24%,oklch(0.66_0.2_12_/_0.22),transparent_26%),radial-gradient(circle_at_82%_18%,oklch(0.68_0.16_250_/_0.18),transparent_30%),linear-gradient(180deg,transparent_0%,var(--background)_88%)]" />
 
         <div className="mx-auto max-w-5xl">
-          <Reveal immediate className="max-w-3xl">
+          <Reveal immediate animateOnEnter className="max-w-3xl">
             <p className="text-sm font-medium text-primary">Changelog</p>
             <h1 className="mt-4 text-balance text-5xl font-semibold tracking-tight sm:text-6xl lg:text-7xl">
               What changed in Sorty

@@ -17,6 +17,8 @@ interface RevealProps {
   delay?: number
   /** Render visible immediately for content already in the initial viewport. */
   immediate?: boolean
+  /** Animate immediate content from its initial painted state without replaying. */
+  animateOnEnter?: boolean
   as?: ElementType
 }
 
@@ -25,6 +27,7 @@ export function Reveal({
   className,
   delay = 0,
   immediate = false,
+  animateOnEnter = false,
   as,
 }: RevealProps) {
   const Tag = (as ?? 'div') as ElementType
@@ -66,7 +69,12 @@ export function Reveal({
   return (
     <Tag
       ref={ref}
-      className={cn('reveal', visible && 'is-visible', className)}
+      className={cn(
+        'reveal',
+        visible && 'is-visible',
+        immediate && animateOnEnter && 'reveal-on-enter',
+        className,
+      )}
       style={delay ? { transitionDelay: `${delay}ms` } : undefined}
     >
       {children}
