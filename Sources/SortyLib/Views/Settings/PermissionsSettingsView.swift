@@ -741,54 +741,39 @@ private struct PermissionSettingsCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 7) {
-            PermissionAnimatedIcon(
-                type: type,
-                state: state,
-                grantAnimationTrigger: grantAnimationTrigger
-            )
-                .foregroundStyle(isHovering ? type.color : .secondary)
-                .frame(height: 28)
-                .accessibilityHidden(true)
+        Group {
+            if isFeatured {
+                HStack(spacing: 14) {
+                    permissionIcon
 
-            HStack(spacing: 5) {
-                Text(LocalizedStringKey(type.rawValue))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        title
 
-                if isRequired {
-                    Text("Required")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
-                            in: Capsule(style: .continuous)
-                        )
+                        permissionDescription
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    footer
+                }
+            } else {
+                VStack(spacing: 7) {
+                    permissionIcon
+
+                    title
+
+                    permissionDescription
+
+                    Spacer(minLength: 2)
+
+                    footer
                 }
             }
-
-            Text(type.description(for: state))
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(
-                    maxWidth: isFeatured ? 420 : .infinity,
-                    minHeight: 26,
-                    alignment: .top
-                )
-
-            Spacer(minLength: 2)
-
-            footer
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, isFeatured ? 16 : 12)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, minHeight: isFeatured ? 124 : 148)
+        .frame(maxWidth: .infinity, minHeight: isFeatured ? 76 : 148)
         .background(cardFill)
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -806,6 +791,53 @@ private struct PermissionSettingsCard: View {
             isHovering = hovering
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private var permissionIcon: some View {
+        PermissionAnimatedIcon(
+            type: type,
+            state: state,
+            grantAnimationTrigger: grantAnimationTrigger,
+            size: isFeatured ? 27 : 23
+        )
+            .foregroundStyle(isHovering ? type.color : .secondary)
+            .frame(width: isFeatured ? 40 : nil, height: isFeatured ? 40 : 28)
+            .accessibilityHidden(true)
+    }
+
+    private var title: some View {
+        HStack(spacing: 5) {
+            Text(LocalizedStringKey(type.rawValue))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(isFeatured ? .leading : .center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if isRequired {
+                Text("Required")
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                        in: Capsule(style: .continuous)
+                    )
+            }
+        }
+    }
+
+    private var permissionDescription: some View {
+        Text(type.description(for: state))
+            .font(.system(size: 10, weight: .medium, design: .rounded))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(
+                maxWidth: isFeatured ? 420 : .infinity,
+                minHeight: isFeatured ? nil : 26,
+                alignment: isFeatured ? .leading : .top
+            )
     }
 
     private var statusBadge: some View {
