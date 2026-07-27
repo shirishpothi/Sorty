@@ -1346,6 +1346,11 @@ else
     mkdir -p "${MACOS_DIR}"
     mkdir -p "${RESOURCES_DIR}"
 
+    # A preserved bundle may contain Finder/iCloud conflict copies such as
+    # "Sorty (1)". codesign treats every file in Contents/MacOS as nested code,
+    # so retain only the executable this build owns before resealing the app.
+    find "${MACOS_DIR}" -mindepth 1 -maxdepth 1 ! -name "${BINARY_NAME}" -exec rm -rf {} +
+
     # Copy binary (SPM output target remains SortyApp; bundled executable is Sorty)
     if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
