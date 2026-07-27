@@ -258,7 +258,7 @@ struct DuplicatesView: View {
     }
 
     private var resultsView: some View {
-        HSplitView {
+        HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 DuplicatesResultsSidebarHeader(
                     manager: detectionManager,
@@ -294,6 +294,8 @@ struct DuplicatesView: View {
             }
             .frame(width: 340)
 
+            Divider()
+
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
                     group: group,
@@ -303,7 +305,7 @@ struct DuplicatesView: View {
                         showDeleteConfirmation = true
                     }
                 )
-                .frame(minWidth: 300, maxWidth: .infinity)
+                .frame(minWidth: 0, maxWidth: .infinity)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
@@ -323,6 +325,7 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var exactGroups: [UnifiedDuplicateGroup] {
