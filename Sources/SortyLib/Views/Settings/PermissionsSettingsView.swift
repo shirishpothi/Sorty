@@ -53,7 +53,8 @@ struct PermissionsSettingsView: View {
                         onExplain: { selectedEducationPermission = .filesAndFolders },
                         onRequest: { _ in requestFilesAndFoldersPermission() },
                         removePermissionTitle: "Remove Current Folder Access…",
-                        onRemovePermission: { activeAlert = .revoke(.filesAndFolders) }
+                        onRemovePermission: { activeAlert = .revoke(.filesAndFolders) },
+                        usesSupportCardStyle: true
                     )
                     .settingsFocusableSetting(.permissionsFilesAndFolders)
 
@@ -66,7 +67,8 @@ struct PermissionsSettingsView: View {
                             fullDiskAccessSourceFrameInScreen = sourceFrame
                             activeAlert = .fullDiskAccessSetup
                         },
-                        onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) }
+                        onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) },
+                        usesSupportCardStyle: true
                     )
                     .settingsFocusableSetting(.permissionsFullDiskAccess)
 
@@ -76,7 +78,8 @@ struct PermissionsSettingsView: View {
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .automation },
                         onRequest: { _ in requestAutomationPermission() },
-                        onRemovePermission: { activeAlert = .revoke(.automation) }
+                        onRemovePermission: { activeAlert = .revoke(.automation) },
+                        usesSupportCardStyle: true
                     )
                     .settingsFocusableSetting(.permissionsAutomation)
 
@@ -87,7 +90,8 @@ struct PermissionsSettingsView: View {
                         onExplain: { selectedEducationPermission = .notifications },
                         onRequest: { _ in requestNotificationPermission() },
                         removePermissionTitle: "Disable & Open Notification Settings…",
-                        onRemovePermission: { activeAlert = .revoke(.notifications) }
+                        onRemovePermission: { activeAlert = .revoke(.notifications) },
+                        usesSupportCardStyle: true
                     )
                     .settingsFocusableSetting(.permissionsNotifications)
 
@@ -119,7 +123,7 @@ struct PermissionsSettingsView: View {
             SettingsCard(title: "How Sorty Uses Access", icon: "lock.shield", color: .green) {
                 VStack(alignment: .leading, spacing: 10) {
                     permissionNote(
-                        icon: "folder.badge.checkmark",
+                        icon: "folder.fill",
                         text: "Files & Folders access is granted only for folders you choose in the macOS picker."
                     )
                     permissionNote(
@@ -150,10 +154,16 @@ struct PermissionsSettingsView: View {
     }
 
     private var statusSummary: some View {
-        Text("\(readyPermissionCount) of \(PermissionType.allCases.count) ready")
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? .green : .secondary)
-            .numericTextTransition(animationValue: readyPermissionCount)
+        HStack(spacing: 3) {
+            Text("\(readyPermissionCount)")
+                .monospacedDigit()
+                .numericTextTransition(animationValue: readyPermissionCount)
+
+            Text("of \(PermissionType.allCases.count) ready")
+        }
+        .font(.system(size: 11, weight: .semibold, design: .rounded))
+        .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? .green : .secondary)
+        .animation(.easeInOut(duration: 0.16), value: readyPermissionCount)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))

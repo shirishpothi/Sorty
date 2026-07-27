@@ -517,6 +517,7 @@ struct PermissionRow: View {
     let onRequest: (CGRect?) -> Void
     let removePermissionTitle: String
     let onRemovePermission: (() -> Void)?
+    let usesSupportCardStyle: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovering = false
@@ -529,7 +530,8 @@ struct PermissionRow: View {
         onExplain: @escaping () -> Void,
         onRequest: @escaping (CGRect?) -> Void,
         removePermissionTitle: String = "Remove Permission…",
-        onRemovePermission: (() -> Void)? = nil
+        onRemovePermission: (() -> Void)? = nil,
+        usesSupportCardStyle: Bool = false
     ) {
         self.type = type
         self.state = state
@@ -538,6 +540,7 @@ struct PermissionRow: View {
         self.onRequest = onRequest
         self.removePermissionTitle = removePermissionTitle
         self.onRemovePermission = onRemovePermission
+        self.usesSupportCardStyle = usesSupportCardStyle
     }
 
     var body: some View {
@@ -576,18 +579,26 @@ struct PermissionRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(rowFill)
         )
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .modifier(PermissionCardSurfaceModifier(usesSupportCardStyle: usesSupportCardStyle))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
         )
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 6 : 3)
+        .shadow(
+            color: .black.opacity(usesSupportCardStyle ? 0 : (colorScheme == .dark ? 0.12 : 0.05)),
+            radius: isHovering ? 12 : 7,
+            x: 0,
+            y: isHovering ? 6 : 3
+        )
         .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
         .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
         .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
         .onHover { hovering in
             isHovering = hovering
+            if hovering, usesSupportCardStyle {
+                HapticFeedbackManager.shared.selection()
+            }
         }
         .onChange(of: state) { _, newState in
             guard newState == .granted else { return }
@@ -615,6 +626,10 @@ struct PermissionRow: View {
     }
 
     private var rowFill: Color {
+        if usesSupportCardStyle {
+            return isHovering ? type.color.opacity(0.14) : Color.secondary.opacity(0.045)
+        }
+
         if state == .granted {
             return Color.green.opacity(colorScheme == .dark ? 0.12 : 0.08)
         }
@@ -629,10 +644,12 @@ struct PermissionRow: View {
         }
 
         if isHovering {
-            return type.color.opacity(0.30)
+            return type.color.opacity(usesSupportCardStyle ? 0.32 : 0.30)
         }
 
-        return Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08)
+        return usesSupportCardStyle
+            ? Color.secondary.opacity(0.08)
+            : Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08)
     }
 
     private var permissionIcon: some View {
@@ -726,6 +743,19 @@ struct PermissionRow: View {
             withAnimation(.easeOut(duration: 0.24)) {
                 grantFlash = false
             }
+        }
+    }
+}
+
+private struct PermissionCardSurfaceModifier: ViewModifier {
+    let usesSupportCardStyle: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if usesSupportCardStyle {
+            content
+        } else {
+            content.systemLiquidGlassBackground(cornerRadius: 14)
         }
     }
 }
