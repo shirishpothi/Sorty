@@ -628,6 +628,8 @@ struct HistoryHeader: View {
             HistoryNavigatorControl(selection: $selectedFilter)
                 .frame(width: HistoryNavigatorControl.preferredWidth)
 
+            Spacer(minLength: 12)
+
             compactClearHistoryButton
                 .fixedSize()
         }
@@ -641,6 +643,8 @@ struct HistoryHeader: View {
 
             HistoryNavigatorControl(selection: $selectedFilter)
                 .frame(width: HistoryNavigatorControl.preferredWidth)
+
+            Spacer(minLength: 12)
 
             compactClearHistoryButton
                 .fixedSize()
