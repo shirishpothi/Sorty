@@ -22,6 +22,7 @@ struct PermissionsSettingsView: View {
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
     @State private var activeAlert: PermissionsSettingsAlert?
+    @State private var isRefreshingPermissions = false
 
     private var readyPermissionCount: Int {
         PermissionType.allCases.filter { type in
@@ -109,9 +110,18 @@ struct PermissionsSettingsView: View {
                     HStack(spacing: 10) {
                         Button {
                             HapticFeedbackManager.shared.tap()
-                            refreshPermissions()
+                            refreshPermissions(animated: true)
                         } label: {
-                            Label("Refresh Status", systemImage: "arrow.clockwise")
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(
+                                        .rotate,
+                                        options: .repeat(.continuous),
+                                        isActive: isRefreshingPermissions
+                                    )
+
+                                Text("Refresh Status")
+                            }
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
 
@@ -193,7 +203,11 @@ struct PermissionsSettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func refreshPermissions() {
+    private func refreshPermissions(animated: Bool = false) {
+        if animated {
+            isRefreshingPermissions = true
+        }
+
         permissionStates[.filesAndFolders] = filesAndFoldersState
         permissionStates[.fullDiskAccess] = fullDiskAccessState()
 
@@ -205,6 +219,10 @@ struct PermissionsSettingsView: View {
             permissionStates[.notifications] = notificationState(
                 for: notificationManager.notificationPermissionStatus
             )
+
+            if animated {
+                isRefreshingPermissions = false
+            }
         }
     }
 
