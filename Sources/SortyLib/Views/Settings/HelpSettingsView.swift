@@ -66,6 +66,7 @@ struct HelpSettingsView: View {
                             url: termsOfServiceURL
                         )
                     }
+                    .settingsFocusable(.helpLegal)
 
                     Divider()
 

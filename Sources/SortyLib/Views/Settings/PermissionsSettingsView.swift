@@ -22,9 +22,13 @@ struct PermissionsSettingsView: View {
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
     @State private var activeAlert: PermissionsSettingsAlert?
+    @State private var grantAnimationTriggers: [PermissionType: Int] = [:]
     @State private var refreshStatusAnimationTrigger = 0
+    @State private var isHoveringRefreshStatus = false
     @State private var isHoveringOpenPrivacySettings = false
     @State private var isOpeningPrivacySettings = false
+    @State private var isShowingAccessInfo = false
+    @State private var hoveredAccessInfoAction: AccessInfoAction?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -50,59 +54,60 @@ struct PermissionsSettingsView: View {
                 }
             ) {
                 VStack(alignment: .leading, spacing: 14) {
+                    PermissionSettingsCard(
+                        type: .filesAndFolders,
+                        state: permissionStates[.filesAndFolders] ?? .unknown,
+                        isRequired: true,
+                        isFeatured: true,
+                        grantAnimationTrigger: grantAnimationTriggers[.filesAndFolders] ?? 0,
+                        onExplain: { selectedEducationPermission = .filesAndFolders },
+                        onRequest: { _ in requestFilesAndFoldersPermission() },
+                        removePermissionTitle: "Remove Current Folder Access…",
+                        onRemovePermission: { activeAlert = .revoke(.filesAndFolders) }
+                    )
+                    .settingsFocusableSetting(.permissionsFilesAndFolders)
+
                     LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 10),
-                            GridItem(.flexible(), spacing: 10)
-                        ],
+                        columns: Array(
+                            repeating: GridItem(.flexible(), spacing: 10),
+                            count: 3
+                        ),
                         spacing: 10
                     ) {
-                        PermissionRow(
-                            type: .filesAndFolders,
-                            state: permissionStates[.filesAndFolders] ?? .unknown,
-                            isRequired: true,
-                            onExplain: { selectedEducationPermission = .filesAndFolders },
-                            onRequest: { _ in requestFilesAndFoldersPermission() },
-                            removePermissionTitle: "Remove Current Folder Access…",
-                            onRemovePermission: { activeAlert = .revoke(.filesAndFolders) },
-                            usesSupportCardStyle: true
-                        )
-                        .settingsFocusableSetting(.permissionsFilesAndFolders)
-
-                        PermissionRow(
+                        PermissionSettingsCard(
                             type: .fullDiskAccess,
                             state: permissionStates[.fullDiskAccess] ?? .unknown,
                             isRequired: false,
+                            grantAnimationTrigger: grantAnimationTriggers[.fullDiskAccess] ?? 0,
                             onExplain: { selectedEducationPermission = .fullDiskAccess },
                             onRequest: { sourceFrame in
                                 fullDiskAccessSourceFrameInScreen = sourceFrame
                                 activeAlert = .fullDiskAccessSetup
                             },
-                            onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) },
-                            usesSupportCardStyle: true
+                            onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) }
                         )
                         .settingsFocusableSetting(.permissionsFullDiskAccess)
 
-                        PermissionRow(
+                        PermissionSettingsCard(
                             type: .automation,
                             state: permissionStates[.automation] ?? .unknown,
                             isRequired: false,
+                            grantAnimationTrigger: grantAnimationTriggers[.automation] ?? 0,
                             onExplain: { selectedEducationPermission = .automation },
                             onRequest: { _ in requestAutomationPermission() },
-                            onRemovePermission: { activeAlert = .revoke(.automation) },
-                            usesSupportCardStyle: true
+                            onRemovePermission: { activeAlert = .revoke(.automation) }
                         )
                         .settingsFocusableSetting(.permissionsAutomation)
 
-                        PermissionRow(
+                        PermissionSettingsCard(
                             type: .notifications,
                             state: permissionStates[.notifications] ?? .unknown,
                             isRequired: false,
+                            grantAnimationTrigger: grantAnimationTriggers[.notifications] ?? 0,
                             onExplain: { selectedEducationPermission = .notifications },
                             onRequest: { _ in requestNotificationPermission() },
                             removePermissionTitle: "Disable & Open Notification Settings…",
-                            onRemovePermission: { activeAlert = .revoke(.notifications) },
-                            usesSupportCardStyle: true
+                            onRemovePermission: { activeAlert = .revoke(.notifications) }
                         )
                         .settingsFocusableSetting(.permissionsNotifications)
                     }
@@ -113,17 +118,28 @@ struct PermissionsSettingsView: View {
                     HStack(spacing: 10) {
                         Button {
                             HapticFeedbackManager.shared.tap()
-                            refreshPermissions()
                             refreshStatusAnimationTrigger += 1
+                            Task {
+                                await refreshPermissions()
+                            }
                         } label: {
                             Label {
                                 Text("Refresh Status")
+                                    .lineLimit(1)
                             } icon: {
                                 Image(systemName: "arrow.clockwise")
                                     .symbolEffect(.rotate, options: .speed(1.5), value: refreshStatusAnimationTrigger)
                             }
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
+                        .onHover { hovering in
+                            if hovering && !isHoveringRefreshStatus {
+                                HapticFeedbackManager.shared.selection()
+                            }
+                            isHoveringRefreshStatus = hovering
+                        }
+
+                        Spacer(minLength: 16)
 
                         Button {
                             HapticFeedbackManager.shared.tap()
@@ -141,6 +157,7 @@ struct PermissionsSettingsView: View {
                         } label: {
                             Label {
                                 Text("Open Privacy & Security")
+                                    .lineLimit(1)
                             } icon: {
                                 Image(
                                     systemName: showsOpenPrivacySettingsChevron
@@ -157,17 +174,25 @@ struct PermissionsSettingsView: View {
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
                         .onHover { hovering in
+                            if hovering && !isHoveringOpenPrivacySettings {
+                                HapticFeedbackManager.shared.selection()
+                            }
                             withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
                                 isHoveringOpenPrivacySettings = hovering
                             }
                         }
-
-                        Spacer()
                     }
                 }
             }
 
-            SettingsCard(title: "How Sorty Uses Access", icon: "lock.shield", color: .green) {
+            SettingsCard(
+                title: "How Sorty Uses Access",
+                icon: "lock.shield",
+                color: .green,
+                headerAccessory: {
+                    accessInfoButton
+                }
+            ) {
                 VStack(alignment: .leading, spacing: 10) {
                     permissionNote(
                         icon: "folder.fill",
@@ -185,10 +210,12 @@ struct PermissionsSettingsView: View {
             }
         }
         .task {
-            refreshPermissions()
+            await refreshPermissions(animateNewGrants: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshPermissions()
+            Task {
+                await refreshPermissions()
+            }
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
@@ -211,9 +238,120 @@ struct PermissionsSettingsView: View {
         .font(.system(size: 11, weight: .semibold, design: .rounded))
         .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? .green : .secondary)
         .animation(.easeInOut(duration: 0.16), value: readyPermissionCount)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
+    }
+
+    private var accessInfoButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            isShowingAccessInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isShowingAccessInfo, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Privacy you can inspect")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+
+                    Text("Read our Privacy Policy and Terms of Service, or review Sorty’s source code.")
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(spacing: 7) {
+                    accessInfoActionButton(
+                        title: "Privacy Policy & Terms",
+                        icon: "hand.raised",
+                        action: .privacyAndTerms
+                    ) {
+                        isShowingAccessInfo = false
+                        appState.openSettingsWindow(
+                            section: .help,
+                            focusTarget: .helpLegal
+                        )
+                    }
+
+                    accessInfoActionButton(
+                        title: "Review Source Code",
+                        icon: "chevron.left.forwardslash.chevron.right",
+                        action: .sourceCode
+                    ) {
+                        isShowingAccessInfo = false
+                        NSWorkspace.shared.open(
+                            URL(string: "https://github.com/sorty-organizer/Sorty")!
+                        )
+                    }
+                }
+            }
+            .padding(14)
+            .frame(width: 300, alignment: .leading)
+            .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+        .help("Privacy, terms, and source code")
+        .accessibilityLabel("How Sorty uses access information")
+        .onHover { hovering in
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+    }
+
+    private func accessInfoActionButton(
+        title: String,
+        icon: String,
+        action: AccessInfoAction,
+        perform: @escaping () -> Void
+    ) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            perform()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 16)
+
+                Text(LocalizedStringKey(title))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+
+                Spacer(minLength: 8)
+
+                Image(
+                    systemName: hoveredAccessInfoAction == action
+                        ? "arrow.up.right"
+                        : "chevron.right"
+                )
+                .font(.system(size: 10, weight: .bold))
+                .contentTransition(.symbolEffect(.replace))
+            }
+            .foregroundStyle(hoveredAccessInfoAction == action ? .primary : .secondary)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .background(
+                Color.primary.opacity(hoveredAccessInfoAction == action ? 0.09 : 0.05),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering && hoveredAccessInfoAction != action {
+                HapticFeedbackManager.shared.selection()
+            }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                hoveredAccessInfoAction = hovering ? action : nil
+            }
+        }
+        .accessibilityLabel(title)
     }
 
     private func permissionNote(icon: String, text: String) -> some View {
@@ -232,24 +370,52 @@ struct PermissionsSettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func refreshPermissions() {
-        permissionStates[.filesAndFolders] = filesAndFoldersState
-        permissionStates[.fullDiskAccess] = fullDiskAccessState()
+    private func refreshPermissions(animateNewGrants: Bool = true) async {
+        updatePermissionState(
+            filesAndFoldersState,
+            for: .filesAndFolders,
+            animateGrant: animateNewGrants
+        )
+        updatePermissionState(
+            fullDiskAccessState(),
+            for: .fullDiskAccess,
+            animateGrant: animateNewGrants
+        )
 
         automationManager.checkPermissions(enableChecksIfNeeded: true)
-        permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
+        updatePermissionState(
+            permissionState(for: automationManager.automationStatus),
+            for: .automation,
+            animateGrant: animateNewGrants
+        )
 
-        Task { @MainActor in
-            await notificationManager.checkNotificationPermission()
-            permissionStates[.notifications] = notificationState(
-                for: notificationManager.notificationPermissionStatus
-            )
-        }
+        await notificationManager.checkNotificationPermission()
+        updatePermissionState(
+            notificationState(for: notificationManager.notificationPermissionStatus),
+            for: .notifications,
+            animateGrant: animateNewGrants
+        )
+    }
+
+    private func updatePermissionState(
+        _ newState: PermissionState,
+        for type: PermissionType,
+        animateGrant: Bool = true
+    ) {
+        let oldState = permissionStates[type]
+        permissionStates[type] = newState
+
+        let wasReady = oldState == .granted || oldState == .restartRequired
+        let isReady = newState == .granted || newState == .restartRequired
+        guard animateGrant, oldState != nil, !wasReady, isReady else { return }
+
+        grantAnimationTriggers[type] = (grantAnimationTriggers[type] ?? 0) + 1
+        HapticFeedbackManager.shared.success()
     }
 
     private func requestFilesAndFoldersPermission() {
         HapticFeedbackManager.shared.tap()
-        permissionStates[.filesAndFolders] = .pending
+        updatePermissionState(.pending, for: .filesAndFolders)
 
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -259,14 +425,13 @@ struct PermissionsSettingsView: View {
         panel.prompt = "Grant Access"
 
         guard panel.runModal() == .OK, let url = panel.url else {
-            permissionStates[.filesAndFolders] = filesAndFoldersState
+            updatePermissionState(filesAndFoldersState, for: .filesAndFolders)
             return
         }
 
         _ = url.startAccessingSecurityScopedResource()
         appState.selectedDirectory = url
-        permissionStates[.filesAndFolders] = .granted
-        HapticFeedbackManager.shared.success()
+        updatePermissionState(.granted, for: .filesAndFolders)
     }
 
     private var filesAndFoldersState: PermissionState {
@@ -276,12 +441,12 @@ struct PermissionsSettingsView: View {
     private func openFullDiskAccessSettings() {
         HapticFeedbackManager.shared.tap()
         didOpenFullDiskAccessSettings = true
-        permissionStates[.fullDiskAccess] = .pending
+        updatePermissionState(.pending, for: .fullDiskAccess)
         PermisoAssistant.shared.present(
             panel: .fullDiskAccess,
             sourceFrameInScreen: fullDiskAccessSourceFrameInScreen,
             onCancel: {
-                permissionStates[.fullDiskAccess] = fullDiskAccessState()
+                updatePermissionState(fullDiskAccessState(), for: .fullDiskAccess)
                 fullDiskAccessSourceFrameInScreen = nil
             }
         )
@@ -289,14 +454,15 @@ struct PermissionsSettingsView: View {
 
     private func requestAutomationPermission() {
         HapticFeedbackManager.shared.tap()
-        permissionStates[.automation] = .pending
+        updatePermissionState(.pending, for: .automation)
         automationManager.requestAutomationPermissionCheck()
-        permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
+        updatePermissionState(
+            permissionState(for: automationManager.automationStatus),
+            for: .automation
+        )
 
         if automationManager.automationStatus == .denied {
             automationManager.openAutomationSettings()
-        } else if automationManager.automationStatus == .granted {
-            HapticFeedbackManager.shared.success()
         }
     }
 
@@ -307,20 +473,19 @@ struct PermissionsSettingsView: View {
             await notificationManager.checkNotificationPermission()
 
             if notificationManager.notificationPermissionStatus == .denied {
-                permissionStates[.notifications] = .denied
+                updatePermissionState(.denied, for: .notifications)
                 openNotificationSettings()
                 return
             }
 
-            permissionStates[.notifications] = .pending
+            updatePermissionState(.pending, for: .notifications)
             let granted = await notificationManager.requestPermission()
-            permissionStates[.notifications] = notificationState(
-                for: notificationManager.notificationPermissionStatus
+            updatePermissionState(
+                notificationState(for: notificationManager.notificationPermissionStatus),
+                for: .notifications
             )
 
-            if granted {
-                HapticFeedbackManager.shared.success()
-            } else {
+            if !granted {
                 HapticFeedbackManager.shared.error()
             }
         }
@@ -377,7 +542,7 @@ struct PermissionsSettingsView: View {
         case .filesAndFolders:
             return "Sorty will release the currently selected folder and reset its macOS access decisions for protected folders and external volumes. Your files won’t be changed."
         case .fullDiskAccess:
-            return "macOS requires Sorty to quit before the revoked Full Disk Access takes effect. Your files and settings won’t be changed."
+            return "macOS only lets you remove Full Disk Access in Privacy & Security. Turn Sorty off in the Full Disk Access list, then quit and reopen Sorty so the change takes effect."
         case .automation:
             return "Sorty will no longer be able to read Finder selections. macOS will ask again the next time you enable Finder Automation."
         case .notifications:
@@ -388,7 +553,7 @@ struct PermissionsSettingsView: View {
     private func revocationButtonTitle(for type: PermissionType) -> String {
         switch type {
         case .fullDiskAccess:
-            return "Remove & Quit Sorty"
+            return "Open Full Disk Access"
         case .notifications:
             return "Disable & Open Settings"
         default:
@@ -399,6 +564,12 @@ struct PermissionsSettingsView: View {
     private func revokePermission(_ type: PermissionType) {
         if type == .notifications {
             disableSystemNotifications()
+            return
+        }
+
+        if type == .fullDiskAccess {
+            HapticFeedbackManager.shared.tap()
+            openFullDiskAccessRemovalSettings()
             return
         }
 
@@ -421,17 +592,15 @@ struct PermissionsSettingsView: View {
                     selectedDirectory.stopAccessingSecurityScopedResource()
                 }
                 appState.selectedDirectory = nil
-                permissionStates[.filesAndFolders] = .unknown
+                updatePermissionState(.unknown, for: .filesAndFolders)
                 HapticFeedbackManager.shared.success()
 
             case .fullDiskAccess:
-                permissionStates[.fullDiskAccess] = .unknown
-                HapticFeedbackManager.shared.success()
-                NSApp.terminate(nil)
+                break
 
             case .automation:
                 automationManager.markAutomationPermissionReset()
-                permissionStates[.automation] = .unknown
+                updatePermissionState(.unknown, for: .automation)
                 HapticFeedbackManager.shared.success()
 
             case .notifications:
@@ -450,6 +619,14 @@ struct PermissionsSettingsView: View {
 
         HapticFeedbackManager.shared.success()
         openNotificationSettings()
+    }
+
+    private func openFullDiskAccessRemovalSettings() {
+        if !NSWorkspace.shared.open(PermisoPanel.fullDiskAccess.settingsURL) {
+            NSWorkspace.shared.open(
+                URL(fileURLWithPath: "/System/Applications/System Settings.app")
+            )
+        }
     }
 
     private func fullDiskAccessState() -> PermissionState {
@@ -525,6 +702,349 @@ struct PermissionsSettingsView: View {
     }
 }
 
+private struct PermissionSettingsCard: View {
+    let type: PermissionType
+    let state: PermissionState
+    let isRequired: Bool
+    let isFeatured: Bool
+    let grantAnimationTrigger: Int
+    let onExplain: () -> Void
+    let onRequest: (CGRect?) -> Void
+    let removePermissionTitle: String
+    let onRemovePermission: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var actionFrameInScreen: CGRect = .zero
+    @State private var isHovering = false
+    @State private var isHoveringRemove = false
+
+    init(
+        type: PermissionType,
+        state: PermissionState,
+        isRequired: Bool,
+        isFeatured: Bool = false,
+        grantAnimationTrigger: Int,
+        onExplain: @escaping () -> Void,
+        onRequest: @escaping (CGRect?) -> Void,
+        removePermissionTitle: String = "Remove Permission…",
+        onRemovePermission: (() -> Void)? = nil
+    ) {
+        self.type = type
+        self.state = state
+        self.isRequired = isRequired
+        self.isFeatured = isFeatured
+        self.grantAnimationTrigger = grantAnimationTrigger
+        self.onExplain = onExplain
+        self.onRequest = onRequest
+        self.removePermissionTitle = removePermissionTitle
+        self.onRemovePermission = onRemovePermission
+    }
+
+    var body: some View {
+        VStack(spacing: 7) {
+            PermissionAnimatedIcon(
+                type: type,
+                state: state,
+                grantAnimationTrigger: grantAnimationTrigger
+            )
+                .foregroundStyle(isHovering ? type.color : .secondary)
+                .frame(height: 28)
+                .accessibilityHidden(true)
+
+            HStack(spacing: 5) {
+                Text(LocalizedStringKey(type.rawValue))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if isRequired {
+                    Text("Required")
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                            in: Capsule(style: .continuous)
+                        )
+                }
+            }
+
+            Text(type.description(for: state))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(
+                    maxWidth: isFeatured ? 420 : .infinity,
+                    minHeight: 26,
+                    alignment: .top
+                )
+
+            Spacer(minLength: 2)
+
+            footer
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: isFeatured ? 124 : 148)
+        .background(cardFill)
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(cardStroke, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contentShape(Rectangle())
+        .scaleEffect(isHovering ? 1.006 : 1)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHovering)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78), value: state)
+        .onHover { hovering in
+            if hovering && !isHovering {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovering = hovering
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var statusBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: state.symbol)
+                .font(.system(size: 10, weight: .bold))
+                .symbolReplaceTransition(animationValue: state)
+
+            Text(state.title(for: type))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .numericTextTransition(animationValue: state)
+        }
+        .foregroundStyle(state.tint)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(state.tint.opacity(0.11), in: Capsule(style: .continuous))
+        .accessibilityLabel(state.title(for: type))
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        if canRemovePermission, let onRemovePermission {
+            HStack(spacing: 7) {
+                statusBadge
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    onRemovePermission()
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isHoveringRemove ? .red : .secondary)
+                        .frame(width: 24, height: 24)
+                        .background(
+                            Color.red.opacity(isHoveringRemove ? 0.12 : 0),
+                            in: Circle()
+                        )
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(removePermissionTitle)
+                .accessibilityLabel(removePermissionTitle)
+                .onHover { hovering in
+                    if hovering && !isHoveringRemove {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    withAnimation(
+                        reduceMotion
+                            ? nil
+                            : .spring(response: 0.24, dampingFraction: 0.82)
+                    ) {
+                        isHoveringRemove = hovering
+                    }
+                }
+            }
+            .fixedSize()
+        } else {
+            switch state {
+            case .pending:
+                statusBadge
+                    .frame(height: 24)
+
+            case .granted, .restartRequired:
+                EmptyView()
+
+            case .unknown, .denied:
+                HStack(spacing: 8) {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        onExplain()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Learn why Sorty uses this permission")
+                    .accessibilityLabel("Learn about \(type.rawValue)")
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        onRequest(actionFrameInScreen.isEmpty ? nil : actionFrameInScreen.integral)
+                    } label: {
+                        Text(LocalizedStringKey(actionTitle))
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                            .frame(maxWidth: isFeatured ? 180 : .infinity)
+                    }
+                    .buttonStyle(.sortySecondary(size: .small, color: type.color))
+                    .background(
+                        ScreenFrameReader(frameInScreen: $actionFrameInScreen)
+                            .allowsHitTesting(false)
+                    )
+                    .accessibilityLabel(actionTitle)
+                }
+                .frame(maxWidth: isFeatured ? 220 : .infinity)
+            }
+        }
+    }
+
+    private var actionTitle: String {
+        guard state == .denied else { return type.compactActionTitle }
+
+        switch type {
+        case .automation, .notifications:
+            return "Open Settings"
+        default:
+            return type.compactActionTitle
+        }
+    }
+
+    private var canRemovePermission: Bool {
+        state == .granted || state == .restartRequired
+    }
+
+    private var cardFill: Color {
+        isHovering ? type.color.opacity(0.08) : Color.secondary.opacity(0.045)
+    }
+
+    private var cardStroke: Color {
+        isHovering ? type.color.opacity(0.28) : Color.secondary.opacity(0.09)
+    }
+}
+
+private struct PermissionAnimatedIcon: View {
+    let type: PermissionType
+    let state: PermissionState
+    let grantAnimationTrigger: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var gearRotation = 0.0
+    @State private var bellRotation = 0.0
+    @State private var bellRingTask: Task<Void, Never>?
+
+    private var isReady: Bool {
+        state == .granted || state == .restartRequired
+    }
+
+    @ViewBuilder
+    var body: some View {
+        Group {
+            switch type {
+            case .filesAndFolders:
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 23, weight: .semibold))
+                    .symbolEffect(
+                        .bounce.up.byLayer,
+                        options: .speed(0.85),
+                        value: reduceMotion ? 0 : grantAnimationTrigger
+                    )
+
+            case .fullDiskAccess:
+                Image(systemName: isReady ? "lock.fill" : "lock.open.fill")
+                    .font(.system(size: 23, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(
+                        .bounce,
+                        options: .speed(0.9),
+                        value: reduceMotion ? 0 : grantAnimationTrigger
+                    )
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.68),
+                        value: state
+                    )
+
+            case .automation:
+                ZStack {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .rotationEffect(.degrees(gearRotation))
+                        .offset(x: -5, y: 4)
+
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .rotationEffect(.degrees(-gearRotation * 1.25))
+                        .offset(x: 6, y: -5)
+                }
+                .frame(width: 27, height: 27)
+
+            case .notifications:
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 23, weight: .semibold))
+                    .rotationEffect(.degrees(bellRotation), anchor: .top)
+            }
+        }
+        .onChange(of: grantAnimationTrigger) { oldValue, newValue in
+            guard newValue != oldValue, !reduceMotion else { return }
+            playGrantAnimation()
+        }
+        .onDisappear {
+            bellRingTask?.cancel()
+        }
+    }
+
+    private func playGrantAnimation() {
+        switch type {
+        case .automation:
+            withAnimation(.easeInOut(duration: 0.72)) {
+                gearRotation += 360
+            }
+
+        case .notifications:
+            ringBell()
+
+        case .filesAndFolders, .fullDiskAccess:
+            break
+        }
+    }
+
+    private func ringBell() {
+        bellRingTask?.cancel()
+        bellRingTask = Task { @MainActor in
+            let swings: [(angle: Double, duration: Double)] = [
+                (-19, 0.09),
+                (17, 0.12),
+                (-13, 0.105),
+                (9, 0.095),
+                (-5, 0.085),
+                (0, 0.11)
+            ]
+
+            for swing in swings {
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: swing.duration)) {
+                    bellRotation = swing.angle
+                }
+                try? await Task.sleep(for: .seconds(swing.duration))
+            }
+        }
+    }
+}
+
+private enum AccessInfoAction: Hashable {
+    case privacyAndTerms
+    case sourceCode
+}
+
 private enum PermissionsSettingsAlert: Identifiable {
     case fullDiskAccessSetup
     case revoke(PermissionType)
@@ -563,7 +1083,10 @@ private enum SystemPermissionRevoker {
                 "SystemPolicyRemovableVolumes"
             ]
         case .fullDiskAccess:
-            services = ["SystemPolicyAllFiles"]
+            return Result(
+                succeeded: false,
+                message: "macOS requires Full Disk Access to be removed in System Settings."
+            )
         case .automation:
             services = ["AppleEvents"]
         case .notifications:

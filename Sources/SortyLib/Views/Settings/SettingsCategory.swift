@@ -73,6 +73,7 @@ public enum SettingsFocusTarget: String, Sendable {
     case troubleshootingLearnings = "settings.troubleshooting.learnings"
     case troubleshootingReset = "settings.troubleshooting.reset"
     case helpSupport = "settings.help.support"
+    case helpLegal = "settings.help.legal"
     case helpIssueDetails = "settings.help.issue-details"
     case experimentalEmptyState = "settings.experimental.empty-state"
 }
