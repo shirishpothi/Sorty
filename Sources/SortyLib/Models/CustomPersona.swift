@@ -132,17 +132,17 @@ public class CustomPersonaStore: ObservableObject {
     
     public init() {
         loadPersonas()
-#if DEBUG
-        if customPersonas.isEmpty {
-            customPersonas = Self.debugPersonas
+        if customPersonas.count < 100 {
+            let existingNames = Set(customPersonas.map(\.name))
+            customPersonas.append(contentsOf: Self.placeholderPersonas.filter {
+                !existingNames.contains($0.name)
+            }.prefix(max(0, 100 - customPersonas.count)))
         }
-#endif
         setupNotificationObservers()
     }
 
-#if DEBUG
     /// Temporary data for exercising long persona lists during local UI work.
-    private static var debugPersonas: [CustomPersona] {
+    private static var placeholderPersonas: [CustomPersona] {
         (1...100).map { index in
             CustomPersona(
                 name: "Placeholder Persona \(index)",
@@ -152,7 +152,6 @@ public class CustomPersonaStore: ObservableObject {
             )
         }
     }
-#endif
     
     private func setupNotificationObservers() {
         clearUsageObserver = NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
