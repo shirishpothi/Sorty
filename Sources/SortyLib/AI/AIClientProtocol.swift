@@ -51,9 +51,19 @@ public enum AIClientError: LocalizedError, Sendable {
     case invalidURL
     case invalidResponse
     case invalidResponseFormat
+    case internetAccessBlocked
     case apiError(statusCode: Int, message: String)
     case networkError(any Error & Sendable)
     case jsonDecodingError(context: String)
+
+    public static let internetAccessBlockedCode = "SORTY_NETWORK_PRIVACY_BLOCKED"
+
+    public var isInternetAccessBlocked: Bool {
+        if case .internetAccessBlocked = self {
+            return true
+        }
+        return false
+    }
     
     public var isCancellation: Bool {
         switch self {
@@ -80,6 +90,8 @@ public enum AIClientError: LocalizedError, Sendable {
             return "Invalid response from AI provider"
         case .invalidResponseFormat:
             return "Invalid response format (JSON mode might be unsupported)"
+        case .internetAccessBlocked:
+            return "Internet access is blocked"
         case .apiError(let statusCode, _):
             return "API Error (\(statusCode)): \(getStatusExplanation(statusCode))"
         case .networkError(let error):
@@ -91,6 +103,12 @@ public enum AIClientError: LocalizedError, Sendable {
     
     public var failureReason: String? {
         switch self {
+        case .internetAccessBlocked:
+            return """
+            Code: \(Self.internetAccessBlockedCode)
+
+            Sorty blocked this request before it reached the AI provider because Block Internet Connections is on.
+            """
         case .apiError(_, let message):
             let parsed = parseErrorMessage(message)
             let redactedRaw = redactPotentialKeys(message)

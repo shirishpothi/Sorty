@@ -65,11 +65,11 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         let remote = URL(string: "https://api.openai.com/v1/models")!
 
         XCTAssertThrowsError(try AIRequestSupport.makeJSONRequest(url: remote, method: "GET")) { error in
-            guard case AIClientError.apiError(let statusCode, _) = error else {
-                XCTFail("Expected apiError for privacy mode block, got: \(error)")
+            guard case AIClientError.internetAccessBlocked = error else {
+                XCTFail("Expected internetAccessBlocked, got: \(error)")
                 return
             }
-            XCTAssertEqual(statusCode, 403)
+            XCTAssertEqual(error.localizedDescription, "Internet access is blocked")
         }
     }
 
@@ -116,11 +116,12 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         do {
             try await client.checkHealth()
             XCTFail("Expected privacy mode to block Codex subscription access")
-        } catch let AIClientError.apiError(statusCode, message) {
-            XCTAssertEqual(statusCode, 403)
-            XCTAssertEqual(message, NetworkPrivacyPolicy.blockedMessage)
+        } catch let error as AIClientError {
+            XCTAssertTrue(error.isInternetAccessBlocked)
+            XCTAssertEqual(error.localizedDescription, "Internet access is blocked")
+            XCTAssertTrue(error.failureReason?.contains(AIClientError.internetAccessBlockedCode) == true)
         } catch {
-            XCTFail("Expected API privacy error, got: \(error)")
+            XCTFail("Expected internet privacy error, got: \(error)")
         }
     }
 

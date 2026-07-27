@@ -117,7 +117,7 @@ enum AIRequestSupport {
 
     static func ensureNetworkAllowed(url: URL) throws {
         guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
-            throw AIClientError.apiError(statusCode: 403, message: NetworkPrivacyPolicy.blockedMessage)
+            throw AIClientError.internetAccessBlocked
         }
     }
 

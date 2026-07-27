@@ -2795,7 +2795,8 @@ struct ErrorView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
-    private enum ErrorCategory {
+    private enum ErrorCategory: Equatable {
+        case internetPrivacy
         case apiKey
         case network
         case permissions
@@ -2804,6 +2805,13 @@ struct ErrorView: View {
     
     private var category: ErrorCategory {
         let description = error.localizedDescription.lowercased()
+        if let aiError = error as? AIClientError, aiError.isInternetAccessBlocked {
+            return .internetPrivacy
+        }
+        if description.contains("block internet connections")
+            || description.contains("internet access is blocked") {
+            return .internetPrivacy
+        }
         if description.contains("api key") || description.contains("unauthorized") || description.contains("authentication") {
             return .apiKey
         }
@@ -2823,6 +2831,8 @@ struct ErrorView: View {
     
     private var errorIcon: String {
         switch category {
+        case .internetPrivacy:
+            return "network.slash"
         case .apiKey:
             return "key.fill"
         case .network:
@@ -2836,6 +2846,8 @@ struct ErrorView: View {
     
     private var errorTitle: String {
         switch category {
+        case .internetPrivacy:
+            return "Internet Access Blocked"
         case .apiKey:
             return "AI Credentials Required"
         case .network:
@@ -2849,6 +2861,8 @@ struct ErrorView: View {
     
     private var recoveryText: String {
         switch category {
+        case .internetPrivacy:
+            return "Sorty stopped the request before it reached your AI provider. Turn off Block Internet Connections in Advanced Settings, then retry."
         case .apiKey:
             return "Check your provider and API key in Settings, then retry."
         case .network:
@@ -2881,6 +2895,7 @@ struct ErrorView: View {
 
         Error: \(errorTitle)
         Category: \(privacySafeCategoryName)
+        \(privacySafeErrorCodeLine)
         Summary: \(privacySafeErrorSummary)
         Suggested action: \(privacySafeSuggestedAction)
         Workflow: \(settingsViewModel.config.mode.displayName)
@@ -2894,6 +2909,8 @@ struct ErrorView: View {
 
     private var privacySafeCategoryName: String {
         switch category {
+        case .internetPrivacy:
+            return "Internet privacy"
         case .apiKey:
             return "AI credentials"
         case .network:
@@ -2907,6 +2924,8 @@ struct ErrorView: View {
 
     private var privacySafeErrorSummary: String {
         switch category {
+        case .internetPrivacy:
+            return "Sorty blocked the request locally before it reached the selected AI provider."
         case .apiKey:
             return "Sorty couldn't authenticate with the selected AI provider."
         case .network:
@@ -2923,6 +2942,8 @@ struct ErrorView: View {
 
     private var privacySafeSuggestedAction: String {
         switch category {
+        case .internetPrivacy:
+            return "Open Advanced Settings, turn off Block Internet Connections, then retry."
         case .apiKey:
             return "Check the selected provider and its API key in Settings, then retry."
         case .network:
@@ -2935,6 +2956,11 @@ struct ErrorView: View {
         case .generic:
             return "Choose a smarter model and retry. If it still fails, simplify Instructions or Persona, then review Learnings, workflow, and organization rules."
         }
+    }
+
+    private var privacySafeErrorCodeLine: String {
+        guard category == .internetPrivacy else { return "" }
+        return "Code: \(AIClientError.internetAccessBlockedCode)"
     }
 
     var body: some View {
@@ -3040,6 +3066,43 @@ struct ErrorView: View {
                     .help("Open Advanced Settings and focus the timeout controls")
                     .accessibilityHint("Opens the request and resource timeout controls")
                     .accessibilityIdentifier("ErrorOpenTimeoutSettingsButton")
+                }
+
+                if category == .internetPrivacy {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.settings)
+                        appState.openSettingsWindow(
+                            section: .advanced,
+                            focusTarget: .advancedInternetPrivacy
+                        )
+                        appState.navigatedFromSettings = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showsSettingsChevron ? "arrow.up.right" : "network")
+                                .font(.system(size: 10, weight: .semibold))
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
+                            Text("Internet Settings")
+                                .font(.caption.bold())
+                        }
+                    }
+                    .buttonStyle(.tintedPill(.orange, size: .small))
+                    .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
+                    .help("Open Advanced Settings and focus Block Internet Connections")
+                    .accessibilityHint(
+                        "Opens the setting that prevents Sorty from contacting cloud providers"
+                    )
+                    .accessibilityIdentifier("ErrorOpenInternetSettingsButton")
+                    .onHover { hovering in
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            isHoveringSettings = hovering
+                        }
+                    }
                 }
 
                 if category == .apiKey {
