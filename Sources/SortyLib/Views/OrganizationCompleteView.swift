@@ -231,7 +231,7 @@ struct OrganizationCompleteView: View {
                             HapticFeedbackManager.shared.tap()
                             returnToStart()
                         } label: {
-                            Label("Organise Another", systemImage: "arrow.counterclockwise")
+                            Label("Organise Another", systemImage: "folder.badge.plus")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.sortyPrimary(size: .large))
