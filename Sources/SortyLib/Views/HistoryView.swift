@@ -673,7 +673,7 @@ struct HistoryHeader: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 1))
             : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
 
-        HStack(spacing: 8) {
+        return HStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.blue.gradient)
