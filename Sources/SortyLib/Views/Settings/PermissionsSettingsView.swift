@@ -50,6 +50,11 @@ struct PermissionsSettingsView: View {
                 }
             ) {
                 VStack(alignment: .leading, spacing: 14) {
+                    Text("Review the macOS access Sorty uses for folder organization, Finder actions, and notifications. Optional permissions can stay off until you need their features.")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     LazyVGrid(
                         columns: [
                             GridItem(.flexible(), spacing: 10),
@@ -118,17 +123,7 @@ struct PermissionsSettingsView: View {
                         } label: {
                             Label {
                                 Text("Refresh Status")
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                isOpeningPrivacySettings = true
-                            }
                             } icon: {
-
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(0.35))
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                    isOpeningPrivacySettings = false
-                                }
-                            }
                                 Image(systemName: "arrow.clockwise")
                                     .symbolEffect(.rotate, value: refreshStatusAnimationTrigger)
                             }
@@ -137,7 +132,17 @@ struct PermissionsSettingsView: View {
 
                         Button {
                             HapticFeedbackManager.shared.tap()
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                isOpeningPrivacySettings = true
+                            }
                             openPrivacyAndSecuritySettings()
+
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(0.35))
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                    isOpeningPrivacySettings = false
+                                }
+                            }
                         } label: {
                             Label {
                                 Text("Open Privacy & Security")
@@ -147,11 +152,6 @@ struct PermissionsSettingsView: View {
                                         ? "arrow.up.right"
                                         : "gearshape"
                                 )
-                        .onHover { hovering in
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                isHoveringOpenPrivacySettings = hovering
-                            }
-                        }
                                 .contentTransition(.symbolEffect(.replace))
                                 .transaction { transaction in
                                     if reduceMotion {
@@ -161,6 +161,11 @@ struct PermissionsSettingsView: View {
                             }
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
+                        .onHover { hovering in
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                isHoveringOpenPrivacySettings = hovering
+                            }
+                        }
 
                         Spacer()
                     }
@@ -175,7 +180,7 @@ struct PermissionsSettingsView: View {
                     )
                     permissionNote(
                         icon: "lock.open",
-                        text: "Full Disk Access is optional, but it avoids separate access prompts for each folder, making it faster to organize multiple folders."
+                        text: "Full Disk Access is optional and only helps with protected folders you explicitly select."
                     )
                     permissionNote(
                         icon: "hand.raised",
