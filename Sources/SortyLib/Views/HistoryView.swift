@@ -587,14 +587,14 @@ struct HistoryHeader: View {
                 emptyStateTitleRow
             }
         }
-        .padding(.horizontal, showsControls ? 28 : 32)
+        .padding(.horizontal, showsControls ? 24 : 32)
         .padding(.vertical, showsControls ? 12 : 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")
     }
 
     private var populatedHeader: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 17, weight: .semibold))
@@ -606,21 +606,26 @@ struct HistoryHeader: View {
                 Text("\(totalSessions) runs")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                     .contentTransition(.numericText())
                     .numericTextTransition(animationValue: totalSessions)
                     .accessibilityLabel("\(totalSessions) runs recorded")
             }
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("History, \(totalSessions) runs")
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 4)
 
             HistoryNavigatorControl(selection: $selectedFilter)
-                .fixedSize()
+                .frame(width: HistoryNavigatorControl.preferredWidth)
+                .layoutPriority(1)
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 4)
 
             clearHistoryButton
+                .fixedSize()
         }
     }
 
@@ -660,6 +665,7 @@ struct HistoryHeader: View {
 
 private struct HistoryNavigatorControl: NSViewRepresentable {
     private static let segmentWidth: CGFloat = 70
+    static let preferredWidth = segmentWidth * CGFloat(HistoryView.HistoryFilter.allCases.count)
 
     @Binding var selection: HistoryView.HistoryFilter
 
@@ -708,6 +714,8 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
         if control.responds(to: NSSelectorFromString("setRole:")) {
             control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
         }
+
+        control.segmentDistribution = .fillEqually
 
         for (index, filter) in filters.enumerated() {
             control.setWidth(Self.segmentWidth, forSegment: index)
