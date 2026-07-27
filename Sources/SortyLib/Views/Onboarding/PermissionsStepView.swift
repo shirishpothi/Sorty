@@ -544,44 +544,54 @@ struct PermissionRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            permissionIcon
+        Group {
+            if usesSupportCardStyle {
+                VStack(spacing: 10) {
+                    permissionIcon
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Text(LocalizedStringKey(type.rawValue))
-                        .font(.headline)
+                    title
 
-                    if isRequired {
-                        Text("Required")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Capsule(style: .continuous))
-                    }
+                    Text(type.description(for: state))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 2)
+
+                    trailingControl
                 }
+                .frame(maxWidth: .infinity, minHeight: 154)
+            } else {
+                HStack(spacing: 14) {
+                    permissionIcon
 
-                Text(type.description(for: state))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        title
+
+                        Text(type.description(for: state))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    trailingControl
+                }
             }
-
-            Spacer()
-
-            trailingControl
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .fill(rowFill)
         )
         .modifier(PermissionCardSurfaceModifier(usesSupportCardStyle: usesSupportCardStyle))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
         )
         .shadow(
@@ -590,7 +600,7 @@ struct PermissionRow: View {
             x: 0,
             y: isHovering ? 6 : 3
         )
-        .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
+        .scaleEffect(grantFlash ? 1.012 : (isHovering && !usesSupportCardStyle ? 1.006 : 1))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
         .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
         .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
@@ -617,6 +627,29 @@ struct PermissionRow: View {
         .accessibilityElement(children: .contain)
     }
 
+    private var title: some View {
+        HStack(spacing: 7) {
+            Text(LocalizedStringKey(type.rawValue))
+                .font(.system(size: usesSupportCardStyle ? 14 : 17, weight: .bold, design: .rounded))
+
+            if isRequired {
+                Text("Required")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
+                        in: Capsule(style: .continuous)
+                    )
+            }
+        }
+    }
+
+    private var cardCornerRadius: CGFloat {
+        usesSupportCardStyle ? 8 : 14
+    }
+
     private var canRemovePermission: Bool {
         state == .granted || state == .restartRequired
     }
@@ -639,34 +672,46 @@ struct PermissionRow: View {
     }
 
     private var rowStroke: Color {
+        if usesSupportCardStyle {
+            return isHovering ? type.color.opacity(0.32) : Color.secondary.opacity(0.08)
+        }
+
         if grantFlash || state == .granted {
             return Color.green.opacity(grantFlash ? 0.72 : 0.34)
         }
 
         if isHovering {
-            return type.color.opacity(usesSupportCardStyle ? 0.32 : 0.30)
+            return type.color.opacity(0.30)
         }
 
-        return usesSupportCardStyle
-            ? Color.secondary.opacity(0.08)
-            : Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08)
+        return Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08)
     }
 
     private var permissionIcon: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
-                .overlay {
+        Group {
+            if usesSupportCardStyle {
+                Image(systemName: state == .granted ? "checkmark" : type.icon)
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(isHovering ? iconTint : .secondary)
+                    .symbolReplaceTransition(animationValue: state)
+                    .frame(height: 34)
+            } else {
+                ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
-                }
+                        .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
+                        }
 
-            Image(systemName: state == .granted ? "checkmark" : type.icon)
-                .font(.system(size: state == .granted ? 18 : 19, weight: .semibold))
-                .foregroundStyle(iconTint)
-                .symbolReplaceTransition(animationValue: state)
+                    Image(systemName: state == .granted ? "checkmark" : type.icon)
+                        .font(.system(size: state == .granted ? 18 : 19, weight: .semibold))
+                        .foregroundStyle(iconTint)
+                        .symbolReplaceTransition(animationValue: state)
+                }
+                .frame(width: 46, height: 46)
+            }
         }
-        .frame(width: 46, height: 46)
         .accessibilityHidden(true)
     }
 

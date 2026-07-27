@@ -46,54 +46,62 @@ struct PermissionsSettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    PermissionRow(
-                        type: .filesAndFolders,
-                        state: permissionStates[.filesAndFolders] ?? .unknown,
-                        isRequired: true,
-                        onExplain: { selectedEducationPermission = .filesAndFolders },
-                        onRequest: { _ in requestFilesAndFoldersPermission() },
-                        removePermissionTitle: "Remove Current Folder Access…",
-                        onRemovePermission: { activeAlert = .revoke(.filesAndFolders) },
-                        usesSupportCardStyle: true
-                    )
-                    .settingsFocusableSetting(.permissionsFilesAndFolders)
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)
+                        ],
+                        spacing: 10
+                    ) {
+                        PermissionRow(
+                            type: .filesAndFolders,
+                            state: permissionStates[.filesAndFolders] ?? .unknown,
+                            isRequired: true,
+                            onExplain: { selectedEducationPermission = .filesAndFolders },
+                            onRequest: { _ in requestFilesAndFoldersPermission() },
+                            removePermissionTitle: "Remove Current Folder Access…",
+                            onRemovePermission: { activeAlert = .revoke(.filesAndFolders) },
+                            usesSupportCardStyle: true
+                        )
+                        .settingsFocusableSetting(.permissionsFilesAndFolders)
 
-                    PermissionRow(
-                        type: .fullDiskAccess,
-                        state: permissionStates[.fullDiskAccess] ?? .unknown,
-                        isRequired: false,
-                        onExplain: { selectedEducationPermission = .fullDiskAccess },
-                        onRequest: { sourceFrame in
-                            fullDiskAccessSourceFrameInScreen = sourceFrame
-                            activeAlert = .fullDiskAccessSetup
-                        },
-                        onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) },
-                        usesSupportCardStyle: true
-                    )
-                    .settingsFocusableSetting(.permissionsFullDiskAccess)
+                        PermissionRow(
+                            type: .fullDiskAccess,
+                            state: permissionStates[.fullDiskAccess] ?? .unknown,
+                            isRequired: false,
+                            onExplain: { selectedEducationPermission = .fullDiskAccess },
+                            onRequest: { sourceFrame in
+                                fullDiskAccessSourceFrameInScreen = sourceFrame
+                                activeAlert = .fullDiskAccessSetup
+                            },
+                            onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) },
+                            usesSupportCardStyle: true
+                        )
+                        .settingsFocusableSetting(.permissionsFullDiskAccess)
 
-                    PermissionRow(
-                        type: .automation,
-                        state: permissionStates[.automation] ?? .unknown,
-                        isRequired: false,
-                        onExplain: { selectedEducationPermission = .automation },
-                        onRequest: { _ in requestAutomationPermission() },
-                        onRemovePermission: { activeAlert = .revoke(.automation) },
-                        usesSupportCardStyle: true
-                    )
-                    .settingsFocusableSetting(.permissionsAutomation)
+                        PermissionRow(
+                            type: .automation,
+                            state: permissionStates[.automation] ?? .unknown,
+                            isRequired: false,
+                            onExplain: { selectedEducationPermission = .automation },
+                            onRequest: { _ in requestAutomationPermission() },
+                            onRemovePermission: { activeAlert = .revoke(.automation) },
+                            usesSupportCardStyle: true
+                        )
+                        .settingsFocusableSetting(.permissionsAutomation)
 
-                    PermissionRow(
-                        type: .notifications,
-                        state: permissionStates[.notifications] ?? .unknown,
-                        isRequired: false,
-                        onExplain: { selectedEducationPermission = .notifications },
-                        onRequest: { _ in requestNotificationPermission() },
-                        removePermissionTitle: "Disable & Open Notification Settings…",
-                        onRemovePermission: { activeAlert = .revoke(.notifications) },
-                        usesSupportCardStyle: true
-                    )
-                    .settingsFocusableSetting(.permissionsNotifications)
+                        PermissionRow(
+                            type: .notifications,
+                            state: permissionStates[.notifications] ?? .unknown,
+                            isRequired: false,
+                            onExplain: { selectedEducationPermission = .notifications },
+                            onRequest: { _ in requestNotificationPermission() },
+                            removePermissionTitle: "Disable & Open Notification Settings…",
+                            onRemovePermission: { activeAlert = .revoke(.notifications) },
+                            usesSupportCardStyle: true
+                        )
+                        .settingsFocusableSetting(.permissionsNotifications)
+                    }
 
                     Divider()
                         .opacity(0.35)
