@@ -67,7 +67,6 @@ struct FlatFolderRowContextMenu: View {
 
 struct FlatFileRowContent: View {
     private enum Column {
-        static let renameActionsWidth: CGFloat = 84
         static let tagsWidth: CGFloat = 72
         static let commentWidth: CGFloat = 14
         static let sizeWidth: CGFloat = 44
@@ -81,7 +80,6 @@ struct FlatFileRowContent: View {
     let fileComment: String?
     let duplicateInfo: DuplicateInfo?
     let parentSuggestion: FolderSuggestion?
-    let unchangedReason: String?
     let handoffDirectory: URL?
     let learningsManager: LearningsManager
     @Binding var isEditingName: Bool
@@ -96,96 +94,107 @@ struct FlatFileRowContent: View {
     let onReject: () -> Void
 
     var body: some View {
-        HStack {
-            FileThumbnailView(
-                url: URL(fileURLWithPath: file.path),
-                size: CGSize(width: 20, height: 20)
-            )
-
-            if isEditingName {
-                TextField("New name", text: $editedName)
-                    .textFieldStyle(.plain)
-                    .focused(isFocused)
-                    .onSubmit(onSave)
-                    .onExitCommand(perform: onCancel)
-                    .font(.body)
-            } else if let renameMapping, renameMapping.hasRename {
-                RenameNameChangeView(
-                    originalName: file.displayName,
-                    suggestedName: renameMapping.suggestedName ?? "",
-                    helpText: renameHelpText ?? "",
-                    isRegenerating: isRegeneratingName
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                FileThumbnailView(
+                    url: URL(fileURLWithPath: file.path),
+                    size: CGSize(width: 20, height: 20)
                 )
-            } else {
-                Text(file.displayName)
-                    .lineLimit(1)
-                    .foregroundColor(.primary)
-            }
 
-            Spacer()
-
-            Group {
-                if let renameMapping, renameMapping.hasRename {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.caption)
-                            .foregroundColor(.purple)
-                            .help(renameMapping.renameReason ?? "Sorty suggested rename")
-
-                        RenameActionGlassCluster(
-                            isRegenerating: isRegeneratingName,
-                            onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
-                            onRegenerate: onRegenerate,
-                            onReject: onReject
+                if isEditingName {
+                    TextField("New name", text: $editedName)
+                        .textFieldStyle(.plain)
+                        .focused(isFocused)
+                        .onSubmit(onSave)
+                        .onExitCommand(perform: onCancel)
+                        .font(.body)
+                } else {
+                    Text(file.displayName)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundColor(renameMapping?.hasRename == true ? .secondary : .primary)
+                        .strikethrough(
+                            renameMapping?.hasRename == true,
+                            color: .red.opacity(0.72)
                         )
+                }
+
+                Spacer(minLength: 12)
+
+                Group {
+                    if !fileTags.isEmpty {
+                        TagDotsView(tags: fileTags)
                     }
-                } else if let unchangedReason {
-                    RenameReasoningPopoverButton(reason: unchangedReason)
                 }
-            }
-            .frame(width: Column.renameActionsWidth, alignment: .trailing)
+                .frame(width: Column.tagsWidth, alignment: .leading)
 
-            Group {
-                if !fileTags.isEmpty {
-                    TagDotsView(tags: fileTags)
+                Group {
+                    if let fileComment, !fileComment.isEmpty {
+                        CommentBubbleButton(comment: fileComment)
+                    }
                 }
-            }
-            .frame(width: Column.tagsWidth, alignment: .leading)
+                .frame(width: Column.commentWidth, alignment: .center)
 
-            Group {
-                if let fileComment, !fileComment.isEmpty {
-                    CommentBubbleButton(comment: fileComment)
+                if let parentSuggestion {
+                    LiquidGlassLearningsButton(
+                        file: file,
+                        suggestion: parentSuggestion,
+                        learningsManager: learningsManager
+                    )
                 }
+
+                if let duplicateInfo {
+                    LiquidGlassDuplicateButton(
+                        duplicateInfo: duplicateInfo,
+                        handoffDirectory: handoffDirectory,
+                        highlightedFileID: $highlightedFileID
+                    )
+                }
+
+                Text(file.formattedSize)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+                    .frame(width: Column.sizeWidth, alignment: .trailing)
+
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .frame(width: Column.dragHandleWidth)
+                    .accessibilityHidden(true)
             }
-            .frame(width: Column.commentWidth, alignment: .center)
 
-            if let parentSuggestion {
-                LiquidGlassLearningsButton(
-                    file: file,
-                    suggestion: parentSuggestion,
-                    learningsManager: learningsManager
-                )
+            if let renameMapping, renameMapping.hasRename, !isEditingName {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    RenameNameChangeView(
+                        originalName: file.displayName,
+                        suggestedName: renameMapping.suggestedName ?? "",
+                        helpText: renameHelpText ?? "",
+                        isRegenerating: isRegeneratingName,
+                        showsOriginalName: false
+                    )
+
+                    Spacer(minLength: 12)
+
+                    Image(systemName: "wand.and.stars")
+                        .font(.caption)
+                        .foregroundColor(.purple)
+                        .help(renameMapping.renameReason ?? "Sorty suggested rename")
+
+                    RenameActionGlassCluster(
+                        isRegenerating: isRegeneratingName,
+                        onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
+                        onRegenerate: onRegenerate,
+                        onReject: onReject
+                    )
+                }
+                .padding(.leading, 28)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            if let duplicateInfo {
-                LiquidGlassDuplicateButton(
-                    duplicateInfo: duplicateInfo,
-                    handoffDirectory: handoffDirectory,
-                    highlightedFileID: $highlightedFileID
-                )
-            }
-
-            Text(file.formattedSize)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .monospacedDigit()
-                .frame(width: Column.sizeWidth, alignment: .trailing)
-
-            Image(systemName: "line.3.horizontal")
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: Column.dragHandleWidth)
-                .accessibilityHidden(true)
         }
     }
 }

@@ -252,6 +252,7 @@ struct RenameNameChangeView: View {
     let suggestedName: String
     let helpText: String
     var isRegenerating = false
+    var showsOriginalName = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var suggestedNameReveal = true
@@ -259,17 +260,19 @@ struct RenameNameChangeView: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Text(originalName)
-                .foregroundColor(.red.opacity(0.82))
-                .strikethrough(true, color: .red.opacity(0.75))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textShimmer(isLoading: isRegenerating, phaseOffset: 0.16, intensity: 1.25)
+            if showsOriginalName {
+                Text(originalName)
+                    .foregroundColor(.red.opacity(0.82))
+                    .strikethrough(true, color: .red.opacity(0.75))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textShimmer(isLoading: isRegenerating, phaseOffset: 0.16, intensity: 1.25)
 
-            Image(systemName: "arrow.right")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary.opacity(0.7))
-                .opacity(isRegenerating ? 0.55 : 1)
+                Image(systemName: "arrow.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .opacity(isRegenerating ? 0.55 : 1)
+            }
 
             Text(suggestedName)
                 .fontWeight(.medium)

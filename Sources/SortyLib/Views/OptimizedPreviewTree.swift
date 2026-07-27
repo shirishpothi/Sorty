@@ -1216,12 +1216,6 @@ struct FlatFileRowView: View {
         store.highlightedFileID == file.id
     }
 
-    private var unchangedReason: String? {
-        guard let mapping = renameMapping, !mapping.hasRename else { return nil }
-        let trimmed = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
     private var rowContent: FlatFileRowContent {
         FlatFileRowContent(
             file: file,
@@ -1231,7 +1225,6 @@ struct FlatFileRowView: View {
             fileComment: fileComment,
             duplicateInfo: duplicateInfo,
             parentSuggestion: parentSuggestion,
-            unchangedReason: unchangedReason,
             handoffDirectory: appState.selectedDirectory,
             learningsManager: learningsManager,
             isEditingName: $isEditingName,
