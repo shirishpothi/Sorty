@@ -65,7 +65,10 @@ struct PermissionsSettingsView: View {
                         removePermissionTitle: "Remove Current Folder Access…",
                         onRemovePermission: { activeAlert = .revoke(.filesAndFolders) }
                     )
-                    .settingsFocusableSetting(.permissionsFilesAndFolders)
+                    .settingsFocusable(
+                        .permissionsFilesAndFolders,
+                        shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
 
                     LazyVGrid(
                         columns: Array(
@@ -86,7 +89,10 @@ struct PermissionsSettingsView: View {
                             },
                             onRemovePermission: { activeAlert = .revoke(.fullDiskAccess) }
                         )
-                        .settingsFocusableSetting(.permissionsFullDiskAccess)
+                        .settingsFocusable(
+                            .permissionsFullDiskAccess,
+                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
 
                         PermissionSettingsCard(
                             type: .automation,
@@ -97,7 +103,10 @@ struct PermissionsSettingsView: View {
                             onRequest: { _ in requestAutomationPermission() },
                             onRemovePermission: { activeAlert = .revoke(.automation) }
                         )
-                        .settingsFocusableSetting(.permissionsAutomation)
+                        .settingsFocusable(
+                            .permissionsAutomation,
+                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
 
                         PermissionSettingsCard(
                             type: .notifications,
@@ -109,7 +118,10 @@ struct PermissionsSettingsView: View {
                             removePermissionTitle: "Disable & Open Notification Settings…",
                             onRemovePermission: { activeAlert = .revoke(.notifications) }
                         )
-                        .settingsFocusableSetting(.permissionsNotifications)
+                        .settingsFocusable(
+                            .permissionsNotifications,
+                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                     }
 
                     Divider()

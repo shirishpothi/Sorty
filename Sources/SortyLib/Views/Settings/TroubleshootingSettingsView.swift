@@ -256,7 +256,10 @@ private struct MaintenanceActionTile: View {
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
-        .settingsFocusable(focusTarget)
+        .settingsFocusable(
+            focusTarget,
+            shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering

@@ -18,12 +18,13 @@ extension EnvironmentValues {
     }
 }
 
-private struct SettingsFocusableModifier: ViewModifier {
+private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.settingsFocusTarget) private var focusTarget
     @State private var isBreathing = false
 
     let target: SettingsFocusTarget
+    let shape: FocusShape
     let horizontalRingPadding: CGFloat
     let verticalRingPadding: CGFloat
 
@@ -36,7 +37,7 @@ private struct SettingsFocusableModifier: ViewModifier {
             .id(target.rawValue)
             .overlay(
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    shape
                         .strokeBorder(
                             isFocused
                             ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
@@ -44,7 +45,7 @@ private struct SettingsFocusableModifier: ViewModifier {
                             lineWidth: 2
                         )
 
-                    RoundedRectangle(cornerRadius: 12)
+                    shape
                         .strokeBorder(
                             isFocused
                             ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
@@ -525,11 +526,24 @@ extension View {
     }
 
     func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
+        settingsFocusable(
+            target,
+            shape: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+    }
+
+    func settingsFocusable<FocusShape: InsettableShape>(
+        _ target: SettingsFocusTarget,
+        shape: FocusShape,
+        horizontalRingPadding: CGFloat = 0,
+        verticalRingPadding: CGFloat = 0
+    ) -> some View {
         modifier(
             SettingsFocusableModifier(
                 target: target,
-                horizontalRingPadding: 0,
-                verticalRingPadding: 0
+                shape: shape,
+                horizontalRingPadding: horizontalRingPadding,
+                verticalRingPadding: verticalRingPadding
             )
         )
     }
@@ -544,12 +558,11 @@ extension View {
     }
 
     func settingsFocusableSetting(_ target: SettingsFocusTarget) -> some View {
-        modifier(
-            SettingsFocusableModifier(
-                target: target,
-                horizontalRingPadding: 8,
-                verticalRingPadding: 6
-            )
+        settingsFocusable(
+            target,
+            shape: RoundedRectangle(cornerRadius: 10, style: .continuous),
+            horizontalRingPadding: 8,
+            verticalRingPadding: 6
         )
     }
 
