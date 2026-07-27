@@ -150,6 +150,18 @@ struct HistoryView: View {
         primarySectionKind == .manual && !watchedEntries.isEmpty
     }
 
+    private var filterSelection: Binding<HistoryFilter> {
+        Binding(
+            get: { selectedFilter },
+            set: { newSelection in
+                guard newSelection != selectedFilter else { return }
+                selectedFilter = newSelection
+                displayedEntryCount = pageSize
+                refreshFilteredEntries(in: cachedSessionRecords, using: newSelection)
+            }
+        )
+    }
+
     enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "All"
         case undoable = "Undoable"
@@ -220,7 +232,7 @@ struct HistoryView: View {
 
                     HistoryHeader(
                         totalSessions: impactSummary.totalSessions,
-                        selectedFilter: $selectedFilter,
+                        selectedFilter: filterSelection,
                         showsControls: false,
                         onClearHistory: {
                             appState.clearHistoryWithConfirmation()
@@ -233,7 +245,7 @@ struct HistoryView: View {
                 // Header - matches DuplicatesView style
                 HistoryHeader(
                     totalSessions: impactSummary.totalSessions,
-                    selectedFilter: $selectedFilter,
+                    selectedFilter: filterSelection,
                     showsControls: true,
                     onClearHistory: {
                         appState.clearHistoryWithConfirmation()
@@ -308,10 +320,6 @@ struct HistoryView: View {
             }
             consumePendingNotificationActionIfNeeded()
         }
-        .onChange(of: selectedFilter) { _, _ in
-            displayedEntryCount = pageSize
-            refreshFilteredEntries()
-        }
         .onChange(of: searchText) { _, _ in
             displayedEntryCount = pageSize
             refreshFilteredEntries()
@@ -368,7 +376,14 @@ struct HistoryView: View {
 
         if !entries.isEmpty {
             HStack {
-                Label(kind.title, systemImage: kind.systemImage)
+                Label {
+                    Text(kind.title)
+                        .numericTextTransition(animationValue: kind.title)
+                } icon: {
+                    Image(systemName: kind.systemImage)
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                }
                     .font(.headline)
                 Spacer()
                 Text("\(totalCount)")
@@ -423,7 +438,11 @@ struct HistoryView: View {
         refreshFilteredEntries(in: cachedSessionRecords)
     }
 
-    private func refreshFilteredEntries(in records: [HistorySessionRecord]) {
+    private func refreshFilteredEntries(
+        in records: [HistorySessionRecord],
+        using filter: HistoryFilter? = nil
+    ) {
+        let activeFilter = filter ?? selectedFilter
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         var manual: [HistorySessionRow] = []
         var watched: [HistorySessionRow] = []
@@ -431,7 +450,7 @@ struct HistoryView: View {
         watched.reserveCapacity(records.count / 4)
 
         for record in records {
-            guard selectedFilter.includes(
+            guard activeFilter.includes(
                 status: record.row.status,
                 source: record.source,
                 isUndone: record.isUndone,
@@ -628,11 +647,16 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSSegmentedControl {
         let filters = HistoryView.HistoryFilter.allCases
+        let symbolConfiguration = NSImage.SymbolConfiguration(
+            pointSize: 16,
+            weight: .regular
+        )
         let images = filters.map { filter in
-            let image = NSImage(
+            let symbol = NSImage(
                 systemSymbolName: filter.systemImage,
                 accessibilityDescription: filter.rawValue
             ) ?? NSImage()
+            let image = symbol.withSymbolConfiguration(symbolConfiguration) ?? symbol
             image.isTemplate = true
             return image
         }
@@ -664,6 +688,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 
         for (index, filter) in filters.enumerated() {
             control.setWidth(Self.segmentWidth, forSegment: index)
+            control.setImageScaling(.scaleNone, forSegment: index)
             control.setToolTip(filter.rawValue, forSegment: index)
         }
 
