@@ -25,6 +25,7 @@ Both clients disable person profiles and IP collection. Session replay, heatmaps
 | Event | Scope | Key bounded properties |
 |---|---|---|
 | `$pageview` | Every public website route | `page_name`, `page_path`, `traffic_source` |
+| `$pageleave` | Website exits while analytics is enabled | `$prev_pageview_duration`, `$prev_pageview_pathname` |
 | `web:section_viewed` | Meaningfully visible homepage sections | `section`, `page_path` |
 | `web:interaction` | Navigation, downloads, FAQ, source/support links, and analytics preferences | `action`, `component`, `location`, `target`, `outcome` |
 | `app:session_started` | Each opted-in Mac analytics session | `launch_source` |
@@ -56,7 +57,9 @@ The insight short IDs are `zWy5neXL`, `344OWGEe`, `dawp7NuK`, `o0NmgL6f`, and `e
 
 ## Project configuration
 
-The project is set to the `Asia/Singapore` timezone with IP anonymization and stateless cookieless mode enabled. Automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking are disabled; lightweight LCP, INP, and CLS `$web_vitals` capture is enabled. Project-side exception capture remains enabled only so the consent-gated native SDK can submit crash reports on the next launch; browser exceptions are manual and sanitized.
+The project is set to the `Asia/Singapore` timezone with IP anonymization and stateless cookieless mode enabled. Automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking are disabled; consent-gated `$pageleave` timing and lightweight LCP, INP, and CLS `$web_vitals` capture are enabled. Bounce rate remains conservative without `$autocapture`, while session duration can use `$pageleave`. Project-side exception capture remains enabled only so the consent-gated native SDK can submit crash reports on the next launch; browser exceptions are manual and sanitized.
+
+The website is a static GitHub Pages export, so it cannot host PostHog request-forwarding routes. A reverse proxy remains blocked on obtaining a custom domain and configuring PostHog's managed proxy with its generated DNS CNAME; `NEXT_PUBLIC_POSTHOG_HOST` should then be updated to that proxy origin.
 
 The public website token and ingestion host are GitHub repository variables. The personal PostHog key is stored only as the `POSTHOG_CLI_API_KEY` GitHub Actions secret, and the project ID is a repository variable.
 

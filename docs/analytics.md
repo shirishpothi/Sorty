@@ -17,6 +17,7 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 | Event | Surface | Purpose |
 |---|---|---|
 | `$pageview` | Website | Visits to each public route, using a stable page name and sanitized path |
+| `$pageleave` | Website | Consent-gated page-exit timing for more accurate session duration |
 | `web:section_viewed` | Website | Meaningfully visible named homepage sections |
 | `web:scroll_depth_reached` | Website | Bounded 25%, 50%, 75%, 90%, and 100% scroll milestones for each sanitized page |
 | `web:not_found_viewed` | Website | Explicit 404 visits without retaining the unknown requested path |
@@ -47,7 +48,9 @@ The website reads `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_H
 
 `POSTHOG_CLI_API_KEY` is a GitHub Actions secret and `POSTHOG_CLI_PROJECT_ID` is a repository variable. The website workflow injects source-map identifiers, uploads source maps, and deletes maps before publishing the static artifact. Release and nightly Mac workflows build `dwarf-with-dsym` symbols and upload dSYMs without source files.
 
-PostHog project settings keep automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking disabled. The website uses PostHog's lightweight `$web_vitals` capture for the three Core Web Vitals—LCP, INP, and CLS—through its event and property allowlists. IP anonymization and stateless cookieless mode are enabled. Exception capture is enabled project-side so the explicitly opted-in native crash reporter can submit on the next launch; browser exceptions remain locally controlled and manually sanitized.
+PostHog project settings keep automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking disabled. The website uses consent-gated `$pageleave` events for session duration and PostHog's lightweight `$web_vitals` capture for the three Core Web Vitals—LCP, INP, and CLS—through its event and property allowlists. Bounce rate remains conservative because PostHog requires automatic DOM interaction capture for its complete bounce calculation, and Sorty deliberately does not collect it. IP anonymization and stateless cookieless mode are enabled. Exception capture is enabled project-side so the explicitly opted-in native crash reporter can submit on the next launch; browser exceptions remain locally controlled and manually sanitized.
+
+The static GitHub Pages export cannot host a request-forwarding reverse proxy. PostHog requests continue to use `NEXT_PUBLIC_POSTHOG_HOST` directly until Sorty has a custom domain where a managed PostHog proxy can be provisioned with a neutral subdomain and DNS CNAME.
 
 ## Adding instrumentation
 

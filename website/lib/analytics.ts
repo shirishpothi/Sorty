@@ -24,6 +24,7 @@ type ExceptionContext = {
 
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$exception',
+  '$pageleave',
   '$pageview',
   '$web_vitals',
   'web:interaction',
@@ -59,6 +60,10 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   '$lib_version',
   '$os',
   '$os_version',
+  '$pageview_id',
+  '$prev_pageview_duration',
+  '$prev_pageview_id',
+  '$prev_pageview_pathname',
   '$process_person_profile',
   '$session_id',
   'action',
@@ -265,7 +270,7 @@ export function initializeWebsiteAnalytics(): void {
     defaults: '2026-05-30',
     autocapture: false,
     capture_pageview: false,
-    capture_pageleave: false,
+    capture_pageleave: true,
     capture_exceptions: false,
     capture_performance: {
       web_vitals_allowed_metrics: ['LCP', 'INP', 'CLS'],
