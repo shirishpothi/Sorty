@@ -121,9 +121,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     }
 
     document.addEventListener('scroll', handleScroll, { passive: true })
+    const fallbackInterval = window.setInterval(measureScrollDepth, 1_000)
     measureScrollDepth()
     return () => {
       document.removeEventListener('scroll', handleScroll)
+      window.clearInterval(fallbackInterval)
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
