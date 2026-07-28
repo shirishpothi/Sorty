@@ -210,6 +210,11 @@ jobs:
           test ! -e "releases/Sorty.app/Contents/Resources/AppIcon.icns"
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
 
+      - name: Verify PostHog credentials are not packaged
+        env:
+          POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+        run: python3 scripts/verify_posthog_release_secrets.py releases/Sorty.app
+
       - name: Upload PostHog macOS symbols
         env:
           POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}

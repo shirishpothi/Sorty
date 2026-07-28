@@ -15,6 +15,14 @@ public enum AnalyticsConsent: String, Sendable {
     case denied
 }
 
+public struct ExperimentalFeature: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let systemImage: String
+    public let variant: String?
+}
+
 @MainActor
 public final class AnalyticsManager: ObservableObject {
     public static let shared = AnalyticsManager()
@@ -25,9 +33,12 @@ public final class AnalyticsManager: ObservableObject {
 
     @Published public private(set) var consent: AnalyticsConsent
     @Published public private(set) var isActive = false
+    @Published public private(set) var experimentalFeatures: [ExperimentalFeature] = []
+    @Published public private(set) var isLoadingExperimentalFeatures = false
 
     private let defaults: UserDefaults
     private var activeProjectToken: String?
+    private var captureRateLimiter = AnalyticsCaptureRateLimiter()
 
     private static let productionProjectToken = "phc_rhKqvGRtWWMrSEC34WwUJipMZYM8kJA9ppav4ZxK7RiB"
     private static let productionHost = "https://us.i.posthog.com"
@@ -55,9 +66,9 @@ public final class AnalyticsManager: ObservableObject {
             defaults.set(false, forKey: Self.crashCollectionSuspendedDefaultsKey)
         }
 
-        let environment = ProcessInfo.processInfo.environment
-        let projectToken = environment["SORTY_POSTHOG_PROJECT_TOKEN"] ?? Self.productionProjectToken
-        let host = environment["SORTY_POSTHOG_HOST"] ?? Self.productionHost
+        let configuration = Self.configuration()
+        let projectToken = configuration.projectToken
+        let host = configuration.host
         guard !projectToken.isEmpty else { return }
 
         let config = PostHogConfig(projectToken: projectToken, host: host)
@@ -66,7 +77,7 @@ public final class AnalyticsManager: ObservableObject {
         config.captureApplicationLifecycleEvents = false
         config.captureScreenViews = false
         config.enableSwizzling = false
-        config.preloadFeatureFlags = false
+        config.preloadFeatureFlags = true
         config.sendFeatureFlagEvent = false
         config.flushAt = 20
         config.maxQueueSize = 250
@@ -81,6 +92,7 @@ public final class AnalyticsManager: ObservableObject {
         PostHogSDK.shared.setup(config)
         activeProjectToken = projectToken
         isActive = true
+        reloadExperimentalFeatures()
         var sessionProperties: [String: Any] = [
             "platform_surface": "mac_app",
             "launch_source": "standard",
@@ -129,6 +141,17 @@ public final class AnalyticsManager: ObservableObject {
         stopAndClear()
         defaults.removeObject(forKey: Self.consentDefaultsKey)
         consent = .undecided
+    }
+
+    public func reloadExperimentalFeatures() {
+        guard canCapture else {
+            experimentalFeatures = []
+            isLoadingExperimentalFeatures = false
+            return
+        }
+
+        isLoadingExperimentalFeatures = true
+        PostHogSDK.shared.reloadFeatureFlags(Self.didReloadExperimentalFeatures)
     }
 
     public func captureScreen(
@@ -232,7 +255,7 @@ public final class AnalyticsManager: ObservableObject {
         severity: String = "error",
         recoverable: Bool = true
     ) {
-        guard canCapture else { return }
+        guard canCapture, captureRateLimiter.shouldCapture() else { return }
 
         let classification = Self.classify(error)
         let sanitizedError = SanitizedAnalyticsError(
@@ -314,7 +337,7 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     private func capture(event: String, properties: [String: Any]) {
-        guard canCapture else { return }
+        guard canCapture, captureRateLimiter.shouldCapture() else { return }
         var safeProperties = properties
         safeProperties["platform_surface"] = "mac_app"
         safeProperties["$geoip_disable"] = true
@@ -322,11 +345,11 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     private func stopAndClear() {
+        experimentalFeatures = []
+        isLoadingExperimentalFeatures = false
         defaults.set(true, forKey: Self.crashCollectionSuspendedDefaultsKey)
 
-        let environment = ProcessInfo.processInfo.environment
         let projectToken = activeProjectToken
-            ?? environment["SORTY_POSTHOG_PROJECT_TOKEN"]
             ?? Self.productionProjectToken
 
         if isActive {
@@ -337,6 +360,83 @@ public final class AnalyticsManager: ObservableObject {
         Self.removePersistedSDKData(projectToken: projectToken)
         Self.removePendingCrashReport()
         activeProjectToken = nil
+    }
+
+    private static func configuration(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> (projectToken: String, host: String) {
+        #if DEBUG
+        let projectToken = environment["SORTY_POSTHOG_PROJECT_TOKEN"] ?? productionProjectToken
+        let requestedHost = environment["SORTY_POSTHOG_HOST"] ?? productionHost
+        let host = validatedDebugHost(requestedHost) ?? productionHost
+        return (projectToken, host)
+        #else
+        // Release builds never trust launch-environment overrides. Allowing an
+        // arbitrary host would let another local process redirect opted-in
+        // analytics to a collector outside Sorty's PostHog project.
+        return (productionProjectToken, productionHost)
+        #endif
+    }
+
+    private static func validatedDebugHost(_ value: String) -> String? {
+        guard let components = URLComponents(string: value),
+              components.scheme == "https",
+              components.host != nil,
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil
+        else {
+            return nil
+        }
+        return value
+    }
+
+    private func updateExperimentalFeatures() {
+        guard canCapture else {
+            experimentalFeatures = []
+            isLoadingExperimentalFeatures = false
+            return
+        }
+
+        experimentalFeatures = (PostHogSDK.shared.getAllFeatureFlags() ?? [])
+            .compactMap(Self.experimentalFeature)
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        isLoadingExperimentalFeatures = false
+    }
+
+    private nonisolated static func didReloadExperimentalFeatures() {
+        Task { @MainActor in
+            shared.updateExperimentalFeatures()
+        }
+    }
+
+    private static func experimentalFeature(
+        from result: PostHogFeatureFlagResult
+    ) -> ExperimentalFeature? {
+        let prefix = "labs-"
+        guard result.enabled, result.key.hasPrefix(prefix) else { return nil }
+
+        let payload = result.payload as? [String: Any]
+        let fallbackName = result.key
+            .dropFirst(prefix.count)
+            .replacingOccurrences(of: "-", with: " ")
+            .capitalized
+
+        return ExperimentalFeature(
+            id: result.key,
+            title: nonEmptyString(payload?["title"]) ?? fallbackName,
+            description: nonEmptyString(payload?["description"])
+                ?? "This experiment is available for your installation.",
+            systemImage: nonEmptyString(payload?["system_image"]) ?? "flask",
+            variant: result.variant
+        )
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private nonisolated static func removePersistedSDKData(projectToken: String) {
@@ -622,6 +722,35 @@ public final class AnalyticsManager: ObservableObject {
         }
 
         return ErrorClassification(category: "unknown", cause: "unclassified", type: "application_error")
+    }
+}
+
+struct AnalyticsCaptureRateLimiter {
+    private static let maximumEventsPerMinute = 120
+    private static let maximumEventsPerProcess = 10_000
+
+    private var windowStartedAt: TimeInterval = 0
+    private var windowCount = 0
+    private var processCount = 0
+
+    mutating func shouldCapture(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+        guard processCount < Self.maximumEventsPerProcess else { return false }
+
+        if windowStartedAt == 0 || now - windowStartedAt >= 60 {
+            windowStartedAt = now
+            windowCount = 0
+        }
+        guard windowCount < Self.maximumEventsPerMinute else { return false }
+
+        windowCount += 1
+        processCount += 1
+        return true
+    }
+
+    mutating func reset() {
+        windowStartedAt = 0
+        windowCount = 0
+        processCount = 0
     }
 }
 
