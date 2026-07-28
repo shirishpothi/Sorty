@@ -6,7 +6,7 @@ import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { trackWebInteraction } from '@/lib/analytics'
+import { trackDownloadClicked, trackWebInteraction } from '@/lib/analytics'
 
 const XATTR_COMMAND = 'sudo xattr -cr /Applications/Sorty.app'
 
@@ -219,6 +219,7 @@ export function DownloadButton({
 
     setCopyFeedback('idle')
     setShowNotice(true)
+    trackDownloadClicked(analyticsLocation)
     trackWebInteraction({
       action: 'download_started',
       component: 'download_button',

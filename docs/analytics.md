@@ -21,6 +21,7 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 | `web:section_viewed` | Website | Meaningfully visible named homepage sections |
 | `web:scroll_depth_reached` | Website | Bounded 25%, 50%, 75%, 90%, and 100% scroll milestones for each sanitized page |
 | `web:not_found_viewed` | Website | Explicit 404 visits without retaining the unknown requested path |
+| `web:download_clicked` | Website | Download-button clicks as a dedicated conversion event, with the bounded CTA location so PostHog can show unique users clearly |
 | `web:interaction` | Website | Important links, downloads, fixed-command copy outcomes, modal exits, navigation, stable FAQ opens and closes, menu toggles, preference controls, legal-section choices, and bounded recovery actions |
 | `$web_vitals` | Website | Consent-gated PostHog Web Vitals for LCP, INP, and CLS |
 | `app:session_started` | Mac | An opted-in app analytics session |

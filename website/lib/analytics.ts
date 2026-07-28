@@ -27,6 +27,7 @@ const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$pageleave',
   '$pageview',
   '$web_vitals',
+  'web:download_clicked',
   'web:interaction',
   'web:not_found_viewed',
   'web:scroll_depth_reached',
@@ -385,6 +386,13 @@ export function trackWebInteraction({
     location: safePropertyValue(location),
     target: safePropertyValue(target),
     outcome: safePropertyValue(outcome),
+  })
+}
+
+export function trackDownloadClicked(location: string): void {
+  capture('web:download_clicked', {
+    location: safePropertyValue(location),
+    target: 'sorty_zip',
   })
 }
 
