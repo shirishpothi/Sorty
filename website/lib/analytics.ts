@@ -22,10 +22,18 @@ type ExceptionContext = {
   cause?: string
 }
 
+type WebPerformanceMetric = {
+  name: string
+  value: number
+  rating: string
+  navigationType: string
+}
+
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$exception',
   '$pageview',
   'web:interaction',
+  'web:performance_measured',
   'web:section_viewed',
 ])
 
@@ -46,6 +54,8 @@ const SECTION_NAMES = new Set([
   'footer',
 ])
 
+const PERFORMANCE_METRICS = new Set(['CLS', 'FCP', 'INP', 'LCP', 'TTFB'])
+
 const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   '$browser',
   '$browser_version',
@@ -61,11 +71,16 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'action',
   'analytics_scope',
   'component',
+  'distinct_id',
   'error_category',
   'error_cause',
   'error_type',
   'handled',
   'location',
+  'metric_name',
+  'metric_unit',
+  'metric_value',
+  'navigation_type',
   'outcome',
   'page_name',
   'page_path',
@@ -75,6 +90,7 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'target',
   'token',
   'traffic_source',
+  'rating',
 ])
 
 let isInitialized = false
@@ -352,6 +368,28 @@ export function trackWebInteraction({
     location: safePropertyValue(location),
     target: safePropertyValue(target),
     outcome: safePropertyValue(outcome),
+  })
+}
+
+export function trackWebPerformance({
+  name,
+  value,
+  rating,
+  navigationType,
+}: WebPerformanceMetric): void {
+  if (!PERFORMANCE_METRICS.has(name) || !Number.isFinite(value)) {
+    return
+  }
+
+  const isLayoutShift = name === 'CLS'
+  capture('web:performance_measured', {
+    metric_name: name.toLowerCase(),
+    metric_unit: isLayoutShift ? 'score' : 'milliseconds',
+    metric_value: isLayoutShift
+      ? Math.round(value * 1_000) / 1_000
+      : Math.round(value),
+    navigation_type: safePropertyValue(navigationType),
+    rating: safePropertyValue(rating),
   })
 }
 
