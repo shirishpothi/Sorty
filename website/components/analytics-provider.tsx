@@ -14,6 +14,7 @@ import {
   captureWebsiteException,
   isWebsiteAnalyticsEnabled,
   trackPageView,
+  trackScrollDepth,
   trackSectionView,
   trackWebInteraction,
   trackWebPerformance,
@@ -84,6 +85,49 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     )
     elements.forEach((element) => observer.observe(element))
     return () => observer.disconnect()
+  }, [pathname])
+
+  useEffect(() => {
+    const reached = new Set<number>()
+    const thresholds = [25, 50, 75, 90, 100]
+    let frame: number | null = null
+
+    const measureScrollDepth = () => {
+      frame = null
+      const scrollableHeight =
+        document.documentElement.scrollHeight - window.innerHeight
+      const depthPercent =
+        scrollableHeight <= 0
+          ? 100
+          : Math.min(
+              100,
+              Math.round((window.scrollY / scrollableHeight) * 100),
+            )
+
+      for (const threshold of thresholds) {
+        if (depthPercent < threshold || reached.has(threshold)) {
+          continue
+        }
+
+        reached.add(threshold)
+        trackScrollDepth(pathname, threshold)
+      }
+    }
+
+    const handleScroll = () => {
+      if (frame === null) {
+        frame = window.requestAnimationFrame(measureScrollDepth)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    measureScrollDepth()
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+      }
+    }
   }, [pathname])
 
   useEffect(() => {
@@ -205,10 +249,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
               id={descriptionId}
               className="mt-3 text-sm leading-relaxed text-muted-foreground"
             >
-              Sorty measures page and section visits, meaningful button use, and
-              sanitized technical errors. It uses no analytics cookies, user
-              profile, session recording, form text, file data, or full
-              referrer URLs.
+              Sorty measures page and section visits, coarse scroll milestones,
+              meaningful button and FAQ use, and sanitized technical errors. It
+              uses no analytics cookies, user profile, session replay, form
+              text, file data, or full referrer URLs.
             </p>
             <p className="mt-3 text-xs text-muted-foreground">
               Current setting:{' '}

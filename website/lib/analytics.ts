@@ -33,7 +33,9 @@ const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$exception',
   '$pageview',
   'web:interaction',
+  'web:not_found_viewed',
   'web:performance_measured',
+  'web:scroll_depth_reached',
   'web:section_viewed',
 ])
 
@@ -71,6 +73,7 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'action',
   'analytics_scope',
   'component',
+  'depth_percent',
   'distinct_id',
   'error_category',
   'error_cause',
@@ -280,8 +283,8 @@ export function initializeWebsiteAnalytics(): void {
     capture_performance: false,
     capture_dead_clicks: false,
     person_profiles: 'never',
-    persistence: 'memory',
-    disable_persistence: true,
+    persistence: 'sessionStorage',
+    disable_persistence: false,
     disable_session_recording: true,
     enable_heatmaps: false,
     disable_surveys: true,
@@ -327,12 +330,20 @@ function capture(event: string, properties: Properties): void {
 
 export function trackPageView(pathname: string): void {
   const pagePath = safePagePath(pathname)
+  const pageName = PAGE_NAMES[pagePath] ?? 'not_found'
   capture('$pageview', {
     $current_url: `${window.location.origin}${pagePath}`,
-    page_name: PAGE_NAMES[pagePath] ?? 'not_found',
+    page_name: pageName,
     page_path: pagePath,
     traffic_source: trafficSource(),
   })
+
+  if (pageName === 'not_found') {
+    capture('web:not_found_viewed', {
+      page_name: pageName,
+      page_path: pagePath,
+    })
+  }
 }
 
 export function trackSectionView(section: string, pagePath: string): void {
@@ -343,6 +354,17 @@ export function trackSectionView(section: string, pagePath: string): void {
   capture('web:section_viewed', {
     page_path: safePagePath(pagePath),
     section,
+  })
+}
+
+export function trackScrollDepth(pathname: string, depthPercent: number): void {
+  if (![25, 50, 75, 90, 100].includes(depthPercent)) {
+    return
+  }
+
+  capture('web:scroll_depth_reached', {
+    depth_percent: depthPercent,
+    page_path: safePagePath(pathname),
   })
 }
 

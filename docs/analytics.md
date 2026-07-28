@@ -6,7 +6,7 @@ Sorty uses PostHog for the same lightweight product and reliability telemetry th
 
 The Mac app is opt-in. `AnalyticsManager` does not initialize PostHog until the user allows anonymous analytics after onboarding. Denial is persisted locally but never reported. Revoking consent, enabling **Block Internet Connections**, or deleting Sorty usage data closes the SDK and clears its local queue and anonymous identifier.
 
-The website uses anonymous, cookieless aggregate measurement by default. The footer provides a persistent opt-out, and Global Privacy Control or Do Not Track disables capture automatically. It uses no person profiles, session replay, heatmaps, surveys, automatic click capture, full referrers, query strings, console logs, or form text.
+The website uses anonymous, cookieless aggregate measurement by default. The footer provides a persistent opt-out, and Global Privacy Control or Do Not Track disables capture automatically. A random identifier lives in session storage only until the browser tab closes so page views can be grouped into one visit; it uses no person profiles, session replay, heatmaps, surveys, automatic click capture, full referrers, query strings, console logs, or form text.
 
 Both clients instruct PostHog to discard IP addresses and never create a person profile. Analytics is anonymous: the Mac app uses a random installation identifier only to group its own events, and neither client sends a name, email address, account identifier, advertising identifier, or other information linked to a person. Neither client may send file or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, user-entered text, or raw handled-error messages. File contents are never transmitted to PostHog.
 
@@ -18,7 +18,9 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 |---|---|---|
 | `$pageview` | Website | Visits to each public route, using a stable page name and sanitized path |
 | `web:section_viewed` | Website | Meaningfully visible named homepage sections |
-| `web:interaction` | Website | Important links, downloads, fixed-command copy outcomes, modal exits, navigation, FAQ and menu toggles, preference controls, legal-section choices, and bounded recovery actions |
+| `web:scroll_depth_reached` | Website | Bounded 25%, 50%, 75%, 90%, and 100% scroll milestones for each sanitized page |
+| `web:not_found_viewed` | Website | Explicit 404 visits without retaining the unknown requested path |
+| `web:interaction` | Website | Important links, downloads, fixed-command copy outcomes, modal exits, navigation, stable FAQ opens and closes, menu toggles, preference controls, legal-section choices, and bounded recovery actions |
 | `app:session_started` | Mac | An opted-in app analytics session |
 | `app:screen_viewed` | Mac | Main screens and individual Settings sections |
 | `app:feature_used` | Mac | Feature and sub-feature actions, including settings changes and bucketed persona inventory, with stable outcomes |

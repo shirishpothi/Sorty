@@ -127,12 +127,14 @@ export default function PrivacyPolicyPage() {
           Cookieless website analytics
         </h3>
         <p>
-          This website measures page visits, section visibility, meaningful
-          links and buttons, coarse traffic-source categories, and sanitized
-          technical errors through PostHog. It uses cookieless mode, does not
-          create a person profile, does not record sessions or page contents,
-          strips query strings and full referrer URLs, and instructs PostHog to
-          discard IP addresses. You can disable it at any time through
+          This website measures page visits within an anonymous browser-tab
+          visit, named page and section visibility, coarse scroll-depth
+          milestones, meaningful links, buttons, and FAQ opens, coarse
+          traffic-source categories, and sanitized technical errors through
+          PostHog. It uses cookieless mode, does not create a person profile or
+          record session replays or page contents, strips query strings and full
+          referrer URLs, and instructs PostHog to discard IP addresses. You can
+          disable it at any time through
           &quot;Analytics preferences&quot; in the footer. Global Privacy
           Control and Do Not Track are honored automatically.
         </p>
@@ -153,8 +155,9 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong className="text-foreground">Settings &amp; preferences</strong>{' '}
             — stored in standard macOS UserDefaults, including your app
-            analytics choice. The website stores only its analytics preference
-            in local storage.
+            analytics choice. The website stores its analytics preference in
+            local storage and a random anonymous visit identifier in session
+            storage until the browser tab closes.
           </li>
           <li>
             <strong className="text-foreground">Watched Folders</strong> —

@@ -9,16 +9,16 @@ import { trackWebInteraction } from '@/lib/analytics'
 
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 
-function FaqItem({ q, a, index }: { q: string; a: string; index: number }) {
+function FaqItem({ id, q, a }: { id: string; q: string; a: string }) {
   const [open, setOpen] = useState(false)
   const toggle = () => {
     const nextOpen = !open
     setOpen(nextOpen)
     trackWebInteraction({
-      action: 'faq_toggled',
+      action: nextOpen ? 'faq_opened' : 'faq_closed',
       component: 'faq_item',
       location: 'faq',
-      target: `question_${index + 1}`,
+      target: id,
       outcome: nextOpen ? 'opened' : 'closed',
     })
   }
@@ -74,7 +74,7 @@ export function Faq() {
         <div className="mt-12 space-y-3">
           {FAQS.map((item, i) => (
             <Reveal key={item.q} delay={(i % 4) * 60}>
-              <FaqItem {...item} index={i} />
+              <FaqItem {...item} />
             </Reveal>
           ))}
         </div>
