@@ -54,6 +54,22 @@ jobs:
         working-directory: website
         run: pnpm install --frozen-lockfile
 
+      - name: Validate public PostHog configuration
+        shell: bash
+        run: |
+          if [[ ! "${NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN}" =~ ^phc_[A-Za-z0-9_-]+$ ]]; then
+            echo "::error::NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN must be a browser-safe phc_ project token."
+            exit 1
+          fi
+
+          case "${NEXT_PUBLIC_POSTHOG_HOST}" in
+            https://us.i.posthog.com|https://eu.i.posthog.com) ;;
+            *)
+              echo "::error::NEXT_PUBLIC_POSTHOG_HOST must be an approved PostHog ingestion origin."
+              exit 1
+              ;;
+          esac
+
       - name: Build static site
         working-directory: website
         env:
@@ -84,6 +100,20 @@ jobs:
             --release-version "${GITHUB_SHA}" \
             --delete-after
           find out/_next/static -type f -name '*.map' -delete
+
+      - name: Audit public artifact for PostHog secrets
+        working-directory: website
+        shell: bash
+        run: |
+          if find out -type f -name '*.map' -print -quit | grep -q .; then
+            echo "::error::Source maps must not be included in the public Pages artifact."
+            exit 1
+          fi
+
+          if grep -RIlE --exclude='*.map' 'phx_[A-Za-z0-9_-]+' out | grep -q .; then
+            echo "::error::A privileged PostHog personal API key was found in the public artifact."
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
