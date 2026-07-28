@@ -28,60 +28,6 @@ struct HelpSettingsView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            SettingsCard(title: "Support Assistant", icon: "stethoscope", color: .teal) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(healthCheckSummary)
-                                .font(.subheadline.weight(.semibold))
-
-                            Text("Sorty checks its configuration and Finder integration locally, then points you to the exact setting that needs attention.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            runHealthCheck()
-                        } label: {
-                            Label(
-                                isRunningHealthCheck ? "Checking" : healthChecks.isEmpty ? "Run Checks" : "Check Again",
-                                systemImage: isRunningHealthCheck ? "arrow.trianglehead.2.clockwise.rotate.90" : "waveform.path.ecg"
-                            )
-                        }
-                        .buttonStyle(.sortyBordered(intent: .info, size: .small))
-                        .disabled(isRunningHealthCheck)
-                        .accessibilityIdentifier("RunSupportHealthCheckButton")
-                    }
-
-                    if isRunningHealthCheck {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if !healthChecks.isEmpty {
-                        Divider()
-
-                        VStack(spacing: 8) {
-                            ForEach(healthChecks) { check in
-                                SupportHealthCheckRow(check: check) {
-                                    openSupportDestination(check.destination)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .settingsFocusable(.helpAssistant)
-            .animatedAppearance(delay: 0.05)
-            .task {
-                guard healthChecks.isEmpty else { return }
-                runHealthCheck()
-            }
-
             SettingsCard(title: "Support", icon: "questionmark.circle.fill", color: .teal) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
@@ -197,6 +143,60 @@ struct HelpSettingsView: View {
             }
             .settingsFocusable(.helpIssueDetails)
             .animatedAppearance(delay: 0.16)
+
+            SettingsCard(title: "Support Assistant", icon: "stethoscope", color: .teal) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(healthCheckSummary)
+                                .font(.subheadline.weight(.semibold))
+
+                            Text("Sorty checks its configuration and Finder integration locally, then points you to the exact setting that needs attention.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            runHealthCheck()
+                        } label: {
+                            Label(
+                                isRunningHealthCheck ? "Checking" : healthChecks.isEmpty ? "Run Checks" : "Check Again",
+                                systemImage: isRunningHealthCheck ? "arrow.trianglehead.2.clockwise.rotate.90" : "waveform.path.ecg"
+                            )
+                        }
+                        .buttonStyle(.sortyBordered(intent: .info, size: .small))
+                        .disabled(isRunningHealthCheck)
+                        .accessibilityIdentifier("RunSupportHealthCheckButton")
+                    }
+
+                    if isRunningHealthCheck {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if !healthChecks.isEmpty {
+                        Divider()
+
+                        VStack(spacing: 8) {
+                            ForEach(healthChecks) { check in
+                                SupportHealthCheckRow(check: check) {
+                                    openSupportDestination(check.destination)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .settingsFocusable(.helpAssistant)
+            .animatedAppearance(delay: 0.22)
+            .task {
+                guard healthChecks.isEmpty else { return }
+                runHealthCheck()
+            }
         }
         .onDisappear {
             copyResetTask?.cancel()
