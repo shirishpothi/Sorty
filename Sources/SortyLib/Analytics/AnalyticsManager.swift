@@ -38,7 +38,7 @@ public final class AnalyticsManager: ObservableObject {
             .flatMap(AnalyticsConsent.init(rawValue:)) ?? .undecided
     }
 
-    public func startIfAuthorized() {
+    public func startIfAuthorized(launchDuration: TimeInterval? = nil) {
         guard consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isAnalyticsSuppressedForThisProcess,
@@ -81,12 +81,17 @@ public final class AnalyticsManager: ObservableObject {
         PostHogSDK.shared.setup(config)
         activeProjectToken = projectToken
         isActive = true
+        var sessionProperties: [String: Any] = [
+            "platform_surface": "mac_app",
+            "launch_source": "standard",
+        ]
+        if let launchDuration {
+            sessionProperties.merge(Self.durationProperties(launchDuration)) { current, _ in current }
+            sessionProperties["stage"] = "main_window_appeared"
+        }
         capture(
             event: "app:session_started",
-            properties: [
-                "platform_surface": "mac_app",
-                "launch_source": "standard",
-            ]
+            properties: sessionProperties
         )
     }
 
@@ -282,6 +287,25 @@ public final class AnalyticsManager: ObservableObject {
         ]
     }
 
+    public static func generationDurationProperties(
+        _ stats: GenerationStats?
+    ) -> [String: Any] {
+        guard let stats else { return [:] }
+
+        var properties: [String: Any] = [
+            "ai_duration_ms": roundedMilliseconds(stats.duration),
+            "time_to_first_token_ms": roundedMilliseconds(stats.ttft),
+        ]
+        if let scanDuration = stats.scanDuration {
+            properties["scan_duration_ms"] = roundedMilliseconds(scanDuration)
+        }
+        return properties
+    }
+
+    private static func roundedMilliseconds(_ duration: TimeInterval) -> Int {
+        Int((max(0, duration) * 1_000).rounded())
+    }
+
     private var canCapture: Bool {
         isActive
             && consent == .granted
@@ -385,6 +409,7 @@ public final class AnalyticsManager: ObservableObject {
             "$process_person_profile",
             "$session_id",
             "action",
+            "ai_duration_ms",
             "button",
             "control",
             "count_bucket",
@@ -404,6 +429,7 @@ public final class AnalyticsManager: ObservableObject {
             "recoverable",
             "result_kind",
             "screen",
+            "scan_duration_ms",
             "section",
             "selection_kind",
             "semantic_enabled",
@@ -411,6 +437,7 @@ public final class AnalyticsManager: ObservableObject {
             "source",
             "stage",
             "subfeature",
+            "time_to_first_token_ms",
             "variant",
             "workflow",
         ]

@@ -347,6 +347,8 @@ public class LearningsManager: ObservableObject {
     // MARK: - Secure Profile Storage
     
     private func loadProfile() async {
+        let loadStartedAt = Date()
+        var loadOutcome = "success"
         isLoading = true
         do {
             if let profile = try LearningsFileManager.load() {
@@ -355,10 +357,19 @@ public class LearningsManager: ObservableObject {
                 currentProfile = prepareLoadedProfile(LearningsProfile())
             }
         } catch {
+            loadOutcome = "failed"
             self.error = "Failed to load profile: \(error.localizedDescription)"
             currentProfile = prepareLoadedProfile(LearningsProfile())
         }
         isLoading = false
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "learnings_profile",
+            stage: "loaded",
+            outcome: loadOutcome,
+            properties: AnalyticsManager.durationProperties(
+                Date().timeIntervalSince(loadStartedAt)
+            )
+        )
     }
     
     /// Load profile synchronously for background collection (without authentication)

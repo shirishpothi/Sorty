@@ -1006,6 +1006,7 @@ public struct ProviderSelectionStepView: View {
     private func fetchCopilotModels() {
         guard settingsViewModel.config.provider == .githubCopilot, copilotAuth.isAuthenticated else { return }
 
+        let loadStartedAt = Date()
         isLoadingModels = true
         Task {
             do {
@@ -1018,11 +1019,27 @@ public struct ProviderSelectionStepView: View {
                             settingsViewModel.config.model = models.first ?? AIProvider.githubCopilot.defaultModel
                         }
                         isLoadingModels = false
+                        AnalyticsManager.shared.captureWorkflow(
+                            workflow: "model_catalog",
+                            stage: "loaded",
+                            outcome: "success",
+                            properties: AnalyticsManager.durationProperties(
+                                Date().timeIntervalSince(loadStartedAt)
+                            ).merging(["source": "onboarding"]) { current, _ in current }
+                        )
                     }
                 }
             } catch {
                 await MainActor.run {
                     isLoadingModels = false
+                    AnalyticsManager.shared.captureWorkflow(
+                        workflow: "model_catalog",
+                        stage: "loaded",
+                        outcome: "failed",
+                        properties: AnalyticsManager.durationProperties(
+                            Date().timeIntervalSince(loadStartedAt)
+                        ).merging(["source": "onboarding"]) { current, _ in current }
+                    )
                 }
             }
         }

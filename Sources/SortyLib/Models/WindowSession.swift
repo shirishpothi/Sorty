@@ -31,6 +31,7 @@ public final class WindowSession: ObservableObject {
     ) async {
         guard !didConfigure else { return }
         didConfigure = true
+        let configurationStartedAt = Date()
 
         organizer.exclusionRules = exclusionRules
         organizer.personaManager = personaManager
@@ -44,6 +45,14 @@ public final class WindowSession: ObservableObject {
 
         await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
         appState.updateManager.checkOnLaunchIfNeeded()
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "app_launch",
+            stage: "window_ready",
+            outcome: "completed",
+            properties: AnalyticsManager.durationProperties(
+                Date().timeIntervalSince(configurationStartedAt)
+            )
+        )
     }
 
     public func applyConfiguration(_ config: AIConfig, learningsManager: LearningsManager) async {

@@ -18,6 +18,11 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let buildAutoCloseRequestKey = "buildAutoCloseRequest"
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
+    private let launchStartedAt = Date()
+
+    var launchDuration: TimeInterval {
+        Date().timeIntervalSince(launchStartedAt)
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
@@ -578,7 +583,7 @@ struct SortyApp: App {
             return
         }
 
-        AnalyticsManager.shared.startIfAuthorized()
+        AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         syncLoginItemState()
 

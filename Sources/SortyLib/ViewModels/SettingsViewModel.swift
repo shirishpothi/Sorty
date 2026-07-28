@@ -334,6 +334,7 @@ public class SettingsViewModel: ObservableObject {
     
     public func updateAvailableModels(force: Bool = false) {
         Task {
+            let loadStartedAt = Date()
             await MainActor.run {
                 self.isLoadingModels = true
             }
@@ -352,6 +353,14 @@ public class SettingsViewModel: ObservableObject {
                     self.config.model = self.availableModels.first ?? config.provider.defaultModel
                 }
                 self.isLoadingModels = false
+                AnalyticsManager.shared.captureWorkflow(
+                    workflow: "model_catalog",
+                    stage: "loaded",
+                    outcome: catalogModels.isEmpty ? "fallback" : "success",
+                    properties: AnalyticsManager.durationProperties(
+                        Date().timeIntervalSince(loadStartedAt)
+                    ).merging(["source": "settings"]) { current, _ in current }
+                )
             }
         }
     }

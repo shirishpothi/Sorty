@@ -1500,7 +1500,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ).merging([
                     "count_bucket": AnalyticsManager.countBucket(files.count),
                     "result_kind": "organization_plan",
-                ]) { current, _ in current }
+                ]) { current, _ in current }.merging(
+                    AnalyticsManager.generationDurationProperties(validatedPlan.generationStats)
+                ) { current, _ in current }
             )
 
         } catch is CancellationError {
