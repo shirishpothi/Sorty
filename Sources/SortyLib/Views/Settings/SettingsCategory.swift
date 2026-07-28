@@ -111,7 +111,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case troubleshootingCache = "settings.troubleshooting.cache"
     case troubleshootingLearnings = "settings.troubleshooting.learnings"
     case troubleshootingReset = "settings.troubleshooting.reset"
-    case helpAssistant = "settings.help.assistant"
+    case troubleshootingAssistant = "settings.troubleshooting.assistant"
     case helpSupport = "settings.help.support"
     case helpLegal = "settings.help.legal"
     case helpDocumentation = "settings.help.documentation"
@@ -193,10 +193,11 @@ public extension SettingsFocusTarget {
             return .advanced
 
         case .troubleshootingMaintenance, .troubleshootingCache,
-             .troubleshootingLearnings, .troubleshootingReset:
+             .troubleshootingLearnings, .troubleshootingReset,
+             .troubleshootingAssistant:
             return .troubleshooting
 
-        case .helpAssistant, .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
+        case .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
              .helpChangelog, .helpPrivacy, .helpTerms, .helpIssueDetails:
             return .help
 
@@ -432,20 +433,20 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .troubleshooting:
             return [
+                feature("Support Assistant", "Run local health checks and open the exact setting needed to recover.", keywords: ["health check", "diagnose", "repair", "support"], target: .troubleshootingAssistant),
                 feature("Cache", "Clear cached data and recover from stale state.", keywords: ["clear cache"], target: .troubleshootingCache),
                 feature("Learnings Data", "Inspect or reset learning signals and history.", keywords: ["delete learnings"], target: .troubleshootingLearnings),
                 feature("Reset Sorty", "Perform a full reset of app configuration.", keywords: ["erase all data", "factory reset"], target: .troubleshootingReset)
             ]
         case .help:
             return [
-                feature("Support Assistant", "Run local health checks and open the exact setting needed to recover.", keywords: ["health check", "diagnose", "repair"], target: .helpAssistant),
                 feature("Support Links", "Open documentation, changelog, issue reporting, privacy, and terms.", target: .helpSupport),
                 feature("Documentation", "Open Sorty’s help and usage documentation.", keywords: ["help guide", "readme"], target: .helpDocumentation),
                 feature("Report Issue", "Open GitHub Issues to report a bug or request a feature.", keywords: ["bug report", "github issue"], target: .helpReportIssue),
                 feature("View Changelog", "Review recent Sorty releases and product changes.", keywords: ["release notes", "what's new"], target: .helpChangelog),
                 feature("Privacy Policy", "Read Sorty’s privacy policy.", keywords: ["legal", "data"], target: .helpPrivacy),
                 feature("Terms of Service", "Read Sorty’s terms of service.", keywords: ["legal", "terms"], target: .helpTerms),
-                feature("Copy Support Report", "Copy privacy-safe app, system, configuration, and health-check details.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
+                feature("Copy Support Report", "Copy privacy-safe app, system, and configuration details.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
             ]
         case .experimental:
             return [

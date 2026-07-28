@@ -526,7 +526,7 @@ View the full changelog at:
 
 ### Support Assistant
 
-Open **Settings → Help & Support** to run Sorty's local support checks. The assistant verifies the active provider configuration, internet privacy policy, Finder integration, and analytics support context, then links directly to the setting that can resolve each detected problem.
+Open **Settings → Troubleshooting** to run Sorty's local support checks. The assistant appears at the bottom of the page, verifies the active provider configuration, internet privacy policy, Finder integration, and analytics support context, then links directly to the setting that can resolve each detected problem.
 
 **Copy Support Report** produces a ready-to-paste diagnostic summary without file names, folder paths, file contents, prompts, credentials, AI responses, or raw error messages. Review the report before adding it to a public GitHub issue.
 
