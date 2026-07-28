@@ -45,15 +45,17 @@ Mac instrumentation covers app sessions; main screens; individual Settings secti
 
 ## Dashboard
 
-The pinned `Analytics basics (wizard)` dashboard contains exactly five low-noise insights:
+The pinned `Analytics basics (wizard)` dashboard contains seven low-noise insights:
 
 1. **Website page visits by route** — daily `$pageview` volume split by `page_name`.
 2. **Mac screen visits** — daily opted-in `app:screen_viewed` volume split by `screen`.
 3. **Mac feature adoption** — daily opted-in `app:feature_used` volume split by `feature`.
 4. **Organize workflow conversion** — `started` → `plan_ready` → `applied` within 24 hours.
 5. **Errors and crashes by surface** — daily `$exception` volume split by `platform_surface`.
+6. **Mac daily retention (D1–D30)** — first-time opted-in app-session cohorts, with headline D1, D7, D14, and D30 return rates over a 90-day cohort range.
+7. **Mac weekly retention (W1–W12)** — the same app-session cohorts at W1, W4, W8, and W12 over a 180-day cohort range.
 
-The insight short IDs are `zWy5neXL`, `344OWGEe`, `dawp7NuK`, `o0NmgL6f`, and `ev4Nr8nD`. Queries were validated successfully; results are currently empty because production traffic has not yet reached the new instrumentation.
+The insight short IDs are `zWy5neXL`, `344OWGEe`, `dawp7NuK`, `o0NmgL6f`, `ev4Nr8nD`, `ec7tRvCV`, and `XV07qGab`. Queries were validated successfully. Retention uses `app:session_started` for both entry and return, strict calendar periods, and first-time cohorts; website traffic is excluded because its session-only identifier deliberately cannot link visitors across days.
 
 ## Project configuration
 
@@ -75,7 +77,7 @@ The website Pages workflow injects PostHog source-map identifiers, uploads maps,
 
 ## Verification
 
-- PostHog dashboard and all five saved insights were created and queried through the PostHog CLI.
+- PostHog dashboard and all seven saved insights were created and queried through the PostHog CLI.
 - The website passed focused ESLint, TypeScript checking, and a production static export with analytics variables configured.
 - `SortyLib` passed a clean Swift build using an isolated SwiftPM scratch directory.
 - Final website, app-target, workflow, deployment, and live-surface verification are recorded in the delivery commit and CI runs.
