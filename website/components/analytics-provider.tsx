@@ -120,10 +120,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    document.addEventListener('scroll', handleScroll, { passive: true })
     measureScrollDepth()
     return () => {
-      window.removeEventListener('scroll', handleScroll)
+      document.removeEventListener('scroll', handleScroll)
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
