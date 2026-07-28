@@ -1445,13 +1445,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     workflow: "organize",
                     stage: "plan_ready",
                     outcome: "empty",
-                    properties: [
+                    properties: AnalyticsManager.durationProperties(
+                        Date().timeIntervalSince(analyticsStartedAt)
+                    ).merging([
                         "count_bucket": AnalyticsManager.countBucket(0),
-                        "duration_bucket": AnalyticsManager.durationBucket(
-                            Date().timeIntervalSince(analyticsStartedAt)
-                        ),
                         "result_kind": "empty_directory",
-                    ]
+                    ]) { current, _ in current }
                 )
 
                 return
@@ -1496,13 +1495,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_ready",
                 outcome: "success",
-                properties: [
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                ).merging([
                     "count_bucket": AnalyticsManager.countBucket(files.count),
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
                     "result_kind": "organization_plan",
-                ]
+                ]) { current, _ in current }
             )
 
         } catch is CancellationError {
@@ -1512,11 +1510,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "cancelled",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
-                ]
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                )
             )
             throw CancellationError()
         } catch let error as OrganizationError where error == .cancelled {
@@ -1526,11 +1522,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "cancelled",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
-                ]
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                )
             )
             throw CancellationError()
         } catch let error as AIClientError where error.isCancellation {
@@ -1540,11 +1534,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "cancelled",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
-                ]
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                )
             )
             throw CancellationError()
         } catch where (error as NSError).code == NSURLErrorCancelled || 
@@ -1556,11 +1548,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "cancelled",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
-                ]
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                )
             )
             throw CancellationError()
         } catch {
@@ -1570,11 +1560,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "failed",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
-                ]
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                )
             )
             AnalyticsManager.shared.capture(
                 error: error,
@@ -3629,14 +3617,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "applied",
                 outcome: "success",
-                properties: [
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                ).merging([
                     "count_bucket": AnalyticsManager.countBucket(operations.count),
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
                     "entry_source": source.rawValue,
                     "mode": operationMode.rawValue,
-                ]
+                ]) { current, _ in current }
             )
 
         } catch {
@@ -3670,14 +3657,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 workflow: "organize",
                 stage: "apply",
                 outcome: partialOperations == nil ? "failed" : "partially_completed",
-                properties: [
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                ).merging([
                     "count_bucket": AnalyticsManager.countBucket(partialOperations?.count ?? 0),
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(analyticsStartedAt)
-                    ),
                     "entry_source": source.rawValue,
                     "mode": operationMode.rawValue,
-                ]
+                ]) { current, _ in current }
             )
             AnalyticsManager.shared.capture(
                 error: error,

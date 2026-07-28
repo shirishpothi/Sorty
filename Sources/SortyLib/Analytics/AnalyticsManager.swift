@@ -274,6 +274,14 @@ public final class AnalyticsManager: ObservableObject {
         }
     }
 
+    public static func durationProperties(_ duration: TimeInterval) -> [String: Any] {
+        let clampedDuration = max(0, duration)
+        return [
+            "duration_bucket": durationBucket(clampedDuration),
+            "duration_ms": Int((clampedDuration * 1_000).rounded()),
+        ]
+    }
+
     private var canCapture: Bool {
         isActive
             && consent == .granted
@@ -381,6 +389,7 @@ public final class AnalyticsManager: ObservableObject {
             "control",
             "count_bucket",
             "duration_bucket",
+            "duration_ms",
             "entry_source",
             "error_category",
             "error_cause",

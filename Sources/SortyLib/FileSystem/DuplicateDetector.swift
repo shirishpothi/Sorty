@@ -659,12 +659,11 @@ public class DuplicateDetectionManager: ObservableObject {
                 workflow: "duplicate_scan",
                 stage: "completed",
                 outcome: "empty",
-                properties: [
+                properties: AnalyticsManager.durationProperties(scanDuration).merging([
                     "count_bucket": AnalyticsManager.countBucket(0),
-                    "duration_bucket": AnalyticsManager.durationBucket(scanDuration),
                     "result_kind": "no_files",
                     "semantic_enabled": settings.includeSemanticDuplicates,
-                ]
+                ]) { current, _ in current }
             )
             return
         }
@@ -694,12 +693,11 @@ public class DuplicateDetectionManager: ObservableObject {
                 workflow: "duplicate_scan",
                 stage: "scanning",
                 outcome: "cancelled",
-                properties: [
-                    "duration_bucket": AnalyticsManager.durationBucket(
-                        Date().timeIntervalSince(scanStartedAt)
-                    ),
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(scanStartedAt)
+                ).merging([
                     "semantic_enabled": settings.includeSemanticDuplicates,
-                ]
+                ]) { current, _ in current }
             )
             return
         }
@@ -765,12 +763,11 @@ public class DuplicateDetectionManager: ObservableObject {
             workflow: "duplicate_scan",
             stage: "completed",
             outcome: "success",
-            properties: [
+            properties: AnalyticsManager.durationProperties(scanDuration).merging([
                 "count_bucket": AnalyticsManager.countBucket(allGroups.count),
-                "duration_bucket": AnalyticsManager.durationBucket(scanDuration),
                 "result_kind": allGroups.isEmpty ? "no_duplicates" : "duplicates_found",
                 "semantic_enabled": settings.includeSemanticDuplicates,
-            ]
+            ]) { current, _ in current }
         )
     }
     
