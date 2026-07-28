@@ -18,7 +18,7 @@ The Mac app does not initialize PostHog while consent is undecided or denied. It
 
 The website collects anonymous cookieless aggregate analytics by default. A persistent footer control allows visitors to opt out or back in, and Global Privacy Control or Do Not Track disables capture automatically.
 
-Both clients disable person profiles and IP collection. Session replay, heatmaps, surveys, automatic click capture, console capture, performance capture, and browser automatic exception capture are disabled. Event and property allowlists reject unexpected telemetry, and sanitizers remove URLs with query strings, local paths, email addresses, raw handled-error text, and other high-cardinality data. File or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, form text, and user-entered text are prohibited.
+Both clients disable person profiles and IP collection. Session replay, heatmaps, surveys, automatic click capture, console capture, performance attribution, and browser automatic exception capture are disabled. The website allows only PostHog's lightweight LCP, INP, and CLS `$web_vitals` measurements. Event and property allowlists reject unexpected telemetry, and sanitizers remove URLs with query strings, local paths, email addresses, raw handled-error text, and other high-cardinality data. File or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, form text, and user-entered text are prohibited.
 
 ## Event catalog
 
@@ -56,7 +56,7 @@ The insight short IDs are `zWy5neXL`, `344OWGEe`, `dawp7NuK`, `o0NmgL6f`, and `e
 
 ## Project configuration
 
-The project is set to the `Asia/Singapore` timezone with IP anonymization and stateless cookieless mode enabled. Web autocapture, recordings, console capture, performance capture, heatmaps, surveys, and dead-click tracking are disabled. Project-side exception capture remains enabled only so the consent-gated native SDK can submit crash reports on the next launch; browser exceptions are manual and sanitized.
+The project is set to the `Asia/Singapore` timezone with IP anonymization and stateless cookieless mode enabled. Automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking are disabled; lightweight LCP, INP, and CLS `$web_vitals` capture is enabled. Project-side exception capture remains enabled only so the consent-gated native SDK can submit crash reports on the next launch; browser exceptions are manual and sanitized.
 
 The public website token and ingestion host are GitHub repository variables. The personal PostHog key is stored only as the `POSTHOG_CLI_API_KEY` GitHub Actions secret, and the project ID is a repository variable.
 

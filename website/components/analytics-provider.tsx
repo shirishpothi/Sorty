@@ -8,7 +8,6 @@ import {
   useState,
 } from 'react'
 import { usePathname } from 'next/navigation'
-import { useReportWebVitals } from 'next/web-vitals'
 import {
   applyWebsiteAnalyticsPreference,
   captureWebsiteException,
@@ -17,7 +16,6 @@ import {
   trackScrollDepth,
   trackSectionView,
   trackWebInteraction,
-  trackWebPerformance,
   WEBSITE_ANALYTICS_PREFERENCE_KEY,
   type WebsiteAnalyticsPreference,
 } from '@/lib/analytics'
@@ -44,15 +42,6 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     })
   const titleId = useId()
   const descriptionId = useId()
-
-  useReportWebVitals((metric) => {
-    trackWebPerformance({
-      name: metric.name,
-      value: metric.value,
-      rating: metric.rating,
-      navigationType: metric.navigationType,
-    })
-  })
 
   useEffect(() => {
     trackPageView(pathname)

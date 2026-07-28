@@ -22,19 +22,12 @@ type ExceptionContext = {
   cause?: string
 }
 
-type WebPerformanceMetric = {
-  name: string
-  value: number
-  rating: string
-  navigationType: string
-}
-
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$exception',
   '$pageview',
+  '$web_vitals',
   'web:interaction',
   'web:not_found_viewed',
-  'web:performance_measured',
   'web:scroll_depth_reached',
   'web:section_viewed',
 ])
@@ -55,8 +48,6 @@ const SECTION_NAMES = new Set([
   'faq',
   'footer',
 ])
-
-const PERFORMANCE_METRICS = new Set(['CLS', 'FCP', 'INP', 'LCP', 'TTFB'])
 
 const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   '$browser',
@@ -80,10 +71,6 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'error_type',
   'handled',
   'location',
-  'metric_name',
-  'metric_unit',
-  'metric_value',
-  'navigation_type',
   'outcome',
   'page_name',
   'page_path',
@@ -93,7 +80,6 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'target',
   'token',
   'traffic_source',
-  'rating',
 ])
 
 let isInitialized = false
@@ -211,7 +197,8 @@ function sanitizeEvent(event: CaptureResult | null): CaptureResult | null {
       .filter(
         ([key]) =>
           WEBSITE_PROPERTY_ALLOWLIST.has(key) ||
-          key.startsWith('$exception'),
+          key.startsWith('$exception') ||
+          key.startsWith('$web_vitals_'),
       )
       .map(([key, value]) => [key, sanitizeProperty(value)]),
   )
@@ -280,7 +267,10 @@ export function initializeWebsiteAnalytics(): void {
     capture_pageview: false,
     capture_pageleave: false,
     capture_exceptions: false,
-    capture_performance: false,
+    capture_performance: {
+      web_vitals_allowed_metrics: ['LCP', 'INP', 'CLS'],
+      web_vitals_attribution: false,
+    },
     capture_dead_clicks: false,
     person_profiles: 'never',
     persistence: 'sessionStorage',
@@ -390,28 +380,6 @@ export function trackWebInteraction({
     location: safePropertyValue(location),
     target: safePropertyValue(target),
     outcome: safePropertyValue(outcome),
-  })
-}
-
-export function trackWebPerformance({
-  name,
-  value,
-  rating,
-  navigationType,
-}: WebPerformanceMetric): void {
-  if (!PERFORMANCE_METRICS.has(name) || !Number.isFinite(value)) {
-    return
-  }
-
-  const isLayoutShift = name === 'CLS'
-  capture('web:performance_measured', {
-    metric_name: name.toLowerCase(),
-    metric_unit: isLayoutShift ? 'score' : 'milliseconds',
-    metric_value: isLayoutShift
-      ? Math.round(value * 1_000) / 1_000
-      : Math.round(value),
-    navigation_type: safePropertyValue(navigationType),
-    rating: safePropertyValue(rating),
   })
 }
 
