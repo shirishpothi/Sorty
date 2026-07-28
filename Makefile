@@ -11,6 +11,7 @@ CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
 SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
+SWIFTPM_CACHE_FLAG := --disable-dependency-cache
 
 # Package.swift owns compiler and linker settings so builds and tests share one
 # incremental compilation signature instead of invalidating each other.
@@ -60,16 +61,16 @@ dev:
 # runs the complete test suite with parallel execution
 test:
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox
 
 # Quick test run - excludes slow UI/integration tests
 test-fast:
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox --filter SortyTests
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
 	@echo "🖥️  UI tests are currently disabled (skipped)."
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
 
@@ -113,7 +114,7 @@ ci-report:
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
-	@swift package $(SWIFTPM_SCRATCH_FLAG) clean
+	@swift package $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) clean
 	@rm -rf .build
 	@rm -rf "$(SORTY_BUILD_DIR)"
 	@rm -rf releases/

@@ -555,7 +555,7 @@ reset_swiftpm_build_database() {
 
 reset_swiftpm_package_cache() {
     log_item "Resetting SwiftPM package cache"
-    swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" reset >/dev/null 2>&1 || {
+    swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" --disable-dependency-cache reset >/dev/null 2>&1 || {
         reset_cached_build_products
         reset_cached_dependency_products
     }
@@ -1098,7 +1098,7 @@ if [ "$SKIP_TESTS" != "true" ]; then
         # shellcheck disable=SC2206
         TEST_FLAGS_ARRAY=( ${TEST_FLAGS} )
     fi
-    if ! run_with_swiftpm_db_recovery "unit_tests" swift test --scratch-path "${BUILD_DIR}" "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
+    if ! run_with_swiftpm_db_recovery "unit_tests" swift test --scratch-path "${BUILD_DIR}" --disable-dependency-cache "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
         log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
@@ -1302,7 +1302,7 @@ else
         # shellcheck disable=SC2206
         BUILD_FLAGS_ARRAY=( ${BUILD_FLAGS_EXTRA} )
     fi
-    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
+    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" --disable-dependency-cache -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1
     fi

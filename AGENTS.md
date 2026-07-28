@@ -11,7 +11,7 @@
 - If more work remains after a push, keep going in follow-up commits on the same branch instead of waiting for a perfect final batch.
 - Propose bold ideas when they can meaningfully improve the product or workflow; do not limit recommendations to conservative changes.
 - Be careful with destructive actions that the user did not explicitly request, and confirm the intended scope before taking them.
-- Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; use `make test-ui` only to confirm UI tests are currently disabled.
+- Single test: `swift test --scratch-path "$HOME/Library/Caches/Sorty/build" --disable-dependency-cache --disable-sandbox --filter SortyTests.TestClass/testMethod`; never run a repository-local `swift build` or `swift test` without that scratch path because it creates a second `.build` dependency cache. Use `make test-ui` only to confirm UI tests are currently disabled.
 - No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests when useful, and Blacksmith CI as the quality gate.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
 - Main targets: `Sources/SortyLib` shared app logic, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
