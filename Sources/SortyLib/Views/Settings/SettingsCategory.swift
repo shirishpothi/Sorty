@@ -111,6 +111,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case troubleshootingCache = "settings.troubleshooting.cache"
     case troubleshootingLearnings = "settings.troubleshooting.learnings"
     case troubleshootingReset = "settings.troubleshooting.reset"
+    case helpAssistant = "settings.help.assistant"
     case helpSupport = "settings.help.support"
     case helpLegal = "settings.help.legal"
     case helpDocumentation = "settings.help.documentation"
@@ -195,7 +196,7 @@ public extension SettingsFocusTarget {
              .troubleshootingLearnings, .troubleshootingReset:
             return .troubleshooting
 
-        case .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
+        case .helpAssistant, .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
              .helpChangelog, .helpPrivacy, .helpTerms, .helpIssueDetails:
             return .help
 
@@ -437,13 +438,14 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .help:
             return [
+                feature("Support Assistant", "Run local health checks and open the exact setting needed to recover.", keywords: ["health check", "diagnose", "repair"], target: .helpAssistant),
                 feature("Support Links", "Open documentation, changelog, issue reporting, privacy, and terms.", target: .helpSupport),
                 feature("Documentation", "Open Sorty’s help and usage documentation.", keywords: ["help guide", "readme"], target: .helpDocumentation),
                 feature("Report Issue", "Open GitHub Issues to report a bug or request a feature.", keywords: ["bug report", "github issue"], target: .helpReportIssue),
                 feature("View Changelog", "Review recent Sorty releases and product changes.", keywords: ["release notes", "what's new"], target: .helpChangelog),
                 feature("Privacy Policy", "Read Sorty’s privacy policy.", keywords: ["legal", "data"], target: .helpPrivacy),
                 feature("Terms of Service", "Read Sorty’s terms of service.", keywords: ["legal", "terms"], target: .helpTerms),
-                feature("Copy Issue Details", "Copy app, build, macOS, and device details for GitHub issue reports.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
+                feature("Copy Support Report", "Copy privacy-safe app, system, configuration, and health-check details.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
             ]
         case .experimental:
             return [

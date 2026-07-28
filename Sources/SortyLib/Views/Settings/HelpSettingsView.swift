@@ -9,8 +9,10 @@ import AppKit
 import SwiftUI
 
 struct HelpSettingsView: View {
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var analytics = AnalyticsManager.shared
 
     private let docsURL = URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!
     private let issuesURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues")!
@@ -21,9 +23,65 @@ struct HelpSettingsView: View {
 
     @State private var copiedIssueDetails = false
     @State private var copyResetTask: Task<Void, Never>?
+    @State private var healthChecks: [SupportHealthCheck] = []
+    @State private var isRunningHealthCheck = false
 
     var body: some View {
         VStack(spacing: 20) {
+            SettingsCard(title: "Support Assistant", icon: "stethoscope", color: .teal) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(healthCheckSummary)
+                                .font(.subheadline.weight(.semibold))
+
+                            Text("Sorty checks its configuration and Finder integration locally, then points you to the exact setting that needs attention.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            runHealthCheck()
+                        } label: {
+                            Label(
+                                isRunningHealthCheck ? "Checking" : healthChecks.isEmpty ? "Run Checks" : "Check Again",
+                                systemImage: isRunningHealthCheck ? "arrow.trianglehead.2.clockwise.rotate.90" : "waveform.path.ecg"
+                            )
+                        }
+                        .buttonStyle(.sortyBordered(intent: .info, size: .small))
+                        .disabled(isRunningHealthCheck)
+                        .accessibilityIdentifier("RunSupportHealthCheckButton")
+                    }
+
+                    if isRunningHealthCheck {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if !healthChecks.isEmpty {
+                        Divider()
+
+                        VStack(spacing: 8) {
+                            ForEach(healthChecks) { check in
+                                SupportHealthCheckRow(check: check) {
+                                    openSupportDestination(check.destination)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .settingsFocusable(.helpAssistant)
+            .animatedAppearance(delay: 0.05)
+            .task {
+                guard healthChecks.isEmpty else { return }
+                runHealthCheck()
+            }
+
             SettingsCard(title: "Support", icon: "questionmark.circle.fill", color: .teal) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
@@ -103,9 +161,9 @@ struct HelpSettingsView: View {
             .settingsFocusable(.helpSupport)
             .animatedAppearance(delay: 0.1)
 
-            SettingsCard(title: "Issue Details", icon: "clipboard", color: .blue) {
+            SettingsCard(title: "Support Report", icon: "clipboard", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Copy a ready-to-paste environment block for GitHub issues.")
+                    Text("Copy a privacy-safe report containing app details and the local checks above. It never includes file names, folder paths, prompts, credentials, or AI responses.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -122,7 +180,7 @@ struct HelpSettingsView: View {
                             Image(systemName: copiedIssueDetails ? "checkmark" : "doc.on.doc")
                                 .symbolReplaceTransition(animationValue: copiedIssueDetails)
 
-                            Text(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details")
+                            Text(copiedIssueDetails ? "Copied Support Report" : "Copy Support Report")
                                 .numericTextTransition(animationValue: copiedIssueDetails)
                         }
                             .frame(maxWidth: .infinity)
@@ -149,6 +207,15 @@ struct HelpSettingsView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(issueDetailsText, forType: .string)
         HapticFeedbackManager.shared.success()
+        AnalyticsManager.shared.captureFeature(
+            feature: "support",
+            subfeature: "support_report",
+            action: "copied",
+            outcome: "success",
+            properties: [
+                "count_bucket": AnalyticsManager.countBucket(healthChecks.filter { $0.status == .needsAttention }.count),
+            ]
+        )
 
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
             copiedIssueDetails = true
@@ -175,19 +242,21 @@ struct HelpSettingsView: View {
         let defaults = UserDefaults.standard
         let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
         let memory = ByteCountFormatter.string(fromByteCount: Int64(processInfo.physicalMemory), countStyle: .memory)
-        let appSupportPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sorty")
-            .path ?? "unknown"
-        let cachesPath = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent(bundleID)
-            .path ?? "unknown"
+        let checkResults = healthChecks.isEmpty
+            ? "- Checks not run"
+            : healthChecks.map { "- \($0.title): \($0.status.reportLabel)" }.joined(separator: "\n")
 
         return """
+        ### What happened
+        <!-- Describe what you expected and what Sorty did instead. -->
+
+        ### Sorty Support Checks
+        \(checkResults)
+
         ### Environment
         - Sorty: \(BuildInfo.fullVersion)
         - Commit: \(BuildInfo.shortCommit)
         - Bundle ID: \(bundleID)
-        - Bundle path: \(Bundle.main.bundlePath)
 
         ### System
         - macOS: \(processInfo.operatingSystemVersionString)
@@ -221,9 +290,154 @@ struct HelpSettingsView: View {
         - Internet privacy mode: \(yesNo(FeatureFlags.internetPrivacyModeEnabled))
         - Menu bar extra: \(yesNo(defaults.object(forKey: "showMenuBarExtra") as? Bool ?? true))
         - Completed onboarding: \(yesNo(defaults.bool(forKey: "hasCompletedOnboarding")))
-        - App support path: \(appSupportPath)
-        - Caches path: \(cachesPath)
+
+        ### Privacy
+        This report does not include file names, folder paths, file contents, prompts, credentials, AI responses, or raw error messages.
         """
+    }
+
+    private var healthCheckSummary: String {
+        if isRunningHealthCheck {
+            return "Checking Sorty…"
+        }
+        guard !healthChecks.isEmpty else {
+            return "Find and fix common problems"
+        }
+        let attentionCount = healthChecks.filter { $0.status == .needsAttention }.count
+        return attentionCount == 0
+            ? "Everything checked looks healthy"
+            : "\(attentionCount) \(attentionCount == 1 ? "item needs" : "items need") attention"
+    }
+
+    private func runHealthCheck() {
+        guard !isRunningHealthCheck else { return }
+        isRunningHealthCheck = true
+        AnalyticsManager.shared.captureFeature(
+            feature: "support",
+            subfeature: "health_check",
+            action: "started",
+            outcome: "started"
+        )
+
+        Task { @MainActor in
+            let finderDiagnostics = await ExtensionCommunication.getFinderSyncDiagnosticsAsync()
+            let config = viewModel.config
+            var checks: [SupportHealthCheck] = []
+
+            if config.requiresAPIKey,
+               config.authMethod(for: config.provider) == .apiKey,
+               config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+                checks.append(
+                    SupportHealthCheck(
+                        id: "provider",
+                        title: "AI Provider",
+                        detail: "\(config.provider.displayName) needs an API key before Sorty can organize files.",
+                        status: .needsAttention,
+                        actionTitle: "Open Provider",
+                        destination: .providerConfiguration
+                    )
+                )
+            } else {
+                checks.append(
+                    SupportHealthCheck(
+                        id: "provider",
+                        title: "AI Provider",
+                        detail: "\(config.provider.displayName) has the configuration required to make a request.",
+                        status: .healthy,
+                        actionTitle: nil,
+                        destination: nil
+                    )
+                )
+            }
+
+            if FeatureFlags.internetPrivacyModeEnabled,
+               config.provider != .ollama,
+               config.provider != .appleFoundationModel {
+                checks.append(
+                    SupportHealthCheck(
+                        id: "network",
+                        title: "Internet Access",
+                        detail: "Block Internet Connections is preventing \(config.provider.displayName) from receiving requests.",
+                        status: .needsAttention,
+                        actionTitle: "Review Setting",
+                        destination: .advancedInternetPrivacy
+                    )
+                )
+            } else {
+                checks.append(
+                    SupportHealthCheck(
+                        id: "network",
+                        title: "Internet Access",
+                        detail: FeatureFlags.internetPrivacyModeEnabled
+                            ? "Sorty is configured for an offline provider."
+                            : "Sorty is allowed to contact the configured provider.",
+                        status: .healthy,
+                        actionTitle: nil,
+                        destination: nil
+                    )
+                )
+            }
+
+            checks.append(
+                SupportHealthCheck(
+                    id: "finder",
+                    title: "Finder Integration",
+                    detail: finderDiagnostics.detailMessage,
+                    status: finderDiagnostics.isOperational ? .healthy : .needsAttention,
+                    actionTitle: finderDiagnostics.isOperational ? nil : "Open Repair",
+                    destination: finderDiagnostics.isOperational ? nil : .finderExtension
+                )
+            )
+            let analyticsDetail: String
+            let analyticsStatus: SupportHealthStatus
+            if analytics.isActive {
+                analyticsDetail = "Anonymous reliability analytics are active and can help classify support problems."
+                analyticsStatus = .healthy
+            } else if analytics.consent == .granted {
+                analyticsDetail = "Analytics are allowed but currently paused by an app privacy setting."
+                analyticsStatus = .informational
+            } else {
+                analyticsDetail = "Analytics are off. Local checks and support reports still work normally."
+                analyticsStatus = .informational
+            }
+            checks.append(
+                SupportHealthCheck(
+                    id: "analytics",
+                    title: "Support Context",
+                    detail: analyticsDetail,
+                    status: analyticsStatus,
+                    actionTitle: analytics.isActive ? nil : "Privacy Settings",
+                    destination: analytics.isActive ? nil : .advancedAnalytics
+                )
+            )
+
+            healthChecks = checks
+            isRunningHealthCheck = false
+
+            let attentionCount = checks.filter { $0.status == .needsAttention }.count
+            AnalyticsManager.shared.captureFeature(
+                feature: "support",
+                subfeature: "health_check",
+                action: "completed",
+                outcome: attentionCount == 0 ? "healthy" : "attention_needed",
+                properties: [
+                    "count_bucket": AnalyticsManager.countBucket(attentionCount),
+                ]
+            )
+        }
+    }
+
+    private func openSupportDestination(_ destination: SettingsFocusTarget?) {
+        guard let destination else { return }
+        AnalyticsManager.shared.captureFeature(
+            feature: "support",
+            subfeature: "health_check",
+            action: "opened_recovery",
+            outcome: "success",
+            properties: ["selection_kind": destination.rawValue]
+        )
+        HapticFeedbackManager.shared.tap()
+        appState.openSettingsWindow(focusTarget: destination)
     }
 
     private func yesNo(_ value: Bool) -> String {
@@ -238,6 +452,83 @@ struct HelpSettingsView: View {
         #else
         return "unknown"
         #endif
+    }
+}
+
+private enum SupportHealthStatus: Equatable {
+    case healthy
+    case needsAttention
+    case informational
+
+    var icon: String {
+        switch self {
+        case .healthy: return "checkmark.circle.fill"
+        case .needsAttention: return "exclamationmark.triangle.fill"
+        case .informational: return "info.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .healthy: return .green
+        case .needsAttention: return .orange
+        case .informational: return .blue
+        }
+    }
+
+    var reportLabel: String {
+        switch self {
+        case .healthy: return "Healthy"
+        case .needsAttention: return "Needs attention"
+        case .informational: return "Information"
+        }
+    }
+}
+
+private struct SupportHealthCheck: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let status: SupportHealthStatus
+    let actionTitle: String?
+    let destination: SettingsFocusTarget?
+}
+
+private struct SupportHealthCheckRow: View {
+    let check: SupportHealthCheck
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: check.status.icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(check.status.color)
+                .frame(width: 20, height: 20)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(check.title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(check.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(check.title), \(check.status.reportLabel)")
+            .accessibilityHint(check.detail)
+
+            Spacer(minLength: 8)
+
+            if let actionTitle = check.actionTitle {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.sortyBordered(intent: .info, size: .small))
+            }
+        }
+        .padding(10)
+        .background(check.status.color.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -557,6 +848,7 @@ private struct DeeplinkEntryRow: View {
         HelpSettingsView()
             .padding()
             .environmentObject(SettingsViewModel())
+            .environmentObject(AppState())
     }
     .frame(width: 560)
 }
