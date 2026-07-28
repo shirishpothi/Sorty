@@ -751,8 +751,15 @@ final class PromptBuilderPrioritizationTests: XCTestCase {
             includeContentMetadata: false
         )
 
-        // First 50 files should be in the prompt, remaining 10 should be truncated
-        XCTAssertTrue(prompt.contains("and 10 more"))
+        // Every file should remain present and preserve the input order.
+        let firstFileRange = prompt.range(of: "file0.pdf")
+        let lastFileRange = prompt.range(of: "file59.pdf")
+
+        XCTAssertNotNil(firstFileRange)
+        XCTAssertNotNil(lastFileRange)
+        if let firstFileRange, let lastFileRange {
+            XCTAssertLessThan(firstFileRange.lowerBound, lastFileRange.lowerBound)
+        }
     }
 }
 

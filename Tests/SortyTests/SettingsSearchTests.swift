@@ -76,7 +76,7 @@ final class SettingsSearchTests: XCTestCase {
 
     func testHelpFocusTargetMappingsForKnownSnippets() {
         XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Support Links")), .helpSupport)
-        XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Copy Issue Details")), .helpIssueDetails)
+        XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Copy Support Report")), .helpIssueDetails)
     }
 
     func testEveryVisibleFeatureSnippetHasAFocusTarget() {
