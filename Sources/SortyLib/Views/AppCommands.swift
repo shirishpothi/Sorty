@@ -237,13 +237,6 @@ public struct SortyCommands: Commands {
             .keyboardShortcut("🌐", modifiers: .command)
             .disabled(appState == nil)
 
-            if FeatureFlags.shadersEnabled {
-                Button("Shaders", systemImage: "sparkles.rectangle.stack") {
-                    appState?.showShaders()
-                }
-                .disabled(appState == nil)
-            }
-
             Divider()
 
             Button("Sorty Help", systemImage: "questionmark.circle") {
