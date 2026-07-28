@@ -73,6 +73,7 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'section',
   'surface',
   'target',
+  'token',
   'traffic_source',
 ])
 
