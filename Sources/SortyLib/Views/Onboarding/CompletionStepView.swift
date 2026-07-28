@@ -318,6 +318,102 @@ private struct CompletionPrimaryAction: View {
     }
 }
 
+private struct CompletionAnalyticsPreference: View {
+    @Binding var isEnabled: Bool
+    @State private var isShowingDetails = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle(isOn: $isEnabled) {
+                Text("Share anonymous analytics")
+                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+            }
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .accessibilityIdentifier("OnboardingAnalyticsToggle")
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                isShowingDetails.toggle()
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("What anonymous analytics includes")
+            .accessibilityLabel("About anonymous analytics")
+            .accessibilityIdentifier("OnboardingAnalyticsInfoButton")
+            .popover(isPresented: $isShowingDetails, arrowEdge: .bottom) {
+                analyticsDetails
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            CompletionPalette.shadowRose.opacity(0.18),
+            in: Capsule()
+        )
+    }
+
+    private var analyticsDetails: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Anonymous analytics")
+                .font(.headline)
+
+            Text("When this is on, Sorty sends limited product and reliability events so we can see which parts of the app are useful and where failures occur.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            detailSection(
+                title: "What is included",
+                systemImage: "checkmark.circle.fill",
+                color: .green,
+                text: "Screens and features used; broad actions, outcomes, counts, and timings; app and macOS versions and device category; sanitized errors and crashes with messages and sensitive values redacted."
+            )
+
+            detailSection(
+                title: "What is never included",
+                systemImage: "xmark.circle.fill",
+                color: .red,
+                text: "Your identity, folder or file names, paths, file contents, prompts, custom instructions, AI responses, API keys, or other credentials. Sorty does not record your screen or keystrokes."
+            )
+
+            Text("You can change this at any time in Settings → Advanced. Turning it off stops analytics and clears locally stored analytics data.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(width: 390, alignment: .leading)
+        .systemLiquidGlassPopover(cornerRadius: 12)
+    }
+
+    private func detailSection(
+        title: String,
+        systemImage: String,
+        color: Color,
+        text: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .foregroundStyle(color)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Completion Step View
 
 public struct CompletionStepView: View {
@@ -325,6 +421,7 @@ public struct CompletionStepView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
+    @ObservedObject private var analytics = AnalyticsManager.shared
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
     let onFinish: () -> Void
@@ -342,6 +439,7 @@ public struct CompletionStepView: View {
     @State private var audioPlayer: AVAudioPlayer?
     @State private var audioFadeTask: Task<Void, Never>?
     @State private var readinessState: ReadinessState = .idle
+    @State private var isAnalyticsEnabled = true
 
     // Exit animation states
     @State private var exitTriggered = false
@@ -378,6 +476,13 @@ public struct CompletionStepView: View {
                 )
                 CompletionCopy(hasAppeared: hasAppeared, contentDismissed: contentDismissed)
                 CompletionTipsGrid(tipsAppeared: tipsAppeared, contentDismissed: contentDismissed)
+                CompletionAnalyticsPreference(isEnabled: $isAnalyticsEnabled)
+                    .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
+                    .offset(y: tipsAppeared ? (contentDismissed ? 40 : 0) : 12)
+                    .animation(
+                        .spring(response: 0.65, dampingFraction: 0.85).delay(0.95),
+                        value: tipsAppeared
+                    )
                 CompletionPrimaryAction(
                     tipsAppeared: tipsAppeared,
                     contentDismissed: contentDismissed,
@@ -396,6 +501,7 @@ public struct CompletionStepView: View {
             .offset(y: -6)
         }
         .onAppear {
+            isAnalyticsEnabled = analytics.consent != .denied
             startRevealSequence()
         }
         .onDisappear {
@@ -614,6 +720,7 @@ public struct CompletionStepView: View {
 
     private func startTransition() {
         guard !exitTriggered else { return }
+        analytics.setConsent(isAnalyticsEnabled ? .granted : .denied)
         let exitDuration = reduceMotion ? 0 : 0.52
         HapticFeedbackManager.shared.success()
         fadeOutAndStopAudio(duration: exitDuration)
