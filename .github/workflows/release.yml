@@ -222,7 +222,7 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: sorty-z1
-          SENTRY_PROJECT: apple-ios
+          SENTRY_PROJECT: sorty-macos
         run: |
           if [[ -z "${SENTRY_AUTH_TOKEN}" ]]; then
             echo "::error::SENTRY_AUTH_TOKEN is required to publish release symbols."
