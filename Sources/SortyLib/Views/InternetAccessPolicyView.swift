@@ -120,7 +120,7 @@ struct InternetAccessPolicyView: View {
 
             Divider()
 
-            AutoScrollingConnectionList(connections: policy.connections)
+            ConnectionList(connections: policy.connections)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Text("Deny consequences indicate exactly what functionality becomes unavailable when a host is blocked.")
@@ -248,43 +248,16 @@ private struct ConnectionCard: View {
     }
 }
 
-private struct AutoScrollingConnectionList: View {
+private struct ConnectionList: View {
     let connections: [InternetAccessPolicyConnection]
 
-    @State private var autoScrollIndex = 0
-
-    private let autoScrollIntervalSeconds: UInt64 = 2_200_000_000
     private let cardSpacing: CGFloat = 10
 
     var body: some View {
-        ScrollViewReader { proxy in
-            GeometryReader { _ in
-                ScrollView(.vertical, showsIndicators: true) {
-                    cardsStack
-                }
-                .task(id: connections.count) {
-                    guard connections.count > 1 else { return }
-
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: autoScrollIntervalSeconds)
-                        guard !Task.isCancelled else { return }
-
-                        await MainActor.run {
-                            guard connections.count > 1 else { return }
-                            autoScrollIndex = (autoScrollIndex + 1) % connections.count
-                            withAnimation(.easeInOut(duration: 0.65)) {
-                                proxy.scrollTo(autoScrollIndex, anchor: .top)
-                            }
-                        }
-                    }
-                }
-                .onChange(of: connections.count) { _, _ in
-                    autoScrollIndex = 0
-                    proxy.scrollTo(0, anchor: .top)
-                }
-                .accessibilityIdentifier("InternetAccessPolicyConnectionsList")
-            }
+        ScrollView(.vertical, showsIndicators: true) {
+            cardsStack
         }
+        .accessibilityIdentifier("InternetAccessPolicyConnectionsList")
     }
 
     private var cardsStack: some View {
