@@ -7,6 +7,20 @@
 
 import Foundation
 
+public enum DiagnosticReportError: LocalizedError {
+    case unavailable
+    case archiveFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable:
+            return "Sorty couldn't prepare the diagnostic report."
+        case .archiveFailed:
+            return "Sorty couldn't create the diagnostic ZIP archive."
+        }
+    }
+}
+
 public final class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
     
@@ -61,39 +75,216 @@ public final class LogManager: @unchecked Sendable {
         }
     }
     
-    public func exportLogs() -> URL? {
-        guard let logsDirectory = logsDirectory else { return nil }
-
+    @MainActor
+    public func generateDiagnosticReport(config: AIConfig, at destinationURL: URL) throws {
+        guard let logsDirectory else { throw DiagnosticReportError.unavailable }
         queue.sync {
             try? logFileHandle?.synchronize()
         }
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let timestamp = dateFormatter.string(from: Date())
-        
-        let exportURL = fileManager.temporaryDirectory.appendingPathComponent("Sorty_Logs_\(timestamp).zip")
-        
+
+        let reportDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("Sorty-Diagnostic-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: reportDirectory) }
+
         do {
-            // Remove existing if any (unlikely with timestamp)
-            if fileManager.fileExists(atPath: exportURL.path) {
-                try fileManager.removeItem(at: exportURL)
+            try fileManager.createDirectory(at: reportDirectory, withIntermediateDirectories: true)
+            try diagnosticOverview(config: config).write(
+                to: reportDirectory.appendingPathComponent("diagnostic.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try telemetryReport().write(
+                to: reportDirectory.appendingPathComponent("telemetry.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try logSummary(in: logsDirectory).write(
+                to: reportDirectory.appendingPathComponent("log-summary.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try privacyReadme.write(
+                to: reportDirectory.appendingPathComponent("README.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
             }
-            
-            // Simple zip by using file coordinator or shell (simpler for this context)
-            // Using zip command for reliability on macOS
+
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-            process.arguments = ["-r", "-j", exportURL.path, logsDirectory.path]
-            
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            process.arguments = [
+                "-c", "-k", "--sequesterRsrc",
+                reportDirectory.path, destinationURL.path,
+            ]
             try process.run()
             process.waitUntilExit()
-            
-            return process.terminationStatus == 0 ? exportURL : nil
+            guard process.terminationStatus == 0 else {
+                throw DiagnosticReportError.archiveFailed
+            }
         } catch {
-            print("Failed to export logs: \(error)")
-            return nil
+            if let reportError = error as? DiagnosticReportError {
+                throw reportError
+            }
+            throw DiagnosticReportError.unavailable
         }
+    }
+
+    @MainActor
+    private func diagnosticOverview(config: AIConfig) -> String {
+        let process = ProcessInfo.processInfo
+        let defaults = UserDefaults.standard
+        let memory = ByteCountFormatter.string(
+            fromByteCount: Int64(process.physicalMemory),
+            countStyle: .memory
+        )
+        return """
+        Sorty Diagnostic Report
+        Generated: \(timestampFormatter.string(from: Date()))
+
+        App
+        - Version: \(BuildInfo.fullVersion)
+        - Commit: \(BuildInfo.shortCommit)
+        - Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")
+
+        System
+        - macOS: \(process.operatingSystemVersionString)
+        - Architecture: \(Self.systemArchitecture)
+        - CPU cores: \(process.activeProcessorCount)
+        - Memory: \(memory)
+        - Locale: \(Locale.current.identifier)
+
+        AI configuration
+        - Provider: \(config.provider.displayName)
+        - Model family: \(config.model.isEmpty ? "provider default" : "custom selection")
+        - Auth method: \(config.authMethod(for: config.provider).displayName)
+        - Custom API URL configured: \(Self.yesNo(config.apiURL?.isEmpty == false))
+        - Mode: \(config.mode.displayName)
+        - Deep scan: \(Self.yesNo(config.enableDeepScan))
+        - Vision: \(Self.yesNo(config.enableVision))
+        - Smart rename: \(Self.yesNo(config.enableSmartRename))
+        - Duplicate detection: \(Self.yesNo(config.detectDuplicates))
+        - File tagging: \(Self.yesNo(config.enableFileTagging))
+        - Streaming: \(Self.yesNo(config.enableStreaming))
+        - Reasoning: \(Self.yesNo(config.enableReasoning))
+        - Request timeout: \(Int(config.requestTimeout))s
+        - Resource timeout: \(Int(config.resourceTimeout))s
+
+        App settings
+        - Privacy mode: \(Self.yesNo(defaults.bool(forKey: "privacyModeEnabled")))
+        - Block Internet Connections: \(Self.yesNo(FeatureFlags.internetPrivacyModeEnabled))
+        - Menu bar extra: \(Self.yesNo(defaults.object(forKey: "showMenuBarExtra") as? Bool ?? true))
+        - Completed onboarding: \(Self.yesNo(defaults.bool(forKey: "hasCompletedOnboarding")))
+        """
+    }
+
+    @MainActor
+    private func telemetryReport() throws -> String {
+        let analytics = AnalyticsManager.shared
+        let reliability = ReliabilityManager.shared
+        let activityCounts = Dictionary(
+            grouping: NotificationManager.shared.analyticsEvents,
+            by: { "\($0.eventType.rawValue):\($0.notificationType)" }
+        ).mapValues(\.count)
+
+        let report: [String: Any] = [
+            "posthog": [
+                "consent": analytics.consent.rawValue,
+                "active": analytics.isActive,
+                "person_profiles": "disabled",
+                "geoip": "disabled",
+                "allowed_event_families": [
+                    "app:session_started",
+                    "app:screen_viewed",
+                    "app:feature_used",
+                    "app:workflow_progressed",
+                    "app:important_button_clicked",
+                ],
+                "active_experiment_count": analytics.experimentalFeatures.count,
+            ],
+            "sentry": reliability.diagnosticSummary,
+            "local_activity_counts": activityCounts,
+            "privacy": [
+                "contains_remote_events": false,
+                "contains_event_or_user_ids": false,
+                "contains_raw_errors": false,
+                "contains_notification_details": false,
+            ],
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: report,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private func logSummary(in directory: URL) throws -> String {
+        var levels: [String: Int] = [:]
+        var categories: [String: Int] = [:]
+        let pattern = try NSRegularExpression(
+            pattern: #"^\[[^\]]+\] \[([A-Z]+)\] \[([A-Za-z0-9_. -]{1,64})\]"#
+        )
+        let files = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ).filter { $0.pathExtension == "log" }
+
+        for file in files {
+            guard let contents = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            contents.enumerateLines { line, _ in
+                let range = NSRange(line.startIndex..<line.endIndex, in: line)
+                guard let match = pattern.firstMatch(in: line, range: range),
+                      let levelRange = Range(match.range(at: 1), in: line),
+                      let categoryRange = Range(match.range(at: 2), in: line)
+                else { return }
+                levels[String(line[levelRange]), default: 0] += 1
+                categories[String(line[categoryRange]), default: 0] += 1
+            }
+        }
+
+        let report: [String: Any] = [
+            "log_file_count": files.count,
+            "levels": levels,
+            "categories": categories,
+            "raw_messages_included": false,
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: report,
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private var privacyReadme: String {
+        """
+        This archive is designed to be safe to attach to a public GitHub issue.
+
+        It intentionally excludes raw log messages, file and folder names, paths,
+        file contents, prompts, AI responses, credentials, API URLs, email
+        addresses, user or device identifiers, PostHog event payloads, Sentry
+        envelopes, crash dumps, and SDK caches.
+
+        diagnostic.txt contains environment and bounded configuration facts.
+        telemetry.json describes analytics and reliability status plus aggregate
+        local activity categories. log-summary.json contains counts only.
+        """
+    }
+
+    private static func yesNo(_ value: Bool) -> String {
+        value ? "Yes" : "No"
+    }
+
+    private static var systemArchitecture: String {
+        #if arch(arm64)
+        "arm64"
+        #elseif arch(x86_64)
+        "x86_64"
+        #else
+        "unknown"
+        #endif
     }
     
     // MARK: - Private Methods

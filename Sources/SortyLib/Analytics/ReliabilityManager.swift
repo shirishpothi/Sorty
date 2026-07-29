@@ -20,6 +20,18 @@ public final class ReliabilityManager {
     private var captureRateLimiter = ReliabilityCaptureRateLimiter()
     private var launchSpan: ReliabilitySpan?
 
+    public var diagnosticSummary: [String: Any] {
+        [
+            "consent": consent.rawValue,
+            "active": isActive,
+            "environment": Self.environmentName,
+            "send_default_pii": false,
+            "network_tracking": false,
+            "file_io_tracing": false,
+            "raw_payloads_included": false,
+        ]
+    }
+
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }

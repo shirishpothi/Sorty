@@ -66,6 +66,7 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Organization Style")), .rulesOrganizationStyle)
         XCTAssertEqual(SettingsCategory.notifications.focusTarget(for: snippet(in: .notifications, titled: "System Notifications")), .notificationsSystem)
         XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Block Internet Connections")), .advancedInternetPrivacy)
+        XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Generate Diagnostic Report")), .advancedErrorLogs)
     }
 
     func testFocusTargetIsNilForUnknownSnippet() {

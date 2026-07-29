@@ -15,6 +15,7 @@ struct AdvancedSettingsView: View {
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var isShowingFinderRecommendation = false
+    @State private var diagnosticReportError: String?
 
     private var analyticsEnabled: Binding<Bool> {
         Binding(
@@ -159,21 +160,38 @@ struct AdvancedSettingsView: View {
                     
                     Button {
                         HapticFeedbackManager.shared.tap()
-                        if let logURL = LogManager.shared.exportLogs() {
+                        let panel = NSSavePanel()
+                        panel.title = "Save Diagnostic Report"
+                        panel.nameFieldStringValue = "Sorty-Diagnostic.zip"
+                        panel.allowedFileTypes = ["zip"]
+                        panel.canCreateDirectories = true
+                        guard panel.runModal() == .OK, let destination = panel.url else { return }
+                        do {
+                            try LogManager.shared.generateDiagnosticReport(
+                                config: viewModel.config,
+                                at: destination
+                            )
                             HapticFeedbackManager.shared.success()
-                            NSWorkspace.shared.activateFileViewerSelecting([logURL])
-                        } else {
+                            AnalyticsManager.shared.captureFeature(
+                                feature: "support",
+                                subfeature: "diagnostic_report",
+                                action: "generated",
+                                outcome: "success"
+                            )
+                            NSWorkspace.shared.activateFileViewerSelecting([destination])
+                        } catch {
                             HapticFeedbackManager.shared.error()
+                            diagnosticReportError = error.localizedDescription
                         }
                     } label: {
                         HStack {
-                            Image(systemName: "hammer")
-                            Text("Show Error Logs")
+                            Image(systemName: "doc.zipper")
+                            Text("Generate Diagnostic Report")
                         }
                     }
-                    .buttonStyle(.sortyProminent(intent: .destructive))
+                    .buttonStyle(.sortyProminent(intent: .secondary))
                     .settingsFocusableSetting(.advancedErrorLogs)
-                    .accessibilityIdentifier("ShowErrorLogsButton")
+                    .accessibilityIdentifier("GenerateDiagnosticReportButton")
                     .onHover { hovering in
                         if hovering {
                             HapticFeedbackManager.shared.selection()
@@ -183,6 +201,17 @@ struct AdvancedSettingsView: View {
             }
             .settingsFocusable(.advancedDeveloper)
             .animatedAppearance(delay: 0.15)
+        }
+        .alert(
+            "Couldn’t Generate Report",
+            isPresented: Binding(
+                get: { diagnosticReportError != nil },
+                set: { if !$0 { diagnosticReportError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(diagnosticReportError ?? "")
         }
     }
 }

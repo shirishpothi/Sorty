@@ -528,7 +528,7 @@ View the full changelog at:
 
 Open **Settings → Troubleshooting** to run Sorty's local support checks. The assistant appears at the bottom of the page, verifies the active provider configuration, internet privacy policy, Finder integration, and analytics support context, then links directly to the setting that can resolve each detected problem.
 
-**Copy Support Report** produces a ready-to-paste diagnostic summary without file names, folder paths, file contents, prompts, credentials, AI responses, or raw error messages. Review the report before adding it to a public GitHub issue.
+**Generate Diagnostic Report** in **Settings → Advanced → Developer** lets you choose where to save a ZIP containing app and system details, bounded configuration, structural log counts, local activity totals, and PostHog/Sentry status. It deliberately excludes raw log messages, filenames, paths, contents, prompts, credentials, AI responses, user or device identifiers, PostHog event payloads, Sentry envelopes, and crash dumps, so the archive is suitable for a public GitHub issue.
 
 ### AI Not Responding
 

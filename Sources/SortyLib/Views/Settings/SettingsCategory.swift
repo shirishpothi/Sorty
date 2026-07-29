@@ -429,7 +429,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Request Timeout", "Set how long Sorty waits for the initial AI response.", keywords: ["initial response", "seconds"], target: .advancedRequestTimeout),
                 feature("Resource Timeout", "Set the maximum total duration of an AI request.", keywords: ["total request duration", "seconds"], target: .advancedResourceTimeout),
                 feature("Stats for Nerds", "Show detailed generation metrics.", keywords: ["developer", "metrics", "tokens", "throughput", "cost"], target: .advancedStats),
-                feature("Show Error Logs", "Export and reveal diagnostic logs for debugging.", keywords: ["developer tools", "red logs", "error logs", "logs"], target: .advancedErrorLogs)
+                feature("Generate Diagnostic Report", "Save a privacy-safe ZIP with app, system, log, PostHog, and Sentry diagnostics.", keywords: ["developer tools", "report", "zip", "error logs", "logs", "analytics"], target: .advancedErrorLogs)
             ]
         case .troubleshooting:
             return [
