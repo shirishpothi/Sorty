@@ -182,6 +182,27 @@ public final class ReliabilityManager {
         }
     }
 
+    @discardableResult
+    public func captureDiagnosticReport(reportID: String) -> String? {
+        guard isActive,
+              consent == .granted,
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              captureRateLimiter.shouldCapture()
+        else {
+            return nil
+        }
+
+        let eventID = SentrySDK.capture(
+            message: "sorty.diagnostic_report.generated"
+        ) { scope in
+            scope.setTag(value: "mac_app", key: "platform_surface")
+            scope.setTag(value: "diagnostic_report", key: "feature")
+            scope.setTag(value: "generated", key: "operation")
+            scope.setTag(value: reportID, key: "diagnostic_report_id")
+        }
+        return eventID == .empty ? nil : eventID.sentryIdString
+    }
+
     public func startSpan(
         name: String,
         operation: String,

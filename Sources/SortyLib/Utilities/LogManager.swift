@@ -21,6 +21,11 @@ public enum DiagnosticReportError: LocalizedError {
     }
 }
 
+public struct DiagnosticReportResult: Sendable {
+    public let reportID: String
+    public let sentryEventID: String?
+}
+
 public final class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
     
@@ -76,11 +81,16 @@ public final class LogManager: @unchecked Sendable {
     }
     
     @MainActor
-    public func generateDiagnosticReport(config: AIConfig, at destinationURL: URL) throws {
+    public func generateDiagnosticReport(
+        config: AIConfig,
+        at destinationURL: URL
+    ) throws -> DiagnosticReportResult {
         guard let logsDirectory else { throw DiagnosticReportError.unavailable }
         queue.sync {
             try? logFileHandle?.synchronize()
         }
+        let reportID = UUID().uuidString.lowercased()
+        let sentryEventID = ReliabilityManager.shared.captureDiagnosticReport(reportID: reportID)
 
         let reportDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("Sorty-Diagnostic-\(UUID().uuidString)", isDirectory: true)
@@ -88,18 +98,27 @@ public final class LogManager: @unchecked Sendable {
 
         do {
             try fileManager.createDirectory(at: reportDirectory, withIntermediateDirectories: true)
-            try diagnosticOverview(config: config).write(
+            try diagnosticOverview(
+                config: config,
+                reportID: reportID,
+                sentryEventID: sentryEventID
+            ).write(
                 to: reportDirectory.appendingPathComponent("diagnostic.txt"),
                 atomically: true,
                 encoding: .utf8
             )
-            try telemetryReport().write(
+            try telemetryReport(reportID: reportID, sentryEventID: sentryEventID).write(
                 to: reportDirectory.appendingPathComponent("telemetry.json"),
                 atomically: true,
                 encoding: .utf8
             )
             try logSummary(in: logsDirectory).write(
                 to: reportDirectory.appendingPathComponent("log-summary.json"),
+                atomically: true,
+                encoding: .utf8
+            )
+            try safeLogTimeline(in: logsDirectory).write(
+                to: reportDirectory.appendingPathComponent("log-timeline.json"),
                 atomically: true,
                 encoding: .utf8
             )
@@ -124,6 +143,10 @@ public final class LogManager: @unchecked Sendable {
             guard process.terminationStatus == 0 else {
                 throw DiagnosticReportError.archiveFailed
             }
+            return DiagnosticReportResult(
+                reportID: reportID,
+                sentryEventID: sentryEventID
+            )
         } catch {
             if let reportError = error as? DiagnosticReportError {
                 throw reportError
@@ -133,7 +156,11 @@ public final class LogManager: @unchecked Sendable {
     }
 
     @MainActor
-    private func diagnosticOverview(config: AIConfig) -> String {
+    private func diagnosticOverview(
+        config: AIConfig,
+        reportID: String,
+        sentryEventID: String?
+    ) -> String {
         let process = ProcessInfo.processInfo
         let defaults = UserDefaults.standard
         let memory = ByteCountFormatter.string(
@@ -143,6 +170,8 @@ public final class LogManager: @unchecked Sendable {
         return """
         Sorty Diagnostic Report
         Generated: \(timestampFormatter.string(from: Date()))
+        Diagnostic ID: \(reportID)
+        Sentry event: \(sentryEventID ?? "Not sent — reliability sharing is unavailable or disabled")
 
         App
         - Version: \(BuildInfo.fullVersion)
@@ -181,7 +210,7 @@ public final class LogManager: @unchecked Sendable {
     }
 
     @MainActor
-    private func telemetryReport() throws -> String {
+    private func telemetryReport(reportID: String, sentryEventID: String?) throws -> String {
         let analytics = AnalyticsManager.shared
         let reliability = ReliabilityManager.shared
         let activityCounts = Dictionary(
@@ -190,6 +219,8 @@ public final class LogManager: @unchecked Sendable {
         ).mapValues(\.count)
 
         let report: [String: Any] = [
+            "diagnostic_report_id": reportID,
+            "sentry_event_id": sentryEventID ?? NSNull(),
             "posthog": [
                 "consent": analytics.consent.rawValue,
                 "active": analytics.isActive,
@@ -208,7 +239,8 @@ public final class LogManager: @unchecked Sendable {
             "local_activity_counts": activityCounts,
             "privacy": [
                 "contains_remote_events": false,
-                "contains_event_or_user_ids": false,
+                "contains_user_or_device_ids": false,
+                "contains_diagnostic_correlation_ids": true,
                 "contains_raw_errors": false,
                 "contains_notification_details": false,
             ],
@@ -218,6 +250,89 @@ public final class LogManager: @unchecked Sendable {
             options: [.prettyPrinted, .sortedKeys]
         )
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private func safeLogTimeline(in directory: URL) throws -> String {
+        let files = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        ).filter { $0.pathExtension == "log" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let pattern = try NSRegularExpression(
+            pattern: #"^\[([^\]]+)\] \[([A-Z]+)\] \[([A-Za-z0-9_. -]{1,64})\] (.*)$"#
+        )
+        var entries: [[String: String]] = []
+
+        for file in files {
+            guard let contents = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            contents.enumerateLines { line, _ in
+                let range = NSRange(line.startIndex..<line.endIndex, in: line)
+                guard let match = pattern.firstMatch(in: line, range: range),
+                      let timestampRange = Range(match.range(at: 1), in: line),
+                      let levelRange = Range(match.range(at: 2), in: line),
+                      let categoryRange = Range(match.range(at: 3), in: line),
+                      let messageRange = Range(match.range(at: 4), in: line)
+                else { return }
+                let signals = Self.diagnosticSignals(in: String(line[messageRange]))
+                entries.append([
+                    "timestamp": String(line[timestampRange]),
+                    "level": String(line[levelRange]),
+                    "category": String(line[categoryRange]),
+                    "signals": signals.isEmpty ? "none" : signals.joined(separator: ","),
+                ])
+                if entries.count > 250 {
+                    entries.removeFirst(entries.count - 250)
+                }
+            }
+        }
+
+        let data = try JSONSerialization.data(
+            withJSONObject: [
+                "entries": entries,
+                "raw_messages_included": false,
+                "description": "Chronology and machine-derived failure signals; message text is discarded.",
+            ],
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func diagnosticSignals(in message: String) -> [String] {
+        let lowercased = message.lowercased()
+        var signals: [String] = []
+        let rules: [(String, [String])] = [
+            ("timeout", ["timeout", "timed out"]),
+            ("cancelled", ["cancelled", "canceled"]),
+            ("permission_denied", ["permission", "not permitted", "access denied"]),
+            ("authentication", ["unauthorized", "authentication", "invalid token", "signing out"]),
+            ("rate_limited", ["rate limit", "too many requests"]),
+            ("network", ["connection", "network", "offline", "dns"]),
+            ("file_conflict", ["already exists", "path exists", "conflict"]),
+            ("parse_failure", ["parse", "decoding", "invalid json"]),
+        ]
+        for (signal, needles) in rules where needles.contains(where: lowercased.contains) {
+            signals.append(signal)
+        }
+        if let status = firstMatch(in: message, pattern: #"\bHTTP\s+([1-5][0-9]{2})\b"#) {
+            signals.append("http_\(status)")
+        }
+        if let exitCode = firstMatch(in: message, pattern: #"\bexit(?:ed)?\s*(?:code|status)?[: ]+(-?[0-9]+)\b"#) {
+            signals.append("exit_\(exitCode)")
+        }
+        return signals
+    }
+
+    private static func firstMatch(in value: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+              let match = regex.firstMatch(
+                  in: value,
+                  range: NSRange(value.startIndex..<value.endIndex, in: value)
+              ),
+              let range = Range(match.range(at: 1), in: value)
+        else {
+            return nil
+        }
+        return String(value[range])
     }
 
     private func logSummary(in directory: URL) throws -> String {
@@ -265,11 +380,14 @@ public final class LogManager: @unchecked Sendable {
         It intentionally excludes raw log messages, file and folder names, paths,
         file contents, prompts, AI responses, credentials, API URLs, email
         addresses, user or device identifiers, PostHog event payloads, Sentry
-        envelopes, crash dumps, and SDK caches.
+        envelopes, crash dumps, and SDK caches. The diagnostic and Sentry event
+        IDs are random correlation values and do not identify the user or device.
 
         diagnostic.txt contains environment and bounded configuration facts.
         telemetry.json describes analytics and reliability status plus aggregate
         local activity categories. log-summary.json contains counts only.
+        log-timeline.json preserves chronology and recognized failure signals
+        while permanently discarding every raw log message.
         """
     }
 

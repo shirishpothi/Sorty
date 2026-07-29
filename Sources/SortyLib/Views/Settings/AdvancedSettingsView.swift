@@ -167,7 +167,7 @@ struct AdvancedSettingsView: View {
                         panel.canCreateDirectories = true
                         guard panel.runModal() == .OK, let destination = panel.url else { return }
                         do {
-                            try LogManager.shared.generateDiagnosticReport(
+                            _ = try LogManager.shared.generateDiagnosticReport(
                                 config: viewModel.config,
                                 at: destination
                             )
@@ -189,7 +189,7 @@ struct AdvancedSettingsView: View {
                             Text("Generate Diagnostic Report")
                         }
                     }
-                    .buttonStyle(.sortyProminent(intent: .secondary))
+                    .buttonStyle(.sortyProminent(intent: .destructive))
                     .settingsFocusableSetting(.advancedErrorLogs)
                     .accessibilityIdentifier("GenerateDiagnosticReportButton")
                     .onHover { hovering in

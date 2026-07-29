@@ -528,7 +528,7 @@ View the full changelog at:
 
 Open **Settings → Troubleshooting** to run Sorty's local support checks. The assistant appears at the bottom of the page, verifies the active provider configuration, internet privacy policy, Finder integration, and analytics support context, then links directly to the setting that can resolve each detected problem.
 
-**Generate Diagnostic Report** in **Settings → Advanced → Developer** lets you choose where to save a ZIP containing app and system details, bounded configuration, structural log counts, local activity totals, and PostHog/Sentry status. It deliberately excludes raw log messages, filenames, paths, contents, prompts, credentials, AI responses, user or device identifiers, PostHog event payloads, Sentry envelopes, and crash dumps, so the archive is suitable for a public GitHub issue.
+**Generate Diagnostic Report** in **Settings → Advanced → Developer** lets you choose where to save a ZIP containing app and system details, bounded configuration, structural log counts, a privacy-safe failure timeline, local activity totals, and PostHog/Sentry status. When reliability sharing is active, Sorty also sends Sentry a sanitized event with the same random diagnostic ID, letting support correlate the public ZIP with server-side reliability data without identifying the user. The archive deliberately excludes raw log messages, filenames, paths, contents, prompts, credentials, AI responses, user or device identifiers, PostHog event payloads, Sentry envelopes, and crash dumps.
 
 ### AI Not Responding
 
