@@ -1,16 +1,16 @@
 # Sorty Analytics
 
-Sorty uses PostHog for the same lightweight product and reliability telemetry that is normal for most apps: understanding which screens and features are useful, where workflows fail, and whether releases are reliable. It uses one project for the public website and Mac app, keeps the event namespace small, and never uses analytics to inspect user content.
+Sorty uses PostHog for lightweight product analytics and Sentry for reliability telemetry across the Mac app and public website. PostHog answers which screens and features are useful; Sentry reports crashes, hangs, sanitized handled errors, and sampled performance traces. Neither service may inspect user content.
 
 ## Consent and privacy
 
-The Mac app is opt-in. `AnalyticsManager` does not initialize PostHog until the user allows anonymous analytics after onboarding. Denial is persisted locally but never reported. Revoking consent, enabling **Block Internet Connections**, or deleting Sorty usage data closes the SDK and clears its local queue and anonymous identifier.
+The Mac app is opt-in. `AnalyticsManager` and `ReliabilityManager` do not initialize their SDKs until the user allows anonymous analytics after onboarding. Denial is persisted locally but never reported. Revoking consent, enabling **Block Internet Connections**, or deleting Sorty usage data closes both SDKs and clears their local queues and anonymous identifiers.
 
 The website uses anonymous, cookieless aggregate measurement by default. The footer provides a persistent opt-out, and Global Privacy Control or Do Not Track disables capture automatically. A random identifier lives in session storage only until the browser tab closes so page views can be grouped into one visit; it uses no person profiles, session replay, heatmaps, surveys, automatic click capture, full referrers, query strings, console logs, or form text.
 
-Both clients instruct PostHog to discard IP addresses and never create a person profile. Analytics is anonymous: the Mac app uses a random installation identifier only to group its own events, and neither client sends a name, email address, account identifier, advertising identifier, or other information linked to a person. Neither client may send file or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, user-entered text, or raw handled-error messages. File contents are never transmitted to PostHog.
+Both clients instruct PostHog and Sentry to discard IP addresses and avoid person profiles or default personal data. Telemetry is anonymous: neither client sends a name, email address, account identifier, advertising identifier, or other information linked to a person. Neither client may send file or folder names, paths, file contents, prompts, custom instructions, AI responses, API keys, user-entered text, raw handled-error messages, screenshots, view hierarchies, console logs, or session replays.
 
-This boundary is separate from AI-provider requests. If a user explicitly enables Deep Scan with a cloud provider, content may be sent directly to that selected provider to produce an organization plan; it is never routed through Sorty or included in PostHog analytics.
+This boundary is separate from AI-provider requests. If a user explicitly enables Deep Scan with a cloud provider, content may be sent directly to that selected provider to produce an organization plan; it is never included in PostHog or Sentry telemetry.
 
 ## Event taxonomy
 
@@ -29,16 +29,17 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 | `app:feature_used` | Mac | Feature and sub-feature actions, including settings changes and bucketed persona inventory, with stable outcomes |
 | `app:workflow_progressed` | Mac | Organize, apply, regenerate, undo, duplicate-scan, and cleanup stages |
 | `app:important_button_clicked` | Mac | A small allowlist of decision-critical buttons |
-| `$exception` | Both | Sanitized handled errors and opted-in Mac crashes |
 
 Do not create a new event for every button or state. Prefer an existing canonical event with low-cardinality `feature`, `subfeature`, `action`, `stage`, `outcome`, `screen`, `control`, `selection_kind`, or `button` properties. Counts and durations must use `AnalyticsManager.countBucket` and `durationBucket`; paths, identifiers, persona names or contents, model names, and free text are not acceptable dimensions.
 
 ## Implementation map
 
 - Mac SDK setup, consent, allowlists, bucketing, and error classification: `Sources/SortyLib/Analytics/AnalyticsManager.swift`
+- Mac Sentry setup, consent, privacy policy, crash/hang capture, rate limiting, and handled-error classification: `Sources/SortyLib/Analytics/ReliabilityManager.swift`
 - Mac settings toggles, notification previews, automation controls, and persona inventory: `Sources/SortyLib/Views/Settings/SettingsComponents.swift`, `Sources/SortyLib/Views/Settings/AutomationSettingsView.swift`, and `Sources/SortyLib/Views/PersonaPickerView.swift`
 - Mac one-time permission UI: `Sources/SortyLib/Analytics/AnalyticsConsentView.swift`
-- Website initialization, sanitization, route events, and error classification: `website/lib/analytics.ts`
+- Website PostHog initialization, sanitization, and product events: `website/lib/analytics.ts`
+- Website Sentry initialization, privacy policy, sampled tracing, and error classification: `website/lib/reliability.ts`
 - Website route/section/action listeners and preferences UI: `website/components/analytics-provider.tsx`
 - Website client bootstrap: `website/instrumentation-client.ts`
 - Completed PostHog project, dashboard, and release handoff: `posthog-setup-report.md`
@@ -49,9 +50,12 @@ The website reads `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_H
 
 The pinned PostHog dashboard measures first-time Mac app-session retention at daily D1–D30 and weekly W1–W12 intervals. The daily view highlights D1, D7, D14, and D30 over a 90-day cohort range; the weekly view highlights W1, W4, W8, and W12 over 180 days. Both use `app:session_started` as the entry and return event with strict calendar periods. Website retention is intentionally excluded because the website's session-only anonymous identifier cannot link a visitor across days.
 
-`POSTHOG_CLI_API_KEY` is a GitHub Actions secret and `POSTHOG_CLI_PROJECT_ID` is a repository variable. The website workflow accepts only a browser-safe `phc_` project token and the approved US or EU PostHog ingestion origin, so a personal `phx_` API key or arbitrary collection endpoint cannot be compiled into a release by mistake. It injects source-map identifiers, uploads source maps, then fails the release if a source map or `phx_` key remains in the public artifact. Release and nightly Mac workflows build `dwarf-with-dsym` symbols and upload dSYMs without source files.
+`SENTRY_AUTH_TOKEN` is a GitHub Actions secret used only by Sentry CLI. The website workflow publishes a commit-addressed Sentry release, injects and uploads source-map identifiers under the `/Sorty` Pages prefix, then removes every map from the public artifact. The Mac release workflow publishes `com.sorty.app@version+build`, associates its commits, and uploads dSYMs without source files. Release scans reject PostHog personal keys and Sentry auth tokens while allowing the public PostHog token and public Sentry DSNs.
 
-PostHog project settings keep automatic click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking disabled. The website uses consent-gated `$pageleave` events for session duration and PostHog's lightweight `$web_vitals` capture for the three Core Web Vitals—LCP, INP, and CLS—through its event and property allowlists. Bounce rate remains conservative because PostHog requires automatic DOM interaction capture for its complete bounce calculation, and Sorty deliberately does not collect it. IP anonymization and stateless cookieless mode are enabled. Exception capture is enabled project-side so the explicitly opted-in native crash reporter can submit on the next launch; browser exceptions remain locally controlled and manually sanitized.
+PostHog project settings keep automatic exception and click capture, recordings, console capture, performance attribution, heatmaps, surveys, and dead-click tracking disabled. The website uses consent-gated `$pageleave` events for session duration and PostHog's lightweight `$web_vitals` capture for LCP, INP, and CLS. Sentry receives sanitized errors plus 5% sampled traces; automatic network, file-I/O, user-interaction tracing, screenshots, view hierarchies, logs, replay, profiling, and raw MetricKit payloads are disabled. Both Sentry projects have server-side IP scrubbing enabled, and the website project accepts events only from the public GitHub Pages origin and localhost development.
+
+Sentry has separate `apple-ios` and `sorty-website` projects, high-priority issue notifications, and focused dashboards for unresolved errors and the bounded `operation` or `surface` tags. Expected cancellations and internet-privacy blocks remain workflow outcomes rather than Sentry issues, and handled errors are represented by a sanitized category/cause/operation error instead of the original message.
+
 
 The browser-safe `phc_` token identifies the PostHog project but grants no read, query, configuration, or source-map access. Because any public ingestion token can be copied and used to submit fabricated events, the PostHog project must also restrict authorized web origins to `https://sorty-organizer.github.io` (and any explicitly approved preview origin), reject unexpected event names and properties through the ingestion allowlists where available, and use anomaly or volume alerts to contain deliberate event spam. Client-side checks protect privacy and data quality for the shipped app; they are not an authentication boundary against a modified client.
 
@@ -64,4 +68,4 @@ The static GitHub Pages export cannot host a request-forwarding reverse proxy. P
 3. Capture intent at the important UI control and capture the outcome at the manager or workflow boundary.
 4. Send expected cancellations as workflow outcomes, not exceptions.
 5. Update the event catalog and this guide if the event namespace or privacy boundary changes.
-6. Verify Swift compilation, website lint/type-check/build, and the relevant PostHog dashboard query.
+6. Verify Swift compilation, website lint/type-check/build, and the relevant PostHog or Sentry dashboard query.

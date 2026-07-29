@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import {
-  captureWebsiteException,
-  trackWebInteraction,
-} from '@/lib/analytics'
+import { trackWebInteraction } from '@/lib/analytics'
+import { captureWebsiteException } from '@/lib/reliability'
 
 export default function GlobalError({
   error,

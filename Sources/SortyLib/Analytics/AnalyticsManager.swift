@@ -2,7 +2,7 @@
 //  AnalyticsManager.swift
 //  Sorty
 //
-//  Consent-gated, privacy-preserving product and reliability analytics.
+//  Consent-gated, privacy-preserving product analytics.
 //
 
 import Combine
@@ -28,9 +28,6 @@ public final class AnalyticsManager: ObservableObject {
     public static let shared = AnalyticsManager()
 
     public static let consentDefaultsKey = "analyticsConsent"
-    private static let crashCollectionSuspendedDefaultsKey =
-        "analyticsCrashCollectionSuspended"
-
     @Published public private(set) var consent: AnalyticsConsent
     @Published public private(set) var isActive = false
     @Published public private(set) var experimentalFeatures: [ExperimentalFeature] = []
@@ -55,15 +52,7 @@ public final class AnalyticsManager: ObservableObject {
               !Self.isAnalyticsSuppressedForThisProcess,
               !isActive
         else {
-            if defaults.bool(forKey: Self.crashCollectionSuspendedDefaultsKey) {
-                Self.removePendingCrashReport()
-            }
             return
-        }
-
-        if defaults.bool(forKey: Self.crashCollectionSuspendedDefaultsKey) {
-            Self.removePendingCrashReport()
-            defaults.set(false, forKey: Self.crashCollectionSuspendedDefaultsKey)
         }
 
         let configuration = Self.configuration()
@@ -81,10 +70,6 @@ public final class AnalyticsManager: ObservableObject {
         config.sendFeatureFlagEvent = false
         config.flushAt = 20
         config.maxQueueSize = 250
-        config.errorTrackingConfig.autoCapture = true
-        config.errorTrackingConfig.inAppIncludes = ["Sorty", "SortyLib"]
-        config.errorTrackingConfig.inAppByDefault = false
-        config.errorTrackingConfig.exceptionSteps.enabled = false
         config.setBeforeSend { event in
             Self.sanitized(event: event)
         }
@@ -115,6 +100,7 @@ public final class AnalyticsManager: ObservableObject {
 
         switch newConsent {
         case .granted:
+            ReliabilityManager.shared.consentDidChange(newConsent)
             startIfAuthorized()
             captureFeature(
                 feature: "privacy",
@@ -123,6 +109,7 @@ public final class AnalyticsManager: ObservableObject {
                 outcome: "success"
             )
         case .denied:
+            ReliabilityManager.shared.consentDidChange(newConsent)
             stopAndClear()
         case .undecided:
             break
@@ -130,6 +117,7 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     public func networkPrivacyDidChange(isEnabled: Bool) {
+        ReliabilityManager.shared.networkPrivacyDidChange(isEnabled: isEnabled)
         if isEnabled {
             stopAndClear()
         } else {
@@ -138,6 +126,7 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     public func resetConsentAndData() {
+        ReliabilityManager.shared.stopAndClear()
         stopAndClear()
         defaults.removeObject(forKey: Self.consentDefaultsKey)
         consent = .undecided
@@ -248,38 +237,6 @@ public final class AnalyticsManager: ObservableObject {
         )
     }
 
-    public func capture(
-        error: Error,
-        feature: String,
-        operation: String,
-        severity: String = "error",
-        recoverable: Bool = true
-    ) {
-        guard canCapture, captureRateLimiter.shouldCapture() else { return }
-
-        let classification = Self.classify(error)
-        let sanitizedError = SanitizedAnalyticsError(
-            category: classification.category,
-            cause: classification.cause,
-            operation: operation
-        )
-
-        PostHogSDK.shared.captureException(
-            sanitizedError,
-            properties: [
-                "platform_surface": "mac_app",
-                "feature": feature,
-                "operation": operation,
-                "error_category": classification.category,
-                "error_cause": classification.cause,
-                "error_type": classification.type,
-                "severity": severity,
-                "recoverable": recoverable,
-                "$geoip_disable": true,
-            ]
-        )
-    }
-
     public static func countBucket(_ count: Int) -> String {
         switch count {
         case ..<1: return "0"
@@ -347,8 +304,6 @@ public final class AnalyticsManager: ObservableObject {
     private func stopAndClear() {
         experimentalFeatures = []
         isLoadingExperimentalFeatures = false
-        defaults.set(true, forKey: Self.crashCollectionSuspendedDefaultsKey)
-
         let projectToken = activeProjectToken
             ?? Self.productionProjectToken
 
@@ -358,7 +313,6 @@ public final class AnalyticsManager: ObservableObject {
         }
 
         Self.removePersistedSDKData(projectToken: projectToken)
-        Self.removePendingCrashReport()
         activeProjectToken = nil
     }
 
@@ -459,25 +413,6 @@ public final class AnalyticsManager: ObservableObject {
         try? FileManager.default.removeItem(at: sdkDirectory)
     }
 
-    private nonisolated static func removePendingCrashReport() {
-        guard let cachesDirectory = FileManager.default.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-        ).first
-        else {
-            return
-        }
-
-        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
-        let crashReportDirectory = cachesDirectory
-            .appendingPathComponent(
-                "com.plausiblelabs.crashreporter.data",
-                isDirectory: true
-            )
-            .appendingPathComponent(bundleIdentifier, isDirectory: true)
-        try? FileManager.default.removeItem(at: crashReportDirectory)
-    }
-
     private nonisolated static var isAnalyticsSuppressedForThisProcess: Bool {
         let process = ProcessInfo.processInfo
         return process.environment["XCTestConfigurationFilePath"] != nil
@@ -492,14 +427,12 @@ public final class AnalyticsManager: ObservableObject {
             "app:feature_used",
             "app:workflow_progressed",
             "app:important_button_clicked",
-            "$exception",
         ]
         guard allowedEvents.contains(event.event) else { return nil }
 
         let allowedProperties: Set<String> = [
             "$app_build",
             "$app_version",
-            "$debug_images",
             "$device_type",
             "$geoip_disable",
             "$lib",
@@ -516,9 +449,6 @@ public final class AnalyticsManager: ObservableObject {
             "duration_bucket",
             "duration_ms",
             "entry_source",
-            "error_category",
-            "error_cause",
-            "error_type",
             "feature",
             "has_custom_instructions",
             "launch_source",
@@ -526,14 +456,12 @@ public final class AnalyticsManager: ObservableObject {
             "operation",
             "outcome",
             "platform_surface",
-            "recoverable",
             "result_kind",
             "screen",
             "scan_duration_ms",
             "section",
             "selection_kind",
             "semantic_enabled",
-            "severity",
             "source",
             "stage",
             "subfeature",
@@ -544,106 +472,16 @@ public final class AnalyticsManager: ObservableObject {
 
         let originalProperties = event.properties
         var safeProperties = originalProperties.reduce(into: [String: Any]()) { result, pair in
-            guard allowedProperties.contains(pair.key) || pair.key.hasPrefix("$exception") else {
+            guard allowedProperties.contains(pair.key) else {
                 return
             }
-            result[pair.key] = pair.key == "$debug_images"
-                ? sanitizedExceptionData(pair.value)
-                : sanitized(value: pair.value)
-        }
-
-        if event.event == "$exception" {
-            if let exceptionList = originalProperties["$exception_list"] {
-                safeProperties["$exception_list"] = sanitizedExceptionData(exceptionList)
-            }
-
-            if originalProperties["$exception_level"] as? String == "fatal" {
-                let crash = crashClassification(from: originalProperties)
-                safeProperties["feature"] = "app_runtime"
-                safeProperties["operation"] = "process_crash"
-                safeProperties["error_category"] = "crash"
-                safeProperties["error_cause"] = crash.cause
-                safeProperties["error_type"] = crash.type
-                safeProperties["severity"] = "fatal"
-                safeProperties["recoverable"] = false
-            }
+            result[pair.key] = sanitized(value: pair.value)
         }
 
         safeProperties["$geoip_disable"] = true
         safeProperties["platform_surface"] = "mac_app"
         event.properties = safeProperties
         return event
-    }
-
-    private nonisolated static func sanitizedExceptionData(_ value: Any) -> Any {
-        if let dictionary = value as? [String: Any] {
-            return dictionary.reduce(into: [String: Any]()) { result, pair in
-                if ["value", "message", "crash_info_message"].contains(pair.key),
-                   pair.value is String
-                {
-                    result[pair.key] = "[redacted]"
-                } else if ["abs_path", "code_file", "filename"].contains(pair.key),
-                          let path = pair.value as? String
-                {
-                    result[pair.key] = safeFileComponent(path)
-                } else {
-                    result[pair.key] = sanitizedExceptionData(pair.value)
-                }
-            }
-        }
-        if let array = value as? [Any] {
-            return array.map(sanitizedExceptionData)
-        }
-        return sanitized(value: value)
-    }
-
-    private nonisolated static func safeFileComponent(_ path: String) -> String {
-        let component: String
-        if let url = URL(string: path), url.scheme != nil {
-            component = url.lastPathComponent
-        } else {
-            component = URL(fileURLWithPath: path).lastPathComponent
-        }
-        return sanitized(string: String(component.prefix(128)))
-    }
-
-    private nonisolated static func crashClassification(
-        from properties: [String: Any]
-    ) -> ErrorClassification {
-        let exception = (properties["$exception_list"] as? [[String: Any]])?.first
-        let rawType = exception?["type"] as? String ?? "native_crash"
-        let mechanism = (exception?["mechanism"] as? [String: Any])?["type"] as? String
-
-        let cause: String
-        switch mechanism {
-        case "nsexception":
-            cause = "uncaught_exception"
-        case "signal":
-            cause = "fatal_signal"
-        case "mach_exception":
-            cause = "mach_exception"
-        default:
-            cause = "process_crash"
-        }
-
-        return ErrorClassification(
-            category: "crash",
-            cause: cause,
-            type: boundedIdentifier(rawType, fallback: "native_crash")
-        )
-    }
-
-    private nonisolated static func boundedIdentifier(
-        _ value: String,
-        fallback: String
-    ) -> String {
-        let normalized = value.lowercased().replacingOccurrences(
-            of: #"[^a-z0-9_.-]+"#,
-            with: "_",
-            options: .regularExpression
-        )
-        let bounded = String(normalized.prefix(64))
-        return bounded.isEmpty ? fallback : bounded
     }
 
     private nonisolated static func sanitized(value: Any) -> Any {
@@ -684,45 +522,6 @@ public final class AnalyticsManager: ObservableObject {
         return result
     }
 
-    private nonisolated static func classify(_ error: Error) -> ErrorClassification {
-        let nsError = error as NSError
-        let description = nsError.localizedDescription.lowercased()
-
-        if error is CancellationError
-            || nsError.code == NSUserCancelledError
-            || nsError.code == NSURLErrorCancelled
-            || description.contains("cancelled")
-            || description.contains("canceled")
-        {
-            return ErrorClassification(category: "cancellation", cause: "user_or_system_cancelled", type: "cancelled")
-        }
-        if nsError.code == NSURLErrorTimedOut || description.contains("timed out") || description.contains("timeout") {
-            return ErrorClassification(category: "network", cause: "timeout", type: "url_error")
-        }
-        if nsError.domain == NSURLErrorDomain {
-            return ErrorClassification(category: "network", cause: "connection_failed", type: "url_error")
-        }
-        if nsError.domain == NSPOSIXErrorDomain || nsError.domain == NSCocoaErrorDomain {
-            if description.contains("permission") || description.contains("not permitted") || description.contains("access") {
-                return ErrorClassification(category: "permission", cause: "access_denied", type: "filesystem_error")
-            }
-            return ErrorClassification(category: "filesystem", cause: "file_operation_failed", type: "filesystem_error")
-        }
-        if description.contains("block internet") || description.contains("internet connections") {
-            return ErrorClassification(category: "privacy", cause: "network_blocked", type: "policy_error")
-        }
-        if description.contains("api key") || description.contains("authentication") || description.contains("unauthorized") {
-            return ErrorClassification(category: "authentication", cause: "credentials_rejected", type: "provider_error")
-        }
-        if description.contains("configuration") || description.contains("not configured") {
-            return ErrorClassification(category: "configuration", cause: "missing_or_invalid_configuration", type: "configuration_error")
-        }
-        if description.contains("validation") || description.contains("invalid response") || description.contains("decode") {
-            return ErrorClassification(category: "validation", cause: "invalid_data", type: "validation_error")
-        }
-
-        return ErrorClassification(category: "unknown", cause: "unclassified", type: "application_error")
-    }
 }
 
 struct AnalyticsCaptureRateLimiter {
@@ -752,20 +551,4 @@ struct AnalyticsCaptureRateLimiter {
         windowCount = 0
         processCount = 0
     }
-}
-
-private struct ErrorClassification: Sendable {
-    let category: String
-    let cause: String
-    let type: String
-}
-
-private struct SanitizedAnalyticsError: LocalizedError, CustomNSError {
-    let category: String
-    let cause: String
-    let operation: String
-
-    static var errorDomain: String { "com.sorty.app.analytics" }
-    var errorCode: Int { 1 }
-    var errorDescription: String? { "\(category):\(cause):\(operation)" }
 }

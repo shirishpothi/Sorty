@@ -10,7 +10,6 @@ import {
 import { usePathname } from 'next/navigation'
 import {
   applyWebsiteAnalyticsPreference,
-  captureWebsiteException,
   isWebsiteAnalyticsEnabled,
   trackPageView,
   trackScrollDepth,
@@ -19,6 +18,7 @@ import {
   WEBSITE_ANALYTICS_PREFERENCE_KEY,
   type WebsiteAnalyticsPreference,
 } from '@/lib/analytics'
+import { applyWebsiteReliabilityPreference } from '@/lib/reliability'
 
 type AnalyticsPreferencesContextValue = {
   openPreferences: () => void
@@ -122,30 +122,6 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      captureWebsiteException(event.error ?? new Error('Window error'), {
-        surface: 'window',
-        handled: false,
-        cause: 'unhandled_error',
-      })
-    }
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      captureWebsiteException(event.reason, {
-        surface: 'promise',
-        handled: false,
-        cause: 'unhandled_rejection',
-      })
-    }
-
-    window.addEventListener('error', handleError)
-    window.addEventListener('unhandledrejection', handleRejection)
-    return () => {
-      window.removeEventListener('error', handleError)
-      window.removeEventListener('unhandledrejection', handleRejection)
-    }
-  }, [])
-
-  useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       const target = event.target
       if (!(target instanceof Element)) {
@@ -174,6 +150,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   function setAnalyticsPreference(next: WebsiteAnalyticsPreference) {
     window.localStorage.setItem(WEBSITE_ANALYTICS_PREFERENCE_KEY, next)
     applyWebsiteAnalyticsPreference(next)
+    applyWebsiteReliabilityPreference(next)
     setPreference(next)
     setIsOpen(false)
 

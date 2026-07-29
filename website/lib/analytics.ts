@@ -16,14 +16,7 @@ type InteractionProperties = {
   outcome?: string
 }
 
-type ExceptionContext = {
-  surface: string
-  handled: boolean
-  cause?: string
-}
-
 const POSTHOG_EVENT_ALLOWLIST = new Set([
-  '$exception',
   '$pageleave',
   '$pageview',
   '$web_vitals',
@@ -72,17 +65,12 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'component',
   'depth_percent',
   'distinct_id',
-  'error_category',
-  'error_cause',
-  'error_type',
-  'handled',
   'location',
   'outcome',
   'page_name',
   'page_path',
   'platform_surface',
   'section',
-  'surface',
   'target',
   'token',
   'traffic_source',
@@ -203,7 +191,6 @@ function sanitizeEvent(event: CaptureResult | null): CaptureResult | null {
       .filter(
         ([key]) =>
           WEBSITE_PROPERTY_ALLOWLIST.has(key) ||
-          key.startsWith('$exception') ||
           key.startsWith('$web_vitals_'),
       )
       .map(([key, value]) => [key, sanitizeProperty(value)]),
@@ -393,70 +380,5 @@ export function trackDownloadClicked(location: string): void {
   capture('web:download_clicked', {
     location: safePropertyValue(location),
     target: 'sorty_zip',
-  })
-}
-
-function classifyError(error: unknown): {
-  error: Error
-  type: string
-  category: string
-  cause: string
-} {
-  const original =
-    error instanceof Error ? error : new Error('A non-Error value was thrown')
-  const type = safePropertyValue(original.name) ?? 'error'
-  const lowerMessage = original.message.toLowerCase()
-
-  let category = 'runtime'
-  let cause = 'unexpected_state'
-
-  if (
-    original.name === 'NetworkError' ||
-    lowerMessage.includes('network') ||
-    lowerMessage.includes('fetch')
-  ) {
-    category = 'network'
-    cause = 'request_failed'
-  } else if (
-    original.name === 'ChunkLoadError' ||
-    lowerMessage.includes('loading chunk')
-  ) {
-    category = 'resource'
-    cause = 'bundle_load_failed'
-  } else if (original.name === 'SecurityError') {
-    category = 'browser_security'
-    cause = 'browser_policy'
-  } else if (original.name === 'TypeError') {
-    cause = 'invalid_value'
-  }
-
-  const safeError = new Error(`${category}:${cause}`)
-  safeError.name = original.name || 'Error'
-  if (original.stack) {
-    safeError.stack = original.stack
-      .replace(/^.*$/m, `${safeError.name}: ${safeError.message}`)
-      .replace(/[?#][^\s)]+/g, '')
-  }
-
-  return { error: safeError, type, category, cause }
-}
-
-export function captureWebsiteException(
-  error: unknown,
-  context: ExceptionContext,
-): void {
-  initializeWebsiteAnalytics()
-  if (!isInitialized || !isWebsiteAnalyticsEnabled()) {
-    return
-  }
-
-  const classified = classifyError(error)
-  posthog.captureException(classified.error, {
-    error_type: classified.type,
-    error_category: classified.category,
-    error_cause: safePropertyValue(context.cause) ?? classified.cause,
-    handled: context.handled,
-    surface: safePropertyValue(context.surface),
-    platform_surface: 'website',
   })
 }

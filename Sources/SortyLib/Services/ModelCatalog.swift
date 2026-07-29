@@ -100,6 +100,11 @@ public final class ModelCatalog: ObservableObject {
         } catch {
             await MainActor.run {
                 lastError[provider] = error
+                ReliabilityManager.shared.capture(
+                    error: error,
+                    feature: "model_catalog",
+                    operation: "refresh_provider"
+                )
             }
         }
         
@@ -1050,6 +1055,11 @@ public final class ModelCatalog: ObservableObject {
                 modelsByProvider[provider] = wrapper.models
                 cacheTimestamps[provider] = wrapper.timestamp
             } catch {
+                ReliabilityManager.shared.capture(
+                    error: error,
+                    feature: "model_catalog",
+                    operation: "load_cache"
+                )
                 continue
             }
         }
@@ -1069,6 +1079,11 @@ public final class ModelCatalog: ObservableObject {
             let data = try JSONEncoder().encode(wrapper)
             try data.write(to: cacheFile)
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "model_catalog",
+                operation: "save_cache"
+            )
             return
         }
     }

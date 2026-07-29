@@ -339,6 +339,12 @@ public class LearningsManager: ObservableObject {
 
             return true
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "clear_data",
+                recoverable: false
+            )
             self.error = "Failed to clear data: \(error.localizedDescription)"
             return false
         }
@@ -358,6 +364,11 @@ public class LearningsManager: ObservableObject {
             }
         } catch {
             loadOutcome = "failed"
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "load_profile"
+            )
             self.error = "Failed to load profile: \(error.localizedDescription)"
             currentProfile = prepareLoadedProfile(LearningsProfile())
         }
@@ -384,6 +395,11 @@ public class LearningsManager: ObservableObject {
                 currentProfile = prepareLoadedProfile(LearningsProfile())
             }
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "load_profile_for_collection"
+            )
             self.error = "Failed to load profile: \(error.localizedDescription)"
             currentProfile = prepareLoadedProfile(LearningsProfile())
         }
@@ -398,6 +414,11 @@ public class LearningsManager: ObservableObject {
         do {
             try LearningsFileManager.save(profile: currentProfile ?? profile)
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "save_profile"
+            )
             self.error = "Failed to save profile: \(error.localizedDescription)"
         }
     }
@@ -2535,6 +2556,11 @@ public class LearningsManager: ObservableObject {
         do {
             learningsModelSelection = try JSONDecoder().decode(LearningsModelSelection.self, from: data)
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "load_model_selection"
+            )
             DebugLogger.log("Failed to load learnings model selection: \(error.localizedDescription)")
             learningsModelSelection = nil
         }
@@ -2546,6 +2572,11 @@ public class LearningsManager: ObservableObject {
                 let data = try JSONEncoder().encode(learningsModelSelection)
                 userDefaults.set(data, forKey: Self.learningsModelSelectionKey)
             } catch {
+                ReliabilityManager.shared.capture(
+                    error: error,
+                    feature: "learnings",
+                    operation: "save_model_selection"
+                )
                 DebugLogger.log("Failed to save learnings model selection: \(error.localizedDescription)")
             }
         } else {
@@ -2587,6 +2618,11 @@ public class LearningsManager: ObservableObject {
             modelDirectories = try JSONDecoder().decode([ReferenceModelDirectory].self, from: data)
             restoreModelDirectoryAccess()
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "load_model_directories"
+            )
             DebugLogger.log("Failed to load model directories: \(error.localizedDescription)")
             modelDirectories = []
         }
@@ -2597,6 +2633,11 @@ public class LearningsManager: ObservableObject {
             let data = try JSONEncoder().encode(modelDirectories)
             userDefaults.set(data, forKey: Self.modelDirectoriesKey)
         } catch {
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "learnings",
+                operation: "save_model_directories"
+            )
             DebugLogger.log("Failed to save model directories: \(error.localizedDescription)")
         }
     }

@@ -25,6 +25,9 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        #if canImport(SortyLib)
+            ReliabilityManager.shared.startIfAuthorized()
+        #endif
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
     }
 
@@ -584,6 +587,7 @@ struct SortyApp: App {
         }
 
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
+        ReliabilityManager.shared.finishLaunchSpan()
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         syncLoginItemState()
 

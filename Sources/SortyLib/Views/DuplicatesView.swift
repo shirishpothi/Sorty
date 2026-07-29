@@ -412,7 +412,7 @@ struct DuplicatesView: View {
                         stage: "preparing",
                         outcome: "failed"
                     )
-                    AnalyticsManager.shared.capture(
+                    ReliabilityManager.shared.capture(
                         error: error,
                         feature: "duplicates",
                         operation: "scan_directory"
@@ -534,7 +534,7 @@ struct DuplicatesView: View {
                     "count_bucket": AnalyticsManager.countBucket(files.count),
                 ]
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "duplicates",
                 operation: "move_to_trash"

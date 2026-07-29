@@ -23,6 +23,9 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
   NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ vars.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN }}
   NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
+  NEXT_PUBLIC_SENTRY_DSN: https://1a279fd4e1ae3b869fa0f5ba78ccf173@o4511816291844096.ingest.us.sentry.io/4511816327954432
+  NEXT_PUBLIC_SENTRY_RELEASE: sorty-website@${{ github.sha }}
+  NEXT_PUBLIC_SENTRY_DIST: ${{ github.run_id }}
 
 jobs:
   build-and-deploy:
@@ -34,6 +37,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -76,32 +81,34 @@ jobs:
           NEXT_PUBLIC_BASE_PATH: /Sorty
         run: pnpm build
 
-      - name: Upload PostHog source maps
+      - name: Publish Sentry website release and source maps
         working-directory: website
         env:
-          POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
-          POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_CLI_PROJECT_ID }}
-          POSTHOG_CLI_HOST: https://us.posthog.com
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: sorty-z1
+          SENTRY_PROJECT: sorty-website
         run: |
-          if [[ -z "${POSTHOG_CLI_API_KEY}" || -z "${POSTHOG_CLI_PROJECT_ID}" ]]; then
-            echo "PostHog CLI credentials are unavailable; skipping source-map upload."
+          if [[ -z "${SENTRY_AUTH_TOKEN}" ]]; then
+            echo "::error::SENTRY_AUTH_TOKEN is required to publish source maps."
             find out/_next/static -type f -name '*.map' -delete
-            exit 0
+            exit 1
           fi
 
-          pnpm exec posthog-cli sourcemap inject \
-            --directory out/_next/static \
-            --release-name sorty-website \
-            --release-version "${GITHUB_SHA}"
-
-          pnpm exec posthog-cli sourcemap upload \
-            --directory out/_next/static \
-            --release-name sorty-website \
-            --release-version "${GITHUB_SHA}" \
-            --delete-after
+          pnpm exec sentry-cli releases new "${NEXT_PUBLIC_SENTRY_RELEASE}"
+          pnpm exec sentry-cli releases set-commits \
+            "${NEXT_PUBLIC_SENTRY_RELEASE}" \
+            --auto
+          pnpm exec sentry-cli sourcemaps inject out/_next/static
+          pnpm exec sentry-cli sourcemaps upload \
+            --release "${NEXT_PUBLIC_SENTRY_RELEASE}" \
+            --dist "${NEXT_PUBLIC_SENTRY_DIST}" \
+            --url-prefix "~/Sorty/_next/static" \
+            out/_next/static
+          pnpm exec sentry-cli releases finalize \
+            "${NEXT_PUBLIC_SENTRY_RELEASE}"
           find out/_next/static -type f -name '*.map' -delete
 
-      - name: Audit public artifact for PostHog secrets
+      - name: Audit public artifact for observability secrets
         working-directory: website
         shell: bash
         run: |
@@ -112,6 +119,11 @@ jobs:
 
           if grep -RIlE --exclude='*.map' 'phx_[A-Za-z0-9_-]+' out | grep -q .; then
             echo "::error::A privileged PostHog personal API key was found in the public artifact."
+            exit 1
+          fi
+
+          if grep -RIlE --exclude='*.map' 'sntrys_[A-Za-z0-9_-]+' out | grep -q .; then
+            echo "::error::A privileged Sentry auth token was found in the public artifact."
             exit 1
           fi
 

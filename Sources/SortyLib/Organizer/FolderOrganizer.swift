@@ -1347,6 +1347,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Organization blocked: Already in progress")
             return
         }
+        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+            name: "organize",
+            operation: "workflow.organize",
+            feature: "organize"
+        )
+        defer { reliabilitySpan?.finish() }
 
         AnalyticsManager.shared.captureWorkflow(
             workflow: "organize",
@@ -1406,7 +1412,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let analyticsStartedAt = Date()
         guard let client = aiClient else {
             let error = OrganizationError.clientNotConfigured
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "generate_plan"
@@ -1566,7 +1572,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     Date().timeIntervalSince(analyticsStartedAt)
                 )
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "generate_plan"
@@ -3475,6 +3481,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
+        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+            name: "apply_plan",
+            operation: "workflow.apply",
+            feature: "organize"
+        )
+        defer { reliabilitySpan?.finish() }
         let analyticsStartedAt = Date()
         AnalyticsManager.shared.captureWorkflow(
             workflow: "organize",
@@ -3667,7 +3679,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     "mode": operationMode.rawValue,
                 ]) { current, _ in current }
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "apply_plan",
@@ -3850,6 +3862,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !isOperationInProgress() else {
             return
         }
+        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+            name: "regenerate_preview",
+            operation: "workflow.regenerate",
+            feature: "organize"
+        )
+        defer { reliabilitySpan?.finish() }
         
         if let exclusionRules = exclusionRules {
             files = exclusionRules.filterFiles(files)
@@ -3914,7 +3932,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "failed",
                 properties: ["variant": "provider"]
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_with_provider"
@@ -4041,7 +4059,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "failed",
                 properties: ["variant": "model"]
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_with_model"
@@ -4230,7 +4248,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "failed",
                 properties: ["variant": "same_configuration"]
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_preview"
@@ -4371,6 +4389,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
     @discardableResult
     public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
+        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+            name: "undo_organization",
+            operation: "workflow.undo",
+            feature: "history"
+        )
+        defer { reliabilitySpan?.finish() }
         AnalyticsManager.shared.captureWorkflow(
             workflow: "undo",
             stage: "started",
@@ -4395,7 +4419,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 stage: "restore",
                 outcome: "failed"
             )
-            AnalyticsManager.shared.capture(
+            ReliabilityManager.shared.capture(
                 error: error,
                 feature: "history",
                 operation: "undo_organization"
