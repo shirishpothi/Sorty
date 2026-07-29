@@ -168,7 +168,10 @@ public struct ContentView: View {
             if oldValue != newValue {
                 previousView = oldValue
                 displayedView = newValue
-                captureMainScreen(newValue)
+                captureMainScreen(
+                    newValue,
+                    previousScreen: analyticsScreenName(for: oldValue)
+                )
             }
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
@@ -227,15 +230,20 @@ public struct ContentView: View {
 
     private func captureMainScreen(
         _ view: AppState.AppView,
-        source: String = "navigation"
+        source: String = "navigation",
+        previousScreen: String? = nil
     ) {
         guard let screen = analyticsScreenName(for: view) else { return }
-        analytics.captureScreen(screen, source: source)
+        analytics.captureScreen(
+            screen,
+            source: source,
+            previousScreen: previousScreen
+        )
     }
 
     private func analyticsScreenName(for view: AppState.AppView) -> String? {
         switch view {
-        case .settings: return nil
+        case .settings: return "settings"
         case .organize: return "organize"
         case .history: return "history"
         case .duplicates: return "duplicates"

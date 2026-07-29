@@ -146,13 +146,15 @@ public final class AnalyticsManager: ObservableObject {
     public func captureScreen(
         _ screen: String,
         section: String? = nil,
-        source: String = "navigation"
+        source: String = "navigation",
+        previousScreen: String? = nil
     ) {
         var properties: [String: Any] = [
             "screen": screen,
             "source": source,
         ]
         properties["section"] = section
+        properties["previous_screen"] = previousScreen
         capture(event: "app:screen_viewed", properties: properties)
     }
 
@@ -456,6 +458,7 @@ public final class AnalyticsManager: ObservableObject {
             "operation",
             "outcome",
             "platform_surface",
+            "previous_screen",
             "result_kind",
             "screen",
             "scan_duration_ms",

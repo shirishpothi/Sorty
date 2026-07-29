@@ -2998,6 +2998,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         mode: OrganizationMode,
         historySource: OrganizationEntrySource = .manual
     ) async throws {
+        AnalyticsManager.shared.captureWorkflow(
+            workflow: "organize",
+            stage: "started",
+            outcome: "started",
+            properties: [
+                "entry_source": historySource.rawValue,
+                "has_custom_instructions": !(customPrompt?.isEmpty ?? true),
+                "mode": mode.rawValue,
+            ]
+        )
+
         // Build a client for this run so watched-folder action choices never mutate
         // or inherit the main Organize page's selected mode.
         guard let defaultClient = aiClient else {
