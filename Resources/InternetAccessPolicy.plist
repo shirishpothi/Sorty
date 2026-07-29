@@ -94,6 +94,26 @@
         </dict>
         <dict>
             <key>Host</key>
+            <string>us.i.posthog.com</string>
+            <key>Relevance</key>
+            <string>Optional</string>
+            <key>Purpose</key>
+            <string>With your consent, Sorty sends anonymous, privacy-filtered product analytics and retrieves experimental feature flags from PostHog.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, analytics and experimental feature flags will remain unavailable; file organization continues normally.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>o4511816291844096.ingest.us.sentry.io</string>
+            <key>Relevance</key>
+            <string>Optional</string>
+            <key>Purpose</key>
+            <string>With your consent, Sorty sends privacy-filtered crash, error, hang, and performance reports to Sentry.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, reliability reports cannot be delivered; file organization continues normally.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
             <string>api.githubcopilot.com</string>
             <key>Relevance</key>
             <string>Essential</string>
