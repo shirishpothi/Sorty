@@ -124,8 +124,8 @@ export function initializeWebsiteReliability(): void {
     dist: process.env.NEXT_PUBLIC_SENTRY_DIST,
     sendDefaultPii: false,
     attachStacktrace: true,
-    enableLogs: false,
-    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.05 : 1,
+    enableLogs: true,
+    tracesSampleRate: 1,
     tracePropagationTargets: [],
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
@@ -152,6 +152,22 @@ export function initializeWebsiteReliability(): void {
     },
   })
   isInitialized = true
+
+  const attributes = {
+    platform_surface: 'website',
+    environment:
+      process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  }
+  Sentry.logger.info('sorty.reliability.started', attributes)
+  Sentry.metrics.count('sorty.website.load', 1, { attributes })
+  Sentry.startSpan(
+    {
+      name: 'website.load',
+      op: 'ui.load',
+      attributes,
+    },
+    () => undefined,
+  )
 }
 
 export function applyWebsiteReliabilityPreference(
@@ -178,16 +194,25 @@ export function captureWebsiteException(
   }
 
   const classified = classifyError(error)
+  const surface = safeIdentifier(context.surface, 'unknown')
+  const cause = safeIdentifier(context.cause, classified.cause)
+  const attributes = {
+    platform_surface: 'website',
+    surface,
+    handled: context.handled,
+    error_type: classified.type,
+    error_category: classified.category,
+    error_cause: cause,
+  }
+  Sentry.logger.error('sorty.reliability.handled_error', attributes)
+  Sentry.metrics.count('sorty.website.handled_error', 1, { attributes })
   Sentry.withScope((scope) => {
     scope.setTag('platform_surface', 'website')
-    scope.setTag('surface', safeIdentifier(context.surface, 'unknown'))
+    scope.setTag('surface', surface)
     scope.setTag('handled', context.handled ? 'true' : 'false')
     scope.setTag('error_type', classified.type)
     scope.setTag('error_category', classified.category)
-    scope.setTag(
-      'error_cause',
-      safeIdentifier(context.cause, classified.cause),
-    )
+    scope.setTag('error_cause', cause)
     Sentry.captureException(classified.error)
   })
 }

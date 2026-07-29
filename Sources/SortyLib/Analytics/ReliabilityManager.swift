@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Sentry
+@preconcurrency import Sentry
 
 @MainActor
 public final class ReliabilityManager {
@@ -62,11 +62,20 @@ public final class ReliabilityManager {
         options.enableCoreDataTracing = false
         options.enableSwizzling = false
         options.enableMetricKitRawPayload = false
-        options.enableLogs = false
+        options.enableLogs = true
+        options.enableMetrics = true
         options.tracesSampleRate = Self.tracesSampleRate
 
         SentrySDK.start(options: options)
         isActive = true
+        SentrySDK.logger.info(
+            "sorty.reliability.started",
+            attributes: Self.telemetryAttributes
+        )
+        SentrySDK.metrics.count(
+            key: "sorty.app.launch",
+            attributes: Self.metricAttributes
+        )
         launchSpan = startSpan(
             name: "app.launch",
             operation: "app.start",
@@ -112,15 +121,42 @@ public final class ReliabilityManager {
             cause: classification.cause,
             operation: Self.boundedIdentifier(operation, fallback: "unknown_operation")
         )
+        let safeFeature = Self.boundedIdentifier(feature, fallback: "unknown_feature")
+        let safeOperation = Self.boundedIdentifier(
+            operation,
+            fallback: "unknown_operation"
+        )
+
+        SentrySDK.logger.error(
+            "sorty.reliability.handled_error",
+            attributes: [
+                "platform_surface": "mac_app",
+                "feature": safeFeature,
+                "operation": safeOperation,
+                "error_category": classification.category,
+                "error_cause": classification.cause,
+                "recoverable": recoverable,
+            ]
+        )
+        SentrySDK.metrics.count(
+            key: "sorty.app.handled_error",
+            attributes: [
+                "platform_surface": "mac_app",
+                "feature": safeFeature,
+                "operation": safeOperation,
+                "error_category": classification.category,
+                "recoverable": recoverable,
+            ]
+        )
 
         SentrySDK.capture(error: sanitizedError) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(
-                value: Self.boundedIdentifier(feature, fallback: "unknown_feature"),
+                value: safeFeature,
                 key: "feature"
             )
             scope.setTag(
-                value: Self.boundedIdentifier(operation, fallback: "unknown_operation"),
+                value: safeOperation,
                 key: "operation"
             )
             scope.setTag(value: classification.category, key: "error_category")
@@ -200,18 +236,14 @@ public final class ReliabilityManager {
     }
 
     private static var tracesSampleRate: NSNumber {
-        #if DEBUG
         return 1
-        #else
-        return 0.05
-        #endif
     }
 
     private static func configuredDSN(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> String? {
         #if DEBUG
-        guard let dsn = environment["SORTY_SENTRY_DSN"] else { return nil }
+        let dsn = environment["SORTY_SENTRY_DSN"] ?? productionDSN
         #else
         let dsn = productionDSN
         #endif
@@ -227,6 +259,20 @@ public final class ReliabilityManager {
             return nil
         }
         return dsn
+    }
+
+    private static var telemetryAttributes: [String: Any] {
+        [
+            "platform_surface": "mac_app",
+            "environment": environmentName,
+        ]
+    }
+
+    private static var metricAttributes: [String: SentryAttributeValue] {
+        [
+            "platform_surface": "mac_app",
+            "environment": environmentName,
+        ]
     }
 
     private static var cacheDirectory: URL {
