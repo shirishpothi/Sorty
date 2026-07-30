@@ -11,8 +11,89 @@ type ExceptionContext = {
 
 const PRODUCTION_DSN =
   'https://1a279fd4e1ae3b869fa0f5ba78ccf173@o4511816291844096.ingest.us.sentry.io/4511816327954432'
+const RELIABILITY_MAXIMUM_EVENTS_PER_MINUTE = 12
+const RELIABILITY_MAXIMUM_EVENTS_PER_SESSION = 200
+const RELIABILITY_MAXIMUM_TRANSACTIONS_PER_MINUTE = 30
+const RELIABILITY_MAXIMUM_TRANSACTIONS_PER_SESSION = 500
+const RELIABILITY_MAXIMUM_HANDLED_CAPTURES_PER_MINUTE = 6
+const RELIABILITY_MAXIMUM_HANDLED_CAPTURES_PER_SESSION = 100
 
 let isInitialized = false
+let eventWindowStartedAt = 0
+let eventWindowCount = 0
+let eventSessionCount = 0
+let transactionWindowStartedAt = 0
+let transactionWindowCount = 0
+let transactionSessionCount = 0
+let handledCaptureWindowStartedAt = 0
+let handledCaptureWindowCount = 0
+let handledCaptureSessionCount = 0
+
+function shouldSendWithinBudget(
+  kind: 'event' | 'transaction',
+  now = Date.now(),
+): boolean {
+  const isEvent = kind === 'event'
+  const maximumPerMinute = isEvent
+    ? RELIABILITY_MAXIMUM_EVENTS_PER_MINUTE
+    : RELIABILITY_MAXIMUM_TRANSACTIONS_PER_MINUTE
+  const maximumPerSession = isEvent
+    ? RELIABILITY_MAXIMUM_EVENTS_PER_SESSION
+    : RELIABILITY_MAXIMUM_TRANSACTIONS_PER_SESSION
+  let windowStartedAt = isEvent
+    ? eventWindowStartedAt
+    : transactionWindowStartedAt
+  let windowCount = isEvent ? eventWindowCount : transactionWindowCount
+  const sessionCount = isEvent ? eventSessionCount : transactionSessionCount
+
+  if (sessionCount >= maximumPerSession) {
+    return false
+  }
+  if (windowStartedAt === 0 || now - windowStartedAt >= 60_000) {
+    windowStartedAt = now
+    windowCount = 0
+  }
+  if (windowCount >= maximumPerMinute) {
+    return false
+  }
+
+  if (isEvent) {
+    eventWindowStartedAt = windowStartedAt
+    eventWindowCount = windowCount + 1
+    eventSessionCount += 1
+  } else {
+    transactionWindowStartedAt = windowStartedAt
+    transactionWindowCount = windowCount + 1
+    transactionSessionCount += 1
+  }
+  return true
+}
+
+function shouldCaptureHandledError(now = Date.now()): boolean {
+  if (
+    handledCaptureSessionCount >=
+    RELIABILITY_MAXIMUM_HANDLED_CAPTURES_PER_SESSION
+  ) {
+    return false
+  }
+  if (
+    handledCaptureWindowStartedAt === 0 ||
+    now - handledCaptureWindowStartedAt >= 60_000
+  ) {
+    handledCaptureWindowStartedAt = now
+    handledCaptureWindowCount = 0
+  }
+  if (
+    handledCaptureWindowCount >=
+    RELIABILITY_MAXIMUM_HANDLED_CAPTURES_PER_MINUTE
+  ) {
+    return false
+  }
+
+  handledCaptureWindowCount += 1
+  handledCaptureSessionCount += 1
+  return true
+}
 
 function safeIdentifier(value: string | undefined, fallback: string): string {
   if (!value) {
@@ -137,6 +218,9 @@ export function initializeWebsiteReliability(): void {
       }
     },
     beforeSend(event) {
+      if (!shouldSendWithinBudget('event')) {
+        return null
+      }
       delete event.user
       delete event.request
       if (event.message) {
@@ -145,6 +229,9 @@ export function initializeWebsiteReliability(): void {
       return event
     },
     beforeSendTransaction(event) {
+      if (!shouldSendWithinBudget('transaction')) {
+        return null
+      }
       delete event.user
       delete event.request
       event.transaction = safeTransactionName(event.transaction)
@@ -189,7 +276,11 @@ export function captureWebsiteException(
   context: ExceptionContext,
 ): void {
   initializeWebsiteReliability()
-  if (!isInitialized || !isWebsiteAnalyticsEnabled()) {
+  if (
+    !isInitialized ||
+    !isWebsiteAnalyticsEnabled() ||
+    !shouldCaptureHandledError()
+  ) {
     return
   }
 

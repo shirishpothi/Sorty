@@ -36,9 +36,14 @@ public final class AnalyticsManager: ObservableObject {
     private let defaults: UserDefaults
     private var activeProjectToken: String?
     private var captureRateLimiter = AnalyticsCaptureRateLimiter()
+    private var lastFeatureFlagReloadAt: TimeInterval?
 
     private static let productionProjectToken = "phc_rhKqvGRtWWMrSEC34WwUJipMZYM8kJA9ppav4ZxK7RiB"
     private static let productionHost = "https://us.i.posthog.com"
+    private static let minimumFeatureFlagReloadInterval: TimeInterval = 300
+    private static let maximumExperimentalFeatures = 20
+    private static let maximumFeatureTitleLength = 80
+    private static let maximumFeatureDescriptionLength = 280
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -138,8 +143,18 @@ public final class AnalyticsManager: ObservableObject {
             isLoadingExperimentalFeatures = false
             return
         }
+        guard !isLoadingExperimentalFeatures else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        if let lastFeatureFlagReloadAt,
+           now - lastFeatureFlagReloadAt < Self.minimumFeatureFlagReloadInterval
+        {
+            updateExperimentalFeatures()
+            return
+        }
 
         isLoadingExperimentalFeatures = true
+        lastFeatureFlagReloadAt = now
         PostHogSDK.shared.reloadFeatureFlags(Self.didReloadExperimentalFeatures)
     }
 
@@ -358,6 +373,8 @@ public final class AnalyticsManager: ObservableObject {
         experimentalFeatures = (PostHogSDK.shared.getAllFeatureFlags() ?? [])
             .compactMap(Self.experimentalFeature)
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .prefix(Self.maximumExperimentalFeatures)
+            .map { $0 }
         isLoadingExperimentalFeatures = false
     }
 
@@ -371,7 +388,14 @@ public final class AnalyticsManager: ObservableObject {
         from result: PostHogFeatureFlagResult
     ) -> ExperimentalFeature? {
         let prefix = "labs-"
-        guard result.enabled, result.key.hasPrefix(prefix) else { return nil }
+        guard let boundedKey = boundedIdentifier(result.key),
+              result.enabled,
+              result.key.hasPrefix(prefix),
+              result.key.count <= 64,
+              boundedKey == result.key
+        else {
+            return nil
+        }
 
         let payload = result.payload as? [String: Any]
         let fallbackName = result.key
@@ -380,19 +404,38 @@ public final class AnalyticsManager: ObservableObject {
             .capitalized
 
         return ExperimentalFeature(
-            id: result.key,
-            title: nonEmptyString(payload?["title"]) ?? fallbackName,
-            description: nonEmptyString(payload?["description"])
+            id: boundedKey,
+            title: boundedString(
+                payload?["title"],
+                maximumLength: maximumFeatureTitleLength
+            ) ?? String(fallbackName.prefix(maximumFeatureTitleLength)),
+            description: boundedString(
+                payload?["description"],
+                maximumLength: maximumFeatureDescriptionLength
+            )
                 ?? "This experiment is available for your installation.",
-            systemImage: nonEmptyString(payload?["system_image"]) ?? "flask",
-            variant: result.variant
+            systemImage: boundedIdentifier(payload?["system_image"]) ?? "flask",
+            variant: result.variant.map { String($0.prefix(64)) }
         )
     }
 
-    private static func nonEmptyString(_ value: Any?) -> String? {
+    private static func boundedString(
+        _ value: Any?,
+        maximumLength: Int
+    ) -> String? {
         guard let value = value as? String else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(maximumLength))
+    }
+
+    private static func boundedIdentifier(_ value: Any?) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.lowercased().replacingOccurrences(
+            of: #"[^a-z0-9.-]+"#,
+            with: "",
+            options: .regularExpression
+        )
+        return normalized.isEmpty ? nil : String(normalized.prefix(64))
     }
 
     private nonisolated static func removePersistedSDKData(projectToken: String) {

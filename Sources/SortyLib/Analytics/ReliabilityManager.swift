@@ -210,7 +210,8 @@ public final class ReliabilityManager {
     ) -> ReliabilitySpan? {
         guard isActive,
               consent == .granted,
-              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              captureRateLimiter.shouldCapture()
         else {
             return nil
         }
