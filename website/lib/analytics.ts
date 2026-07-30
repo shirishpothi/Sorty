@@ -76,7 +76,63 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'traffic_source',
 ])
 
+const ANALYTICS_MAXIMUM_EVENTS_PER_MINUTE = 60
+const ANALYTICS_MAXIMUM_EVENTS_PER_SESSION = 2_000
+const APPROVED_POSTHOG_ORIGIN = 'https://us.i.posthog.com'
+
 let isInitialized = false
+let analyticsWindowStartedAt = 0
+let analyticsWindowCount = 0
+let analyticsSessionCount = 0
+
+function shouldCaptureAnalytics(now = Date.now()): boolean {
+  if (analyticsSessionCount >= ANALYTICS_MAXIMUM_EVENTS_PER_SESSION) {
+    return false
+  }
+
+  if (
+    analyticsWindowStartedAt === 0 ||
+    now - analyticsWindowStartedAt >= 60_000
+  ) {
+    analyticsWindowStartedAt = now
+    analyticsWindowCount = 0
+  }
+  if (analyticsWindowCount >= ANALYTICS_MAXIMUM_EVENTS_PER_MINUTE) {
+    return false
+  }
+
+  analyticsWindowCount += 1
+  analyticsSessionCount += 1
+  return true
+}
+
+function configuredPostHog():
+  | { projectToken: string; host: string }
+  | undefined {
+  const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
+  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST
+
+  if (!projectToken || !/^phc_[A-Za-z0-9_-]+$/.test(projectToken) || !host) {
+    return undefined
+  }
+
+  try {
+    const url = new URL(host)
+    if (
+      url.origin !== APPROVED_POSTHOG_ORIGIN ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash ||
+      url.username ||
+      url.password
+    ) {
+      return undefined
+    }
+    return { projectToken, host: url.origin }
+  } catch {
+    return undefined
+  }
+}
 
 function readPreference(): WebsiteAnalyticsPreference | null {
   if (typeof window === 'undefined') {
@@ -239,21 +295,20 @@ export function initializeWebsiteAnalytics(): void {
     return
   }
 
-  const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST
+  const configuration = configuredPostHog()
 
-  if (!projectToken || !host) {
+  if (!configuration) {
     if (process.env.NODE_ENV === 'development') {
       console.error(
-        'NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN and NEXT_PUBLIC_POSTHOG_HOST variables required by PostHog are missing or un-configured, this causes events to be silently missed. This error stops appearing once both variables are configured',
+        'PostHog requires a browser-safe phc_ project token and the approved HTTPS ingestion origin.',
       )
     }
     return
   }
 
   isInitialized = true
-  posthog.init(projectToken, {
-    api_host: host,
+  posthog.init(configuration.projectToken, {
+    api_host: configuration.host,
     ui_host: 'https://us.posthog.com',
     defaults: '2026-05-30',
     autocapture: false,
@@ -301,7 +356,11 @@ export function applyWebsiteAnalyticsPreference(
 
 function capture(event: string, properties: Properties): void {
   initializeWebsiteAnalytics()
-  if (!isInitialized || !isWebsiteAnalyticsEnabled()) {
+  if (
+    !isInitialized ||
+    !isWebsiteAnalyticsEnabled() ||
+    !shouldCaptureAnalytics()
+  ) {
     return
   }
 
