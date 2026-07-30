@@ -50,7 +50,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                     shape
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
+                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.95 : 0.72)
                             : Color.clear,
                             lineWidth: 2
                         )
@@ -58,7 +58,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                     shape
                         .strokeBorder(
                             isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
+                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.42 : 0.16)
                             : Color.clear,
                             lineWidth: 3
                         )
@@ -71,7 +71,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
             )
             .shadow(
                 color: isFocused
-                    ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
+                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.38 : 0.16)
                     : .clear,
                 radius: isBreathing ? 14 : 7
             )
@@ -120,18 +120,22 @@ struct SidebarButton: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundStyle(isSelected ? color : .secondary)
+                    .foregroundStyle(
+                        isSelected ? SortyDesignSystem.Colors.resolvedAccent : .secondary
+                    )
                     .frame(width: 20)
                 
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline)
+                    .font(SortyDesignSystem.Typography.controlLabel())
                     .foregroundStyle(isSelected ? .primary : .secondary)
                 
                 Spacer()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(isSelected ? color.opacity(0.1) : Color.clear)
+            .background(
+                isSelected ? SortyDesignSystem.Colors.primarySoft : Color.clear
+            )
             .contentShape(Rectangle())
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -199,7 +203,7 @@ struct SettingsCard<Content: View>: View {
                             .frame(width: 16)
 
                         Text(LocalizedStringKey(title))
-                            .font(.subheadline.weight(.semibold))
+                            .font(SortyDesignSystem.Typography.cardTitle())
                             .foregroundStyle(.secondary)
 
                         headerAccessory
@@ -252,7 +256,7 @@ struct SettingsCard<Content: View>: View {
                 .foregroundStyle(color)
                 .frame(width: 14)
             Text(LocalizedStringKey(title))
-                .font(.system(size: 11, weight: .bold))
+                .font(SortyDesignSystem.Typography.detail())
                 .foregroundColor(.secondary)
             headerAccessory
             countBadge
@@ -330,15 +334,15 @@ struct StepCard<Content: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
-                .font(.caption.bold())
+                .font(SortyDesignSystem.Typography.badge())
                 .foregroundColor(.white)
                 .frame(width: 20, height: 20)
-                .background(Color.accentColor)
+                .background(SortyDesignSystem.Colors.resolvedAccent)
                 .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 6) {
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.medium))
+                    .font(SortyDesignSystem.Typography.controlLabel(weight: .medium))
                 content
             }
         }

@@ -38,9 +38,15 @@ public enum SortyDesignSystem {
     public enum Colors {
         /// Sorty brand rose accent.
         public static let accent = Color(red: 0.850, green: 0.235, blue: 0.353)
+        public static let accentHover = Color(red: 0.902, green: 0.325, blue: 0.427)
+        public static let accentPressed = Color(red: 0.737, green: 0.184, blue: 0.290)
+        public static let accentSoft = accent.opacity(0.12)
+        public static let accentSelection = accent.opacity(0.20)
 
         // Brand colors
         public static var primary: Color { resolvedAccent }
+        public static var primarySoft: Color { resolvedAccent.opacity(0.12) }
+        public static var primarySelection: Color { resolvedAccent.opacity(0.20) }
         public static let purple = Color.purple
         public static let purpleLight = Color.purple.opacity(0.1)
         public static let blue = Color.blue
@@ -57,6 +63,9 @@ public enum SortyDesignSystem {
         public static let warning = Color.orange
         public static let error = Color.red
         public static let info = Color.blue
+        public static let destructive = Color.red
+        public static let ai = Color.purple
+        public static let aiSoft = Color.purple.opacity(0.12)
         
         // Background colors (macOS adaptive)
         public static let backgroundPrimary = Color(NSColor.windowBackgroundColor)
@@ -158,10 +167,44 @@ public enum SortyDesignSystem {
         public static func largeTitle(weight: Font.Weight = .bold) -> Font {
             .system(size: sizeLargeTitle, weight: weight, design: .rounded)
         }
+
+        // Role-based styles. Keep dense working UI in SF Pro and reserve
+        // SF Rounded for friendly empty, onboarding, and completion states.
+        public static func pageTitle() -> Font {
+            .system(size: 20, weight: .semibold, design: .default)
+        }
+
+        public static func sectionTitle() -> Font {
+            .system(size: sizeHeadline, weight: .semibold, design: .default)
+        }
+
+        public static func cardTitle() -> Font {
+            .system(size: sizeSubheadline, weight: .semibold, design: .default)
+        }
+
+        public static func controlLabel(weight: Font.Weight = .regular) -> Font {
+            .system(size: sizeSubheadline, weight: weight, design: .default)
+        }
+
+        public static func detail() -> Font {
+            .system(size: 11, weight: .regular, design: .default)
+        }
+
+        public static func badge() -> Font {
+            .system(size: sizeCaption2, weight: .semibold, design: .default)
+        }
+
+        public static func friendlyTitle(size: CGFloat = sizeTitle2) -> Font {
+            .system(size: size, weight: .semibold, design: .rounded)
+        }
+
+        public static func metric(size: CGFloat = sizeTitle) -> Font {
+            .system(size: size, weight: .bold, design: .rounded)
+        }
         
         // Monospaced for data
-        public static func mono(size: CGFloat = sizeBody) -> Font {
-            .system(size: size, design: .monospaced)
+        public static func mono(size: CGFloat = sizeBody, weight: Font.Weight = .regular) -> Font {
+            .system(size: size, weight: weight, design: .monospaced)
         }
     }
     

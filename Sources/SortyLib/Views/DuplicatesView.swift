@@ -605,17 +605,17 @@ struct DuplicatesHeaderNew: View {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(SortyDesignSystem.Colors.primarySoft)
                         .frame(width: 44, height: 44)
 
                     Image(systemName: "doc.on.doc.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .font(.title3)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Duplicate Files")
-                        .font(.headline)
+                        .font(SortyDesignSystem.Typography.sectionTitle())
                         .lineLimit(1)
 
                     if let dir = currentDirectory {
@@ -722,7 +722,7 @@ private struct DuplicatesResultsSidebarHeader: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Review groups")
-                    .font(.headline)
+                    .font(SortyDesignSystem.Typography.sectionTitle())
 
                 Text(summaryText)
                     .font(.caption)
@@ -1239,7 +1239,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             }
 
             Text(group.displayName)
-                .font(.title3.weight(.semibold))
+                .font(SortyDesignSystem.Typography.pageTitle())
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1285,7 +1285,7 @@ struct UnifiedDuplicateGroupDetailView: View {
                 Text(compactButtonTitle(for: recommendation))
             }
             .buttonStyle(.onboardingPill)
-            .tint(.blue)
+            .tint(SortyDesignSystem.Colors.destructive)
             .controlSize(.regular)
             .help(recommendation.description)
         } else {

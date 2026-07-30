@@ -732,7 +732,7 @@ struct DirectoryHeader: View {
                         .accessibilityHidden(true)
 
                     Text(mode.workflowTitle)
-                        .font(.headline)
+                        .font(SortyDesignSystem.Typography.sectionTitle())
                         .lineLimit(1)
                         .numericTextTransition(animationValue: mode)
                 }
@@ -832,7 +832,7 @@ private struct SetupRepairGateView: View {
                 .foregroundStyle(.orange)
 
             Text("Finish Provider Setup")
-                .font(.title3.weight(.semibold))
+                .font(SortyDesignSystem.Typography.friendlyTitle(size: 18))
 
             Text(message)
                 .font(.body)

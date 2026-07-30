@@ -24,11 +24,12 @@
    - Animation.staggerDelay (0.05s)
 
  - **Colors**: Brand colors, semantic colors, backgrounds, text colors
-   - Colors.primary, Colors.purple, Colors.success
+   - Colors.primary, Colors.primarySoft, Colors.destructive, Colors.ai
    - Colors.backgroundPrimary, Colors.textSecondary
 
  - **Typography**: Font sizes, weights, and predefined styles
-   - Typography.caption(), Typography.headline(), Typography.title()
+   - Typography.pageTitle(), Typography.sectionTitle(), Typography.cardTitle()
+   - Typography.friendlyTitle() for empty, onboarding, and completion states
    - Typography.mono() for data display
 
  - **Spacing**: Consistent spacing values
