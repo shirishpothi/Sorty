@@ -437,6 +437,10 @@ private enum AboutAppIconVariant: String, CaseIterable {
 }
 
 private enum AboutIconImageNormalizer {
+    /// Ignore soft source-image shadows when measuring each icon's visual size.
+    /// The carousel adds one consistent shadow after normalization.
+    private static let artworkAlphaThreshold: CGFloat = 0.5
+
     static func normalized(_ image: NSImage) -> NSImage {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
               let visibleBounds = visibleBounds(in: cgImage),
@@ -476,7 +480,9 @@ private enum AboutIconImageNormalizer {
         var maxY = -1
 
         for y in 0..<height {
-            for x in 0..<width where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.01 {
+            for x in 0..<width where
+                (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) >= artworkAlphaThreshold
+            {
                 minX = min(minX, x)
                 minY = min(minY, y)
                 maxX = max(maxX, x)
