@@ -44,7 +44,6 @@ struct LearningsView: View {
     @State private var isQuickRefreshingLearnings = false
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
-    @State private var contentOpacity: Double = 0
     @State private var emptyLearningsHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
 
@@ -126,13 +125,9 @@ struct LearningsView: View {
         }
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
         .frame(minWidth: 700, minHeight: 600)
-        .opacity(contentOpacity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings Dashboard")
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
             manager.isLocked = false
             if settingsViewModel.availableModels.isEmpty {
                 settingsViewModel.updateAvailableModels()

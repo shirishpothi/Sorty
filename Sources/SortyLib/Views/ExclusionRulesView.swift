@@ -17,7 +17,6 @@ struct ExclusionRulesView: View {
     @State private var showingAddRule = false
     @State private var showingLearningExclusionImporter = false
     @State private var searchText = ""
-    @State private var contentOpacity: Double = 0
     @State private var newNLException = ""
     @State private var isImprovingException = false
     @State private var showImproveExceptionRequest = false
@@ -181,12 +180,6 @@ struct ExclusionRulesView: View {
             allowsMultipleSelection: true
         ) { result in
             handleLearningExclusionImport(result)
-        }
-        .opacity(contentOpacity)
-        .onAppear {
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
         }
     }
 

@@ -94,7 +94,6 @@ struct HistoryView: View {
     @State private var showAlert = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var searchText: String = ""
-    @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
     @State private var showRedoModelPicker = false
     @State private var redoModelEntry: OrganizationHistoryEntry?
@@ -282,7 +281,6 @@ struct HistoryView: View {
         .emptyStateWorkflowGradient(isVisible: cachedEntries.isEmpty)
         .animation(.pageTransition, value: cachedEntries.isEmpty)
         .navigationTitle("History")
-        .opacity(contentOpacity)
         .disabled(isProcessing)
         .overlay {
             if isProcessing {
@@ -328,9 +326,6 @@ struct HistoryView: View {
             }
         )
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
             consumePendingNotificationActionIfNeeded()
         }
         .onChange(of: searchText) { _, _ in

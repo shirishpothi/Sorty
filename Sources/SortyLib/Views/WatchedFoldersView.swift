@@ -13,7 +13,6 @@ struct WatchedFoldersView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
-    @State private var contentOpacity: Double = 0
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -84,12 +83,6 @@ struct WatchedFoldersView: View {
         }
         .siriDropZone(cornerRadius: 12, isTargeted: $isDropTargeted) { providers in
             handleFolderDrop(providers: providers)
-        }
-        .opacity(contentOpacity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
         }
         .navigationTitle("Watched Folders")
     }

@@ -16,7 +16,6 @@ struct DuplicatesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
-    @State private var contentOpacity: Double = 0
     @State private var showSettings = false
     @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
@@ -119,7 +118,6 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.sortySpringStandard, value: detectionManager.state)
                 .animation(.sortySpringStandard, value: effectiveDirectory)
-                .opacity(contentOpacity)
             }
         }
         .emptyStateWorkflowGradient(isVisible: isShowingEmptyContent)
@@ -143,9 +141,6 @@ struct DuplicatesView: View {
             )
         }
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
             consumePendingHandoffIfNeeded()
         }
         .onChange(of: effectiveDirectory) { _, _ in

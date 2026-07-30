@@ -12,7 +12,6 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var selectedCategory: SettingsCategory = .rules
-    @State private var contentOpacity: Double = 0
     @State private var searchText = ""
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
@@ -39,7 +38,6 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .searchable(text: $searchText, prompt: "Search settings")
-        .opacity(contentOpacity)
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
             windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
         }
@@ -48,9 +46,6 @@ struct SettingsView: View {
                 selectedCategory = section
             }
             captureSettingsScreen(selectedCategory)
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
         }
         .onChange(of: selectedCategory) { _, category in
             captureSettingsScreen(category)
