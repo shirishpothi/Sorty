@@ -56,10 +56,14 @@ PostHog project settings keep automatic exception and click capture, recordings,
 
 Sentry has separate `sorty-macos` and `sorty-website` projects, high-priority issue notifications, and focused dashboards for unresolved errors and the bounded `operation` or `surface` tags. Expected cancellations and internet-privacy blocks remain workflow outcomes rather than Sentry issues, and handled errors are represented by a sanitized category/cause/operation error instead of the original message.
 
+The Mac PostHog client accepts at most 120 events per minute and 10,000 events per process, while the website accepts 60 events per minute and 2,000 per session. Mac Sentry accepts at most 30 handled-error or transaction capture calls per minute and 500 per process. Website Sentry accepts at most six handled-error capture calls, 12 error envelopes, and 30 transactions per minute, with session ceilings of 100, 200, and 500 respectively. These limits bound accidental loops and UI automation against the shipped SDK queues, while the browser-safe `phc_` project token and public Sentry DSNs still require service-side quotas and anomaly monitoring to contain fabricated direct-ingestion traffic.
 
 The browser-safe `phc_` token identifies the PostHog project but grants no read, query, configuration, or source-map access. Because any public ingestion token can be copied and used to submit fabricated events, the PostHog project must also restrict authorized web origins to `https://sorty-organizer.github.io` (and any explicitly approved preview origin), reject unexpected event names and properties through the ingestion allowlists where available, and use anomaly or volume alerts to contain deliberate event spam. Client-side checks protect privacy and data quality for the shipped app; they are not an authentication boundary against a modified client.
 
 The static GitHub Pages export cannot host a request-forwarding reverse proxy. PostHog requests continue to use `NEXT_PUBLIC_POSTHOG_HOST` directly until Sorty has a custom domain where a managed PostHog proxy can be provisioned with a neutral subdomain and DNS CNAME.
+
+The Mac app also uses consent-gated PostHog feature flags to populate **Settings → Experimental**. Enabled flags whose keys begin with `labs-` appear there; an optional JSON payload may provide bounded `title`, `description`, and `system_image` strings. Reloads are limited to once every five minutes, at most 20 flags are rendered, flag evaluation events remain disabled, and flags are cleared from the UI when analytics consent is revoked or internet connections are blocked.
+
 
 ## Adding instrumentation
 
