@@ -50,7 +50,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                     shape
                         .strokeBorder(
                             isFocused
-                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.95 : 0.72)
+                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
                             : Color.clear,
                             lineWidth: 2
                         )
@@ -58,7 +58,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                     shape
                         .strokeBorder(
                             isFocused
-                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.42 : 0.16)
+                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
                             : Color.clear,
                             lineWidth: 3
                         )
@@ -71,7 +71,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
             )
             .shadow(
                 color: isFocused
-                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(isBreathing ? 0.38 : 0.16)
+                    ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
                     : .clear,
                 radius: isBreathing ? 14 : 7
             )
@@ -120,22 +120,18 @@ struct SidebarButton: View {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundStyle(
-                        isSelected ? SortyDesignSystem.Colors.resolvedAccent : .secondary
-                    )
+                    .foregroundStyle(isSelected ? color : .secondary)
                     .frame(width: 20)
                 
                 Text(LocalizedStringKey(title))
-                    .font(SortyDesignSystem.Typography.controlLabel())
+                    .font(.subheadline)
                     .foregroundStyle(isSelected ? .primary : .secondary)
                 
                 Spacer()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(
-                isSelected ? SortyDesignSystem.Colors.primarySoft : Color.clear
-            )
+            .background(isSelected ? color.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -203,7 +199,7 @@ struct SettingsCard<Content: View>: View {
                             .frame(width: 16)
 
                         Text(LocalizedStringKey(title))
-                            .font(SortyDesignSystem.Typography.cardTitle())
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
                         headerAccessory
@@ -256,7 +252,7 @@ struct SettingsCard<Content: View>: View {
                 .foregroundStyle(color)
                 .frame(width: 14)
             Text(LocalizedStringKey(title))
-                .font(SortyDesignSystem.Typography.detail())
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
             headerAccessory
             countBadge
@@ -334,15 +330,15 @@ struct StepCard<Content: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
-                .font(SortyDesignSystem.Typography.badge())
+                .font(.caption.bold())
                 .foregroundColor(.white)
                 .frame(width: 20, height: 20)
-                .background(SortyDesignSystem.Colors.resolvedAccent)
+                .background(Color.accentColor)
                 .clipShape(Circle())
             
             VStack(alignment: .leading, spacing: 6) {
                 Text(LocalizedStringKey(title))
-                    .font(SortyDesignSystem.Typography.controlLabel(weight: .medium))
+                    .font(.subheadline.weight(.medium))
                 content
             }
         }

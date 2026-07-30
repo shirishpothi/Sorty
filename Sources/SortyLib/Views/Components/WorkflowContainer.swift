@@ -124,18 +124,18 @@ struct WorkflowGradientBackground: View {
     /// near-white window background; dark mode looks better with a softer
     /// wash so it doesn't compete with the foreground content.
     private var topOpacity: Double {
-        colorScheme == .dark ? 0.12 : 0.16
+        colorScheme == .dark ? 0.28 : 0.44
     }
 
     private var midOpacity: Double {
-        colorScheme == .dark ? 0.04 : 0.06
+        colorScheme == .dark ? 0.11 : 0.18
     }
 
     /// Top-of-stack soft bloom: a radial highlight that drifts horizontally,
     /// giving the wash a sense of light catching on it rather than a flat
     /// pulse.
     private var bloomOpacity: Double {
-        colorScheme == .dark ? 0.08 : 0.10
+        colorScheme == .dark ? 0.22 : 0.30
     }
 
     /// Static workflow wash. Keep this free of timed transforms so the background
@@ -496,7 +496,8 @@ struct WorkflowCard<Content: View>: View {
                             .foregroundStyle(.secondary)
                     }
                     Text(LocalizedStringKey(title))
-                        .font(SortyDesignSystem.Typography.cardTitle())
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                 }
             }

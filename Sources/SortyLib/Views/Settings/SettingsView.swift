@@ -122,7 +122,8 @@ struct SettingsView: View {
     
     private func sectionHeader(_ title: String) -> some View {
         Text(LocalizedStringKey(title))
-            .font(SortyDesignSystem.Typography.badge())
+            .font(.caption)
+            .fontWeight(.semibold)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.top, 12)
@@ -261,13 +262,13 @@ struct SettingsView: View {
         HStack(spacing: 12) {
             Image(systemName: selectedCategory.icon)
                 .font(.title2)
-                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                .foregroundStyle(selectedCategory.color)
                 .frame(width: 32, height: 32)
                 .symbolReplaceTransition(animationValue: selectedCategory)
-                .background(SortyDesignSystem.Colors.primarySoft)
+                .background(selectedCategory.color.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             Text(LocalizedStringKey(selectedCategory.rawValue))
-                .font(SortyDesignSystem.Typography.pageTitle())
+                .font(.title2.bold())
                 .numericTextTransition(animationValue: selectedCategory)
             Spacer()
         }
@@ -281,12 +282,12 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(.title2)
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 32, height: 32)
-                    .background(SortyDesignSystem.Colors.primarySoft)
+                    .background(Color.accentColor.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text("Search Results")
-                    .font(SortyDesignSystem.Typography.pageTitle())
+                    .font(.title2.bold())
             }
 
             Text("\"\(trimmedSearchText)\" matched \(results.count) \(results.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
@@ -312,7 +313,7 @@ struct SettingsView: View {
 
                 VStack(spacing: 5) {
                     Text("Sorty came up empty")
-                        .font(SortyDesignSystem.Typography.friendlyTitle(size: 15))
+                        .font(.headline)
                     Text("Nothing matches \"\(trimmedSearchText)\" yet.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
