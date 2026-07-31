@@ -249,6 +249,11 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!) { Label("Report Issue", systemImage: "ladybug") }
 
+            Button("Thinking Orbs", systemImage: "circle.dotted.circle") {
+                appState?.showThinkingOrbs()
+            }
+            .disabled(appState == nil)
+
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
             }
@@ -488,6 +493,7 @@ public class AppState: ObservableObject {
     private var accreditationsWindowController: NSWindowController?
     private var internetAccessPolicyWindowController: NSWindowController?
     private var shadersWindowController: NSWindowController?
+    private var thinkingOrbsWindowController: NSWindowController?
     private var thanksWindowController: NSWindowController?
     private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
@@ -1657,6 +1663,35 @@ public class AppState: ObservableObject {
 
         shadersWindowController = NSWindowController(window: window)
         shadersWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        HapticFeedbackManager.shared.selection()
+    }
+
+    public func showThinkingOrbs() {
+        if let existingWindow = thinkingOrbsWindowController?.window {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            HapticFeedbackManager.shared.selection()
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = NSHostingView(rootView: ThinkingOrbsView())
+        window.title = "Thinking Orbs"
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = false
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 680, height: 520)
+        window.tabbingMode = .disallowed
+        window.center()
+
+        thinkingOrbsWindowController = NSWindowController(window: window)
+        thinkingOrbsWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         HapticFeedbackManager.shared.selection()
     }
