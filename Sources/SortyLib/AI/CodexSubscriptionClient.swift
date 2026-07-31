@@ -11,11 +11,21 @@ public struct CodexAvailableModel: Sendable, Equatable {
     public let id: String
     public let displayName: String
     public let inputModalities: [String]
+    public let serviceTiers: [String]
 
-    public init(id: String, displayName: String, inputModalities: [String]) {
+    public init(id: String, displayName: String, inputModalities: [String], serviceTiers: [String]) {
         self.id = id
         self.displayName = displayName
         self.inputModalities = inputModalities
+        self.serviceTiers = serviceTiers
+    }
+}
+
+public enum CodexSubscriptionSettings {
+    public static let fastModeKey = "codexSubscriptionFastMode"
+
+    public static var isFastModeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: fastModeKey)
     }
 }
 
@@ -255,7 +265,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                         return CodexAvailableModel(
                             id: id,
                             displayName: model["displayName"] as? String ?? id,
-                            inputModalities: model["inputModalities"] as? [String] ?? []
+                            inputModalities: model["inputModalities"] as? [String] ?? [],
+                            serviceTiers: (model["serviceTiers"] as? [[String: Any]])?
+                                .compactMap { $0["id"] as? String } ?? []
                         )
                     }
                     return availableModels
@@ -307,7 +319,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             model: config.model,
             outputURL: outputURL,
             schemaURL: schemaURL,
-            imageFiles: imageFiles
+            imageFiles: imageFiles,
+            fastMode: CodexSubscriptionSettings.isFastModeEnabled
         )
 
         let inputPipe = Pipe()
@@ -407,7 +420,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         model: String,
         outputURL: URL,
         schemaURL: URL?,
-        imageFiles: [URL]
+        imageFiles: [URL],
+        fastMode: Bool = false
     ) -> [String] {
         var arguments = [
             "exec",
@@ -423,6 +437,15 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             "--model",
             model
         ]
+
+        if fastMode {
+            arguments += [
+                "--enable",
+                "fast_mode",
+                "--config",
+                #"service_tier="priority""#
+            ]
+        }
 
         if let schemaURL {
             arguments += ["--output-schema", schemaURL.path]

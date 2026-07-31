@@ -422,6 +422,19 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertEqual(arguments[schemaFlagIndex + 1], schemaURL.path)
     }
 
+    func testCodexFastModeUsesPriorityServiceTier() {
+        let arguments = CodexSubscriptionClient.codexArguments(
+            model: "gpt-test",
+            outputURL: URL(fileURLWithPath: "/tmp/output.txt"),
+            schemaURL: nil,
+            imageFiles: [],
+            fastMode: true
+        )
+
+        XCTAssertTrue(arguments.contains("fast_mode"))
+        XCTAssertTrue(arguments.contains(#"service_tier="priority""#))
+    }
+
     func testOpenRouterStructuredObjectRequestsDisableReasoningAndRequireJSON() throws {
         var requestBody: [String: Any] = [:]
 

@@ -197,6 +197,7 @@ struct ModelSelectionPopover: View {
     @State private var showFreeOnly: Bool = false
     @State private var showCodexOnly: Bool = false
     @State private var isContextMessageVisible = true
+    @AppStorage(CodexSubscriptionSettings.fastModeKey) private var isCodexFastModeEnabled = false
 
     init(
         isPresented: Binding<Bool>,
@@ -267,6 +268,17 @@ struct ModelSelectionPopover: View {
         modelCatalog.codexSubscriptionModels.contains { $0.id == modelId }
     }
 
+    private func codexFastModeAvailability(for modelId: String) -> Bool? {
+        guard let model = modelCatalog.codexSubscriptionModels.first(where: { $0.id == modelId }) else {
+            return nil
+        }
+        return model.capabilities?.contains("service:priority") == true
+    }
+
+    private func supportsCodexFastMode(_ modelId: String) -> Bool {
+        codexFastModeAvailability(for: modelId) == true
+    }
+
     /// Returns whether a model supports vision (for badge display)
     private func isVisionModel(_ modelId: String) -> Bool {
         modelCatalog.supportsVision(modelId: modelId, provider: selectedProvider)
@@ -304,6 +316,16 @@ struct ModelSelectionPopover: View {
             guard isEnabled else { return }
             Task {
                 await modelCatalog.refreshCodexSubscriptionModels()
+            }
+        }
+        .onChange(of: selectedModel) { _, model in
+            if showCodexOnly && codexFastModeAvailability(for: model) == false {
+                isCodexFastModeEnabled = false
+            }
+        }
+        .onChange(of: modelCatalog.codexSubscriptionModels) { _, _ in
+            if codexFastModeAvailability(for: selectedModel) == false {
+                isCodexFastModeEnabled = false
             }
         }
     }
@@ -542,6 +564,33 @@ struct ModelSelectionPopover: View {
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 6)
+
+            if selectedProvider == .openAI && showCodexOnly {
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.orange)
+
+                    Text("Fast mode")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Toggle("", isOn: $isCodexFastModeEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        .disabled(!supportsCodexFastMode(selectedModel))
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
+                .help(
+                    supportsCodexFastMode(selectedModel)
+                        ? "Use Codex's faster priority service tier"
+                        : "Fast mode isn't available for this model"
+                )
+            }
             
             ScrollView {
                 LazyVStack(spacing: 2) {
@@ -583,6 +632,8 @@ struct ModelSelectionPopover: View {
                     .font(.system(size: 12))
                     .foregroundColor(selectedModel == model ? .white : .primary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(1)
 
                 if isVisionModel(model) {
                     HStack(spacing: 3) {
@@ -597,6 +648,7 @@ struct ModelSelectionPopover: View {
                     .background(
                         Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.teal.opacity(0.15))
                     )
+                    .fixedSize()
                 }
 
                 if selectedProvider == .openRouter && isModelFree(model) {
@@ -608,6 +660,7 @@ struct ModelSelectionPopover: View {
                         .background(
                             Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.green.opacity(0.15))
                         )
+                        .fixedSize()
                 }
 
                 if selectedProvider == .openAI && isCodexModel(model) {
@@ -619,6 +672,7 @@ struct ModelSelectionPopover: View {
                         .background(
                             Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.purple.opacity(0.15))
                         )
+                        .fixedSize()
                 }
 
                 Spacer()
@@ -627,12 +681,14 @@ struct ModelSelectionPopover: View {
                     Text("Default")
                         .font(.system(size: 9))
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .secondary)
+                        .fixedSize()
                 }
 
                 if model == currentModel && selectedProvider == currentProvider {
                     Text("Current")
                         .font(.system(size: 9))
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .green)
+                        .fixedSize()
                 }
             }
             .padding(.horizontal, 10)

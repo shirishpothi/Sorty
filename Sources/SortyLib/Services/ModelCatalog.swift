@@ -321,7 +321,8 @@ public final class ModelCatalog: ObservableObject {
                 id: model.id,
                 displayName: model.displayName,
                 provider: .openAI,
-                capabilities: model.inputModalities.map { "input:\($0)" },
+                capabilities: model.inputModalities.map { "input:\($0)" }
+                    + model.serviceTiers.map { "service:\($0)" },
                 updatedAt: Date()
             )
         }
