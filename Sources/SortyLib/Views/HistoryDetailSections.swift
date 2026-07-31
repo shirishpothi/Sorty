@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import SwiftUI
 
 struct HistoryDetailHeaderSection: View {
@@ -64,12 +65,23 @@ struct HistorySessionStatisticsSection: View {
 struct HistoryPartialUndoSection: View {
     let entry: OrganizationHistoryEntry
 
-    private var affectedItems: [String] {
+    private var affectedItems: [PartialUndoItem] {
         let failedFiles = entry.undoFailedFiles ?? []
-        let remainingOperations = (entry.operations ?? []).map { operation in
-            URL(fileURLWithPath: operation.destinationPath ?? operation.sourcePath).lastPathComponent
+        var items = (entry.operations ?? []).map { operation in
+            PartialUndoItem(
+                name: URL(
+                    fileURLWithPath: operation.destinationPath ?? operation.sourcePath
+                ).lastPathComponent,
+                operation: operation
+            )
         }
-        return Array(Set(failedFiles + remainingOperations)).sorted()
+
+        let operationNames = Set(items.map(\.name))
+        items.append(contentsOf: failedFiles.compactMap { fileName in
+            guard !operationNames.contains(fileName) else { return nil }
+            return PartialUndoItem(name: fileName, operation: nil)
+        })
+        return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     @ViewBuilder
@@ -95,9 +107,10 @@ struct HistoryPartialUndoSection: View {
                     Text("Some changes could not be undone.")
                         .font(.callout.weight(.medium))
                 } else {
-                    ForEach(affectedItems, id: \.self) { item in
-                        Label(item, systemImage: "doc")
-                            .font(.callout.weight(.medium))
+                    VStack(spacing: 4) {
+                        ForEach(affectedItems) { item in
+                            PartialUndoItemRow(item: item)
+                        }
                     }
                 }
             }
@@ -105,12 +118,109 @@ struct HistoryPartialUndoSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.yellow.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(
                 affectedItems.isEmpty
                     ? "Partially undone. Some changes were not restored."
-                    : "Partially undone. Not restored: \(affectedItems.joined(separator: ", "))."
+                    : "Partially undone. Not restored: \(affectedItems.map(\.name).joined(separator: ", "))."
             )
+        }
+    }
+}
+
+private struct PartialUndoItem: Identifiable {
+    let name: String
+    let operation: FileSystemManager.FileOperation?
+
+    var id: String {
+        operation?.id.uuidString ?? name
+    }
+
+    var iconURL: URL {
+        guard let operation else {
+            return URL(fileURLWithPath: name)
+        }
+        return URL(fileURLWithPath: operation.destinationPath ?? operation.sourcePath)
+    }
+
+    var isFolder: Bool {
+        operation?.type == .createFolder
+    }
+}
+
+private struct PartialUndoItemRow: View {
+    let item: PartialUndoItem
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            openItem()
+        } label: {
+            HStack(spacing: 8) {
+                itemIcon
+
+                Text(item.name)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .opacity(isHovered ? 1 : 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .background(
+                Color.primary.opacity(isHovered ? 0.06 : 0),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Show in Finder")
+        .accessibilityLabel("Show \(item.name) in Finder")
+    }
+
+    @ViewBuilder
+    private var itemIcon: some View {
+        if item.isFolder {
+            FolderThumbnailView(url: item.iconURL, size: CGSize(width: 20, height: 20))
+                .frame(width: 20, height: 20)
+        } else {
+            FileThumbnailView(url: item.iconURL, size: CGSize(width: 20, height: 20))
+                .frame(width: 20, height: 20)
+        }
+    }
+
+    private func openItem() {
+        let fileManager = FileManager.default
+        let candidates = [
+            item.operation?.destinationPath,
+            item.operation?.sourcePath,
+            item.iconURL.path
+        ].compactMap { $0 }
+
+        if let existingPath = candidates.first(where: { fileManager.fileExists(atPath: $0) }) {
+            NSWorkspace.shared.activateFileViewerSelecting([
+                URL(fileURLWithPath: existingPath)
+            ])
+            return
+        }
+
+        for path in candidates {
+            var parentURL = URL(fileURLWithPath: path).deletingLastPathComponent()
+            while parentURL.path != "/" {
+                if fileManager.fileExists(atPath: parentURL.path) {
+                    NSWorkspace.shared.open(parentURL)
+                    return
+                }
+                parentURL.deleteLastPathComponent()
+            }
         }
     }
 }
