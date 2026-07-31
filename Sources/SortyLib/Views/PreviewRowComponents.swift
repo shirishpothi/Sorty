@@ -67,7 +67,7 @@ struct FlatFolderRowContextMenu: View {
 
 struct FlatFileRowContent: View {
     private enum Column {
-        static let sizeWidth: CGFloat = 44
+        static let sizeWidth: CGFloat = 60
         static let dragHandleWidth: CGFloat = 12
     }
 
@@ -148,6 +148,7 @@ struct FlatFileRowContent: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .monospacedDigit()
+                        .lineLimit(1)
                         .frame(width: Column.sizeWidth, alignment: .leading)
 
                     Image(systemName: "line.3.horizontal")
