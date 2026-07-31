@@ -92,6 +92,11 @@ public enum OpenSourceCredits {
             name: "SymbolParticleMorph",
             license: "MIT · animation reference",
             url: URL(string: "https://github.com/AndreasInk/SymbolParticleMorph")!
+        ),
+        CreditItem(
+            name: "thinking-orbs",
+            license: "MIT · animation reference",
+            url: URL(string: "https://github.com/Jakubantalik/thinking-orbs")!
         )
     ]
 }
