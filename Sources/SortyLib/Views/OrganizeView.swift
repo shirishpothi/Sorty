@@ -2936,7 +2936,14 @@ struct ErrorView: View {
         case .permissions:
             return "Sorty couldn't access a required folder."
         case .generic:
-            return "Sorty couldn't create an organization plan."
+            switch planGenerationFailureCode {
+            case "OUTPUT_LIMIT":
+                return "The selected model couldn't finish a complete organization plan within its output limit."
+            case "INVALID_PLAN":
+                return "The selected model returned a response that Sorty couldn't convert into a complete organization plan."
+            default:
+                return "Sorty couldn't create an organization plan."
+            }
         }
     }
 
@@ -2954,13 +2961,45 @@ struct ErrorView: View {
         case .permissions:
             return "Grant access to the required folder, then retry."
         case .generic:
+            if planGenerationFailureCode == "OUTPUT_LIMIT" {
+                return "Retry to let Sorty use smaller batches, or choose a model with a larger output limit."
+            }
+            if planGenerationFailureCode == "INVALID_PLAN" {
+                return "Retry to let Sorty use smaller batches. If it still fails, choose a more capable model."
+            }
             return "Choose a smarter model and retry. If it still fails, simplify Instructions or Persona, then review Learnings, workflow, and organization rules."
         }
     }
 
     private var privacySafeErrorCodeLine: String {
-        guard category == .internetPrivacy else { return "" }
-        return "Code: \(AIClientError.internetAccessBlockedCode)"
+        if category == .internetPrivacy {
+            return "Code: \(AIClientError.internetAccessBlockedCode)"
+        }
+        guard let planGenerationFailureCode else { return "" }
+        return "Code: \(planGenerationFailureCode)"
+    }
+
+    private var planGenerationFailureCode: String? {
+        guard category == .generic else { return nil }
+        if let clientError = error as? AIClientError {
+            switch clientError {
+            case .invalidResponseFormat, .jsonDecodingError:
+                return "INVALID_PLAN"
+            case .apiError(let statusCode, let message):
+                let description = message.lowercased()
+                if statusCode == 413 ||
+                    description.contains("output limit") ||
+                    description.contains("context length") ||
+                    description.contains("maximum context") ||
+                    description.contains("max_tokens") ||
+                    description.contains("too many tokens") {
+                    return "OUTPUT_LIMIT"
+                }
+            default:
+                break
+            }
+        }
+        return nil
     }
 
     var body: some View {

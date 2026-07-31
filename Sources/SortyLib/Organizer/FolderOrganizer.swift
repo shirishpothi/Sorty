@@ -450,6 +450,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     nonisolated private static let deepScanFileLimit = 2_000
     nonisolated private static let organizeAnalysisBatchSize = 350
     nonisolated private static let renameAnalysisBatchSize = 120
+    nonisolated private static let minimumAdaptiveAnalysisBatchSize = 8
     nonisolated private static let previewVersionFileLimit = 20_000
     nonisolated private static let assignmentDestinationRegex =
         try? NSRegularExpression(
@@ -1882,24 +1883,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             : Self.renameAnalysisBatchSize
         let batchCount = max(1, (files.count + batchSize - 1) / batchSize)
 
-        guard batchCount > 1 else {
-            if imagePayload.isEmpty {
-                return try await client.analyze(
-                    files: files,
-                    customInstructions: instructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            }
-            return try await client.analyzeWithImages(
-                files: files,
-                imageData: imagePayload,
-                customInstructions: instructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature
-            )
-        }
-
         let analysisStart = Date()
         let accumulator = LargeFolderPlanAccumulator()
         var taxonomy: [String] = []
@@ -1910,6 +1893,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var firstTTFT: TimeInterval?
         var estimatedCost = Decimal.zero
         var hasEstimatedCost = false
+        var completedAnalysisBatchCount = 0
 
         for batchIndex in 0..<batchCount {
             try checkCancellation()
@@ -1934,50 +1918,41 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 mode: mode
             )
 
-            let batchNames = Set(batch.map(\.displayName))
-            let batchImages = imagePayload.filter { batchNames.contains($0.key) }
-
             startTimeoutTimer()
-            let batchPlan: OrganizationPlan
-            if batchImages.isEmpty {
-                batchPlan = try await client.analyze(
-                    files: batch,
-                    customInstructions: batchInstructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            } else {
-                batchPlan = try await client.analyzeWithImages(
-                    files: batch,
-                    imageData: batchImages,
-                    customInstructions: batchInstructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            }
+            let batchPlans = try await analyzeBatchAdaptively(
+                files: batch,
+                client: client,
+                imagePayload: imagePayload,
+                instructions: batchInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
 
             try checkCancellation()
+            completedAnalysisBatchCount += batchPlans.count
 
-            if let stats = batchPlan.generationStats {
-                totalResponseTokens += stats.totalTokens
-                if let promptTokens = stats.promptTokens {
-                    totalPromptTokens += promptTokens
-                    hasPromptTokenCount = true
+            for batchPlan in batchPlans {
+                if let stats = batchPlan.generationStats {
+                    totalResponseTokens += stats.totalTokens
+                    if let promptTokens = stats.promptTokens {
+                        totalPromptTokens += promptTokens
+                        hasPromptTokenCount = true
+                    }
+                    if firstTTFT == nil {
+                        firstTTFT = stats.ttft
+                    }
+                    if let cost = stats.estimatedCost {
+                        estimatedCost += cost
+                        hasEstimatedCost = true
+                    }
                 }
-                if firstTTFT == nil {
-                    firstTTFT = stats.ttft
+                let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
+                    retainedNotes.append(note)
                 }
-                if let cost = stats.estimatedCost {
-                    estimatedCost += cost
-                    hasEstimatedCost = true
-                }
-            }
-            let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
-                retainedNotes.append(note)
-            }
 
-            taxonomy = await accumulator.merge(batchPlan)
+                taxonomy = await accumulator.merge(batchPlan)
+            }
 
             let completed = batchIndex + 1
             let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
@@ -1999,7 +1974,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }.value
         let model = client.config.model
         let provider = client.config.provider.displayName
-        let summary = "Analyzed \(GenerationStats.formatCount(files.count)) files in \(batchCount) bounded batches."
+        let summary = "Analyzed \(GenerationStats.formatCount(files.count)) files in \(completedAnalysisBatchCount) bounded batches."
         mergedPlan.notes = ([summary] + retainedNotes).joined(separator: " ")
         mergedPlan.generationStats = GenerationStats(
             duration: duration,
@@ -2018,6 +1993,112 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             stage: mode == .renameOnly ? "Checking name suggestions..." : "Checking organization plan..."
         )
         return mergedPlan
+    }
+
+    private func analyzeBatchAdaptively(
+        files: [FileItem],
+        client: AIClientProtocol,
+        imagePayload: [String: Data],
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> [OrganizationPlan] {
+        try checkCancellation()
+
+        let fileNames = Set(files.map(\.displayName))
+        let batchImages = imagePayload.filter { fileNames.contains($0.key) }
+
+        do {
+            let plan: OrganizationPlan
+            if batchImages.isEmpty {
+                plan = try await client.analyze(
+                    files: files,
+                    customInstructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            } else {
+                plan = try await client.analyzeWithImages(
+                    files: files,
+                    imageData: batchImages,
+                    customInstructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            }
+            return [plan]
+        } catch {
+            try checkCancellation()
+            guard Self.shouldSplitAnalysisBatch(after: error, fileCount: files.count) else {
+                throw error
+            }
+
+            let splitIndex = files.count / 2
+            let firstFiles = Array(files[..<splitIndex])
+            let secondFiles = Array(files[splitIndex...])
+            LogManager.shared.log(
+                "Retrying a failed \(files.count)-file AI batch as \(firstFiles.count) and \(secondFiles.count) files.",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
+            organizationStage = "Retrying a large batch in smaller groups..."
+
+            let recoveryInstructions = instructions + """
+
+            ADAPTIVE RETRY
+            - The previous larger request could not produce a complete valid plan.
+            - Return a complete plan for only the files in this smaller recovery batch.
+            """
+            let firstPlans = try await analyzeBatchAdaptively(
+                files: firstFiles,
+                client: client,
+                imagePayload: batchImages,
+                instructions: recoveryInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+            let secondPlans = try await analyzeBatchAdaptively(
+                files: secondFiles,
+                client: client,
+                imagePayload: batchImages,
+                instructions: recoveryInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+            return firstPlans + secondPlans
+        }
+    }
+
+    nonisolated private static func shouldSplitAnalysisBatch(
+        after error: Error,
+        fileCount: Int
+    ) -> Bool {
+        guard fileCount > minimumAdaptiveAnalysisBatchSize else { return false }
+
+        if let clientError = error as? AIClientError {
+            switch clientError {
+            case .invalidResponseFormat, .jsonDecodingError:
+                return true
+            case .apiError(let statusCode, let message):
+                if statusCode == 413 {
+                    return true
+                }
+                let description = message.lowercased()
+                return description.contains("output limit") ||
+                    description.contains("context length") ||
+                    description.contains("maximum context") ||
+                    description.contains("max_tokens") ||
+                    description.contains("too many tokens")
+            default:
+                break
+            }
+        }
+
+        let description = error.localizedDescription.lowercased()
+        return description.contains("output limit") ||
+            description.contains("context length") ||
+            description.contains("maximum context") ||
+            description.contains("too many tokens")
     }
 
     nonisolated private static func largeFolderBatchContext(

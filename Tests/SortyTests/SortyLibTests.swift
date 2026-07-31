@@ -159,6 +159,36 @@ class SortyTests: XCTestCase {
     }
 
     @MainActor
+    func testOutputLimitFailureSplitsBatchAndPreservesSuccessfulResults() async throws {
+        for index in 0..<16 {
+            let fileURL = tempDirectory.appendingPathComponent("adaptive-\(index).txt")
+            try Data().write(to: fileURL)
+        }
+
+        folderOrganizer.setAIClientForTesting(mockClient)
+        await mockClient.setHandler { files in
+            if files.count > 8 {
+                throw AIClientError.apiError(
+                    statusCode: 413,
+                    message: "The model reached its output limit."
+                )
+            }
+            return OrganizationPlan(
+                suggestions: [
+                    FolderSuggestion(folderName: "Documents", files: files)
+                ]
+            )
+        }
+
+        try await folderOrganizer.organize(directory: tempDirectory)
+        let batchSizes = await mockClient.currentAnalyzedBatchSizes()
+
+        XCTAssertEqual(batchSizes, [16, 8, 8])
+        XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 16)
+        XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.count, 1)
+    }
+
+    @MainActor
     func testClientNotConfiguredError() async {
         // Ensure client is nil
         folderOrganizer.setAIClientForTesting(nil)
