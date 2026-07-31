@@ -242,16 +242,10 @@ struct OrganizingFlightStageView: View {
             .animation(.spring(response: 0.32, dampingFraction: 0.55), value: bumpTrigger)
             .animation(.easeOut(duration: 0.25), value: showHalo)
 
-            Text(suggestion.folderName)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .numericTextTransition(
-                    animationValue: suggestion.folderName,
-                    animation: .easeInOut(duration: 0.28)
-                )
-                .frame(maxWidth: bucketSize.width + 24)
+            GeneratingFolderNameLabel(
+                name: suggestion.folderName,
+                maxWidth: bucketSize.width + 24
+            )
         }
     }
 
@@ -465,6 +459,54 @@ struct OrganizingFlightStageView: View {
         let longestName = [originalName, suggestedName ?? ""]
             .max(by: { measuredWidth(of: $0) < measuredWidth(of: $1) }) ?? originalName
         return min(300, max(116, measuredWidth(of: longestName) + cardSize.width + 33))
+    }
+}
+
+private struct GeneratingFolderNameLabel: View {
+    let name: String
+    let maxWidth: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isRevealed = false
+
+    var body: some View {
+        Text(name)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .numericTextTransition(
+                animationValue: name,
+                animation: .easeInOut(duration: 0.28)
+            )
+            .frame(maxWidth: maxWidth)
+            .opacity(isRevealed ? 1 : 0.52)
+            .blur(radius: reduceMotion || isRevealed ? 0 : 4)
+            .scaleEffect(isRevealed ? 1 : 0.96)
+            .onAppear {
+                guard !reduceMotion else {
+                    isRevealed = true
+                    return
+                }
+                withAnimation(.spring(response: 0.48, dampingFraction: 0.84).delay(0.12)) {
+                    isRevealed = true
+                }
+            }
+            .onChange(of: name) { _, _ in
+                revealUpdatedName()
+            }
+    }
+
+    private func revealUpdatedName() {
+        guard !reduceMotion else {
+            isRevealed = true
+            return
+        }
+
+        isRevealed = false
+        withAnimation(.spring(response: 0.48, dampingFraction: 0.84).delay(0.08)) {
+            isRevealed = true
+        }
     }
 }
 
