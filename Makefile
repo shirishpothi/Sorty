@@ -17,7 +17,9 @@ SWIFTPM_CACHE_FLAG := --disable-dependency-cache
 # incremental compilation signature instead of invalidating each other.
 SWIFT_DEBUG_FLAGS := --disable-sandbox
 SWIFT_RELEASE_FLAGS := --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+# Keep local app identity stable across rebuilds so macOS continues granting the
+# replacement binary access to Keychain credentials created by the prior build.
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
