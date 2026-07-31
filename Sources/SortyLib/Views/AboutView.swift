@@ -370,7 +370,10 @@ private enum AboutAppIconVariant: String, CaseIterable {
     /// Slot 0 is always the running app icon; the remaining slots are the other
     /// variants, excluding the one this build already ships so nothing duplicates.
     static func cycleImages(current: AboutAppIconVariant?) -> [NSImage] {
-        let appIcon = AboutIconImageNormalizer.normalized(NSApplication.shared.applicationIconImage)
+        let appIcon = AboutIconImageNormalizer.normalized(
+            NSApplication.shared.applicationIconImage,
+            opticalScale: current?.opticalScale ?? 1
+        )
 
         let others = allCases.filter { variant in
             guard let current else { return true }
@@ -378,8 +381,18 @@ private enum AboutAppIconVariant: String, CaseIterable {
         }
 
         var images: [NSImage] = [appIcon]
-        images.append(contentsOf: others.compactMap { loadImage(for: $0).map(AboutIconImageNormalizer.normalized) })
+        images.append(contentsOf: others.compactMap { variant in
+            loadImage(for: variant).map {
+                AboutIconImageNormalizer.normalized($0, opticalScale: variant.opticalScale)
+            }
+        })
         return images
+    }
+
+    /// The Nightly artwork has a little more visual breathing room inside its
+    /// outer shape, so it needs a slight optical correction in the carousel.
+    private var opticalScale: CGFloat {
+        self == .nightly ? 1.04 : 1
     }
 
     private static func variant(from rawValue: String?) -> AboutAppIconVariant? {
@@ -441,7 +454,7 @@ private enum AboutIconImageNormalizer {
     /// The carousel adds one consistent shadow after normalization.
     private static let artworkAlphaThreshold: CGFloat = 0.5
 
-    static func normalized(_ image: NSImage) -> NSImage {
+    static func normalized(_ image: NSImage, opticalScale: CGFloat) -> NSImage {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
               let visibleBounds = visibleBounds(in: cgImage),
               let croppedImage = cgImage.cropping(to: visibleBounds) else {
@@ -456,6 +469,7 @@ private enum AboutIconImageNormalizer {
 
         let croppedSize = CGSize(width: CGFloat(croppedImage.width), height: CGFloat(croppedImage.height))
         let scale = min(canvasSize.width / croppedSize.width, canvasSize.height / croppedSize.height)
+            * opticalScale
         let drawSize = NSSize(width: croppedSize.width * scale, height: croppedSize.height * scale)
         let drawRect = NSRect(
             x: (canvasSize.width - drawSize.width) / 2,
