@@ -1613,7 +1613,10 @@ struct HistoryDetailSheet: View {
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                    HistoryDetailHeaderSection(entry: entry)
+                    HistoryDetailHeaderSection(
+                        entry: entry,
+                        reasoningNotes: entry.plan?.notes
+                    )
 
                     Divider()
 
@@ -1656,11 +1659,6 @@ struct HistoryDetailSheet: View {
                     // Learnings Applied
                     if let plan = entry.plan {
                         HistoryLiquidGlassLearningsCard(plan: plan)
-                    }
-
-                    // AI Reasoning
-                    if let plan = entry.plan, !plan.notes.isEmpty {
-                        HistoryLiquidGlassReasoningCard(notes: plan.notes)
                     }
 
                     // Duplicate Files

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct HistoryDetailHeaderSection: View {
     let entry: OrganizationHistoryEntry
+    let reasoningNotes: String?
 
     private var directoryName: String {
         URL(fileURLWithPath: entry.directoryPath).lastPathComponent
@@ -25,17 +26,27 @@ struct HistoryDetailHeaderSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(directoryName), \(entry.status.displayName), \(entry.timestamp.formatted())")
 
-            Label {
-                PrivacySensitivePathText(path: entry.directoryPath)
-            } icon: {
-                Image(systemName: "folder")
+            HStack(alignment: .center, spacing: 12) {
+                Label {
+                    PrivacySensitivePathText(path: entry.directoryPath)
+                } icon: {
+                    Image(systemName: "folder")
+                }
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .padding(8)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(6)
+                .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
+                .layoutPriority(1)
+
+                Spacer(minLength: 12)
+
+                if let reasoningNotes, !reasoningNotes.isEmpty {
+                    HistoryLiquidGlassReasoningCard(notes: reasoningNotes)
+                        .fixedSize()
+                }
             }
-            .font(.system(.caption, design: .monospaced))
-            .foregroundStyle(.secondary)
-            .padding(8)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(6)
-            .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
         }
     }
 }
