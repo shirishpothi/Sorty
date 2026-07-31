@@ -410,9 +410,6 @@ struct HistoryView: View {
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
                         selectEntry(id: entry.id)
-                    },
-                    onTryAgain: {
-                        prepareTryAgain(id: entry.id)
                     }
                 )
                 .transition(historyCardTransition)
@@ -500,12 +497,6 @@ struct HistoryView: View {
             selectedEntry = entry
             showingDetail = true
         }
-    }
-
-    private func prepareTryAgain(id: UUID) {
-        guard let entry = cachedEntries.first(where: { $0.id == id }) else { return }
-        redoModelEntry = entry
-        showRedoModelPicker = true
     }
 
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
@@ -1101,7 +1092,6 @@ private struct HistorySessionCard: View {
     let entry: HistorySessionRow
     let isSelected: Bool
     let onSelect: () -> Void
-    let onTryAgain: () -> Void
 
     @State private var isHovered = false
 
@@ -1117,13 +1107,6 @@ private struct HistorySessionCard: View {
         }
     }
 
-    private var canTryAgain: Bool {
-        switch entry.status {
-        case .failed, .cancelled, .skipped: true
-        case .completed, .undo, .partiallyUndone, .duplicatesCleanup: false
-        }
-    }
-
     var body: some View {
         let timestampText = entry.timestamp.formatted(date: .abbreviated, time: .shortened)
 
@@ -1135,7 +1118,7 @@ private struct HistorySessionCard: View {
                     entry: entry,
                     timestampText: timestampText,
                     statusColor: statusColor,
-                    showsStatus: !canTryAgain
+                    showsStatus: true
                 )
             }
             .buttonStyle(.plain)
@@ -1146,27 +1129,6 @@ private struct HistorySessionCard: View {
             )
             .accessibilityHint("Open session details")
             .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
-
-            if canTryAgain {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    onTryAgain()
-                } label: {
-                    Label("Try Again", systemImage: "arrow.clockwise")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 30)
-                        .background(
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
-                            in: Capsule()
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Try this organization again")
-                .accessibilityHint("Choose a model and regenerate the organization")
-                .accessibilityIdentifier("TryAgainButton-\(entry.id.uuidString)")
-            }
 
             Image(systemName: "chevron.right")
                 .font(.caption)
