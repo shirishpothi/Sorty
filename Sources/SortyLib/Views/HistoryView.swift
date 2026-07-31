@@ -1045,29 +1045,13 @@ private struct HistorySessionCardHeader: View {
             Spacer()
 
             if showsStatus {
-                HStack(spacing: 4) {
-                    if entry.status == .partiallyUndone {
-                        Image(systemName: "arrow.uturn.backward")
-                    }
-
-                    Text(entry.status.displayName)
-
-                    if entry.status == .partiallyUndone {
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                }
+                Text(entry.status.displayName)
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(statusColor.opacity(0.15))
                     .foregroundStyle(statusColor)
                     .clipShape(Capsule())
-                    .accessibilityLabel(
-                        entry.status == .partiallyUndone
-                            ? "Partially undone. Open details"
-                            : entry.status.displayName
-                    )
             }
         }
         .padding(12)
