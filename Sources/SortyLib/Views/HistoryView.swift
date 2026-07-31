@@ -110,6 +110,10 @@ struct HistoryView: View {
         !filteredManualEntries.isEmpty || !filteredWatchedEntries.isEmpty
     }
 
+    private var matchingSessionCount: Int {
+        filteredManualEntries.count + filteredWatchedEntries.count
+    }
+
     private var manualEntries: ArraySlice<HistorySessionRow> {
         filteredManualEntries.prefix(displayedEntryCount)
     }
@@ -254,7 +258,7 @@ struct HistoryView: View {
             } else {
                 // Header - matches DuplicatesView style
                 HistoryHeader(
-                    totalSessions: impactSummary.totalSessions,
+                    totalSessions: matchingSessionCount,
                     selectedFilter: filterSelection,
                     showsControls: true,
                     onClearHistory: {
