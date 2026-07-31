@@ -195,9 +195,9 @@ extension Animation {
         .easeOut(duration: 0.2)
     }
 
-    /// Bouncy spring animation for modals and sheets - subtle
+    /// Restrained spring animation for modal content settling into place.
     public static var modalBounce: Animation {
-        .easeOut(duration: 0.2)
+        .spring(response: 0.38, dampingFraction: 0.84)
     }
 
     /// Subtle bounce for interactive elements
@@ -296,16 +296,23 @@ struct PageTransitionModifier: ViewModifier {
     }
 }
 
-/// Modal bounce presentation modifier - subtle version
+/// Gives custom modal content a restrained scale-and-rise entrance.
 struct ModalBounceModifier: ViewModifier {
     @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(appeared ? 1.0 : 0.96)
-            .opacity(appeared ? 1.0 : 0.5)
+            .scaleEffect(reduceMotion || appeared ? 1.0 : 0.985)
+            .offset(y: reduceMotion || appeared ? 0 : 8)
+            .opacity(reduceMotion || appeared ? 1.0 : 0)
             .onAppear {
-                withAnimation(.easeOut(duration: 0.2)) {
+                guard !reduceMotion else {
+                    appeared = true
+                    return
+                }
+
+                withAnimation(.modalBounce) {
                     appeared = true
                 }
             }

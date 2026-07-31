@@ -3289,7 +3289,6 @@ struct PartialUndoResultSheet: View {
     let onDismiss: () -> Void
 
     @State private var isHoveredOpenFolder = false
-    @State private var contentOpacity: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -3455,12 +3454,7 @@ struct PartialUndoResultSheet: View {
             .padding(20)
         }
         .frame(minWidth: 400, idealWidth: 400, maxWidth: 400, minHeight: 450)
-        .opacity(contentOpacity)
-        .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
-        }
+        .modalBounce()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Partial undo complete. \(result.successCount) files restored, \(result.missingFiles.count) files not found.")
     }
