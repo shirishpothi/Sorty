@@ -163,6 +163,115 @@ struct AboutView: View {
         .frame(width: 420, height: 510)
         .modifier(AboutGlassBackground())
         .windowLinkHoverPillHost()
+        .overlay(alignment: .topLeading) {
+            AboutWindowControls()
+                .padding(.leading, 14)
+                .padding(.top, 12)
+        }
+    }
+}
+
+// MARK: - About window controls
+
+/// A playful, enlarged take on the macOS window controls used by the About window.
+/// The glyphs appear as a group on hover, matching the behavior of native traffic lights.
+private struct AboutWindowControls: View {
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            controlButton(
+                color: Color(red: 1, green: 0.25, blue: 0.32),
+                size: 54,
+                symbol: "xmark",
+                symbolSize: 23,
+                accessibilityLabel: "Close About Sorty"
+            ) {
+                HapticFeedbackManager.shared.tap()
+                NSApp.keyWindow?.performClose(nil)
+            }
+            .offset(x: 48, y: 40)
+
+            controlButton(
+                color: Color(red: 1, green: 0.79, blue: 0),
+                size: 38,
+                symbol: "minus",
+                symbolSize: 17,
+                accessibilityLabel: "Minimize About Sorty"
+            ) {
+                HapticFeedbackManager.shared.tap()
+                NSApp.keyWindow?.miniaturize(nil)
+            }
+            .offset(x: 116, y: 49)
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                NSApp.keyWindow?.toggleFullScreen(nil)
+            } label: {
+                ZStack {
+                    Capsule(style: .continuous)
+                        .fill(Color(red: 0, green: 0.78, blue: 0.38))
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .stroke(.white.opacity(0.18), lineWidth: 1.5)
+                        }
+                        .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+                        .rotationEffect(.degrees(-42))
+
+                    Image(systemName: "arrow.down.left.and.arrow.up.right")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundStyle(.black.opacity(0.64))
+                        .opacity(isHovered ? 1 : 0)
+                }
+                .frame(width: 82, height: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Enter Full Screen")
+            .accessibilityIdentifier("AboutFullScreenButton")
+            .offset(x: -3, y: 0)
+        }
+        .frame(width: 158, height: 96, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+    }
+
+    private func controlButton(
+        color: Color,
+        size: CGFloat,
+        symbol: String,
+        symbolSize: CGFloat,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .overlay {
+                        Circle()
+                            .stroke(.white.opacity(0.3), lineWidth: 1.5)
+                    }
+                    .shadow(color: .black.opacity(0.13), radius: 3, y: 2)
+
+                Image(systemName: symbol)
+                    .font(.system(size: symbolSize, weight: .heavy))
+                    .foregroundStyle(.black.opacity(0.58))
+                    .opacity(isHovered ? 1 : 0)
+            }
+            .frame(width: size, height: size)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibilityLabel))
+        .accessibilityIdentifier("About\(symbol == "xmark" ? "Close" : "Minimize")Button")
     }
 }
 

@@ -1522,7 +1522,7 @@ public class AppState: ObservableObject {
         
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 420),
-            styleMask: [.titled, .closable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -1532,6 +1532,9 @@ public class AppState: ObservableObject {
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        window.standardWindowButton(.closeButton)?.isHidden = true
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
         if #available(macOS 26.0, *) {
             window.backgroundColor = .clear
             window.isOpaque = false
