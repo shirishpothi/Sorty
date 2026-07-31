@@ -248,65 +248,49 @@ private struct HistoryPrimaryStats: View {
     let entry: OrganizationHistoryEntry
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.green)
-                    .accessibilityHidden(true)
+        HStack(spacing: 0) {
+            if entry.status == .duplicatesCleanup {
+                HistorySummaryStatItem(
+                    value: "\(entry.duplicatesDeleted ?? 0)",
+                    label: "Duplicates Deleted",
+                    icon: "trash.fill",
+                    color: .red
+                )
 
-                Text("Session Statistics")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .accessibilityAddTraits(.isHeader)
-
-                Spacer()
-            }
-
-            HStack(spacing: 0) {
-                if entry.status == .duplicatesCleanup {
-                    HistorySummaryStatItem(
-                        value: "\(entry.duplicatesDeleted ?? 0)",
-                        label: "Duplicates Deleted",
-                        icon: "trash.fill",
-                        color: .red
-                    )
-
-                    if let recovered = entry.recoveredSpace {
-                        HistorySummaryStatDivider()
-                        HistorySummaryStatItem(
-                            value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
-                            label: "Space Recovered",
-                            icon: "externaldrive.fill",
-                            color: .green
-                        )
-                    }
-                } else {
-                    HistorySummaryStatItem(
-                        value: "\(entry.filesOrganized)",
-                        label: "Files Organized",
-                        icon: "doc.on.doc.fill",
-                        color: .blue
-                    )
-
+                if let recovered = entry.recoveredSpace {
                     HistorySummaryStatDivider()
-
                     HistorySummaryStatItem(
-                        value: "\(entry.foldersCreated)",
-                        label: "Folders Created",
-                        icon: "folder.fill.badge.plus",
-                        color: .purple
+                        value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
+                        label: "Space Recovered",
+                        icon: "externaldrive.fill",
+                        color: .green
                     )
+                }
+            } else {
+                HistorySummaryStatItem(
+                    value: "\(entry.filesOrganized)",
+                    label: "Files Organized",
+                    icon: "doc.on.doc.fill",
+                    color: .blue
+                )
 
-                    if let plan = entry.plan, plan.version > 1 {
-                        HistorySummaryStatDivider()
-                        HistorySummaryStatItem(
-                            value: "v\(plan.version)",
-                            label: "Plan Version",
-                            icon: "number",
-                            color: .gray
-                        )
-                    }
+                HistorySummaryStatDivider()
+
+                HistorySummaryStatItem(
+                    value: "\(entry.foldersCreated)",
+                    label: "Folders Created",
+                    icon: "folder.fill.badge.plus",
+                    color: .purple
+                )
+
+                if let plan = entry.plan, plan.version > 1 {
+                    HistorySummaryStatDivider()
+                    HistorySummaryStatItem(
+                        value: "v\(plan.version)",
+                        label: "Plan Version",
+                        icon: "number",
+                        color: .gray
+                    )
                 }
             }
         }
