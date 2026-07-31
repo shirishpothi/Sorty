@@ -1965,9 +1965,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let batch = Array(files[start..<end])
             let completedBeforeRequest = batchIndex
             let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
-            let suggestionAction = mode == .renameOnly ? "Generating names" : "Generating suggestions"
+            let suggestionAction = mode == .renameOnly ? "Finding better names" : "Finding the best folders"
             let planningStage = batchCount > 1
-                ? "\(suggestionAction): \(GenerationStats.formatCount(end)) / \(GenerationStats.formatCount(files.count)) files..."
+                ? "\(suggestionAction) for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files..."
                 : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
             updateMeasuredProgress(
                 completed: completedBeforeRequest,
@@ -2031,7 +2031,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 completed: completed,
                 total: batchCount,
                 estimatedOverallProgress: completedProgress,
-                stage: "Suggestions ready: \(GenerationStats.formatCount(end)) / \(GenerationStats.formatCount(files.count)) files"
+                stage: "Found suggestions for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
             )
         }
 
