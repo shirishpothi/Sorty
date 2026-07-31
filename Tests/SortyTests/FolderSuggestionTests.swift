@@ -463,4 +463,42 @@ final class FolderSuggestionTests: XCTestCase {
             try FileOrganizationValidator.validate(plan, at: rootURL)
         )
     }
+
+    func testDestinationHierarchyNormalizationMergesFlattenedAndNestedBatchPaths() throws {
+        let flattenedFile = FileItem(
+            path: "/test/flattened.png",
+            name: "flattened",
+            extension: "png"
+        )
+        let nestedFile = FileItem(
+            path: "/test/nested.png",
+            name: "nested",
+            extension: "png"
+        )
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "CodexBar Project Files/Images And Icons",
+                files: [flattenedFile]
+            ),
+            FolderSuggestion(
+                folderName: "CodexBar Project Files",
+                subfolders: [
+                    FolderSuggestion(
+                        folderName: "Images And Icons",
+                        files: [nestedFile]
+                    )
+                ]
+            )
+        ])
+
+        let normalized = FolderOrganizer.normalizingDestinationHierarchy(in: plan)
+        let parent = try XCTUnwrap(normalized.suggestions.first)
+        let child = try XCTUnwrap(parent.subfolders.first)
+
+        XCTAssertEqual(normalized.suggestions.count, 1)
+        XCTAssertEqual(parent.folderName, "CodexBar Project Files")
+        XCTAssertEqual(parent.subfolders.count, 1)
+        XCTAssertEqual(child.folderName, "Images And Icons")
+        XCTAssertEqual(Set(child.files.map(\.id)), Set([flattenedFile.id, nestedFile.id]))
+    }
 }

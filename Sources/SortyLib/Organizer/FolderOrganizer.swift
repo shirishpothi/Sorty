@@ -2257,6 +2257,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         - This request contains a complete, disjoint batch from one larger folder.
         - File IDs are local to this batch. Include every file in this batch exactly once.
         - Keep decisions consistent across batches and do not invent wrapper folders just because this is a batch.
+        - Reuse the same nested folder structure across batches; never alternate between "Parent/Child" and a Parent folder containing Child.
         \(taxonomyContext)
         """
     }
@@ -2265,10 +2266,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         _ incomingPlan: OrganizationPlan,
         into accumulatedPlan: inout OrganizationPlan
     ) {
-        let incoming = removingDuplicateAssignments(from: incomingPlan)
+        let incoming = normalizingDestinationHierarchy(
+            in: removingDuplicateAssignments(from: incomingPlan)
+        )
         mergeSuggestions(incoming.suggestions, into: &accumulatedPlan.suggestions)
         accumulatedPlan.unorganizedFiles.append(contentsOf: incoming.unorganizedFiles)
         accumulatedPlan.unorganizedDetails.append(contentsOf: incoming.unorganizedDetails)
+    }
+
+    nonisolated static func normalizingDestinationHierarchy(
+        in plan: OrganizationPlan
+    ) -> OrganizationPlan {
+        var normalized = plan
+        normalized.suggestions = []
+        mergeSuggestions(plan.suggestions, into: &normalized.suggestions)
+        return normalized
     }
 
     nonisolated private static func removingDuplicateAssignments(
@@ -2313,7 +2325,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             uniquingKeysWith: { first, _ in first }
         )
 
-        for suggestion in incoming {
+        for rawSuggestion in incoming {
+            let suggestion = hierarchizedSuggestion(rawSuggestion)
             let key = normalizedDestinationKey(suggestion.folderName)
             if let index = existingIndexByKey[key] {
                 existing[index] = mergeFolderSuggestion(suggestion, into: existing[index])
@@ -2322,6 +2335,36 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 existing.append(suggestion)
             }
         }
+    }
+
+    nonisolated private static func hierarchizedSuggestion(
+        _ suggestion: FolderSuggestion
+    ) -> FolderSuggestion {
+        var recursivelyNormalized = suggestion
+        recursivelyNormalized.subfolders = []
+        mergeSuggestions(suggestion.subfolders, into: &recursivelyNormalized.subfolders)
+        guard !suggestion.folderName.hasPrefix("/") else {
+            return recursivelyNormalized
+        }
+
+        let components = suggestion.folderName
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+            .filter { $0 != "." }
+        guard components.count > 1, let leafName = components.last else {
+            return recursivelyNormalized
+        }
+
+        var nested = recursivelyNormalized
+        nested.folderName = leafName
+        for component in components.dropLast().reversed() {
+            nested = FolderSuggestion(
+                folderName: component,
+                subfolders: [nested]
+            )
+        }
+        return nested
     }
 
     nonisolated private static func mergeFolderSuggestion(
@@ -2564,7 +2607,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-        let normalizedInputPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+        let hierarchyNormalizedPlan = Self.normalizingDestinationHierarchy(in: plan)
+        let normalizedInputPlan = await normalizeStorageDestinations(
+            in: hierarchyNormalizedPlan,
+            allowedLocations: allowedLocations,
+            sourceDirectoryURL: directory
+        )
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {

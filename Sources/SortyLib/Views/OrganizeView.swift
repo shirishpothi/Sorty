@@ -2881,6 +2881,9 @@ struct ErrorView: View {
         case .permissions:
             return "Grant file access for this folder and try again."
         case .generic:
+            if planGenerationFailureCode == "PATH_CONFLICT" {
+                return "Sorty found duplicate destination folders in the generated plan. Retry and Sorty will rebuild the plan without moving any files."
+            }
             return "Choose a smarter model, then retry."
         }
     }
@@ -2947,6 +2950,8 @@ struct ErrorView: View {
                 return "The selected model couldn't finish a complete organization plan within its output limit."
             case "INVALID_PLAN":
                 return "The selected model returned a response that Sorty couldn't convert into a complete organization plan."
+            case "PATH_CONFLICT":
+                return "Sorty found two generated folders that resolve to the same destination path."
             default:
                 return "Sorty couldn't create an organization plan."
             }
@@ -2973,6 +2978,9 @@ struct ErrorView: View {
             if planGenerationFailureCode == "INVALID_PLAN" {
                 return "Retry to let Sorty use smaller batches. If it still fails, choose a more capable model."
             }
+            if planGenerationFailureCode == "PATH_CONFLICT" {
+                return "Retry to rebuild and merge duplicate destinations safely. No files were moved."
+            }
             return "Choose a smarter model and retry. If it still fails, simplify Instructions or Persona, then review Learnings, workflow, and organization rules."
         }
     }
@@ -2987,6 +2995,10 @@ struct ErrorView: View {
 
     private var planGenerationFailureCode: String? {
         guard category == .generic else { return nil }
+        if let validationError = error as? ValidationError,
+           case .pathConflict = validationError {
+            return "PATH_CONFLICT"
+        }
         if let clientError = error as? AIClientError {
             switch clientError {
             case .invalidResponseFormat, .jsonDecodingError:
