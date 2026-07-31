@@ -140,9 +140,11 @@ struct OrganizationCompleteView: View {
     
     var body: some View {
         GeometryReader { proxy in
+            let usesCompactVerticalLayout = proxy.size.height < 720
+
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 28) {
-                    VStack(spacing: 16) {
+                VStack(spacing: usesCompactVerticalLayout ? 18 : 28) {
+                    VStack(spacing: usesCompactVerticalLayout ? 10 : 16) {
                         ZStack {
                             CompletionBadgeGlow(color: statusColor)
                                 .phaseAnimator([false, true, false], trigger: glowPulseID) { content, isIntensified in
@@ -180,6 +182,8 @@ struct OrganizationCompleteView: View {
                             .scaleEffect(iconAppeared ? 1 : 0.3)
                             .shadow(color: statusColor.opacity(0.42), radius: 12)
                         }
+                        .scaleEffect(usesCompactVerticalLayout ? 0.84 : 1)
+                        .frame(height: usesCompactVerticalLayout ? 92 : 112)
                         .contentShape(Circle())
                         .onTapGesture {
                             glowPulseID += 1
@@ -187,7 +191,7 @@ struct OrganizationCompleteView: View {
                         }
                         .help("Click to intensify the glow")
                         
-                        VStack(spacing: 8) {
+                        VStack(spacing: usesCompactVerticalLayout ? 5 : 8) {
                             Text(statusTitle)
                                 .font(.title.bold())
                                 .opacity(titleAppeared ? 1 : 0)
@@ -212,16 +216,17 @@ struct OrganizationCompleteView: View {
                             if effectiveTimeSaved > 0 && undoState == .idle {
                                 TimeSavedHighlight(
                                     value: timeSavedString(effectiveTimeSaved),
-                                    animationValue: effectiveTimeSaved
+                                    animationValue: effectiveTimeSaved,
+                                    usesCompactVerticalLayout: usesCompactVerticalLayout
                                 )
-                                .padding(.top, 8)
+                                .padding(.top, usesCompactVerticalLayout ? 2 : 8)
                                 .opacity(timeSavedAppeared ? 1 : 0)
                                 .offset(y: timeSavedAppeared ? 0 : 10)
                             }
                         }
                     }
                     
-                    VStack(spacing: 18) {
+                    VStack(spacing: usesCompactVerticalLayout ? 12 : 18) {
                         HStack(spacing: 10) {
                             Image(systemName: "checkmark.seal.fill")
                                 .font(.system(size: 14, weight: .semibold))
@@ -266,7 +271,7 @@ struct OrganizationCompleteView: View {
                         }
                     }
                     .padding(.horizontal, 22)
-                    .padding(.vertical, 18)
+                    .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
                     .frame(maxWidth: 560)
                     .background(Color(NSColor.controlBackgroundColor))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -282,7 +287,8 @@ struct OrganizationCompleteView: View {
                             icon: "externaldrive.fill",
                             title: "Route large runs to preferred destinations",
                             description: "Add storage locations to send future results directly into archive or project folders.",
-                            actionTitle: "Set Up Locations"
+                            actionTitle: "Set Up Locations",
+                            usesCompactVerticalLayout: usesCompactVerticalLayout
                         ) {
                             HapticFeedbackManager.shared.tap()
                             withAnimation(.pageTransition) {
@@ -295,7 +301,7 @@ struct OrganizationCompleteView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                     
-                    VStack(spacing: 12) {
+                    VStack(spacing: usesCompactVerticalLayout ? 8 : 12) {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             returnToStart()
@@ -441,7 +447,7 @@ struct OrganizationCompleteView: View {
                 .frame(minHeight: proxy.size.height - 40)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 20)
-                .padding(.vertical, 20)
+                .padding(.vertical, usesCompactVerticalLayout ? 12 : 20)
             }
         }
         .background(WorkflowGradientBackground())
@@ -704,6 +710,7 @@ struct OrganizationCompleteView: View {
 private struct TimeSavedHighlight: View {
     let value: String
     let animationValue: TimeInterval
+    let usesCompactVerticalLayout: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -735,7 +742,7 @@ private struct TimeSavedHighlight: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, usesCompactVerticalLayout ? 7 : 10)
         .frame(maxWidth: 340)
         .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
@@ -901,6 +908,7 @@ private struct CompletionFeatureSuggestionCard: View {
     let title: String
     let description: String
     let actionTitle: String
+    let usesCompactVerticalLayout: Bool
     let action: () -> Void
     
     var body: some View {
@@ -938,7 +946,7 @@ private struct CompletionFeatureSuggestionCard: View {
                 .layoutPriority(2)
                 .help("Open storage location settings")
         }
-        .padding(16)
+        .padding(usesCompactVerticalLayout ? 12 : 16)
         .systemLiquidGlassBackground(cornerRadius: 16)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
