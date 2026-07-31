@@ -288,11 +288,29 @@ public class SettingsViewModel: ObservableObject {
         }
     }
     
-    /// Immediate save for when app terminates or explicit save is needed
+    /// Synchronous save for app termination. macOS does not wait for unstructured
+    /// tasks started from `willTerminate`, so this path must finish before returning.
     public func forceSave() {
         saveTask?.cancel()
-        Task { @MainActor in
-            await performSave()
+        let apiKey = config.apiKey
+        let provider = config.provider
+        var configToSave = config
+        configToSave.apiKey = nil
+
+        if provider != .githubCopilot,
+           provider.typicallyRequiresAPIKey,
+           config.authMethod(for: provider) == .apiKey {
+            if let apiKey {
+                _ = credentialStore.saveImmediately(provider.keychainKey, apiKey)
+            } else if credentialHydrationProvider != provider {
+                Task { [credentialStore] in
+                    _ = await credentialStore.delete(provider.keychainKey)
+                }
+            }
+        }
+
+        if let encoded = try? JSONEncoder().encode(configToSave) {
+            userDefaults.set(encoded, forKey: configKey)
         }
     }
     

@@ -69,9 +69,11 @@ struct KeychainManager {
                 cleanupFallbackServices(for: key)
                 return true
             }
+            logFailure(operation: "update", status: updateStatus)
             return false
         }
 
+        logFailure(operation: "save", status: status)
         return false
     }
 
@@ -182,6 +184,9 @@ struct KeychainManager {
             _ = SecItemDelete(query as CFDictionary)
         }
     }
+
+    private static func logFailure(operation: String, status: OSStatus) {
+        let message = SecCopyErrorMessageString(status, nil).map { $0 as String } ?? "Unknown Keychain error"
+        NSLog("Sorty Keychain %@ failed (OSStatus %d): %@", operation, status, message)
+    }
 }
-
-

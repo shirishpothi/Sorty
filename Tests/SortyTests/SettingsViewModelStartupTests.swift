@@ -101,6 +101,38 @@ final class SettingsViewModelStartupTests: XCTestCase {
         XCTAssertEqual(recorder.savedValue, "openrouter-secret")
     }
 
+    func testForceSavePersistsCredentialBeforeReturning() throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var storedConfig = AIConfig.default
+        storedConfig.provider = .openRouter
+        defaults.set(try JSONEncoder().encode(storedConfig), forKey: "aiConfig")
+
+        let recorder = ImmediateCredentialSaveRecorder()
+        let credentialStore = SettingsCredentialStore(
+            load: { _ in nil },
+            save: { _, _ in true },
+            saveImmediately: { key, value in
+                recorder.record(key: key, value: value)
+                return true
+            },
+            delete: { _ in true }
+        )
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: credentialStore,
+            observesNotifications: false
+        )
+        viewModel.config.apiKey = "openrouter-secret"
+
+        viewModel.forceSave()
+
+        XCTAssertEqual(recorder.savedKey, AIProvider.openRouter.keychainKey)
+        XCTAssertEqual(recorder.savedValue, "openrouter-secret")
+    }
+
     func testStartupSaveDoesNotDeleteCredentialBeforeHydrationCompletes() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

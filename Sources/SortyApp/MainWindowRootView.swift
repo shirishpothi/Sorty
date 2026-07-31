@@ -104,8 +104,8 @@ struct MainWindowRootView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                settingsViewModel.forceSave()
                 Task { @MainActor in
-                    settingsViewModel.forceSave()
                     await learningsManager.forceSave()
                 }
             }
