@@ -151,6 +151,7 @@ private struct PartialUndoItem: Identifiable {
 private struct PartialUndoItemRow: View {
     let item: PartialUndoItem
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
 
     var body: some View {
@@ -168,9 +169,16 @@ private struct PartialUndoItemRow: View {
                 Spacer()
 
                 Image(systemName: "arrow.up.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 10)
                     .opacity(isHovered ? 1 : 0)
+                    .offset(
+                        x: reduceMotion || isHovered ? 0 : -3,
+                        y: reduceMotion || isHovered ? 0 : 3
+                    )
+                    .scaleEffect(reduceMotion || isHovered ? 1 : 0.75)
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -181,6 +189,10 @@ private struct PartialUndoItemRow: View {
             )
         }
         .buttonStyle(.plain)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+            value: isHovered
+        )
         .onHover { isHovered = $0 }
         .help("Show in Finder")
         .accessibilityLabel("Show \(item.name) in Finder")
