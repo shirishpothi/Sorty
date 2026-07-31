@@ -250,7 +250,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                         throw AIClientError.jsonDecodingError(context: "Invalid Codex model-list response")
                     }
 
-                    return models.compactMap { model in
+                    let availableModels: [CodexAvailableModel] = models.compactMap { model -> CodexAvailableModel? in
                         guard let id = model["id"] as? String else { return nil }
                         return CodexAvailableModel(
                             id: id,
@@ -258,6 +258,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                             inputModalities: model["inputModalities"] as? [String] ?? []
                         )
                     }
+                    return availableModels
                 }
             }
 

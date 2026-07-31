@@ -263,6 +263,10 @@ struct ModelSelectionPopover: View {
         return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
     }
 
+    private func isCodexModel(_ modelId: String) -> Bool {
+        modelCatalog.codexSubscriptionModels.contains { $0.id == modelId }
+    }
+
     /// Returns whether a model supports vision (for badge display)
     private func isVisionModel(_ modelId: String) -> Bool {
         modelCatalog.supportsVision(modelId: modelId, provider: selectedProvider)
