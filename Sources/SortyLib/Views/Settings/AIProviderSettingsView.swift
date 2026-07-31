@@ -391,7 +391,7 @@ struct AIProviderSettingsView: View {
                 title: "API Key",
                 text: Binding(
                     get: { viewModel.config.apiKey ?? "" },
-                    set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
+                    set: { viewModel.updateAPIKey($0) }
                 ),
                 isOptional: !viewModel.config.requiresAPIKey
             )

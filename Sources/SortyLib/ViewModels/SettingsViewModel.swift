@@ -11,11 +11,13 @@ import Combine
 struct SettingsCredentialStore: Sendable {
     let load: @Sendable (String) async -> String?
     let save: @Sendable (String, String) async -> Bool
+    let saveImmediately: @MainActor @Sendable (String, String) -> Bool
     let delete: @Sendable (String) async -> Bool
 
     static let keychain = SettingsCredentialStore(
         load: { await KeychainManager.getAsync(key: $0) },
         save: { await KeychainManager.saveAsync(key: $0, value: $1) },
+        saveImmediately: { KeychainManager.save(key: $0, value: $1) },
         delete: { await KeychainManager.deleteAsync(key: $0) }
     )
 }
@@ -211,6 +213,18 @@ public class SettingsViewModel: ObservableObject {
         isApplyingConfigMutation = true
         config.apiKey = apiKey
         isApplyingConfigMutation = false
+    }
+
+    public func updateAPIKey(_ value: String) {
+        let apiKey = value.isEmpty ? nil : value
+        config.apiKey = apiKey
+
+        guard let apiKey,
+              config.provider != .githubCopilot,
+              config.provider.typicallyRequiresAPIKey,
+              config.authMethod(for: config.provider) == .apiKey else { return }
+
+        _ = credentialStore.saveImmediately(config.provider.keychainKey, apiKey)
     }
 
     private func persistCredential(_ apiKey: String, for provider: AIProvider) {

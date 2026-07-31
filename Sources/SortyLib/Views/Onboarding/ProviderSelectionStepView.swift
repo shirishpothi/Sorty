@@ -496,7 +496,7 @@ public struct ProviderSelectionStepView: View {
                 TextField("Enter your API key", text: Binding(
                     get: { settingsViewModel.config.apiKey ?? "" },
                     set: {
-                        settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                        settingsViewModel.updateAPIKey($0)
                         scheduleConnectionTest()
                     }
                 ))
@@ -504,7 +504,7 @@ public struct ProviderSelectionStepView: View {
                 SecureField("Enter your API key", text: Binding(
                     get: { settingsViewModel.config.apiKey ?? "" },
                     set: {
-                        settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                        settingsViewModel.updateAPIKey($0)
                         scheduleConnectionTest()
                     }
                 ))

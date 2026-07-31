@@ -19,6 +19,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
                 return nil
             },
             save: { _, _ in true },
+            saveImmediately: { _, _ in true },
             delete: { _ in true }
         )
 
@@ -52,6 +53,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         let credentialStore = SettingsCredentialStore(
             load: { _ in "stale-credential" },
             save: { _, _ in true },
+            saveImmediately: { _, _ in true },
             delete: { _ in true }
         )
         let viewModel = SettingsViewModel(
@@ -66,6 +68,37 @@ final class SettingsViewModelStartupTests: XCTestCase {
 
         XCTAssertEqual(viewModel.config.provider, .ollama)
         XCTAssertNil(viewModel.config.apiKey)
+    }
+
+    func testUpdatingAPIKeyPersistsBeforeReturning() throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var storedConfig = AIConfig.default
+        storedConfig.provider = .openRouter
+        defaults.set(try JSONEncoder().encode(storedConfig), forKey: "aiConfig")
+
+        let recorder = ImmediateCredentialSaveRecorder()
+        let credentialStore = SettingsCredentialStore(
+            load: { _ in nil },
+            save: { _, _ in true },
+            saveImmediately: { key, value in
+                recorder.record(key: key, value: value)
+                return true
+            },
+            delete: { _ in true }
+        )
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: credentialStore,
+            observesNotifications: false
+        )
+
+        viewModel.updateAPIKey("openrouter-secret")
+
+        XCTAssertEqual(recorder.savedKey, AIProvider.openRouter.keychainKey)
+        XCTAssertEqual(recorder.savedValue, "openrouter-secret")
     }
 
     func testStartupSaveDoesNotDeleteCredentialBeforeHydrationCompletes() async throws {
@@ -91,6 +124,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
                 await recorder.recordSave(key: key, value: value)
                 return true
             },
+            saveImmediately: { _, _ in true },
             delete: { key in
                 await recorder.recordDelete(key: key)
                 return true
@@ -112,6 +146,17 @@ final class SettingsViewModelStartupTests: XCTestCase {
         let deletedAfterHydration = await recorder.deletedKeys()
         XCTAssertEqual(viewModel.config.apiKey, "persisted-openrouter-key")
         XCTAssertEqual(deletedAfterHydration, [])
+    }
+}
+
+@MainActor
+private final class ImmediateCredentialSaveRecorder {
+    private(set) var savedKey: String?
+    private(set) var savedValue: String?
+
+    func record(key: String, value: String) {
+        savedKey = key
+        savedValue = value
     }
 }
 
