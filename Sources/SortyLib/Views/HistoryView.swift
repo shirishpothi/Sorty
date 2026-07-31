@@ -3290,6 +3290,7 @@ struct PartialUndoResultSheet: View {
 
     @State private var isHoveredOpenFolder = false
     @State private var contentOpacity: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -3412,13 +3413,35 @@ struct PartialUndoResultSheet: View {
                 Button {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: result.directoryPath)
                 } label: {
-                    Label("Open Folder in Finder", systemImage: "folder")
+                    Label {
+                        Text("Open Folder in Finder")
+                    } icon: {
+                        Image(systemName: isHoveredOpenFolder ? "arrow.up.right" : "folder")
+                            .contentTransition(.symbolEffect(.replace))
+                            .transaction { transaction in
+                                if reduceMotion {
+                                    transaction.disablesAnimations = true
+                                }
+                            }
+                    }
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.sortyBordered)
                 .scaleEffect(isHoveredOpenFolder ? 1.02 : 1.0)
-                .animation(.subtleBounce, value: isHoveredOpenFolder)
-                .onHover { isHoveredOpenFolder = $0 }
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    value: isHoveredOpenFolder
+                )
+                .onHover { hovering in
+                    if hovering && !isHoveredOpenFolder {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    withAnimation(
+                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)
+                    ) {
+                        isHoveredOpenFolder = hovering
+                    }
+                }
                 .accessibilityIdentifier("OpenFolderButton")
 
                 Button("Done") {

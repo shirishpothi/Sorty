@@ -59,10 +59,6 @@ struct HistorySessionStatisticsSection: View {
     var body: some View {
         if entry.success || entry.status == .duplicatesCleanup {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Session Statistics")
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-
                 HistoryPrimaryStats(entry: entry)
 
                 if showsDetailedStats, let stats = entry.plan?.generationStats {
@@ -252,45 +248,116 @@ private struct HistoryPrimaryStats: View {
     let entry: OrganizationHistoryEntry
 
     var body: some View {
-        HStack(spacing: 20) {
-            if entry.status == .duplicatesCleanup {
-                DetailStatView(
-                    title: "Duplicates Deleted",
-                    value: "\(entry.duplicatesDeleted ?? 0)",
-                    icon: "trash.fill",
-                    color: .red
-                )
-                if let recovered = entry.recoveredSpace {
-                    DetailStatView(
-                        title: "Space Recovered",
-                        value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
-                        icon: "externaldrive.fill",
-                        color: .green
+        VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
+
+                Text("Session Statistics")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+
+                Spacer()
+            }
+
+            HStack(spacing: 0) {
+                if entry.status == .duplicatesCleanup {
+                    HistorySummaryStatItem(
+                        value: "\(entry.duplicatesDeleted ?? 0)",
+                        label: "Duplicates Deleted",
+                        icon: "trash.fill",
+                        color: .red
                     )
-                }
-            } else {
-                DetailStatView(
-                    title: "Files Organized",
-                    value: "\(entry.filesOrganized)",
-                    icon: "doc.fill",
-                    color: .blue
-                )
-                DetailStatView(
-                    title: "Folders Created",
-                    value: "\(entry.foldersCreated)",
-                    icon: "folder.fill",
-                    color: .accentColor
-                )
-                if let plan = entry.plan {
-                    DetailStatView(
-                        title: "Plan Version",
-                        value: "v\(plan.version)",
-                        icon: "number",
-                        color: .gray
+
+                    if let recovered = entry.recoveredSpace {
+                        HistorySummaryStatDivider()
+                        HistorySummaryStatItem(
+                            value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
+                            label: "Space Recovered",
+                            icon: "externaldrive.fill",
+                            color: .green
+                        )
+                    }
+                } else {
+                    HistorySummaryStatItem(
+                        value: "\(entry.filesOrganized)",
+                        label: "Files Organized",
+                        icon: "doc.on.doc.fill",
+                        color: .blue
                     )
+
+                    HistorySummaryStatDivider()
+
+                    HistorySummaryStatItem(
+                        value: "\(entry.foldersCreated)",
+                        label: "Folders Created",
+                        icon: "folder.fill.badge.plus",
+                        color: .purple
+                    )
+
+                    if let plan = entry.plan, plan.version > 1 {
+                        HistorySummaryStatDivider()
+                        HistorySummaryStatItem(
+                            value: "v\(plan.version)",
+                            label: "Plan Version",
+                            icon: "number",
+                            color: .gray
+                        )
+                    }
                 }
             }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .background(Color(NSColor.controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+private struct HistorySummaryStatItem: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(color)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 1) {
+                Text(value)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .numericTextTransition(animationValue: value)
+
+                Text(label)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value) \(label)")
+    }
+}
+
+private struct HistorySummaryStatDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.09))
+            .frame(width: 1, height: 44)
+            .accessibilityHidden(true)
     }
 }
 
