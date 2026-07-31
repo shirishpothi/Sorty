@@ -1966,7 +1966,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let completedBeforeRequest = batchIndex
             let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
             let planningStage = batchCount > 1
-                ? "Planning batch \(batchIndex + 1) of \(batchCount) · \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
+                ? "Planning \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
                 : "Planning \(GenerationStats.formatCount(files.count)) files"
             updateMeasuredProgress(
                 completed: completedBeforeRequest,
@@ -2045,7 +2045,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let model = client.config.model
         let provider = client.config.provider.displayName
         let summary = batchCount > 1
-            ? "Analyzed \(GenerationStats.formatCount(files.count)) files in \(completedAnalysisBatchCount) bounded batches."
+            ? "Analyzed \(GenerationStats.formatCount(files.count)) files across \(completedAnalysisBatchCount) AI requests."
             : "Analyzed \(GenerationStats.formatCount(files.count)) files."
         mergedPlan.notes = ([summary] + retainedNotes).joined(separator: " ")
         mergedPlan.generationStats = GenerationStats(
@@ -2177,17 +2177,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let firstFiles = Array(files[..<splitIndex])
             let secondFiles = Array(files[splitIndex...])
             LogManager.shared.log(
-                "Retrying a failed \(files.count)-file AI batch as \(firstFiles.count) and \(secondFiles.count) files.",
+                "Retrying a failed \(files.count)-file AI request as separate requests for \(firstFiles.count) and \(secondFiles.count) files.",
                 level: .warning,
                 category: "FolderOrganizer"
             )
-            organizationStage = "Retrying a large batch in smaller groups..."
+            organizationStage = "Retrying with fewer files at a time..."
 
             let recoveryInstructions = instructions + """
 
             ADAPTIVE RETRY
             - The previous larger request could not produce a complete valid plan.
-            - Return a complete plan for only the files in this smaller recovery batch.
+            - Return a complete plan for only the files in this smaller request.
             """
             let firstPlans = try await analyzeBatchAdaptively(
                 files: firstFiles,

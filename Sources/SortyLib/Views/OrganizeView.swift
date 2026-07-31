@@ -2973,10 +2973,10 @@ struct ErrorView: View {
             return "Grant access to the required folder, then retry."
         case .generic:
             if planGenerationFailureCode == "OUTPUT_LIMIT" {
-                return "Retry to let Sorty use smaller batches, or choose a model with a larger output limit."
+                return "Retry to let Sorty process fewer files at a time, or choose a model with a larger output limit."
             }
             if planGenerationFailureCode == "INVALID_PLAN" {
-                return "Retry to let Sorty use smaller batches. If it still fails, choose a more capable model."
+                return "Retry to let Sorty process fewer files at a time. If it still fails, choose a more capable model."
             }
             if planGenerationFailureCode == "PATH_CONFLICT" {
                 return "Retry to rebuild and merge duplicate destinations safely. No files were moved."

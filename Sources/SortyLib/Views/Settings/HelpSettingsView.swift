@@ -208,7 +208,7 @@ struct HelpSettingsView: View {
         - Deep scan: \(yesNo(config.enableDeepScan))
         - Vision: \(yesNo(config.enableVision))
         - Vision detail: \(config.effectiveVisionDetailLevel.displayName)
-        - Vision batch: \(config.limitVisionImages ? "\(config.visionBatchStrategy.displayName), max \(config.visionBatchSize)" : "All images")
+        - Images selected for vision: \(config.limitVisionImages ? "\(config.visionBatchStrategy.displayName), max \(config.visionBatchSize)" : "All images")
         - Smart rename: \(yesNo(config.enableSmartRename))
         - Duplicate detection: \(yesNo(config.detectDuplicates))
         - File tagging: \(yesNo(config.enableFileTagging))

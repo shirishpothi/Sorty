@@ -38,7 +38,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             )
         } catch let error as AIClientError where Self.isContextLimitError(error) {
             if files.count > 1 {
-                DebugLogger.log("AFM context limit reached for \(files.count) files. Retrying in adaptive batches.")
+                DebugLogger.log("AFM context limit reached for \(files.count) files. Retrying with smaller requests.")
                 return try await analyzeInAdaptiveBatches(
                     files: files,
                     customInstructions: customInstructions,
@@ -261,7 +261,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             promptTokens: nil
         )
 
-        let notes = "Generated in \(processedChunkCount) adaptive batch(es) to fit Apple model context limits."
+        let notes = "Generated across \(processedChunkCount) requests to fit Apple model context limits."
         return OrganizationPlan(
             suggestions: mergedSuggestions,
             unorganizedFiles: mergedUnorganizedFiles,
@@ -323,7 +323,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         if lowered.contains("context") || lowered.contains("token") || lowered.contains("length") {
             return AIClientError.apiError(
                 statusCode: 413,
-                message: "Apple Foundation Model request exceeded local context limits. Sorty will retry in smaller batches automatically. Details: \(message)"
+                message: "Apple Foundation Model request exceeded local context limits. Sorty will retry with fewer files at a time. Details: \(message)"
             )
         }
 

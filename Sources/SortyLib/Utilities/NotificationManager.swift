@@ -805,7 +805,7 @@ public class NotificationManager: ObservableObject {
     }
 
     public func sendInFlowPreviewSample() {
-        show(.previewReady(folderName: "Current Batch"))
+        show(.previewReady(folderName: "Current Preview"))
     }
 
     /// Show a demo of the in-app HUD delivery style.
