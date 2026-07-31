@@ -369,7 +369,11 @@ public final class RunningOrganizationActivity: ObservableObject {
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private actor LargeFolderPlanAccumulator {
-        private var plan = OrganizationPlan()
+        private var plan: OrganizationPlan
+
+        init(plan: OrganizationPlan = OrganizationPlan()) {
+            self.plan = plan
+        }
 
         func merge(_ incoming: OrganizationPlan) -> [String] {
             FolderOrganizer.mergeLargeFolderBatch(incoming, into: &plan)
@@ -379,6 +383,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         func result() -> OrganizationPlan {
             plan
         }
+    }
+
+    private struct OrganizationResumeCheckpoint {
+        let files: [FileItem]
+        let directory: URL
+        let instructions: String
+        let personaPrompt: String?
+        let imagePayload: [String: Data]
+        let temperature: Double?
+        let mode: OrganizationMode
+        var completedPlans: [OrganizationPlan]
+        var nextBatchIndex: Int
     }
 
     nonisolated(unsafe) private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
@@ -514,6 +530,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var startTime: Date?
     private var timeoutTask: Task<Void, Never>?
     private var suppressCancellationReset = false
+    private var resumeCheckpoint: OrganizationResumeCheckpoint?
+
+    public var canResumeOrganization: Bool {
+        guard resumeCheckpoint != nil,
+              case .error(let error) = state else { return false }
+        return Self.isTimeoutFailure(error)
+    }
     
     // MARK: - Batch Update Mechanism
     
@@ -1483,6 +1506,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 currentPlan = validatedPlan
+                resumeCheckpoint = nil
                 updateState(.ready, stage: "Ready!", progress: 1.0)
             }
 
@@ -1858,7 +1882,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             imagePayload: imagePayload,
             instructions: instructions,
             personaPrompt: personaPrompt,
-            temperature: temperature
+            temperature: temperature,
+            directory: directory
         )
 
         try checkCancellation()
@@ -1875,9 +1900,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         instructions: String,
         personaPrompt: String?,
         temperature: Double?,
-        modeOverride: OrganizationMode? = nil
+        modeOverride: OrganizationMode? = nil,
+        directory: URL? = nil,
+        resuming checkpoint: OrganizationResumeCheckpoint? = nil
     ) async throws -> OrganizationPlan {
-        let mode = modeOverride ?? aiConfig?.mode ?? client.config.mode
+        let mode = checkpoint?.mode ?? modeOverride ?? aiConfig?.mode ?? client.config.mode
         let batchSize = mode == .organize
             ? Self.organizeAnalysisBatchSize
             : Self.renameAnalysisBatchSize
@@ -1894,8 +1921,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var estimatedCost = Decimal.zero
         var hasEstimatedCost = false
         var completedAnalysisBatchCount = 0
+        var completedPlans = checkpoint?.completedPlans ?? []
 
-        for batchIndex in 0..<batchCount {
+        for completedPlan in completedPlans {
+            taxonomy = await accumulator.merge(completedPlan)
+            if let stats = completedPlan.generationStats {
+                totalResponseTokens += stats.totalTokens
+                if let promptTokens = stats.promptTokens {
+                    totalPromptTokens += promptTokens
+                    hasPromptTokenCount = true
+                }
+                if firstTTFT == nil {
+                    firstTTFT = stats.ttft
+                }
+                if let cost = stats.estimatedCost {
+                    estimatedCost += cost
+                    hasEstimatedCost = true
+                }
+            }
+            completedAnalysisBatchCount += 1
+        }
+
+        let resolvedDirectory = checkpoint?.directory ?? directory ?? currentDirectory
+        if let resolvedDirectory {
+            resumeCheckpoint = OrganizationResumeCheckpoint(
+                files: files,
+                directory: resolvedDirectory,
+                instructions: instructions,
+                personaPrompt: personaPrompt,
+                imagePayload: imagePayload,
+                temperature: temperature,
+                mode: mode,
+                completedPlans: completedPlans,
+                nextBatchIndex: checkpoint?.nextBatchIndex ?? 0
+            )
+        }
+
+        for batchIndex in (checkpoint?.nextBatchIndex ?? 0)..<batchCount {
             try checkCancellation()
 
             let start = batchIndex * batchSize
@@ -1953,6 +2015,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
                 taxonomy = await accumulator.merge(batchPlan)
             }
+            completedPlans.append(contentsOf: batchPlans)
+            resumeCheckpoint?.completedPlans = completedPlans
+            resumeCheckpoint?.nextBatchIndex = batchIndex + 1
 
             let completed = batchIndex + 1
             let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
@@ -1993,6 +2058,74 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             stage: mode == .renameOnly ? "Checking name suggestions..." : "Checking organization plan..."
         )
         return mergedPlan
+    }
+
+    public func resumeOrganization() async throws {
+        guard let checkpoint = resumeCheckpoint,
+              let client = aiClient else {
+            throw OrganizationError.noCurrentPlan
+        }
+
+        cancelInternal()
+        isCancellationRequested = false
+        clearStreamingDisplayState()
+        updateState(
+            .organizing,
+            stage: "Continuing \(checkpoint.mode.displayName)...",
+            progress: 0.30
+        )
+
+        currentTask = Task {
+            let plan = try await analyzeInBoundedBatches(
+                files: checkpoint.files,
+                client: client,
+                imagePayload: checkpoint.imagePayload,
+                instructions: checkpoint.instructions,
+                personaPrompt: checkpoint.personaPrompt,
+                temperature: checkpoint.temperature,
+                modeOverride: checkpoint.mode,
+                directory: checkpoint.directory,
+                resuming: checkpoint
+            )
+            let validatedPlan = try await validationPhase(
+                plan: plan,
+                files: checkpoint.files,
+                directory: checkpoint.directory,
+                instructions: checkpoint.instructions,
+                personaPrompt: checkpoint.personaPrompt,
+                temperature: checkpoint.temperature,
+                imagePayload: checkpoint.imagePayload
+            )
+            currentPlan = validatedPlan
+            resumeCheckpoint = nil
+            updateState(.ready, stage: "Ready!", progress: 1.0)
+        }
+        defer { currentTask = nil }
+
+        do {
+            try await currentTask?.value
+        } catch {
+            stopTimeoutTimer()
+            handleOrganizationError(error, directory: checkpoint.directory)
+            throw error
+        }
+    }
+
+    nonisolated private static func isTimeoutFailure(_ error: Error) -> Bool {
+        if let clientError = error as? AIClientError,
+           case .networkError(let underlyingError) = clientError {
+            let underlyingNSError = underlyingError as NSError
+            if underlyingNSError.domain == NSURLErrorDomain,
+               underlyingNSError.code == NSURLErrorTimedOut {
+                return true
+            }
+        }
+        let description = error.localizedDescription.lowercased()
+        if description.contains("timeout") || description.contains("timed out") {
+            return true
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
     }
 
     private func analyzeBatchAdaptively(
@@ -4629,6 +4762,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             detectedDuplicates = []
             measuredWorkProgress = nil
             visionAnalysisSummary = nil
+            resumeCheckpoint = nil
             isCancellationRequested = false
             userInitiatedAction = false
             

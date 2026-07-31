@@ -383,6 +383,12 @@ struct OrganizeView: View {
         case .error(let error):
             ErrorView(
                 error: error,
+                canResume: organizer.canResumeOrganization,
+                onResume: {
+                    Task {
+                        try? await organizer.resumeOrganization()
+                    }
+                },
                 onCancel: returnToDirectorySelection,
                 onRetry: {
                     HapticFeedbackManager.shared.tap()
@@ -2767,6 +2773,8 @@ struct StorageLocationsInfoPopover: View {
 
 struct ErrorView: View {
     let error: Error
+    var canResume = false
+    var onResume: () -> Void = {}
     let onCancel: () -> Void
     let onRetry: () -> Void
     let onRetryWithSmarterModel: () -> Void
@@ -2902,8 +2910,6 @@ struct ErrorView: View {
         Provider: \(settingsViewModel.config.provider.displayName)
         Sorty: \(BuildInfo.fullVersion)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
-
-        Privacy: This report does not include file names, paths, file contents, custom instructions, prompts, model responses, credentials, API endpoints, or model identifiers.
         """
     }
 
@@ -3032,6 +3038,23 @@ struct ErrorView: View {
             }
 
             HStack(spacing: 12) {
+                if canResume && category == .network && isTimeoutError {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        onResume()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text("Continue \(settingsViewModel.config.mode.displayName)")
+                                .font(.caption.bold())
+                        }
+                    }
+                    .buttonStyle(.tintedPill(.accentColor, size: .small))
+                    .help("Continue from the last completed part of this organization")
+                    .accessibilityIdentifier("ErrorContinueOrganizationButton")
+                }
+
                 Button {
                     HapticFeedbackManager.shared.tap()
                     animateActionFeedback(.cancel)

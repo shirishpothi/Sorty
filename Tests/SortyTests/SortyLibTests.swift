@@ -189,6 +189,43 @@ class SortyTests: XCTestCase {
     }
 
     @MainActor
+    func testTimeoutCanContinueFromLastCompletedBatch() async throws {
+        for index in 0..<121 {
+            let fileURL = tempDirectory.appendingPathComponent("resume-\(index).txt")
+            try Data().write(to: fileURL)
+        }
+
+        let renameConfig = AIConfig(
+            apiKey: "test-key",
+            model: "test-model",
+            mode: .renameOnly,
+            enableDeepScan: false,
+            enableVision: false
+        )
+        let renameClient = MockAIClient(config: renameConfig)
+        let timeoutTracker = ResumeTimeoutTracker()
+        folderOrganizer.setAIClientForTesting(renameClient)
+        await renameClient.setHandler { files in
+            try await timeoutTracker.plan(for: files)
+        }
+
+        do {
+            try await folderOrganizer.organize(directory: tempDirectory)
+            XCTFail("Expected the final batch to time out")
+        } catch {
+            XCTAssertTrue(folderOrganizer.canResumeOrganization)
+        }
+
+        try await folderOrganizer.resumeOrganization()
+        let batchSizes = await renameClient.currentAnalyzedBatchSizes()
+
+        XCTAssertEqual(batchSizes, [120, 1, 1])
+        XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 121)
+        XCTAssertEqual(folderOrganizer.state, .ready)
+        XCTAssertFalse(folderOrganizer.canResumeOrganization)
+    }
+
+    @MainActor
     func testClientNotConfiguredError() async {
         // Ensure client is nil
         folderOrganizer.setAIClientForTesting(nil)
@@ -338,5 +375,21 @@ class SortyTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
+    }
+}
+
+private actor ResumeTimeoutTracker {
+    private var hasTimedOut = false
+
+    func plan(for files: [FileItem]) throws -> OrganizationPlan {
+        if files.count == 1, !hasTimedOut {
+            hasTimedOut = true
+            throw AIClientError.networkError(URLError(.timedOut))
+        }
+        return OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "", files: files)
+            ]
+        )
     }
 }
