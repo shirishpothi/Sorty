@@ -248,7 +248,7 @@ struct ModelSelectionPopover: View {
 
         // Filter Codex (subscription) models for OpenAI if toggled
         if showCodexOnly && selectedProvider == .openAI {
-            models = models.filter { isCodexModel($0) }
+            models = modelCatalog.codexSubscriptionModels.map(\.id)
         }
 
         if !searchText.isEmpty {
@@ -261,11 +261,6 @@ struct ModelSelectionPopover: View {
     private func isModelFree(_ modelId: String) -> Bool {
         let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
         return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
-    }
-
-    /// Returns whether a model ID belongs to OpenAI's Codex (subscription) line
-    private func isCodexModel(_ modelId: String) -> Bool {
-        modelId.localizedCaseInsensitiveContains("codex")
     }
 
     /// Returns whether a model supports vision (for badge display)
@@ -300,6 +295,12 @@ struct ModelSelectionPopover: View {
             isSearchFocused = true
             isSearchAccessibilityFocused = true
             await modelCatalog.refresh(provider: currentProvider)
+        }
+        .onChange(of: showCodexOnly) { _, isEnabled in
+            guard isEnabled else { return }
+            Task {
+                await modelCatalog.refreshCodexSubscriptionModels()
+            }
         }
     }
 
@@ -503,7 +504,11 @@ struct ModelSelectionPopover: View {
 
                 Button {
                     Task {
-                        await modelCatalog.refresh(provider: selectedProvider, force: true)
+                        if showCodexOnly && selectedProvider == .openAI {
+                            await modelCatalog.refreshCodexSubscriptionModels(force: true)
+                        } else {
+                            await modelCatalog.refresh(provider: selectedProvider, force: true)
+                        }
                     }
                 } label: {
                     HStack(spacing: 4) {

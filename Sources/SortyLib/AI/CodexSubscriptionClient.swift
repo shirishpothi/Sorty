@@ -7,6 +7,18 @@
 
 import Foundation
 
+public struct CodexAvailableModel: Sendable, Equatable {
+    public let id: String
+    public let displayName: String
+    public let inputModalities: [String]
+
+    public init(id: String, displayName: String, inputModalities: [String]) {
+        self.id = id
+        self.displayName = displayName
+        self.inputModalities = inputModalities
+    }
+}
+
 public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
@@ -170,6 +182,90 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 message: message ?? "Codex CLI sign-in could not be verified. Run `codex login status` in Terminal."
             )
         }
+    }
+
+    public nonisolated static func availableModels() async throws -> [CodexAvailableModel] {
+        guard let serviceURL = URL(string: "https://api.openai.com") else {
+            throw AIClientError.invalidURL
+        }
+        try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
+
+        try await Task.detached(priority: .userInitiated) {
+            guard let codexPath = resolveCodexExecutablePath() else {
+                throw AIClientError.apiError(
+                    statusCode: 501,
+                    message: "Codex CLI is required. Install with: npm i -g @openai/codex"
+                )
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: codexPath)
+            process.arguments = ["app-server", "--stdio"]
+
+            let inputPipe = Pipe()
+            let outputPipe = Pipe()
+            process.standardInput = inputPipe
+            process.standardOutput = outputPipe
+            process.standardError = FileHandle.nullDevice
+
+            try process.run()
+            defer {
+                inputPipe.fileHandleForWriting.closeFile()
+                if process.isRunning {
+                    process.terminate()
+                }
+            }
+
+            let requests = [
+                #"{"id":1,"method":"initialize","params":{"clientInfo":{"name":"sorty","title":"Sorty","version":"1"}}}"#,
+                #"{"id":2,"method":"model/list","params":{"includeHidden":false,"limit":100}}"#
+            ].joined(separator: "\n") + "\n"
+            try inputPipe.fileHandleForWriting.write(contentsOf: Data(requests.utf8))
+
+            var bufferedData = Data()
+            while process.isRunning {
+                let chunk = outputPipe.fileHandleForReading.availableData
+                guard !chunk.isEmpty else { break }
+                bufferedData.append(chunk)
+
+                while let newline = bufferedData.firstIndex(of: 0x0A) {
+                    let lineData = bufferedData[..<newline]
+                    bufferedData.removeSubrange(...newline)
+                    guard
+                        let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                        (json["id"] as? Int) == 2
+                    else {
+                        continue
+                    }
+
+                    if let error = json["error"] as? [String: Any] {
+                        let message = error["message"] as? String ?? "Codex could not provide its model list."
+                        throw AIClientError.apiError(statusCode: 500, message: message)
+                    }
+
+                    guard
+                        let result = json["result"] as? [String: Any],
+                        let models = result["data"] as? [[String: Any]]
+                    else {
+                        throw AIClientError.jsonDecodingError(context: "Invalid Codex model-list response")
+                    }
+
+                    return models.compactMap { model in
+                        guard let id = model["id"] as? String else { return nil }
+                        return CodexAvailableModel(
+                            id: id,
+                            displayName: model["displayName"] as? String ?? id,
+                            inputModalities: model["inputModalities"] as? [String] ?? []
+                        )
+                    }
+                }
+            }
+
+            throw AIClientError.apiError(
+                statusCode: 500,
+                message: "Codex ended before returning its model list."
+            )
+        }.value
     }
 
     private func runCodex(

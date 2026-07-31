@@ -35,10 +35,12 @@ public final class ModelCatalog: ObservableObject {
     @Published public var lastError: [AIProvider: Error?] = [:]
     @Published public var searchResults: [(provider: AIProvider, models: [ModelInfo])] = []
     @Published public var usingFallback: [AIProvider: Bool] = [:]
+    @Published public private(set) var codexSubscriptionModels: [ModelInfo] = []
     
     private var cacheTimestamps: [AIProvider: Date] = [:]
     private let session: URLSession
     private var searchTask: Task<Void, Never>?
+    private var codexModelsTimestamp: Date?
     
     private static let cloudTTL: TimeInterval = 24 * 60 * 60
     private static let ollamaTTL: TimeInterval = 10 * 60
@@ -70,6 +72,28 @@ public final class ModelCatalog: ObservableObject {
             return fallbackModels(for: provider)
         }
         return filteredModels(cached, for: provider)
+    }
+
+    public func refreshCodexSubscriptionModels(force: Bool = false) async {
+        if !force,
+           let codexModelsTimestamp,
+           Date().timeIntervalSince(codexModelsTimestamp) < Self.cloudTTL,
+           !codexSubscriptionModels.isEmpty {
+            return
+        }
+
+        do {
+            let models = try await fetchCodexSubscriptionModels()
+            codexSubscriptionModels = models
+            codexModelsTimestamp = Date()
+        } catch {
+            lastError[.openAI] = error
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "model_catalog",
+                operation: "refresh_codex_models"
+            )
+        }
     }
     
     public func refresh(provider: AIProvider, force: Bool = false) async {
@@ -230,7 +254,10 @@ public final class ModelCatalog: ObservableObject {
                 ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config)
             }.value
             if hasCredential {
-                return (codexSubscriptionModels(), false)
+                let models = try await fetchCodexSubscriptionModels()
+                codexSubscriptionModels = models
+                codexModelsTimestamp = Date()
+                return (models, false)
             }
             return ([], true)
         }
@@ -288,43 +315,15 @@ public final class ModelCatalog: ObservableObject {
         return (models, false)
     }
 
-    private func codexSubscriptionModels() -> [ModelInfo] {
-        // Codex subscription sessions do not expose /v1/models like API-key sessions.
-        // Keep this list aligned with https://developers.openai.com/codex/models
-        // whenever OpenAI updates the Codex model catalog.
-        let codexModelOrder = [
-            "gpt-5.4",
-            "gpt-5.4-mini",
-            "gpt-5.3-codex",
-            "gpt-5.3-codex-spark",
-            "gpt-5.2-codex",
-            "gpt-5.2",
-            "gpt-5.1-codex-max",
-            "gpt-5.1-codex-mini",
-            "gpt-5.1-codex",
-            "gpt-5.1",
-            "gpt-5-codex",
-            "gpt-5-codex-mini",
-            "gpt-5"
-        ]
-
-        var orderedModels = codexModelOrder
-
-        if let cliConfigured = CodexCLIAuthManager.readConfiguredModel() {
-            let trimmedConfiguredModel = cliConfigured.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedConfiguredModel.isEmpty,
-               !orderedModels.contains(trimmedConfiguredModel) {
-                LogManager.shared.log(
-                    "Codex CLI configured model '\(trimmedConfiguredModel)' is not in the known static Codex model list. Consider updating codexSubscriptionModels().",
-                    level: .warning,
-                    category: "ModelCatalog"
-                )
-                orderedModels.insert(trimmedConfiguredModel, at: 0)
-            }
-        }
-
-        return orderedModels.map {
-            ModelInfo(id: $0, displayName: $0, provider: .openAI, updatedAt: Date())
+    private func fetchCodexSubscriptionModels() async throws -> [ModelInfo] {
+        try await CodexSubscriptionClient.availableModels().map { model in
+            ModelInfo(
+                id: model.id,
+                displayName: model.displayName,
+                provider: .openAI,
+                capabilities: model.inputModalities.map { "input:\($0)" },
+                updatedAt: Date()
+            )
         }
     }
     
