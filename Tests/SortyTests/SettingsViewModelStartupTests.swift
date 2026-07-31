@@ -67,4 +67,67 @@ final class SettingsViewModelStartupTests: XCTestCase {
         XCTAssertEqual(viewModel.config.provider, .ollama)
         XCTAssertNil(viewModel.config.apiKey)
     }
+
+    func testStartupSaveDoesNotDeleteCredentialBeforeHydrationCompletes() async throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var storedConfig = AIConfig.default
+        storedConfig.provider = .openRouter
+        storedConfig.model = AIProvider.openRouter.defaultModel
+        defaults.set(try JSONEncoder().encode(storedConfig), forKey: "aiConfig")
+
+        let recorder = StartupCredentialStoreRecorder()
+        let credentialStore = SettingsCredentialStore(
+            load: { key in
+                if key == "apiKey" {
+                    return nil
+                }
+                try? await Task.sleep(for: .milliseconds(800))
+                return "persisted-openrouter-key"
+            },
+            save: { key, value in
+                await recorder.recordSave(key: key, value: value)
+                return true
+            },
+            delete: { key in
+                await recorder.recordDelete(key: key)
+                return true
+            }
+        )
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: credentialStore,
+            observesNotifications: false
+        )
+
+        viewModel.config.temperature = 0.2
+        try await Task.sleep(for: .milliseconds(600))
+
+        let deletedBeforeHydration = await recorder.deletedKeys()
+        XCTAssertEqual(deletedBeforeHydration, [])
+
+        try await Task.sleep(for: .milliseconds(300))
+        let deletedAfterHydration = await recorder.deletedKeys()
+        XCTAssertEqual(viewModel.config.apiKey, "persisted-openrouter-key")
+        XCTAssertEqual(deletedAfterHydration, [])
+    }
+}
+
+private actor StartupCredentialStoreRecorder {
+    private var saves: [(key: String, value: String)] = []
+    private var deletes: [String] = []
+
+    func recordSave(key: String, value: String) {
+        saves.append((key, value))
+    }
+
+    func recordDelete(key: String) {
+        deletes.append(key)
+    }
+
+    func deletedKeys() -> [String] {
+        deletes
+    }
 }

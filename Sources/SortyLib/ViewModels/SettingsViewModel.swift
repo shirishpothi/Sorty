@@ -40,6 +40,8 @@ public class SettingsViewModel: ObservableObject {
 
             // Same provider, auth method switched — preserve API key and hydrate/clear in-memory field.
             if oldProvider == newProvider, oldAuthMethod != newAuthMethod {
+                cancelCredentialHydration()
+
                 if oldAuthMethod == .apiKey,
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
@@ -71,6 +73,8 @@ public class SettingsViewModel: ObservableObject {
 
             // Provider switched — swap API keys via Keychain
             if oldProvider != newProvider {
+                cancelCredentialHydration()
+
                 // Save the old provider's selected model so it can be restored later
                 userDefaults.set(oldValue.model, forKey: modelSelectionKey(for: oldProvider))
 
@@ -120,6 +124,8 @@ public class SettingsViewModel: ObservableObject {
                       newAuthMethod == .apiKey,
                       let newKey = newKey,
                       !newKey.isEmpty {
+                cancelCredentialHydration()
+
                 // Same provider, API key changed — save immediately to Keychain
                 // so ModelCatalog reads the fresh key (fixes Gemini model list race)
                 Task { [weak self, credentialStore] in
@@ -145,6 +151,8 @@ public class SettingsViewModel: ObservableObject {
     private let providerHealthCheckFailedOnceForUITestsKey = "uitestProviderHealthCheckFailedOnce"
     private var saveTask: Task<Void, Never>?
     private var credentialTask: Task<Void, Never>?
+    private var credentialHydrationID: UUID?
+    private var credentialHydrationProvider: AIProvider?
     private var isApplyingConfigMutation = false
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
@@ -216,7 +224,10 @@ public class SettingsViewModel: ObservableObject {
         authMethod: ProviderAuthMethod,
         migratesLegacyKey: Bool = false
     ) {
-        credentialTask?.cancel()
+        cancelCredentialHydration()
+        let hydrationID = UUID()
+        credentialHydrationID = hydrationID
+        credentialHydrationProvider = provider
         credentialTask = Task { [weak self, credentialStore] in
             if migratesLegacyKey,
                let oldAPIKey = await credentialStore.load("apiKey"),
@@ -228,10 +239,22 @@ public class SettingsViewModel: ObservableObject {
             let apiKey = await credentialStore.load(provider.keychainKey)
             guard !Task.isCancelled,
                   let self,
+                  self.credentialHydrationID == hydrationID else { return }
+            self.credentialTask = nil
+            self.credentialHydrationID = nil
+            self.credentialHydrationProvider = nil
+            guard
                   self.config.provider == provider,
                   self.config.authMethod(for: provider) == authMethod else { return }
             self.setInMemoryAPIKey(apiKey)
         }
+    }
+
+    private func cancelCredentialHydration() {
+        credentialTask?.cancel()
+        credentialTask = nil
+        credentialHydrationID = nil
+        credentialHydrationProvider = nil
     }
     
     /// Debounced save that batches rapid changes
@@ -279,7 +302,7 @@ public class SettingsViewModel: ObservableObject {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
                 _ = await credentialStore.save(providerKey, apiKey)
-            } else {
+            } else if credentialHydrationProvider != provider {
                 _ = await credentialStore.delete(providerKey)
             }
         }
