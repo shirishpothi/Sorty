@@ -4802,6 +4802,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Batch all reset operations into a single UI update cycle
         withBatchUpdates {
+            pinsCompletionView = false
             transition(to: .idle, force: true)
             progress = 0.0
             currentPlan = nil

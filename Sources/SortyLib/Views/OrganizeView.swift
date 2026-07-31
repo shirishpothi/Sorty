@@ -319,7 +319,7 @@ struct OrganizeView: View {
 
     private var isCompletionContentVisible: Bool {
         if case .completed = organizer.state { return true }
-        return showsCompletionContent
+        return organizer.pinsCompletionView || showsCompletionContent
     }
 
     @ViewBuilder

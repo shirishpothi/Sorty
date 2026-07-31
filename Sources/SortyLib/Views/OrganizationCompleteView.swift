@@ -447,6 +447,7 @@ struct OrganizationCompleteView: View {
         .background(WorkflowGradientBackground())
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: undoState)
         .onAppear {
+            organizer.pinsCompletionView = true
             HapticFeedbackManager.shared.success()
             
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
@@ -485,9 +486,6 @@ struct OrganizationCompleteView: View {
             withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.8)) {
                 historyLinkAppeared = true
             }
-        }
-        .onDisappear {
-            organizer.pinsCompletionView = false
         }
     }
 
