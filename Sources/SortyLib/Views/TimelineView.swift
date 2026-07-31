@@ -316,39 +316,41 @@ struct CompactTimelineView: View {
     }
     
     var body: some View {
-        TimelineView(
-            entries: entries,
-            directoryPath: directoryPath,
-            onRestore: handleRestore
-        )
-        .disabled(isProcessing)
-        .overlay {
-            if isProcessing {
-                SortyGradientLoadingBar(width: 160, height: 10)
-                    .padding(20)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(10)
-            }
-        }
-        .alert("Timeline", isPresented: $showAlert) {
-            Button("OK") { }
-        } message: {
-            if let msg = alertMessage {
-                Text(msg)
-            }
-        }
-        .alert("Missing Files", isPresented: $showMissingFilesConfirmation) {
-            Button("Cancel", role: .cancel) {
-                pendingRestoreEntry = nil
-                missingFilesForConfirmation = []
-            }
-            Button("Continue Anyway") {
-                if let entry = pendingRestoreEntry {
-                    performRestore(entry)
+        if filteredEntries.count > 1 {
+            TimelineView(
+                entries: entries,
+                directoryPath: directoryPath,
+                onRestore: handleRestore
+            )
+            .disabled(isProcessing)
+            .overlay {
+                if isProcessing {
+                    SortyGradientLoadingBar(width: 160, height: 10)
+                        .padding(20)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(10)
                 }
             }
-        } message: {
-            Text("\(missingFilesForConfirmation.count) file(s) no longer exist and cannot be restored:\n\n\(missingFilesForConfirmation.prefix(5).joined(separator: "\n"))\(missingFilesForConfirmation.count > 5 ? "\n...and \(missingFilesForConfirmation.count - 5) more" : "")\n\nContinue with partial restore?")
+            .alert("Timeline", isPresented: $showAlert) {
+                Button("OK") { }
+            } message: {
+                if let msg = alertMessage {
+                    Text(msg)
+                }
+            }
+            .alert("Missing Files", isPresented: $showMissingFilesConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    pendingRestoreEntry = nil
+                    missingFilesForConfirmation = []
+                }
+                Button("Continue Anyway") {
+                    if let entry = pendingRestoreEntry {
+                        performRestore(entry)
+                    }
+                }
+            } message: {
+                Text("\(missingFilesForConfirmation.count) file(s) no longer exist and cannot be restored:\n\n\(missingFilesForConfirmation.prefix(5).joined(separator: "\n"))\(missingFilesForConfirmation.count > 5 ? "\n...and \(missingFilesForConfirmation.count - 5) more" : "")\n\nContinue with partial restore?")
+            }
         }
     }
     
