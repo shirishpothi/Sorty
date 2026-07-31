@@ -320,6 +320,38 @@ struct FolderSuggestionPill: View {
 // MARK: - Watched Folder Card
 
 struct WatchedFolderCard: View {
+    private enum AccessRecoveryError: Identifiable {
+        case incorrectFolder(selectedName: String)
+        case bookmarkCreationFailed
+
+        var id: String {
+            switch self {
+            case .incorrectFolder:
+                return "incorrect-folder"
+            case .bookmarkCreationFailed:
+                return "bookmark-creation-failed"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .incorrectFolder:
+                return "Choose the Original Folder"
+            case .bookmarkCreationFailed:
+                return "Access Couldn’t Be Saved"
+            }
+        }
+
+        func message(for expectedName: String) -> String {
+            switch self {
+            case .incorrectFolder(let selectedName):
+                return "Sorty expected \"\(expectedName)\", but you selected \"\(selectedName)\". No folder was changed. Choose \"\(expectedName)\" to restore access."
+            case .bookmarkCreationFailed:
+                return "Sorty couldn’t save access to \"\(expectedName)\". No folder was changed. Please try again."
+            }
+        }
+    }
+
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
@@ -328,6 +360,7 @@ struct WatchedFolderCard: View {
     @State private var pendingFullOrganization: WatchedFolder?
     @State private var isHovered = false
     @State private var highlightPulse = false
+    @State private var accessRecoveryError: AccessRecoveryError?
 
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
@@ -533,16 +566,31 @@ struct WatchedFolderCard: View {
             panel.allowsMultipleSelection = false
             panel.message = "Re-select \"\(folder.name)\" to restore access"
             panel.prompt = "Grant Access"
-            panel.directoryURL = URL(fileURLWithPath: folder.path).deletingLastPathComponent()
+            panel.directoryURL = folder.url
 
             if panel.runModal() == .OK, let url = panel.url {
-                watchedFoldersManager.reauthorizeFolder(folder, with: url)
-                HapticFeedbackManager.shared.success()
+                switch watchedFoldersManager.reauthorizeFolder(folder, with: url) {
+                case .success:
+                    HapticFeedbackManager.shared.success()
+                case .incorrectFolder:
+                    HapticFeedbackManager.shared.error()
+                    accessRecoveryError = .incorrectFolder(selectedName: url.lastPathComponent)
+                case .bookmarkCreationFailed:
+                    HapticFeedbackManager.shared.error()
+                    accessRecoveryError = .bookmarkCreationFailed
+                }
             }
         }
         .font(.caption2)
         .buttonStyle(.sortyBordered)
         .controlSize(.mini)
+        .alert(item: $accessRecoveryError) { error in
+            Alert(
+                title: Text(error.title),
+                message: Text(error.message(for: folder.name)),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     @ViewBuilder

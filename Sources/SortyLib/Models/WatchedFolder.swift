@@ -19,6 +19,12 @@ public enum FolderAccessStatus: String, Codable, Sendable {
     case unknown
 }
 
+public enum WatchedFolderReauthorizationResult: Sendable {
+    case success
+    case incorrectFolder
+    case bookmarkCreationFailed
+}
+
 public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var path: String
@@ -341,7 +347,18 @@ public class WatchedFoldersManager: ObservableObject {
     }
     
     /// Re-authorizes a watched folder by creating a new security-scoped bookmark from a freshly-picked URL
-    public func reauthorizeFolder(_ folder: WatchedFolder, with url: URL) {
+    @discardableResult
+    public func reauthorizeFolder(
+        _ folder: WatchedFolder,
+        with url: URL
+    ) -> WatchedFolderReauthorizationResult {
+        guard Self.normalizedPath(url.path) == Self.normalizedPath(folder.path) else {
+            DebugLogger.log(
+                "Rejected watched-folder access for unexpected path: expected \(folder.path), selected \(url.path)"
+            )
+            return .incorrectFolder
+        }
+
         // For URLs from fileImporter, startAccessingSecurityScopedResource()
         // may return false because the picker already grants temporary access.
         // We proceed with bookmark creation regardless.
@@ -383,8 +400,10 @@ public class WatchedFoldersManager: ObservableObject {
             updateFolder(updated)
 
             DebugLogger.log("Successfully reauthorized watched folder: \(folder.name)")
+            return .success
         } catch {
             DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
+            return .bookmarkCreationFailed
         }
     }
 

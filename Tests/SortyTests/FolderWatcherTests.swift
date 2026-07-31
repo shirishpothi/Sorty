@@ -84,4 +84,30 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertNotNil(manager.folder(withID: folder.id)?.lastTriggered)
         XCTAssertEqual(manager.monitoringRevision, revision)
     }
+
+    @MainActor
+    func testReauthorizationRejectsASelectedDifferentFolderWithoutChangingState() {
+        let manager = WatchedFoldersManager()
+        manager.clearAll()
+        defer { manager.clearAll() }
+
+        let folder = WatchedFolder(
+            path: "/tmp/Sorty-Expected-Watched-Folder",
+            bookmarkData: Data([1, 2, 3])
+        )
+        manager.addFolder(folder)
+        let revision = manager.monitoringRevision
+
+        let result = manager.reauthorizeFolder(
+            folder,
+            with: URL(fileURLWithPath: "/tmp/Sorty-Different-Watched-Folder")
+        )
+
+        guard case .incorrectFolder = result else {
+            return XCTFail("Expected a mismatched folder selection to be rejected")
+        }
+        XCTAssertEqual(manager.folder(withID: folder.id)?.path, folder.path)
+        XCTAssertEqual(manager.folder(withID: folder.id)?.bookmarkData, folder.bookmarkData)
+        XCTAssertEqual(manager.monitoringRevision, revision)
+    }
 }
