@@ -746,6 +746,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         do {
             watchedFoldersManager.markTriggered(executionFolder)
+            notificationManager.showWatchedFolderStarted(
+                fileCount: candidateAudit.stable.count,
+                folderName: executionFolder.name,
+                folderPath: resolvedURL.path
+            )
             
             print("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
             

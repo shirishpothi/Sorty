@@ -273,9 +273,14 @@ public struct MenuBarView: View {
     private var backgroundToggle: some View {
         VStack(spacing: 0) {
             Toggle(isOn: Binding(
-                get: { notificationSettings.settings.notifyOnAutoOrganize },
+                get: {
+                    notificationSettings.settings.watchedFolderStartNotificationsEnabled ||
+                    notificationSettings.settings.watchedFolderCompletionNotificationsEnabled
+                },
                 set: { newValue in
                     notificationSettings.settings.notifyOnAutoOrganize = newValue
+                    notificationSettings.settings.watchedFolderStartNotificationsEnabled = newValue
+                    notificationSettings.settings.watchedFolderCompletionNotificationsEnabled = newValue
                     HapticFeedbackManager.shared.tap()
                 }
             )) {

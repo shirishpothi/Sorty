@@ -89,6 +89,8 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case notificationsProcessingComplete = "settings.notifications.processing-complete"
     case notificationsPreviewReady = "settings.notifications.preview-ready"
     case notificationsProcessingErrors = "settings.notifications.processing-errors"
+    case notificationsWatchedFolderStarted = "settings.notifications.watched-folder-started"
+    case notificationsWatchedFolderFinished = "settings.notifications.watched-folder-finished"
     case notificationsCompletionSound = "settings.notifications.completion-sound"
     case permissionsFilesAndFolders = "settings.permissions.files-and-folders"
     case permissionsFullDiskAccess = "settings.permissions.full-disk-access"
@@ -179,7 +181,8 @@ public extension SettingsFocusTarget {
 
         case .notificationsPermission, .notificationsInAppHUD, .notificationsSystem,
              .notificationsTypes, .notificationsProcessingComplete, .notificationsPreviewReady,
-             .notificationsProcessingErrors, .notificationsCompletionSound:
+             .notificationsProcessingErrors, .notificationsWatchedFolderStarted,
+             .notificationsWatchedFolderFinished, .notificationsCompletionSound:
             return .notifications
 
         case .permissionsFilesAndFolders, .permissionsFullDiskAccess,
@@ -406,6 +409,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Processing Complete", "Notify when file processing finishes successfully.", keywords: ["finished", "success"], target: .notificationsProcessingComplete),
                 feature("Preview Ready", "Notify when Sorty finishes generating an organization plan.", keywords: ["plan ready"], target: .notificationsPreviewReady),
                 feature("Processing Errors", "Notify when organization encounters an error.", keywords: ["failure", "failed"], target: .notificationsProcessingErrors),
+                feature("Watched Folder Started", "Notify when Sorty detects additions and starts organizing them.", keywords: ["watcher", "automatic", "detected"], target: .notificationsWatchedFolderStarted),
+                feature("Watched Folder Finished", "Notify when automatic organization finishes.", keywords: ["watcher", "automatic", "complete"], target: .notificationsWatchedFolderFinished),
                 feature("Completion Sound", "Play a sound when organization finishes.", keywords: ["sounds", "audio"], target: .notificationsCompletionSound)
             ]
         case .permissions:

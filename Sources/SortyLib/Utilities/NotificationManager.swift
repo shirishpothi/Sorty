@@ -234,6 +234,7 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
         case previewReady(folderName: String, folderPath: String? = nil)
         case processingError(message: String, folderPath: String? = nil, isCritical: Bool, canRetry: Bool, isAutomated: Bool = false)
         case batchSummary(stats: BatchSummaryStats, isAutomated: Bool = false)
+        case watchedFolderStarted(fileCount: Int, folderName: String, folderPath: String)
         case info(title: String, message: String)
         
         // Legacy initializers for backwards compatibility
@@ -270,6 +271,8 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
                 return folderPath
             case .batchSummary(let stats, _):
                 return stats.folderPath
+            case .watchedFolderStarted(_, _, let folderPath):
+                return folderPath
             case .info:
                 return nil
             }
@@ -281,6 +284,8 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
                  .processingError(_, _, _, _, let isAutomated),
                  .batchSummary(_, let isAutomated):
                 return isAutomated
+            case .watchedFolderStarted:
+                return true
             case .previewReady, .info:
                 return false
             }
@@ -524,9 +529,14 @@ public class NotificationManager: ObservableObject {
         
         // Handle automated organization filter
         switch type {
+        case .watchedFolderStarted:
+            guard settingsValue.watchedFolderStartNotificationsEnabled else {
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "watched folder started disabled")
+                return
+            }
         case .processingComplete(_, _, _, _, let isAutomated),
              .batchSummary(_, let isAutomated):
-            if isAutomated && !settingsValue.notifyOnAutoOrganize {
+            if isAutomated && !settingsValue.watchedFolderCompletionNotificationsEnabled {
                 print("NotificationManager: Automated organization notification suppressed by settings")
                 trackAnalytics(.suppressed, type: type, backend: .native, detail: "automated notifications disabled")
                 return
@@ -569,6 +579,8 @@ public class NotificationManager: ObservableObject {
                 trackAnalytics(.suppressed, type: type, backend: .native, detail: "batch summary disabled")
                 return
             }
+        case .watchedFolderStarted:
+            break
         case .info:
             // Info notifications are always allowed
             break
@@ -747,6 +759,10 @@ public class NotificationManager: ObservableObject {
     public func showBatchSummary(stats: BatchSummaryStats, isAutomated: Bool = false) {
         show(.batchSummary(stats: stats, isAutomated: isAutomated))
     }
+
+    public func showWatchedFolderStarted(fileCount: Int, folderName: String, folderPath: String) {
+        show(.watchedFolderStarted(fileCount: fileCount, folderName: folderName, folderPath: folderPath))
+    }
     
     /// Request user attention (dock bounce)
     public func requestAttention(isCritical: Bool = false) {
@@ -851,6 +867,8 @@ public class NotificationManager: ObservableObject {
             return "processingError"
         case .batchSummary:
             return "batchSummary"
+        case .watchedFolderStarted:
+            return "watchedFolderStarted"
         case .info:
             return "info"
         }
@@ -947,6 +965,13 @@ public class NotificationManager: ObservableObject {
             }
             
             return (title, message, "folder.fill.badge.gearshape", iconColor)
+        case .watchedFolderStarted(let fileCount, let folderName, _):
+            return (
+                "Organizing \(folderName)",
+                "Detected \(fileCount) new addition\(fileCount == 1 ? "" : "s"). Organizing now.",
+                "folder.fill.badge.gearshape",
+                .blue
+            )
         case .info(let title, let message):
             return (title, message, "info.circle.fill", .blue)
         }
@@ -962,7 +987,7 @@ public class NotificationManager: ObservableObject {
         }
 
         switch type {
-        case .processingComplete, .previewReady, .batchSummary:
+        case .processingComplete, .previewReady, .batchSummary, .watchedFolderStarted:
             return true
         case .processingError, .info:
             return false
@@ -1320,6 +1345,9 @@ public class NotificationManager: ObservableObject {
             add(canRetry && failureClass.shouldOfferRetry ? 90 : 0, canRetry && failureClass.shouldOfferRetry ? retryAction() : nil)
             add(folderPath != nil ? 70 : 0, folderPath.map(openFolderAction))
             add(isAutomated || !failureClass.shouldOfferRedoWithModel ? 0 : 65, !isAutomated && failureClass.shouldOfferRedoWithModel ? redoWithModelAction() : nil)
+
+        case .watchedFolderStarted:
+            add(100, type.folderPath.map(openFolderAction))
 
         case .info:
             break

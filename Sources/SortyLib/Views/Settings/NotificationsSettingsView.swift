@@ -80,6 +80,24 @@ struct NotificationsSettingsView: View {
                     Divider()
 
                     SettingsToggle(
+                        isOn: $notificationSettings.settings.watchedFolderStartNotificationsEnabled,
+                        title: "Watched Folder Started",
+                        description: "When Sorty detects additions and starts organizing them",
+                        focusTarget: .notificationsWatchedFolderStarted
+                    )
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.watchedFolderCompletionNotificationsEnabled,
+                        title: "Watched Folder Finished",
+                        description: "When Sorty finishes organizing detected additions",
+                        focusTarget: .notificationsWatchedFolderFinished
+                    )
+
+                    Divider()
+
+                    SettingsToggle(
                         isOn: $notificationSettings.settings.playCompletionSound,
                         title: "Completion Sound",
                         description: "Play a satisfying sound when organization finishes",

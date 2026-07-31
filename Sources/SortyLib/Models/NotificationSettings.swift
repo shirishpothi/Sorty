@@ -53,6 +53,22 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
 
     /// Specifically notify when automatic organization (watched folders) occurs
     public var notifyOnAutoOrganize: Bool = true
+
+    /// Notify when a watched folder begins organizing newly detected files.
+    public var notifyOnWatchedFolderStart: Bool?
+
+    /// Notify when a watched folder finishes organizing detected files.
+    public var notifyOnWatchedFolderCompletion: Bool?
+
+    public var watchedFolderStartNotificationsEnabled: Bool {
+        get { notifyOnWatchedFolderStart ?? notifyOnAutoOrganize }
+        set { notifyOnWatchedFolderStart = newValue }
+    }
+
+    public var watchedFolderCompletionNotificationsEnabled: Bool {
+        get { notifyOnWatchedFolderCompletion ?? notifyOnAutoOrganize }
+        set { notifyOnWatchedFolderCompletion = newValue }
+    }
     
     /// Display critical errors even if notifications are off
     public var alwaysShowCriticalErrors: Bool = true
