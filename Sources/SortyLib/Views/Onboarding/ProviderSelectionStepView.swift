@@ -20,6 +20,7 @@ public struct ProviderSelectionStepView: View {
     @State private var availableModels: [String] = []
     @State private var isLoadingModels = false
     @State private var isHoveringUsername = false
+    @State private var isHoveringCodexEmail = false
     @State private var isShowingAPIKey = false
     @State private var isShowingModelPopover = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
@@ -556,6 +557,11 @@ public struct ProviderSelectionStepView: View {
                             Text(email)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringCodexEmail) ? 4 : 0)
+                                .animation(.spring(), value: isHoveringCodexEmail)
+                                .onHover { hovering in
+                                    isHoveringCodexEmail = hovering
+                                }
                         }
                     }
 

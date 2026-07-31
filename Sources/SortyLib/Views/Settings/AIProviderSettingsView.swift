@@ -23,6 +23,7 @@ struct AIProviderSettingsView: View {
     @State private var hasCopiedConnectionError = false
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
+    @State private var isHoveringCodexEmail = false
     @State private var isDetailsExpanded = false
     @State private var isInternetAccessBlocked = false
     @State private var isHoveringInternetSettings = false
@@ -433,6 +434,11 @@ struct AIProviderSettingsView: View {
                         Text(codexAuth.accountEmail ?? "Signed in via Codex CLI")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringCodexEmail) ? 4 : 0)
+                            .animation(.spring(), value: isHoveringCodexEmail)
+                            .onHover { hovering in
+                                isHoveringCodexEmail = hovering
+                            }
                     }
 
                     Spacer()
