@@ -35,6 +35,7 @@ struct OrganizationCompleteView: View {
     @State private var undoRestoredCount = 0
     @State private var undoSkippedCount = 0
     @State private var lastUndoneEntry: OrganizationHistoryEntry?
+    @State private var isStorageSuggestionDismissed = false
     
     @State private var shouldShowFinalCounts = false
 
@@ -65,7 +66,10 @@ struct OrganizationCompleteView: View {
     }
     
     private var shouldShowStorageSuggestion: Bool {
-        mode != .renameOnly && totalFiles >= 50 && storageLocationsManager.enabledLocations.isEmpty
+        !isStorageSuggestionDismissed
+            && mode != .renameOnly
+            && totalFiles >= 50
+            && storageLocationsManager.enabledLocations.isEmpty
     }
 
     private var primaryStatLabel: String {
@@ -288,7 +292,13 @@ struct OrganizationCompleteView: View {
                             title: "Route large runs to preferred destinations",
                             description: "Add storage locations to send future results directly into archive or project folders.",
                             actionTitle: "Set Up Locations",
-                            usesCompactVerticalLayout: usesCompactVerticalLayout
+                            usesCompactVerticalLayout: usesCompactVerticalLayout,
+                            onDismiss: {
+                                HapticFeedbackManager.shared.tap()
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    isStorageSuggestionDismissed = true
+                                }
+                            }
                         ) {
                             HapticFeedbackManager.shared.tap()
                             withAnimation(.pageTransition) {
@@ -909,6 +919,7 @@ private struct CompletionFeatureSuggestionCard: View {
     let description: String
     let actionTitle: String
     let usesCompactVerticalLayout: Bool
+    let onDismiss: () -> Void
     let action: () -> Void
     
     var body: some View {
@@ -945,6 +956,17 @@ private struct CompletionFeatureSuggestionCard: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
                 .help("Open storage location settings")
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss suggestion")
+            .accessibilityLabel("Dismiss storage location suggestion")
         }
         .padding(usesCompactVerticalLayout ? 12 : 16)
         .systemLiquidGlassBackground(cornerRadius: 16)
@@ -962,8 +984,6 @@ private struct CompletionFeatureSuggestionCard: View {
         )
         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 5)
         .help(description)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(description)")
-        .accessibilityHint("Use this suggestion to configure destinations for future runs")
+        .accessibilityElement(children: .contain)
     }
 }
