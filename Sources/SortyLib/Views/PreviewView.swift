@@ -12,6 +12,7 @@ struct PreviewView: View {
     let plan: OrganizationPlan
     let baseURL: URL
     let onReturnToStart: (() -> Void)?
+    let onApplyStarted: (() -> Void)?
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -56,9 +57,15 @@ struct PreviewView: View {
         return .none
     }
     
-    init(plan: OrganizationPlan, baseURL: URL, onReturnToStart: (() -> Void)? = nil) {
+    init(
+        plan: OrganizationPlan,
+        baseURL: URL,
+        onReturnToStart: (() -> Void)? = nil,
+        onApplyStarted: (() -> Void)? = nil
+    ) {
         self.plan = plan; self.baseURL = baseURL
         self.onReturnToStart = onReturnToStart
+        self.onApplyStarted = onApplyStarted
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
     }
@@ -272,6 +279,7 @@ struct PreviewView: View {
     
     private func applyOrganization() {
         isApplying = true; if hasEdits { organizer.currentPlan = editablePlan }
+        onApplyStarted?()
         if activeNotificationApplyRequestID != nil {
             NotificationManager.shared.recordActionLifecycle("apply", stage: "executing", detail: baseURL.path)
         }

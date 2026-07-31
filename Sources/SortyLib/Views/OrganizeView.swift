@@ -314,7 +314,7 @@ struct OrganizeView: View {
 
     private var shouldShowCompletionView: Bool {
         if case .completed = organizer.state { return true }
-        return organizer.pinsCompletionView
+        return organizer.pinsCompletionView || showsCompletionContent
     }
 
     private var isCompletionContentVisible: Bool {
@@ -373,7 +373,8 @@ struct OrganizeView: View {
                 PreviewView(
                     plan: plan,
                     baseURL: appState.selectedDirectory!,
-                    onReturnToStart: returnToStartAfterCancellation
+                    onReturnToStart: returnToStartAfterCancellation,
+                    onApplyStarted: beginCompletionHandoff
                 )
             } else {
                 PreviewHandoffView(mode: settingsViewModel.config.mode)
