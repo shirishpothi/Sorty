@@ -1965,20 +1965,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let batch = Array(files[start..<end])
             let completedBeforeRequest = batchIndex
             let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
+            let planningStage = batchCount > 1
+                ? "Planning batch \(batchIndex + 1) of \(batchCount) · \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
+                : "Planning \(GenerationStats.formatCount(files.count)) files"
             updateMeasuredProgress(
                 completed: completedBeforeRequest,
                 total: batchCount,
                 estimatedOverallProgress: phaseProgress,
-                stage: "Planning batch \(batchIndex + 1) of \(batchCount) · \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
+                stage: planningStage
             )
 
             var batchInstructions = instructions
-            batchInstructions += Self.largeFolderBatchContext(
-                batchIndex: batchIndex,
-                batchCount: batchCount,
-                taxonomy: taxonomy,
-                mode: mode
-            )
+            if batchCount > 1 {
+                batchInstructions += Self.largeFolderBatchContext(
+                    batchIndex: batchIndex,
+                    batchCount: batchCount,
+                    taxonomy: taxonomy,
+                    mode: mode
+                )
+            }
 
             startTimeoutTimer()
             let batchPlans = try await analyzeBatchAdaptively(
@@ -2039,7 +2044,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }.value
         let model = client.config.model
         let provider = client.config.provider.displayName
-        let summary = "Analyzed \(GenerationStats.formatCount(files.count)) files in \(completedAnalysisBatchCount) bounded batches."
+        let summary = batchCount > 1
+            ? "Analyzed \(GenerationStats.formatCount(files.count)) files in \(completedAnalysisBatchCount) bounded batches."
+            : "Analyzed \(GenerationStats.formatCount(files.count)) files."
         mergedPlan.notes = ([summary] + retainedNotes).joined(separator: " ")
         mergedPlan.generationStats = GenerationStats(
             duration: duration,
