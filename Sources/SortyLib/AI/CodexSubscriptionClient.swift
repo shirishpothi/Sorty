@@ -190,7 +190,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
         try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
 
-        try await Task.detached(priority: .userInitiated) {
+        return try await Task.detached(priority: .userInitiated) {
             guard let codexPath = resolveCodexExecutablePath() else {
                 throw AIClientError.apiError(
                     statusCode: 501,
