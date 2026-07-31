@@ -61,6 +61,60 @@ struct HistorySessionStatisticsSection: View {
     }
 }
 
+struct HistoryPartialUndoSection: View {
+    let entry: OrganizationHistoryEntry
+
+    private var affectedItems: [String] {
+        let failedFiles = entry.undoFailedFiles ?? []
+        let remainingOperations = (entry.operations ?? []).map { operation in
+            URL(fileURLWithPath: operation.destinationPath ?? operation.sourcePath).lastPathComponent
+        }
+        return Array(Set(failedFiles + remainingOperations)).sorted()
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if entry.status == .partiallyUndone {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Not Undone", systemImage: "exclamationmark.triangle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.yellow)
+                    .accessibilityAddTraits(.isHeader)
+
+                if let restoredCount = entry.undoRestoredCount, restoredCount > 0 {
+                    Text("Sorty restored \(restoredCount) operation\(restoredCount == 1 ? "" : "s"). The items below were not restored to their original locations.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("The items below were not restored to their original locations.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                if affectedItems.isEmpty {
+                    Text("Some changes could not be undone.")
+                        .font(.callout.weight(.medium))
+                } else {
+                    ForEach(affectedItems, id: \.self) { item in
+                        Label(item, systemImage: "doc")
+                            .font(.callout.weight(.medium))
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.yellow.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                affectedItems.isEmpty
+                    ? "Partially undone. Some changes were not restored."
+                    : "Partially undone. Not restored: \(affectedItems.joined(separator: ", "))."
+            )
+        }
+    }
+}
+
 private struct HistoryPrimaryStats: View {
     let entry: OrganizationHistoryEntry
 

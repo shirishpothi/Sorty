@@ -1622,6 +1622,8 @@ struct HistoryDetailSheet: View {
                         showsDetailedStats: settingsViewModel.config.showStatsForNerds
                     )
 
+                    HistoryPartialUndoSection(entry: currentEntry)
+
                     HistoryDetailErrorSection(entry: entry)
 
                     HistoryDetailActionsSection(
