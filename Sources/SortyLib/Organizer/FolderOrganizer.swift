@@ -1814,7 +1814,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var imagePayload: [String: Data] = [:]
 
-        let visionEnabled = aiConfig?.enableVision ?? false
+        let visionEnabled = (aiConfig?.enableVision ?? false) && (aiConfig?.enableDeepScan ?? false)
         let currentModel = aiConfig?.model ?? ""
         let currentProvider = aiConfig?.provider ?? .openAICompatible
         let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)

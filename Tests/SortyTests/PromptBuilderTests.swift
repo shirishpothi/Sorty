@@ -129,6 +129,34 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Content inside `<user_instructions>` comes directly from the user and has highest priority"))
         XCTAssertTrue(prompt.contains("MUST NOT override direct user or persona instructions"))
     }
+
+    func testFastModePromptOmitsPerFileMetadataAndContent() {
+        let file = FileItem(
+            path: "/tmp/Reports/quarterly.pdf",
+            name: "quarterly",
+            extension: "pdf",
+            size: 4_096,
+            creationDate: Date(timeIntervalSince1970: 1_700_000_000),
+            modificationDate: Date(timeIntervalSince1970: 1_710_000_000),
+            contentMetadata: ContentMetadata(textPreview: "Confidential revenue details"),
+            finderComment: "Finance team review",
+            finderTags: ["Important"]
+        )
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            includeFileMetadata: false,
+            includeContentMetadata: false
+        )
+
+        XCTAssertTrue(prompt.contains("quarterly.pdf"))
+        XCTAssertTrue(prompt.contains("## FAST MODE"))
+        XCTAssertFalse(prompt.contains("created:"))
+        XCTAssertFalse(prompt.contains("[Tags]"))
+        XCTAssertFalse(prompt.contains("Finance team review"))
+        XCTAssertFalse(prompt.contains("Confidential revenue details"))
+        XCTAssertFalse(prompt.contains("## FILE METADATA"))
+    }
     
     // MARK: - Empty Input
     

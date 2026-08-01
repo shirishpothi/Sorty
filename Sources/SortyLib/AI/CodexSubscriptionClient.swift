@@ -58,7 +58,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
             enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: true,
+            includeFileMetadata: config.enableDeepScan,
+            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions
         )
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
@@ -115,7 +116,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
             enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: true,
+            includeFileMetadata: config.enableDeepScan,
+            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions,
             analyzedImageFilenames: imageData.keys.sorted()
         )

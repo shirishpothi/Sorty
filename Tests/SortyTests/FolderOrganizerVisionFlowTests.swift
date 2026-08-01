@@ -80,6 +80,32 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
         XCTAssertNotNil(organizer.visionAnalysisSummary?.warningMessage)
     }
 
+    func testFastModeSkipsVisionPreparationAndUsesTextAnalysis() async throws {
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o",
+            enableDeepScan: false,
+            enableVision: true
+        )
+        try await organizer.configure(with: config)
+
+        let mockClient = VisionFlowMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+
+        try createPNG(at: tempDirectory.appendingPathComponent("one.png"))
+
+        try await organizer.organize(directory: tempDirectory)
+
+        let analyzeWithImagesCalls = await mockClient.analyzeWithImagesCalls
+        let analyzeCalls = await mockClient.analyzeCalls
+
+        XCTAssertEqual(analyzeWithImagesCalls, 0)
+        XCTAssertEqual(analyzeCalls, 1)
+        XCTAssertNil(organizer.visionAnalysisSummary)
+    }
+
     func testVisionFlowWithoutLimitSendsAllImages() async throws {
         let config = AIConfig(
             provider: .openAI,

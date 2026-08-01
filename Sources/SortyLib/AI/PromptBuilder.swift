@@ -68,6 +68,7 @@ struct PromptBuilder {
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
         enableReasoning: Bool = false,
         enableSmartRename: Bool = false,
+        includeFileMetadata: Bool = true,
         includeContentMetadata: Bool = false,
         customInstructions: String? = nil,
         storageLocationsContext: String? = nil,
@@ -253,24 +254,25 @@ struct PromptBuilder {
             }
             
             for file in sortedFiles {
-                var fileDesc = "  - \(file.displayName) (\(file.formattedSize))"
+                var fileDesc = "  - \(file.displayName)"
                 
-                // Include file dates
-                if let created = file.creationDate {
-                    fileDesc += ", created: \(dateFormatter.string(from: created))"
-                }
-                if let modified = file.modificationDate {
-                    fileDesc += ", modified: \(dateFormatter.string(from: modified))"
-                }
-                
-                // Include Finder tags
-                if let tags = file.finderTags, !tags.isEmpty {
-                    fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
-                }
-                
-                // Include Finder comment
-                if let comment = file.finderComment, !comment.isEmpty {
-                    fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
+                if includeFileMetadata {
+                    fileDesc += " (\(file.formattedSize))"
+
+                    if let created = file.creationDate {
+                        fileDesc += ", created: \(dateFormatter.string(from: created))"
+                    }
+                    if let modified = file.modificationDate {
+                        fileDesc += ", modified: \(dateFormatter.string(from: modified))"
+                    }
+
+                    if let tags = file.finderTags, !tags.isEmpty {
+                        fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
+                    }
+
+                    if let comment = file.finderComment, !comment.isEmpty {
+                        fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
+                    }
                 }
                 
                 // Include content metadata if available and requested
@@ -297,14 +299,19 @@ struct PromptBuilder {
             prompt += "- OCR results: Use text found in images/screenshots for more accurate categorization\n\n"
         }
         
-        prompt += "## FILE METADATA\n"
-        prompt += "Files include metadata when available — use it for smarter organization:\n"
-        prompt += "- Treat filenames as helpful but imperfect labels; do not overfit to names like IMG_, Screenshot, scan, final, or untitled\n"
-        prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
-        prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
-        prompt += "- Dates (created/modified): Group by time period or project phase when relevant\n"
-        prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
-        prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
+        if includeFileMetadata {
+            prompt += "## FILE METADATA\n"
+            prompt += "Files include metadata when available — use it for smarter organization:\n"
+            prompt += "- Treat filenames as helpful but imperfect labels; do not overfit to names like IMG_, Screenshot, scan, final, or untitled\n"
+            prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
+            prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
+            prompt += "- Dates (created/modified): Group by time period or project phase when relevant\n"
+            prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
+            prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
+        } else {
+            prompt += "## FAST MODE\n"
+            prompt += "Organize from filenames, extensions, folder structure, and the supplied instructions. Do not assume file contents that were not provided.\n\n"
+        }
 
         if mode == .renameOnly {
             prompt += "\nReturn the suggestions in JSON format. Use a single folder named '.' to represent the current location for all files."

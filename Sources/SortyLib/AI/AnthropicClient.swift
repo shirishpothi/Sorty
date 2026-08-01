@@ -47,7 +47,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
             enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: true,
+            includeFileMetadata: config.enableDeepScan,
+            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions
         )
 
@@ -87,7 +88,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning, 
             enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: true,
+            includeFileMetadata: config.enableDeepScan,
+            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions,
             analyzedImageFilenames: orderedImageNames
         )
