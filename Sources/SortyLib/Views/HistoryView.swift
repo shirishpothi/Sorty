@@ -1021,7 +1021,8 @@ private struct HistorySessionCardHeader: View {
         HStack(spacing: 12) {
             FolderThumbnailView(
                 url: URL(fileURLWithPath: entry.directoryPath),
-                size: CGSize(width: 32, height: 32)
+                size: CGSize(width: 32, height: 32),
+                defersLoadingUntilFirstFrame: true
             )
             .frame(width: 32)
             .accessibilityHidden(true)

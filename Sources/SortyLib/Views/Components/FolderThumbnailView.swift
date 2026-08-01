@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
 public struct FolderThumbnailView: View {
     let url: URL
     let size: CGSize
+    let defersLoadingUntilFirstFrame: Bool
 
     @State private var thumbnail: NSImage?
     @State private var isLoading = true
@@ -22,9 +23,14 @@ public struct FolderThumbnailView: View {
         NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
     }()
     
-    public init(url: URL, size: CGSize = CGSize(width: 40, height: 40)) {
+    public init(
+        url: URL,
+        size: CGSize = CGSize(width: 40, height: 40),
+        defersLoadingUntilFirstFrame: Bool = false
+    ) {
         self.url = url
         self.size = size
+        self.defersLoadingUntilFirstFrame = defersLoadingUntilFirstFrame
     }
     
     public var body: some View {
@@ -34,6 +40,10 @@ public struct FolderThumbnailView: View {
         )
         .frame(width: size.width, height: size.height)
         .task(id: url) {
+            if defersLoadingUntilFirstFrame {
+                // Let a destination's initial layout commit before icon lookup begins.
+                await Task.yield()
+            }
             isLoading = true
             thumbnail = await FolderThumbnailProvider.shared.thumbnail(for: url, size: size)
             isLoading = false
