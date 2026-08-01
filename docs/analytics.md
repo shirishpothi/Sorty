@@ -16,25 +16,30 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 
 | Event | Surface | Purpose |
 |---|---|---|
-| `$pageview` | Website | Visits to each public route, using a stable page name and sanitized path |
+| `$pageview` | Website | Visits to each public route, using a stable page name, sanitized path, and previous public route |
 | `$pageleave` | Website | Consent-gated page-exit timing for more accurate session duration |
 | `web:section_viewed` | Website | Meaningfully visible named homepage sections |
 | `web:scroll_depth_reached` | Website | Bounded 25%, 50%, 75%, 90%, and 100% scroll milestones for each sanitized page |
 | `web:not_found_viewed` | Website | Explicit 404 visits without retaining the unknown requested path |
 | `web:download_clicked` | Website | Download-button clicks as a dedicated conversion event, with the bounded CTA location so PostHog can show unique users clearly |
+| `web:download_notice_viewed` | Website | The installation and quarantine-removal notice shown after a download click |
+| `web:terminal_command_copied` | Website | Success or failure when copying the fixed `xattr` command, without capturing the command text |
+| `web:sponsor_clicked` | Website | GitHub Sponsors conversion clicks, broken down by a bounded website location |
+| `web:privacy_policy_clicked` | Website | Navigation clicks to the Privacy Policy, broken down by a bounded website location |
+| `web:route_clicked` | Website | Clicks between known public routes, using normalized source and destination paths |
 | `web:interaction` | Website | Important links, downloads, fixed-command copy outcomes, modal exits, navigation, stable FAQ opens and closes, menu toggles, preference controls, legal-section choices, and bounded recovery actions |
 | `$web_vitals` | Website | Consent-gated PostHog Web Vitals for LCP, INP, and CLS |
-| `app:session_started` | Mac | An opted-in app analytics session |
-| `app:screen_viewed` | Mac | Main screens and individual Settings sections |
+| `app:session_started` | Mac | An opted-in app analytics session, including launch-to-main-window time for returning opted-in users |
+| `app:screen_viewed` | Mac | Main screens and individual Settings sections, with a bounded previous-screen value for navigation-path funnels |
 | `app:feature_used` | Mac | Feature and sub-feature actions, including settings changes and bucketed persona inventory, with stable outcomes |
-| `app:workflow_progressed` | Mac | Organize, apply, regenerate, undo, duplicate-scan, and cleanup stages |
+| `app:workflow_progressed` | Mac | Organize, apply, regenerate, undo, duplicate-scan, app/window setup, model-catalog, learnings-profile, and cleanup stages, including Organize mode and entry source plus exact rounded duration for timed workflows |
 | `app:important_button_clicked` | Mac | A small allowlist of decision-critical buttons |
 
-Do not create a new event for every button or state. Prefer an existing canonical event with low-cardinality `feature`, `subfeature`, `action`, `stage`, `outcome`, `screen`, `control`, `selection_kind`, or `button` properties. Counts and durations must use `AnalyticsManager.countBucket` and `durationBucket`; paths, identifiers, persona names or contents, model names, and free text are not acceptable dimensions.
+Do not create a new event for every button or state. Prefer an existing canonical event with low-cardinality `feature`, `subfeature`, `action`, `stage`, `outcome`, `screen`, `control`, `selection_kind`, or `button` properties. Counts must use `AnalyticsManager.countBucket`; timed Mac workflows use `durationProperties` for a broad bucket and rounded milliseconds. Paths, identifiers, persona names or contents, model names, and free text are not acceptable dimensions.
 
 ## Implementation map
 
-- Mac SDK setup, consent, allowlists, bucketing, and error classification: `Sources/SortyLib/Analytics/AnalyticsManager.swift`
+- Mac PostHog setup, consent, allowlists, bucketing, and feature flags: `Sources/SortyLib/Analytics/AnalyticsManager.swift`
 - Mac Sentry setup, consent, privacy policy, crash/hang capture, rate limiting, and handled-error classification: `Sources/SortyLib/Analytics/ReliabilityManager.swift`
 - Mac settings toggles, notification previews, automation controls, and persona inventory: `Sources/SortyLib/Views/Settings/SettingsComponents.swift`, `Sources/SortyLib/Views/Settings/AutomationSettingsView.swift`, and `Sources/SortyLib/Views/PersonaPickerView.swift`
 - Mac one-time permission UI: `Sources/SortyLib/Analytics/AnalyticsConsentView.swift`
@@ -46,7 +51,7 @@ Do not create a new event for every button or state. Prefer an existing canonica
 
 ## Configuration and releases
 
-The website reads `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST`. GitHub repository variables provide both values to the Pages workflow. The Mac app contains the public project token and ingestion host, with `SORTY_POSTHOG_PROJECT_TOKEN` and `SORTY_POSTHOG_HOST` overrides for development builds.
+The website reads `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST`. GitHub repository variables provide both values to the Pages workflow. The Mac app contains the public project token and fixed ingestion host; `SORTY_POSTHOG_PROJECT_TOKEN` and `SORTY_POSTHOG_HOST` are debug-only overrides, and release builds ignore the launch environment so opted-in telemetry cannot be redirected to another collector.
 
 The pinned PostHog dashboard measures first-time Mac app-session retention at daily D1–D30 and weekly W1–W12 intervals. The daily view highlights D1, D7, D14, and D30 over a 90-day cohort range; the weekly view highlights W1, W4, W8, and W12 over 180 days. Both use `app:session_started` as the entry and return event with strict calendar periods. Website retention is intentionally excluded because the website's session-only anonymous identifier cannot link a visitor across days.
 
@@ -64,6 +69,7 @@ The static GitHub Pages export cannot host a request-forwarding reverse proxy. P
 
 The Mac app also uses consent-gated PostHog feature flags to populate **Settings → Experimental**. Enabled flags whose keys begin with `labs-` appear there; an optional JSON payload may provide bounded `title`, `description`, and `system_image` strings. Reloads are limited to once every five minutes, at most 20 flags are rendered, flag evaluation events remain disabled, and flags are cleared from the UI when analytics consent is revoked or internet connections are blocked.
 
+The website uses the same `labs-` key prefix through the typed hooks in `website/lib/feature-flags.ts`. Components should use `useLabsFeatureEnabled`, `useLabsFeatureVariant`, or `useLabsFeaturePayload`; the hooks read cached assignments without emitting feature-flag exposure events, and payloads are limited to bounded `title`, `description`, and `system_image` values. Denying website analytics clears the rendered Labs state and stops further flag use or exposure events.
 
 ## Adding instrumentation
 
