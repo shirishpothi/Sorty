@@ -2,6 +2,81 @@ import XCTest
 @testable import SortyLib
 
 final class FolderWatcherTests: XCTestCase {
+    @MainActor
+    private final class RestartRecoveryDelegate: FolderWatcherDelegate {
+        let expectation: XCTestExpectation
+        private(set) var deliveredFiles: Set<String> = []
+
+        init(expectation: XCTestExpectation) {
+            self.expectation = expectation
+        }
+
+        func folderWatcher(
+            _ watcher: FolderWatcher,
+            didDetectChangesIn folder: WatchedFolder,
+            newFiles: Set<String>,
+            resolvedURL: URL,
+            completion: @escaping @Sendable (Bool) -> Void
+        ) {
+            deliveredFiles.formUnion(newFiles)
+            completion(true)
+            expectation.fulfill()
+        }
+
+        func folderWatcher(
+            _ watcher: FolderWatcher,
+            didDetectStaleBookmarkFor folder: WatchedFolder,
+            newBookmarkData: Data
+        ) {}
+    }
+
+    func testWatchedFolderUsesSevenSecondSettleDelayByDefault() {
+        let folder = WatchedFolder(path: "/tmp/Sorty-Watched-Default-Delay")
+
+        XCTAssertEqual(folder.triggerDelay, 7)
+    }
+
+    @MainActor
+    func testRestartRecoveryDeliversFileAddedWhileWatcherWasStopped() async throws {
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Sorty-Watcher-Restart-\(UUID().uuidString)", isDirectory: true)
+        let watchedURL = testRoot.appendingPathComponent("Watched", isDirectory: true)
+        let persistenceRoot = testRoot.appendingPathComponent("State", isDirectory: true)
+        try FileManager.default.createDirectory(at: watchedURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        try Data("before".utf8).write(to: watchedURL.appendingPathComponent("before.txt"))
+        let folder = WatchedFolder(
+            path: watchedURL.path,
+            triggerDelay: 0.05
+        )
+
+        var firstWatcher: FolderWatcher? = FolderWatcher(persistenceRoot: persistenceRoot)
+        firstWatcher?.syncWithFolders([folder])
+
+        let snapshotURL = persistenceRoot
+            .appendingPathComponent("WatcherSnapshots", isDirectory: true)
+            .appendingPathComponent("\(folder.id.uuidString).json")
+        for _ in 0..<100 where !FileManager.default.fileExists(atPath: snapshotURL.path) {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: snapshotURL.path))
+
+        firstWatcher?.stopAllWatching()
+        firstWatcher = nil
+        try Data("after".utf8).write(to: watchedURL.appendingPathComponent("after.txt"))
+
+        let delivered = expectation(description: "file added while stopped is recovered")
+        let delegate = RestartRecoveryDelegate(expectation: delivered)
+        let secondWatcher = FolderWatcher(persistenceRoot: persistenceRoot)
+        secondWatcher.delegate = delegate
+        secondWatcher.syncWithFolders([folder])
+
+        await fulfillment(of: [delivered], timeout: 3)
+        XCTAssertEqual(delegate.deliveredFiles, ["after.txt"])
+        secondWatcher.stopAllWatching()
+    }
+
     func testIgnoresICloudAndOneDrivePlaceholderFiles() {
         let iCloudPlaceholder = URL(fileURLWithPath: "/tmp/.Document.pdf.icloud")
         let oneDrivePlaceholder = URL(fileURLWithPath: "/tmp/Document.cloud")

@@ -75,7 +75,8 @@ public final class FolderWatcher: @unchecked Sendable {
     private static let eventCursorPersistenceDelay: TimeInterval = 5
     private static let streamLatency: TimeInterval = 1
     private static let retryDelay: TimeInterval = 0.25
-    private static let healthCheckInterval: TimeInterval = 300
+    private static let healthCheckInterval: TimeInterval = 60
+    private static let reconciliationInterval: TimeInterval = 300
     private static let maximumExplicitRootsPerAnchor = 512
     private static let maximumPendingScans = 128
 
@@ -83,6 +84,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private let scanQueue = DispatchQueue(label: "com.sorty.folderwatcher.scanner", qos: .utility)
     private let queueSpecificKey = DispatchSpecificKey<Void>()
     private let fileManager = FileManager.default
+    private let persistenceRootOverride: URL?
 
     private var stream: FSEventStreamRef?
     private var callbackContext: UnsafeMutableRawPointer?
@@ -118,20 +120,29 @@ public final class FolderWatcher: @unchecked Sendable {
     private var folderSnapshots: [UUID: [String: FileFingerprint]] = [:]
     private var dirtySnapshotFolderIDs: Set<UUID> = []
     private var workspaceObservers: [NSObjectProtocol] = []
+    private var applicationObservers: [NSObjectProtocol] = []
+    private var lastReconciliationAt = Date.distantPast
 
     private lazy var watcherStateURL: URL? = {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sorty", isDirectory: true)
-            .appendingPathComponent("WatcherState.json")
+        let root = persistenceRootOverride
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sorty", isDirectory: true)
+        return root?.appendingPathComponent("WatcherState.json")
     }()
 
     private lazy var snapshotStoreDirectory: URL? = {
-        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sorty", isDirectory: true)
-            .appendingPathComponent("WatcherSnapshots", isDirectory: true)
+        let root = persistenceRootOverride
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("Sorty", isDirectory: true)
+        return root?.appendingPathComponent("WatcherSnapshots", isDirectory: true)
     }()
 
-    public init() {
+    public convenience init() {
+        self.init(persistenceRoot: nil)
+    }
+
+    init(persistenceRoot: URL?) {
+        self.persistenceRootOverride = persistenceRoot
         queue.setSpecific(key: queueSpecificKey, value: ())
         persistedEventID = readPersistedEventCursor()?.eventID
         latestProcessedEventID = persistedEventID
@@ -149,6 +160,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         let center = NSWorkspace.shared.notificationCenter
         workspaceObservers.forEach(center.removeObserver)
+        applicationObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     // MARK: - Public API
@@ -213,7 +225,20 @@ public final class FolderWatcher: @unchecked Sendable {
             if previousRoots != self.monitoringRoots {
                 self.rebuildStream()
             }
+            self.beginScan(
+                at: self.rootPath(for: folder.id, folder: folder),
+                isRecovery: true
+            )
             self.startHealthTimerIfNeeded()
+        }
+    }
+
+    /// Reconciles persisted baselines with disk without waiting for a stream event.
+    /// This is used after launch/configuration and as a bounded fallback if FSEvents
+    /// was quiet while the app was rebuilding or not running.
+    public func reconcileNow() {
+        queue.async { [weak self] in
+            self?.scheduleFullReconciliation()
         }
     }
 
@@ -265,6 +290,7 @@ public final class FolderWatcher: @unchecked Sendable {
             )
             let previousRoots = self.monitoringRoots
             let initialMinimumEventID = self.persistedEventID ?? FSEventsGetCurrentEventId()
+            var rootsNeedingRecovery: Set<String> = []
 
             for folderID in Array(self.watchedFolders.keys) where enabledFolders[folderID] == nil {
                 self.uninstall(folderID: folderID)
@@ -276,13 +302,14 @@ public final class FolderWatcher: @unchecked Sendable {
                    existing.bookmarkData == folder.bookmarkData {
                     self.watchedFolders[folder.id] = folder
                 } else {
-                    self.uninstall(folderID: folder.id)
+                    self.uninstall(folderID: folder.id, removePersistedSnapshot: false)
                     self.install(
                         folder,
                         minimumEventID: self.hasCompletedInitialSync
                             ? FSEventsGetCurrentEventId()
                             : initialMinimumEventID
                     )
+                    rootsNeedingRecovery.insert(self.rootPath(for: folder.id, folder: folder))
                 }
             }
 
@@ -292,7 +319,11 @@ public final class FolderWatcher: @unchecked Sendable {
                 self.rebuildStream()
             }
             if isInitialSync {
-                self.scheduleRecoveryScans(affectedBy: "/")
+                self.scheduleFullReconciliation()
+            } else {
+                for root in Self.minimalMonitoringRoots(from: Array(rootsNeedingRecovery)) {
+                    self.beginScan(at: root, isRecovery: true)
+                }
             }
             self.startHealthTimerIfNeeded()
             self.stopHealthTimerIfIdle()
@@ -338,14 +369,14 @@ public final class FolderWatcher: @unchecked Sendable {
         restorePersistedSnapshot(for: folder)
     }
 
-    private func uninstall(folderID: UUID) {
+    private func uninstall(folderID: UUID, removePersistedSnapshot: Bool = true) {
         watchedFolders.removeValue(forKey: folderID)
         pausedFolders.remove(folderID)
         minimumEventIDs.removeValue(forKey: folderID)
         recentlyRemovedFiles.removeValue(forKey: folderID)
         folderSnapshots.removeValue(forKey: folderID)
         dirtySnapshotFolderIDs.remove(folderID)
-        if let url = snapshotURL(for: folderID) {
+        if removePersistedSnapshot, let url = snapshotURL(for: folderID) {
             try? fileManager.removeItem(at: url)
         }
         clearPendingFiles(for: folderID)
@@ -1266,6 +1297,16 @@ public final class FolderWatcher: @unchecked Sendable {
                 self?.recoverAfterLifecycleChange(affectedPath: mountedPath)
             }
         })
+
+        applicationObservers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.queue.async { [weak self] in
+                self?.scheduleFullReconciliation()
+            }
+        })
     }
 
     private func recoverAfterLifecycleChange(affectedPath: String) {
@@ -1278,7 +1319,14 @@ public final class FolderWatcher: @unchecked Sendable {
             rebuildStream()
         }
         scheduleRecoveryScans(affectedBy: affectedPath)
+        lastReconciliationAt = Date()
         DebugLogger.log("FSEvents: Replayed cursor and scheduled lifecycle recovery")
+    }
+
+    private func scheduleFullReconciliation() {
+        guard !watchedFolders.isEmpty else { return }
+        scheduleRecoveryScans(affectedBy: "/")
+        lastReconciliationAt = Date()
     }
 
     private func scheduleCursorPersistence() {
@@ -1344,6 +1392,10 @@ public final class FolderWatcher: @unchecked Sendable {
             guard let self else { return }
             if self.stream == nil, !self.isSuspendedForBackpressure {
                 self.rebuildStream()
+            }
+            if Date().timeIntervalSince(self.lastReconciliationAt)
+                >= Self.reconciliationInterval {
+                self.scheduleFullReconciliation()
             }
         }
         timer.resume()

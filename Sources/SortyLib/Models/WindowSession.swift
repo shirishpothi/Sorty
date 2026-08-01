@@ -12,11 +12,12 @@ public final class WindowSession: ObservableObject {
 
     public init(
         id: UUID = UUID(),
-        updateManager: SparkleUpdateManager = SparkleUpdateManager()
+        updateManager: SparkleUpdateManager = SparkleUpdateManager(),
+        history: OrganizationHistory = OrganizationHistory()
     ) {
         self.id = id
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)
-        self.organizer = FolderOrganizer()
+        self.organizer = FolderOrganizer(history: history)
     }
 
     public func configureIfNeeded(

@@ -405,7 +405,8 @@ struct SortyApp: App {
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var updateManager = SparkleUpdateManager()
-    @StateObject private var automationOrganizer = FolderOrganizer()
+    @StateObject private var organizationHistory: OrganizationHistory
+    @StateObject private var automationOrganizer: FolderOrganizer
 
     @State private var coordinator: AppCoordinator?
     @State private var hasConfiguredGlobals = false
@@ -414,6 +415,12 @@ struct SortyApp: App {
 
     init() {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel())
+
+        let organizationHistory = OrganizationHistory()
+        _organizationHistory = StateObject(wrappedValue: organizationHistory)
+        _automationOrganizer = StateObject(
+            wrappedValue: FolderOrganizer(history: organizationHistory)
+        )
 
         let codexAuthManager = CodexCLIAuthManager()
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
@@ -551,6 +558,7 @@ struct SortyApp: App {
         MainWindowRootView(
             launchRequest: launchRequest.wrappedValue,
             coordinator: coordinator,
+            history: organizationHistory,
             updateManager: updateManager
         )
         .tint(SortyDesignSystem.Colors.resolvedAccent)

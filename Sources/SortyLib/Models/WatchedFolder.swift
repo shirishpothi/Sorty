@@ -10,6 +10,8 @@ import Combine
 
 public extension Notification.Name {
     static let autoOrganizeDisabledGlobally = Notification.Name("autoOrganizeDisabledGlobally")
+    static let retryWatchedFolderBatch = Notification.Name("retryWatchedFolderBatch")
+    static let discardWatchedFolderBatch = Notification.Name("discardWatchedFolderBatch")
 }
 
 public enum FolderAccessStatus: String, Codable, Sendable {
@@ -25,6 +27,27 @@ public enum WatchedFolderReauthorizationResult: Sendable {
     case bookmarkCreationFailed
 }
 
+public enum WatchedFolderActivity: Equatable, Sendable {
+    case waitingForStability(fileCount: Int, nextAttemptAt: Date)
+    case queued(fileCount: Int, nextAttemptAt: Date)
+    case retrying(fileCount: Int, attempt: Int, nextAttemptAt: Date)
+    case parked(fileCount: Int)
+    case running(fileCount: Int)
+    case awaitingReview(fileCount: Int)
+}
+
+public enum WatchedFolderApplyPolicy: String, Codable, CaseIterable, Sendable {
+    case autoApply
+    case notifyAndReview
+
+    public var displayName: String {
+        switch self {
+        case .autoApply: "Apply Automatically"
+        case .notifyAndReview: "Notify and Review"
+        }
+    }
+}
+
 public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var path: String
@@ -33,6 +56,7 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var autoOrganize: Bool
     public var lastTriggered: Date?
     public var triggerDelay: TimeInterval // Seconds to wait after file changes before organizing
+    public var snoozedUntil: Date?
     public var customPrompt: String?
     public var temperature: Double?
     public var bookmarkData: Data?
@@ -41,6 +65,7 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var providerOverride: AIProvider?    // nil = use global automation provider
     /// Optional for backwards-compatible decoding of watched folders saved before action modes existed.
     public var organizationMode: OrganizationMode?
+    public var applyPolicy: WatchedFolderApplyPolicy?
     
     public init(
         id: UUID = UUID(),
@@ -49,13 +74,15 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         isEnabled: Bool = true,
         autoOrganize: Bool = true,
         lastTriggered: Date? = nil,
-        triggerDelay: TimeInterval = 5.0,
+        triggerDelay: TimeInterval = 7.0,
+        snoozedUntil: Date? = nil,
         customPrompt: String? = nil,
         temperature: Double? = nil,
         bookmarkData: Data? = nil,
         modelOverride: String? = nil,
         providerOverride: AIProvider? = nil,
-        organizationMode: OrganizationMode = .organize
+        organizationMode: OrganizationMode = .organize,
+        applyPolicy: WatchedFolderApplyPolicy = .autoApply
     ) {
         self.id = id
         self.path = path
@@ -64,16 +91,26 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         self.autoOrganize = autoOrganize
         self.lastTriggered = lastTriggered
         self.triggerDelay = triggerDelay
+        self.snoozedUntil = snoozedUntil
         self.customPrompt = customPrompt
         self.temperature = temperature
         self.bookmarkData = bookmarkData
         self.modelOverride = modelOverride
         self.providerOverride = providerOverride
         self.organizationMode = organizationMode
+        self.applyPolicy = applyPolicy
     }
 
     public var effectiveOrganizationMode: OrganizationMode {
         organizationMode ?? .organize
+    }
+
+    public var isSnoozed: Bool {
+        snoozedUntil.map { $0 > Date() } ?? false
+    }
+
+    public var effectiveApplyPolicy: WatchedFolderApplyPolicy {
+        applyPolicy ?? .autoApply
     }
     
     public var url: URL {
@@ -92,6 +129,7 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var activeFolderCount = 0
     @Published public private(set) var accessIssueFolderCount = 0
     @Published public private(set) var monitoringRevision = 0
+    @Published public private(set) var activityByFolder: [UUID: WatchedFolderActivity] = [:]
 
     private let userDefaults = UserDefaults.standard
     private let legacyStorageKey = "watchedFolders"
@@ -105,7 +143,7 @@ public class WatchedFoldersManager: ObservableObject {
         loadFolders()
         setupNotificationObservers()
     }
-    
+
     private func setupNotificationObservers() {
         NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearAll()
@@ -141,6 +179,7 @@ public class WatchedFoldersManager: ObservableObject {
     public func clearAll() {
         stopAllSecurityScopedAccess()
         folders.removeAll()
+        activityByFolder.removeAll()
         indexByID.removeAll()
         idByNormalizedPath.removeAll()
         activeFolderCount = 0
@@ -164,6 +203,7 @@ public class WatchedFoldersManager: ObservableObject {
         }
         folders.removeLast()
         journal.remove(folder.id)
+        activityByFolder.removeValue(forKey: folder.id)
         monitoringRevision &+= 1
         if removedFolder.isEnabled {
             setActiveFolderCount(max(activeFolderCount - 1, 0))
@@ -227,6 +267,20 @@ public class WatchedFoldersManager: ObservableObject {
                 action: updated.isEnabled ? "enable" : "disable",
                 outcome: "success"
             )
+        }
+    }
+
+    public func snooze(_ folder: WatchedFolder, until: Date?) {
+        guard var updated = self.folder(withID: folder.id) else { return }
+        updated.snoozedUntil = until
+        updateFolder(updated)
+    }
+
+    public func setActivity(_ activity: WatchedFolderActivity?, for folderID: UUID) {
+        if let activity {
+            activityByFolder[folderID] = activity
+        } else {
+            activityByFolder.removeValue(forKey: folderID)
         }
     }
     

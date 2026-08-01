@@ -58,6 +58,27 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.windowSessionID, session.id)
     }
 
+    func testWindowSessionUsesInjectedSharedHistory() {
+        let suiteName = "WindowSessionHistoryTests-\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        let storageDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(suiteName, isDirectory: true)
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: storageDirectory)
+        }
+        let history = OrganizationHistory(
+            userDefaults: userDefaults,
+            storageDirectory: storageDirectory
+        )
+
+        let firstSession = WindowSession(history: history)
+        let secondSession = WindowSession(history: history)
+
+        XCTAssertTrue(firstSession.organizer.history === history)
+        XCTAssertTrue(secondSession.organizer.history === history)
+    }
+
     func testWindowScopedNotificationMatchesOnlyTargetWindowSession() {
         let targetSessionID = UUID()
         let otherSessionID = UUID()

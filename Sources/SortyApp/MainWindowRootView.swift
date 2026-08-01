@@ -40,11 +40,14 @@ struct MainWindowRootView: View {
     init(
         launchRequest: WindowLaunchRequest?,
         coordinator: AppCoordinator?,
+        history: OrganizationHistory,
         updateManager: SparkleUpdateManager
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
-        _windowSession = StateObject(wrappedValue: WindowSession(updateManager: updateManager))
+        _windowSession = StateObject(
+            wrappedValue: WindowSession(updateManager: updateManager, history: history)
+        )
     }
 
     var body: some View {
@@ -150,6 +153,11 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
+                let folderPath = notification.userInfo?["folderPath"] as? String
+                _ = coordinator?.presentPendingReview(
+                    folderPath: folderPath,
+                    in: windowSession.organizer
+                )
                 withAnimation(.pageTransition) {
                     if windowSession.appState.selectedDirectory == nil,
                        let currentDirectory = windowSession.organizer.currentDirectory {

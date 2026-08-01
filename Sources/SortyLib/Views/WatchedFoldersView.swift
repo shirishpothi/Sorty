@@ -614,6 +614,43 @@ struct WatchedFolderCard: View {
         }
     }
 
+    @ViewBuilder
+    private var activityLine: some View {
+        if folder.isSnoozed, let until = folder.snoozedUntil {
+            Label(snoozedActivityText(until: until), systemImage: "clock.badge.pause")
+                .foregroundStyle(.orange)
+        } else if let activity = watchedFoldersManager.activityByFolder[folder.id] {
+            HStack(spacing: 8) {
+                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Label {
+                        let status = activityText(activity, now: context.date)
+                        Text(status)
+                            .numericTextTransition(animationValue: status)
+                    } icon: {
+                        Image(systemName: activityIcon(activity))
+                    }
+                }
+
+                if case .parked = activity {
+                    pendingBatchButton("Retry", notification: .retryWatchedFolderBatch)
+                    pendingBatchButton("Discard", notification: .discardWatchedFolderBatch)
+                } else if case .awaitingReview = activity {
+                    Button("Review") {
+                        HapticFeedbackManager.shared.tap()
+                        NotificationCenter.default.post(
+                            name: .showOrganizationPreview,
+                            object: nil,
+                            userInfo: ["folderPath": folder.path]
+                        )
+                    }
+                    .buttonStyle(.link)
+                    .controlSize(.mini)
+                }
+            }
+            .foregroundStyle(activityColor(activity))
+        }
+    }
+
     private var folderInfoView: some View {
         VStack(alignment: .leading, spacing: 4) {
             titleRow
@@ -625,11 +662,17 @@ struct WatchedFolderCard: View {
                 .truncationMode(.middle)
 
             statsRow
+
+            activityLine
+                .font(.caption2)
+                .lineLimit(1)
         }
     }
 
     private var quickActionsView: some View {
         HStack(spacing: 8) {
+            snoozeMenu
+
             Button {
                 HapticFeedbackManager.shared.tap()
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
@@ -669,6 +712,113 @@ struct WatchedFolderCard: View {
             .help("Remove")
             .accessibilityLabel("Remove \(folder.name)")
         }
+    }
+
+    private var snoozeMenu: some View {
+        Menu {
+            if folder.isSnoozed {
+                Button("Resume Now") {
+                    watchedFoldersManager.snooze(folder, until: nil)
+                    HapticFeedbackManager.shared.selection()
+                }
+                Divider()
+            }
+            Button("15 Minutes") { snooze(for: 15 * 60) }
+            Button("1 Hour") { snooze(for: 60 * 60) }
+            Button("Until Tomorrow") {
+                let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
+                watchedFoldersManager.snooze(
+                    folder,
+                    until: Calendar.current.startOfDay(for: tomorrow)
+                )
+                HapticFeedbackManager.shared.selection()
+            }
+        } label: {
+            Image(systemName: folder.isSnoozed ? "clock.badge.checkmark" : "clock.badge.pause")
+                .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(folder.isSnoozed ? "Change snooze" : "Snooze this watched folder")
+        .accessibilityLabel(
+            folder.isSnoozed ? "Change snooze for \(folder.name)" : "Snooze \(folder.name)"
+        )
+    }
+
+    private func snooze(for duration: TimeInterval) {
+        watchedFoldersManager.snooze(folder, until: Date().addingTimeInterval(duration))
+        HapticFeedbackManager.shared.selection()
+    }
+
+    private func activityText(_ activity: WatchedFolderActivity, now: Date) -> String {
+        switch activity {
+        case .waitingForStability(let count, let date):
+            return "\(count) waiting for stability · \(countdown(to: date, from: now))"
+        case .queued(let count, let date):
+            return "\(count) queued · \(countdown(to: date, from: now))"
+        case .retrying(let count, let attempt, let date):
+            return "\(count) retrying (attempt \(attempt)) · \(countdown(to: date, from: now))"
+        case .parked(let count):
+            return "\(count) parked after repeated failures"
+        case .running(let count):
+            return "Organizing \(count) file\(count == 1 ? "" : "s")"
+        case .awaitingReview(let count):
+            return "\(count) file\(count == 1 ? "" : "s") ready to review"
+        }
+    }
+
+    private func snoozedActivityText(until: Date) -> String {
+        let time = until.formatted(date: .omitted, time: .shortened)
+        guard let activity = watchedFoldersManager.activityByFolder[folder.id] else {
+            return "Snoozed until \(time)"
+        }
+        let count: Int
+        switch activity {
+        case .waitingForStability(let fileCount, _),
+             .queued(let fileCount, _),
+             .parked(let fileCount),
+             .running(let fileCount),
+             .awaitingReview(let fileCount):
+            count = fileCount
+        case .retrying(let fileCount, _, _):
+            count = fileCount
+        }
+        return "Snoozed until \(time) · \(count) queued"
+    }
+
+    private func countdown(to date: Date, from now: Date) -> String {
+        let seconds = max(Int(date.timeIntervalSince(now).rounded(.up)), 0)
+        return seconds == 0 ? "starting now" : "in \(seconds)s"
+    }
+
+    private func activityIcon(_ activity: WatchedFolderActivity) -> String {
+        switch activity {
+        case .waitingForStability: "hourglass"
+        case .queued: "tray.full"
+        case .retrying: "arrow.clockwise"
+        case .parked: "exclamationmark.circle"
+        case .running: "arrow.triangle.2.circlepath"
+        case .awaitingReview: "eye"
+        }
+    }
+
+    private func activityColor(_ activity: WatchedFolderActivity) -> Color {
+        switch activity {
+        case .parked: .red
+        case .retrying: .orange
+        case .running, .awaitingReview: .blue
+        case .waitingForStability, .queued: .secondary
+        }
+    }
+
+    private func pendingBatchButton(_ title: String, notification: Notification.Name) -> some View {
+        Button(title) {
+            HapticFeedbackManager.shared.tap()
+            NotificationCenter.default.post(name: notification, object: folder.id)
+        }
+        .buttonStyle(.link)
+        .controlSize(.mini)
     }
 
     private var isEnabledBinding: Binding<Bool> {
@@ -789,6 +939,7 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
+    @EnvironmentObject var organizer: FolderOrganizer
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var steeringManager = SteeringPromptManager.shared
@@ -798,6 +949,8 @@ struct WatchedFolderConfigView: View {
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
     @State private var selectedMode: OrganizationMode
+    @State private var triggerDelay: Double
+    @State private var selectedApplyPolicy: WatchedFolderApplyPolicy
     @State private var showModelPicker = false
     @State private var showFolderModelInfo = false
     @State private var showSavedPromptsSheet = false
@@ -821,6 +974,8 @@ struct WatchedFolderConfigView: View {
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
         _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
         _selectedMode = State(initialValue: folder.effectiveOrganizationMode)
+        _triggerDelay = State(initialValue: min(max(folder.triggerDelay, 5), 10))
+        _selectedApplyPolicy = State(initialValue: folder.effectiveApplyPolicy)
     }
 
     var body: some View {
@@ -883,6 +1038,40 @@ struct WatchedFolderConfigView: View {
                                 .foregroundStyle(.secondary)
                                 .numericTextTransition(animationValue: selectedMode)
                         }
+                    }
+
+                    ConfigSection(title: "When a Plan Is Ready", icon: "checkmark.shield", color: .green) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("Apply policy", selection: $selectedApplyPolicy) {
+                                ForEach(WatchedFolderApplyPolicy.allCases, id: \.self) { policy in
+                                    Text(policy.displayName).tag(policy)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityHint("Choose whether Sorty applies watched-folder plans or waits for your review")
+
+                            Text(selectedApplyPolicy == .autoApply
+                                ? "Sorty applies the plan as soon as it is ready."
+                                : "Sorty keeps the plan unchanged and notifies you to review it before applying.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    ConfigSection(title: "Timing", icon: "timer", color: .orange) {
+                        Stepper(value: $triggerDelay, in: 5...10, step: 1) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Wait \(Int(triggerDelay)) seconds")
+                                    .font(.subheadline)
+                                    .numericTextTransition(animationValue: Int(triggerDelay))
+                                Text("After the last file change, wait for activity to settle before checking files.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityLabel("Trigger delay")
+                        .accessibilityValue("\(Int(triggerDelay)) seconds")
                     }
 
                     // Actions Section
@@ -1087,21 +1276,11 @@ struct WatchedFolderConfigView: View {
                         )
                     }
 
-                    // Folder Info
-                    if let lastTriggered = folder.lastTriggered {
-                        ConfigSection(title: "Statistics", icon: "chart.bar", color: .gray) {
-                            HStack {
-                                Text("Last run")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text(lastTriggered, style: .relative)
-                                    .font(.subheadline)
-                                Text("ago")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                    ConfigSection(title: "Recent AI Actions", icon: "sparkles", color: .purple) {
+                        WatchedFolderRecentActions(
+                            folder: folder,
+                            history: organizer.history
+                        )
                     }
                 }
                 .padding(20)
@@ -1372,6 +1551,8 @@ struct WatchedFolderConfigView: View {
     private var currentFolderConfiguration: WatchedFolder {
         var updated = folder
         updated.organizationMode = selectedMode
+        updated.triggerDelay = triggerDelay
+        updated.applyPolicy = selectedApplyPolicy
         updated.customPrompt =
             customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? nil : customPrompt
@@ -1407,6 +1588,170 @@ struct WatchedFolderConfigView: View {
             watchedFoldersManager.updateFolder(currentFolderConfiguration)
         }
         dismiss()
+    }
+}
+
+private struct WatchedFolderRecentActions: View {
+    private struct UndoFailure: Identifiable {
+        let id = UUID()
+        let message: String
+    }
+
+    let folder: WatchedFolder
+    @ObservedObject var history: OrganizationHistory
+    @EnvironmentObject private var organizer: FolderOrganizer
+    @State private var undoingEntryID: UUID?
+    @State private var undoFailure: UndoFailure?
+
+    private var recentEntries: [OrganizationHistoryEntry] {
+        let folderPath = normalizedPath(folder.path)
+        return Array(history.entries.lazy.filter { entry in
+            entry.source == .watchedFolder && normalizedPath(entry.directoryPath) == folderPath
+        }.prefix(3))
+    }
+
+    var body: some View {
+        Group {
+            if recentEntries.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .foregroundStyle(.secondary)
+                    Text("No AI actions for this folder yet")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(recentEntries.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 {
+                            Divider()
+                                .padding(.leading, 28)
+                        }
+
+                        actionRow(entry)
+                            .padding(.vertical, 7)
+                    }
+                }
+            }
+        }
+        .alert(item: $undoFailure) { failure in
+            Alert(
+                title: Text("Couldn’t Undo Action"),
+                message: Text(failure.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    private func actionRow(_ entry: OrganizationHistoryEntry) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: iconName(for: entry))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color(for: entry))
+                .frame(width: 18)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary(for: entry))
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .numericTextTransition(animationValue: summary(for: entry))
+
+                Text(entry.timestamp, style: .relative)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if canUndo(entry) {
+                Button {
+                    undo(entry)
+                } label: {
+                    if undoingEntryID == entry.id {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 36)
+                    } else {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    }
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.small)
+                .disabled(undoingEntryID != nil)
+                .accessibilityHint("Restores the files changed by this AI action")
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func undo(_ entry: OrganizationHistoryEntry) {
+        guard undoingEntryID == nil else { return }
+        undoingEntryID = entry.id
+        Task { @MainActor in
+            defer { undoingEntryID = nil }
+            do {
+                _ = try await organizer.undoHistoryEntry(entry)
+                HapticFeedbackManager.shared.success()
+            } catch {
+                HapticFeedbackManager.shared.error()
+                undoFailure = UndoFailure(message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func canUndo(_ entry: OrganizationHistoryEntry) -> Bool {
+        !entry.isUndone
+            && entry.operations?.isEmpty == false
+            && (entry.status == .completed || entry.status == .partiallyUndone)
+    }
+
+    private func summary(for entry: OrganizationHistoryEntry) -> String {
+        switch entry.status {
+        case .completed:
+            let count = entry.filesOrganized
+            return "Organized \(count) file\(count == 1 ? "" : "s")"
+        case .partiallyUndone:
+            return "Partially undid this action"
+        case .undo:
+            return "Undid this action"
+        case .failed:
+            return "AI organization failed"
+        case .cancelled:
+            return "AI organization was cancelled"
+        case .skipped:
+            return "AI organization was skipped"
+        case .duplicatesCleanup:
+            return "Cleaned up duplicates"
+        }
+    }
+
+    private func iconName(for entry: OrganizationHistoryEntry) -> String {
+        switch entry.status {
+        case .completed: "checkmark.circle.fill"
+        case .partiallyUndone: "arrow.uturn.backward.circle"
+        case .undo: "arrow.uturn.backward.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        case .cancelled: "xmark.circle.fill"
+        case .skipped: "forward.circle.fill"
+        case .duplicatesCleanup: "doc.on.doc.fill"
+        }
+    }
+
+    private func color(for entry: OrganizationHistoryEntry) -> Color {
+        switch entry.status {
+        case .completed: .green
+        case .partiallyUndone, .skipped: .orange
+        case .undo: .blue
+        case .failed: .red
+        case .cancelled: .secondary
+        case .duplicatesCleanup: .purple
+        }
+    }
+
+    private func normalizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 }
 
