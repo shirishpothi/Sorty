@@ -66,6 +66,15 @@ final class SortyFinderSync: FIFinderSync {
             watchItem.image = watchImage
             watchItem.target = self
             menu.addItem(watchItem)
+
+            let excludeItem = NSMenuItem(
+                title: String(localized: "Exclude with Sorty"),
+                action: #selector(excludeAction(_:)),
+                keyEquivalent: ""
+            )
+            excludeItem.image = organizeImage
+            excludeItem.target = self
+            menu.addItem(excludeItem)
         case .toolbarItemMenu:
             let organizeItem = NSMenuItem(
                 title: String(localized: "Organize Folder"),
@@ -107,6 +116,15 @@ final class SortyFinderSync: FIFinderSync {
         guard let watchURL = Self.urlForWatching(path: url.path) else { return }
 
         Self.open(watchURL, directoryURL: url, event: "action.watch")
+    }
+
+    @objc private func excludeAction(_ sender: AnyObject?) {
+        _ = sender
+
+        guard let url = Self.selectedDirectoryURL() else { return }
+        guard let excludeURL = Self.urlForExcluding(path: url.path) else { return }
+
+        Self.open(excludeURL, directoryURL: url, event: "action.exclude")
     }
 
     private static func selectedDirectoryURL() -> URL? {
@@ -194,6 +212,14 @@ final class SortyFinderSync: FIFinderSync {
             URLQueryItem(name: "action", value: "add"),
             URLQueryItem(name: "path", value: path)
         ]
+        return components.url
+    }
+
+    private static func urlForExcluding(path: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "sorty"
+        components.host = "exclude"
+        components.queryItems = [URLQueryItem(name: "path", value: path)]
         return components.url
     }
 
