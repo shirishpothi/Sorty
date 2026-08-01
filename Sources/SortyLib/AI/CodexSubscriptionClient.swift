@@ -58,7 +58,6 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
             enableSmartRename: config.enableSmartRename,
-            includeFileMetadata: config.enableDeepScan,
             includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions
         )
@@ -116,7 +115,6 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
             enableSmartRename: config.enableSmartRename,
-            includeFileMetadata: config.enableDeepScan,
             includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions,
             analyzedImageFilenames: imageData.keys.sorted()

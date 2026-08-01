@@ -1944,6 +1944,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         resuming checkpoint: OrganizationResumeCheckpoint? = nil
     ) async throws -> OrganizationPlan {
         let mode = checkpoint?.mode ?? modeOverride ?? aiConfig?.mode ?? client.config.mode
+        let resolvedDirectory = checkpoint?.directory ?? directory ?? currentDirectory
+        var completeInstructions = checkpoint?.instructions ?? instructions
+        if mode != .renameOnly,
+           !completeInstructions.contains("## SOURCE FOLDER CONTEXT"),
+           let resolvedDirectory,
+           let manifest = PromptBuilder.buildDirectoryManifestContext(
+               baseDirectoryURL: resolvedDirectory,
+               files: files
+           ) {
+            completeInstructions += "\n\n" + manifest
+        }
         let batchSize = mode == .organize
             ? Self.organizeAnalysisBatchSize
             : Self.renameAnalysisBatchSize
@@ -1983,12 +1994,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             completedAnalysisBatchCount += 1
         }
 
-        let resolvedDirectory = checkpoint?.directory ?? directory ?? currentDirectory
         if let resolvedDirectory {
             resumeCheckpoint = OrganizationResumeCheckpoint(
                 files: files,
                 directory: resolvedDirectory,
-                instructions: instructions,
+                instructions: completeInstructions,
                 personaPrompt: personaPrompt,
                 imagePayload: imagePayload,
                 temperature: temperature,
@@ -2017,7 +2027,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 stage: planningStage
             )
 
-            var batchInstructions = instructions
+            var batchInstructions = completeInstructions
             if batchCount > 1 {
                 batchInstructions += Self.largeFolderBatchContext(
                     batchIndex: batchIndex,
@@ -3384,6 +3394,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 if isDirectory.boolValue {
                     if let nestedFiles = try? await scanner.scanDirectory(
                         at: fileURL,
+                        relativeTo: directory,
                         deepScan: shouldDeepScan,
                         exclusionMatcher: exclusionMatcher
                     ) {
@@ -3391,6 +3402,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     }
                 } else if let item = try? await scanner.scanFile(
                     at: fileURL,
+                    relativeTo: directory,
                     deepScan: shouldDeepScan,
                     exclusionMatcher: exclusionMatcher
                 ) {
@@ -3638,8 +3650,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let exclusionMatcher = exclusionRules?.matcherSnapshot()
         var files: [FileItem] = []
         for url in selectedFiles {
-            if let item = try? await scanner.scanFile(
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                continue
+            }
+
+            if isDirectory.boolValue {
+                if let nestedFiles = try? await scanner.scanDirectory(
+                    at: url,
+                    relativeTo: directory,
+                    deepScan: aiConfig?.enableDeepScan ?? false,
+                    deepScanFileLimit: Self.deepScanFileLimit,
+                    exclusionMatcher: exclusionMatcher
+                ) {
+                    files.append(contentsOf: nestedFiles)
+                }
+            } else if let item = try? await scanner.scanFile(
                 at: url,
+                relativeTo: directory,
+                deepScan: aiConfig?.enableDeepScan ?? false,
                 exclusionMatcher: exclusionMatcher
             ) {
                 files.append(item)

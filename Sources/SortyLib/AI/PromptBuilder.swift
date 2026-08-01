@@ -68,7 +68,6 @@ struct PromptBuilder {
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
         enableReasoning: Bool = false,
         enableSmartRename: Bool = false,
-        includeFileMetadata: Bool = true,
         includeContentMetadata: Bool = false,
         customInstructions: String? = nil,
         storageLocationsContext: String? = nil,
@@ -234,7 +233,7 @@ struct PromptBuilder {
         // Group files by extension for better context
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
         let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
+        dateFormatter.formatOptions = [.withInternetDateTime]
         
         for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
@@ -254,36 +253,46 @@ struct PromptBuilder {
             }
             
             for file in sortedFiles {
-                var fileDesc = "  - \(file.displayName)"
+                let promptPath = file.relativePath ?? file.displayName
+                var fileDesc = "  - \(promptPath)"
                 
-                if includeFileMetadata {
-                    fileDesc += " (\(file.formattedSize))"
+                fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
 
-                    if let created = file.creationDate {
-                        fileDesc += ", created: \(dateFormatter.string(from: created))"
-                    }
-                    if let modified = file.modificationDate {
-                        fileDesc += ", modified: \(dateFormatter.string(from: modified))"
-                    }
+                if let created = file.creationDate {
+                    fileDesc += ", created: \(dateFormatter.string(from: created))"
+                }
+                if let modified = file.modificationDate {
+                    fileDesc += ", modified: \(dateFormatter.string(from: modified))"
+                }
+                if let accessed = file.lastAccessDate {
+                    fileDesc += ", accessed: \(dateFormatter.string(from: accessed))"
+                }
+                if let resolution = file.resolutionString {
+                    fileDesc += ", dimensions: \(resolution)"
+                }
+                if let cloudStatus = file.cloudStatus {
+                    fileDesc += ", cloud status: \(cloudStatus.rawValue)"
+                }
+                if let hash = file.sha256Hash, !hash.isEmpty {
+                    fileDesc += ", SHA-256: \(hash)"
+                }
 
-                    if let tags = file.finderTags, !tags.isEmpty {
-                        fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
-                    }
+                if let tags = file.finderTags, !tags.isEmpty {
+                    fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
+                }
 
-                    if let comment = file.finderComment, !comment.isEmpty {
-                        fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
-                    }
+                if let comment = file.finderComment, !comment.isEmpty {
+                    fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
                 }
                 
                 // Include content metadata if available and requested
                 if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
-                    if mode == .renameOnly || mode == .organizeAndRename {
-                        let snippet = renameMetadataSnippet(for: file, maxLength: 220)
-                        if !snippet.isEmpty {
-                            fileDesc += "\n    [Rename Context] \(snippet)"
-                        }
-                    } else {
-                        fileDesc += "\n    [Content Analysis] \(metadata.summary)"
+                    let summary = contentMetadataDescription(metadata)
+                    if !summary.isEmpty {
+                        let label = mode == .renameOnly || mode == .organizeAndRename
+                            ? "Rename Context"
+                            : "Content Analysis"
+                        fileDesc += "\n    [\(label)] \(summary)"
                     }
                 }
                 
@@ -299,19 +308,14 @@ struct PromptBuilder {
             prompt += "- OCR results: Use text found in images/screenshots for more accurate categorization\n\n"
         }
         
-        if includeFileMetadata {
-            prompt += "## FILE METADATA\n"
-            prompt += "Files include metadata when available — use it for smarter organization:\n"
-            prompt += "- Treat filenames as helpful but imperfect labels; do not overfit to names like IMG_, Screenshot, scan, final, or untitled\n"
-            prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
-            prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
-            prompt += "- Dates (created/modified): Group by time period or project phase when relevant\n"
-            prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
-            prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
-        } else {
-            prompt += "## FAST MODE\n"
-            prompt += "Organize from filenames, extensions, folder structure, and the supplied instructions. Do not assume file contents that were not provided.\n\n"
-        }
+        prompt += "## FILE METADATA\n"
+        prompt += "Files include metadata when available — use it for smarter organization:\n"
+        prompt += "- Treat filenames as helpful but imperfect labels; do not overfit to names like IMG_, Screenshot, scan, final, or untitled\n"
+        prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
+        prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
+        prompt += "- Dates (created/modified/accessed): Group by time period or project phase when relevant\n"
+        prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
+        prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
 
         if mode == .renameOnly {
             prompt += "\nReturn the suggestions in JSON format. Use a single folder named '.' to represent the current location for all files."
@@ -394,21 +398,40 @@ struct PromptBuilder {
 
     private static func compactFileLine(id: Int, file: FileItem, maxNameLength: Int) -> String {
         let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
-        let displayName = file.displayName.isEmpty ? file.name : file.displayName
-        let clippedName = String(displayName.prefix(maxNameLength))
+        let displayPath = file.relativePath ?? (file.displayName.isEmpty ? file.name : file.displayName)
+        let clippedName = String(displayPath.prefix(maxNameLength))
         var line = "\(id)|\(ext)|\(clippedName)"
         
         // Append Finder metadata compactly when present
-        var extras: [String] = []
+        var extras = ["bytes:\(file.size)"]
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withFullDate]
+        if let created = file.creationDate {
+            extras.append("created:\(dateFormatter.string(from: created))")
+        }
+        if let modified = file.modificationDate {
+            extras.append("modified:\(dateFormatter.string(from: modified))")
+        }
+        if let accessed = file.lastAccessDate {
+            extras.append("accessed:\(dateFormatter.string(from: accessed))")
+        }
+        if let resolution = file.resolutionString {
+            extras.append("dimensions:\(resolution)")
+        }
+        if let cloudStatus = file.cloudStatus {
+            extras.append("cloud:\(cloudStatus.rawValue)")
+        }
         if let tags = file.finderTags, !tags.isEmpty {
             extras.append("tags:\(tags.joined(separator: ","))")
         }
         if let comment = file.finderComment, !comment.isEmpty {
             extras.append("comment:\(String(comment.prefix(40)))")
         }
-        let parentPath = URL(fileURLWithPath: file.path).deletingLastPathComponent().lastPathComponent
-        if !parentPath.isEmpty && parentPath != "/" {
-            extras.append("parent:\(String(parentPath.prefix(32)))")
+        if let metadata = file.contentMetadata, !metadata.isEmpty {
+            let metadataSummary = contentMetadataDescription(metadata)
+            if !metadataSummary.isEmpty {
+                extras.append("content:\(truncateForPrompt(metadataSummary, maxLength: 160))")
+            }
         }
         if !extras.isEmpty {
             line += "|\(extras.joined(separator: "|"))"
@@ -725,53 +748,46 @@ struct PromptBuilder {
         return output
     }
 
-    private static func renameMetadataSnippet(for file: FileItem, maxLength: Int) -> String {
+    private static func contentMetadataDescription(_ metadata: ContentMetadata) -> String {
         var parts: [String] = []
 
-        if let metadata = file.contentMetadata {
-            if let title = metadata.documentTitle, !title.isEmpty {
-                parts.append("Title: \(truncateForPrompt(title, maxLength: maxLength))")
-            }
-            if let ocr = metadata.ocrText, !ocr.isEmpty {
-                parts.append("OCR: \(truncateForPrompt(ocr, maxLength: maxLength))")
-            }
-            if let preview = metadata.textPreview, !preview.isEmpty {
-                parts.append("Text: \(truncateForPrompt(preview, maxLength: maxLength))")
-            }
-            if let keywords = metadata.keywords, !keywords.isEmpty {
-                parts.append("Keywords: \(truncateForPrompt(keywords.joined(separator: ", "), maxLength: maxLength))")
-            }
-            if let detected = metadata.detectedKeywords, !detected.isEmpty {
-                parts.append("Detected: \(truncateForPrompt(detected.joined(separator: ", "), maxLength: maxLength))")
-            }
-            if let exif = metadata.exifData, !exif.isEmpty {
-                let exifSummary = exif.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
-                parts.append("EXIF: \(truncateForPrompt(exifSummary, maxLength: maxLength))")
-            }
-            if let pages = metadata.pageCount {
-                parts.append("Pages: \(pages)")
-            }
-            if let duration = metadata.duration {
-                let minutes = Int(duration) / 60
-                let seconds = Int(duration) % 60
-                parts.append("Duration: \(minutes)m \(seconds)s")
-            }
-            if let mediaInfo = metadata.mediaInfo, !mediaInfo.isEmpty {
-                let mediaSummary = mediaInfo.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
-                parts.append("Media: \(truncateForPrompt(mediaSummary, maxLength: maxLength))")
-            }
+        if let title = metadata.documentTitle, !title.isEmpty {
+            parts.append("Title: \(truncateForPrompt(title, maxLength: 240))")
         }
-
-        if let comment = file.finderComment, !comment.isEmpty {
-            parts.append("Comment: \(truncateForPrompt(comment, maxLength: maxLength))")
+        if let author = metadata.author, !author.isEmpty {
+            parts.append("Author: \(truncateForPrompt(author, maxLength: 160))")
         }
-
-        if let tags = file.finderTags, !tags.isEmpty {
-            parts.append("Tags: \(tags.joined(separator: ", "))")
+        if let created = metadata.creationDate {
+            parts.append("Document created: \(ISO8601DateFormatter().string(from: created))")
         }
-
-        if parts.isEmpty, let semantic = file.semanticTextContent, !semantic.isEmpty {
-            parts.append(truncateForPrompt(semantic, maxLength: maxLength))
+        if let pages = metadata.pageCount {
+            parts.append("Pages: \(pages)")
+        }
+        if let duration = metadata.duration {
+            parts.append("Duration: \(duration) seconds")
+        }
+        if let keywords = metadata.keywords, !keywords.isEmpty {
+            parts.append("Keywords: \(keywords.joined(separator: ", "))")
+        }
+        if let detected = metadata.detectedKeywords, !detected.isEmpty {
+            parts.append("Detected keywords: \(detected.joined(separator: ", "))")
+        }
+        if let confidence = metadata.ocrConfidence {
+            parts.append("OCR confidence: \(confidence)")
+        }
+        if let exif = metadata.exifData, !exif.isEmpty {
+            let values = exif.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            parts.append("EXIF: \(truncateForPrompt(values.joined(separator: ", "), maxLength: 600))")
+        }
+        if let media = metadata.mediaInfo, !media.isEmpty {
+            let values = media.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            parts.append("Media: \(truncateForPrompt(values.joined(separator: ", "), maxLength: 600))")
+        }
+        if let preview = metadata.textPreview, !preview.isEmpty {
+            parts.append("Text: \(truncateForPrompt(preview, maxLength: 1_600))")
+        }
+        if let ocr = metadata.ocrText, !ocr.isEmpty {
+            parts.append("OCR: \(truncateForPrompt(ocr, maxLength: 1_200))")
         }
 
         return parts.joined(separator: " | ")
@@ -885,6 +901,10 @@ struct PromptBuilder {
         }
 
         let ancestorNames = directoryContextNames(for: baseDirectoryURL)
+        let directoryMetadata = directoryMetadataContext(
+            baseDirectoryURL: baseDirectoryURL,
+            maxEntries: maxEntries
+        )
 
         var context = """
         ## SOURCE FOLDER CONTEXT
@@ -893,6 +913,7 @@ struct PromptBuilder {
         Files in current organization scope: \(files.count)
         Extension mix: \(extensionSummary.isEmpty ? "n/a" : extensionSummary)
         Folder distribution: \(parentSummary.isEmpty ? "(root only)" : parentSummary)
+        \(directoryMetadata)
         Relative paths in scope:
         \(manifestLines.joined(separator: "\n"))
         """
@@ -903,6 +924,84 @@ struct PromptBuilder {
 
         context += "\nUse this context to understand projects, clients, events, and existing groupings before deciding on folder structure. Do not rely on filenames alone."
         return context
+    }
+
+    private static func directoryMetadataContext(
+        baseDirectoryURL: URL,
+        maxEntries: Int
+    ) -> String {
+        let keys: Set<URLResourceKey> = [
+            .isDirectoryKey,
+            .creationDateKey,
+            .contentModificationDateKey,
+            .contentAccessDateKey,
+            .tagNamesKey,
+        ]
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime]
+        var lines: [String] = []
+        var directoryCount = 0
+
+        func appendDirectory(_ url: URL, relativePath: String) {
+            directoryCount += 1
+            guard lines.count < maxEntries else { return }
+
+            let values = try? url.resourceValues(forKeys: keys)
+            var parts = ["- \(relativePath)"]
+            if let created = values?.creationDate {
+                parts.append("created \(dateFormatter.string(from: created))")
+            }
+            if let modified = values?.contentModificationDate {
+                parts.append("modified \(dateFormatter.string(from: modified))")
+            }
+            if let accessed = values?.contentAccessDate {
+                parts.append("accessed \(dateFormatter.string(from: accessed))")
+            }
+            if let tags = values?.tagNames, !tags.isEmpty {
+                parts.append("tags \(tags.joined(separator: ", "))")
+            }
+            if let comment = finderComment(at: url), !comment.isEmpty {
+                parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
+            }
+            lines.append(parts.joined(separator: " | "))
+        }
+
+        appendDirectory(baseDirectoryURL, relativePath: ".")
+        if let enumerator = FileManager.default.enumerator(
+            at: baseDirectoryURL,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            while let item = enumerator.nextObject() as? URL {
+                guard (try? item.resourceValues(forKeys: keys).isDirectory) == true else {
+                    continue
+                }
+                appendDirectory(
+                    item,
+                    relativePath: relativePath(for: item, baseDirectoryURL: baseDirectoryURL)
+                )
+            }
+        }
+
+        var context = "Directory metadata in scope (\(directoryCount) total):\n"
+        context += lines.joined(separator: "\n")
+        if directoryCount > lines.count {
+            context += "\n- ... and \(directoryCount - lines.count) more directories in scope"
+        }
+        return context
+    }
+
+    private static func finderComment(at url: URL) -> String? {
+        let key = "com.apple.metadata:kMDItemFinderComment"
+        let size = getxattr(url.path, key, nil, 0, 0, 0)
+        guard size > 0 else { return nil }
+
+        var data = Data(count: size)
+        let result = data.withUnsafeMutableBytes { buffer in
+            getxattr(url.path, key, buffer.baseAddress, size, 0, 0)
+        }
+        guard result > 0 else { return nil }
+        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
     }
 
     private static func directoryContextNames(for directoryURL: URL, maxAncestors: Int = 3) -> [String] {
@@ -923,12 +1022,24 @@ struct PromptBuilder {
     }
 
     private static func relativePath(for file: FileItem, baseDirectoryURL: URL) -> String {
+        if let relativePath = file.relativePath, !relativePath.isEmpty {
+            return relativePath
+        }
         let path = file.path
         let basePath = baseDirectoryURL.standardizedFileURL.path
         if path.hasPrefix(basePath + "/") {
             return String(path.dropFirst(basePath.count + 1))
         }
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private static func relativePath(for itemURL: URL, baseDirectoryURL: URL) -> String {
+        let path = itemURL.standardizedFileURL.path
+        let basePath = baseDirectoryURL.standardizedFileURL.path
+        guard path.hasPrefix(basePath + "/") else {
+            return itemURL.lastPathComponent
+        }
+        return String(path.dropFirst(basePath.count + 1))
     }
     
     // MARK: - Reference Model Directory Context

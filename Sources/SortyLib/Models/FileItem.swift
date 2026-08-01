@@ -17,6 +17,9 @@ public enum CloudFileStatus: String, Codable, Sendable {
 public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var path: String
+    /// Path relative to the directory selected for organization.
+    /// This keeps nested-folder context without exposing the absolute path.
+    public var relativePath: String?
     public var name: String
     public var `extension`: String
     public var size: Int64
@@ -54,6 +57,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     public init(
         id: UUID = UUID(),
         path: String,
+        relativePath: String? = nil,
         name: String,
         extension: String = "",
         size: Int64 = 0,
@@ -74,6 +78,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     ) {
         self.id = id
         self.path = path
+        self.relativePath = relativePath
         self.name = name
         self.extension = `extension`
         self.size = size

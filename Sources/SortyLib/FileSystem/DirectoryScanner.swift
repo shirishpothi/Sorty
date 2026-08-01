@@ -76,6 +76,7 @@ actor DirectoryScanner {
     /// Scan directory with optional deep content analysis and hash computation
     func scanDirectory(
         at url: URL,
+        relativeTo baseDirectoryURL: URL? = nil,
         includeHidden: Bool = false,
         deepScan: Bool = false,
         computeHashes: Bool = false,
@@ -132,6 +133,7 @@ actor DirectoryScanner {
 
         try await scanDirectoryRecursive(
             at: url,
+            relativeTo: baseDirectoryURL ?? url,
             fileManager: fileManager,
             includeHidden: includeHidden,
             deepScan: deepScan,
@@ -437,6 +439,7 @@ actor DirectoryScanner {
     /// Scan a single file and return a FileItem
     func scanFile(
         at url: URL,
+        relativeTo baseDirectoryURL: URL? = nil,
         deepScan: Bool = false,
         computeHashes: Bool = false,
         skipCloudPlaceholders: Bool = true,
@@ -507,6 +510,7 @@ actor DirectoryScanner {
 
         return FileItem(
             path: url.path,
+            relativePath: baseDirectoryURL.map { Self.relativePath(for: url, under: $0) },
             name: fileName,
             extension: pathExtension,
             size: Int64(size),
@@ -543,6 +547,7 @@ actor DirectoryScanner {
 
     private func scanDirectoryRecursive(
         at url: URL,
+        relativeTo baseDirectoryURL: URL,
         fileManager: FileManager,
         includeHidden: Bool,
         deepScan: Bool,
@@ -669,9 +674,9 @@ actor DirectoryScanner {
                     "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
             }
 
-            // Finder comments require a separate xattr syscall. Read them only
-            // for files that already receive the more expensive deep analysis.
-            let finderComment = contentMetadata == nil ? nil : Self.readFinderComment(at: fileURL)
+            // Finder comments are lightweight filesystem metadata and remain useful
+            // even when content extraction is disabled.
+            let finderComment = Self.readFinderComment(at: fileURL)
 
             let extractedOCRText = contentMetadata?.ocrText
             let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
@@ -684,6 +689,7 @@ actor DirectoryScanner {
 
             let fileItem = FileItem(
                 path: fileURL.path,
+                relativePath: Self.relativePath(for: fileURL, under: baseDirectoryURL),
                 name: fileName,
                 extension: pathExtension,
                 size: Int64(size),
@@ -754,6 +760,15 @@ actor DirectoryScanner {
     }
 
     // MARK: - Finder Metadata
+
+    private static func relativePath(for itemURL: URL, under baseDirectoryURL: URL) -> String {
+        let itemPath = itemURL.standardizedFileURL.path
+        let basePath = baseDirectoryURL.standardizedFileURL.path
+        guard itemPath.hasPrefix(basePath + "/") else {
+            return itemURL.lastPathComponent
+        }
+        return String(itemPath.dropFirst(basePath.count + 1))
+    }
 
     private static func extractImageDimensions(from metadata: ContentMetadata?) -> (
         width: Int, height: Int

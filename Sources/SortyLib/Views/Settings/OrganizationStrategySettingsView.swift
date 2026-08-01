@@ -39,7 +39,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             ),
                             title: "Fast Mode",
-                            description: "Skip content, metadata, and image attachments; use filenames and folder context",
+                            description: "Skip file content and image attachments; use names, metadata, and folder context",
                             focusTarget: .strategyFastMode
                         )
                         .disabled(!viewModel.config.provider.supportsDeepScan)

@@ -83,14 +83,13 @@ final class ContentMetadataExtendedTests: XCTestCase {
         XCTAssertFalse(metadata.isEmpty)
     }
     
-    func testIsEmptyIgnoresOtherFields() {
-        // These fields alone should not make isEmpty false
+    func testIsNotEmptyWithStructuredMetadataOnly() {
         let metadata = ContentMetadata(
             pageCount: 10,
             author: "Author",
             keywords: ["test"]
         )
-        XCTAssertTrue(metadata.isEmpty)
+        XCTAssertFalse(metadata.isEmpty)
     }
     
     // MARK: - allTextContent Tests

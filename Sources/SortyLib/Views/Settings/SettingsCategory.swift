@@ -351,7 +351,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .strategy:
             return [
-                feature("Fast Mode", "Skip content, file metadata, and image attachments for faster organization when filenames and folder context are enough.", keywords: ["deep scanning", "scan content"], target: .strategyFastMode),
+                feature("Fast Mode", "Skip file content and image attachments while retaining metadata and folder context.", keywords: ["deep scanning", "scan content"], target: .strategyFastMode),
                 feature("AI Vision for Images", "Use image understanding to classify screenshots and photos.", keywords: ["vision", "image analysis"], target: .strategyVision),
                 feature("Renaming", "Control how Sorty names organized files.", keywords: ["rename", "filename"], target: .strategyRenaming),
                 feature("Naming Template", "Choose a built-in or custom naming preset.", keywords: ["naming preset", "template"], target: .strategyNamingTemplate),

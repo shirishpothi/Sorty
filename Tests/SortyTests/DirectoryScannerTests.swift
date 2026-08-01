@@ -95,6 +95,7 @@ class DirectoryScannerTests: XCTestCase {
         let files = try await scanner.scanDirectory(at: tempDirectory)
         
         XCTAssertTrue(files.contains(where: { $0.name == "sub" }))
+        XCTAssertEqual(files.first(where: { $0.name == "sub" })?.relativePath, "SubDir/sub.txt")
     }
 
     func testScanningPrunesExcludedSubtreesBeforeDeepAnalysis() async throws {

@@ -281,7 +281,7 @@ learnings-cli --clear
 |-----------|-------|-------|
 | File names | ✓ | ✓ (sent to AI) |
 | File metadata | ✓ | ✓ (sent to AI) |
-| File content | ✓ (Deep Scan) | ✗ |
+| File content | ✓ (Deep Scan) | Bounded extracted summaries (Deep Scan) |
 | Organization history | ✓ | ✗ |
 | Settings | ✓ | ✗ |
 
@@ -314,7 +314,7 @@ Yes! Press ⌘Z immediately after applying, or go to History and click "Revert" 
 No. Organization only moves files into folders. The only deletion feature is for duplicates, with Safe Deletion enabled by default.
 
 ### Does Deep Scan upload my file contents?
-No. Deep Scan extracts metadata locally. Only file names and metadata summaries are sent to the AI.
+Sorty always sends relative folder structure and available file metadata to the selected AI provider. Deep Scan also extracts supported content locally and sends bounded text, OCR, EXIF, and media summaries; it does not upload the original file itself.
 
 ### Can I use Sorty offline?
 Yes, with Ollama (local AI) or Apple Intelligence. Cloud providers require internet.

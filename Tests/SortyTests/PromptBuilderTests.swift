@@ -130,7 +130,7 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("MUST NOT override direct user or persona instructions"))
     }
 
-    func testFastModePromptOmitsPerFileMetadataAndContent() {
+    func testFastModePromptIncludesFileMetadataButOmitsContent() {
         let file = FileItem(
             path: "/tmp/Reports/quarterly.pdf",
             name: "quarterly",
@@ -145,17 +145,15 @@ final class PromptBuilderTests: XCTestCase {
 
         let prompt = PromptBuilder.buildOrganizationPrompt(
             files: [file],
-            includeFileMetadata: false,
             includeContentMetadata: false
         )
 
         XCTAssertTrue(prompt.contains("quarterly.pdf"))
-        XCTAssertTrue(prompt.contains("## FAST MODE"))
-        XCTAssertFalse(prompt.contains("created:"))
-        XCTAssertFalse(prompt.contains("[Tags]"))
-        XCTAssertFalse(prompt.contains("Finance team review"))
+        XCTAssertTrue(prompt.contains("## FILE METADATA"))
+        XCTAssertTrue(prompt.contains("created:"))
+        XCTAssertTrue(prompt.contains("[Tags]"))
+        XCTAssertTrue(prompt.contains("Finance team review"))
         XCTAssertFalse(prompt.contains("Confidential revenue details"))
-        XCTAssertFalse(prompt.contains("## FILE METADATA"))
     }
     
     // MARK: - Empty Input
@@ -285,6 +283,8 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertNotNil(context)
         XCTAssertTrue(context?.contains("SOURCE FOLDER CONTEXT") ?? false)
         XCTAssertTrue(context?.contains("Invoices/march.pdf") ?? false)
+        XCTAssertTrue(context?.contains("Directory metadata in scope (2 total)") ?? false)
+        XCTAssertTrue(context?.contains("- Invoices") ?? false)
         XCTAssertTrue(context?.contains("notes.txt") ?? false)
         XCTAssertTrue(context?.contains("pdf:1") ?? false)
         XCTAssertTrue(context?.contains("txt:1") ?? false)
@@ -333,5 +333,78 @@ final class PromptBuilderTests: XCTestCase {
 
         XCTAssertNotNil(context)
         XCTAssertTrue(context?.contains("external-report.pdf") ?? false)
+    }
+
+    func testOrganizationPromptIncludesCollectedMetadataAndRelativeHierarchy() {
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let metadata = ContentMetadata(
+            textPreview: "Quarterly revenue report",
+            documentTitle: "Q4 Results",
+            exifData: ["camera": "Example Camera", "lens": "35mm"],
+            pageCount: 12,
+            author: "A. Example",
+            creationDate: created,
+            keywords: ["finance", "quarterly"],
+            ocrText: "Revenue increased",
+            ocrConfidence: 0.97,
+            detectedKeywords: ["revenue"],
+            duration: 42,
+            mediaInfo: ["codec": "example"]
+        )
+        let file = FileItem(
+            path: "/Users/example/Work/Reports/Q4.pdf",
+            relativePath: "Reports/Q4.pdf",
+            name: "Q4",
+            extension: "pdf",
+            size: 4_096,
+            creationDate: created,
+            modificationDate: created,
+            lastAccessDate: created,
+            contentMetadata: metadata,
+            sha256Hash: "abc123",
+            imageWidth: 1_920,
+            imageHeight: 1_080,
+            cloudStatus: .synced,
+            finderComment: "Ready to file",
+            finderTags: ["Work"]
+        )
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            includeContentMetadata: true
+        )
+
+        XCTAssertTrue(prompt.contains("Reports/Q4.pdf"))
+        XCTAssertFalse(prompt.contains("/Users/example"))
+        XCTAssertTrue(prompt.contains("4096 bytes"))
+        XCTAssertTrue(prompt.contains("accessed:"))
+        XCTAssertTrue(prompt.contains("dimensions: 1920x1080"))
+        XCTAssertTrue(prompt.contains("cloud status: synced"))
+        XCTAssertTrue(prompt.contains("SHA-256: abc123"))
+        XCTAssertTrue(prompt.contains("[Tags] Work"))
+        XCTAssertTrue(prompt.contains("[Finder Comment] Ready to file"))
+        XCTAssertTrue(prompt.contains("Author: A. Example"))
+        XCTAssertTrue(prompt.contains("OCR confidence: 0.97"))
+        XCTAssertTrue(prompt.contains("lens=35mm"))
+        XCTAssertTrue(prompt.contains("codec=example"))
+        XCTAssertTrue(prompt.contains("Quarterly revenue report"))
+    }
+
+    func testCompactPromptIncludesMetadataAndRelativeHierarchy() {
+        let file = FileItem(
+            path: "/Users/example/Work/Reports/Q4.pdf",
+            relativePath: "Reports/Q4.pdf",
+            name: "Q4",
+            extension: "pdf",
+            size: 4_096,
+            finderTags: ["Work"]
+        )
+
+        let prompt = PromptBuilder.buildCompactPrompt(files: [file])
+
+        XCTAssertTrue(prompt.contains("Reports/Q4.pdf"))
+        XCTAssertTrue(prompt.contains("bytes:4096"))
+        XCTAssertTrue(prompt.contains("tags:Work"))
+        XCTAssertFalse(prompt.contains("/Users/example"))
     }
 }

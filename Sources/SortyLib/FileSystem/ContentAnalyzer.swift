@@ -58,7 +58,18 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
     }
 
     public var isEmpty: Bool {
-        textPreview == nil && documentTitle == nil && exifData == nil && ocrText == nil && mediaInfo == nil
+        textPreview == nil
+            && documentTitle == nil
+            && exifData == nil
+            && pageCount == nil
+            && author == nil
+            && creationDate == nil
+            && keywords == nil
+            && ocrText == nil
+            && ocrConfidence == nil
+            && detectedKeywords == nil
+            && duration == nil
+            && mediaInfo == nil
     }
 
     /// All available text content (document text + OCR)
