@@ -2027,7 +2027,7 @@ private struct InsightHistorySection: View {
 
     private var receivingResponseView: some View {
         HStack(spacing: 12) {
-            SolvingOrbView()
+            ComposingOrbView()
                 .frame(width: 26, height: 26)
 
             Text("Receiving AI response...")
