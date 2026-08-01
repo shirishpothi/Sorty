@@ -44,8 +44,9 @@ private struct HistorySessionRow: Identifiable, Equatable {
     let duplicatesDeleted: Int?
     let recoveredSpace: Int64?
     let generationMetadata: String?
+    let thumbnailLoadDelay: Duration
 
-    init(entry: OrganizationHistoryEntry) {
+    init(entry: OrganizationHistoryEntry, thumbnailLoadIndex: Int) {
         id = entry.id
         directoryPath = entry.directoryPath
         folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
@@ -55,6 +56,7 @@ private struct HistorySessionRow: Identifiable, Equatable {
         foldersCreated = entry.foldersCreated
         duplicatesDeleted = entry.duplicatesDeleted
         recoveredSpace = entry.recoveredSpace
+        thumbnailLoadDelay = .milliseconds(250 + min(thumbnailLoadIndex, 12) * 35)
 
         if let stats = entry.plan?.generationStats {
             let modelName = stats.compactModelName
@@ -74,8 +76,8 @@ private struct HistorySessionRecord: Equatable {
     let isUndone: Bool
     let hasOperations: Bool
 
-    init(entry: OrganizationHistoryEntry) {
-        row = HistorySessionRow(entry: entry)
+    init(entry: OrganizationHistoryEntry, thumbnailLoadIndex: Int) {
+        row = HistorySessionRow(entry: entry, thumbnailLoadIndex: thumbnailLoadIndex)
         directoryPath = entry.directoryPath
         source = entry.source
         isUndone = entry.isUndone
@@ -444,7 +446,9 @@ struct HistoryView: View {
     }
 
     private func refreshHistorySnapshot(_ entries: [OrganizationHistoryEntry]) {
-        let records = entries.map(HistorySessionRecord.init)
+        let records = entries.enumerated().map { index, entry in
+            HistorySessionRecord(entry: entry, thumbnailLoadIndex: index)
+        }
         cachedEntries = entries
         cachedSessionRecords = records
         impactSummary = HistoryImpactSummary(entries: entries)
@@ -1015,10 +1019,12 @@ private struct HistorySessionCardHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 25, weight: .medium))
-                .foregroundStyle(.blue.gradient)
-                .frame(width: 32, height: 32)
+            FolderThumbnailView(
+                url: URL(fileURLWithPath: entry.directoryPath),
+                size: CGSize(width: 32, height: 32),
+                loadDelay: entry.thumbnailLoadDelay
+            )
+                .frame(width: 32)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
