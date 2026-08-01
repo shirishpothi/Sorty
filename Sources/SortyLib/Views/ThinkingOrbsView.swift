@@ -103,19 +103,6 @@ public struct ThinkingOrbsView: View {
     }
 }
 
-struct SolvingThinkingOrb: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ThinkingOrb(
-            state: .solving,
-            isDark: colorScheme == .dark,
-            reduceMotion: reduceMotion
-        )
-    }
-}
-
 private struct ThinkingOrb: View {
     let state: ThinkingOrbState
     let isDark: Bool

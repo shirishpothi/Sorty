@@ -1437,6 +1437,22 @@ private struct RenameGenerationSkeletonRow: View {
     }
 }
 
+private struct SubtleDotPulse: ViewModifier {
+    let delay: Double
+    @State private var isOn = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isOn ? 1.25 : 0.78)
+            .opacity(isOn ? 0.9 : 0.38)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.58).repeatForever().delay(delay)) {
+                    isOn = true
+                }
+            }
+    }
+}
+
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
     let measuredProgress: MeasuredWorkProgress?
@@ -2027,9 +2043,15 @@ private struct InsightHistorySection: View {
 
     private var receivingResponseView: some View {
         HStack(spacing: 12) {
-            SolvingThinkingOrb()
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.secondary.opacity(0.32))
+                        .frame(width: 5, height: 5)
+                        .modifier(SubtleDotPulse(delay: Double(index) * 0.14))
+                }
+            }
+                .padding(.vertical, 6)
 
             Text("Receiving AI response...")
                 .font(.caption)
