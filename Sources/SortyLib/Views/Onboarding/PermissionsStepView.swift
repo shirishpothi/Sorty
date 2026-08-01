@@ -14,6 +14,7 @@ import Permiso
 
 public struct PermissionsStepView: View {
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
+    @EnvironmentObject private var appState: AppState
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
@@ -349,8 +350,9 @@ public struct PermissionsStepView: View {
         panel.message = "Choose any folder you want Sorty to organize."
         panel.prompt = "Grant Access"
 
-        if panel.runModal() == .OK, let url = panel.url {
-            _ = url.startAccessingSecurityScopedResource()
+        if panel.runModal() == .OK,
+           let url = panel.url,
+           appState.grantFilesAndFoldersPermission(for: url) {
             hasRequiredPermissions = true
             permissionStates[.filesAndFolders] = .granted
             HapticFeedbackManager.shared.success()

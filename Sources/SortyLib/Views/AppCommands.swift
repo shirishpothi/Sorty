@@ -406,6 +406,7 @@ public class AppState: ObservableObject {
 
     private static let requiresSetupRepairKey = "requiresSetupRepair"
     private static let setupRepairMessageKey = "setupRepairMessage"
+    private static let filesAndFoldersPermissionBookmarkKey = "filesAndFoldersPermissionBookmark"
     private let userDefaults: UserDefaults
     private let sensitiveActionSecurityManager = SecurityManager.shared
     public let windowSessionID: UUID
@@ -427,8 +428,10 @@ public class AppState: ObservableObject {
             }
         }
     }
-    /// Security-scoped bookmark for the selected directory, ensuring sandbox access persists.
+    /// Security-scoped bookmark for the currently selected directory within this window session.
     public private(set) var selectedDirectoryBookmark: Data?
+    /// Persistent security-scoped bookmark for the folder selected in Files & Folders settings.
+    @Published public private(set) var filesAndFoldersPermissionBookmark: Data?
     @Published public var updateManager: SparkleUpdateManager
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
@@ -569,6 +572,9 @@ public class AppState: ObservableObject {
         self.windowSessionID = windowSessionID
         self.updateManager = updateManager
         self.userDefaults = userDefaults
+        self.filesAndFoldersPermissionBookmark = userDefaults.data(
+            forKey: Self.filesAndFoldersPermissionBookmarkKey
+        )
 
         // Onboarding completion is the source of truth. `lastLaunchedVersion`
         // can be written by a launch that never completed onboarding, so it
@@ -608,6 +614,58 @@ public class AppState: ObservableObject {
 
     public var canStartOrganization: Bool {
         selectedDirectory != nil && (organizer?.state == .idle || organizer?.state == .completed)
+    }
+
+    /// Records a folder selected through the Files & Folders picker so its grant survives
+    /// later status refreshes and app launches. This is intentionally separate from the
+    /// current workflow directory, which is scoped to one window session.
+    @discardableResult
+    public func grantFilesAndFoldersPermission(for url: URL) -> Bool {
+        guard let bookmark = try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        ) else {
+            return false
+        }
+
+        filesAndFoldersPermissionBookmark = bookmark
+        userDefaults.set(bookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
+        return true
+    }
+
+    /// Resolves the saved grant to distinguish a remembered folder choice from a stale or
+    /// invalid bookmark. Resolving a bookmark does not make it the active workflow folder.
+    public func hasFilesAndFoldersPermission() -> Bool {
+        guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
+
+        var isStale = false
+        guard let resolved = try? URL(
+            resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            revokeFilesAndFoldersPermission()
+            return false
+        }
+
+        if isStale,
+           let refreshedBookmark = try? resolved.bookmarkData(
+               options: .withSecurityScope,
+               includingResourceValuesForKeys: nil,
+               relativeTo: nil
+           ) {
+            filesAndFoldersPermissionBookmark = refreshedBookmark
+            userDefaults.set(refreshedBookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
+        }
+
+        return true
+    }
+
+    public func revokeFilesAndFoldersPermission() {
+        filesAndFoldersPermissionBookmark = nil
+        userDefaults.removeObject(forKey: Self.filesAndFoldersPermissionBookmarkKey)
     }
 
     public var hasCurrentPlan: Bool {

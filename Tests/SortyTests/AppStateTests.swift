@@ -289,6 +289,20 @@ class AppStateTests: XCTestCase {
         appState.selectedDirectory = testURL
         XCTAssertEqual(appState.selectedDirectory, testURL)
     }
+
+    func testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory() {
+        let folder = URL(fileURLWithPath: "/tmp")
+
+        XCTAssertTrue(appState.grantFilesAndFoldersPermission(for: folder))
+        XCTAssertTrue(appState.hasFilesAndFoldersPermission())
+
+        appState.selectedDirectory = nil
+        let relaunchedState = AppState(userDefaults: testDefaults)
+        XCTAssertTrue(relaunchedState.hasFilesAndFoldersPermission())
+
+        relaunchedState.revokeFilesAndFoldersPermission()
+        XCTAssertFalse(relaunchedState.hasFilesAndFoldersPermission())
+    }
     
     // MARK: - Computed Properties Tests
     

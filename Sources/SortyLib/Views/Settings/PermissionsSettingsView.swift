@@ -443,13 +443,18 @@ struct PermissionsSettingsView: View {
             return
         }
 
-        _ = url.startAccessingSecurityScopedResource()
+        guard appState.grantFilesAndFoldersPermission(for: url) else {
+            updatePermissionState(.unknown, for: .filesAndFolders)
+            activeAlert = .failure("Sorty couldn't save access to that folder. Please choose it again.")
+            return
+        }
+
         appState.selectedDirectory = url
         updatePermissionState(.granted, for: .filesAndFolders)
     }
 
     private var filesAndFoldersState: PermissionState {
-        appState.selectedDirectory != nil ? .granted : .unknown
+        appState.hasFilesAndFoldersPermission() ? .granted : .unknown
     }
 
     private func openFullDiskAccessSettings() {
@@ -605,6 +610,7 @@ struct PermissionsSettingsView: View {
                 if let selectedDirectory = appState.selectedDirectory {
                     selectedDirectory.stopAccessingSecurityScopedResource()
                 }
+                appState.revokeFilesAndFoldersPermission()
                 appState.selectedDirectory = nil
                 updatePermissionState(.unknown, for: .filesAndFolders)
                 HapticFeedbackManager.shared.success()
