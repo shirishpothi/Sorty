@@ -151,6 +151,8 @@ struct OrganizeView: View {
         .accessibilityLabel("Organization workflow")
         .accessibilityHint("Select a folder and configure options")
         .onAppear {
+            settingsViewModel.config.enableStreaming = true
+            organizer.setLiveInsightsEnabled(true)
             configureOrganizer()
             presentSteeringPromptsIfRequested()
             presentWorkflowContentIfNeeded()
@@ -572,7 +574,9 @@ struct OrganizeView: View {
     private func configureOrganizer() {
         Task {
             do {
-                try await organizer.configure(with: settingsViewModel.config)
+                var config = settingsViewModel.config
+                config.enableStreaming = true
+                try await organizer.configure(with: config)
             } catch {
                 organizer.state = .error(error)
             }

@@ -290,6 +290,20 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(cached.current, organizer.currentInsight)
         XCTAssertEqual(cached.history.count, organizer.insightHistory.count)
     }
+
+    func testProgressLineInvalidatesOlderExtractedInsightCache() async {
+        let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
+        organizer.didReceiveChunk(content)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        organizer.didReceiveChunk(" more")
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+        organizer.didReceiveChunk("\n>> decision: Grouping project documents together\n")
+
+        let cached = organizer.getCachedInsights()
+        XCTAssertEqual(cached.current, "Grouping project documents together")
+        XCTAssertEqual(cached.history.last?.text, "Grouping project documents together")
+    }
     
     // MARK: - Organization Stage Updates
     

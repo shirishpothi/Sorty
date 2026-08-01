@@ -816,10 +816,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private func clearStreamingDisplayState() {
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
+        insightExtractionTask?.cancel()
+        insightExtractionTask = nil
         streamingContent = ""
         displayStreamingContent = ""
         truncatedDisplayStreamingContent = ""
         lastDisplayUpdate = .distantPast
+        lastInsightExtraction = .distantPast
+        insightsCache = nil
         progressLineBuffer = ""
         receivedProgressLines = false
         jsonStartedInStream = false
@@ -934,6 +938,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
                 self.insightHistory.append(insight)
             }
+            insightsCache = nil
         }
         
         // Check if remaining buffer contains start of JSON (e.g., chunk ended mid-line with "{")
