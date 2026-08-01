@@ -189,19 +189,16 @@ public struct ThinkingOrbLoaderView: View {
                 // limited to the front hemisphere.
                 let a = lon + rotationTime - scanTime
                 let d = atan2(sin(a), cos(a))
-                // Make the sweep legible at the response pill's 36pt size:
-                // a broad, bright front-facing meridian reads as a scan rather
-                // than a barely perceptible change in dot density.
-                let boost = exp(-(d * d) / 0.32) * pow(max(0, z2), 0.45)
+                let boost = exp(-(d * d) / 0.18) * max(0, z2)
 
                 dots.append(
                     Dot(
                         x: cx + x1 * radius,
                         y: cy - y1 * radius,
                         z: z2,
-                        r: max(rMin, (rBase + rDepth * depth + (boost * 1.65)) * rs),
-                        white: max(0, inkFar - inkSpan * depth - (boost * 0.38)),
-                        alpha: dimBase + (1 - dimBase) * min(1, boost * 1.2)
+                        r: max(rMin, (rBase + rDepth * depth + boost) * rs),
+                        white: inkFar - inkSpan * depth,
+                        alpha: dimBase + (1 - dimBase) * min(1, boost)
                     )
                 )
             }
