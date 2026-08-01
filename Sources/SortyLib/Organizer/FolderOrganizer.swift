@@ -659,7 +659,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private let revertOperationTracker = RevertOperationTracker()
     
     private let visionAnalyzer = ImageVisionAnalyzer()
-    private let visionImageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp"]
+    private let visionImageExtensions: Set<String> = [
+        "bmp", "gif", "heic", "heif", "jpeg", "jpg", "png", "tif", "tiff", "webp",
+    ]
 
     #if DEBUG
     private var revertOperationTestHook: (@Sendable () async -> Void)?
@@ -1814,12 +1816,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var imagePayload: [String: Data] = [:]
 
-        let visionEnabled = (aiConfig?.enableVision ?? false) && (aiConfig?.enableDeepScan ?? false)
+        let visionEnabled = aiConfig?.enableVision ?? false
         let currentModel = aiConfig?.model ?? ""
         let currentProvider = aiConfig?.provider ?? .openAICompatible
         let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
         let shouldLimitVisionImages = aiConfig?.limitVisionImages ?? true
-        let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 5)
+        let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 12)
         let visionSelectionLimit: Int
         if shouldLimitVisionImages {
             visionSelectionLimit = configuredBatchSize
@@ -1832,27 +1834,32 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             ? boundedVisionSelection(
                 from: files,
                 batchSize: visionSelectionLimit,
-                strategy: aiConfig?.visionBatchStrategy ?? .firstN
+                strategy: aiConfig?.visionBatchStrategy ?? .noText,
+                fileBatchSize: shouldLimitVisionImages
+                    ? (isRenameOnly ? Self.renameAnalysisBatchSize : Self.organizeAnalysisBatchSize)
+                    : nil
             )
             : (selected: [], total: 0)
 
         if visionSelection.total > 0 && modelSupportsVision {
             let selectedBatch = visionSelection.selected
-            let selectedImageURLs = Array(Set(selectedBatch.compactMap(\.url)))
             let totalImageCount = visionSelection.total
             let isLimitedSelection = selectedBatch.count < totalImageCount
             let initialPreparationStage = isLimitedSelection
-                ? "Sorty is analyzing 0 of \(selectedImageURLs.count) selected images..."
+                ? "Sorty is analyzing 0 of \(selectedBatch.count) selected images..."
                 : "Sorty is analyzing 0 images..."
             aiAnalysisActivity = .preparingImages
             updateMeasuredProgress(
                 completed: 0,
-                total: selectedImageURLs.count,
+                total: selectedBatch.count,
                 estimatedOverallProgress: 0.22,
                 stage: initialPreparationStage
             )
 
-            let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedImageURLs) { [weak self] completed, total in
+            imagePayload = await visionAnalyzer.prepareFilesForVision(
+                files: selectedBatch,
+                baseDirectoryURL: directory
+            ) { [weak self] completed, total in
                 guard let self else { return }
                 let phaseProgress = 0.22 + (Double(completed) / Double(max(total, 1))) * 0.08
                 let stage = isLimitedSelection
@@ -1865,14 +1872,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     stage: stage
                 )
             }
-            var analyzedNames: [String] = []
-            for file in selectedBatch {
-                guard let fileURL = file.url else { continue }
-                if let data = urlPayload[fileURL] {
-                    imagePayload[file.displayName] = data
-                    analyzedNames.append(file.displayName)
-                }
-            }
+            let analyzedNames = imagePayload.keys.sorted()
 
             let failedCount = max(0, selectedBatch.count - analyzedNames.count)
             let skippedCount = max(0, totalImageCount - analyzedNames.count)
@@ -2203,7 +2203,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             uniqueKeysWithValues: files.enumerated().map { ($0.offset + 1, $0.element) }
         )
 
-        let fileNames = Set(files.map(\.displayName))
+        let fileNames = Set(files.map(visionAttachmentName))
         let batchImages = imagePayload.filter { fileNames.contains($0.key) }
 
         do {
@@ -2494,8 +2494,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private func boundedVisionSelection(
         from files: [FileItem],
         batchSize: Int,
-        strategy: VisionBatchStrategy
+        strategy: VisionBatchStrategy,
+        fileBatchSize: Int? = nil
     ) -> (selected: [FileItem], total: Int) {
+        if let fileBatchSize, files.count > fileBatchSize {
+            var selected: [FileItem] = []
+            var total = 0
+            for start in stride(from: 0, to: files.count, by: fileBatchSize) {
+                let end = min(start + fileBatchSize, files.count)
+                let selection = boundedVisionSelection(
+                    from: Array(files[start..<end]),
+                    batchSize: batchSize,
+                    strategy: strategy
+                )
+                selected.append(contentsOf: selection.selected)
+                total += selection.total
+            }
+            return (selected, total)
+        }
+
         let safeBatchSize = max(1, batchSize)
         var selected: [FileItem] = []
         selected.reserveCapacity(min(safeBatchSize, files.count))
@@ -2564,10 +2581,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         ## AI VISION CONTEXT
         I've attached \(analyzedImageFilenames.count) images from this folder.
-        For each image, describe what you see and use that context to determine the best folder categorization.
+        Inspect every attachment before choosing folders. Ground each attached file's placement in visible evidence such as its subject, setting, activity, document type, interface, event, and readable text. Group images by meaningful shared visual context, and let strong visual evidence override vague camera or screenshot filenames. Keep visually unrelated images separate and don't invent details that aren't visible.
         Attached image order:
         \(fileList)
         """
+    }
+
+    private func visionAttachmentName(for file: FileItem) -> String {
+        file.relativePath ?? file.displayName
     }
 
     private func exclusionInstructions(forRenameOnly isRenameOnly: Bool) -> String {

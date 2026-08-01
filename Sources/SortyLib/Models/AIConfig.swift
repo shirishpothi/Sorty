@@ -632,8 +632,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
         selectedNamingPresetId: UUID? = nil,
         limitVisionImages: Bool = true,
-        visionBatchSize: Int = 5,
-        visionBatchStrategy: VisionBatchStrategy = .firstN,
+        visionBatchSize: Int = 12,
+        visionBatchStrategy: VisionBatchStrategy = .noText,
         visionDetailLevel: VisionDetailLevel? = nil,
         ocrLanguages: [String] = ["en-US"],
         customOCRKeywords: [String]? = nil,
@@ -754,8 +754,18 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRuleMode = try container.decodeIfPresent(RenameRuleApplicationMode.self, forKey: .renameRuleMode) ?? .beforeAI
         selectedNamingPresetId = try container.decodeIfPresent(UUID.self, forKey: .selectedNamingPresetId)
         limitVisionImages = try container.decodeIfPresent(Bool.self, forKey: .limitVisionImages) ?? true
-        visionBatchSize = try container.decodeIfPresent(Int.self, forKey: .visionBatchSize) ?? 5
-        visionBatchStrategy = try container.decodeIfPresent(VisionBatchStrategy.self, forKey: .visionBatchStrategy) ?? .firstN
+        let decodedVisionBatchSize = try container.decodeIfPresent(Int.self, forKey: .visionBatchSize) ?? 12
+        let decodedVisionBatchStrategy = try container.decodeIfPresent(VisionBatchStrategy.self, forKey: .visionBatchStrategy) ?? .noText
+        if limitVisionImages,
+           decodedVisionBatchSize == 5,
+           decodedVisionBatchStrategy == .firstN {
+            // Migrate the former hidden defaults to a broader, higher-value sample.
+            visionBatchSize = 12
+            visionBatchStrategy = .noText
+        } else {
+            visionBatchSize = decodedVisionBatchSize
+            visionBatchStrategy = decodedVisionBatchStrategy
+        }
         visionDetailLevel = try container.decodeIfPresent(VisionDetailLevel.self, forKey: .visionDetailLevel) ?? VisionDetailLevel.defaultFor(provider: provider)
         ocrLanguages = try container.decodeIfPresent([String].self, forKey: .ocrLanguages) ?? ["en-US"]
         customOCRKeywords = try container.decodeIfPresent([String].self, forKey: .customOCRKeywords)
@@ -834,8 +844,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRuleMode: .beforeAI,
         selectedNamingPresetId: nil,
         limitVisionImages: true,
-        visionBatchSize: 5,
-        visionBatchStrategy: .firstN,
+        visionBatchSize: 12,
+        visionBatchStrategy: .noText,
         visionDetailLevel: .auto,
         ocrLanguages: ["en-US"],
         customOCRKeywords: nil,

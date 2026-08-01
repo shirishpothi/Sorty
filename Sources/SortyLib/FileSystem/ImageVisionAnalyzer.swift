@@ -127,7 +127,8 @@ public final class ImageVisionAnalyzer: Sendable {
     public func prepareFilesForVision(
         files: [FileItem],
         baseDirectoryURL: URL? = nil,
-        pdfPageLimit: Int = 2
+        pdfPageLimit: Int = 2,
+        progress: (@Sendable (_ completed: Int, _ total: Int) async -> Void)? = nil
     ) async -> [String: Data] {
         await withTaskGroup(of: [String: Data].self) { group in
             var iterator = files.makeIterator()
@@ -143,8 +144,11 @@ public final class ImageVisionAnalyzer: Sendable {
             }
 
             var results: [String: Data] = [:]
+            var completed = 0
             for await partial in group {
                 results.merge(partial) { _, new in new }
+                completed += 1
+                await progress?(completed, files.count)
 
                 if let nextFile = iterator.next(), !Task.isCancelled {
                     group.addTask {
@@ -169,7 +173,7 @@ public final class ImageVisionAnalyzer: Sendable {
 
         let ext = file.extension.lowercased()
         let attachmentName = attachmentLabel(for: file, baseDirectoryURL: baseDirectoryURL)
-        if ["jpg", "jpeg", "png", "heic", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
+        if ["jpg", "jpeg", "png", "heic", "heif", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
            let data = await prepareImageForVision(at: url) {
             return [attachmentName: data]
         }

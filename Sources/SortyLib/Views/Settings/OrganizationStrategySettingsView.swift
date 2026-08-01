@@ -67,23 +67,12 @@ struct OrganizationStrategySettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
-                        description: isFastModeOn
-                            ? "Paused while Fast Mode is on; your preference is preserved"
-                            : "Attach selected images to your AI request for content-aware organization",
+                        description: "Analyze image content for stronger visual grouping, including in Fast Mode",
                         focusTarget: .strategyVision
                     )
-                    .disabled(isFastModeOn || !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
+                    .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
 
-                    if isFastModeOn {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.fill")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
-                            Text("Turn off Fast Mode to include image content in organization.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
+                    if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
                         HStack(spacing: 4) {
                             Image(systemName: "info.circle")
                                 .font(.caption2)

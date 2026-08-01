@@ -80,7 +80,7 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
         XCTAssertNotNil(organizer.visionAnalysisSummary?.warningMessage)
     }
 
-    func testFastModeSkipsVisionPreparationAndUsesTextAnalysis() async throws {
+    func testFastModeStillUsesVisionWhenVisionIsEnabled() async throws {
         let config = AIConfig(
             provider: .openAI,
             apiURL: "https://api.openai.com",
@@ -101,9 +101,41 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
         let analyzeWithImagesCalls = await mockClient.analyzeWithImagesCalls
         let analyzeCalls = await mockClient.analyzeCalls
 
-        XCTAssertEqual(analyzeWithImagesCalls, 0)
-        XCTAssertEqual(analyzeCalls, 1)
-        XCTAssertNil(organizer.visionAnalysisSummary)
+        XCTAssertEqual(analyzeWithImagesCalls, 1)
+        XCTAssertEqual(analyzeCalls, 0)
+        XCTAssertEqual(organizer.visionAnalysisSummary?.analyzedCount, 1)
+    }
+
+    func testVisionPreservesRelativePathsAndRequestsEvidenceBasedGrouping() async throws {
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o",
+            enableVision: true,
+            visionBatchSize: 12,
+            visionBatchStrategy: .noText
+        )
+        try await organizer.configure(with: config)
+
+        let mockClient = VisionFlowMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+
+        let receipts = tempDirectory.appendingPathComponent("Receipts")
+        let holidays = tempDirectory.appendingPathComponent("Holidays")
+        try FileManager.default.createDirectory(at: receipts, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: holidays, withIntermediateDirectories: true)
+        try createPNG(at: receipts.appendingPathComponent("image.png"))
+        try createPNG(at: holidays.appendingPathComponent("image.png"))
+
+        try await organizer.organize(directory: tempDirectory)
+
+        let imageNames = await mockClient.lastImageNames
+        let instructions = await mockClient.lastCustomInstructions
+
+        XCTAssertEqual(imageNames, ["Holidays/image.png", "Receipts/image.png"])
+        XCTAssertTrue(instructions?.contains("Ground each attached file's placement in visible evidence") == true)
+        XCTAssertTrue(instructions?.contains("let strong visual evidence override vague camera or screenshot filenames") == true)
     }
 
     func testVisionFlowWithoutLimitSendsAllImages() async throws {
@@ -176,6 +208,8 @@ actor VisionFlowMockClient: AIClientProtocol {
     var analyzeCalls = 0
     var analyzeWithImagesCalls = 0
     var lastImageCount = 0
+    var lastImageNames: [String] = []
+    var lastCustomInstructions: String?
 
     init(config: AIConfig) {
         self.config = config
@@ -193,6 +227,8 @@ actor VisionFlowMockClient: AIClientProtocol {
     func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
         analyzeWithImagesCalls += 1
         lastImageCount = imageData.count
+        lastImageNames = imageData.keys.sorted()
+        lastCustomInstructions = customInstructions
         return OrganizationPlan(
             suggestions: [FolderSuggestion(folderName: "Grouped", files: files)],
             unorganizedFiles: [],

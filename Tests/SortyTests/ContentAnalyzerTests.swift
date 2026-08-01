@@ -790,6 +790,22 @@ final class AIConfigOCRKeywordsTests: XCTestCase {
     func testLimitVisionImagesDefault() {
         let config = AIConfig.default
         XCTAssertTrue(config.limitVisionImages)
+        XCTAssertEqual(config.visionBatchSize, 12)
+        XCTAssertEqual(config.visionBatchStrategy, .noText)
+    }
+
+    func testLegacyVisionDefaultsMigrateToQualityFirstSampling() throws {
+        let config = AIConfig(
+            limitVisionImages: true,
+            visionBatchSize: 5,
+            visionBatchStrategy: .firstN
+        )
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(decoded.visionBatchSize, 12)
+        XCTAssertEqual(decoded.visionBatchStrategy, .noText)
     }
 
     func testVisionAndOCRSettingsCodable() throws {
