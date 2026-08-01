@@ -1226,7 +1226,7 @@ struct UnifiedDuplicateGroupDetailView: View {
 
     private var overviewTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !group.isExact || group.confidenceLevel != .high {
+            if !group.isExact {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         overviewBadges
@@ -1256,24 +1256,6 @@ struct UnifiedDuplicateGroupDetailView: View {
                 .padding(.vertical, 4)
                 .background(Color.blue.opacity(0.1), in: Capsule())
         }
-
-        if group.confidenceLevel != .high {
-            confidenceBadge
-        }
-    }
-
-    private var confidenceBadge: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(confidenceColor)
-                .frame(width: 6, height: 6)
-            Text(group.confidenceLevel.rawValue)
-                .font(.caption.weight(.medium))
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(confidenceColor.opacity(0.12), in: Capsule())
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -1298,14 +1280,6 @@ struct UnifiedDuplicateGroupDetailView: View {
             .tint(.red)
             .controlSize(.regular)
             .help("Keep the first file and clean up the rest.")
-        }
-    }
-
-    private var confidenceColor: Color {
-        switch group.confidenceLevel {
-        case .high: return .green
-        case .medium: return .yellow
-        case .low: return .orange
         }
     }
 
