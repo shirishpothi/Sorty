@@ -394,6 +394,79 @@ class SemanticDuplicateTests: XCTestCase {
         XCTAssertEqual(groups[0].groupType, .documentVersions)
         XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
     }
+
+    func testResolutionVariantsRequireVisualSimilarity() async {
+        let files = [
+            FileItem(
+                path: "/test/banner-large.jpg",
+                name: "banner-large",
+                extension: "jpg",
+                size: 2_000,
+                contentFingerprint: String(repeating: "0", count: 64),
+                imageWidth: 2_000,
+                imageHeight: 1_000
+            ),
+            FileItem(
+                path: "/test/banner-small.jpg",
+                name: "banner-small",
+                extension: "jpg",
+                size: 1_000,
+                contentFingerprint: String(repeating: "1", count: 64),
+                imageWidth: 1_000,
+                imageHeight: 500
+            )
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    func testResolutionVariantsKeepDifferentSizedCopiesTogether() async {
+        let fingerprint = String(repeating: "0", count: 64)
+        let files = [
+            FileItem(
+                path: "/test/banner-large.jpg",
+                name: "banner-large",
+                extension: "jpg",
+                size: 2_000,
+                contentFingerprint: fingerprint,
+                imageWidth: 2_000,
+                imageHeight: 1_000
+            ),
+            FileItem(
+                path: "/test/banner-small.jpg",
+                name: "banner-small",
+                extension: "jpg",
+                size: 1_000,
+                contentFingerprint: fingerprint,
+                imageWidth: 1_000,
+                imageHeight: 500
+            )
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].groupType, .resolutionVariants)
+        XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
+    }
+
+    func testTextSimilarityNormalizesPunctuationAndSmallEdits() {
+        let first = "Quarterly revenue increased by 18 percent, while operating costs stayed flat."
+        let second = "Quarterly revenue increased by 18 percent while operating costs remained flat."
+
+        XCTAssertGreaterThan(SemanticDuplicateDetector.textSimilarity(first, second), 0.80)
+    }
+
+    func testTextSimilarityUsesWordOrderToRejectSharedVocabulary() {
+        let first = "Alice approved the payment after Bob reviewed the invoice."
+        let second = "Bob approved the invoice after Alice reviewed the payment."
+
+        XCTAssertLessThan(SemanticDuplicateDetector.textSimilarity(first, second), 0.90)
+    }
 }
 
 // MARK: - FileItem Semantic Extensions Tests

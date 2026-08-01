@@ -229,13 +229,17 @@ public actor SemanticDuplicateDetector {
 
         // Step 2: Find near-identical images using perceptual hashing
         progressHandler?(currentStep, totalSteps, "Comparing images...")
-        let similarImageGroups = await findSimilarImages(in: imageFiles)
+        let imageHashes = await perceptualHashRecords(in: imageFiles)
+        let similarImageGroups = findSimilarImages(in: imageHashes)
         groups.append(contentsOf: similarImageGroups)
         currentStep += 1
 
         // Step 3: Find resolution variants (same image, different sizes)
         progressHandler?(currentStep, totalSteps, "Finding resolution variants...")
-        let resolutionGroups = await findResolutionVariants(in: imageFiles)
+        let resolutionGroups = await findResolutionVariants(
+            in: imageFiles,
+            perceptualHashes: Dictionary(uniqueKeysWithValues: imageHashes.map { ($0.file.id, $0.value) })
+        )
         groups.append(contentsOf: resolutionGroups)
         currentStep += 1
 
@@ -318,7 +322,7 @@ public actor SemanticDuplicateDetector {
 
     // MARK: - Perceptual Hash Comparison
 
-    private func findSimilarImages(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
+    private func perceptualHashRecords(in images: [FileItem]) async -> [PerceptualHashRecord] {
         var imageHashes: [PerceptualHashRecord] = []
         imageHashes.reserveCapacity(images.count)
 
@@ -343,6 +347,10 @@ public actor SemanticDuplicateDetector {
             imageHashes.append(PerceptualHashRecord(file: file, value: value))
         }
 
+        return imageHashes
+    }
+
+    private func findSimilarImages(in imageHashes: [PerceptualHashRecord]) -> [SemanticDuplicateGroup] {
         guard imageHashes.count > 1 else {
             return []
         }
@@ -436,7 +444,10 @@ public actor SemanticDuplicateDetector {
 
     // MARK: - Resolution Variant Detection
 
-    private func findResolutionVariants(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
+    private func findResolutionVariants(
+        in images: [FileItem],
+        perceptualHashes: [UUID: UInt64]
+    ) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
 
         // Group by similar filename patterns
@@ -486,20 +497,54 @@ public actor SemanticDuplicateDetector {
 
             guard withDimensions.count > 1 else { continue }
 
-            // Check if they're actually different resolutions of the same image
-            let sortedBySize = withDimensions.sorted { ($0.totalPixels ?? 0) > ($1.totalPixels ?? 0) }
+            var links: [(Int, Int)] = []
+            for firstIndex in withDimensions.indices {
+                guard let firstHash = perceptualHashes[withDimensions[firstIndex].id] else { continue }
+                for secondIndex in withDimensions.indices where secondIndex > firstIndex {
+                    guard let secondHash = perceptualHashes[withDimensions[secondIndex].id] else { continue }
+                    let distance = (firstHash ^ secondHash).nonzeroBitCount
+                    if distance <= hammingThreshold {
+                        links.append((firstIndex, secondIndex))
+                    }
+                }
+            }
 
-            // Skip if all same resolution
-            guard let first = sortedBySize.first?.totalPixels,
-                  let last = sortedBySize.last?.totalPixels,
-                  first != last else { continue }
+            let visuallyMatchedGroups = connectedSemanticGroups(
+                itemCount: withDimensions.count,
+                links: links
+            ) { indexes in
+                indexes.map { withDimensions[$0] }
+            }
 
-            groups.append(SemanticDuplicateGroup(
-                groupType: .resolutionVariants,
-                files: sortedBySize,
-                similarity: 0.98,
-                recommendation: .keepHighestResolution(fileId: sortedBySize.first!.id)
-            ))
+            for matchedFiles in visuallyMatchedGroups {
+                let sortedBySize = matchedFiles.sorted { ($0.totalPixels ?? 0) > ($1.totalPixels ?? 0) }
+                guard let first = sortedBySize.first?.totalPixels,
+                      let last = sortedBySize.last?.totalPixels,
+                      first != last,
+                      let highestResolutionFile = sortedBySize.first else {
+                    continue
+                }
+
+                let matchedFileIDs = Set(sortedBySize.map(\.id))
+                let worstDistance = links.compactMap { link -> Int? in
+                    let firstFile = withDimensions[link.0]
+                    let secondFile = withDimensions[link.1]
+                    guard matchedFileIDs.contains(firstFile.id),
+                          matchedFileIDs.contains(secondFile.id),
+                          let firstHash = perceptualHashes[firstFile.id],
+                          let secondHash = perceptualHashes[secondFile.id] else {
+                        return nil
+                    }
+                    return (firstHash ^ secondHash).nonzeroBitCount
+                }.max() ?? 0
+
+                groups.append(SemanticDuplicateGroup(
+                    groupType: .resolutionVariants,
+                    files: sortedBySize,
+                    similarity: Self.similarityForHammingDistance(worstDistance),
+                    recommendation: .keepHighestResolution(fileId: highestResolutionFile.id)
+                ))
+            }
         }
 
         return groups
@@ -569,7 +614,7 @@ public actor SemanticDuplicateDetector {
                 guard !localProcessed.contains(documents[j].id),
                       let content2 = documents[j].semanticTextContent else { continue }
 
-                let similarity = calculateTextSimilarity(content1, content2)
+                let similarity = Self.textSimilarity(content1, content2)
                 if similarity >= similarityThreshold {
                     links.append((i, j, similarity))
                 }
@@ -695,7 +740,7 @@ public actor SemanticDuplicateDetector {
                 guard !processedIds.contains(withContent[j].id),
                       let content2 = withContent[j].semanticTextContent else { continue }
 
-                let similarity = calculateTextSimilarity(content1, content2)
+                let similarity = Self.textSimilarity(content1, content2)
                 if similarity >= vibeTextSimilarityThreshold {
                     similarFiles.append(withContent[j])
                     lowestSimilarityInGroup = min(lowestSimilarityInGroup, similarity)
@@ -755,18 +800,59 @@ public actor SemanticDuplicateDetector {
         )
     }
 
-    // MARK: - Text Similarity (Jaccard Index)
+    // MARK: - Text Similarity
 
-    private func calculateTextSimilarity(_ text1: String, _ text2: String) -> Double {
-        let words1 = Set(text1.lowercased().split(separator: " ").map { String($0) })
-        let words2 = Set(text2.lowercased().split(separator: " ").map { String($0) })
+    static func textSimilarity(_ firstText: String, _ secondText: String) -> Double {
+        let firstTokens = normalizedTokens(in: firstText)
+        let secondTokens = normalizedTokens(in: secondText)
+        guard !firstTokens.isEmpty, !secondTokens.isEmpty else { return 0 }
 
-        guard !words1.isEmpty && !words2.isEmpty else { return 0 }
+        let frequencySimilarity = cosineSimilarity(firstTokens, secondTokens)
+        let orderSimilarity = diceSimilarity(bigrams(from: firstTokens), bigrams(from: secondTokens))
 
-        let intersection = words1.intersection(words2).count
-        let union = words1.union(words2).count
+        if min(firstTokens.count, secondTokens.count) < 4 {
+            return firstTokens == secondTokens ? 1 : frequencySimilarity * 0.7
+        }
 
-        return Double(intersection) / Double(union)
+        // Word frequency tolerates small edits, while adjacent word pairs stop
+        // documents with the same vocabulary in a different order from looking
+        // like versions of one another.
+        return frequencySimilarity * 0.65 + orderSimilarity * 0.35
+    }
+
+    private static func normalizedTokens(in text: String) -> [String] {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+    }
+
+    private static func cosineSimilarity(_ first: [String], _ second: [String]) -> Double {
+        let firstCounts = first.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        let secondCounts = second.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        let dotProduct = firstCounts.reduce(0.0) { result, entry in
+            result + Double(entry.value * (secondCounts[entry.key] ?? 0))
+        }
+        let firstMagnitude = sqrt(firstCounts.values.reduce(0.0) { $0 + Double($1 * $1) })
+        let secondMagnitude = sqrt(secondCounts.values.reduce(0.0) { $0 + Double($1 * $1) })
+        guard firstMagnitude > 0, secondMagnitude > 0 else { return 0 }
+        return dotProduct / (firstMagnitude * secondMagnitude)
+    }
+
+    private static func bigrams(from tokens: [String]) -> [String: Int] {
+        guard tokens.count > 1 else { return [:] }
+        return zip(tokens, tokens.dropFirst()).reduce(into: [String: Int]()) { counts, pair in
+            counts[pair.0 + "\u{1F}" + pair.1, default: 0] += 1
+        }
+    }
+
+    private static func diceSimilarity(_ first: [String: Int], _ second: [String: Int]) -> Double {
+        let firstCount = first.values.reduce(0, +)
+        let secondCount = second.values.reduce(0, +)
+        guard firstCount + secondCount > 0 else { return 0 }
+        let overlap = first.reduce(0) { result, entry in
+            result + min(entry.value, second[entry.key] ?? 0)
+        }
+        return Double(2 * overlap) / Double(firstCount + secondCount)
     }
 
     // MARK: - Helper Methods
@@ -970,11 +1056,11 @@ public actor SemanticDuplicateDetector {
         )
     }
 
-    private func connectedSemanticGroups(
+    private func connectedSemanticGroups<Group>(
         itemCount: Int,
         links: [(Int, Int)],
-        makeGroup: (Set<Int>) -> SemanticDuplicateGroup
-    ) -> [SemanticDuplicateGroup] {
+        makeGroup: (Set<Int>) -> Group
+    ) -> [Group] {
         guard itemCount > 1, !links.isEmpty else { return [] }
 
         var parent = Array(0..<itemCount)
