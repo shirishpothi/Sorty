@@ -763,6 +763,15 @@ public class NotificationManager: ObservableObject {
     public func showWatchedFolderStarted(fileCount: Int, folderName: String, folderPath: String) {
         show(.watchedFolderStarted(fileCount: fileCount, folderName: folderName, folderPath: folderPath))
     }
+
+    /// Show a representative watched-folder notification from Settings.
+    public func previewWatchedFolderActivity() {
+        showWatchedFolderStarted(
+            fileCount: 3,
+            folderName: "Downloads",
+            folderPath: NSHomeDirectory() + "/Downloads"
+        )
+    }
     
     /// Request user attention (dock bounce)
     public func requestAttention(isCritical: Bool = false) {

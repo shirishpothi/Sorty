@@ -80,18 +80,11 @@ struct NotificationsSettingsView: View {
                     Divider()
 
                     SettingsToggle(
-                        isOn: $notificationSettings.settings.watchedFolderStartNotificationsEnabled,
-                        title: "Watched Folder Started",
-                        description: "When Sorty detects additions and starts organizing them",
-                        focusTarget: .notificationsWatchedFolderStarted
-                    )
-
-                    Divider()
-
-                    SettingsToggle(
-                        isOn: $notificationSettings.settings.watchedFolderCompletionNotificationsEnabled,
-                        title: "Watched Folder Finished",
-                        description: "When Sorty finishes organizing detected additions",
+                        isOn: watchedFolderActivityNotifications,
+                        title: "Watched Folder Activity",
+                        description: "When Sorty starts or finishes organizing detected additions",
+                        previewAction: { notificationManager.previewWatchedFolderActivity() },
+                        previewIcon: "play.fill",
                         focusTarget: .notificationsWatchedFolderFinished
                     )
 
@@ -119,6 +112,19 @@ struct NotificationsSettingsView: View {
             NSSound.beep()
         }
         HapticFeedbackManager.shared.tap()
+    }
+
+    private var watchedFolderActivityNotifications: Binding<Bool> {
+        Binding(
+            get: {
+                notificationSettings.settings.watchedFolderStartNotificationsEnabled &&
+                    notificationSettings.settings.watchedFolderCompletionNotificationsEnabled
+            },
+            set: { isEnabled in
+                notificationSettings.settings.watchedFolderStartNotificationsEnabled = isEnabled
+                notificationSettings.settings.watchedFolderCompletionNotificationsEnabled = isEnabled
+            }
+        )
     }
 
 }

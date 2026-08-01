@@ -409,8 +409,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Processing Complete", "Notify when file processing finishes successfully.", keywords: ["finished", "success"], target: .notificationsProcessingComplete),
                 feature("Preview Ready", "Notify when Sorty finishes generating an organization plan.", keywords: ["plan ready"], target: .notificationsPreviewReady),
                 feature("Processing Errors", "Notify when organization encounters an error.", keywords: ["failure", "failed"], target: .notificationsProcessingErrors),
-                feature("Watched Folder Started", "Notify when Sorty detects additions and starts organizing them.", keywords: ["watcher", "automatic", "detected"], target: .notificationsWatchedFolderStarted),
-                feature("Watched Folder Finished", "Notify when automatic organization finishes.", keywords: ["watcher", "automatic", "complete"], target: .notificationsWatchedFolderFinished),
+                feature("Watched Folder Activity", "Notify when Sorty starts or finishes organizing detected additions.", keywords: ["watcher", "automatic", "detected", "complete"], target: .notificationsWatchedFolderFinished),
                 feature("Completion Sound", "Play a sound when organization finishes.", keywords: ["sounds", "audio"], target: .notificationsCompletionSound)
             ]
         case .permissions:
