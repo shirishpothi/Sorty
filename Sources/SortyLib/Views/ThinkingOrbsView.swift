@@ -110,8 +110,19 @@ public struct SolvingOrbView: View {
 
     public init() {}
 
+    /// The dot radii in `OrbRenderer` are tuned for a 96pt canvas; render at that
+    /// native size and scale down so small frames keep the dotted look instead of
+    /// merging into a solid blob.
+    private static let nativeSide: CGFloat = 96
+
     public var body: some View {
-        ThinkingOrb(state: .solving, isDark: colorScheme == .dark, reduceMotion: reduceMotion)
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            ThinkingOrb(state: .solving, isDark: colorScheme == .dark, reduceMotion: reduceMotion)
+                .frame(width: Self.nativeSide, height: Self.nativeSide)
+                .scaleEffect(side / Self.nativeSide)
+                .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
     }
 }
 

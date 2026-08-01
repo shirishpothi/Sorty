@@ -2,16 +2,53 @@
 //  ExperimentalSettingsView.swift
 //  Sorty
 //
-//  Empty state for experimental features
+//  PostHog-backed experimental features
 //
 
 import SwiftUI
 
 struct ExperimentalSettingsView: View {
+    @ObservedObject private var analytics = AnalyticsManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
 
     var body: some View {
+        Group {
+            if analytics.isLoadingExperimentalFeatures {
+                loadingState
+            } else if analytics.experimentalFeatures.isEmpty {
+                emptyState
+            } else {
+                featureList
+            }
+        }
+        .task {
+            analytics.reloadExperimentalFeatures()
+            guard !hasAppeared else { return }
+            if !reduceMotion {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            guard !Task.isCancelled else { return }
+            hasAppeared = true
+        }
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            Text("Checking the lab…")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Checking for experimental features.")
+    }
+
+    private var emptyState: some View {
         VStack(spacing: 12) {
             Image("ExperimentalEmptyState")
                 .resizable()
@@ -61,14 +98,58 @@ struct ExperimentalSettingsView: View {
         .settingsFocusable(.experimentalEmptyState)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No experimental features are available right now.")
-        .task {
-            guard !hasAppeared else { return }
-            if !reduceMotion {
-                try? await Task.sleep(for: .milliseconds(100))
+    }
+
+    private var featureList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(analytics.experimentalFeatures) { feature in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: feature.systemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.indigo)
+                        .frame(width: 28, height: 28)
+                        .background(.indigo.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(feature.title)
+                                .font(.subheadline.weight(.semibold))
+                            if let variant = feature.variant {
+                                Text(variant)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.secondary.opacity(0.1), in: Capsule())
+                            }
+                        }
+                        Text(feature.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+
+                if feature.id != analytics.experimentalFeatures.last?.id {
+                    Divider()
+                }
             }
-            guard !Task.isCancelled else { return }
-            hasAppeared = true
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .settingsFocusable(.experimentalEmptyState)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 8)
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.45, dampingFraction: 0.82),
+            value: hasAppeared
+        )
     }
 }
 
