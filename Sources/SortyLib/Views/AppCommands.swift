@@ -447,6 +447,7 @@ public class AppState: ObservableObject {
     @Published public var showDeleteUsageDataConfirmation: Bool = false
     @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
     @Published public var highlightedWatchedFolderID: UUID?
+    @Published public var showsFinderWorkflowPicker = false
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
     @Published public var requiresSetupRepair: Bool {
         didSet {

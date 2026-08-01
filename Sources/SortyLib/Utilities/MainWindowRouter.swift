@@ -37,10 +37,19 @@ public final class MainWindowRouter {
     private final class SessionRecord {
         weak var window: NSWindow?
         var lastFocusedAt: Date
+        var isBusy: Bool
+        let registeredAt: Date
 
-        init(window: NSWindow, lastFocusedAt: Date = Date()) {
+        init(
+            window: NSWindow,
+            lastFocusedAt: Date = Date(),
+            isBusy: Bool = false,
+            registeredAt: Date = Date()
+        ) {
             self.window = window
             self.lastFocusedAt = lastFocusedAt
+            self.isBusy = isBusy
+            self.registeredAt = registeredAt
         }
     }
 
@@ -79,18 +88,37 @@ public final class MainWindowRouter {
         sessions[sessionID]?.lastFocusedAt = Date()
     }
 
+    public func setBusy(_ isBusy: Bool, for sessionID: UUID) {
+        pruneClosedSessions()
+        sessions[sessionID]?.isBusy = isBusy
+    }
+
     public var preferredSessionID: UUID? {
         pruneClosedSessions()
 
-        if let keyWindowID = sessions.first(where: { $0.value.window?.isKeyWindow == true })?.key {
+        return preferredSessionID(in: sessions)
+    }
+
+    public var preferredAvailableSessionID: UUID? {
+        pruneClosedSessions()
+        return preferredSessionID(in: sessions.filter { !$0.value.isBusy })
+    }
+
+    public var hasOpenSessions: Bool {
+        pruneClosedSessions()
+        return !sessions.isEmpty
+    }
+
+    private func preferredSessionID(in candidates: [UUID: SessionRecord]) -> UUID? {
+        if let keyWindowID = candidates.first(where: { $0.value.window?.isKeyWindow == true })?.key {
             return keyWindowID
         }
 
-        if let mainWindowID = sessions.first(where: { $0.value.window?.isMainWindow == true })?.key {
+        if let mainWindowID = candidates.first(where: { $0.value.window?.isMainWindow == true })?.key {
             return mainWindowID
         }
 
-        return sessions
+        return candidates
             .filter { $0.value.window?.isVisible == true }
             .max(by: { lhs, rhs in lhs.value.lastFocusedAt < rhs.value.lastFocusedAt })?
             .key
@@ -112,16 +140,44 @@ public final class MainWindowRouter {
     public func routeDeeplink(_ url: URL) -> Bool {
         guard let preferredSessionID else { return false }
 
+        return routeDeeplink(url, to: preferredSessionID)
+    }
+
+    @discardableResult
+    public func routeFinderDeeplink(_ url: URL, receivedBy sessionID: UUID) -> Bool {
+        pruneClosedSessions()
+
+        let availableSessions = sessions.filter { !$0.value.isBusy }
+        guard !availableSessions.isEmpty else { return false }
+
+        if let receiver = sessions[sessionID],
+           Date().timeIntervalSince(receiver.registeredAt) < 2,
+           let olderSessionID = preferredSessionID(
+               in: availableSessions.filter {
+                   $0.key != sessionID && $0.value.registeredAt < receiver.registeredAt
+               }
+           ) {
+            guard routeDeeplink(url, to: olderSessionID) else { return false }
+            receiver.window?.performClose(nil)
+            return true
+        }
+
+        guard let targetSessionID = preferredSessionID(in: availableSessions) else { return false }
+        return routeDeeplink(url, to: targetSessionID)
+    }
+
+    private func routeDeeplink(_ url: URL, to sessionID: UUID) -> Bool {
+
         NotificationCenter.default.post(
             name: .routeDeeplinkInMainWindow,
             object: nil,
             userInfo: Self.scopedUserInfo(
                 [WindowRoutingUserInfoKey.deeplinkURLString: url.absoluteString],
-                targetSessionID: preferredSessionID
+                targetSessionID: sessionID
             )
         )
 
-        activateWindow(for: preferredSessionID)
+        activateWindow(for: sessionID)
         return true
     }
 

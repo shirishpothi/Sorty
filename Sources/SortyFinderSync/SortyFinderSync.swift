@@ -10,8 +10,14 @@ final class SortyFinderSync: FIFinderSync {
     private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
     nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(finderOrganizeImage(), isTemplate: false)
-    nonisolated(unsafe) private static let cachedLightWatchImage = finderWatchImage(isDark: false)
-    nonisolated(unsafe) private static let cachedDarkWatchImage = finderWatchImage(isDark: true)
+    nonisolated(unsafe) private static let cachedWatchImage = normalizedMenuIcon(
+        finderActionImage(named: "SortyWatchMascot", fallbackSymbol: "eye"),
+        isTemplate: false
+    )
+    nonisolated(unsafe) private static let cachedExcludeImage = normalizedMenuIcon(
+        finderActionImage(named: "SortyExcludeMascot", fallbackSymbol: "folder.badge.minus"),
+        isTemplate: false
+    )
 
     override init() {
         super.init()
@@ -43,9 +49,8 @@ final class SortyFinderSync: FIFinderSync {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.cachedOrganizeImage
-        let watchImage = Self.prefersDarkAppearance
-            ? Self.cachedDarkWatchImage
-            : Self.cachedLightWatchImage
+        let watchImage = Self.cachedWatchImage
+        let excludeImage = Self.cachedExcludeImage
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -68,11 +73,11 @@ final class SortyFinderSync: FIFinderSync {
             menu.addItem(watchItem)
 
             let excludeItem = NSMenuItem(
-                title: String(localized: "Exclude with Sorty"),
+                title: String(localized: "Exclude from Sorty"),
                 action: #selector(excludeAction(_:)),
                 keyEquivalent: ""
             )
-            excludeItem.image = organizeImage
+            excludeItem.image = excludeImage
             excludeItem.target = self
             menu.addItem(excludeItem)
         case .toolbarItemMenu:
@@ -200,7 +205,10 @@ final class SortyFinderSync: FIFinderSync {
         var components = URLComponents()
         components.scheme = "sorty"
         components.host = "organize"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
+        components.queryItems = [
+            URLQueryItem(name: "path", value: path),
+            URLQueryItem(name: "source", value: "finder")
+        ]
         return components.url
     }
 
@@ -221,6 +229,21 @@ final class SortyFinderSync: FIFinderSync {
         components.host = "exclude"
         components.queryItems = [URLQueryItem(name: "path", value: path)]
         return components.url
+    }
+
+    private static func finderActionImage(named resourceName: String, fallbackSymbol: String) -> NSImage {
+        if let imageURL = Bundle.main.url(forResource: resourceName, withExtension: "png"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.isTemplate = false
+            return image
+        }
+
+        let fallback = NSImage(
+            systemSymbolName: fallbackSymbol,
+            accessibilityDescription: resourceName
+        ) ?? NSImage(size: NSSize(width: 16, height: 16))
+        fallback.isTemplate = true
+        return fallback
     }
 
     private static func finderOrganizeImage() -> NSImage {
@@ -267,48 +290,6 @@ final class SortyFinderSync: FIFinderSync {
             ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
         return fallback
-    }
-
-    private static func finderWatchImage(isDark: Bool) -> NSImage {
-        // Finder Sync extensions do NOT honor isTemplate for menu item images.
-        // We must explicitly render the SF Symbol in the correct color for the
-        // current appearance (white in dark mode, black in light mode).
-        // See docs/agent-guides/finder-integration.md "Menu Icon Rendering" for details.
-        let drawColor = isDark ? NSColor.white : NSColor.black
-        let menuIconSize = NSSize(width: 16, height: 16)
-
-        let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: "Watch")
-            ?? NSImage(systemSymbolName: "folder", accessibilityDescription: "Watch")
-            ?? NSImage(size: menuIconSize)
-        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        let configured = symbol.withSymbolConfiguration(config) ?? symbol
-
-        // Scale the symbol proportionally and center it within the menu icon size
-        let sourceSize = configured.size
-        let maxDimension = max(sourceSize.width, sourceSize.height, 1)
-        let scale = min(menuIconSize.width, menuIconSize.height) / maxDimension
-        let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
-        let drawRect = NSRect(
-            x: (menuIconSize.width - drawSize.width) / 2,
-            y: (menuIconSize.height - drawSize.height) / 2,
-            width: drawSize.width,
-            height: drawSize.height
-        )
-
-        let rendered = NSImage(size: menuIconSize)
-        rendered.lockFocus()
-        // Draw the symbol scaled proportionally (renders in default black)
-        configured.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-        // Tint only the opaque pixels with the desired color
-        drawColor.set()
-        NSRect(origin: .zero, size: menuIconSize).fill(using: .sourceAtop)
-        rendered.unlockFocus()
-        rendered.isTemplate = false
-        return rendered
-    }
-
-    private static var prefersDarkAppearance: Bool {
-        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {

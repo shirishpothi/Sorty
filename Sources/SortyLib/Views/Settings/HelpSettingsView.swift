@@ -313,7 +313,7 @@ struct DeeplinkSettingsView: View {
                 entries: [
                     DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder."),
                     DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders."),
-                    DeeplinkEntry(title: "Exclude with Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
+                    DeeplinkEntry(title: "Exclude from Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
                     DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
                 ]
             )

@@ -997,7 +997,11 @@ struct ReadyToOrganizeView: View {
             // Compact header
             VStack(spacing: 16) {
                 iconSection
-                ReadyToOrganizeTitle(mode: mode)
+                ReadyToOrganizeTitle(
+                    mode: mode,
+                    showsWorkflowPicker: appState.showsFinderWorkflowPicker,
+                    onSelectMode: selectWorkflow
+                )
             }
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.96)
@@ -1130,6 +1134,17 @@ struct ReadyToOrganizeView: View {
             withAnimation(.spring(response: 0.42, dampingFraction: 0.62)) {
                 startCTACompression = 0
             }
+        }
+    }
+
+    private func selectWorkflow(_ selectedMode: OrganizationMode) {
+        guard selectedMode != mode else { return }
+        HapticFeedbackManager.shared.selection()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6)) {
+            if selectedMode != .organize {
+                settingsViewModel.config.enableSmartRename = true
+            }
+            settingsViewModel.config.mode = selectedMode
         }
     }
 

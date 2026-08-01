@@ -31763,40 +31763,6 @@
         }
       }
     },
-    "Test Rule": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Test-Regel"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Probar regla"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Test de Règle"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "テストルール"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "测试规则"
-          }
-        }
-      }
-    },
     "Testing connection...": {
       "localizations": {
         "de": {
@@ -45666,37 +45632,37 @@
         }
       }
     },
-    "Exclude with Sorty": {
+    "Exclude from Sorty": {
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exklusion mit Sorty"
+            "value": "Von Sorty ausschließen"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Excluye con Sorty"
+            "value": "Excluir de Sorty"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exclure avec Sorty"
+            "value": "Exclure de Sorty"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sortyで除外"
+            "value": "Sortyから除外"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用Sorty排除"
+            "value": "从 Sorty 中排除"
           }
         }
       }

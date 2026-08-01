@@ -2,11 +2,47 @@ import SwiftUI
 
 struct ReadyToOrganizeTitle: View {
     let mode: OrganizationMode
+    let showsWorkflowPicker: Bool
+    let onSelectMode: (OrganizationMode) -> Void
 
     var body: some View {
         VStack(spacing: 6) {
-            Text("Ready to \(mode.actionVerb)")
+            if showsWorkflowPicker {
+                HStack(spacing: 5) {
+                    Text("Ready to")
+
+                    Menu {
+                        ForEach(OrganizationMode.allCases, id: \.self) { workflow in
+                            Button {
+                                onSelectMode(workflow)
+                            } label: {
+                                Label {
+                                    Text(workflow.actionVerb)
+                                } icon: {
+                                    Image(
+                                        systemName: workflow == mode
+                                            ? "checkmark" : workflow.iconName
+                                    )
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(mode.actionVerb)
+                            .underline(pattern: .dot, color: .secondary)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Choose Organize, Organize & Rename, or Rename")
+                    .accessibilityLabel("Workflow: \(mode.actionVerb)")
+                    .accessibilityHint("Choose one of three workflows")
+                }
                 .font(.title2.weight(.semibold))
+            } else {
+                Text("Ready to \(mode.actionVerb)")
+                    .font(.title2.weight(.semibold))
+            }
+
             Text(LocalizedStringKey(mode.description))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

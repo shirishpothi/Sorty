@@ -29,7 +29,8 @@ public struct ExtensionCommunication {
     private static let directoryKey = "selectedDirectory"
     private static let organizeQuickActionWorkflowName = "Organize with Sorty.workflow"
     private static let watchQuickActionWorkflowName = "Watch with Sorty.workflow"
-    private static let excludeQuickActionWorkflowName = "Exclude with Sorty.workflow"
+    private static let excludeQuickActionWorkflowName = "Exclude from Sorty.workflow"
+    private static let legacyExcludeQuickActionWorkflowName = "Exclude with Sorty.workflow"
     private static let scanQuickActionWorkflowName = "Scan with Sorty.workflow"
     private static let previewQuickActionWorkflowName = "Preview with Sorty.workflow"
     private static let organizeQuickActionBundleIdentifier = "com.sorty.workflow.organize"
@@ -55,11 +56,12 @@ public struct ExtensionCommunication {
     private static let activeSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
         (organizeQuickActionBundleIdentifier, "Organize with Sorty"),
         (watchQuickActionBundleIdentifier, "Watch with Sorty"),
-        (excludeQuickActionBundleIdentifier, "Exclude with Sorty")
+        (excludeQuickActionBundleIdentifier, "Exclude from Sorty")
     ]
     private static let deprecatedSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
         (scanQuickActionBundleIdentifier, "Scan with Sorty"),
-        (previewQuickActionBundleIdentifier, "Preview with Sorty")
+        (previewQuickActionBundleIdentifier, "Preview with Sorty"),
+        (excludeQuickActionBundleIdentifier, "Exclude with Sorty")
     ]
     public static let notificationName = Notification.Name("SortyDirectorySelected")
     public static let finderSyncHeartbeatNotification = Notification.Name("SortyFinderSyncHeartbeat")
@@ -1531,6 +1533,7 @@ public struct ExtensionCommunication {
     private enum QuickActionIconStyle {
         case organize
         case watch
+        case exclude
     }
 
     private static func isSystemUsingDarkAppearance() -> Bool {
@@ -1663,6 +1666,24 @@ public struct ExtensionCommunication {
         return nil
     }
 
+    private static func quickActionGeneratedMascotImage(named resourceName: String) -> NSImage? {
+        let finderSyncResources = Bundle.main.builtInPlugInsURL?
+            .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let candidates = [
+            finderSyncResources?.appendingPathComponent("\(resourceName).png"),
+            cwd.appendingPathComponent("SortyFinderSync/\(resourceName).png")
+        ].compactMap { $0 }
+
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            if let image = NSImage(contentsOf: candidate) {
+                image.isTemplate = false
+                return image
+            }
+        }
+        return nil
+    }
+
     private static func quickActionIconImage(style: QuickActionIconStyle) -> NSImage {
         switch style {
         case .organize:
@@ -1693,6 +1714,10 @@ public struct ExtensionCommunication {
             return fallback
 
         case .watch:
+            if let mascot = quickActionGeneratedMascotImage(named: "SortyWatchMascot") {
+                return mascot
+            }
+
             if let watchTemplateImage = quickActionWatchTemplateImage() {
                 return watchTemplateImage
             }
@@ -1716,6 +1741,18 @@ public struct ExtensionCommunication {
             rendered.unlockFocus()
             rendered.isTemplate = false
             return rendered
+
+        case .exclude:
+            if let mascot = quickActionGeneratedMascotImage(named: "SortyExcludeMascot") {
+                return mascot
+            }
+
+            let fallback = NSImage(
+                systemSymbolName: "folder.badge.minus",
+                accessibilityDescription: "Exclude from Sorty"
+            ) ?? NSImage(size: NSSize(width: 256, height: 256))
+            fallback.isTemplate = false
+            return fallback
         }
     }
 
@@ -1748,14 +1785,8 @@ public struct ExtensionCommunication {
         let iconImage = quickActionIconImage(style: style)
         let iconICNSData = style == .organize ? quickActionMascotIconData() : nil
 
-        if style == .watch {
-            // Avoid package-level custom icon for watch actions so Finder uses
-            // the NSServices template icon that adapts to light/dark mode.
-            _ = NSWorkspace.shared.setIcon(nil, forFile: workflowDir.path, options: [])
-        } else {
-            // Use Sorty's mascot instead of Automator's default wand icon in Finder Quick Actions.
-            _ = NSWorkspace.shared.setIcon(iconImage, forFile: workflowDir.path, options: [])
-        }
+        // Use the action-specific mascot instead of Automator's default wand icon.
+        _ = NSWorkspace.shared.setIcon(iconImage, forFile: workflowDir.path, options: [])
 
         do {
             let resourcesDir = contentsDir.appendingPathComponent("Resources", isDirectory: true)
@@ -2136,7 +2167,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
             """
 
             let workflowPlist = """
@@ -3084,7 +3115,7 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Install a "Exclude with Sorty" Quick Action workflow to ~/Library/Services
+    /// Install an "Exclude from Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickExcludeAction() -> (success: Bool, message: String) {
         let workflowName = excludeQuickActionWorkflowName
         guard let servicesDir = resolveServicesDirectoryForInstall() else {
@@ -3097,6 +3128,12 @@ public struct ExtensionCommunication {
         let contentsDir = workflowDir.appendingPathComponent("Contents")
 
         do {
+            let legacyWorkflowDir = servicesDir.appendingPathComponent(
+                legacyExcludeQuickActionWorkflowName
+            )
+            if FileManager.default.fileExists(atPath: legacyWorkflowDir.path) {
+                try FileManager.default.removeItem(at: legacyWorkflowDir)
+            }
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
@@ -3108,7 +3145,7 @@ public struct ExtensionCommunication {
                 <key>CFBundleIdentifier</key>
                 <string>\(excludeQuickActionBundleIdentifier)</string>
                 <key>CFBundleName</key>
-                <string>Exclude with Sorty</string>
+                <string>Exclude from Sorty</string>
                 <key>CFBundlePackageType</key>
                 <string>BNDL</string>
                 <key>CFBundleIconFile</key>
@@ -3119,7 +3156,7 @@ public struct ExtensionCommunication {
                         <key>NSMenuItem</key>
                         <dict>
                             <key>default</key>
-                            <string>Exclude with Sorty</string>
+                            <string>Exclude from Sorty</string>
                         </dict>
                         <key>NSIconName</key>
                         <string>\(quickActionServiceIconName)</string>
@@ -3355,11 +3392,11 @@ public struct ExtensionCommunication {
             </plist>
             """
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
+            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir, style: .exclude)
 
             refreshDynamicServicesRegistry()
 
-            return (true, "Quick Exclude Action installed! Right-click any folder in Finder to use 'Exclude with Sorty'.")
+            return (true, "Exclude Action installed. Right-click any folder in Finder to use 'Exclude from Sorty'.")
 
         } catch {
             return (false, "Installation failed: \(error.localizedDescription)")

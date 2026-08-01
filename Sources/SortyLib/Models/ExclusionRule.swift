@@ -28,6 +28,23 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
 
     public var id: String { rawValue }
 
+    public var friendlyName: String {
+        switch self {
+        case .fileExtension: return "Files with an extension"
+        case .fileName: return "Files with a name"
+        case .folderName: return "Folders with a name"
+        case .pathContains: return "Folder"
+        case .regex: return "Advanced name pattern"
+        case .fileSize: return "Files by size"
+        case .creationDate: return "Files by creation date"
+        case .modificationDate: return "Files by modification date"
+        case .hiddenFiles: return "Hidden files"
+        case .systemFiles: return "macOS system files"
+        case .fileType: return "A kind of file"
+        case .customScript: return "Custom script"
+        }
+    }
+
     public var icon: String {
         switch self {
         case .fileExtension: return "doc.badge.ellipsis"
@@ -543,10 +560,18 @@ private struct CompiledExclusionRule: Sendable {
 
         case .pathContains:
             guard !trimmedPattern.isEmpty else { return nil }
-            predicate = .pathContains(
-                rule.caseSensitive ? trimmedPattern : trimmedPattern.lowercased(),
-                caseSensitive: rule.caseSensitive
-            )
+            if trimmedPattern.hasPrefix("/") {
+                let normalizedPath = URL(fileURLWithPath: trimmedPattern).standardizedFileURL.path
+                predicate = .folderTree(
+                    rule.caseSensitive ? normalizedPath : normalizedPath.lowercased(),
+                    caseSensitive: rule.caseSensitive
+                )
+            } else {
+                predicate = .pathContains(
+                    rule.caseSensitive ? trimmedPattern : trimmedPattern.lowercased(),
+                    caseSensitive: rule.caseSensitive
+                )
+            }
 
         case .regex:
             guard !trimmedPattern.isEmpty else { return nil }
@@ -630,6 +655,7 @@ private enum CompiledExclusionPredicate: Sendable {
     case fileNameContains(String, caseSensitive: Bool)
     case folderNameContains(String, caseSensitive: Bool)
     case pathContains(String, caseSensitive: Bool)
+    case folderTree(String, caseSensitive: Bool)
     case regex(CompiledExclusionRegex)
     case fileSize(limitMB: Double, greater: Bool)
     case date(
@@ -654,7 +680,7 @@ private enum CompiledExclusionPredicate: Sendable {
 
     var canPruneDirectory: Bool {
         switch self {
-        case .folderNameContains, .pathContains, .hiddenFiles, .systemFiles:
+        case .folderNameContains, .pathContains, .folderTree, .hiddenFiles, .systemFiles:
             return true
         default:
             return false
@@ -671,7 +697,7 @@ private enum CompiledExclusionPredicate: Sendable {
             return 2
         case .systemFiles:
             return 3
-        case .pathContains:
+        case .pathContains, .folderTree:
             return 4
         case .folderNameContains:
             return 5
@@ -704,6 +730,10 @@ private enum CompiledExclusionPredicate: Sendable {
             return caseSensitive
                 ? cache.path.contains(pattern)
                 : cache.lowercasedPath().contains(pattern)
+
+        case .folderTree(let folderPath, let caseSensitive):
+            let path = caseSensitive ? cache.path : cache.lowercasedPath()
+            return path == folderPath || path.hasPrefix(folderPath + "/")
 
         case .regex(let regex):
             return regex.matches(cache.name)

@@ -1,6 +1,15 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Exclude from Sorty" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Von Sorty ausschließen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Excluir de Sorty" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exclure de Sorty" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyから除外" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "从 Sorty 中排除" } }
+      }
+    },
     "Organize Folder" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Ordner organisieren" } },

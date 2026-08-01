@@ -55,6 +55,7 @@ public enum SortyUninstaller {
     private static let quickActionWorkflows: [(name: String, bundleIdentifier: String)] = [
         ("Organize with Sorty.workflow", "com.sorty.workflow.organize"),
         ("Watch with Sorty.workflow", "com.sorty.workflow.watch"),
+        ("Exclude from Sorty.workflow", "com.sorty.workflow.exclude"),
         ("Exclude with Sorty.workflow", "com.sorty.workflow.exclude"),
         ("Scan with Sorty.workflow", "com.sorty.workflow.scan"),
         ("Preview with Sorty.workflow", "com.sorty.workflow.preview"),

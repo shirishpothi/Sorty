@@ -23,6 +23,7 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var globalShortcutManager: GlobalShortcutManager
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
     @AppStorage("lastSeenWhatsNewBuild") private var lastSeenWhatsNewBuild = ""
     @AppStorage("forceShowWhatsNewOnLaunch") private var forceShowWhatsNewOnLaunch = false
@@ -188,6 +189,10 @@ struct MainWindowRootView: View {
                     automationManager: automationManager,
                     calibrateAction: calibrate
                 )
+                MainWindowRouter.shared.setBusy(
+                    windowSession.organizer.state.isOperationInProgress,
+                    for: windowSession.id
+                )
                 scheduleSetupRepairReconciliation()
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
@@ -225,6 +230,10 @@ struct MainWindowRootView: View {
                 }
             }
             .onChange(of: windowSession.organizer.state) { _, newState in
+                MainWindowRouter.shared.setBusy(
+                    newState.isOperationInProgress,
+                    for: windowSession.id
+                )
                 if !newState.isOperationInProgress {
                     coordinator?.finishManualOrganization(sessionID: windowSession.id)
                 }
@@ -341,6 +350,17 @@ struct MainWindowRootView: View {
     private func handleExternalDeeplink(_ url: URL) {
         guard ExternalDeeplinkDeduper.shouldHandle(url) else { return }
 
+        if url.isFinderWorkflowDeeplink {
+            if MainWindowRouter.shared.routeFinderDeeplink(url, receivedBy: windowSession.id) {
+                return
+            }
+
+            if MainWindowRouter.shared.hasOpenSessions {
+                openWindow(value: WindowLaunchRequest(url: url))
+                return
+            }
+        }
+
         if MainWindowRouter.shared.routeDeeplink(url) {
             return
         }
@@ -349,6 +369,14 @@ struct MainWindowRootView: View {
     }
 
     private func processDeeplink(_ url: URL) {
+        if url.host?.lowercased() == "organize" {
+            let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "source" })?
+                .value
+            windowSession.appState.showsFinderWorkflowPicker = source == "finder"
+        }
+
         deeplinkHandler.handle(url: url)
 
         guard let destination = deeplinkHandler.pendingDestination else { return }
@@ -453,6 +481,18 @@ struct MainWindowRootView: View {
         }
     }
 
+}
+
+private extension URL {
+    var isFinderWorkflowDeeplink: Bool {
+        guard scheme?.lowercased() == "sorty" else { return false }
+        switch host?.lowercased() {
+        case "organize", "watched", "exclude":
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 private extension View {

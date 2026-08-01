@@ -48,10 +48,9 @@ struct ExclusionRulesView: View {
 
     private var groupedRules: [(String, [ExclusionRule])] {
         let groups: [(String, [ExclusionRuleType])] = [
-            ("Pattern Rules", [.fileExtension, .fileName, .folderName, .pathContains, .regex]),
-            ("Size & Date", [.fileSize, .creationDate, .modificationDate]),
-            ("System Rules", [.hiddenFiles, .systemFiles, .fileType]),
-            ("Custom", [.customScript]),
+            ("Files & Folders", [.fileExtension, .fileName, .folderName, .pathContains, .fileType]),
+            ("Conditions", [.fileSize, .creationDate, .modificationDate, .regex, .customScript]),
+            ("macOS", [.hiddenFiles, .systemFiles]),
         ]
 
         return groups.compactMap { (title, types) in
@@ -129,8 +128,8 @@ struct ExclusionRulesView: View {
                                     title: group.0,
                                     rules: group.1,
                                     rulesManager: rulesManager,
-                                    infoText: group.0 == "Pattern Rules"
-                                        ? "These rules match file extensions, names, folder names, paths, or regular expressions. Matching items are left untouched and aren't used for learnings."
+                                    infoText: group.0 == "Files & Folders"
+                                        ? "Matching files and folders are left untouched and aren't used for learnings."
                                         : nil
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.05)
@@ -169,7 +168,7 @@ struct ExclusionRulesView: View {
         }
         .emptyStateWorkflowGradient(isVisible: rulesManager.rules.isEmpty)
         .animation(.pageTransition, value: rulesManager.rules.isEmpty)
-        .navigationTitle("Exclusion Rules")
+        .navigationTitle("Exclusions")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
                 .modalBounce()
@@ -195,7 +194,7 @@ struct ExclusionRulesView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Exclusion Rules")
+                    Text("Exclusions")
                         .font(.title2)
                         .fontWeight(.semibold)
 
@@ -230,7 +229,7 @@ struct ExclusionRulesView: View {
                         rulesManager.clearAllRules()
                     }
                 } label: {
-                    Label("Clear All", systemImage: "trash")
+                    Label("Remove All", systemImage: "trash")
                 }
                 .buttonStyle(.tintedPill(.red, size: .small))
                 .controlSize(.small)
@@ -241,7 +240,7 @@ struct ExclusionRulesView: View {
                 HapticFeedbackManager.shared.tap()
                 showingAddRule = true
             } label: {
-                Label("Add Rule", systemImage: "plus")
+                Label("Add Exclusion", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured)
@@ -254,7 +253,7 @@ struct ExclusionRulesView: View {
     private var emptyHeaderView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Exclusion Rules")
+                Text("Exclusions")
                     .font(.largeTitle.bold())
 
                 Text(
@@ -561,12 +560,12 @@ struct EmptyExclusionRulesView: View {
                     .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
-                Text("No Exclusion Rules")
+                Text("Nothing is excluded")
                     .font(.title3)
                     .fontWeight(.semibold)
 
                 Text(
-                    "Add rules to exclude certain files or folders from organization. Excluded items also won't generate learnings."
+                    "Choose folders or simple rules for anything Sorty should leave untouched."
                 )
                 .font(.body)
                 .foregroundStyle(.secondary)
@@ -580,7 +579,7 @@ struct EmptyExclusionRulesView: View {
             Button {
                 onAddRule()
             } label: {
-                Label("Add Rule", systemImage: "plus")
+                Label("Add Exclusion", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
@@ -753,6 +752,10 @@ struct ExclusionRuleRow: View {
         NSWorkspace.shared.icon(forFile: "/tmp")
     }()
 
+    private var isFolderExclusion: Bool {
+        rule.type == .pathContains && rule.pattern.hasPrefix("/")
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Type icon - use system folder icon for folder rules
@@ -780,11 +783,13 @@ struct ExclusionRuleRow: View {
                 }
 
                 HStack(spacing: 6) {
-                    Text(rule.type.rawValue)
+                    Text(isFolderExclusion ? "Folder" : rule.type.friendlyName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    if let description = rule.description, !description.isEmpty {
+                    if !isFolderExclusion,
+                       let description = rule.description,
+                       !description.isEmpty {
                         Text("•")
                             .foregroundStyle(.secondary)
                         Text(LocalizedStringKey(description))
@@ -859,7 +864,7 @@ struct ExclusionRuleRow: View {
 
     @ViewBuilder
     private var ruleIcon: some View {
-        if rule.type == .folderName {
+        if rule.type == .folderName || isFolderExclusion {
             AppKitImageView(
                 image: Self.systemFolderIcon,
                 size: CGSize(width: 16, height: 16),
@@ -915,15 +920,21 @@ struct AddExclusionRuleView: View {
     @State private var numericValue: Double = 100
     @State private var comparisonGreater: Bool = true
     @State private var selectedFileTypeCategory: FileTypeCategory = .images
-
-    @State private var testInput: String = ""
-    @State private var isMatch: Bool = false
+    @State private var selectedFolderURL: URL?
+    @State private var showingFolderPicker = false
     @State private var appeared = false
 
-    private let ruleCategories: [(String, [ExclusionRuleType])] = [
-        ("Pattern", [.fileExtension, .fileName, .folderName, .pathContains, .regex]),
-        ("Size & Date", [.fileSize, .creationDate, .modificationDate]),
-        ("System", [.hiddenFiles, .systemFiles, .fileType]),
+    private let ruleTypes: [ExclusionRuleType] = [
+        .fileExtension,
+        .fileName,
+        .folderName,
+        .fileType,
+        .hiddenFiles,
+        .systemFiles,
+        .fileSize,
+        .creationDate,
+        .modificationDate,
+        .regex,
     ]
 
     var body: some View {
@@ -938,12 +949,12 @@ struct AddExclusionRuleView: View {
 
                 Spacer()
 
-                Text("Add Exclusion Rule")
+                Text("Exclude from Sorty")
                     .font(.headline)
 
                 Spacer()
 
-                Button("Add Rule") {
+                Button(selectedFolderURL == nil ? "Add Exclusion" : "Exclude Folder") {
                     HapticFeedbackManager.shared.success()
                     addRule()
                 }
@@ -959,109 +970,118 @@ struct AddExclusionRuleView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Rule Type Selection
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Rule Type")
+                        Label("Choose a folder", systemImage: "folder.badge.minus")
                             .font(.subheadline.weight(.semibold))
+
+                        Text("Sorty will leave this folder and everything inside it untouched.")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        ForEach(ruleCategories, id: \.0) { category in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(category.0)
+                        if let selectedFolderURL {
+                            HStack(spacing: 10) {
+                                FolderThumbnailView(
+                                    url: selectedFolderURL,
+                                    size: CGSize(width: 28, height: 28)
+                                )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(selectedFolderURL.lastPathComponent)
+                                        .font(.subheadline.weight(.medium))
+                                    PrivacySensitivePathText(
+                                        path: selectedFolderURL.deletingLastPathComponent().path
+                                    )
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-
-                                FlowLayout(spacing: 8) {
-                                    ForEach(category.1, id: \.self) { type in
-                                        RuleTypeChip(
-                                            type: type,
-                                            isSelected: selectedType == type
-                                        ) {
-                                            withAnimation(
-                                                .spring(response: 0.25, dampingFraction: 0.8)
-                                            ) {
-                                                selectedType = type
-                                            }
-                                            HapticFeedbackManager.shared.selection()
-                                        }
-                                    }
+                                    .lineLimit(1)
                                 }
-                            }
-                        }
-                    }
-                    .padding(16)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-
-                    // Configuration
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Configuration")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        ruleConfigurationView
-                    }
-                    .padding(16)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-
-                    // Description
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Description (optional)")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        TextField("e.g., Skip large media files", text: $description)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    .padding(16)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-
-                    // Test Section
-                    if selectedType.requiresPattern && selectedType != .fileType {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Test Rule")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
 
                                 Spacer()
 
-                                if !testInput.isEmpty {
-                                    HStack(spacing: 4) {
-                                        Image(
-                                            systemName: isMatch
-                                                ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        Text(isMatch ? "Matches" : "No match")
-                                            .numericTextTransition(animationValue: isMatch)
-                                    }
-                                    .font(.caption)
-                                    .foregroundColor(isMatch ? .green : .secondary)
-                                    .transition(.scale.combined(with: .opacity))
+                                Button("Change") {
+                                    showingFolderPicker = true
+                                }
+                                .buttonStyle(.sortyBordered(size: .small))
+                            }
+                        } else {
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                showingFolderPicker = true
+                            } label: {
+                                Label("Choose Folder", systemImage: "folder.badge.minus")
+                            }
+                            .buttonStyle(.onboardingPill)
+                            .accessibilityIdentifier("ChooseExclusionFolderButton")
+                        }
+                    }
+                    .padding(16)
+                    .systemLiquidGlassBackground(cornerRadius: 12)
+
+                    if selectedFolderURL != nil {
+                        Button("Create a rule instead") {
+                            HapticFeedbackManager.shared.selection()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedFolderURL = nil
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        HStack(spacing: 12) {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.2))
+                                .frame(height: 1)
+                            Text("or create a rule")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize()
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.2))
+                                .frame(height: 1)
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("What should Sorty leave alone?")
+                                .font(.subheadline.weight(.semibold))
+
+                            Picker("Exclusion", selection: $selectedType) {
+                                ForEach(ruleTypes, id: \.self) { type in
+                                    Label(type.friendlyName, systemImage: type.icon)
+                                        .tag(type)
                                 }
                             }
-
-                            TextField(testPlaceholder, text: $testInput)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: testInput) { _, _ in checkMatch() }
-                                .onChange(of: pattern) { _, _ in checkMatch() }
-                                .onChange(of: selectedType) { _, _ in checkMatch() }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .onChange(of: selectedType) { _, _ in
+                                HapticFeedbackManager.shared.selection()
+                            }
                         }
                         .padding(16)
                         .systemLiquidGlassBackground(cornerRadius: 12)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMatch)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Details")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            ruleConfigurationView
+                        }
+                        .padding(16)
+                        .systemLiquidGlassBackground(cornerRadius: 12)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Label (optional)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            TextField("e.g. Old video exports", text: $description)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        .padding(16)
+                        .systemLiquidGlassBackground(cornerRadius: 12)
                     }
 
-                    // Help Text
-                    HStack(spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.blue)
-                        Text(helpTextForType(selectedType))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.blue.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .padding(20)
             }
@@ -1071,6 +1091,17 @@ struct AddExclusionRuleView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 appeared = true
             }
+        }
+        .fileImporter(
+            isPresented: $showingFolderPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else {
+                return
+            }
+            HapticFeedbackManager.shared.selection()
+            selectedFolderURL = url.standardizedFileURL
         }
     }
 
@@ -1165,6 +1196,10 @@ struct AddExclusionRuleView: View {
     }
 
     private var isValidInput: Bool {
+        if selectedFolderURL != nil {
+            return true
+        }
+
         switch selectedType {
         case .hiddenFiles, .systemFiles, .fileType:
             return true
@@ -1177,53 +1212,22 @@ struct AddExclusionRuleView: View {
         }
     }
 
-    private func checkMatch() {
-        guard !testInput.isEmpty, !pattern.isEmpty else {
-            isMatch = false
+    private func addRule() {
+        if let selectedFolderURL {
+            let normalizedPath = selectedFolderURL.standardizedFileURL.path
+            let folderName = selectedFolderURL.lastPathComponent
+            let rule = ExclusionRule(
+                type: .pathContains,
+                pattern: normalizedPath,
+                description: folderName.isEmpty ? "Protected folder" : folderName
+            )
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                rulesManager.addRule(rule)
+            }
+            dismiss()
             return
         }
 
-        let fileName =
-            testInput.contains(".")
-            ? String(testInput.split(separator: ".").dropLast().joined(separator: ".")) : testInput
-        let fileExtension =
-            testInput.contains(".") ? String(testInput.split(separator: ".").last ?? "") : ""
-
-        let file = FileItem(
-            path: "/path/to/\(testInput)",
-            name: fileName,
-            extension: fileExtension,
-            size: Int64((Double(testInput) ?? 0) * 1024 * 1024),
-            isDirectory: false,
-            creationDate: Date()
-        )
-
-        let rule = ExclusionRule(
-            type: selectedType,
-            pattern: pattern,
-            numericValue: numericValue,
-            comparisonGreater: comparisonGreater
-        )
-
-        let newMatch = rule.matches(file)
-        if newMatch != isMatch {
-            HapticFeedbackManager.shared.selection()
-        }
-        isMatch = newMatch
-    }
-
-    private var testPlaceholder: String {
-        switch selectedType {
-        case .fileExtension: return "document.txt"
-        case .fileName: return ".DS_Store"
-        case .folderName: return "node_modules"
-        case .pathContains: return "/Users/me/backup/file.txt"
-        case .regex: return "IMG_0001.jpg"
-        default: return "Enter test value"
-        }
-    }
-
-    private func addRule() {
         var rule: ExclusionRule
 
         switch selectedType {
@@ -1256,66 +1260,6 @@ struct AddExclusionRuleView: View {
         dismiss()
     }
 
-    private func helpTextForType(_ type: ExclusionRuleType) -> String {
-        switch type {
-        case .fileExtension: return "Excludes all files with this extension"
-        case .fileName: return "Excludes files with this exact name"
-        case .folderName: return "Excludes all folders with this name"
-        case .pathContains: return "Excludes paths containing this text"
-        case .regex: return "Excludes files matching this regex pattern"
-        case .fileSize: return "Excludes files based on size threshold"
-        case .creationDate: return "Excludes files created before/after threshold"
-        case .modificationDate: return "Excludes files modified before/after threshold"
-        case .hiddenFiles: return "Excludes files starting with '.' (hidden files)"
-        case .systemFiles: return "Excludes macOS system files (.DS_Store, etc.)"
-        case .fileType: return "Excludes entire categories of file types"
-        case .customScript: return "Run custom AppleScript (advanced)"
-        }
-    }
-}
-
-// MARK: - Rule Type Chip
-
-struct RuleTypeChip: View {
-    let type: ExclusionRuleType
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: iconForType(type))
-                    .font(.caption)
-                Text(type.rawValue)
-                    .font(.caption)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.1)
-            )
-            .foregroundColor(isSelected ? .white : .primary)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func iconForType(_ type: ExclusionRuleType) -> String {
-        switch type {
-        case .fileExtension: return "doc.badge.gearshape"
-        case .fileName: return "doc"
-        case .folderName: return "folder"
-        case .pathContains: return "arrow.triangle.branch"
-        case .regex: return "text.magnifyingglass"
-        case .fileSize: return "scalemass"
-        case .creationDate: return "calendar.badge.plus"
-        case .modificationDate: return "calendar.badge.clock"
-        case .hiddenFiles: return "eye.slash"
-        case .systemFiles: return "gearshape.2"
-        case .fileType: return "doc.on.doc"
-        case .customScript: return "applescript"
-        }
-    }
 }
 
 // FlowLayout is now defined globally in AnalysisView.swift

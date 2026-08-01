@@ -175,18 +175,23 @@ public final class WindowSession: ObservableObject {
         case .watched(let action, let path):
             appState.currentView = .watchedFolders
             if action == "add", let path {
-                let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-                if let existingFolder = watchedFoldersManager.folders.first(where: { $0.path == normalizedPath }) {
-                    let highlightedID = existingFolder.id
-                    appState.highlightedWatchedFolderID = highlightedID
-                    // Clear highlight after animation
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
-                        if appState.highlightedWatchedFolderID == highlightedID {
-                            appState.highlightedWatchedFolderID = nil
-                        }
-                    }
+                let folderURL = URL(fileURLWithPath: path).standardizedFileURL
+                let normalizedPath = folderURL.path
+                let watchedFolder: WatchedFolder
+
+                if let existingFolder = watchedFoldersManager.folders.first(where: {
+                    URL(fileURLWithPath: $0.path).standardizedFileURL.path == normalizedPath
+                }) {
+                    watchedFolder = existingFolder
+                } else {
+                    watchedFolder = WatchedFolder(
+                        path: normalizedPath,
+                        bookmarkData: securityScopedBookmark(for: folderURL)
+                    )
+                    watchedFoldersManager.addFolder(watchedFolder)
                 }
+
+                highlightWatchedFolder(watchedFolder.id)
             }
 
         case .rules(let action, _, let pattern):
@@ -207,8 +212,20 @@ public final class WindowSession: ObservableObject {
             appState.currentView = .exclusions
             if let path {
                 let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-                let rule = ExclusionRule(type: .pathContains, pattern: normalizedPath)
-                exclusionRules.addRule(rule)
+                let alreadyExcluded = exclusionRules.rules.contains {
+                    $0.type == .pathContains
+                        && $0.pattern.hasPrefix("/")
+                        && URL(fileURLWithPath: $0.pattern).standardizedFileURL.path == normalizedPath
+                }
+                if !alreadyExcluded {
+                    let folderName = URL(fileURLWithPath: normalizedPath).lastPathComponent
+                    let rule = ExclusionRule(
+                        type: .pathContains,
+                        pattern: normalizedPath,
+                        description: folderName.isEmpty ? "Protected folder" : folderName
+                    )
+                    exclusionRules.addRule(rule)
+                }
             }
 
         case .storage(let action, let path):
@@ -221,6 +238,31 @@ public final class WindowSession: ObservableObject {
         }
     }
 
+    private func securityScopedBookmark(for url: URL) -> Data? {
+        let didStart = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStart {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        return try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+    }
+
+    private func highlightWatchedFolder(_ folderID: UUID) {
+        appState.highlightedWatchedFolderID = folderID
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if appState.highlightedWatchedFolderID == folderID {
+                appState.highlightedWatchedFolderID = nil
+            }
+        }
+    }
+
     private func applySettingsDestination(section: String?) {
         guard let section = section?.lowercased() else {
             appState.selectedSettingsSection = nil
@@ -229,7 +271,7 @@ public final class WindowSession: ObservableObject {
         }
 
         switch section {
-        case "finder", "finder-integration", "finder-services", "services", "quick-actions", "organize-with-sorty", "watch-with-sorty", "exclude-with-sorty":
+        case "finder", "finder-integration", "finder-services", "services", "quick-actions", "organize-with-sorty", "watch-with-sorty", "exclude-with-sorty", "exclude-from-sorty":
             appState.selectedSettingsSection = .finder
             appState.settingsFocusTarget = nil
         case "watched", "watched-folders", "folders", "exclusions", "rules":

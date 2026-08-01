@@ -76,7 +76,7 @@ struct FinderIntegrationSettingsView: View {
                         )
 
                         compactStatusRow(
-                            label: "Exclude with Sorty",
+                            label: "Exclude from Sorty",
                             isHealthy: isExcludeActionInstalled,
                             focusTarget: .finderExclude
                         )
