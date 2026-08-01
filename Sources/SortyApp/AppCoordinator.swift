@@ -598,6 +598,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         if let snoozedUntil = folder.snoozedUntil, snoozedUntil > Date() {
             mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
+            deferPendingWork(for: folder.id, until: snoozedUntil)
+            scheduleRetry()
+            completion(true)
+            return
+        }
 
         guard !isManualOrganizationActive(for: folder.id) else {
             print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
