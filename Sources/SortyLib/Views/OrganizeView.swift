@@ -69,7 +69,10 @@ struct OrganizeView: View {
     @State private var readyPreviewHandoffTask: Task<Void, Never>?
     @State private var errorViewTestRoute: ErrorViewTestRoute?
 
-    private let minimumLiveOrganizationPresentation: TimeInterval = 1.0
+    // Just long enough for the first file flight to land before PreviewView
+    // replaces the live stage. Kept short: the live stage must never make the
+    // user wait for a plan that is already ready.
+    private let minimumLiveOrganizationPresentation: TimeInterval = 1.2
 
     var body: some View {
         ZStack {
@@ -209,6 +212,8 @@ struct OrganizeView: View {
         }
         .onDisappear {
             workflowEntranceTask?.cancel()
+            readyPreviewHandoffTask?.cancel()
+            readyPreviewHandoffTask = nil
         }
     }
 
@@ -514,14 +519,18 @@ struct OrganizeView: View {
 
     private func noteLiveOrganizationStarted() {
         guard !reduceMotion, liveOrganizationStartedAt == nil else { return }
+
+        // If the plan is already ready when the first live suggestions parse,
+        // the response effectively arrived at once (non-streaming provider or
+        // a final throttled flush). There is nothing live to show, so go
+        // straight to the preview instead of replaying a fake animation.
+        if organizer.state == .ready {
+            resetLiveOrganizationPresentation()
+            return
+        }
+
         liveOrganizationStartedAt = Date()
         keepsLiveOrganizationVisible = true
-
-        // The throttled stream update can arrive after the organizer reaches
-        // ready, so schedule the handoff here as well as in handleStateChange.
-        if organizer.state == .ready {
-            scheduleReadyPreviewHandoff()
-        }
     }
 
     private func scheduleReadyPreviewHandoff() {

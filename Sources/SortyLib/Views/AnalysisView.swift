@@ -711,7 +711,8 @@ struct AnalysisView: View {
             hasRenameStreamEvents = false
             let suggestions = OrganizingStreamSuggestions.parse(
                 from: streamText,
-                files: organizer.scannedFiles
+                files: organizer.scannedFiles,
+                fileIDTable: organizer.streamFileIDTable
             )
             if suggestions.isEmpty {
                 if hasOrganizeStreamEvents,
@@ -733,33 +734,52 @@ struct AnalysisView: View {
     }
 }
 
-private enum OrganizingStreamSuggestions {
+enum OrganizingStreamSuggestions {
     private static let maxParseCharacters = 30_000
     private static let maxVisibleFolders = 5
     private static let maxFilesPerFolder = 12
+    // JSON string body: any escaped character or any character that is not a
+    // quote or backslash. This correctly handles \\, \", \n, and \uXXXX.
     private static let folderNameRegex = try? NSRegularExpression(
-        pattern: #""name"\s*:\s*"((?:\\"|[^"])*)""#,
+        pattern: #""name"\s*:\s*"((?:\\.|[^"\\])*)""#,
         options: []
     )
     private static let filenameRegex = try? NSRegularExpression(
-        pattern: #""filename"\s*:\s*"((?:\\"|[^"])*)""#,
+        pattern: #""filename"\s*:\s*"((?:\\.|[^"\\])*)""#,
         options: []
     )
     private static let suggestedNameRegex = try? NSRegularExpression(
-        pattern: #""suggested_name"\s*:\s*"((?:\\"|[^"])*)""#,
+        pattern: #""suggested_name"\s*:\s*"((?:\\.|[^"\\])*)""#,
+        options: []
+    )
+    /// Preferred compact format: `"file_ids":[1,2,3]`. The closing bracket is
+    /// optional so partially streamed arrays still parse.
+    private static let fileIDsRegex = try? NSRegularExpression(
+        pattern: #""file_ids"\s*:\s*\[([^\]]*)(\])?"#,
+        options: []
+    )
+    /// Rename entries in the preferred compact format:
+    /// `{"file_id":1,"suggested_name":"Clear Name.ext",...}`.
+    private static let renamePairRegex = try? NSRegularExpression(
+        pattern: #""file_id"\s*:\s*(\d+)[^{}]*?"suggested_name"\s*:\s*"((?:\\.|[^"\\])*)""#,
+        options: []
+    )
+    /// Legacy organize-only format: `"files":["name.pdf","other.png"]`.
+    /// The body excludes braces/brackets so object arrays never match here.
+    private static let plainFilesArrayRegex = try? NSRegularExpression(
+        pattern: #""files"\s*:\s*\[([^\[\]{}]*)"#,
+        options: []
+    )
+    private static let quotedStringRegex = try? NSRegularExpression(
+        pattern: #""((?:\\.|[^"\\])*)""#,
         options: []
     )
 
-    static func hasRenderableEvents(in streamText: String) -> Bool {
-        guard let jsonStart = streamText.firstIndex(of: "{") else { return false }
-        let jsonText = boundedParseText(String(streamText[jsonStart...]))
-        let nsText = jsonText as NSString
-        let fullRange = NSRange(location: 0, length: nsText.length)
-        return folderNameRegex?.firstMatch(in: jsonText, range: fullRange) != nil
-            && filenameRegex?.firstMatch(in: jsonText, range: fullRange) != nil
-    }
-
-    static func parse(from streamText: String, files: [FileItem]) -> [FolderSuggestion] {
+    static func parse(
+        from streamText: String,
+        files: [FileItem],
+        fileIDTable: [Int: FileItem] = [:]
+    ) -> [FolderSuggestion] {
         guard let jsonStart = streamText.firstIndex(of: "{") else { return [] }
 
         let jsonText = boundedParseText(String(streamText[jsonStart...]))
@@ -772,6 +792,10 @@ private enum OrganizingStreamSuggestions {
         var suggestionsByFolder: [String: FolderSuggestion] = [:]
         var orderedFolderNames: [String] = []
         var assignedFileIDs: Set<UUID> = []
+        // The folder currently being generated: its name is complete but no
+        // file assignments have streamed in yet. Shown as a pending bucket so
+        // the stage reflects what the model is doing right now.
+        var pendingFolderName: String?
 
         for index in folderMatches.indices {
             let folderMatch = folderMatches[index]
@@ -793,10 +817,20 @@ private enum OrganizingStreamSuggestions {
 
             let segmentRange = NSRange(location: segmentStart, length: segmentEnd - segmentStart)
             let segment = nsText.substring(with: segmentRange)
-            guard segment.range(of: #""files""#, options: .caseInsensitive) != nil else { continue }
+            let isLastFolder = index == folderMatches.count - 1
+            let mentionsFiles = segment.range(of: #""files""#, options: .caseInsensitive) != nil
+                || segment.range(of: #""file_ids""#, options: .caseInsensitive) != nil
+            guard mentionsFiles || isLastFolder else { continue }
 
-            let parsedEntries = parseFiles(from: segment, filesByName: filesByName)
-            guard !parsedEntries.isEmpty else { continue }
+            let parsedEntries = mentionsFiles
+                ? parseFiles(from: segment, filesByName: filesByName, fileIDTable: fileIDTable)
+                : []
+            guard !parsedEntries.isEmpty else {
+                if isLastFolder {
+                    pendingFolderName = folderName
+                }
+                continue
+            }
 
             if suggestionsByFolder[folderName] == nil {
                 orderedFolderNames.append(folderName)
@@ -823,22 +857,37 @@ private enum OrganizingStreamSuggestions {
             suggestionsByFolder[folderName] = suggestion
         }
 
-        return Array(orderedFolderNames
+        var results = orderedFolderNames
             .compactMap { suggestionsByFolder[$0] }
             .filter { !$0.files.isEmpty }
-            .suffix(maxVisibleFolders))
+        if let pendingFolderName,
+           !results.contains(where: { $0.folderName == pendingFolderName }) {
+            results.append(FolderSuggestion(folderName: pendingFolderName))
+        }
+        return Array(results.suffix(maxVisibleFolders))
     }
 
     private static func parseFiles(
         from segment: String,
-        filesByName: [String: FileItem]
+        filesByName: [String: FileItem],
+        fileIDTable: [Int: FileItem]
     ) -> [(file: FileItem, suggestedName: String?)] {
-        let segmentText = segment as NSString
-        let matches = fileObjectMatches(in: segment, segmentText: segmentText)
-
         var parsedFiles: [(file: FileItem, suggestedName: String?)] = []
         var seenIDs: Set<UUID> = []
-        for object in matches {
+
+        // Preferred compact format: resolve "file_ids":[1,2] through the
+        // request's published ID table.
+        if !fileIDTable.isEmpty {
+            let renamesByID = renameSuggestionsByFileID(in: segment)
+            for id in fileIDValues(in: segment) {
+                guard let file = fileIDTable[id], seenIDs.insert(file.id).inserted else { continue }
+                parsedFiles.append((file: file, suggestedName: renamesByID[id]))
+            }
+        }
+
+        // Rename-capable legacy format: objects with "filename" fields.
+        let segmentText = segment as NSString
+        for object in fileObjectMatches(in: segment, segmentText: segmentText) {
             let filename = firstCapture(regex: filenameRegex, text: object)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !filename.isEmpty else { continue }
@@ -849,11 +898,93 @@ private enum OrganizingStreamSuggestions {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             parsedFiles.append((file: file, suggestedName: suggestedName.isEmpty ? nil : suggestedName))
         }
+
+        // Organize-only legacy format: "files":["name.pdf","other.png"].
+        for filename in plainFileArrayNames(in: segment) {
+            let key = normalizedFileName(filename)
+            guard let file = filesByName[key], seenIDs.insert(file.id).inserted else { continue }
+            parsedFiles.append((file: file, suggestedName: nil))
+        }
+
         return parsedFiles
     }
 
+    /// Extracts integer IDs from `"file_ids":[...]` arrays in the segment.
+    /// While the array is still streaming (no closing bracket yet), a trailing
+    /// number is dropped because more digits may follow.
+    private static func fileIDValues(in segment: String) -> [Int] {
+        guard let regex = fileIDsRegex else { return [] }
+        let nsSegment = segment as NSString
+        let matches = regex.matches(in: segment, range: NSRange(location: 0, length: nsSegment.length))
+
+        var ids: [Int] = []
+        for match in matches where match.numberOfRanges > 2 {
+            let bodyRange = match.range(at: 1)
+            guard bodyRange.location != NSNotFound else { continue }
+            let body = nsSegment.substring(with: bodyRange)
+            let isClosed = match.range(at: 2).location != NSNotFound && match.range(at: 2).length > 0
+
+            var tokens = body
+                .split(separator: ",", omittingEmptySubsequences: true)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            if !isClosed, let last = body.unicodeScalars.last, CharacterSet.decimalDigits.contains(last) {
+                tokens.removeLast()
+            }
+            ids.append(contentsOf: tokens.compactMap { Int($0) })
+        }
+        return ids
+    }
+
+    private static func renameSuggestionsByFileID(in segment: String) -> [Int: String] {
+        guard let regex = renamePairRegex else { return [:] }
+        let nsSegment = segment as NSString
+        let matches = regex.matches(in: segment, range: NSRange(location: 0, length: nsSegment.length))
+
+        var renames: [Int: String] = [:]
+        for match in matches where match.numberOfRanges > 2 {
+            let idRange = match.range(at: 1)
+            let nameRange = match.range(at: 2)
+            guard idRange.location != NSNotFound, nameRange.location != NSNotFound,
+                  let id = Int(nsSegment.substring(with: idRange)) else { continue }
+            let name = decodeJSONString(nsSegment.substring(with: nameRange))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty {
+                renames[id] = name
+            }
+        }
+        return renames
+    }
+
+    /// Filenames from legacy plain-string arrays: `"files":["a.pdf","b.png"]`.
+    /// Only complete quoted strings match, so partially streamed names are
+    /// skipped until their closing quote arrives.
+    private static func plainFileArrayNames(in segment: String) -> [String] {
+        guard let arrayRegex = plainFilesArrayRegex, let stringRegex = quotedStringRegex else { return [] }
+        let nsSegment = segment as NSString
+        let arrayMatches = arrayRegex.matches(in: segment, range: NSRange(location: 0, length: nsSegment.length))
+
+        var names: [String] = []
+        for match in arrayMatches where match.numberOfRanges > 1 {
+            let bodyRange = match.range(at: 1)
+            guard bodyRange.location != NSNotFound else { continue }
+            let body = nsSegment.substring(with: bodyRange)
+            let nsBody = body as NSString
+            let stringMatches = stringRegex.matches(in: body, range: NSRange(location: 0, length: nsBody.length))
+            for stringMatch in stringMatches where stringMatch.numberOfRanges > 1 {
+                let nameRange = stringMatch.range(at: 1)
+                guard nameRange.location != NSNotFound else { continue }
+                let name = decodeJSONString(nsBody.substring(with: nameRange))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty {
+                    names.append(name)
+                }
+            }
+        }
+        return names
+    }
+
     private static func fileObjectMatches(in segment: String, segmentText: NSString) -> [String] {
-        let objectPattern = #"\{[^{}]*"filename"\s*:\s*"((?:\\"|[^"])*)"[^{}]*\}"#
+        let objectPattern = #"\{[^{}]*"filename"\s*:\s*"((?:\\.|[^"\\])*)"[^{}]*\}"#
         if let objectRegex = try? NSRegularExpression(pattern: objectPattern, options: []) {
             let objectMatches = objectRegex.matches(
                 in: segment,
@@ -897,15 +1028,26 @@ private enum OrganizingStreamSuggestions {
 
     private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
         var lookup: [String: FileItem] = [:]
-        lookup.reserveCapacity(files.count * 3)
+        var ambiguousKeys: Set<String> = []
+        lookup.reserveCapacity(files.count)
         for file in files {
-            for key in [
+            let keys = Set([
                 normalizedFileName(file.displayName),
                 normalizedFileName(file.path),
                 normalizedFileName(file.name)
-            ] where !key.isEmpty {
-                lookup[key] = file
+            ])
+            for key in keys where !key.isEmpty {
+                if let existing = lookup[key], existing.id != file.id {
+                    // Two distinct files share a basename; drop the key rather
+                    // than animating an arbitrary one of them.
+                    ambiguousKeys.insert(key)
+                } else {
+                    lookup[key] = file
+                }
             }
+        }
+        for key in ambiguousKeys {
+            lookup.removeValue(forKey: key)
         }
         return lookup
     }

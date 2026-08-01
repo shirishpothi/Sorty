@@ -295,23 +295,12 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
     }
 
     private func streamContent(_ content: String) async {
-        let chunkSize = 20
-        var currentIndex = content.startIndex
-
-        while currentIndex < content.endIndex {
-            let nextIndex = content.index(currentIndex, offsetBy: chunkSize, limitedBy: content.endIndex) ?? content.endIndex
-            let chunk = String(content[currentIndex..<nextIndex])
-
-            await MainActor.run {
-                streamingDelegate?.didReceiveChunk(chunk)
-            }
-
-            // Minimal delay so the streaming UI can animate updates smoothly.
-            try? await Task.sleep(nanoseconds: 5_000_000)
-            currentIndex = nextIndex
-        }
-
+        // The on-device model does not stream: by the time we have `content`,
+        // generation already finished. Deliver it in one shot instead of
+        // replaying fake incremental chunks, which only delayed the plan and
+        // made the UI pretend work was still happening.
         await MainActor.run {
+            streamingDelegate?.didReceiveChunk(content)
             streamingDelegate?.didComplete(content: content)
         }
     }

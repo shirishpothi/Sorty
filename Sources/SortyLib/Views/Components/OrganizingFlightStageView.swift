@@ -205,7 +205,10 @@ struct OrganizingFlightStageView: View {
         .font(.caption.weight(.semibold))
         .lineLimit(1)
         .truncationMode(.middle)
-        .frame(maxWidth: currentCardWidth - cardSize.width - 33, alignment: .leading)
+        .frame(
+            maxWidth: currentCardWidth - cardSize.width - 33 - (prioritizesFilenames ? 0 : 23),
+            alignment: .leading
+        )
         .accessibilityHidden(true)
     }
 
@@ -221,6 +224,9 @@ struct OrganizingFlightStageView: View {
     private func destinationView(suggestion: FolderSuggestion, index: Int) -> some View {
         let isBumped = bumpedIndex == index
         let showHalo = haloIndex == index
+        // Name streamed in but no file assignments yet: the model is still
+        // generating this folder, so render it dimmed until files arrive.
+        let isPending = suggestion.files.isEmpty && suggestion.subfolders.isEmpty
 
         VStack(spacing: 4) {
             ZStack {
@@ -234,7 +240,7 @@ struct OrganizingFlightStageView: View {
 
                 AppKitImageView(image: FolderDropBucket.folderIcon, size: bucketSize)
                     .frame(width: bucketSize.width, height: bucketSize.height)
-                    .scaleEffect(isBumped ? 1.07 : 1.0)
+                    .scaleEffect(isBumped ? 1.07 : (isPending ? 0.94 : 1.0))
                     .shadow(color: Color.black.opacity(isBumped ? 0.18 : 0.10),
                             radius: isBumped ? 8 : 4, x: 0, y: 3)
             }
@@ -244,9 +250,17 @@ struct OrganizingFlightStageView: View {
 
             GeneratingFolderNameLabel(
                 name: suggestion.folderName,
-                maxWidth: bucketSize.width + 24
+                maxWidth: folderLabelMaxWidth
             )
         }
+        .opacity(isPending ? 0.55 : 1)
+        .animation(.easeOut(duration: 0.3), value: isPending)
+    }
+
+    /// Full column width for the folder label instead of the icon width, so
+    /// longer folder names aren't needlessly middle-truncated.
+    private var folderLabelMaxWidth: CGFloat {
+        max(bucketSize.width + 24, stageWidth / CGFloat(max(1, bucketCount)) - 10)
     }
 
     // MARK: - Geometry
@@ -277,6 +291,7 @@ struct OrganizingFlightStageView: View {
                     try? await Task.sleep(nanoseconds: 180_000_000)
                     continue
                 }
+                let pace = flightPace()
                 currentFileIcon = iconForPath(flight.file.path)
                 currentFileName = flight.file.displayName
                 currentRenamedFileName = flight.renameMapping?.suggestedName
@@ -286,10 +301,32 @@ struct OrganizingFlightStageView: View {
                 )
                 renameStrikeProgress = 0
                 renameProgress = 0
-                await runFlight(toIndex: flight.folderIndex)
-                try? await Task.sleep(nanoseconds: 140_000_000)
+                await runFlight(toIndex: flight.folderIndex, pace: pace)
+                await sleepScaled(90_000_000, pace)
             }
         }
+    }
+
+    /// How fast the current flight should run. 1.0 is the relaxed pace; the
+    /// more unshown files are queued behind the stream, the faster flights run
+    /// so the animation keeps up with reality instead of replaying history the
+    /// stream has long moved past.
+    private func flightPace() -> Double {
+        let backlog = pendingFlightCount()
+        guard backlog > 1 else { return 1.0 }
+        return max(0.35, 1.0 - 0.09 * Double(backlog - 1))
+    }
+
+    private func pendingFlightCount() -> Int {
+        visibleSuggestions.reduce(0) { count, suggestion in
+            count + filesWithRenames(in: suggestion)
+                .filter { !shownFlightFileIDs.contains($0.file.id) }
+                .count
+        }
+    }
+
+    private func sleepScaled(_ nanoseconds: UInt64, _ pace: Double) async {
+        try? await Task.sleep(nanoseconds: UInt64(Double(nanoseconds) * pace))
     }
 
     private func stopCycle() {
@@ -307,7 +344,7 @@ struct OrganizingFlightStageView: View {
         renameProgress = 0
     }
 
-    private func runFlight(toIndex index: Int) async {
+    private func runFlight(toIndex index: Int, pace: Double = 1.0) async {
         let destX = centerOffset(for: index)
         let landingY = folderTopOffset() - 8
         let direction = max(-1, min(1, destX / max(1, stageWidth / 2)))
@@ -322,51 +359,51 @@ struct OrganizingFlightStageView: View {
         cardOpacity = 0
         haloIndex = nil
 
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+        withAnimation(.spring(response: 0.24 * pace, dampingFraction: 0.72)) {
             cardOpacity = 1
             cardScale = 1.075
             cardLift = 1.35
             cardRotation = Double(direction) * -3.2
         }
-        try? await Task.sleep(nanoseconds: 210_000_000)
+        await sleepScaled(170_000_000, pace)
         if Task.isCancelled { return }
 
         // Phase 2: carry the lifted file toward its folder along a visible arc.
 
         if currentRenamedFileName != nil {
-            withAnimation(.easeInOut(duration: 0.16)) {
+            withAnimation(.easeInOut(duration: 0.14 * pace)) {
                 renameStrikeProgress = 1
             }
-            try? await Task.sleep(nanoseconds: 120_000_000)
+            await sleepScaled(100_000_000, pace)
             if Task.isCancelled { return }
 
-            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.26)) {
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.24 * pace)) {
                 renameProgress = 1
             }
             HapticFeedbackManager.shared.selection()
-            try? await Task.sleep(nanoseconds: 160_000_000)
+            await sleepScaled(130_000_000, pace)
             if Task.isCancelled { return }
         }
 
-        try? await Task.sleep(nanoseconds: 40_000_000)
+        await sleepScaled(30_000_000, pace)
         if Task.isCancelled { return }
 
         // Show the receive halo just before the file lands.
-        withAnimation(.easeIn(duration: 0.32).delay(0.18)) {
+        withAnimation(.easeIn(duration: 0.28 * pace).delay(0.14 * pace)) {
             haloIndex = index
         }
 
         flightDestination = CGSize(width: destX, height: landingY)
-        withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.74)) {
+        withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.58 * pace)) {
             flightProgress = 1
             cardScale = 1
             cardRotation = Double(direction) * 4.8
         }
-        try? await Task.sleep(nanoseconds: 680_000_000)
+        await sleepScaled(540_000_000, pace)
         if Task.isCancelled { return }
 
         // Phase 3: the file tucks into the folder, the folder bumps.
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+        withAnimation(.spring(response: 0.24 * pace, dampingFraction: 0.78)) {
             tuckOffset = CGSize(width: 0, height: 20)
             cardScale = 0.28
             cardOpacity = 0
@@ -377,9 +414,9 @@ struct OrganizingFlightStageView: View {
         bumpTrigger &+= 1
         HapticFeedbackManager.shared.selection()
 
-        try? await Task.sleep(nanoseconds: 220_000_000)
+        await sleepScaled(180_000_000, pace)
         if Task.isCancelled { return }
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.22 * pace)) {
             haloIndex = nil
         }
         bumpedIndex = nil
@@ -389,9 +426,22 @@ struct OrganizingFlightStageView: View {
 
     private func mergeDisplayedSuggestions(animated: Bool = true) {
         let incoming = Array(suggestions.prefix(maxBuckets))
-        guard !incoming.isEmpty else { return }
+        guard !incoming.isEmpty else {
+            // The stream was cleared (new run or next request batch): start the
+            // next session fresh instead of keeping stale folders and blocking
+            // the new plan's files from flying.
+            if !displayedSuggestions.isEmpty {
+                displayedSuggestions = []
+                shownFlightFileIDs = []
+            }
+            return
+        }
 
-        var merged = displayedSuggestions
+        // Mirror the parser's rolling window: update retained folders, evict
+        // ones that fell out of the window, and append newcomers. Without
+        // eviction the stage freezes once `maxBuckets` folders have appeared.
+        let incomingNames = Set(incoming.map(\.folderName))
+        var merged = displayedSuggestions.filter { incomingNames.contains($0.folderName) }
         var didInsert = false
         for suggestion in incoming {
             if let index = merged.firstIndex(where: { $0.folderName == suggestion.folderName }) {
@@ -455,10 +505,13 @@ struct OrganizingFlightStageView: View {
     }
 
     private func cardWidth(originalName: String, suggestedName: String?) -> CGFloat {
-        guard prioritizesFilenames else { return 188 }
+        // Size the card to the actual name in both modes; a fixed width cut
+        // off ordinary filenames. The non-rename card also shows the
+        // arrow.down.right glyph, so reserve room for it.
         let longestName = [originalName, suggestedName ?? ""]
             .max(by: { measuredWidth(of: $0) < measuredWidth(of: $1) }) ?? originalName
-        return min(300, max(116, measuredWidth(of: longestName) + cardSize.width + 33))
+        let arrowAllowance: CGFloat = prioritizesFilenames ? 0 : 23
+        return min(320, max(116, measuredWidth(of: longestName) + cardSize.width + 33 + arrowAllowance))
     }
 }
 

@@ -464,6 +464,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var streamingContent: String = ""
     @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
     @Published public var truncatedDisplayStreamingContent: String = "" // UI-ready preview text (pre-computed off render path)
+    /// ID -> file mapping for the AI request currently streaming. Compact prompts
+    /// number files per request batch (1-based), so live-stream consumers must
+    /// resolve `file_ids` through this table rather than indexing `scannedFiles`.
+    @Published public private(set) var streamFileIDTable: [Int: FileItem] = [:]
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
     @Published public var liveInsightsEnabled: Bool = true
@@ -1424,6 +1428,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     ) async throws {
         withBatchUpdates {
             clearStreamingDisplayState()
+            streamFileIDTable = [:]
             isStreaming = false
             showTimeoutMessage = false
             currentInsight = ""
@@ -2173,6 +2178,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double?
     ) async throws -> [OrganizationPlan] {
         try checkCancellation()
+
+        // Compact prompts number this request's files 1-based; publish the same
+        // mapping so the live-stream UI can resolve `file_ids` while streaming.
+        streamFileIDTable = Dictionary(
+            uniqueKeysWithValues: files.enumerated().map { ($0.offset + 1, $0.element) }
+        )
 
         let fileNames = Set(files.map(\.displayName))
         let batchImages = imagePayload.filter { fileNames.contains($0.key) }
