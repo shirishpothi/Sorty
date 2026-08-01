@@ -220,14 +220,15 @@ public struct ThinkingOrbLoaderView: View {
 
 /// Text sweep in the style of markiv/SwiftUI-Shimmer's mask mode: the glyphs
 /// themselves are masked by a moving diagonal gradient, so the text dims to
-/// 30% and a full-brightness band sweeps through the letterforms.
+/// 30% and a full-brightness band sweeps through the letterforms. Its phase
+/// comes from a shared clock so inserting the label never restarts the sweep.
 public struct TextSweepModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isInitialState = true
 
     /// How far the gradient endpoints extend past the view (unit points).
     private let bandSize: CGFloat = 0.3
-    private let animation = Animation.linear(duration: 2.0).delay(0.35).repeatForever(autoreverses: false)
+    private let sweepDuration: TimeInterval = 2.0
+    private let sweepDelay: TimeInterval = 0.35
     private let gradient = Gradient(colors: [
         .black.opacity(0.3),
         .black,
@@ -240,21 +241,26 @@ public struct TextSweepModifier: ViewModifier {
         } else {
             content
                 .mask(
-                    LinearGradient(
-                        gradient: gradient,
-                        startPoint: isInitialState
-                            ? UnitPoint(x: -bandSize, y: -bandSize)
-                            : UnitPoint(x: 1, y: 1),
-                        endPoint: isInitialState
-                            ? UnitPoint(x: 0, y: 0)
-                            : UnitPoint(x: 1 + bandSize, y: 1 + bandSize)
-                    )
+                    SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        let cycleDuration = sweepDuration + sweepDelay
+                        let cycleTime = timeline.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: cycleDuration)
+                        let progress = min(1, max(0, (cycleTime - sweepDelay) / sweepDuration))
+                        let position = CGFloat(progress)
+
+                        LinearGradient(
+                            gradient: gradient,
+                            startPoint: UnitPoint(
+                                x: -bandSize + ((1 + bandSize) * position),
+                                y: -bandSize + ((1 + bandSize) * position)
+                            ),
+                            endPoint: UnitPoint(
+                                x: (1 + bandSize) * position,
+                                y: (1 + bandSize) * position
+                            )
+                        )
+                    }
                 )
-                .animation(animation, value: isInitialState)
-                .onAppear {
-                    // Defer past initial layout so appearance itself doesn't animate.
-                    DispatchQueue.main.async { isInitialState = false }
-                }
         }
     }
 }
