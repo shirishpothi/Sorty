@@ -949,7 +949,6 @@ struct WatchedFolderConfigView: View {
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
     @State private var selectedMode: OrganizationMode
-    @State private var triggerDelay: Double
     @State private var selectedApplyPolicy: WatchedFolderApplyPolicy
     @State private var showModelPicker = false
     @State private var showFolderModelInfo = false
@@ -974,7 +973,6 @@ struct WatchedFolderConfigView: View {
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
         _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
         _selectedMode = State(initialValue: folder.effectiveOrganizationMode)
-        _triggerDelay = State(initialValue: min(max(folder.triggerDelay, 5), 10))
         _selectedApplyPolicy = State(initialValue: folder.effectiveApplyPolicy)
     }
 
@@ -1057,21 +1055,6 @@ struct WatchedFolderConfigView: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
-
-                    ConfigSection(title: "Timing", icon: "timer", color: .orange) {
-                        Stepper(value: $triggerDelay, in: 5...10, step: 1) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Wait \(Int(triggerDelay)) seconds")
-                                    .font(.subheadline)
-                                    .numericTextTransition(animationValue: Int(triggerDelay))
-                                Text("After the last file change, wait for activity to settle before checking files.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .accessibilityLabel("Trigger delay")
-                        .accessibilityValue("\(Int(triggerDelay)) seconds")
                     }
 
                     // Actions Section
@@ -1551,7 +1534,6 @@ struct WatchedFolderConfigView: View {
     private var currentFolderConfiguration: WatchedFolder {
         var updated = folder
         updated.organizationMode = selectedMode
-        updated.triggerDelay = triggerDelay
         updated.applyPolicy = selectedApplyPolicy
         updated.customPrompt =
             customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
