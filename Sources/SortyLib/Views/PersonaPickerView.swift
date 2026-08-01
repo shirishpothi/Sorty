@@ -32,16 +32,6 @@ struct PersonaPickerView: View {
                 Text("Default Organization Persona")
                     .font(.caption)
                     .foregroundColor(.secondary)
-
-                Spacer()
-
-                Button(action: {
-                    appState.personaGeneratorPresentationContext = .settings
-                }) {
-                    Label("Generate", systemImage: "sparkles")
-                        .font(.caption)
-                }
-                .buttonStyle(.borderless)
             }
 
             LazyVGrid(columns: personaGridColumns, spacing: 8) {
@@ -73,9 +63,21 @@ struct PersonaPickerView: View {
             if !customStore.customPersonas.isEmpty {
                 Divider()
 
-                Text("Custom Personas")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Custom Personas")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Button(action: {
+                        appState.personaGeneratorPresentationContext = .settings
+                    }) {
+                        Label("Generate Custom Persona", systemImage: "sparkles")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
 
                 LazyVGrid(columns: personaGridColumns, spacing: 8) {
                     ForEach(customStore.customPersonas) { custom in
