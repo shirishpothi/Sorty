@@ -2203,7 +2203,7 @@ private struct InsightHistorySection: View {
             Text(loaderLabel)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.85))
-                .textShimmer(isLoading: true, phaseOffset: 0.18, intensity: 1.0)
+                .loaderTextSweep()
 
             Spacer()
         }
@@ -2541,6 +2541,54 @@ private struct InsightHistorySection: View {
                 ? "AI response preview hidden in Privacy Mode" : "AI response preview")
     }
 
+}
+
+/// Adds a moving highlight without changing the base text's rendering.
+private struct LoaderTextSweepModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private let bandWidthRatio: CGFloat = 0.62
+    private let shimmerAngle = Angle(degrees: 8)
+    private let shimmerSpeed = 0.42
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            content.overlay {
+                GeometryReader { geometry in
+                    let width = max(geometry.size.width, 1)
+                    let height = max(geometry.size.height, 1)
+                    let bandWidth = width * bandWidthRatio
+                    let travelDistance = width + (bandWidth * 2.5)
+
+                    SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        let elapsed = (timeline.date.timeIntervalSinceReferenceDate + 0.18) * shimmerSpeed
+                        let progress = elapsed - floor(elapsed)
+                        let easedProgress = progress * progress * (3 - (2 * progress))
+                        let offsetX = (easedProgress * travelDistance) - (bandWidth * 1.2)
+
+                        LinearGradient(
+                            colors: [.clear, .white.opacity(0.5), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: bandWidth, height: height * 2.2)
+                        .rotationEffect(shimmerAngle)
+                        .offset(x: offsetX)
+                        .blendMode(.plusLighter)
+                    }
+                }
+                .mask(content)
+            }
+        }
+    }
+}
+
+private extension View {
+    func loaderTextSweep() -> some View {
+        modifier(LoaderTextSweepModifier())
+    }
 }
 
 // MARK: - Animated Progress Ring
