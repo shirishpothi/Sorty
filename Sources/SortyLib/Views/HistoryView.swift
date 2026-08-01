@@ -242,7 +242,6 @@ struct HistoryView: View {
                 ZStack(alignment: .topLeading) {
                     HistoryEmptyStateView()
                         .transition(TransitionStyles.scaleAndFade)
-                        .animatedAppearance(delay: 0.08)
 
                     HistoryHeader(
                         totalSessions: impactSummary.totalSessions,
@@ -252,7 +251,6 @@ struct HistoryView: View {
                             appState.clearHistoryWithConfirmation()
                         }
                     )
-                    .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -265,7 +263,6 @@ struct HistoryView: View {
                         appState.clearHistoryWithConfirmation()
                     }
                 )
-                .animatedAppearance(delay: 0.03)
 
                 Divider()
 
@@ -277,7 +274,6 @@ struct HistoryView: View {
                         historyEntriesScroll
                             .background(Color(NSColor.windowBackgroundColor))
                             .transition(TransitionStyles.slideFromRight)
-                            .animatedAppearance(delay: 0.08)
                     }
                 }
             }
@@ -1019,13 +1015,11 @@ private struct HistorySessionCardHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            FolderThumbnailView(
-                url: URL(fileURLWithPath: entry.directoryPath),
-                size: CGSize(width: 32, height: 32),
-                defersLoadingUntilFirstFrame: true
-            )
-            .frame(width: 32)
-            .accessibilityHidden(true)
+            Image(systemName: "folder.fill")
+                .font(.system(size: 25, weight: .medium))
+                .foregroundStyle(.blue.gradient)
+                .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(entry.folderName)
