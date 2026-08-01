@@ -117,10 +117,11 @@ public struct ComposingOrbView: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
+            // The composing sash is wider than tall, so fit to the frame's width
+            // and let the wave breathe vertically within the given height.
             ThinkingOrb(state: .composing, isDark: colorScheme == .dark, reduceMotion: reduceMotion)
                 .frame(width: Self.nativeSide, height: Self.nativeSide)
-                .scaleEffect(side / Self.nativeSide)
+                .scaleEffect(proxy.size.width / Self.nativeSide)
                 .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
         }
     }
