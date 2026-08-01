@@ -427,7 +427,7 @@ struct TextShimmerModifier: ViewModifier {
     private let shimmerSpeed: Double = 0.42
 
     private var clampedIntensity: Double {
-        min(max(intensity, 0.5), 1.5)
+        min(max(intensity, 0.5), 1.7)
     }
 
     func body(content: Content) -> some View {
@@ -460,17 +460,17 @@ struct TextShimmerModifier: ViewModifier {
                                 let easedProgress = progress * progress * (3 - (2 * progress))
                                 let offsetX = (easedProgress * travelDistance) - (bandWidth * 1.2)
 
-                                let accentGlow = (colorScheme == .dark ? 0.24 : 0.18) * clampedIntensity
-                                let whiteGlow = (colorScheme == .dark ? 0.48 : 0.34) * clampedIntensity
+                                let accentGlow = (colorScheme == .dark ? 0.38 : 0.28) * clampedIntensity
+                                let whiteGlow = (colorScheme == .dark ? 0.72 : 0.52) * clampedIntensity
 
                                 LinearGradient(
                                     stops: [
                                         .init(color: .clear, location: 0),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45), location: 0.2),
-                                        .init(color: .white.opacity(whiteGlow * 0.56), location: 0.39),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.55), location: 0.2),
+                                        .init(color: .white.opacity(whiteGlow * 0.64), location: 0.39),
                                         .init(color: .white.opacity(whiteGlow), location: 0.5),
-                                        .init(color: .white.opacity(whiteGlow * 0.56), location: 0.61),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45), location: 0.8),
+                                        .init(color: .white.opacity(whiteGlow * 0.64), location: 0.61),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.55), location: 0.8),
                                         .init(color: .clear, location: 1)
                                     ],
                                     startPoint: .leading,
@@ -479,7 +479,7 @@ struct TextShimmerModifier: ViewModifier {
                                 .frame(width: bandWidth, height: height * 2.2)
                                 .rotationEffect(shimmerAngle)
                                 .offset(x: offsetX)
-                                .blendMode(.screen)
+                                .blendMode(.plusLighter)
                             }
                         }
                     }

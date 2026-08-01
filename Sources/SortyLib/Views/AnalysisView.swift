@@ -2027,7 +2027,7 @@ private struct InsightHistorySection: View {
             Text("Receiving AI response...")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .textShimmer(isLoading: true, phaseOffset: 0.2, intensity: 1.15)
+                .textShimmer(isLoading: true, phaseOffset: 0.2, intensity: 1.35)
 
             Spacer()
         }
