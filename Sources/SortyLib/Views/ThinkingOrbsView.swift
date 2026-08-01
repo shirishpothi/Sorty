@@ -218,55 +218,6 @@ public struct ThinkingOrbLoaderView: View {
     }
 }
 
-/// Text sweep in the style of markiv/SwiftUI-Shimmer's mask mode: the glyphs
-/// themselves are masked by a moving diagonal gradient. The base stays legible
-/// so the label reads as steady text with a highlight passing through it,
-/// rather than re-appearing letter by letter on every pass.
-public struct TextSweepModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isInitialState = true
-
-    /// How far the gradient endpoints extend past the view (unit points).
-    private let bandSize: CGFloat = 0.3
-    private let animation = Animation.linear(duration: 2.0).delay(0.35).repeatForever(autoreverses: false)
-    private let gradient = Gradient(colors: [
-        .black.opacity(0.75),
-        .black,
-        .black.opacity(0.75),
-    ])
-
-    public func body(content: Content) -> some View {
-        if reduceMotion {
-            content
-        } else {
-            content
-                .mask(
-                    LinearGradient(
-                        gradient: gradient,
-                        startPoint: isInitialState
-                            ? UnitPoint(x: -bandSize, y: -bandSize)
-                            : UnitPoint(x: 1, y: 1),
-                        endPoint: isInitialState
-                            ? UnitPoint(x: 0, y: 0)
-                            : UnitPoint(x: 1 + bandSize, y: 1 + bandSize)
-                    )
-                )
-                .animation(animation, value: isInitialState)
-                .onAppear {
-                    // Defer past initial layout so appearance itself doesn't animate.
-                    DispatchQueue.main.async { isInitialState = false }
-                }
-        }
-    }
-}
-
-extension View {
-    /// Applies a smooth brightness sweep through the text glyphs.
-    public func textSweep() -> some View {
-        modifier(TextSweepModifier())
-    }
-}
-
 private struct ThinkingOrb: View {
     let state: ThinkingOrbState
     let isDark: Bool

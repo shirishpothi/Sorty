@@ -2203,7 +2203,7 @@ private struct InsightHistorySection: View {
             Text(loaderLabel)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.85))
-                .textSweep()
+                .textShimmer(isLoading: true, phaseOffset: 0.18, intensity: 1.0)
 
             Spacer()
         }
