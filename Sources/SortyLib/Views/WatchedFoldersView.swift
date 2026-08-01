@@ -1269,8 +1269,7 @@ struct WatchedFolderConfigView: View {
                 .padding(20)
             }
         }
-        .frame(minWidth: 520, idealWidth: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 560, height: 680)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             primeModelSelectionFromGlobalDefaultsIfNeeded()
