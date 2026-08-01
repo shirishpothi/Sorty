@@ -539,7 +539,7 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions[0].files.count, 2)
     }
 
-    func testUnassignedFilesFallBackToUnorganized() throws {
+    func testResponseWithoutUsableAssignmentsThrows() {
         let json = """
         {
           "folders": [
@@ -556,11 +556,11 @@ class ResponseParserTests: XCTestCase {
             FileItem(path: "/path/image.jpg", name: "image", extension: "jpg", size: 200, isDirectory: false)
         ]
 
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
-        XCTAssertEqual(plan.suggestions.count, 1)
-        XCTAssertEqual(plan.suggestions[0].files.count, 0)
-        XCTAssertEqual(plan.unorganizedFiles.count, 2)
-        XCTAssertEqual(plan.totalFiles, 2)
+        XCTAssertThrowsError(try ResponseParser.parseResponse(json, originalFiles: files)) { error in
+            guard case ParserError.missingRequiredFields = error else {
+                return XCTFail("Expected missingRequiredFields, got \(error)")
+            }
+        }
     }
 
     func testPathBasedFilenameIsMatchedToOriginalFile() throws {
@@ -586,7 +586,7 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.unorganizedFiles.count, 0)
     }
 
-    func testInvalidCompactFileIDsFallBackToUnorganized() throws {
+    func testInvalidCompactFileIDsThrow() {
         let json = """
         {
           "folder_assignments": [
@@ -603,11 +603,46 @@ class ResponseParserTests: XCTestCase {
             FileItem(path: "/path/photo.jpg", name: "photo", extension: "jpg", size: 200, isDirectory: false)
         ]
 
+        XCTAssertThrowsError(try ResponseParser.parseResponse(json, originalFiles: files)) { error in
+            guard case ParserError.missingRequiredFields = error else {
+                return XCTFail("Expected missingRequiredFields, got \(error)")
+            }
+        }
+    }
+
+    func testDualSchemasPreferAssignmentsThatMapFiles() throws {
+        let json = """
+        {
+          "folder_assignments": [
+            {
+              "name": "2025",
+              "files": ["bridge.jpg", "tulip.jpg"]
+            }
+          ],
+          "folders": [
+            {
+              "name": "Landscapes & Nature",
+              "files": []
+            },
+            {
+              "name": "Bridges & Architecture",
+              "files": []
+            }
+          ],
+          "unorganized": []
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/bridge.jpg", name: "bridge", extension: "jpg", size: 100, isDirectory: false),
+            FileItem(path: "/path/tulip.jpg", name: "tulip", extension: "jpg", size: 200, isDirectory: false)
+        ]
+
         let plan = try ResponseParser.parseResponse(json, originalFiles: files)
-        XCTAssertEqual(plan.suggestions.count, 1)
-        XCTAssertEqual(plan.suggestions[0].files.count, 0)
-        XCTAssertEqual(plan.unorganizedFiles.count, 2)
-        XCTAssertEqual(plan.totalFiles, 2)
+
+        XCTAssertEqual(plan.suggestions.map(\.folderName), ["2025"])
+        XCTAssertEqual(plan.suggestions.first?.files, files)
+        XCTAssertTrue(plan.unorganizedFiles.isEmpty)
     }
 
     func testProgressCueAndJSONOnSameLineParses() throws {

@@ -445,24 +445,39 @@ struct ResponseParser {
         }
 
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
-        let folderPayload = response.folders.isEmpty ? (response.folderAssignments ?? []) : response.folders
+
+        func suggestions(from payload: [FolderResponse]) -> [FolderSuggestion] {
+            payload.map { folder in
+                convertFolderResponse(
+                    folder,
+                    fileLookup: fileLookup,
+                    fileIdIndex: fileIdIndex,
+                    mode: mode
+                )
+            }
+        }
+
+        let folderSuggestions = suggestions(from: response.folders)
+        let assignmentSuggestions = suggestions(from: response.folderAssignments ?? [])
+        let folderAssignmentCount = collectAssignedFileIDs(from: folderSuggestions).count
+        let compactAssignmentCount = collectAssignedFileIDs(from: assignmentSuggestions).count
+
+        // Some models emit both schemas in one response. Prefer the schema that
+        // actually maps more input files instead of blindly choosing `folders`.
+        let parsedSuggestions: [FolderSuggestion]
+        if folderSuggestions.isEmpty || compactAssignmentCount > folderAssignmentCount {
+            parsedSuggestions = assignmentSuggestions
+        } else {
+            parsedSuggestions = folderSuggestions
+        }
 
         let hasExplicitUnorganizedFiles = !(response.unorganized ?? []).isEmpty ||
             !(response.unorganizedIDs ?? []).isEmpty
-        guard !folderPayload.isEmpty || hasExplicitUnorganizedFiles else {
+        guard !parsedSuggestions.isEmpty || hasExplicitUnorganizedFiles else {
             throw ParserError.missingRequiredFields
         }
 
-        // Convert response to OrganizationPlan
-        let suggestions = folderPayload.map { folder in
-            convertFolderResponse(
-                folder,
-                fileLookup: fileLookup,
-                fileIdIndex: fileIdIndex,
-                mode: mode
-            )
-        }
-        let assignedFileIDs = collectAssignedFileIDs(from: suggestions)
+        let assignedFileIDs = collectAssignedFileIDs(from: parsedSuggestions)
 
         var unorganizedDetails = (response.unorganized ?? []).map { unorg in
             UnorganizedFile(filename: unorg.filename, reason: unorg.reason)
@@ -490,6 +505,13 @@ struct ResponseParser {
             unorganizedFiles.append(file)
         }
 
+        // A response containing named folders but no usable assignments is not
+        // an organization plan. Let the caller retry or use partial extraction
+        // instead of presenting every input as accidentally unorganized.
+        if !originalFiles.isEmpty, assignedFileIDs.isEmpty, seenUnorganizedIDs.isEmpty {
+            throw ParserError.missingRequiredFields
+        }
+
         // Defensive fallback: if the model omitted/garbled mappings, keep unmatched files visible.
         for file in originalFiles where !assignedFileIDs.contains(file.id) {
             guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
@@ -503,7 +525,7 @@ struct ResponseParser {
         }
 
         return OrganizationPlan(
-            suggestions: suggestions,
+            suggestions: parsedSuggestions,
             unorganizedFiles: unorganizedFiles,
             unorganizedDetails: unorganizedDetails,
             notes: response.notes ?? "",
