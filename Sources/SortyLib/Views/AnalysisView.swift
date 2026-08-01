@@ -1829,9 +1829,10 @@ private struct InsightHistorySection: View {
             } label: {
                 HStack(spacing: 8) {
                     if isStreaming {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "waveform")
                             .font(.callout)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .symbolEffect(.breathe, options: .repeating)
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.callout)
@@ -1846,13 +1847,6 @@ private struct InsightHistorySection: View {
                             animationValue: headerTitle,
                             animation: .easeInOut(duration: 0.28)
                         )
-
-                    if isStreaming {
-                        Image(systemName: "waveform")
-                            .font(.caption)
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .symbolEffect(.breathe, options: .repeating)
-                    }
 
                     Spacer()
 
