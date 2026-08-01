@@ -422,12 +422,12 @@ struct TextShimmerModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    private let bandWidthRatio: CGFloat = 0.46
-    private let shimmerAngle = Angle(degrees: 10)
-    private let shimmerSpeed: Double = 0.72
+    private let bandWidthRatio: CGFloat = 0.62
+    private let shimmerAngle = Angle(degrees: 8)
+    private let shimmerSpeed: Double = 0.42
 
     private var clampedIntensity: Double {
-        min(max(intensity, 0.5), 2.0)
+        min(max(intensity, 0.5), 1.5)
     }
 
     func body(content: Content) -> some View {
@@ -438,7 +438,7 @@ struct TextShimmerModifier: ViewModifier {
                         let width = max(geometry.size.width, 1)
                         let height = max(geometry.size.height, 1)
                         let bandWidth = width * bandWidthRatio
-                        let travelDistance = width + (bandWidth * 2.8)
+                        let travelDistance = width + (bandWidth * 2.5)
 
                         if reduceMotion {
                             LinearGradient(
@@ -459,51 +459,27 @@ struct TextShimmerModifier: ViewModifier {
                                 let progress = elapsed - floor(elapsed)
                                 let easedProgress = progress * progress * (3 - (2 * progress))
                                 let offsetX = (easedProgress * travelDistance) - (bandWidth * 1.2)
-                                let pulse = (sin(elapsed * 1.3) + 1) * 0.5
 
-                                let accentBase = (colorScheme == .dark ? 0.14 : 0.10) * clampedIntensity
-                                let accentRange = (colorScheme == .dark ? 0.14 : 0.12) * clampedIntensity
-                                let whiteBase = (colorScheme == .dark ? 0.24 : 0.17) * clampedIntensity
-                                let whiteRange = (colorScheme == .dark ? 0.22 : 0.16) * clampedIntensity
+                                let accentGlow = (colorScheme == .dark ? 0.24 : 0.18) * clampedIntensity
+                                let whiteGlow = (colorScheme == .dark ? 0.48 : 0.34) * clampedIntensity
 
-                                let accentGlow = min(accentBase + (pulse * accentRange), 0.68)
-                                let whiteGlow = min(whiteBase + (pulse * whiteRange), 0.9)
-
-                                ZStack(alignment: .leading) {
-                                    LinearGradient(
-                                        colors: [
-                                            .clear,
-                                            SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45),
-                                            .white.opacity(whiteGlow * 0.78),
-                                            .white.opacity(whiteGlow),
-                                            .white.opacity(whiteGlow * 0.72),
-                                            SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.6),
-                                            .clear
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                    .frame(width: bandWidth, height: height * 2.2)
-                                    .rotationEffect(shimmerAngle)
-                                    .offset(x: offsetX)
-                                    .blendMode(.plusLighter)
-
-                                    LinearGradient(
-                                        colors: [
-                                            .clear,
-                                            .white.opacity(min(whiteGlow * 1.15, 1)),
-                                            .white.opacity(min(whiteGlow * 0.82, 1)),
-                                            .clear
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                    .frame(width: bandWidth * 0.58, height: height * 2.2)
-                                    .rotationEffect(shimmerAngle)
-                                    .offset(x: offsetX - (bandWidth * 0.12))
-                                    .blur(radius: 1.1)
-                                    .blendMode(.plusLighter)
-                                }
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .clear, location: 0),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45), location: 0.2),
+                                        .init(color: .white.opacity(whiteGlow * 0.56), location: 0.39),
+                                        .init(color: .white.opacity(whiteGlow), location: 0.5),
+                                        .init(color: .white.opacity(whiteGlow * 0.56), location: 0.61),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45), location: 0.8),
+                                        .init(color: .clear, location: 1)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .frame(width: bandWidth, height: height * 2.2)
+                                .rotationEffect(shimmerAngle)
+                                .offset(x: offsetX)
+                                .blendMode(.screen)
                             }
                         }
                     }

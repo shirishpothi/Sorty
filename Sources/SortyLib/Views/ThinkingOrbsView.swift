@@ -137,28 +137,28 @@ public struct ThinkingOrbLoaderView: View {
         // Interpolate between the upstream 20px and 64px preset constants
         // so density and dot size track the rendered size like the original.
         let f = min(1, max(0, (s - 20) / 44))
-        let speed: CGFloat = 2.665 + f * (2.015 - 2.665)
         let latRings = Int((6 + f * (11 - 6)).rounded())
         let lonDensity: CGFloat = 14 + f * (29 - 14)
         let rBase: CGFloat = 1.05 + f * (0.69 - 1.05)
         let rDepth: CGFloat = 2.975 + f * (1.955 - 2.975)
-        let scanMul: CGFloat = 4.335 + f * (4.08 - 4.335)
         let dimBase: CGFloat = 0.45
         let inkFar: CGFloat = 0.62
         let inkSpan: CGFloat = 0.54
         let rMin: CGFloat = 0.3
 
-        let t = CGFloat(rawTime) * speed
-        let spin: CGFloat = 0.5
+        // The upstream avatar preset uses a deliberately energetic scan. This
+        // response pill stays visible for longer, so give the globe a calm
+        // rotation and let the scan take a little over four seconds to cross.
+        let rotationTime = CGFloat(rawTime) * (0.62 + f * 0.08)
+        let scanTime = CGFloat(rawTime) * (1.35 + f * 0.10)
         let cx = size.width / 2
         let cy = size.height / 2
         let radius = (s / 2) * 0.82
-        let tilt = 0.4 + 0.06 * sin(t * 0.35)
-        let scan = t * (spin + (1.7 - spin) * scanMul)
+        let tilt = 0.4 + 0.06 * sin(rotationTime * 0.35)
         let rs = pow(s / 300, 0.6)
 
         let st = sin(tilt), ct = cos(tilt)
-        let sy = sin(t * spin), cyw = cos(t * spin)
+        let sy = sin(rotationTime), cyw = cos(rotationTime)
 
         struct Dot {
             let x, y, z, r: CGFloat
@@ -187,7 +187,7 @@ public struct ThinkingOrbLoaderView: View {
 
                 // Scan meridian: Gaussian in shortest angular distance,
                 // limited to the front hemisphere.
-                let a = lon + t * spin - scan
+                let a = lon + rotationTime - scanTime
                 let d = atan2(sin(a), cos(a))
                 let boost = exp(-(d * d) / 0.18) * max(0, z2)
 
