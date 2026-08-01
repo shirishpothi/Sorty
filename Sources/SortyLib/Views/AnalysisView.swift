@@ -2025,9 +2025,9 @@ private struct InsightHistorySection: View {
                 .frame(width: 36, height: 36)
 
             Text("Receiving AI response...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textShimmer(isLoading: true, phaseOffset: 0.2, intensity: 1.35)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.85))
+                .textSweep()
 
             Spacer()
         }
