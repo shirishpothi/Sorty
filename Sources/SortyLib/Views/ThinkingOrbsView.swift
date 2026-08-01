@@ -103,10 +103,10 @@ public struct ThinkingOrbsView: View {
     }
 }
 
-/// A paced adaptation of Jakub Antalik's dotted-globe orb (`drawGlobe`, the
-/// "searching" state). The loading presentation uses a calmer rotation and
-/// scan than the upstream avatar preset, so it reads as an ambient response
-/// state instead of competing with the status copy.
+/// Faithful port of the dotted-globe orb from Jakub Antalik's thinking-orbs
+/// (`drawGlobe`, the "searching" state): a tilted, spinning sphere of dots with
+/// a Gaussian scan meridian sweeping the front hemisphere. Renders at actual
+/// size with the upstream sub-linear radius scaling, so it stays crisp small.
 public struct ThinkingOrbLoaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -134,33 +134,31 @@ public struct ThinkingOrbLoaderView: View {
         let s = min(size.width, size.height)
         guard s > 0 else { return }
 
-        // The response pill renders the orb between the upstream inline and
-        // avatar presets. Bias it toward the denser preset so its silhouette
-        // stays round and continuous at this in-between size.
+        // Interpolate between the upstream 20px and 64px preset constants
+        // so density and dot size track the rendered size like the original.
         let f = min(1, max(0, (s - 20) / 44))
-        let latRings = Int((8 + f * (12 - 8)).rounded())
-        let lonDensity: CGFloat = 19 + f * (31 - 19)
-        let rBase: CGFloat = 0.82 + f * (0.62 - 0.82)
-        let rDepth: CGFloat = 2.18 + f * (1.72 - 2.18)
-        let dimBase: CGFloat = 0.40
-        let inkFar: CGFloat = 0.58
-        let inkSpan: CGFloat = 0.48
+        let speed: CGFloat = 2.665 + f * (2.015 - 2.665)
+        let latRings = Int((6 + f * (11 - 6)).rounded())
+        let lonDensity: CGFloat = 14 + f * (29 - 14)
+        let rBase: CGFloat = 1.05 + f * (0.69 - 1.05)
+        let rDepth: CGFloat = 2.975 + f * (1.955 - 2.975)
+        let scanMul: CGFloat = 4.335 + f * (4.08 - 4.335)
+        let dimBase: CGFloat = 0.45
+        let inkFar: CGFloat = 0.62
+        let inkSpan: CGFloat = 0.54
         let rMin: CGFloat = 0.3
 
-        // A full globe turn takes about nine seconds and the scan takes about
-        // six. The independent rates avoid the harsh, rapid interference
-        // pattern produced when both movements share the avatar-speed clock.
-        let rotationTime = CGFloat(rawTime) * (0.66 + f * 0.08)
-        let scanTime = CGFloat(rawTime) * (0.98 + f * 0.10)
+        let t = CGFloat(rawTime) * speed
+        let spin: CGFloat = 0.5
         let cx = size.width / 2
         let cy = size.height / 2
         let radius = (s / 2) * 0.82
-        let tilt = 0.42 + 0.035 * sin(rotationTime * 0.55)
-        let scan = scanTime
+        let tilt = 0.4 + 0.06 * sin(t * 0.35)
+        let scan = t * (spin + (1.7 - spin) * scanMul)
         let rs = pow(s / 300, 0.6)
 
         let st = sin(tilt), ct = cos(tilt)
-        let sy = sin(rotationTime), cyw = cos(rotationTime)
+        let sy = sin(t * spin), cyw = cos(t * spin)
 
         struct Dot {
             let x, y, z, r: CGFloat
@@ -189,9 +187,9 @@ public struct ThinkingOrbLoaderView: View {
 
                 // Scan meridian: Gaussian in shortest angular distance,
                 // limited to the front hemisphere.
-                let a = lon + rotationTime - scan
+                let a = lon + t * spin - scan
                 let d = atan2(sin(a), cos(a))
-                let boost = exp(-(d * d) / 0.28) * max(0, z2)
+                let boost = exp(-(d * d) / 0.18) * max(0, z2)
 
                 dots.append(
                     Dot(
