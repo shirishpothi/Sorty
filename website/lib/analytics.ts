@@ -16,15 +16,25 @@ type InteractionProperties = {
   outcome?: string
 }
 
+type ConversionProperties = {
+  location: string
+  outcome?: string
+}
+
 const POSTHOG_EVENT_ALLOWLIST = new Set([
   '$pageleave',
   '$pageview',
   '$web_vitals',
   'web:download_clicked',
+  'web:download_notice_viewed',
   'web:interaction',
   'web:not_found_viewed',
+  'web:privacy_policy_clicked',
+  'web:route_clicked',
   'web:scroll_depth_reached',
   'web:section_viewed',
+  'web:sponsor_clicked',
+  'web:terminal_command_copied',
 ])
 
 const PAGE_NAMES: Record<string, string> = {
@@ -64,12 +74,14 @@ const WEBSITE_PROPERTY_ALLOWLIST = new Set([
   'analytics_scope',
   'component',
   'depth_percent',
+  'destination_page_path',
   'distinct_id',
   'location',
   'outcome',
   'page_name',
   'page_path',
   'platform_surface',
+  'previous_page_path',
   'section',
   'target',
   'token',
@@ -81,6 +93,7 @@ const ANALYTICS_MAXIMUM_EVENTS_PER_SESSION = 2_000
 const APPROVED_POSTHOG_ORIGIN = 'https://us.i.posthog.com'
 
 let isInitialized = false
+let previousPagePath: string | undefined
 let analyticsWindowStartedAt = 0
 let analyticsWindowCount = 0
 let analyticsSessionCount = 0
@@ -326,7 +339,7 @@ export function initializeWebsiteAnalytics(): void {
     disable_session_recording: true,
     enable_heatmaps: false,
     disable_surveys: true,
-    advanced_disable_feature_flags: true,
+    advanced_disable_feature_flags: false,
     disable_external_dependency_loading: true,
     respect_dnt: true,
     request_batching: false,
@@ -340,6 +353,7 @@ export function applyWebsiteAnalyticsPreference(
   if (preference === 'denied') {
     if (isInitialized) {
       posthog.opt_out_capturing()
+      posthog.featureFlags.reset()
     }
     return
   }
@@ -377,8 +391,10 @@ export function trackPageView(pathname: string): void {
     $current_url: `${window.location.origin}${pagePath}`,
     page_name: pageName,
     page_path: pagePath,
+    previous_page_path: previousPagePath,
     traffic_source: trafficSource(),
   })
+  previousPagePath = pagePath
 
   if (pageName === 'not_found') {
     capture('web:not_found_viewed', {
@@ -439,5 +455,46 @@ export function trackDownloadClicked(location: string): void {
   capture('web:download_clicked', {
     location: safePropertyValue(location),
     target: 'sorty_zip',
+  })
+}
+
+function trackConversion(
+  event: string,
+  { location, outcome }: ConversionProperties,
+): void {
+  capture(event, {
+    location: safePropertyValue(location),
+    outcome: safePropertyValue(outcome),
+  })
+}
+
+export function trackDownloadNoticeViewed(location: string): void {
+  trackConversion('web:download_notice_viewed', { location })
+}
+
+export function trackTerminalCommandCopied(
+  location: string,
+  outcome: 'succeeded' | 'failed',
+): void {
+  trackConversion('web:terminal_command_copied', { location, outcome })
+}
+
+export function trackSponsorClicked(location: string): void {
+  trackConversion('web:sponsor_clicked', { location })
+}
+
+export function trackPrivacyPolicyClicked(location: string): void {
+  trackConversion('web:privacy_policy_clicked', { location })
+}
+
+export function trackRouteClicked(pathname: string): void {
+  const destinationPagePath = safePagePath(pathname)
+  if (destinationPagePath === '/not-found') {
+    return
+  }
+
+  capture('web:route_clicked', {
+    destination_page_path: destinationPagePath,
+    page_path: safePagePath(),
   })
 }

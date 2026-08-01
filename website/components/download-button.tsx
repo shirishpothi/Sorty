@@ -6,7 +6,12 @@ import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { trackDownloadClicked, trackWebInteraction } from '@/lib/analytics'
+import {
+  trackDownloadClicked,
+  trackDownloadNoticeViewed,
+  trackTerminalCommandCopied,
+  trackWebInteraction,
+} from '@/lib/analytics'
 
 const XATTR_COMMAND = 'sudo xattr -cr /Applications/Sorty.app'
 
@@ -192,6 +197,7 @@ export function DownloadButton({
 
     try {
       await writeClipboardText(XATTR_COMMAND)
+      trackTerminalCommandCopied(analyticsLocation, 'succeeded')
       trackWebInteraction({
         action: 'terminal_command_copied',
         component: 'download_notice',
@@ -201,6 +207,7 @@ export function DownloadButton({
       })
     } catch {
       showCopyFeedback('failed')
+      trackTerminalCommandCopied(analyticsLocation, 'failed')
       trackWebInteraction({
         action: 'terminal_command_copied',
         component: 'download_notice',
@@ -220,6 +227,7 @@ export function DownloadButton({
     setCopyFeedback('idle')
     setShowNotice(true)
     trackDownloadClicked(analyticsLocation)
+    trackDownloadNoticeViewed(analyticsLocation)
     trackWebInteraction({
       action: 'download_started',
       component: 'download_button',

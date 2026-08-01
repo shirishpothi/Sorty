@@ -8,12 +8,17 @@ import {
   useState,
 } from 'react'
 import { usePathname } from 'next/navigation'
+import posthog from 'posthog-js'
+import { PostHogProvider } from 'posthog-js/react'
 import {
   applyWebsiteAnalyticsPreference,
   isWebsiteAnalyticsEnabled,
   trackPageView,
+  trackPrivacyPolicyClicked,
+  trackRouteClicked,
   trackScrollDepth,
   trackSectionView,
+  trackSponsorClicked,
   trackWebInteraction,
   WEBSITE_ANALYTICS_PREFERENCE_KEY,
   type WebsiteAnalyticsPreference,
@@ -128,6 +133,14 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
+      const anchor = target.closest<HTMLAnchorElement>('a[href]')
+      if (anchor) {
+        const destination = new URL(anchor.href, window.location.origin)
+        if (destination.origin === window.location.origin) {
+          trackRouteClicked(destination.pathname)
+        }
+      }
+
       const trackedElement = target.closest<HTMLElement>(
         '[data-analytics-action]',
       )
@@ -135,12 +148,32 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
+      const action = trackedElement.dataset.analyticsAction ?? 'clicked'
+      const location =
+        trackedElement.dataset.analyticsLocation ?? 'unknown'
+      const analyticsTarget = trackedElement.dataset.analyticsTarget
+
       trackWebInteraction({
-        action: trackedElement.dataset.analyticsAction ?? 'clicked',
+        action,
         component: trackedElement.dataset.analyticsComponent ?? 'control',
-        location: trackedElement.dataset.analyticsLocation ?? 'unknown',
-        target: trackedElement.dataset.analyticsTarget,
+        location,
+        target: analyticsTarget,
       })
+
+      if (
+        action === 'support_opened' &&
+        analyticsTarget === 'github_sponsors'
+      ) {
+        trackSponsorClicked(location)
+      }
+      if (
+        ['navigation_opened', 'footer_link_opened'].includes(action) &&
+        ['privacy', 'privacy_policy'].includes(
+          analyticsTarget?.toLowerCase().replace(/[^a-z0-9_:-]+/g, '_') ?? '',
+        )
+      ) {
+        trackPrivacyPolicyClicked(location)
+      }
     }
 
     document.addEventListener('click', handleClick)
@@ -187,11 +220,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const isEnabled = isWebsiteAnalyticsEnabled()
 
   return (
-    <AnalyticsPreferencesContext.Provider
-      value={{ openPreferences: openAnalyticsPreferences }}
-    >
-      {children}
-      {isOpen && (
+    <PostHogProvider client={posthog}>
+      <AnalyticsPreferencesContext.Provider
+        value={{ openPreferences: openAnalyticsPreferences }}
+      >
+        {children}
+        {isOpen && (
         <div
           className="fixed inset-0 z-[120] grid place-items-end bg-black/50 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
           onMouseDown={(event) => {
@@ -249,8 +283,9 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             </div>
           </section>
         </div>
-      )}
-    </AnalyticsPreferencesContext.Provider>
+        )}
+      </AnalyticsPreferencesContext.Provider>
+    </PostHogProvider>
   )
 }
 
