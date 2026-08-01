@@ -399,6 +399,17 @@ struct AnalysisView: View {
         organizer.isStreaming || organizer.state == .organizing
     }
 
+    /// Sub-phase shown by the insights island. Prefers the organizer's
+    /// published activity; falls back to inference for paths (such as the
+    /// provider-switch regenerate) that force `isStreaming` without setting it.
+    private var insightIslandActivity: AIAnalysisActivity {
+        let activity = organizer.aiAnalysisActivity
+        guard activity == .none else { return activity }
+        if organizer.isStreaming { return .requesting }
+        guard organizer.state == .organizing else { return .none }
+        return organizer.displayStreamingContent.isEmpty ? .requesting : .validating
+    }
+
     /// True when the live insights island (`aiInsightsView`) is visible beneath
     /// the progress banner, so the banner can expand to meet its width.
     private var showsLiveInsightsIsland: Bool {
@@ -611,13 +622,7 @@ struct AnalysisView: View {
 
     private var aiInsightsView: some View {
         InsightHistorySection(
-            // Treat the pre-first-chunk request wait as streaming so the
-            // island shows the receiving-response loader instead of the
-            // "Analysis complete" checkmark. Once the stream has finished
-            // (content present, `isStreaming` false), fall back to the
-            // completed state while the plan is validated.
-            isStreaming: organizer.isStreaming
-                || (organizer.state == .organizing && organizer.displayStreamingContent.isEmpty),
+            activity: insightIslandActivity,
             insights: liveInsights,
             debugModeEnabled: appState.debugMode,
             streamPreview: organizer.truncatedDisplayStreamingContent,
@@ -1820,7 +1825,7 @@ final class AnalysisInsightViewState: ObservableObject {
 }
 
 private struct InsightHistorySection: View {
-    let isStreaming: Bool
+    let activity: AIAnalysisActivity
     let insights: (current: String, history: [AIInsight])
     let debugModeEnabled: Bool
     let streamPreview: String
@@ -1835,6 +1840,8 @@ private struct InsightHistorySection: View {
             ? PrivacyPathMasker.redactedText(streamPreview) : streamPreview
     }
 
+    private var isActive: Bool { activity != .none }
+
     var body: some View {
         VStack(spacing: 0) {
             Button {
@@ -1843,7 +1850,7 @@ private struct InsightHistorySection: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    if isStreaming {
+                    if isActive {
                         Image(systemName: "waveform")
                             .font(.callout)
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
@@ -1994,15 +2001,27 @@ private struct InsightHistorySection: View {
             if !enabled {
                 streamingModeEnabled = true
                 viewState.showDebugStream = false
-            } else if isStreaming && !liveInsightsEnabled {
+            } else if isActive && !liveInsightsEnabled {
                 liveInsightsEnabled = true
             }
         }
     }
 
     private var headerTitle: String {
-        guard isStreaming else { return "Analysis complete" }
-        return "Sorty is reasoning..."
+        switch activity {
+        case .none: return "Analysis complete"
+        case .preparingImages: return "Preparing images..."
+        case .requesting: return "Sorty is reasoning..."
+        case .validating: return "Finishing up..."
+        }
+    }
+
+    private var loaderLabel: String {
+        switch activity {
+        case .preparingImages: return "Preparing images for analysis..."
+        case .validating: return "Checking suggestions..."
+        case .none, .requesting: return "Receiving AI response..."
+        }
     }
 
     @ViewBuilder
@@ -2022,7 +2041,7 @@ private struct InsightHistorySection: View {
                 detail: nil,
                 fallbackCategory: inferredInsightCategory(for: fallbackInsight)
             )
-        } else if isStreaming {
+        } else if isActive {
             receivingResponseView
         }
 
@@ -2039,7 +2058,7 @@ private struct InsightHistorySection: View {
             ThinkingOrbLoaderView()
                 .frame(width: 36, height: 36)
 
-            Text("Receiving AI response...")
+            Text(loaderLabel)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.85))
                 .textSweep()
@@ -2188,12 +2207,12 @@ private struct InsightHistorySection: View {
 
             Spacer()
 
-            if isStreaming {
+            if isActive {
                 Circle()
                     .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.4))
                     .frame(width: 6, height: 6)
-                    .scaleEffect(isStreaming ? 1.3 : 1.0)
-                    .animation(.default.speed(0.8), value: isStreaming)
+                    .scaleEffect(isActive ? 1.3 : 1.0)
+                    .animation(.default.speed(0.8), value: isActive)
             }
         }
         .padding(.horizontal, 14)

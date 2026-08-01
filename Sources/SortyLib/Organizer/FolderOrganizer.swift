@@ -318,6 +318,17 @@ public struct OrganizationProgress: Sendable {
     }
 }
 
+/// Fine-grained activity inside the AI analysis phase. The coarse
+/// `OrganizationState` stays `.organizing` across all of these, so the UI
+/// uses this to label live progress accurately (for example, distinguishing
+/// local vision image preparation from the network wait for a response).
+public enum AIAnalysisActivity: Equatable, Sendable {
+    case none
+    case preparingImages
+    case requesting
+    case validating
+}
+
 /// Progress backed by a concrete count of completed work items.
 public struct MeasuredWorkProgress: Equatable, Sendable {
     public let completed: Int
@@ -426,11 +437,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 NotificationManager.shared.requestAttention()
             }
 
+            if state != .organizing {
+                aiAnalysisActivity = .none
+            }
+
             syncRunningOrganizationRegistrationIfNeeded(from: oldValue, to: state)
         }
     }
     @Published public var progress: Double = 0.0
     @Published public var currentPlan: OrganizationPlan?
+    private var preparedPlanModeOverride: OrganizationMode?
     @Published public var planHistory: [OrganizationPlan] = []
     @Published public var errorMessage: String?
     @Published public var customInstructions: String = ""
@@ -454,6 +470,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var deepScanProgress: (current: Int, total: Int)?
     @Published public private(set) var measuredWorkProgress: MeasuredWorkProgress?
     @Published public var visionAnalysisSummary: VisionAnalysisSummary?
+    /// What the AI analysis phase is actually doing right now, so the UI can
+    /// label the wait accurately. Reset whenever `state` leaves `.organizing`.
+    @Published public private(set) var aiAnalysisActivity: AIAnalysisActivity = .none
     
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
@@ -1713,6 +1732,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         await MainActor.run {
             isStreaming = false
             measuredWorkProgress = nil
+            aiAnalysisActivity = .requesting
         }
 
         startTimeoutTimer()
@@ -1811,6 +1831,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let initialPreparationStage = isLimitedSelection
                 ? "Sorty is analyzing 0 of \(selectedImageURLs.count) selected images..."
                 : "Sorty is analyzing 0 images..."
+            aiAnalysisActivity = .preparingImages
             updateMeasuredProgress(
                 completed: 0,
                 total: selectedImageURLs.count,
@@ -1914,6 +1935,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             ? Self.organizeAnalysisBatchSize
             : Self.renameAnalysisBatchSize
         let batchCount = max(1, (files.count + batchSize - 1) / batchSize)
+
+        aiAnalysisActivity = .requesting
 
         let analysisStart = Date()
         let accumulator = LargeFolderPlanAccumulator()
@@ -2613,6 +2636,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
         await MainActor.run {
             isStreaming = false
+            aiAnalysisActivity = .validating
         }
 
         guard let client = aiClient else {
@@ -3232,7 +3256,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         providerOverride: AIProvider? = nil,
         modelOverride: String? = nil,
         mode: OrganizationMode = .organize,
-        historySource: OrganizationEntrySource = .manual
+        historySource: OrganizationEntrySource = .manual,
+        autoApply: Bool = true
     ) async throws {
         guard !isOperationInProgress() else {
             DebugLogger.log("Incremental organization blocked: Already in progress")
@@ -3251,7 +3276,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 providerOverride: providerOverride,
                 modelOverride: modelOverride,
                 mode: mode,
-                historySource: historySource
+                historySource: historySource,
+                autoApply: autoApply
             )
         }
         defer { currentTask = nil }
@@ -3271,7 +3297,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         providerOverride: AIProvider? = nil,
         modelOverride: String? = nil,
         mode: OrganizationMode,
-        historySource: OrganizationEntrySource = .manual
+        historySource: OrganizationEntrySource = .manual,
+        autoApply: Bool
     ) async throws {
         AnalyticsManager.shared.captureWorkflow(
             workflow: "organize",
@@ -3530,6 +3557,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 )
             }
 
+            guard autoApply else {
+                await MainActor.run {
+                    preparedPlanModeOverride = mode
+                    updateState(.ready, stage: "Ready for review", progress: 1.0)
+                }
+                return
+            }
+
             // Auto-apply for incremental
             try await apply(
                 at: directory,
@@ -3781,7 +3816,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             properties: [
                 "count_bucket": AnalyticsManager.countBucket(currentPlan.totalFiles),
                 "entry_source": source.rawValue,
-                "mode": (modeOverride ?? aiConfig?.mode ?? .organize).rawValue,
+                "mode": (modeOverride ?? preparedPlanModeOverride ?? aiConfig?.mode ?? .organize).rawValue,
             ]
         )
 
@@ -3792,12 +3827,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Re-validate at apply time to protect all entry points, including regenerated previews.
         var operationConfig = aiConfig ?? aiClient?.config
-        if let modeOverride {
-            operationConfig?.mode = modeOverride
-            operationConfig?.enableSmartRename = modeOverride != .organize
+        let requestedMode = modeOverride ?? preparedPlanModeOverride
+        if let requestedMode {
+            operationConfig?.mode = requestedMode
+            operationConfig?.enableSmartRename = requestedMode != .organize
         }
 
-        let operationMode = modeOverride ?? operationConfig?.mode ?? .organize
+        let operationMode = requestedMode ?? operationConfig?.mode ?? .organize
 
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
@@ -4801,6 +4837,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     public func reset() {
         cancelInternal()
+        preparedPlanModeOverride = nil
         
         // Clear transient AI session errors on manual reset
         AISessionManager.shared.clearErrors()
@@ -4837,6 +4874,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightsCache = nil
         }
         
+    }
+
+    public func loadPreparedIncrementalPlan(
+        _ plan: OrganizationPlan,
+        directory: URL,
+        mode: OrganizationMode
+    ) {
+        cancelInternal()
+        currentDirectory = directory
+        currentPlan = plan
+        preparedPlanModeOverride = mode
+        transition(to: .ready, force: true)
+        organizationStage = "Ready for review"
+        progress = 1
     }
     private func recordPlanRules(_ plan: OrganizationPlan, observer: ContinuousLearningObserver) {
         // Recursively record rules

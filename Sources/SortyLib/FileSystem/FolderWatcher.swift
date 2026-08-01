@@ -5,23 +5,24 @@
 //  Scalable FSEvents monitoring for watched folders.
 //
 
+import AppKit
 import CoreServices
 import Foundation
 
 /// Protocol for receiving bounded folder-change batches.
 ///
-/// Returning `false` applies backpressure. `FolderWatcher` retains the batch,
+/// Completing with `false` applies backpressure. `FolderWatcher` retains the batch,
 /// pauses its event stream if necessary, and retries without growing an
 /// unbounded in-memory queue.
 @MainActor
 public protocol FolderWatcherDelegate: AnyObject {
-    @discardableResult
     func folderWatcher(
         _ watcher: FolderWatcher,
         didDetectChangesIn folder: WatchedFolder,
         newFiles: Set<String>,
-        resolvedURL: URL
-    ) -> Bool
+        resolvedURL: URL,
+        completion: @escaping @Sendable (Bool) -> Void
+    )
 
     func folderWatcher(
         _ watcher: FolderWatcher,
@@ -41,6 +42,23 @@ public final class FolderWatcher: @unchecked Sendable {
     private struct PersistedEventCursor: Codable {
         let eventID: FSEventStreamEventId
         let updatedAt: Date
+    }
+
+    private struct FileFingerprint: Codable, Equatable, Sendable {
+        let size: Int64
+        let modificationDate: Date?
+    }
+
+    private struct PersistedFolderSnapshot: Codable {
+        let rootPath: String
+        let files: [String: FileFingerprint]
+        let updatedAt: Date
+    }
+
+    private struct RecoveryTarget: Sendable {
+        let folderID: UUID
+        let rootPath: String
+        let baseline: [String: FileFingerprint]?
     }
 
     struct ScaleSnapshot: Equatable, Sendable {
@@ -79,6 +97,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private var exclusionMatcher = ExclusionMatcher.empty
 
     private var pendingFiles: [UUID: Set<String>] = [:]
+    private var deliveryInFlight: Set<UUID> = []
     private var debounceWorkItems: [UUID: DispatchWorkItem] = [:]
     private var pendingFileCount = 0
     private var isSuspendedForBackpressure = false
@@ -88,6 +107,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private var activeScanCount = 0
     private var activeScanPath: String?
     private var pendingScanPaths: [String] = []
+    private var recoveryScanPaths: Set<String> = []
     private var requiresFullRecoveryScan = false
     private var healthTimer: DispatchSourceTimer?
     private var cursorPersistenceWorkItem: DispatchWorkItem?
@@ -95,6 +115,9 @@ public final class FolderWatcher: @unchecked Sendable {
     private var latestProcessedEventID: FSEventStreamEventId?
     private var replayFromEventID: FSEventStreamEventId?
     private var hasCompletedInitialSync = false
+    private var folderSnapshots: [UUID: [String: FileFingerprint]] = [:]
+    private var dirtySnapshotFolderIDs: Set<UUID> = []
+    private var workspaceObservers: [NSObjectProtocol] = []
 
     private lazy var watcherStateURL: URL? = {
         fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
@@ -102,11 +125,18 @@ public final class FolderWatcher: @unchecked Sendable {
             .appendingPathComponent("WatcherState.json")
     }()
 
+    private lazy var snapshotStoreDirectory: URL? = {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sorty", isDirectory: true)
+            .appendingPathComponent("WatcherSnapshots", isDirectory: true)
+    }()
+
     public init() {
         queue.setSpecific(key: queueSpecificKey, value: ())
         persistedEventID = readPersistedEventCursor()?.eventID
         latestProcessedEventID = persistedEventID
         replayFromEventID = persistedEventID
+        installWorkspaceObservers()
     }
 
     deinit {
@@ -117,6 +147,8 @@ public final class FolderWatcher: @unchecked Sendable {
             cursorPersistenceWorkItem?.cancel()
             cursorPersistenceWorkItem = nil
         }
+        let center = NSWorkspace.shared.notificationCenter
+        workspaceObservers.forEach(center.removeObserver)
     }
 
     // MARK: - Public API
@@ -151,20 +183,24 @@ public final class FolderWatcher: @unchecked Sendable {
             self.pausedFolders.remove(folder.id)
             self.clearPendingFiles(for: folder.id)
             self.minimumEventIDs[folder.id] = FSEventsGetCurrentEventId()
+            self.folderSnapshots.removeValue(forKey: folder.id)
+            self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
             DebugLogger.log("Resumed watching: \(folder.name)")
         }
     }
 
     /// Advances the root's baseline after known in-app mutations.
     ///
-    /// Event IDs replace the old full hierarchy snapshot, so this remains O(1)
-    /// even when a watched folder contains millions of files.
+    /// Rebuilds the recovery baseline after known in-app mutations without
+    /// delivering those mutations back through automation.
     public func refreshSnapshot(for folder: WatchedFolder) {
         queue.async { [weak self] in
             guard let self else { return }
             self.clearPendingFiles(for: folder.id)
             self.minimumEventIDs[folder.id] = FSEventsGetCurrentEventId()
-            DebugLogger.log("Advanced watcher cursor: \(folder.name)")
+            self.folderSnapshots.removeValue(forKey: folder.id)
+            self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
+            DebugLogger.log("Rebuilding watcher recovery baseline: \(folder.name)")
         }
     }
 
@@ -210,6 +246,8 @@ public final class FolderWatcher: @unchecked Sendable {
             minimumEventIDs.removeAll()
             clearAllPendingFiles()
             pendingScanPaths.removeAll()
+            recoveryScanPaths.removeAll()
+            folderSnapshots.removeAll()
             requiresFullRecoveryScan = false
             stopHealthTimerIfIdle()
         }
@@ -220,6 +258,7 @@ public final class FolderWatcher: @unchecked Sendable {
     public func syncWithFolders(_ folders: [WatchedFolder]) {
         queue.async { [weak self] in
             guard let self else { return }
+            let isInitialSync = !self.hasCompletedInitialSync
 
             let enabledFolders = Dictionary(
                 uniqueKeysWithValues: folders.lazy.filter(\.isEnabled).map { ($0.id, $0) }
@@ -252,6 +291,9 @@ public final class FolderWatcher: @unchecked Sendable {
             if previousRoots != self.monitoringRoots || self.stream == nil {
                 self.rebuildStream()
             }
+            if isInitialSync {
+                self.scheduleRecoveryScans(affectedBy: "/")
+            }
             self.startHealthTimerIfNeeded()
             self.stopHealthTimerIfIdle()
         }
@@ -279,7 +321,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 streamCount: stream == nil ? 0 : 1,
                 pendingFileCount: pendingFileCount,
                 activeScanCount: activeScanCount,
-                trackedFileMetadataCount: 0
+                trackedFileMetadataCount: folderSnapshots.values.reduce(0) { $0 + $1.count }
             )
         }
     }
@@ -293,6 +335,7 @@ public final class FolderWatcher: @unchecked Sendable {
         watchedFolders[folder.id] = folder
         minimumEventIDs[folder.id] = minimumEventID
         _ = resolveBookmark(for: folder)
+        restorePersistedSnapshot(for: folder)
     }
 
     private func uninstall(folderID: UUID) {
@@ -300,6 +343,11 @@ public final class FolderWatcher: @unchecked Sendable {
         pausedFolders.remove(folderID)
         minimumEventIDs.removeValue(forKey: folderID)
         recentlyRemovedFiles.removeValue(forKey: folderID)
+        folderSnapshots.removeValue(forKey: folderID)
+        dirtySnapshotFolderIDs.remove(folderID)
+        if let url = snapshotURL(for: folderID) {
+            try? fileManager.removeItem(at: url)
+        }
         clearPendingFiles(for: folderID)
 
         if let url = resolvedURLs.removeValue(forKey: folderID),
@@ -677,48 +725,49 @@ public final class FolderWatcher: @unchecked Sendable {
 
         let batch = Set(files.prefix(Self.maximumFilesPerBatch))
         let resolvedURL = resolvedURLs[folderID] ?? folder.url
+        guard deliveryInFlight.insert(folderID).inserted else { return }
         let watcher = self
-        var accepted = false
-
-        if Thread.isMainThread {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             MainActor.assumeIsolated {
-                accepted = delegate?.folderWatcher(
+                guard let delegate = self.delegate else {
+                    self.completeDelivery(for: folderID, batch: batch, accepted: true)
+                    return
+                }
+                delegate.folderWatcher(
                     watcher,
                     didDetectChangesIn: folder,
                     newFiles: batch,
                     resolvedURL: resolvedURL
-                ) ?? true
-            }
-        } else {
-            DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                    accepted = delegate?.folderWatcher(
-                        watcher,
-                        didDetectChangesIn: folder,
-                        newFiles: batch,
-                        resolvedURL: resolvedURL
-                    ) ?? true
+                ) { [weak self] accepted in
+                    self?.completeDelivery(for: folderID, batch: batch, accepted: accepted)
                 }
             }
         }
+    }
 
-        guard accepted else {
-            suspendForBackpressure()
-            scheduleFlush(for: folderID)
-            return
+    private func completeDelivery(for folderID: UUID, batch: Set<String>, accepted: Bool) {
+        queue.async { [weak self] in
+            guard let self, self.deliveryInFlight.remove(folderID) != nil else { return }
+            guard accepted else {
+                self.suspendForBackpressure()
+                self.scheduleFlush(for: folderID)
+                return
+            }
+
+            self.pendingFiles[folderID]?.subtract(batch)
+            self.pendingFileCount -= batch.count
+            self.recordAcceptedFiles(batch, for: folderID)
+            if self.pendingFiles[folderID]?.isEmpty == true {
+                self.pendingFiles.removeValue(forKey: folderID)
+                self.debounceWorkItems.removeValue(forKey: folderID)
+                self.persistSnapshot(for: folderID)
+            } else {
+                self.scheduleFlush(for: folderID)
+            }
+            self.resumeAfterBackpressureIfPossible()
+            self.scheduleCursorPersistence()
         }
-
-        pendingFiles[folderID]?.subtract(batch)
-        pendingFileCount -= batch.count
-        if pendingFiles[folderID]?.isEmpty == true {
-            pendingFiles.removeValue(forKey: folderID)
-            debounceWorkItems.removeValue(forKey: folderID)
-        } else {
-            scheduleFlush(for: folderID)
-        }
-
-        resumeAfterBackpressureIfPossible()
-        scheduleCursorPersistence()
     }
 
     private func suspendForBackpressure() {
@@ -794,7 +843,7 @@ public final class FolderWatcher: @unchecked Sendable {
         for root in roots where !exclusionMatcher.shouldPruneDirectory(
             at: URL(fileURLWithPath: root)
         ) {
-            beginScan(at: root)
+            beginScan(at: root, isRecovery: true)
         }
     }
 
@@ -823,18 +872,25 @@ public final class FolderWatcher: @unchecked Sendable {
         return Self.minimalMonitoringRoots(from: recoveredRoots)
     }
 
-    private func beginScan(at path: String) {
+    private func beginScan(at path: String, isRecovery: Bool = false) {
         let path = standardizedPath(path)
         if let activeScanPath, Self.isPath(path, within: activeScanPath) {
             return
         }
-        if pendingScanPaths.contains(where: { Self.isPath(path, within: $0) }) {
+        if let coveringPath = pendingScanPaths.first(where: { Self.isPath(path, within: $0) }) {
+            if isRecovery { recoveryScanPaths.insert(coveringPath) }
             return
         }
 
+        let removedPaths = pendingScanPaths.filter { Self.isPath($0, within: path) }
         pendingScanPaths.removeAll(where: { Self.isPath($0, within: path) })
+        if isRecovery || removedPaths.contains(where: recoveryScanPaths.contains) {
+            recoveryScanPaths.insert(path)
+        }
+        recoveryScanPaths.subtract(removedPaths)
         guard pendingScanPaths.count < Self.maximumPendingScans else {
             pendingScanPaths.removeAll(keepingCapacity: true)
+            recoveryScanPaths.removeAll(keepingCapacity: true)
             requiresFullRecoveryScan = true
             return
         }
@@ -857,12 +913,17 @@ public final class FolderWatcher: @unchecked Sendable {
         }
 
         let path = pendingScanPaths.removeFirst()
+        let isRecovery = recoveryScanPaths.remove(path) != nil
         let matcher = exclusionMatcher
         activeScanPath = path
         activeScanCount = 1
         scanQueue.async { [weak self] in
             guard let self else { return }
-            self.enumerateFiles(at: path, exclusionMatcher: matcher)
+            if isRecovery {
+                self.enumerateRecoveryFiles(at: path, exclusionMatcher: matcher)
+            } else {
+                self.enumerateFiles(at: path, exclusionMatcher: matcher)
+            }
             self.queue.async {
                 self.activeScanPath = nil
                 self.activeScanCount = 0
@@ -935,6 +996,122 @@ public final class FolderWatcher: @unchecked Sendable {
 
         if !absolutePaths.isEmpty {
             ingestScannedPathsWithBackpressure(absolutePaths)
+        }
+    }
+
+    /// Reconciles a complete watched subtree against the last accepted state.
+    /// A missing baseline is initialized silently so enabling an existing tree
+    /// never presents all of its contents as newly arrived.
+    private func enumerateRecoveryFiles(
+        at path: String,
+        exclusionMatcher: ExclusionMatcher
+    ) {
+        let targets = performOnQueueSyncIfNeeded {
+            watchedFolders.compactMap { folderID, folder -> RecoveryTarget? in
+                let root = rootPath(for: folderID, folder: folder)
+                guard Self.isPath(root, within: path) || Self.isPath(path, within: root) else {
+                    return nil
+                }
+                return RecoveryTarget(
+                    folderID: folderID,
+                    rootPath: root,
+                    baseline: folderSnapshots[folderID]
+                )
+            }.sorted { $0.rootPath.count > $1.rootPath.count }
+        }
+        guard !targets.isEmpty else { return }
+
+        var currentStates = Dictionary(
+            uniqueKeysWithValues: targets.map { ($0.folderID, [String: FileFingerprint]()) }
+        )
+        let manager = FileManager()
+        guard let enumerator = manager.enumerator(
+            at: URL(fileURLWithPath: path),
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .isDirectoryKey,
+                .fileSizeKey,
+                .creationDateKey,
+                .contentModificationDateKey,
+                .ubiquitousItemDownloadingStatusKey,
+            ],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return
+        }
+
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .isDirectoryKey,
+                .fileSizeKey,
+                .creationDateKey,
+                .contentModificationDateKey,
+                .ubiquitousItemDownloadingStatusKey,
+            ]) else { continue }
+
+            if values.isDirectory == true {
+                if Self.isIgnoredFile(fileURL.lastPathComponent)
+                    || exclusionMatcher.shouldPruneDirectory(at: fileURL) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+            guard !Self.isIgnoredFile(fileURL.lastPathComponent),
+                  values.isRegularFile == true,
+                  !Self.shouldIgnoreCloudPlaceholder(at: fileURL, resourceValues: values),
+                  !exclusionMatcher.shouldExcludeFile(
+                      at: fileURL,
+                      size: Int64(values.fileSize ?? 0),
+                      creationDate: values.creationDate,
+                      modificationDate: values.contentModificationDate
+                  ),
+                  let target = targets.first(where: {
+                      Self.isPath(fileURL.standardizedFileURL.path, within: $0.rootPath)
+                  }),
+                  let relativePath = Self.relativePath(
+                      of: fileURL.standardizedFileURL.path,
+                      within: target.rootPath
+                  ),
+                  !relativePath.isEmpty else {
+                continue
+            }
+
+            currentStates[target.folderID]?[relativePath] = FileFingerprint(
+                size: Int64(values.fileSize ?? 0),
+                modificationDate: values.contentModificationDate
+            )
+        }
+
+        for target in targets {
+            let current = currentStates[target.folderID] ?? [:]
+            let changedPaths: [String]
+            if let baseline = target.baseline {
+                changedPaths = current.compactMap { relativePath, fingerprint in
+                    baseline[relativePath] == fingerprint
+                        ? nil
+                        : URL(fileURLWithPath: target.rootPath)
+                            .appendingPathComponent(relativePath).path
+                }
+            } else {
+                changedPaths = []
+            }
+
+            performOnQueueSyncIfNeeded {
+                folderSnapshots[target.folderID] = current
+                dirtySnapshotFolderIDs.insert(target.folderID)
+                if changedPaths.isEmpty {
+                    persistSnapshot(for: target.folderID)
+                }
+            }
+            for batchStart in stride(
+                from: 0,
+                to: changedPaths.count,
+                by: Self.maximumFilesPerBatch
+            ) {
+                let end = min(batchStart + Self.maximumFilesPerBatch, changedPaths.count)
+                ingestScannedPathsWithBackpressure(Array(changedPaths[batchStart..<end]))
+            }
         }
     }
 
@@ -1066,6 +1243,44 @@ public final class FolderWatcher: @unchecked Sendable {
 
     // MARK: - Cursor persistence and health
 
+    private func installWorkspaceObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        workspaceObservers.append(center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.queue.async { [weak self] in
+                self?.recoverAfterLifecycleChange(affectedPath: "/")
+            }
+        })
+        workspaceObservers.append(center.addObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            let mountedPath = (notification.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL)?
+                .standardizedFileURL.path
+            guard let mountedPath else { return }
+            self?.queue.async { [weak self] in
+                self?.recoverAfterLifecycleChange(affectedPath: mountedPath)
+            }
+        })
+    }
+
+    private func recoverAfterLifecycleChange(affectedPath: String) {
+        guard !watchedFolders.isEmpty else { return }
+        replayFromEventID = persistedEventID ?? replayFromEventID
+        if affectedPath != "/" {
+            _ = reacquireRoots(affectedBy: affectedPath)
+        }
+        if !isSuspendedForBackpressure {
+            rebuildStream()
+        }
+        scheduleRecoveryScans(affectedBy: affectedPath)
+        DebugLogger.log("FSEvents: Replayed cursor and scheduled lifecycle recovery")
+    }
+
     private func scheduleCursorPersistence() {
         guard !isSuspendedForBackpressure,
               activeScanCount == 0,
@@ -1139,6 +1354,70 @@ public final class FolderWatcher: @unchecked Sendable {
         guard watchedFolders.isEmpty else { return }
         healthTimer?.cancel()
         healthTimer = nil
+    }
+
+    private func recordAcceptedFiles(_ relativePaths: Set<String>, for folderID: UUID) {
+        guard let folder = watchedFolders[folderID], folderSnapshots[folderID] != nil else {
+            return
+        }
+        let root = URL(fileURLWithPath: rootPath(for: folderID, folder: folder))
+        for relativePath in relativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            guard let values = try? url.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey,
+            ]), values.isRegularFile == true else {
+                folderSnapshots[folderID]?.removeValue(forKey: relativePath)
+                continue
+            }
+            folderSnapshots[folderID]?[relativePath] = FileFingerprint(
+                size: Int64(values.fileSize ?? 0),
+                modificationDate: values.contentModificationDate
+            )
+        }
+        dirtySnapshotFolderIDs.insert(folderID)
+    }
+
+    private func restorePersistedSnapshot(for folder: WatchedFolder) {
+        guard folderSnapshots[folder.id] == nil,
+              let url = snapshotURL(for: folder.id),
+              let data = try? Data(contentsOf: url),
+              let snapshot = try? JSONDecoder().decode(PersistedFolderSnapshot.self, from: data),
+              snapshot.rootPath == rootPath(for: folder.id, folder: folder) else {
+            return
+        }
+        folderSnapshots[folder.id] = snapshot.files
+    }
+
+    private func persistSnapshot(for folderID: UUID) {
+        guard dirtySnapshotFolderIDs.contains(folderID),
+              pendingFiles[folderID]?.isEmpty != false,
+              !deliveryInFlight.contains(folderID),
+              let folder = watchedFolders[folderID],
+              let files = folderSnapshots[folderID],
+              let url = snapshotURL(for: folderID) else {
+            return
+        }
+        do {
+            try fileManager.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let snapshot = PersistedFolderSnapshot(
+                rootPath: rootPath(for: folderID, folder: folder),
+                files: files,
+                updatedAt: Date()
+            )
+            try JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
+            dirtySnapshotFolderIDs.remove(folderID)
+        } catch {
+            DebugLogger.log("Failed to persist watcher snapshot for \(folder.name): \(error)")
+        }
+    }
+
+    private func snapshotURL(for folderID: UUID) -> URL? {
+        snapshotStoreDirectory?.appendingPathComponent("\(folderID.uuidString).json")
     }
 
     // MARK: - Helpers

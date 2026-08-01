@@ -580,28 +580,36 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         print("Coordinator: Updated stale bookmark for \(folder.name)")
     }
     
-    @discardableResult
     func folderWatcher(
         _ watcher: FolderWatcher,
         didDetectChangesIn folder: WatchedFolder,
         newFiles: Set<String>,
-        resolvedURL: URL
-    ) -> Bool {
+        resolvedURL: URL,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
         // FolderWatcher already resolves nested roots with its path index. Doing
         // that work again here used to scan every watched folder for every file,
         // which made event routing quadratic as either dimension grew.
         let routedFiles = newFiles
-        guard !routedFiles.isEmpty else { return true }
+        guard !routedFiles.isEmpty else {
+            completion(true)
+            return
+        }
+
+        if let snoozedUntil = folder.snoozedUntil, snoozedUntil > Date() {
+            mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
 
         guard !isManualOrganizationActive(for: folder.id) else {
             print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
-            return true
+            completion(true)
+            return
         }
 
         if let ignoreUntil = ignoredWatchEventsUntil[folder.id] {
             if ignoreUntil > Date() {
                 print("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
-                return true
+                completion(true)
+                return
             }
             ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         }
@@ -611,17 +619,19 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             let isNewPendingFolder = pendingFiles[folder.id] == nil
             guard existingFileCount + routedFiles.count <= maximumPendingFilesPerFolder,
                   !isNewPendingFolder || pendingFiles.count < maximumPendingFolderCount else {
-                return false
+                completion(false)
+                return
             }
 
             print("Coordinator: Organizer busy, queueing \(routedFiles.count) files for \(folder.name)")
             mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
             scheduleRetry()
-            return true
+            completion(true)
+            return
         }
         
         startAutoOrganize(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
-        return true
+        completion(true)
     }
 
     @discardableResult
