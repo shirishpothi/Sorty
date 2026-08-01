@@ -219,8 +219,9 @@ public struct ThinkingOrbLoaderView: View {
 }
 
 /// Text sweep in the style of markiv/SwiftUI-Shimmer's mask mode: the glyphs
-/// themselves are masked by a moving diagonal gradient, so the text dims to
-/// 30% and a full-brightness band sweeps through the letterforms.
+/// themselves are masked by a moving diagonal gradient. The base stays legible
+/// so the label reads as steady text with a highlight passing through it,
+/// rather than re-appearing letter by letter on every pass.
 public struct TextSweepModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isInitialState = true
@@ -229,9 +230,9 @@ public struct TextSweepModifier: ViewModifier {
     private let bandSize: CGFloat = 0.3
     private let animation = Animation.linear(duration: 2.0).delay(0.35).repeatForever(autoreverses: false)
     private let gradient = Gradient(colors: [
-        .black.opacity(0.3),
+        .black.opacity(0.75),
         .black,
-        .black.opacity(0.3),
+        .black.opacity(0.75),
     ])
 
     public func body(content: Content) -> some View {
