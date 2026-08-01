@@ -443,7 +443,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 "--enable",
                 "fast_mode",
                 "--config",
-                #"service_tier="priority""#
+                #"service_tier="fast""#
             ]
         }
 
