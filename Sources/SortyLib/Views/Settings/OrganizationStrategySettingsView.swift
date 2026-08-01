@@ -39,7 +39,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             ),
                             title: "Fast Mode",
-                            description: "Skip content analysis and use filenames, extensions, and folder context only",
+                            description: "Skip document text, OCR, and metadata; image analysis is controlled separately",
                             focusTarget: .strategyFastMode
                         )
                         .disabled(!viewModel.config.provider.supportsDeepScan)
@@ -67,7 +67,7 @@ struct OrganizationStrategySettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
-                        description: "Send images to Sorty for content-aware organization",
+                        description: "Attach selected images to your AI request for content-aware organization",
                         focusTarget: .strategyVision
                     )
                     .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))

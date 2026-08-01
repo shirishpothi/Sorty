@@ -107,6 +107,9 @@ struct PreviewView: View {
             if settingsViewModel.config.showStatsForNerds {
                 PreviewStatsView(stats: editablePlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(editablePlan.totalFiles)), totalFiles: editablePlan.totalFiles, stage: organizer.organizationStage)
             }
+            if !isViewingHistory, let visionSummary = organizer.visionAnalysisSummary {
+                VisionAnalysisSummaryView(summary: visionSummary)
+            }
             Divider()
             PreviewListView(
                 store: previewStore,
@@ -402,5 +405,33 @@ struct PreviewView: View {
                 organizer.reset()
             }
         }
+    }
+}
+
+private struct VisionAnalysisSummaryView: View {
+    let summary: VisionAnalysisSummary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: summary.hasWarning ? "exclamationmark.triangle.fill" : "eye.fill")
+                .foregroundStyle(summary.hasWarning ? .orange : .teal)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary.summaryText)
+                    .font(.caption.weight(.medium))
+                if let warningMessage = summary.warningMessage {
+                    Text(warningMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.teal.opacity(summary.hasWarning ? 0.06 : 0.10))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("VisionAnalysisSummary")
     }
 }

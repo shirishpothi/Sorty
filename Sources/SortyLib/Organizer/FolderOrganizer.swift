@@ -1638,7 +1638,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Organization Phases
 
     private func scanPhase(directory: URL) async throws -> [FileItem] {
-        updateState(.scanning, stage: "Scanning directory...", progress: 0.05)
+        let usesDeepScan = (aiConfig?.enableDeepScan ?? false)
+            && (aiConfig?.provider.supportsDeepScan ?? true)
+        let scanStagePrefix = usesDeepScan
+            ? "Scanning and analyzing file content"
+            : "Fast Mode: scanning file names and folder context"
+        updateState(.scanning, stage: "\(scanStagePrefix)...", progress: 0.05)
 
         try checkCancellation()
 
@@ -1655,7 +1660,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 guard let self, !self.isCancellationRequested else { return }
                 self.scannedFileCount = current
                 self.organizationStage =
-                    "Scanning directory: \(GenerationStats.formatCount(current)) files found..."
+                    "\(scanStagePrefix): \(GenerationStats.formatCount(current)) files found..."
             }
         }
 
@@ -1669,7 +1674,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             filesFound = try await scanner.scanDirectory(
                 at: directory,
-                deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true),
+                deepScan: usesDeepScan,
                 deepScanFileLimit: Self.deepScanFileLimit,
                 exclusionMatcher: exclusionMatcher
             )
@@ -1691,9 +1696,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try? await Task.sleep(for: .seconds(1.5))
         }
 
-        let scanResultStage = exclusionMatcher?.isEmpty == false
+        let scanResult = exclusionMatcher?.isEmpty == false
             ? "Found \(filesFound.count) files after exclusions"
             : "Found \(filesFound.count) files"
+        let scanResultStage = usesDeepScan
+            ? "\(scanResult); content is ready for analysis"
+            : "Fast Mode: \(scanResult.lowercased())"
         updateProgress(0.20, stage: scanResultStage)
 
         try checkCancellation()

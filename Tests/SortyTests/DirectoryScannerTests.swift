@@ -61,6 +61,17 @@ class DirectoryScannerTests: XCTestCase {
         XCTAssertNotNil(files.first?.contentMetadata)
         XCTAssertEqual(files.first?.contentMetadata?.textPreview, content)
     }
+
+    func testFastScanSkipsContentMetadata() async throws {
+        let textFile = tempDirectory.appendingPathComponent("sample.txt")
+        try "This content must not be read in Fast Mode."
+            .write(to: textFile, atomically: true, encoding: .utf8)
+
+        let files = try await scanner.scanDirectory(at: tempDirectory, deepScan: false)
+
+        XCTAssertEqual(files.count, 1)
+        XCTAssertNil(files.first?.contentMetadata)
+    }
     
     func testHashComputation() async throws {
         let file = tempDirectory.appendingPathComponent("hash_test.txt")
