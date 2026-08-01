@@ -2021,8 +2021,8 @@ private struct InsightHistorySection: View {
 
     private var receivingResponseView: some View {
         HStack(spacing: 12) {
-            ComposingOrbView()
-                .frame(width: 58, height: 30)
+            ThinkingOrbLoaderView()
+                .frame(width: 36, height: 36)
 
             Text("Receiving AI response...")
                 .font(.caption)
