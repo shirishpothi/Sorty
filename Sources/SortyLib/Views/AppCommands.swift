@@ -631,11 +631,11 @@ public class AppState: ObservableObject {
 
         filesAndFoldersPermissionBookmark = bookmark
         userDefaults.set(bookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
-        return true
+        return hasFilesAndFoldersPermission()
     }
 
-    /// Resolves the saved grant to distinguish a remembered folder choice from a stale or
-    /// invalid bookmark. Resolving a bookmark does not make it the active workflow folder.
+    /// Resolves the saved grant and proves that Sorty can still read the chosen directory.
+    /// Resolving a bookmark does not make it the active workflow folder.
     public func hasFilesAndFoldersPermission() -> Bool {
         guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
 
@@ -647,6 +647,27 @@ public class AppState: ObservableObject {
             bookmarkDataIsStale: &isStale
         ) else {
             revokeFilesAndFoldersPermission()
+            return false
+        }
+
+        // A bookmark can still resolve after access has been revoked or the folder has become
+        // unavailable. Exercise a non-mutating directory read before reporting this as granted.
+        let didStartAccessing = resolved.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                resolved.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
+              isDirectory.boolValue,
+              FileManager.default.isReadableFile(atPath: resolved.path),
+              (try? FileManager.default.contentsOfDirectory(
+                  at: resolved,
+                  includingPropertiesForKeys: nil,
+                  options: [.skipsHiddenFiles]
+              )) != nil else {
             return false
         }
 

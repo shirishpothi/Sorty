@@ -303,6 +303,14 @@ class AppStateTests: XCTestCase {
         relaunchedState.revokeFilesAndFoldersPermission()
         XCTAssertFalse(relaunchedState.hasFilesAndFoldersPermission())
     }
+
+    func testFilesAndFoldersPermissionRejectsAnUnreadableBookmark() {
+        testDefaults.set(Data([0x00]), forKey: "filesAndFoldersPermissionBookmark")
+        let state = AppState(userDefaults: testDefaults)
+
+        XCTAssertFalse(state.hasFilesAndFoldersPermission())
+        XCTAssertNil(testDefaults.data(forKey: "filesAndFoldersPermissionBookmark"))
+    }
     
     // MARK: - Computed Properties Tests
     
