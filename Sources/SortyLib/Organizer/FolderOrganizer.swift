@@ -1733,7 +1733,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let isRenameOnly = aiConfig?.mode == .renameOnly
         instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
 
-        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(forFolder: directory.path), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
             DebugLogger.log("Injected Learnings context into prompt")
         }
@@ -3432,7 +3432,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Add Learnings context
             var finalPrompt = prompt
             if mode != .renameOnly,
-               let learnedContext = learningsManager?.generatePromptContext(),
+               let learnedContext = learningsManager?.generatePromptContext(forFolder: directory.path),
                !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
             }
@@ -3677,7 +3677,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Add Learnings context
             var finalPrompt = prompt
-            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            if let learnedContext = learningsManager?.generatePromptContext(forFolder: directory.path), !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
             }
 
@@ -4035,7 +4035,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         let isRenameOnly = tempConfig.mode == .renameOnly
         var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions ?? self.customInstructions)
-        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(forFolder: currentDirectory?.path), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
         }
         if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
@@ -4456,7 +4456,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
             
             var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions)
-            if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(forFolder: currentDirectory?.path), !learnedContext.isEmpty {
                 instructions += "\n\n" + learnedContext
             }
 

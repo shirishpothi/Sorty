@@ -2035,21 +2035,18 @@ public class LearningsManager: ObservableObject {
             .map { "Recent instruction (\(promptDateString($0.timestamp))): \($0.instruction)" }
         hardRules.append(contentsOf: recentInstructions)
 
+        // activeRules(from:) already ranks by effective confidence (outcomes + support + recency).
+        let promptRuleDate = Date()
         let activeRules = activeRules(
             from: filteredProfile,
             folderPath: folderPath,
             personaId: nil
         )
-            .sorted {
-                if $0.successRate == $1.successRate {
-                    return $0.supportCount > $1.supportCount
-                }
-                return $0.successRate > $1.successRate
-            }
             .prefix(4)
             .map { rule in
-                let successRate = Int(rule.successRate * 100)
-                return "Proven rule [rule_id: \(rule.id)] (\(successRate)% success): \(rule.explanation)"
+                let confidence = Int(rule.effectiveConfidence(at: promptRuleDate) * 100)
+                let label = rule.isAvoidRule ? "Avoid rule" : "Learned rule"
+                return "\(label) [rule_id: \(rule.id)] (confidence \(confidence)%): \(rule.explanation)"
             }
         hardRules.append(contentsOf: activeRules)
         hardRules = Array(hardRules.orderedDeduplicated().prefix(5))
@@ -2374,10 +2371,16 @@ public class LearningsManager: ObservableObject {
         folderPath: String?,
         personaId: UUID?
     ) -> [InferredRule] {
+        let now = Date()
         let eligibleRules = profile.inferredRules
-            .filter { $0.isEnabled && $0.status == .active }
+            .filter { $0.isEligible(at: now) }
             .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
-            .sorted { $0.priority > $1.priority }
+            .sorted {
+                let lhs = $0.effectiveConfidence(at: now)
+                let rhs = $1.effectiveConfidence(at: now)
+                if lhs == rhs { return $0.priority > $1.priority }
+                return lhs > rhs
+            }
 
         guard !eligibleRules.isEmpty else { return [] }
 

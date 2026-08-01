@@ -524,14 +524,46 @@ extension LearningsManager {
         let engine = LocalRuleInferenceEngine()
         let inferredRules = await engine.inferRules(from: workingProfile)
         
-        // Merge with existing rules, preferring existing ones
-        var existingRulePatterns = Set(workingProfile.inferredRules.map { "\($0.pattern)|\($0.template)" })
+        // Merge with existing rules: strengthen duplicates with new evidence instead of
+        // discarding it, so re-inference keeps established rules learning. User-controlled
+        // state (enabled, status, cooldown, explanation, scope) and observed outcome counts
+        // are always preserved from the existing rule.
+        var indexByKey: [String: Int] = [:]
+        for (index, rule) in workingProfile.inferredRules.enumerated() {
+            indexByKey["\(rule.pattern)|\(rule.template)"] = index
+        }
         
         for newRule in inferredRules {
             let key = "\(newRule.pattern)|\(newRule.template)"
-            if !existingRulePatterns.contains(key) {
+            if let index = indexByKey[key] {
+                let existing = workingProfile.inferredRules[index]
+                workingProfile.inferredRules[index] = InferredRule(
+                    id: existing.id,
+                    pattern: existing.pattern,
+                    template: existing.template,
+                    metadataCues: Array(Set(existing.metadataCues + newRule.metadataCues)),
+                    // Priority magnitude is the signal (avoid rules are negative), and the
+                    // engine recomputes it from the full evidence set each run.
+                    priority: abs(newRule.priority) > abs(existing.priority) ? newRule.priority : existing.priority,
+                    exampleIds: Array(Set(existing.exampleIds + newRule.exampleIds)),
+                    explanation: existing.explanation,
+                    successCount: existing.successCount,
+                    failureCount: existing.failureCount,
+                    isEnabled: existing.isEnabled,
+                    lastAppliedAt: existing.lastAppliedAt,
+                    // max, not sum: each inference run recounts support from the same profile data.
+                    supportCount: max(existing.supportCount, newRule.supportCount),
+                    initialConfidence: existing.initialConfidence ?? newRule.initialConfidence,
+                    scope: existing.scope,
+                    status: existing.status,
+                    evidenceIds: Array(Set(existing.evidenceIds + newRule.evidenceIds)),
+                    evidenceDescription: existing.evidenceDescription ?? newRule.evidenceDescription,
+                    rejectedAt: existing.rejectedAt,
+                    cooldownUntil: existing.cooldownUntil
+                )
+            } else {
                 workingProfile.inferredRules.append(newRule)
-                existingRulePatterns.insert(key)
+                indexByKey[key] = workingProfile.inferredRules.count - 1
             }
         }
         

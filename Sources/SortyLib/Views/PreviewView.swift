@@ -283,9 +283,18 @@ struct PreviewView: View {
         if activeNotificationApplyRequestID != nil {
             NotificationManager.shared.recordActionLifecycle("apply", stage: "executing", detail: baseURL.path)
         }
-        recordAcceptedPlacements()
         let resolvedURL = appState.resolveSelectedDirectoryWithAccess() ?? baseURL
-        Task { @MainActor in do { try await organizer.apply(at: resolvedURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging); if case .completed = organizer.state { isApplying = false } } catch { organizer.state = .error(error); isApplying = false } }
+        Task { @MainActor in
+            do {
+                try await organizer.apply(at: resolvedURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging)
+                if case .completed = organizer.state {
+                    // Record accepted placements only after the apply actually completed,
+                    // so failed or cancelled applies don't write false positive examples.
+                    recordAcceptedPlacements()
+                    isApplying = false
+                }
+            } catch { organizer.state = .error(error); isApplying = false }
+        }
     }
 
     private func consumePendingNotificationActionIfNeeded() {
@@ -310,7 +319,7 @@ struct PreviewView: View {
         appState.clearNotificationActionRequest(id: request.id)
     }
     
-    /// Record accepted file placements and rename decisions before applying
+    /// Record accepted file placements and rename decisions after a successful apply
     private func recordAcceptedPlacements() {
         guard learningsManager.consentManager.canCollectData else { return }
         var remainingLearningExamples = 2_000

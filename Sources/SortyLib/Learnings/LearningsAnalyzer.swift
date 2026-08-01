@@ -76,9 +76,11 @@ public class LearningsAnalyzer: ObservableObject {
         }
         
         // Legacy pattern induction still adds value for template extraction from examples.
+        // It treats every example as positive destination evidence and ignores the action,
+        // so rejected examples must be excluded or rejected destinations become rules.
         currentStatus = "Scanning for structural patterns..."
         let legacyRules = await ruleInducer.induceRules(
-            from: trainingExamples,
+            from: trainingExamples.filter { $0.action != .reject },
             exampleFolders: exampleFolderURLs
         )
         rules.append(contentsOf: legacyRules)
@@ -160,38 +162,55 @@ public class LearningsAnalyzer: ObservableObject {
         let filename = fileURL.lastPathComponent
         let ext = fileURL.pathExtension
         let category = FileCategory.from(extension: ext)
-        
+        let now = Date()
+
         var bestMatch: (rule: InferredRule, confidence: Double)?
         var alternatives: [AlternativeMapping] = []
-        
-        // Try each rule in priority order
-        for rule in rules {
-            if let regex = try? NSRegularExpression(pattern: rule.pattern),
-               regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)) != nil {
-                
-                // Calculate confidence based on priority and match quality
-                let confidence = Double(rule.priority) / 100.0
-                
-                if bestMatch == nil || confidence > bestMatch!.confidence {
-                    if let prev = bestMatch {
-                        // Demote previous best to alternative
-                        let altDst = applyTemplate(prev.rule.template, to: fileURL, rootPath: rootPath)
-                        alternatives.append(AlternativeMapping(
-                            proposedDstPath: altDst,
-                            confidence: prev.confidence,
-                            explanation: "Alternative using rule: \(prev.rule.explanation)"
-                        ))
-                    }
-                    bestMatch = (rule, confidence)
-                } else {
-                    // Add as alternative
-                    let altDst = applyTemplate(rule.template, to: fileURL, rootPath: rootPath)
+
+        // Only enabled, active, non-cooldown rules may influence mappings.
+        let eligibleRules = rules.filter { $0.isEligible(at: now) }
+
+        func ruleMatches(_ rule: InferredRule) -> Bool {
+            guard let regex = try? NSRegularExpression(pattern: rule.pattern) else { return false }
+            return regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)) != nil
+        }
+
+        // Folders that matching avoid rules veto for this file. Avoid rules are never
+        // destinations themselves; they only suppress candidates.
+        let avoidedFolders = Set(
+            eligibleRules
+                .filter { $0.isAvoidRule && ruleMatches($0) }
+                .compactMap { $0.avoidedFolderName?.lowercased() }
+        )
+
+        for rule in eligibleRules where !rule.isAvoidRule {
+            guard ruleMatches(rule) else { continue }
+
+            let dst = applyTemplate(rule.template, to: fileURL, rootPath: rootPath)
+            let destinationFolder = URL(fileURLWithPath: dst).deletingLastPathComponent().lastPathComponent.lowercased()
+            if avoidedFolders.contains(destinationFolder) { continue }
+
+            // Unified confidence from outcomes, support, and recency (not just priority).
+            let confidence = rule.effectiveConfidence(at: now)
+
+            if bestMatch == nil || confidence > bestMatch!.confidence {
+                if let prev = bestMatch {
+                    // Demote previous best to alternative
+                    let altDst = applyTemplate(prev.rule.template, to: fileURL, rootPath: rootPath)
                     alternatives.append(AlternativeMapping(
                         proposedDstPath: altDst,
-                        confidence: confidence,
-                        explanation: "Alternative using rule: \(rule.explanation)"
+                        confidence: prev.confidence,
+                        explanation: "Alternative using rule: \(prev.rule.explanation)"
                     ))
                 }
+                bestMatch = (rule, confidence)
+            } else {
+                // Add as alternative
+                alternatives.append(AlternativeMapping(
+                    proposedDstPath: dst,
+                    confidence: confidence,
+                    explanation: "Alternative using rule: \(rule.explanation)"
+                ))
             }
         }
         

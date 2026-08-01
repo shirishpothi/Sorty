@@ -312,6 +312,50 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         if supportCount >= 5 && failureRate < 0.1 { return .high }
         return .medium
     }
+
+    /// True when this rule encodes an avoidance ("do NOT place here") rather than a destination.
+    /// Avoid rules use the `AVOID:` template prefix and must never be applied as literal paths.
+    public var isAvoidRule: Bool {
+        template.hasPrefix("AVOID:")
+    }
+
+    /// The folder name this avoid rule warns against, if any.
+    public var avoidedFolderName: String? {
+        guard isAvoidRule else { return nil }
+        let payload = template.dropFirst("AVOID:".count)
+        guard let folder = payload.split(separator: "/").first, !folder.isEmpty else { return nil }
+        return String(folder)
+    }
+
+    /// Whether the rule may currently be applied or surfaced to the model:
+    /// enabled, active, and past any rejection cooldown.
+    public func isEligible(at date: Date = Date()) -> Bool {
+        guard isEnabled, status == .active else { return false }
+        if let cooldownUntil, cooldownUntil > date { return false }
+        return true
+    }
+
+    /// Unified 0-1 confidence combining priority, observed outcomes, support, and recency.
+    /// This is the single score used for ranking rules in prompt context and for
+    /// scoring proposed mappings, replacing the previous priority-only heuristics.
+    public func effectiveConfidence(at now: Date = Date()) -> Double {
+        // Avoid rules carry negative priority by convention; magnitude is the signal.
+        let base = Double(min(abs(priority), 100)) / 100.0
+        let usageTotal = successCount + failureCount
+        // Laplace-smoothed success rate: 0.5 with no usage data, converges to the true rate.
+        let smoothedSuccessRate = Double(successCount + 1) / Double(usageTotal + 2)
+        let supportBoost = min(log10(Double(max(supportCount, 0) + 1)) * 0.2, 0.3)
+        var confidence = 0.3 * base + 0.5 * smoothedSuccessRate + supportBoost
+        if let lastAppliedAt {
+            let daysSinceUse = now.timeIntervalSince(lastAppliedAt) / 86_400
+            if daysSinceUse > 90 {
+                confidence *= 0.8
+            } else if daysSinceUse > 30 {
+                confidence *= 0.9
+            }
+        }
+        return min(max(confidence, 0), 1)
+    }
     
     public init(
         id: String = UUID().uuidString,

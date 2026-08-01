@@ -55,55 +55,44 @@ public enum FileLearningsAttributionResolver {
         let heuristicRules = allRules.filter(isEligibleForHeuristicAttribution)
 
         let resolvedRule: InferredRule?
-        let ruleID: String?
 
+        // Explicit model-supplied rule IDs must still pass eligibility filtering,
+        // so disabled, rejected, or cooling-down rules are never shown as attribution.
+        // Unknown or ineligible IDs fall back to heuristic matching instead of being
+        // displayed as raw ID strings.
         if let explicitRuleID,
-           let matchedExplicit = allRules.first(where: { $0.id == explicitRuleID }) {
+           let matchedExplicit = allRules.first(where: { $0.id == explicitRuleID }),
+           isEligibleForHeuristicAttribution(matchedExplicit) {
             resolvedRule = matchedExplicit
-            ruleID = explicitRuleID
         } else if let heuristicMatch = bestHeuristicRule(file: file, suggestion: suggestion, rules: heuristicRules) {
             resolvedRule = heuristicMatch
-            ruleID = heuristicMatch.id
         } else {
             resolvedRule = nil
-            ruleID = explicitRuleID
         }
 
-        guard let ruleID else {
+        guard let rule = resolvedRule else {
             return .empty
         }
 
-        let rule = resolvedRule
         let scope = attributionScope(for: file, rule: rule)
         var items: [LearningsAttributionItem] = []
 
-        if let rule {
-            let confidence = String(describing: rule.confidenceLevel).capitalized
-            let ruleTitle = scope == .fileRuleMatch ? "Learned Rule Matched File" : "Learned Rule Guided Folder"
-            items.append(
-                LearningsAttributionItem(
-                    kind: .learnedRule,
-                    title: ruleTitle,
-                    detail: "\(rule.explanation)\nConfidence: \(confidence) • Support: \(rule.supportCount)"
-                )
+        let confidence = String(describing: rule.confidenceLevel).capitalized
+        let ruleTitle = scope == .fileRuleMatch ? "Learned Rule Matched File" : "Learned Rule Guided Folder"
+        items.append(
+            LearningsAttributionItem(
+                kind: .learnedRule,
+                title: ruleTitle,
+                detail: "\(rule.explanation)\nConfidence: \(confidence) • Support: \(rule.supportCount)"
             )
+        )
 
-            if let evidence = normalizedEvidenceText(from: rule) {
-                items.append(
-                    LearningsAttributionItem(
-                        kind: .ruleEvidence,
-                        title: "Rule Evidence",
-                        detail: evidence
-                    )
-                )
-            }
-
-        } else {
+        if let evidence = normalizedEvidenceText(from: rule) {
             items.append(
                 LearningsAttributionItem(
-                    kind: .learnedRule,
-                    title: "Learned Rule ID",
-                    detail: ruleID
+                    kind: .ruleEvidence,
+                    title: "Rule Evidence",
+                    detail: evidence
                 )
             )
         }
