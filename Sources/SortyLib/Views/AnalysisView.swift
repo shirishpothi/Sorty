@@ -276,7 +276,7 @@ struct AnalysisView: View {
                                     removal: .opacity
                                 )
                             )
-                    } else if organizer.isStreaming {
+                    } else if isAIAnalysisPhaseActive {
                         aiInsightsView
                             .transition(
                                 .asymmetric(
@@ -390,11 +390,20 @@ struct AnalysisView: View {
         )
     }
 
+    /// True while the AI request phase is running: connecting, preparing
+    /// vision images, waiting for the first token, or streaming. Fresh
+    /// organize runs only set `isStreaming` once the first chunk arrives,
+    /// while the regenerate paths force it at request start; gating the
+    /// insights island on this keeps both flows consistent.
+    private var isAIAnalysisPhaseActive: Bool {
+        organizer.isStreaming || organizer.state == .organizing
+    }
+
     /// True when the live insights island (`aiInsightsView`) is visible beneath
     /// the progress banner, so the banner can expand to meet its width.
     private var showsLiveInsightsIsland: Bool {
         guard !isRenameOnlyFlow, !hasOrganizeStreamEvents else { return false }
-        return organizer.isStreaming
+        return isAIAnalysisPhaseActive
     }
 
     private var stageIndicator: some View {
@@ -602,7 +611,13 @@ struct AnalysisView: View {
 
     private var aiInsightsView: some View {
         InsightHistorySection(
-            isStreaming: organizer.isStreaming,
+            // Treat the pre-first-chunk request wait as streaming so the
+            // island shows the receiving-response loader instead of the
+            // "Analysis complete" checkmark. Once the stream has finished
+            // (content present, `isStreaming` false), fall back to the
+            // completed state while the plan is validated.
+            isStreaming: organizer.isStreaming
+                || (organizer.state == .organizing && organizer.displayStreamingContent.isEmpty),
             insights: liveInsights,
             debugModeEnabled: appState.debugMode,
             streamPreview: organizer.truncatedDisplayStreamingContent,
