@@ -224,8 +224,6 @@ struct HelpSettingsView: View {
         - Menu bar extra: \(yesNo(defaults.object(forKey: "showMenuBarExtra") as? Bool ?? true))
         - Completed onboarding: \(yesNo(defaults.bool(forKey: "hasCompletedOnboarding")))
 
-        ### Privacy
-        This report does not include file names, folder paths, file contents, prompts, credentials, AI responses, or raw error messages.
         """
     }
 
