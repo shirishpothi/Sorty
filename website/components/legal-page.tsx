@@ -4,6 +4,7 @@ import { ShieldCheck } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
+import styles from './legal-page.module.css'
 
 interface TocItem {
   id: string
@@ -44,13 +45,13 @@ export function LegalPage({
             <Link
               href="/"
               scroll={false}
-              className="legal-back-link"
+              className={styles.backLink}
               data-analytics-action="legal_navigation_opened"
               data-analytics-component="back_link"
               data-analytics-location="legal_page"
               data-analytics-target="home"
             >
-              <span className="legal-back-link-label">← Back to Sorty</span>
+              <span className={styles.backLinkLabel}>← Back to Sorty</span>
             </Link>
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
               {title}
