@@ -413,6 +413,7 @@ public struct NotificationAnalyticsEvent: Identifiable, Sendable {
 /// Manages all app notifications (HUD overlays and system notifications)
 @MainActor
 public class NotificationManager: ObservableObject {
+    public nonisolated static let transientHUDDuration: TimeInterval = 4
     public static let shared = NotificationManager()
     
     @Published public var currentHUDNotification: HUDNotification?
@@ -1065,9 +1066,9 @@ public class NotificationManager: ObservableObject {
         dismissTask?.cancel()
         guard !notification.isPersistent else { return }
 
-        // Auto-dismiss transient HUDs after 4 seconds.
+        // Auto-dismiss transient HUDs after the shared HUD duration.
         dismissTask = Task {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(for: .seconds(Self.transientHUDDuration))
             if !Task.isCancelled {
                 dismissHUD()
             }

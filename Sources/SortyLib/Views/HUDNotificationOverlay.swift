@@ -67,7 +67,7 @@ struct HUDNotificationCard: View {
     @State private var isHovered = false
     @State private var progressRemaining: CGFloat = 1.0
     
-    private let autoDismissSeconds: Double = 4.0
+    private let autoDismissSeconds = NotificationManager.transientHUDDuration
     private var queuedSummary: String {
         queuedCount == 1 ? "1 more" : "\(queuedCount) more"
     }

@@ -153,7 +153,9 @@ public class MenuBarController: ObservableObject {
         refreshActivity()
     }
 
-    public func showGreeting(for duration: Duration = .seconds(2)) {
+    public func showGreeting(
+        for duration: Duration = .seconds(NotificationManager.transientHUDDuration)
+    ) {
         let sourceID = "interaction.open-menu"
         greetingResetTask?.cancel()
 
