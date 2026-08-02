@@ -44,6 +44,7 @@ struct LearningsView: View {
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
     @State private var emptyLearningsHasAppeared = false
+    @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
 
     private enum StatusPopoverAction {
@@ -1238,10 +1239,26 @@ struct LearningsView: View {
                             .interpolation(.high)
                             .scaledToFit()
                             .frame(width: 72, height: 72)
+                            .opacity(emptyExampleFoldersHasAppeared ? 1 : 0)
+                            .scaleEffect(emptyExampleFoldersHasAppeared ? 1 : 0.8)
+                            .animation(
+                                reduceMotion
+                                    ? .easeOut(duration: 0.12)
+                                    : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                                value: emptyExampleFoldersHasAppeared
+                            )
                             .accessibilityHidden(true)
                     }
                     Text("No reference directories")
                         .font(.subheadline.bold())
+                        .opacity(emptyExampleFoldersHasAppeared ? 1 : 0)
+                        .offset(y: emptyExampleFoldersHasAppeared ? 0 : 8)
+                        .animation(
+                            reduceMotion
+                                ? .easeOut(duration: 0.12)
+                                : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                            value: emptyExampleFoldersHasAppeared
+                        )
                     Button {
                         presentFileImporter(.modelDirectories)
                     } label: {
@@ -1250,11 +1267,27 @@ struct LearningsView: View {
                     }
                     .buttonStyle(.onboardingPill(size: .small))
                     .accessibilityIdentifier("EmptyStateAddModelDirectoryButton")
+                    .opacity(emptyExampleFoldersHasAppeared ? 1 : 0)
+                    .offset(y: emptyExampleFoldersHasAppeared ? 0 : 10)
+                    .animation(
+                        reduceMotion
+                            ? .easeOut(duration: 0.12)
+                            : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                        value: emptyExampleFoldersHasAppeared
+                    )
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
                 .systemLiquidGlassBackground(cornerRadius: 12)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .task {
+                    guard !emptyExampleFoldersHasAppeared else { return }
+                    if !reduceMotion {
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                    guard !Task.isCancelled else { return }
+                    emptyExampleFoldersHasAppeared = true
+                }
             } else {
                 VStack(spacing: 6) {
                     ForEach(manager.modelDirectories) { directory in
