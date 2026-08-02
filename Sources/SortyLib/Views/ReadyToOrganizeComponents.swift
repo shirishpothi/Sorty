@@ -31,7 +31,11 @@ struct ReadyToOrganizeTitle: View {
                         Text(mode.actionVerb)
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(.primary)
-                            .underline(pattern: .dot, color: .secondary)
+                            .numericTextTransition(animationValue: mode)
+                            .overlay(alignment: .bottom) {
+                                WorkflowDottedUnderline()
+                                    .offset(y: 2)
+                            }
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
@@ -50,6 +54,30 @@ struct ReadyToOrganizeTitle: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+    }
+}
+
+private struct WorkflowDottedUnderline: View {
+    var body: some View {
+        Canvas { context, size in
+            let diameter: CGFloat = 1.5
+            let spacing: CGFloat = 2.5
+            var x = diameter / 2
+
+            while x <= size.width - diameter / 2 {
+                let rect = CGRect(
+                    x: x - diameter / 2,
+                    y: (size.height - diameter) / 2,
+                    width: diameter,
+                    height: diameter
+                )
+                context.fill(Path(ellipseIn: rect), with: .foreground)
+                x += diameter + spacing
+            }
+        }
+        .frame(height: 2)
+        .foregroundStyle(.secondary)
+        .accessibilityHidden(true)
     }
 }
 

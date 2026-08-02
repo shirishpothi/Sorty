@@ -246,7 +246,6 @@ struct MainWindowRootView: View {
                 updateMenuBarDuplicateActivity()
             }
             .onOpenURL { url in
-                SortyAppDelegate.pendingDeeplinkActivation = true
                 handleExternalDeeplink(url)
             }
             .onDisappear {
@@ -279,6 +278,10 @@ struct MainWindowRootView: View {
 
     private var contentWithEnvironment: some View {
         ContentView()
+            .handlesExternalEvents(
+                preferring: handledFinderExternalEvents,
+                allowing: handledFinderExternalEvents
+            )
             .environmentObject(settingsViewModel)
             .environmentObject(windowSession.appState)
             .environmentObject(personaManager)
@@ -305,6 +308,11 @@ struct MainWindowRootView: View {
             .background(MainWindowSessionTracker(sessionID: windowSession.id).frame(width: 0, height: 0))
             .trafficLightInactiveBorders()
             .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
+    }
+
+    private var handledFinderExternalEvents: Set<String> {
+        guard !windowSession.organizer.state.isOperationInProgress else { return [] }
+        return ["sorty://organize", "sorty://watched", "sorty://exclude"]
     }
 
     private func processLaunchRequestIfNeeded() {
@@ -381,7 +389,7 @@ struct MainWindowRootView: View {
         guard ExternalDeeplinkDeduper.shouldHandle(url) else { return }
 
         if url.isFinderWorkflowDeeplink {
-            if MainWindowRouter.shared.routeFinderDeeplink(url, receivedBy: windowSession.id) {
+            if MainWindowRouter.shared.routeFinderDeeplink(url) {
                 return
             }
 

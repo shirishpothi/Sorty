@@ -184,21 +184,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         return !keepInBackground && !showMenuBarExtra
     }
 
-    /// Track whether a deeplink URL is being handled so the app can suppress
-    /// the extra window that SwiftUI creates when activated via URL scheme.
-    @MainActor static var pendingDeeplinkActivation = false
-
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
-        -> Bool
-    {
-        if Self.pendingDeeplinkActivation {
-            Self.pendingDeeplinkActivation = false
-            // If we already have a visible window, suppress creating another one.
-            if flag { return false }
-        }
-        return true
-    }
-
     @MainActor
     func updateActivationPolicy(hideDockIcon: Bool) {
         if hideDockIcon {

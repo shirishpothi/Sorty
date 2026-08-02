@@ -38,18 +38,15 @@ public final class MainWindowRouter {
         weak var window: NSWindow?
         var lastFocusedAt: Date
         var isBusy: Bool
-        let registeredAt: Date
 
         init(
             window: NSWindow,
             lastFocusedAt: Date = Date(),
-            isBusy: Bool = false,
-            registeredAt: Date = Date()
+            isBusy: Bool = false
         ) {
             self.window = window
             self.lastFocusedAt = lastFocusedAt
             self.isBusy = isBusy
-            self.registeredAt = registeredAt
         }
     }
 
@@ -154,24 +151,10 @@ public final class MainWindowRouter {
     }
 
     @discardableResult
-    public func routeFinderDeeplink(_ url: URL, receivedBy sessionID: UUID) -> Bool {
+    public func routeFinderDeeplink(_ url: URL) -> Bool {
         pruneClosedSessions()
 
         let availableSessions = sessions.filter { !$0.value.isBusy }
-        guard !availableSessions.isEmpty else { return false }
-
-        if let receiver = sessions[sessionID],
-           Date().timeIntervalSince(receiver.registeredAt) < 2,
-           let olderSessionID = preferredSessionID(
-               in: availableSessions.filter {
-                   $0.key != sessionID && $0.value.registeredAt < receiver.registeredAt
-               }
-           ) {
-            guard routeDeeplink(url, to: olderSessionID) else { return false }
-            receiver.window?.performClose(nil)
-            return true
-        }
-
         guard let targetSessionID = preferredSessionID(in: availableSessions) else { return false }
         return routeDeeplink(url, to: targetSessionID)
     }
