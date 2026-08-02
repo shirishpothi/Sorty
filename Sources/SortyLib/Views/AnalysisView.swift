@@ -229,6 +229,9 @@ struct AnalysisView: View {
 
     /// Whether the scan found zero files (empty directory or all files excluded)
     private var isEmptyDirectory: Bool {
+        if organizer.blockingExclusionRule != nil {
+            return true
+        }
         let stage = organizer.organizationStage
         return stage.contains("Filtered to 0 files")
             || stage.contains("No files found to organize")
@@ -499,11 +502,11 @@ struct AnalysisView: View {
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
-                Text("No Files to \(settingsViewModel.config.mode.actionVerb)")
+                Text(emptyDirectoryTitle)
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("This folder is empty or all files were excluded by your exclusion rules. Try a different folder or adjust your exclusions.")
+                Text(emptyDirectoryMessage)
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -529,6 +532,23 @@ struct AnalysisView: View {
                 }
                 .buttonStyle(.tintedPill(.red))
                 .accessibilityIdentifier("AnalysisEmptyCancelButton")
+
+                if let blockingRule = organizer.blockingExclusionRule {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        appState.highlightedExclusionRuleID = blockingRule.id
+                        appState.currentView = .exclusions
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("View Exclusion")
+                                .font(.callout.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.onboardingPill)
+                    .accessibilityIdentifier("AnalysisEmptyViewExclusionButton")
+                }
 
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -557,6 +577,19 @@ struct AnalysisView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("No files to \(settingsViewModel.config.mode.actionVerb.lowercased()): This folder is empty or all files were excluded.")
+    }
+
+    private var emptyDirectoryTitle: String {
+        organizer.blockingExclusionRule == nil
+            ? "No Files to \(settingsViewModel.config.mode.actionVerb)"
+            : "This Folder Is Excluded"
+    }
+
+    private var emptyDirectoryMessage: String {
+        guard let rule = organizer.blockingExclusionRule else {
+            return "This folder is empty or all files were excluded by your exclusion rules. Try a different folder or adjust your exclusions."
+        }
+        return "\(rule.displayDescription) excludes this folder, so Sorty did not inspect or change anything inside it. You can review that exclusion or choose a different folder."
     }
 
     // MARK: - Analysis Action Buttons

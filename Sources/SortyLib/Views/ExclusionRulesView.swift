@@ -119,7 +119,7 @@ struct ExclusionRulesView: View {
 
                 Divider()
 
-                ZStack {
+                ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 20) {
                             // Grouped rules
@@ -128,6 +128,7 @@ struct ExclusionRulesView: View {
                                     title: group.0,
                                     rules: group.1,
                                     rulesManager: rulesManager,
+                                    highlightedRuleID: appState.highlightedExclusionRuleID,
                                     infoText: group.0 == "Files & Folders"
                                         ? "Matching files and folders are left untouched and aren't used for learnings."
                                         : nil
@@ -162,6 +163,12 @@ struct ExclusionRulesView: View {
                         .padding(.bottom, 20)
                     }
                     .transition(TransitionStyles.slideFromRight)
+                    .onAppear {
+                        scrollToHighlightedRule(using: proxy)
+                    }
+                    .onChange(of: appState.highlightedExclusionRuleID) { _, _ in
+                        scrollToHighlightedRule(using: proxy)
+                    }
                 }
                 .animation(.pageTransition, value: rulesManager.rules.isEmpty)
             }
@@ -179,6 +186,20 @@ struct ExclusionRulesView: View {
             allowsMultipleSelection: true
         ) { result in
             handleLearningExclusionImport(result)
+        }
+    }
+
+    private func scrollToHighlightedRule(using proxy: ScrollViewProxy) {
+        guard let ruleID = appState.highlightedExclusionRuleID else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(ruleID, anchor: .center)
+            }
+            try? await Task.sleep(for: .seconds(3))
+            if appState.highlightedExclusionRuleID == ruleID {
+                appState.highlightedExclusionRuleID = nil
+            }
         }
     }
 
@@ -648,6 +669,7 @@ struct RuleGroupCard: View {
     let title: String
     let rules: [ExclusionRule]
     @ObservedObject var rulesManager: ExclusionRulesManager
+    let highlightedRuleID: UUID?
     let infoText: String?
 
     @State private var isExpanded = true
@@ -720,7 +742,12 @@ struct RuleGroupCard: View {
 
                 VStack(spacing: 0) {
                     ForEach(rules) { rule in
-                        ExclusionRuleRow(rule: rule, rulesManager: rulesManager)
+                        ExclusionRuleRow(
+                            rule: rule,
+                            rulesManager: rulesManager,
+                            isHighlighted: rule.id == highlightedRuleID
+                        )
+                        .id(rule.id)
 
                         if rule.id != rules.last?.id {
                             Divider()
@@ -746,6 +773,7 @@ struct RuleGroupCard: View {
 struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
+    let isHighlighted: Bool
     @State private var isHovered = false
 
     private static let systemFolderIcon: NSImage = {
@@ -840,10 +868,11 @@ struct ExclusionRuleRow: View {
         .contentShape(Rectangle())
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
+        .background(isHighlighted ? Color.accentColor.opacity(0.14) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: isHighlighted)
         .contextMenu {
             Button(role: .destructive) {
                 HapticFeedbackManager.shared.tap()

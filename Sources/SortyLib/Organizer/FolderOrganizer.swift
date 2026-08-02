@@ -621,6 +621,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // Track current directory for status checks
     @Published public var currentDirectory: URL?
+    /// The rule that blocked the root folder for the current organization attempt.
+    @Published public private(set) var blockingExclusionRule: ExclusionRule?
     
     // Track detected duplicates for the current session
     @Published public var detectedDuplicates: [DuplicateGroup] = []
@@ -1672,6 +1674,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         await scanner.setOCRLanguages(aiConfig?.ocrLanguages ?? ["en-US"])
 
         let exclusionMatcher = exclusionRules?.matcherSnapshot()
+        blockingExclusionRule = exclusionRules?.blockingRule(forDirectoryAt: directory)
         let filesFound: [FileItem]
         do {
             filesFound = try await scanner.scanDirectory(
@@ -4925,6 +4928,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             showTimeoutMessage = false
             elapsedTime = 0
             currentDirectory = nil
+            blockingExclusionRule = nil
             scannedFileCount = 0
             scannedFiles = []
             detectedDuplicates = []

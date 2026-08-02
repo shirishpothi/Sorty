@@ -187,6 +187,18 @@ class ExclusionRulesTests: XCTestCase {
     }
 
     @MainActor
+    func testBlockingRuleReturnsTheExactFolderExclusion() {
+        let matchingRule = ExclusionRule(type: .pathContains, pattern: "/Users/test/Downloads")
+        manager.addRule(ExclusionRule(type: .folderName, pattern: "Cache"))
+        manager.addRule(matchingRule)
+
+        XCTAssertEqual(
+            manager.blockingRule(forDirectoryAt: URL(fileURLWithPath: "/Users/test/Downloads"))?.id,
+            matchingRule.id
+        )
+    }
+
+    @MainActor
     func testExclusionEnforcerRemovesNestedViolationsFromAIPlan() {
         let excludedFile = FileItem(path: "/p/cache/secret.tmp", name: "secret", extension: "tmp", size: 0, isDirectory: false)
         let allowedFile = FileItem(path: "/p/report.pdf", name: "report", extension: "pdf", size: 0, isDirectory: false)

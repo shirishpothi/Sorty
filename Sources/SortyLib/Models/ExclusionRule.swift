@@ -360,6 +360,15 @@ public struct ExclusionMatcher: Sendable {
         }
     }
 
+    /// The enabled rule that excludes an entire directory tree, if one applies.
+    public func firstBlockingDirectoryRuleID(at url: URL) -> UUID? {
+        guard !directoryPruningRules.isEmpty else { return nil }
+        var cache = ExclusionMatchCache(url: url)
+        return directoryPruningRules.first {
+            $0.matchesDirectoryForPruning(cache: &cache)
+        }?.id
+    }
+
     public func filterFiles(_ files: [FileItem]) -> [FileItem] {
         guard !rules.isEmpty else { return files }
 
@@ -1054,6 +1063,14 @@ public class ExclusionRulesManager: ObservableObject {
             compiledMatcher = compiledMatcher.refreshed()
         }
         return compiledMatcher
+    }
+
+    /// Returns the exact enabled rule that prevents Sorty from entering this folder.
+    public func blockingRule(forDirectoryAt url: URL) -> ExclusionRule? {
+        guard let ruleID = matcherSnapshot().firstBlockingDirectoryRuleID(at: url) else {
+            return nil
+        }
+        return rules.first { $0.id == ruleID }
     }
 
     // MARK: - Statistics
