@@ -532,12 +532,14 @@ private struct OnboardingIntroView: View {
     @State private var filesAppeared = false
     @State private var fileIcons: [String: NSImage] = [:]
     @State private var collapseProgress: CGFloat = 0
+    @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
-        ZStack {
+        GeometryReader { geometry in
+            ZStack {
             // Phase 1 of the reveal shows only the icon and its rose glow on a
             // fully transparent window — no backdrop, no "app window" feel.
             // The gradient fades in later together with the title and button.
@@ -547,7 +549,7 @@ private struct OnboardingIntroView: View {
                 .opacity(chromeRevealed ? 0.92 : 0)
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
-            // the app icon while the Get Started button is hovered.
+            // the Get Started button while it is hovered.
             // The timeline never pauses while the chips are visible: pausing it
             // froze `context.date`, so resuming made every chip jump to a new
             // orbital position (the hover "glitching"), and the old
@@ -568,7 +570,7 @@ private struct OnboardingIntroView: View {
                                 OrbitChipPlacement(
                                     collapseProgress: collapseProgress,
                                     orbitOffset: orbitOffset(for: file, phase: phase),
-                                    collapseOffset: CGSize(width: file.collapseX, height: file.collapseY),
+                                    collapseOffset: collapseOffset(for: file, in: geometry.size),
                                     orbitRotation: file.rotation + sin(phase * 0.7 + file.driftPhase) * 3,
                                     orbitScale: file.scale
                                 )
@@ -627,6 +629,14 @@ private struct OnboardingIntroView: View {
                 .onboardingBeamBorder(variant: .featured, isIntensified: isHoveringButton, includesInteriorGlow: isHoveringButton)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: OnboardingGetStartedButtonFrameKey.self,
+                            value: proxy.frame(in: .named("onboardingIntro"))
+                        )
+                    }
+                }
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                         isHoveringButton = hovering
@@ -643,15 +653,20 @@ private struct OnboardingIntroView: View {
                 .offset(y: textOffset)
                 .animation(.spring(response: 0.36, dampingFraction: 0.82), value: isHoveringButton)
             }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Welcome to Sorty")
-        .onAppear {
-            runIntroReveal()
-        }
-        .onDisappear {
-            revealGeneration += 1
-            audio.stopAll()
+            }
+            .coordinateSpace(name: "onboardingIntro")
+            .onPreferenceChange(OnboardingGetStartedButtonFrameKey.self) {
+                getStartedButtonFrame = $0
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Welcome to Sorty")
+            .onAppear {
+                runIntroReveal()
+            }
+            .onDisappear {
+                revealGeneration += 1
+                audio.stopAll()
+            }
         }
     }
 
@@ -734,10 +749,25 @@ private struct OnboardingIntroView: View {
         let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
         return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
     }
+
+    private func collapseOffset(for file: OnboardingOrbitFile, in containerSize: CGSize) -> CGSize {
+        CGSize(
+            width: getStartedButtonFrame.midX - containerSize.width / 2 + file.collapseX,
+            height: getStartedButtonFrame.midY - containerSize.height / 2 + file.collapseY
+        )
+    }
+}
+
+private struct OnboardingGetStartedButtonFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
 }
 
 /// Blends each orbit chip between its live orbital placement and its
-/// collapsed position near the app icon. `collapseProgress` is the only
+/// collapsed position inside the Get Started button. `collapseProgress` is the only
 /// animated value — the orbit inputs update on every timeline tick — so the
 /// hover collapse can be entered and exited mid-flight without position
 /// jumps, and the orbit itself never freezes.
@@ -909,7 +939,7 @@ private struct OnboardingOrbitFile: Identifiable {
     let rotation: Double
     let scale: CGFloat
     let appearDelay: Double
-    // Where the file flies to when the pile collapses into the icon.
+    // Relative placement within the Get Started button when the pile collapses.
     let collapseX: CGFloat
     let collapseY: CGFloat
 
