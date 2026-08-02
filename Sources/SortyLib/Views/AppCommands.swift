@@ -249,11 +249,6 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!) { Label("Report Issue", systemImage: "ladybug") }
 
-            Button("Thinking Orbs", systemImage: "circle.dotted.circle") {
-                appState?.showThinkingOrbs()
-            }
-            .disabled(appState == nil)
-
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
             }
