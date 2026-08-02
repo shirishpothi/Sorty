@@ -102,11 +102,19 @@ struct OrganizeView: View {
                         },
                         onClear: {
                             HapticFeedbackManager.shared.tap()
-                            withAnimation(.pageTransition) {
-                                organizer.reset()
-                                appState.selectedDirectory = nil
+                            let panel = NSOpenPanel()
+                            panel.canChooseDirectories = true
+                            panel.canChooseFiles = false
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Select a directory to organize"
+                            panel.prompt = "Select"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                withAnimation(.pageTransition) {
+                                    organizer.reset()
+                                    appState.selectedDirectory = url
+                                }
+                                HapticFeedbackManager.shared.success()
                             }
-                            appState.showDirectoryPicker = true
                         }
                     )
 
@@ -793,7 +801,7 @@ struct DirectoryHeader: View {
             } label: {
                 Label("Change Folder", systemImage: "folder.badge.gearshape")
             }
-            .buttonStyle(.tintedPill(.indigo, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .accessibilityIdentifier("ChangeFolderButton")
         }
         .padding(.horizontal, 24)

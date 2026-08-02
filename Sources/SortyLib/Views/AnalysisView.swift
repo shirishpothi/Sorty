@@ -195,7 +195,6 @@ struct AnalysisView: View {
     @State private var hasRenameStreamEvents = false
     @State private var hasOrganizeStreamEvents = false
     @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
-    @State private var isHoveringExclusionAction = false
 
     private enum MessageTier {
         case none
@@ -541,33 +540,24 @@ struct AnalysisView: View {
                         appState.currentView = .exclusions
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.right")
+                            Image(systemName: "slider.horizontal.3")
                                 .font(.system(size: 12, weight: .semibold))
-                                .offset(
-                                    x: isHoveringExclusionAction ? 2 : 0,
-                                    y: isHoveringExclusionAction ? -2 : 0
-                                )
                             Text("View Exclusion")
                                 .font(.callout.weight(.semibold))
                         }
                     }
-                    .buttonStyle(.tintedPill(.orange))
-                    .animation(
-                        .spring(response: 0.3, dampingFraction: 0.7),
-                        value: isHoveringExclusionAction
-                    )
-                    .onHover { isHovering in
-                        guard isHovering != isHoveringExclusionAction else { return }
-                        if isHovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                        isHoveringExclusionAction = isHovering
-                    }
+                    .buttonStyle(.onboardingPill)
                     .accessibilityIdentifier("AnalysisEmptyViewExclusionButton")
                 }
 
                 Button {
-                    changeFolder()
+                    HapticFeedbackManager.shared.tap()
+                    recordCancelledAnalysis()
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        organizer.reset()
+                        appState.selectedDirectory = nil
+                    }
+                    appState.showDirectoryPicker = true
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "folder.badge.plus")
@@ -576,7 +566,7 @@ struct AnalysisView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .buttonStyle(.tintedPill(.indigo))
+                .buttonStyle(.onboardingPill)
                 .accessibilityIdentifier("AnalysisEmptyChooseFolderButton")
             }
             .opacity(hasAppeared ? 1 : 0)
@@ -600,17 +590,6 @@ struct AnalysisView: View {
             return "This folder is empty or all files were excluded by your exclusion rules. Try a different folder or adjust your exclusions."
         }
         return "\(rule.displayDescription) excludes this folder, so Sorty did not inspect or change anything inside it. You can review that exclusion or choose a different folder."
-    }
-
-    private func changeFolder() {
-        HapticFeedbackManager.shared.tap()
-        recordCancelledAnalysis()
-        withAnimation(.easeOut(duration: 0.3)) {
-            organizer.reset()
-            appState.selectedDirectory = nil
-        }
-        appState.currentView = .organize
-        appState.showDirectoryPicker = true
     }
 
     // MARK: - Analysis Action Buttons
