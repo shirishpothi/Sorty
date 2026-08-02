@@ -4,6 +4,7 @@ struct ReadyToOrganizeTitle: View {
     let mode: OrganizationMode
     let showsWorkflowPicker: Bool
     let onSelectMode: (OrganizationMode) -> Void
+    @State private var isShowingWorkflowChoices = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -12,21 +13,8 @@ struct ReadyToOrganizeTitle: View {
                     Text("Ready to")
                         .font(.title2.weight(.semibold))
 
-                    Menu {
-                        ForEach(OrganizationMode.allCases, id: \.self) { workflow in
-                            Button {
-                                onSelectMode(workflow)
-                            } label: {
-                                Label {
-                                    Text(workflow.actionVerb)
-                                } icon: {
-                                    Image(
-                                        systemName: workflow == mode
-                                            ? "checkmark" : workflow.iconName
-                                    )
-                                }
-                            }
-                        }
+                    Button {
+                        isShowingWorkflowChoices.toggle()
                     } label: {
                         Text(mode.actionVerb)
                             .font(.title2.weight(.semibold))
@@ -37,9 +25,11 @@ struct ReadyToOrganizeTitle: View {
                                     .offset(y: 2)
                             }
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
+                    .buttonStyle(.plain)
                     .fixedSize()
+                    .popover(isPresented: $isShowingWorkflowChoices, arrowEdge: .bottom) {
+                        workflowChoices
+                    }
                     .help("Choose Organize, Organize & Rename, or Rename")
                     .accessibilityLabel("Workflow: \(mode.actionVerb)")
                     .accessibilityHint("Choose one of three workflows")
@@ -54,6 +44,31 @@ struct ReadyToOrganizeTitle: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    private var workflowChoices: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(OrganizationMode.allCases, id: \.self) { workflow in
+                Button {
+                    onSelectMode(workflow)
+                    isShowingWorkflowChoices = false
+                } label: {
+                    Label {
+                        Text(workflow.actionVerb)
+                    } icon: {
+                        Image(systemName: workflow == mode ? "checkmark" : workflow.iconName)
+                            .frame(width: 16)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+            }
+        }
+        .padding(6)
+        .frame(minWidth: 190)
     }
 }
 
@@ -71,12 +86,14 @@ private struct WorkflowDottedUnderline: View {
                     width: diameter,
                     height: diameter
                 )
-                context.fill(Path(ellipseIn: rect), with: .foreground)
+                context.fill(
+                    Path(ellipseIn: rect),
+                    with: .color(Color.secondary.opacity(0.9))
+                )
                 x += diameter + spacing
             }
         }
         .frame(height: 2)
-        .foregroundStyle(.secondary)
         .accessibilityHidden(true)
     }
 }
