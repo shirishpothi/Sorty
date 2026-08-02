@@ -1232,12 +1232,14 @@ struct LearningsView: View {
 
             if manager.modelDirectories.isEmpty {
                 VStack(spacing: 10) {
-                    Image("TeachSortyExampleFolders")
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .frame(width: 72, height: 72)
-                        .accessibilityHidden(true)
+                    if let image = SortyResources.image(named: "TeachSortyExampleFolders") {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                            .frame(width: 72, height: 72)
+                            .accessibilityHidden(true)
+                    }
                     Text("No reference directories")
                         .font(.subheadline.bold())
                     Button {
