@@ -8,6 +8,33 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum DateAgeUnit: CaseIterable, Hashable, Identifiable {
+    case days
+    case weeks
+    case months
+    case years
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .days: "days ago"
+        case .weeks: "weeks ago"
+        case .months: "months ago"
+        case .years: "years ago"
+        }
+    }
+
+    var daysMultiplier: Double {
+        switch self {
+        case .days: 1
+        case .weeks: 7
+        case .months: 30
+        case .years: 365
+        }
+    }
+}
+
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
@@ -948,6 +975,7 @@ struct AddExclusionRuleView: View {
     @State private var description: String = ""
     @State private var numericValue: Double = 100
     @State private var comparisonGreater: Bool = true
+    @State private var dateAgeUnit: DateAgeUnit = .days
     @State private var selectedFileTypeCategory: FileTypeCategory = .images
     @State private var selectedFolderURL: URL?
     @State private var showingFolderPicker = false
@@ -1178,8 +1206,12 @@ struct AddExclusionRuleView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
 
-                Text("days ago")
-                    .foregroundStyle(.secondary)
+                Picker("Age unit", selection: $dateAgeUnit) {
+                    ForEach(DateAgeUnit.allCases) { unit in
+                        Text(unit.label).tag(unit)
+                    }
+                }
+                .pickerStyle(.menu)
 
                 Picker("", selection: $comparisonGreater) {
                     Text("Older than").tag(true)
@@ -1283,7 +1315,9 @@ struct AddExclusionRuleView: View {
                 type: selectedType,
                 pattern: pattern,
                 description: description.isEmpty ? nil : description,
-                numericValue: numericValue,
+                numericValue: selectedType == .fileSize
+                    ? numericValue
+                    : numericValue * dateAgeUnit.daysMultiplier,
                 comparisonGreater: comparisonGreater
             )
         case .fileType:
