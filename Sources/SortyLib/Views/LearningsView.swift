@@ -254,14 +254,11 @@ struct LearningsView: View {
                     whatSortyHasLearnedSection
                         .animatedAppearance(delay: 0.08)
 
-                    recentActivitySection
+                    settingsSection
                         .animatedAppearance(delay: 0.12)
 
-                    settingsSection
-                        .animatedAppearance(delay: 0.16)
-
                     advancedSection
-                        .animatedAppearance(delay: 0.20)
+                        .animatedAppearance(delay: 0.16)
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 20)
@@ -1156,53 +1153,6 @@ struct LearningsView: View {
         }
     }
 
-    // MARK: - Recent Activity (Session Timeline)
-
-    private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Activity")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-
-            if let profile = manager.currentProfile, !profile.sessions.isEmpty {
-                let recentSessions = Array(profile.sessions.prefix(10))
-                VStack(spacing: 0) {
-                    ForEach(Array(recentSessions.enumerated()), id: \.element.id) {
-                        index, session in
-                        SessionTimelineRow(session: session)
-                            .animatedAppearance(delay: Double(index) * 0.04)
-                        if index < recentSessions.count - 1 {
-                            Divider().padding(.leading, 36)
-                        }
-                    }
-                }
-            } else {
-                VStack(spacing: 12) {
-                    Image("ActivityEmptyState")
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .frame(width: 92, height: 92)
-                        .accessibilityIgnoresInvertColors()
-                        .accessibilityHidden(true)
-                    Text("No activity yet")
-                        .font(.subheadline.bold())
-                    Text("Your organization activity will appear here as you use the app.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 360)
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity)
-                .systemLiquidGlassBackground(cornerRadius: 12)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("No activity yet.")
-            }
-        }
-    }
-
     // MARK: - Settings (Inline)
 
     private var settingsSection: some View {
@@ -1701,161 +1651,6 @@ private struct LearningInsightRow: View {
         if rule.failureRate > 0.3 { return .red }
         if rule.failureRate > 0.15 { return .orange }
         return .green
-    }
-}
-
-// MARK: - Session Timeline Row
-
-private struct SessionTimelineRow: View {
-    let session: OrganizationSession
-    @State private var isHovered = false
-    @State private var isExpanded = false
-
-    private var folderName: String {
-        URL(fileURLWithPath: session.folderPath).lastPathComponent
-    }
-
-    private var reactionIcon: String {
-        switch session.reaction {
-        case .accepted: return "checkmark.circle.fill"
-        case .corrected: return "pencil.circle.fill"
-        case .reverted: return "arrow.uturn.backward.circle.fill"
-        case .cancelled: return "xmark.octagon.fill"
-        case .regenerated: return "arrow.triangle.2.circlepath"
-        case .inProgress: return "clock.fill"
-        }
-    }
-
-    private var reactionColor: Color {
-        switch session.reaction {
-        case .accepted: return .green
-        case .corrected: return .blue
-        case .reverted: return .orange
-        case .cancelled: return .red
-        case .regenerated: return .purple
-        case .inProgress: return .secondary
-        }
-    }
-
-    private var reactionLabel: String {
-        switch session.reaction {
-        case .accepted: return "Accepted"
-        case .corrected: return "Corrected"
-        case .reverted: return "Reverted"
-        case .cancelled: return "Cancelled"
-        case .regenerated: return "Regenerated"
-        case .inProgress: return "In progress"
-        }
-    }
-
-    private var sessionDate: Date {
-        session.completedAt ?? session.timestamp
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                guard !session.events.isEmpty else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                    isExpanded.toggle()
-                }
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: reactionIcon)
-                        .font(.body.bold())
-                        .foregroundColor(reactionColor)
-                        .frame(width: 24)
-                        .symbolReplaceTransition(animationValue: reactionIcon)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(folderName)
-                                .font(.subheadline.bold())
-                                .lineLimit(1)
-                            Text(reactionLabel)
-                                .font(.caption2.bold())
-                                .foregroundColor(reactionColor)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(reactionColor.opacity(0.1))
-                                .clipShape(Capsule())
-                        }
-
-                        HStack(spacing: 8) {
-                            if session.filesMoved.count > 0 {
-                                Text("\(session.filesMoved.count) files")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .numericTextTransition(
-                                        animationValue: session.filesMoved.count
-                                    )
-                            }
-                            if !session.userCorrections.isEmpty {
-                                Text(
-                                    "\(session.userCorrections.count) correction\(session.userCorrections.count == 1 ? "" : "s")"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                            }
-                        }
-                    }
-
-                    Spacer()
-
-                    Text(sessionDate, style: .relative)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    if !session.events.isEmpty {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .symbolReplaceTransition(animationValue: isExpanded)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(isHovered ? 0.06 : 0))
-            )
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
-                if hovering { HapticFeedbackManager.shared.selection() }
-            }
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(session.events.suffix(5)) { event in
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(Color.secondary.opacity(0.3))
-                                .frame(width: 5, height: 5)
-                            Text(event.summary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            Spacer()
-                            Text(event.timestamp, style: .relative)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-                .padding(.leading, 48)
-                .padding(.trailing, 12)
-                .padding(.bottom, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(folderName), \(reactionLabel), \(sessionDate.formatted(date: .abbreviated, time: .shortened))"
-        )
     }
 }
 
