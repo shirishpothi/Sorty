@@ -311,11 +311,6 @@ export function initializeWebsiteAnalytics(): void {
   const configuration = configuredPostHog()
 
   if (!configuration) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error(
-        'PostHog requires a browser-safe phc_ project token and the approved HTTPS ingestion origin.',
-      )
-    }
     return
   }
 
