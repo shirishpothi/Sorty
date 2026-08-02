@@ -1022,7 +1022,6 @@ final class EnhancedLearningsTests: XCTestCase {
         ]
         manager.currentProfile = profile
         manager.learningStrength = 0.8
-        manager.useAIForLearnings = false
         manager.dataRetentionDays = 90
         manager.setLearningsModelOverride(provider: .openRouter, model: "openrouter/free")
 
@@ -1041,7 +1040,7 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertEqual(archive.summary.positiveExamples, 1)
         XCTAssertEqual(archive.summary.totalRecordCount, 1)
         XCTAssertEqual(archive.settings.learningStrength, 0.8)
-        XCTAssertFalse(archive.settings.usesAIForAnalysis)
+        XCTAssertTrue(archive.settings.usesAIForAnalysis)
         XCTAssertEqual(archive.settings.dataRetentionDays, 90)
         XCTAssertEqual(archive.settings.modelSelection?.model, "openrouter/free")
         XCTAssertEqual(archive.profile.positiveExamples.first?.id, "example-1")
@@ -1060,7 +1059,6 @@ final class EnhancedLearningsTests: XCTestCase {
         ]
         manager.currentProfile = exportedProfile
         manager.learningStrength = 0.7
-        manager.useAIForLearnings = false
         manager.dataRetentionDays = 0
         let archiveData = try manager.makeProfileArchiveData()
 
@@ -1074,21 +1072,19 @@ final class EnhancedLearningsTests: XCTestCase {
         ]
         manager.currentProfile = existingProfile
         manager.learningStrength = 0.2
-        manager.useAIForLearnings = true
-
         let result = try await manager.importProfile(data: archiveData)
 
         XCTAssertEqual(result.importedRecordCount, 1)
         XCTAssertEqual(result.previousRecordCount, 1)
         XCTAssertEqual(result.resultingRecordCount, 3)
-        XCTAssertEqual(result.restoredSettingCount, 4)
+        XCTAssertEqual(result.restoredSettingCount, 3)
         XCTAssertFalse(result.wasLegacyProfile)
         XCTAssertEqual(manager.currentProfile?.corrections.first?.id, "imported-correction")
         XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.id, "existing-example")
         XCTAssertEqual(manager.currentProfile?.sessions.count, 1)
         XCTAssertEqual(manager.currentProfile?.consentGranted, true)
         XCTAssertEqual(manager.learningStrength, 0.7)
-        XCTAssertFalse(manager.useAIForLearnings)
+        XCTAssertTrue(manager.useAIForLearnings)
     }
 
     func testProfileImportRejectsModifiedArchive() async throws {

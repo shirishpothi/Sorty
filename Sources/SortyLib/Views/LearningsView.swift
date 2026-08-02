@@ -1045,29 +1045,6 @@ struct LearningsView: View {
                 .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 0) {
-                settingsToggleRow(
-                    icon: "pause.circle",
-                    iconColor: .orange,
-                    title: "Pause Learning",
-                    subtitle: "Temporarily stop collecting signals",
-                    isOn: Binding(
-                        get: { manager.sessionLearningPaused },
-                        set: { setSessionLearningPaused($0) }
-                    )
-                )
-
-                Divider().padding(.leading, 40)
-
-                settingsToggleRow(
-                    icon: "cpu",
-                    iconColor: .purple,
-                    title: "Use AI for Analysis",
-                    subtitle: "Spend AI credits on pattern analysis",
-                    isOn: $manager.useAIForLearnings
-                )
-
-                Divider().padding(.leading, 40)
-
                 HStack(spacing: 12) {
                     Image(systemName: "wand.and.stars")
                         .foregroundColor(.blue)
@@ -1172,27 +1149,6 @@ struct LearningsView: View {
                 .accessibilityHint("Permanently deletes all learning data")
             }
         }
-    }
-
-    private func settingsToggleRow(
-        icon: String, iconColor: Color, title: String, subtitle: String, isOn: Binding<Bool>
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(iconColor)
-                .font(.body.bold())
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(LocalizedStringKey(title)).font(.subheadline)
-                Text(LocalizedStringKey(subtitle)).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Toggle("", isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
     }
 
     private var referenceDirectoriesSection: some View {

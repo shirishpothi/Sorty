@@ -35,11 +35,8 @@ public class LearningsManager: ObservableObject {
             userDefaults.set(learningStrength, forKey: "learningStrength")
         }
     }
-    @Published public var useAIForLearnings: Bool = true {
-        didSet {
-            userDefaults.set(useAIForLearnings, forKey: "useAIForLearnings")
-        }
-    }
+    /// Learnings analysis always uses the configured AI provider.
+    public let useAIForLearnings = true
     @Published public var sessionLearningPaused: Bool = false
     @Published public var modelDirectories: [ReferenceModelDirectory] = []
     private var activeModelDirectoryURLs: [String: URL] = [:]
@@ -245,7 +242,7 @@ public class LearningsManager: ObservableObject {
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
         dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
-        useAIForLearnings = userDefaults.object(forKey: "useAIForLearnings") as? Bool ?? true
+        userDefaults.removeObject(forKey: "useAIForLearnings")
         loadLearningsModelSelection()
         loadModelDirectories()
     }
@@ -325,12 +322,10 @@ public class LearningsManager: ObservableObject {
             stopAllModelDirectoryAccess()
             modelDirectories = []
             learningStrength = 0.5
-            useAIForLearnings = true
             dataRetentionDays = 0
 
             [
                 "learningStrength",
-                "useAIForLearnings",
                 "learningDataRetentionDays",
                 Self.learningsModelSelectionKey,
                 Self.modelDirectoriesKey,
@@ -1454,11 +1449,6 @@ public class LearningsManager: ObservableObject {
     
     /// Run analysis on current profile and paths
     public func analyze(rootPaths: [String], examplePaths: [String]) async {
-        guard useAIForLearnings else {
-            error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
-            return
-        }
-        
         // Use configured model directories as example paths when none are explicitly provided
         let effectiveExamplePaths: [String]
         if examplePaths.isEmpty {
@@ -1472,11 +1462,6 @@ public class LearningsManager: ObservableObject {
 
     /// Re-synthesize learning insights without requiring scan roots.
     public func synthesizeLearnings() async {
-        guard useAIForLearnings else {
-            error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
-            return
-        }
-
         await runAnalysis(rootPaths: [], examplePaths: enabledModelDirectoryPaths())
     }
     
@@ -1652,7 +1637,7 @@ public class LearningsManager: ObservableObject {
         if let settings = archive?.settings {
             try validateSettings(settings)
             applyImportedSettings(settings)
-            restoredSettingCount = 4
+            restoredSettingCount = 3
         } else {
             restoredSettingCount = 0
         }
@@ -1716,7 +1701,6 @@ public class LearningsManager: ObservableObject {
 
     private func applyImportedSettings(_ settings: LearningsProfileSettingsSnapshot) {
         learningStrength = settings.learningStrength
-        useAIForLearnings = settings.usesAIForAnalysis
         dataRetentionDays = settings.dataRetentionDays
 
         if let selection = settings.modelSelection {
