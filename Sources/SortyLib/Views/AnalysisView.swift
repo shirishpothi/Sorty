@@ -181,6 +181,7 @@ struct AnalysisView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @StateObject private var refreshManager = AnalysisRefreshManager()
@@ -195,6 +196,8 @@ struct AnalysisView: View {
     @State private var hasRenameStreamEvents = false
     @State private var hasOrganizeStreamEvents = false
     @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
+    @State private var isHoveringViewExclusion = false
+    @State private var isHoveringChangeFolder = false
 
     private enum MessageTier {
         case none
@@ -540,14 +543,36 @@ struct AnalysisView: View {
                         appState.currentView = .exclusions
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "slider.horizontal.3")
+                            Image(
+                                systemName: isHoveringViewExclusion
+                                    ? "arrow.up.right"
+                                    : "slider.horizontal.3"
+                            )
                                 .font(.system(size: 12, weight: .semibold))
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
                             Text("View Exclusion")
                                 .font(.callout.weight(.semibold))
                         }
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.tintedPill(.indigo))
                     .accessibilityIdentifier("AnalysisEmptyViewExclusionButton")
+                    .onHover { hovering in
+                        if hovering && !isHoveringViewExclusion {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                        withAnimation(
+                            reduceMotion
+                                ? nil
+                                : .spring(response: 0.24, dampingFraction: 0.82)
+                        ) {
+                            isHoveringViewExclusion = hovering
+                        }
+                    }
                 }
 
                 Button {
@@ -555,7 +580,6 @@ struct AnalysisView: View {
                     recordCancelledAnalysis()
                     withAnimation(.easeOut(duration: 0.3)) {
                         organizer.reset()
-                        appState.selectedDirectory = nil
                     }
                     appState.showDirectoryPicker = true
                 } label: {
@@ -566,8 +590,14 @@ struct AnalysisView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.tintedPill(.blue))
                 .accessibilityIdentifier("AnalysisEmptyChooseFolderButton")
+                .onHover { hovering in
+                    if hovering && !isHoveringChangeFolder {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    isHoveringChangeFolder = hovering
+                }
             }
             .opacity(hasAppeared ? 1 : 0)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
