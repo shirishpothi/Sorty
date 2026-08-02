@@ -130,6 +130,61 @@ final class ResourceLoadingTests: XCTestCase {
         XCTAssertGreaterThan(image.size.height, 0, "Menu bar label image should load with a valid height")
         XCTAssertFalse(image.isTemplate, "Menu bar label image should remain full-color (non-template)")
     }
+
+    func testMenuBarActivityImagesLoad() {
+        for activity in MenuBarActivity.allCases {
+            let image = SortyResources.image(
+                named: activity.resourceName,
+                withExtension: "png"
+            )
+            XCTAssertNotNil(image, "\(activity.rawValue) should have a bundled menu bar image")
+        }
+    }
+
+    func testMenuBarControllerShowsMostRecentlyStartedActivity() {
+        let controller = MenuBarController()
+        XCTAssertEqual(controller.activity, .idle)
+
+        controller.setActivity(.organizing, sourceID: "organization")
+        controller.setActivity(.duplicateScanning, sourceID: "duplicates")
+        XCTAssertEqual(controller.activity, .duplicateScanning)
+
+        controller.setActivity(.learning, sourceID: "organization")
+        XCTAssertEqual(controller.activity, .learning)
+
+        controller.setActivity(nil, sourceID: "organization")
+        XCTAssertEqual(controller.activity, .duplicateScanning)
+
+        controller.setActivity(nil, sourceID: "duplicates")
+        XCTAssertEqual(controller.activity, .idle)
+    }
+
+    func testMenuBarControllerMapsOrganizationModesAndStopsAtReady() {
+        let controller = MenuBarController()
+
+        controller.updateOrganizationActivity(
+            state: .scanning,
+            mode: .renameOnly,
+            sourceID: "manual"
+        )
+        XCTAssertEqual(controller.activity, .renaming)
+
+        controller.updateOrganizationActivity(
+            state: .organizing,
+            mode: .organize,
+            sourceID: "watched",
+            isWatchedFolder: true
+        )
+        XCTAssertEqual(controller.activity, .watchedFolder)
+
+        controller.updateOrganizationActivity(
+            state: .ready,
+            mode: .organize,
+            sourceID: "watched",
+            isWatchedFolder: true
+        )
+        XCTAssertEqual(controller.activity, .renaming)
+    }
     
     // MARK: - Fallback Behavior Tests
 

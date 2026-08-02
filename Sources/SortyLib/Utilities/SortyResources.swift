@@ -239,7 +239,15 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
 
-        // Try 5: Images subdirectory (SPM .copy() resources)
+        // Try 5: Direct copied Images directory lookup. SwiftPM directory bundles
+        // do not consistently resolve subdirectories through Bundle.url on every
+        // test host, even when the files are present under bundle.resourceURL.
+        if let nsImage = loadImageFromCopiedImagesDirectories(named: name, withExtension: ext) {
+            logger.debug("Loaded image '\(name)' from copied Images directory")
+            return cacheImage(nsImage, forKey: cacheKey)
+        }
+
+        // Try 6: Images subdirectory (SPM .copy() resources)
         if let imageURL = bundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
               let nsImage = NSImage(contentsOf: imageURL),
               isUsableImage(nsImage) {
@@ -247,7 +255,7 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
 
-        // Try 6: Direct bundle resource with extension
+        // Try 7: Direct bundle resource with extension
         if let imageURL = bundle.url(forResource: name, withExtension: ext),
               let nsImage = NSImage(contentsOf: imageURL),
               isUsableImage(nsImage) {
@@ -255,7 +263,7 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
 
-        // Try 7: Bundle image resource helper (covers non-asset bundled images)
+        // Try 8: Bundle image resource helper (covers non-asset bundled images)
         if let imageURL = bundle.urlForImageResource(name),
            let nsImage = NSImage(contentsOf: imageURL),
            isUsableImage(nsImage) {
@@ -263,7 +271,7 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
 
-        // Try 8: Nested Sorty_SortyLib bundle fallback (covers builds where
+        // Try 9: Nested Sorty_SortyLib bundle fallback (covers builds where
         // this process resolves Bundle.main but the copied Images/ assets live
         // in a sibling Sorty_SortyLib.bundle inside app resources).
         if let nsImage = loadImageFromEmbeddedSortyLibBundle(named: name, withExtension: ext) {
@@ -271,7 +279,7 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
         
-        // Try 9: Look in source tree Assets.xcassets imageset directories (development fallback)
+        // Try 10: Look in source tree Assets.xcassets imageset directories (development fallback)
         // This handles the case where Xcode hasn't compiled the asset catalog yet
         let extensions = [ext, "png", "svg", "pdf"]
         let basePaths = [
@@ -319,6 +327,29 @@ public enum SortyResources {
 
     private static func isUsableImage(_ image: NSImage) -> Bool {
         image.size.width > 2 && image.size.height > 2
+    }
+
+    private static func loadImageFromCopiedImagesDirectories(
+        named name: String,
+        withExtension ext: String
+    ) -> NSImage? {
+        let roots = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
+        let candidates = roots.flatMap { root in
+            [
+                root.appendingPathComponent("Images/\(name).\(ext)"),
+                root.appendingPathComponent("Resources/Images/\(name).\(ext)")
+            ]
+        } + [
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                .appendingPathComponent("Sources/SortyLib/Resources/Images/\(name).\(ext)")
+        ]
+
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            if let image = NSImage(contentsOf: candidate), isUsableImage(image) {
+                return image
+            }
+        }
+        return nil
     }
 
     private static func loadImageFromEmbeddedSortyLibBundle(named name: String, withExtension ext: String) -> NSImage? {

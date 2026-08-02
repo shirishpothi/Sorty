@@ -485,7 +485,7 @@ struct SortyApp: App {
                     configureGlobalsIfNeeded()
                 }
         } label: {
-            MenuBarLabel()
+            MenuBarLabel(controller: menuBarController)
         }
         .menuBarExtraStyle(.window)
     }
@@ -633,7 +633,11 @@ struct SortyApp: App {
             automationManager.startUp()
             try? await automationOrganizer.configure(with: settingsViewModel.config)
             learningsManager.configure(with: settingsViewModel.config)
-            menuBarController.configure(settings: settingsViewModel)
+            menuBarController.configure(
+                settings: settingsViewModel,
+                automationOrganizer: automationOrganizer,
+                learningsManager: learningsManager
+            )
         }
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {

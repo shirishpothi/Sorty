@@ -106,22 +106,31 @@ private struct LaunchAtLoginIcon: View {
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
-    public init() {}
+    @ObservedObject private var controller: MenuBarController
 
-    private static let menuBarImage: NSImage = {
-        let source = SortyResources.menuBarLabelNSImage()
-        let image = (source.copy() as? NSImage) ?? source
-        image.size = NSSize(width: 18, height: 18)
-        image.isTemplate = false
-        return image
+    private static let menuBarImages: [MenuBarActivity: NSImage] = {
+        Dictionary(uniqueKeysWithValues: MenuBarActivity.allCases.map { activity in
+            let source = SortyResources.image(
+                named: activity.resourceName,
+                withExtension: "png"
+            ) ?? SortyResources.menuBarLabelNSImage()
+            let image = (source.copy() as? NSImage) ?? source
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = false
+            return (activity, image)
+        })
     }()
 
+    public init(controller: MenuBarController) {
+        self.controller = controller
+    }
+
     public var body: some View {
-        Image(nsImage: Self.menuBarImage)
+        Image(nsImage: Self.menuBarImages[controller.activity] ?? SortyResources.menuBarLabelNSImage())
             .resizable()
             .scaledToFit()
             .frame(width: 18, height: 18)
-            .accessibilityLabel("Sorty")
+            .accessibilityLabel(controller.activity.accessibilityLabel)
     }
 }
 

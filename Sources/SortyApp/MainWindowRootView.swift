@@ -193,6 +193,8 @@ struct MainWindowRootView: View {
                     windowSession.organizer.state.isOperationInProgress,
                     for: windowSession.id
                 )
+                updateMenuBarOrganizationActivity()
+                updateMenuBarDuplicateActivity()
                 scheduleSetupRepairReconciliation()
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
@@ -205,6 +207,7 @@ struct MainWindowRootView: View {
                 Task { @MainActor in
                     await windowSession.applyConfiguration(newConfig, learningsManager: learningsManager)
                 }
+                updateMenuBarOrganizationActivity()
                 scheduleSetupRepairReconciliation()
             }
             .onChange(of: windowSession.appState.hasCompletedOnboarding) { wasComplete, isComplete in
@@ -234,9 +237,13 @@ struct MainWindowRootView: View {
                     newState.isOperationInProgress,
                     for: windowSession.id
                 )
+                updateMenuBarOrganizationActivity()
                 if !newState.isOperationInProgress {
                     coordinator?.finishManualOrganization(sessionID: windowSession.id)
                 }
+            }
+            .onChange(of: windowSession.appState.duplicateManager.isScanning) { _, _ in
+                updateMenuBarDuplicateActivity()
             }
             .onOpenURL { url in
                 SortyAppDelegate.pendingDeeplinkActivation = true
@@ -244,7 +251,30 @@ struct MainWindowRootView: View {
             }
             .onDisappear {
                 coordinator?.finishManualOrganization(sessionID: windowSession.id)
+                menuBarController.setActivity(
+                    nil,
+                    sourceID: "window.\(windowSession.id.uuidString).organization"
+                )
+                menuBarController.setActivity(
+                    nil,
+                    sourceID: "window.\(windowSession.id.uuidString).duplicates"
+                )
             }
+    }
+
+    private func updateMenuBarOrganizationActivity() {
+        menuBarController.updateOrganizationActivity(
+            state: windowSession.organizer.state,
+            mode: settingsViewModel.config.mode,
+            sourceID: "window.\(windowSession.id.uuidString).organization"
+        )
+    }
+
+    private func updateMenuBarDuplicateActivity() {
+        menuBarController.setActivity(
+            windowSession.appState.duplicateManager.isScanning ? .duplicateScanning : nil,
+            sourceID: "window.\(windowSession.id.uuidString).duplicates"
+        )
     }
 
     private var contentWithEnvironment: some View {

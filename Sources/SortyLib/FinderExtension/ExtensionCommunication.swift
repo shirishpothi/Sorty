@@ -40,6 +40,8 @@ public struct ExtensionCommunication {
     private static let previewQuickActionBundleIdentifier = "com.sorty.workflow.preview"
     private static let quickActionIconBaseName = "SortyQuickActionIcon"
     private static let quickActionServiceIconName = "workflowCustomImageTemplate"
+    private static let organizeWorkflowIconVersionInfoKey = "SortyOrganizeIconVersion"
+    private static let organizeWorkflowIconVersion = "2"
     private static let watchWorkflowIconVariantInfoKey = "SortyWatchIconVariant"
     private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
     private static let stagedApplicationPathDefaultsKey = "finderStagedApplicationPath"
@@ -1612,15 +1614,6 @@ public struct ExtensionCommunication {
         return unique
     }
 
-    private static func quickActionMascotIconData() -> Data? {
-        for url in quickActionMascotIconURLCandidates() where FileManager.default.fileExists(atPath: url.path) {
-            if let data = try? Data(contentsOf: url), !data.isEmpty {
-                return data
-            }
-        }
-        return nil
-    }
-
     private static func quickActionWatchIconURLCandidates() -> [URL] {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let finderSyncResources = Bundle.main.builtInPlugInsURL?
@@ -1672,7 +1665,8 @@ public struct ExtensionCommunication {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let candidates = [
             finderSyncResources?.appendingPathComponent("\(resourceName).png"),
-            cwd.appendingPathComponent("SortyFinderSync/\(resourceName).png")
+            cwd.appendingPathComponent("SortyFinderSync/\(resourceName).png"),
+            cwd.appendingPathComponent("Sources/SortyLib/Resources/Images/\(resourceName).png")
         ].compactMap { $0 }
 
         for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
@@ -1687,6 +1681,10 @@ public struct ExtensionCommunication {
     private static func quickActionIconImage(style: QuickActionIconStyle) -> NSImage {
         switch style {
         case .organize:
+            if let mascot = quickActionGeneratedMascotImage(named: "SortyMenuOrganizing") {
+                return mascot
+            }
+
             // Prefer the full-color mascot head icns for workflow icons.
             for candidate in quickActionMascotIconURLCandidates() where FileManager.default.fileExists(atPath: candidate.path) {
                 if let head = NSImage(contentsOf: candidate) {
@@ -1783,7 +1781,6 @@ public struct ExtensionCommunication {
         style: QuickActionIconStyle = .organize
     ) {
         let iconImage = quickActionIconImage(style: style)
-        let iconICNSData = style == .organize ? quickActionMascotIconData() : nil
 
         // Use the action-specific mascot instead of Automator's default wand icon.
         _ = NSWorkspace.shared.setIcon(iconImage, forFile: workflowDir.path, options: [])
@@ -1797,13 +1794,6 @@ public struct ExtensionCommunication {
             let iconNames = style == .watch
                 ? [quickActionServiceIconName]
                 : [quickActionIconBaseName, quickActionServiceIconName]
-
-            if let icnsData = iconICNSData {
-                for iconName in iconNames {
-                    let icnsPath = resourcesDir.appendingPathComponent("\(iconName).icns")
-                    try icnsData.write(to: icnsPath, options: .atomic)
-                }
-            }
 
             guard let pngData = renderedPNGData(for: iconImage) else { return }
             for iconName in iconNames {
@@ -2137,6 +2127,8 @@ public struct ExtensionCommunication {
                 <string>BNDL</string>
                 <key>CFBundleIconFile</key>
                 <string>\(quickActionServiceIconName)</string>
+                <key>\(organizeWorkflowIconVersionInfoKey)</key>
+                <string>\(organizeWorkflowIconVersion)</string>
                 <key>NSServices</key>
                 <array>
                     <dict>
@@ -2466,10 +2458,26 @@ public struct ExtensionCommunication {
 
     /// Check if Quick Action is installed
     public static func isQuickActionInstalled() -> Bool {
-        return isWorkflowInstalledAndCompatible(
-            workflowName: organizeQuickActionWorkflowName,
-            bundleIdentifier: organizeQuickActionBundleIdentifier
-        )
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(organizeQuickActionWorkflowName)
+            guard FileManager.default.fileExists(atPath: workflowPath.path) else { continue }
+
+            let infoPath = workflowPath.appendingPathComponent("Contents/Info.plist")
+            guard let info = NSDictionary(contentsOf: infoPath) as? [String: Any],
+                  info["CFBundleIdentifier"] as? String == organizeQuickActionBundleIdentifier,
+                  info[organizeWorkflowIconVersionInfoKey] as? String == organizeWorkflowIconVersion,
+                  workflowHasFinderContext(infoPlist: info) else {
+                continue
+            }
+
+            let iconPath = workflowPath
+                .appendingPathComponent("Contents/Resources")
+                .appendingPathComponent("\(quickActionServiceIconName).png")
+            if FileManager.default.fileExists(atPath: iconPath.path) {
+                return true
+            }
+        }
+        return false
     }
 
     /// Check if Quick Action is installed (async)

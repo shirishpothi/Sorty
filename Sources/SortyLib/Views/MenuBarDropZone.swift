@@ -12,8 +12,44 @@ import Combine
 
 // MARK: - Menu Bar Controller
 
+public enum MenuBarActivity: String, CaseIterable, Sendable {
+    case idle
+    case organizing
+    case renaming
+    case watchedFolder
+    case duplicateScanning
+    case learning
+
+    var resourceName: String {
+        switch self {
+        case .idle: "SortyMenuIdle"
+        case .organizing: "SortyMenuOrganizing"
+        case .renaming: "SortyMenuRenaming"
+        case .watchedFolder: "SortyMenuWatchedFolder"
+        case .duplicateScanning: "SortyMenuDuplicateScanning"
+        case .learning: "SortyMenuLearning"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .idle: "Sorty"
+        case .organizing: "Sorty is organizing"
+        case .renaming: "Sorty is renaming"
+        case .watchedFolder: "Sorty is organizing a watched folder"
+        case .duplicateScanning: "Sorty is scanning for duplicates"
+        case .learning: "Sorty is learning"
+        }
+    }
+}
+
 @MainActor
 public class MenuBarController: ObservableObject {
+    private struct ActiveOperation {
+        let activity: MenuBarActivity
+        let order: UInt64
+    }
+
     private static let filenameDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -28,11 +64,95 @@ public class MenuBarController: ObservableObject {
     @Published public var isProcessing: Bool = false
     @Published public var errorMessage: String?
     @Published public var showPopover: Bool = false
+    @Published public private(set) var activity: MenuBarActivity = .idle
+
+    private var activeOperations: [String: ActiveOperation] = [:]
+    private var nextActivityOrder: UInt64 = 0
+    private var automationActivitySubscription: AnyCancellable?
+    private var learningActivitySubscription: AnyCancellable?
 
     public init() {}
 
-    public func configure(settings: SettingsViewModel) {
-        _ = settings
+    public func configure(
+        settings: SettingsViewModel,
+        automationOrganizer: FolderOrganizer? = nil,
+        learningsManager: LearningsManager? = nil
+    ) {
+        if let automationOrganizer {
+            automationActivitySubscription = Publishers.CombineLatest(
+                automationOrganizer.$state,
+                settings.$config
+            )
+            .sink { [weak self] state, config in
+                self?.updateOrganizationActivity(
+                    state: state,
+                    mode: config.mode,
+                    sourceID: "global.watched-folder",
+                    isWatchedFolder: true
+                )
+            }
+        }
+
+        if let learningsManager {
+            learningActivitySubscription = learningsManager.analyzer.$isAnalyzing
+                .sink { [weak self] isAnalyzing in
+                    self?.setActivity(
+                        isAnalyzing ? .learning : nil,
+                        sourceID: "global.learning"
+                    )
+                }
+        }
+    }
+
+    public func updateOrganizationActivity(
+        state: OrganizationState,
+        mode: OrganizationMode,
+        sourceID: String,
+        isWatchedFolder: Bool = false
+    ) {
+        let isWorking: Bool
+        switch state {
+        case .scanning, .organizing, .applying:
+            isWorking = true
+        case .idle, .ready, .completed, .error:
+            isWorking = false
+        }
+
+        guard isWorking else {
+            setActivity(nil, sourceID: sourceID)
+            return
+        }
+
+        if isWatchedFolder {
+            setActivity(.watchedFolder, sourceID: sourceID)
+        } else if mode == .renameOnly {
+            setActivity(.renaming, sourceID: sourceID)
+        } else {
+            setActivity(.organizing, sourceID: sourceID)
+        }
+    }
+
+    public func setActivity(_ activity: MenuBarActivity?, sourceID: String) {
+        guard let activity else {
+            activeOperations.removeValue(forKey: sourceID)
+            refreshActivity()
+            return
+        }
+
+        if activeOperations[sourceID]?.activity != activity {
+            nextActivityOrder &+= 1
+            activeOperations[sourceID] = ActiveOperation(
+                activity: activity,
+                order: nextActivityOrder
+            )
+        }
+        refreshActivity()
+    }
+
+    private func refreshActivity() {
+        activity = activeOperations.values
+            .max(by: { $0.order < $1.order })?
+            .activity ?? .idle
     }
 
     public func handleDrop(providers: [NSItemProvider]) async -> Bool {
@@ -582,7 +702,7 @@ public struct MenuBarExtraScene: Scene {
                     controller.configure(settings: settingsViewModel)
                 }
         } label: {
-            MenuBarLabel()
+            MenuBarLabel(controller: controller)
         }
         .menuBarExtraStyle(.window)
     }

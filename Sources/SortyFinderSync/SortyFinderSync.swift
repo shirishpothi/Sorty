@@ -9,7 +9,10 @@ final class SortyFinderSync: FIFinderSync {
     private static let heartbeatMinimumInterval: TimeInterval = 30
     private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
-    nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(finderOrganizeImage(), isTemplate: false)
+    nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(
+        finderActionImage(named: "SortyMenuOrganizing", fallbackSymbol: "folder.fill.badge.gearshape"),
+        isTemplate: false
+    )
     nonisolated(unsafe) private static let cachedWatchImage = normalizedMenuIcon(
         finderActionImage(named: "SortyWatchMascot", fallbackSymbol: "eye"),
         isTemplate: false
@@ -242,52 +245,6 @@ final class SortyFinderSync: FIFinderSync {
             systemSymbolName: fallbackSymbol,
             accessibilityDescription: resourceName
         ) ?? NSImage(size: NSSize(width: 16, height: 16))
-        fallback.isTemplate = true
-        return fallback
-    }
-
-    private static func finderOrganizeImage() -> NSImage {
-        if let imageURL = Bundle.main.url(forResource: "SortyMascotHead", withExtension: "png"),
-           let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = false
-            return image
-        }
-
-        if let imageURL = Bundle.main.url(forResource: "SortyMascotHead", withExtension: "icns"),
-           let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = false
-            return image
-        }
-
-        if let imageURL = Bundle.main.url(forResource: "Sorty Mascot Head", withExtension: "icns"),
-           let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = false
-            return image
-        }
-
-        if let resourceURL = Bundle.main.resourceURL {
-            let hostAppResourcesURL = Bundle.main.bundleURL
-                .deletingLastPathComponent() // PlugIns
-                .deletingLastPathComponent() // Contents
-                .appendingPathComponent("Resources", isDirectory: true)
-
-            let bundledCandidates = [
-                resourceURL.appendingPathComponent("SortyMascotHead.png"),
-                resourceURL.appendingPathComponent("SortyMascotHead.icns"),
-                hostAppResourcesURL.appendingPathComponent("SortyMascotHead.png"),
-                hostAppResourcesURL.appendingPathComponent("SortyMascotHead.icns")
-            ]
-
-            for candidate in bundledCandidates {
-                if let image = NSImage(contentsOf: candidate) {
-                    image.isTemplate = false
-                    return image
-                }
-            }
-        }
-
-        let fallback = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: "Sorty")
-            ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
         return fallback
     }
