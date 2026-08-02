@@ -14,6 +14,7 @@ import Combine
 
 public enum MenuBarActivity: String, CaseIterable, Sendable {
     case idle
+    case greeting
     case organizing
     case renaming
     case watchedFolder
@@ -23,6 +24,7 @@ public enum MenuBarActivity: String, CaseIterable, Sendable {
     var resourceName: String {
         switch self {
         case .idle: "SortyMenuIdle"
+        case .greeting: "SortyMenuGreeting"
         case .organizing: "SortyMenuOrganizing"
         case .renaming: "SortyMenuRenaming"
         case .watchedFolder: "SortyMenuWatchedFolder"
@@ -34,6 +36,7 @@ public enum MenuBarActivity: String, CaseIterable, Sendable {
     var accessibilityLabel: String {
         switch self {
         case .idle: "Sorty"
+        case .greeting: "Sorty says hi"
         case .organizing: "Sorty is organizing"
         case .renaming: "Sorty is renaming"
         case .watchedFolder: "Sorty is organizing a watched folder"
@@ -68,6 +71,7 @@ public class MenuBarController: ObservableObject {
 
     private var activeOperations: [String: ActiveOperation] = [:]
     private var nextActivityOrder: UInt64 = 0
+    private var greetingResetTask: Task<Void, Never>?
     private var automationActivitySubscription: AnyCancellable?
     private var learningActivitySubscription: AnyCancellable?
 
@@ -147,6 +151,22 @@ public class MenuBarController: ObservableObject {
             )
         }
         refreshActivity()
+    }
+
+    public func showGreeting(for duration: Duration = .seconds(2)) {
+        let sourceID = "interaction.open-menu"
+        greetingResetTask?.cancel()
+
+        // Treat each click as a fresh interaction so the greeting wins over
+        // work that was already active, then falls back to it automatically.
+        activeOperations.removeValue(forKey: sourceID)
+        setActivity(.greeting, sourceID: sourceID)
+
+        greetingResetTask = Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            self?.setActivity(nil, sourceID: sourceID)
+        }
     }
 
     private func refreshActivity() {

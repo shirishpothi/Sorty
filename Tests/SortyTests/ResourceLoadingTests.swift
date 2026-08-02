@@ -185,6 +185,17 @@ final class ResourceLoadingTests: XCTestCase {
         )
         XCTAssertEqual(controller.activity, .renaming)
     }
+
+    func testMenuBarGreetingTemporarilyOverridesAndRestoresActivity() async {
+        let controller = MenuBarController()
+        controller.setActivity(.organizing, sourceID: "organization")
+
+        controller.showGreeting(for: .milliseconds(20))
+        XCTAssertEqual(controller.activity, .greeting)
+
+        try? await Task.sleep(for: .milliseconds(40))
+        XCTAssertEqual(controller.activity, .organizing)
+    }
     
     // MARK: - Fallback Behavior Tests
 

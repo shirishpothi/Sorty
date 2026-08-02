@@ -3752,6 +3752,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
+        .environmentObject(MenuBarController())
         .frame(width: 900, height: 600)
 }
 
@@ -3766,6 +3767,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
+        .environmentObject(MenuBarController())
         .frame(width: 900, height: 600)
 }
 
@@ -3780,6 +3782,7 @@ private enum OrganizePreviewObjects {
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
+        .environmentObject(MenuBarController())
         .frame(width: 900, height: 700)
 }
 
@@ -3794,5 +3797,6 @@ private enum OrganizePreviewObjects {
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
         .environmentObject(codexAuthManager)
+        .environmentObject(MenuBarController())
         .frame(width: 900, height: 600)
 }

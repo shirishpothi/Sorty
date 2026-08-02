@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isTargeted = false
     @State private var isHovering = false
@@ -335,6 +336,7 @@ struct DirectorySelectionView: View {
 
     private func openMenuBarTip() {
         HapticFeedbackManager.shared.tap()
+        menuBarController.showGreeting()
         if !UserDefaults.standard.bool(forKey: "showMenuBarIcon") {
             UserDefaults.standard.set(true, forKey: "showMenuBarIcon")
         }
