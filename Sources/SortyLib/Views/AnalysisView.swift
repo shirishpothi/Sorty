@@ -577,11 +577,7 @@ struct AnalysisView: View {
 
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    recordCancelledAnalysis()
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        organizer.reset()
-                    }
-                    appState.showDirectoryPicker = true
+                    presentReplacementDirectoryPicker()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "folder.badge.plus")
@@ -613,6 +609,25 @@ struct AnalysisView: View {
         organizer.blockingExclusionRule == nil
             ? "No Files to \(settingsViewModel.config.mode.actionVerb)"
             : "This Folder Is Excluded"
+    }
+
+    private func presentReplacementDirectoryPicker() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = appState.selectedDirectory?.deletingLastPathComponent()
+        panel.message = "Select a directory to \(settingsViewModel.config.mode.actionVerb.lowercased())"
+        panel.prompt = "Select"
+
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+
+        recordCancelledAnalysis()
+        withAnimation(.pageTransition) {
+            organizer.reset()
+            appState.selectedDirectory = directory
+        }
+        HapticFeedbackManager.shared.success()
     }
 
     private var emptyDirectoryMessage: String {
