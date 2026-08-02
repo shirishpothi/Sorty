@@ -511,11 +511,6 @@ struct LearningsView: View {
     private func restoreLearningsDefaults() {
         HapticFeedbackManager.shared.tap()
         manager.sessionLearningPaused = false
-        if advancedExpanded {
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.82)) {
-                advancedExpanded = false
-            }
-        }
         manager.clearLearningsModelOverride()
         HapticFeedbackManager.shared.success()
     }
