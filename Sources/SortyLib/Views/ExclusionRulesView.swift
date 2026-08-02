@@ -967,10 +967,85 @@ struct ExclusionRuleRow: View {
 
 // MARK: - Add Exclusion Rule View
 
+private enum ExclusionIntent: String, CaseIterable, Identifiable {
+    case folder
+    case fileKind
+    case name
+    case properties
+    case advanced
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .folder: "A specific folder"
+        case .fileKind: "A kind of file"
+        case .name: "Files or folders by name"
+        case .properties: "Files by size or age"
+        case .advanced: "Advanced rule"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .folder: "Leave one folder and everything inside it untouched."
+        case .fileKind: "Ignore a familiar category, or one specific file extension."
+        case .name: "Match text in a file name or an exact folder name."
+        case .properties: "Ignore files above or below a size, or based on their age."
+        case .advanced: "Hidden files, macOS files, path fragments, and regular expressions."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .folder: "folder.badge.minus"
+        case .fileKind: "doc.on.doc"
+        case .name: "text.magnifyingglass"
+        case .properties: "slider.horizontal.3"
+        case .advanced: "gearshape.2"
+        }
+    }
+}
+
+private enum FileKindChoice: String, CaseIterable, Identifiable {
+    case category = "File category"
+    case fileExtension = "File extension"
+
+    var id: Self { self }
+}
+
+private enum NameMatchChoice: String, CaseIterable, Identifiable {
+    case fileName = "File name contains"
+    case folderName = "Folder name is"
+
+    var id: Self { self }
+}
+
+private enum PropertyChoice: String, CaseIterable, Identifiable {
+    case fileSize = "File size"
+    case modificationDate = "Last modified"
+    case creationDate = "Date created"
+
+    var id: Self { self }
+}
+
+private enum AdvancedRuleChoice: String, CaseIterable, Identifiable {
+    case hiddenFiles = "Hidden files"
+    case systemFiles = "macOS system files"
+    case pathContains = "Path contains text"
+    case regex = "Regular expression"
+
+    var id: Self { self }
+}
+
 struct AddExclusionRuleView: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     @Environment(\.dismiss) var dismiss
-    @State private var selectedType: ExclusionRuleType = .fileExtension
+    @State private var selectedIntent: ExclusionIntent?
+    @State private var fileKindChoice: FileKindChoice = .category
+    @State private var nameMatchChoice: NameMatchChoice = .fileName
+    @State private var propertyChoice: PropertyChoice = .fileSize
+    @State private var advancedChoice: AdvancedRuleChoice = .hiddenFiles
     @State private var pattern: String = ""
     @State private var description: String = ""
     @State private var numericValue: Double = 100
@@ -979,125 +1054,25 @@ struct AddExclusionRuleView: View {
     @State private var selectedFileTypeCategory: FileTypeCategory = .images
     @State private var selectedFolderURL: URL?
     @State private var showingFolderPicker = false
-    @State private var appeared = false
-
-    private let ruleTypes: [ExclusionRuleType] = [
-        .fileExtension,
-        .fileName,
-        .folderName,
-        .fileType,
-        .hiddenFiles,
-        .systemFiles,
-        .fileSize,
-        .creationDate,
-        .modificationDate,
-        .regex,
-    ]
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button("Cancel") {
-                    HapticFeedbackManager.shared.tap()
-                    dismiss()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-
-                Spacer()
-
-                Text("Exclude from Sorty")
-                    .font(.headline)
-
-                Spacer()
-
-                Button(selectedFolderURL == nil ? "Add Exclusion" : "Exclude Folder") {
-                    HapticFeedbackManager.shared.success()
-                    addRule()
-                }
-                .buttonStyle(.onboardingPill)
-                .onboardingBeamBorder(variant: .warning, active: isValidInput)
-                .disabled(!isValidInput)
-                .keyboardShortcut(.return, modifiers: [.command])
-            }
-            .padding()
-            .background(.ultraThinMaterial)
+            header
 
             Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if selectedFolderURL != nil {
-                        folderPickerCard
-
-                        Button("Create a rule instead") {
-                            HapticFeedbackManager.shared.selection()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedFolderURL = nil
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                        .frame(maxWidth: .infinity)
+                    if let selectedIntent {
+                        configurationView(for: selectedIntent)
                     } else {
-                        HStack(alignment: .top, spacing: 16) {
-                            folderPickerCard
-
-                            exclusionChoiceDivider
-
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("What should Sorty leave alone?")
-                                    .font(.subheadline.weight(.semibold))
-
-                                Picker("Exclusion", selection: $selectedType) {
-                                    ForEach(ruleTypes, id: \.self) { type in
-                                        Label(type.friendlyName, systemImage: type.icon)
-                                            .tag(type)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .labelsHidden()
-                                .onChange(of: selectedType) { _, _ in
-                                    HapticFeedbackManager.shared.selection()
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
-                            .systemLiquidGlassBackground(cornerRadius: 12)
-                        }
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Details")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-
-                            ruleConfigurationView
-                        }
-                        .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 12)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Label (optional)")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-
-                            TextField("e.g. Old video exports", text: $description)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 12)
+                        intentPicker
                     }
-
                 }
                 .padding(20)
             }
         }
-        .frame(width: 500, height: 580)
-        .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                appeared = true
-            }
-        }
+        .frame(width: 520, height: 600)
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
@@ -1111,9 +1086,148 @@ struct AddExclusionRuleView: View {
         }
     }
 
-    private var folderPickerCard: some View {
+    private var header: some View {
+        HStack {
+            if selectedIntent == nil {
+                Button("Cancel") {
+                    HapticFeedbackManager.shared.tap()
+                    dismiss()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+            } else {
+                Button {
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedIntent = nil
+                        selectedFolderURL = nil
+                    }
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+            }
+
+            Spacer()
+
+            Text(selectedIntent == nil ? "Add an Exclusion" : "Set Up Exclusion")
+                .font(.headline)
+
+            Spacer()
+
+            if selectedIntent != nil {
+                Button("Add Exclusion") {
+                    HapticFeedbackManager.shared.success()
+                    addRule()
+                }
+                .buttonStyle(.onboardingPill)
+                .onboardingBeamBorder(variant: .warning, active: isValidInput)
+                .disabled(!isValidInput)
+                .keyboardShortcut(.return, modifiers: [.command])
+            } else {
+                Button("Cancel") {}
+                    .hidden()
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+    }
+
+    private var intentPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Choose a folder", systemImage: "folder.badge.minus")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What should Sorty leave alone?")
+                    .font(.title3.weight(.semibold))
+
+                Text("Choose the closest match. You’ll only see the settings that apply.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 4)
+
+            ForEach(ExclusionIntent.allCases) { intent in
+                Button {
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedIntent = intent
+                    }
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: intent.icon)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .frame(width: 34, height: 34)
+                            .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(intent.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(intent.explanation)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .systemLiquidGlassBackground(cornerRadius: 12)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func configurationView(for intent: ExclusionIntent) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(intent.title, systemImage: intent.icon)
+                    .font(.title3.weight(.semibold))
+                Text(intent.explanation)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                switch intent {
+                case .folder:
+                    folderConfiguration
+                case .fileKind:
+                    fileKindConfiguration
+                case .name:
+                    nameConfiguration
+                case .properties:
+                    propertyConfiguration
+                case .advanced:
+                    advancedConfiguration
+                }
+            }
+            .padding(16)
+            .systemLiquidGlassBackground(cornerRadius: 12)
+
+            if intent != .folder {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Label (optional)")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("e.g. Old video exports", text: $description)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(16)
+                .systemLiquidGlassBackground(cornerRadius: 12)
+            }
+        }
+    }
+
+    private var folderConfiguration: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Folder")
                 .font(.subheadline.weight(.semibold))
 
             Text("Sorty will leave this folder and everything inside it untouched.")
@@ -1156,130 +1270,192 @@ struct AddExclusionRuleView: View {
                 .accessibilityIdentifier("ChooseExclusionFolderButton")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 
-    private var exclusionChoiceDivider: some View {
-        VStack(spacing: 8) {
-            Capsule()
-                .fill(.quaternary)
-                .frame(width: 1, height: 24)
+    private var fileKindConfiguration: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Match", selection: $fileKindChoice) {
+                ForEach(FileKindChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
 
-            Text("OR")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
+            if fileKindChoice == .category {
+                Picker("Category", selection: $selectedFileTypeCategory) {
+                    ForEach(FileTypeCategory.allCases) { category in
+                        Label(category.rawValue, systemImage: category.icon).tag(category)
+                    }
+                }
+                .pickerStyle(.menu)
 
-            Capsule()
-                .fill(.quaternary)
-                .frame(width: 1, height: 24)
-        }
-        .frame(width: 24)
-        .padding(.top, 86)
-        .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private var ruleConfigurationView: some View {
-        switch selectedType {
-        case .fileSize:
-            HStack(spacing: 12) {
-                TextField("Size", value: $numericValue, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 100)
-
-                Text("MB")
+                Text(categorySummary)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+            } else {
+                labeledPatternField(
+                    title: "Extension",
+                    placeholder: "pdf",
+                    help: "Enter it with or without the dot."
+                )
+            }
+        }
+    }
 
-                Picker("", selection: $comparisonGreater) {
+    private var nameConfiguration: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Match", selection: $nameMatchChoice) {
+                ForEach(NameMatchChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            labeledPatternField(
+                title: nameMatchChoice == .fileName ? "Text in the file name" : "Folder name",
+                placeholder: nameMatchChoice == .fileName ? "draft" : "node_modules",
+                help: nameMatchChoice == .fileName
+                    ? "Any file whose name contains this text will be left alone."
+                    : "Every folder with exactly this name, including its contents, will be left alone."
+            )
+        }
+    }
+
+    private var propertyConfiguration: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Property", selection: $propertyChoice) {
+                ForEach(PropertyChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if propertyChoice == .fileSize {
+                Picker("Exclude files", selection: $comparisonGreater) {
                     Text("Larger than").tag(true)
                     Text("Smaller than").tag(false)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
-            }
 
-        case .creationDate, .modificationDate:
-            HStack(spacing: 12) {
-                TextField("Days", value: $numericValue, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
-
-                Picker("Age unit", selection: $dateAgeUnit) {
-                    ForEach(DateAgeUnit.allCases) { unit in
-                        Text(unit.label).tag(unit)
-                    }
+                HStack {
+                    TextField("Size", value: $numericValue, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                    Text("MB")
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.menu)
-
-                Picker("", selection: $comparisonGreater) {
+            } else {
+                Picker("Exclude files", selection: $comparisonGreater) {
                     Text("Older than").tag(true)
                     Text("Newer than").tag(false)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 200)
-            }
 
-        case .fileType:
-            VStack(alignment: .leading, spacing: 8) {
-                Picker("Category", selection: $selectedFileTypeCategory) {
-                    ForEach(FileTypeCategory.allCases) { category in
-                        Label(category.rawValue, systemImage: category.icon)
-                            .tag(category)
+                HStack {
+                    TextField("Age", value: $numericValue, format: .number)
+                        .textFieldStyle(.roundedBorder)
+
+                    Picker("Age unit", selection: $dateAgeUnit) {
+                        ForEach(DateAgeUnit.allCases) { unit in
+                            Text(unit.label).tag(unit)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
-
-                Text(
-                    "Includes: \(selectedFileTypeCategory.extensions.prefix(5).joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 5 ? "..." : "")"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-        case .hiddenFiles, .systemFiles:
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text("No configuration needed")
-                    .foregroundStyle(.secondary)
-            }
-
-        case .customScript:
-            Text("Custom scripts are not yet implemented.")
-                .font(.caption)
-                .foregroundStyle(.orange)
-
-        default:
-            VStack(alignment: .leading, spacing: 6) {
-                TextField("Pattern", text: $pattern)
-                    .textFieldStyle(.roundedBorder)
-
-                Text(patternHint)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private var patternHint: String {
-        switch selectedType {
-        case .fileExtension: return "Enter extension without dot (e.g., 'txt', 'pdf')"
-        case .fileName: return "Enter full filename (e.g., '.DS_Store')"
-        case .folderName: return "Enter folder name (e.g., 'node_modules')"
-        case .pathContains: return "Enter path fragment (e.g., '/backup/')"
-        case .regex: return "Enter regular expression pattern"
-        default: return ""
+    private var advancedConfiguration: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Rule", selection: $advancedChoice) {
+                ForEach(AdvancedRuleChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .pickerStyle(.menu)
+
+            switch advancedChoice {
+            case .hiddenFiles:
+                explanationRow("Files and folders whose names begin with a period will be left alone.")
+            case .systemFiles:
+                explanationRow("Common macOS metadata and system-generated files will be left alone.")
+            case .pathContains:
+                labeledPatternField(
+                    title: "Text in the path",
+                    placeholder: "/backups/",
+                    help: "Matches this text anywhere in the full path."
+                )
+            case .regex:
+                labeledPatternField(
+                    title: "Regular expression",
+                    placeholder: "^temp_.*\\.log$",
+                    help: "Matches against the file or folder name."
+                )
+            }
+        }
+    }
+
+    private func labeledPatternField(title: String, placeholder: String, help: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            TextField(placeholder, text: $pattern)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("ExclusionRulePatternField")
+            Text(help)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func explanationRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var categorySummary: String {
+        let examples = selectedFileTypeCategory.extensions.prefix(6).map { ".\($0)" }
+        guard !examples.isEmpty else {
+            return "Files not covered by the standard categories."
+        }
+        return "Includes \(examples.joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 6 ? ", and more." : ".")"
+    }
+
+    private var selectedRuleType: ExclusionRuleType? {
+        switch selectedIntent {
+        case .folder: .pathContains
+        case .fileKind: fileKindChoice == .category ? .fileType : .fileExtension
+        case .name: nameMatchChoice == .fileName ? .fileName : .folderName
+        case .properties:
+            switch propertyChoice {
+            case .fileSize: .fileSize
+            case .modificationDate: .modificationDate
+            case .creationDate: .creationDate
+            }
+        case .advanced:
+            switch advancedChoice {
+            case .hiddenFiles: .hiddenFiles
+            case .systemFiles: .systemFiles
+            case .pathContains: .pathContains
+            case .regex: .regex
+            }
+        case nil: nil
         }
     }
 
     private var isValidInput: Bool {
-        if selectedFolderURL != nil {
-            return true
+        guard let selectedIntent, let selectedRuleType else { return false }
+
+        if selectedIntent == .folder {
+            return selectedFolderURL != nil
         }
 
-        switch selectedType {
+        switch selectedRuleType {
         case .hiddenFiles, .systemFiles, .fileType:
             return true
         case .fileSize, .creationDate, .modificationDate:
@@ -1287,60 +1463,62 @@ struct AddExclusionRuleView: View {
         case .customScript:
             return false
         default:
-            return !pattern.isEmpty
+            return !pattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
     private func addRule() {
-        if let selectedFolderURL {
+        guard let selectedIntent, let selectedRuleType else { return }
+
+        if selectedIntent == .folder, let selectedFolderURL {
             let normalizedPath = selectedFolderURL.standardizedFileURL.path
             let folderName = selectedFolderURL.lastPathComponent
-            let rule = ExclusionRule(
-                type: .pathContains,
-                pattern: normalizedPath,
-                description: folderName.isEmpty ? "Protected folder" : folderName
+            save(
+                ExclusionRule(
+                    type: .pathContains,
+                    pattern: normalizedPath,
+                    description: folderName.isEmpty ? "Protected folder" : folderName
+                )
             )
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                rulesManager.addRule(rule)
-            }
-            dismiss()
             return
         }
 
-        var rule: ExclusionRule
+        let trimmedPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rule: ExclusionRule
 
-        switch selectedType {
+        switch selectedRuleType {
         case .fileSize, .creationDate, .modificationDate:
             rule = ExclusionRule(
-                type: selectedType,
-                pattern: pattern,
+                type: selectedRuleType,
                 description: description.isEmpty ? nil : description,
-                numericValue: selectedType == .fileSize
+                numericValue: selectedRuleType == .fileSize
                     ? numericValue
                     : numericValue * dateAgeUnit.daysMultiplier,
                 comparisonGreater: comparisonGreater
             )
         case .fileType:
             rule = ExclusionRule(
-                type: selectedType,
-                pattern: "",
+                type: .fileType,
                 description: description.isEmpty ? nil : description,
                 fileTypeCategory: selectedFileTypeCategory
             )
         default:
             rule = ExclusionRule(
-                type: selectedType,
-                pattern: pattern,
+                type: selectedRuleType,
+                pattern: trimmedPattern,
                 description: description.isEmpty ? nil : description
             )
         }
 
+        save(rule)
+    }
+
+    private func save(_ rule: ExclusionRule) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             rulesManager.addRule(rule)
         }
         dismiss()
     }
-
 }
 
 // FlowLayout is now defined globally in AnalysisView.swift
