@@ -40,7 +40,6 @@ struct LearningsView: View {
     @State private var activeFileImporter: ActiveFileImporter?
     @State private var isShowingFileImporter = false
     @State private var showLearningsModelPicker = false
-    @State private var advancedExpanded = false
     @State private var isQuickRefreshingLearnings = false
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
@@ -254,10 +253,10 @@ struct LearningsView: View {
                     whatSortyHasLearnedSection
                         .animatedAppearance(delay: 0.08)
 
-                    settingsSection
+                    referenceDirectoriesSection
                         .animatedAppearance(delay: 0.12)
 
-                    advancedSection
+                    settingsSection
                         .animatedAppearance(delay: 0.16)
                 }
                 .padding(.horizontal, 28)
@@ -948,118 +947,6 @@ struct LearningsView: View {
         return nil
     }
 
-    // MARK: - Teach by Example
-
-    private var teachByExampleSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "folder.badge.gearshape")
-                    .font(.title2.bold())
-                    .foregroundStyle(.teal)
-                    .frame(width: 42, height: 42)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Teach Sorty with example folders")
-                        .font(.headline)
-                    Text(
-                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 16)
-
-                Button {
-                    presentFileImporter(.modelDirectories)
-                } label: {
-                    Label("Add Examples", systemImage: "plus")
-                        .font(.caption.bold())
-                }
-                .buttonStyle(.onboardingPill(size: .small))
-                .accessibilityIdentifier("TeachByExampleAddButton")
-            }
-
-            HStack(spacing: 10) {
-                teachByExampleStat(
-                    value: "\(manager.modelDirectories.filter(\.isEnabled).count)",
-                    label: "example folders",
-                    color: .teal
-                )
-                teachByExampleStat(
-                    value: "Preview first",
-                    label: "never applies blindly",
-                    color: .blue
-                )
-                teachByExampleStat(
-                    value: "Media ready",
-                    label: "music, movies, photos",
-                    color: .purple
-                )
-            }
-
-            if !manager.modelDirectories.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(manager.modelDirectories.prefix(3)) { directory in
-                        HStack(spacing: 8) {
-                            Image(
-                                systemName: directory.isEnabled
-                                    ? "checkmark.circle.fill" : "pause.circle"
-                            )
-                            .foregroundStyle(directory.isEnabled ? .green : .secondary)
-                            .accessibilityHidden(true)
-                            Text(directory.displayName)
-                                .font(.caption.bold())
-                            Spacer()
-                            Text(
-                                directory.scanSnapshot?.namingConventions.joined(separator: ", ")
-                                    ?? "Ready to scan"
-                            )
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        }
-                    }
-                }
-                .padding(10)
-                .systemLiquidGlassBackground(cornerRadius: 10)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-        }
-        .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: 16)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.teal.opacity(0.16), lineWidth: 1)
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Teach Sorty with example folders")
-    }
-
-    private func teachByExampleStat(value: String, label: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.caption.bold())
-                .foregroundStyle(color)
-                .numericTextTransition(animationValue: value)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 10)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value), \(label)")
-    }
-
     // MARK: - What Sorty Has Learned
 
     private var whatSortyHasLearnedSection: some View {
@@ -1312,46 +1199,6 @@ struct LearningsView: View {
         .padding(.horizontal, 12)
     }
 
-    // MARK: - Advanced
-
-    private var advancedSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                    advancedExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Advanced")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
-                        .animation(
-                            .spring(response: 0.3, dampingFraction: 0.82), value: advancedExpanded)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Advanced settings")
-            .accessibilityHint(advancedExpanded ? "Collapse" : "Expand")
-
-            if advancedExpanded {
-                VStack(alignment: .leading, spacing: 24) {
-                    referenceDirectoriesSection
-                        .animatedAppearance(delay: 0.03)
-                }
-                .padding(.top, 16)
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-                .clipped()
-            }
-        }
-    }
-
     private var referenceDirectoriesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -1390,9 +1237,11 @@ struct LearningsView: View {
 
             if manager.modelDirectories.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.teal.opacity(0.6))
+                    Image("TeachSortyExampleFolders")
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 72, height: 72)
                         .accessibilityHidden(true)
                     Text("No reference directories")
                         .font(.subheadline.bold())
