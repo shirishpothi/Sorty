@@ -493,7 +493,7 @@ struct AnalysisView: View {
                     .fill(Color.orange.opacity(0.1))
                     .frame(width: 100, height: 100)
 
-                Image(systemName: "folder.badge.questionmark")
+                Image(systemName: "folder.badge.minus")
                     .font(.system(size: 44))
                     .foregroundColor(.orange)
             }
