@@ -8,8 +8,9 @@ struct ReadyToOrganizeTitle: View {
     var body: some View {
         VStack(spacing: 6) {
             if showsWorkflowPicker {
-                HStack(spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("Ready to")
+                        .font(.title2.weight(.semibold))
 
                     Menu {
                         ForEach(OrganizationMode.allCases, id: \.self) { workflow in
@@ -28,6 +29,8 @@ struct ReadyToOrganizeTitle: View {
                         }
                     } label: {
                         Text(mode.actionVerb)
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(.primary)
                             .underline(pattern: .dot, color: .secondary)
                     }
                     .menuStyle(.borderlessButton)
@@ -37,7 +40,6 @@ struct ReadyToOrganizeTitle: View {
                     .accessibilityLabel("Workflow: \(mode.actionVerb)")
                     .accessibilityHint("Choose one of three workflows")
                 }
-                .font(.title2.weight(.semibold))
             } else {
                 Text("Ready to \(mode.actionVerb)")
                     .font(.title2.weight(.semibold))

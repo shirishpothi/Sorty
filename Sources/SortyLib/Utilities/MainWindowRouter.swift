@@ -118,8 +118,16 @@ public final class MainWindowRouter {
             return mainWindowID
         }
 
-        return candidates
+        if let visibleWindowID = candidates
             .filter { $0.value.window?.isVisible == true }
+            .max(by: { lhs, rhs in lhs.value.lastFocusedAt < rhs.value.lastFocusedAt })?
+            .key {
+            return visibleWindowID
+        }
+
+        // A minimized window is still an open, reusable Sorty window. Finder
+        // actions should restore it instead of falling through to a new scene.
+        return candidates
             .max(by: { lhs, rhs in lhs.value.lastFocusedAt < rhs.value.lastFocusedAt })?
             .key
     }
@@ -194,6 +202,9 @@ public final class MainWindowRouter {
         guard let window = sessions[sessionID]?.window else { return false }
 
         NSApplication.shared.activate(ignoringOtherApps: true)
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
         window.makeKeyAndOrderFront(nil)
         markFocused(sessionID: sessionID)
         return true
