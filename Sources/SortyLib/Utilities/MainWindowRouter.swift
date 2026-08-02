@@ -118,10 +118,12 @@ public final class MainWindowRouter {
             return mainWindowID
         }
 
-        if let visibleWindowID = candidates
-            .filter { $0.value.window?.isVisible == true }
-            .max(by: { lhs, rhs in lhs.value.lastFocusedAt < rhs.value.lastFocusedAt })?
-            .key {
+        if let visibleWindowID = (
+            candidates
+                .filter { $0.value.window?.isVisible == true }
+                .max(by: { lhs, rhs in lhs.value.lastFocusedAt < rhs.value.lastFocusedAt })?
+                .key
+        ) {
             return visibleWindowID
         }
 
