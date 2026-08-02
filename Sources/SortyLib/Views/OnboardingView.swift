@@ -532,14 +532,14 @@ private struct OnboardingIntroView: View {
     @State private var filesAppeared = false
     @State private var fileIcons: [String: NSImage] = [:]
     @State private var collapseProgress: CGFloat = 0
+    @State private var introFrame: CGRect = .zero
     @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
+        ZStack {
             // Phase 1 of the reveal shows only the icon and its rose glow on a
             // fully transparent window — no backdrop, no "app window" feel.
             // The gradient fades in later together with the title and button.
@@ -570,7 +570,7 @@ private struct OnboardingIntroView: View {
                                 OrbitChipPlacement(
                                     collapseProgress: collapseProgress,
                                     orbitOffset: orbitOffset(for: file, phase: phase),
-                                    collapseOffset: collapseOffset(for: file, in: geometry.size),
+                                    collapseOffset: collapseOffset(for: file),
                                     orbitRotation: file.rotation + sin(phase * 0.7 + file.driftPhase) * 3,
                                     orbitScale: file.scale
                                 )
@@ -629,13 +629,10 @@ private struct OnboardingIntroView: View {
                 .onboardingBeamBorder(variant: .featured, isIntensified: isHoveringButton, includesInteriorGlow: isHoveringButton)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: OnboardingGetStartedButtonFrameKey.self,
-                            value: proxy.frame(in: .named("onboardingIntro"))
-                        )
-                    }
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    getStartedButtonFrame = frame
                 }
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
@@ -653,20 +650,20 @@ private struct OnboardingIntroView: View {
                 .offset(y: textOffset)
                 .animation(.spring(response: 0.36, dampingFraction: 0.82), value: isHoveringButton)
             }
-            }
-            .coordinateSpace(name: "onboardingIntro")
-            .onPreferenceChange(OnboardingGetStartedButtonFrameKey.self) {
-                getStartedButtonFrame = $0
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Welcome to Sorty")
-            .onAppear {
-                runIntroReveal()
-            }
-            .onDisappear {
-                revealGeneration += 1
-                audio.stopAll()
-            }
+        }
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            introFrame = frame
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Welcome to Sorty")
+        .onAppear {
+            runIntroReveal()
+        }
+        .onDisappear {
+            revealGeneration += 1
+            audio.stopAll()
         }
     }
 
@@ -750,19 +747,11 @@ private struct OnboardingIntroView: View {
         return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
     }
 
-    private func collapseOffset(for file: OnboardingOrbitFile, in containerSize: CGSize) -> CGSize {
+    private func collapseOffset(for file: OnboardingOrbitFile) -> CGSize {
         CGSize(
-            width: getStartedButtonFrame.midX - containerSize.width / 2 + file.collapseX,
-            height: getStartedButtonFrame.midY - containerSize.height / 2 + file.collapseY
+            width: getStartedButtonFrame.midX - introFrame.midX + file.collapseX * 0.65,
+            height: getStartedButtonFrame.midY - introFrame.midY + file.collapseY * 0.18
         )
-    }
-}
-
-private struct OnboardingGetStartedButtonFrameKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
     }
 }
 
@@ -785,14 +774,15 @@ private struct OrbitChipPlacement: ViewModifier, Animatable {
 
     func body(content: Content) -> some View {
         let t = min(max(collapseProgress, 0), 1)
+        let collapseOpacity = 1 - max(0, (t - 0.72) / 0.28)
         content
             .rotationEffect(.degrees(orbitRotation * Double(1 - t)))
-            .scaleEffect(orbitScale + (0.24 - orbitScale) * t)
+            .scaleEffect(orbitScale + (0.08 - orbitScale) * t)
             .offset(
                 x: orbitOffset.width + (collapseOffset.width - orbitOffset.width) * t,
                 y: orbitOffset.height + (collapseOffset.height - orbitOffset.height) * t
             )
-            .opacity(Double(1 - t))
+            .opacity(Double(collapseOpacity))
     }
 }
 
