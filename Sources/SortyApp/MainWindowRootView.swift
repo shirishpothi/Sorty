@@ -407,13 +407,12 @@ struct MainWindowRootView: View {
     }
 
     private func processDeeplink(_ url: URL) {
-        if url.host?.lowercased() == "organize" {
-            let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?
-                .first(where: { $0.name == "source" })?
-                .value
-            windowSession.appState.showsFinderWorkflowPicker = source == "finder"
-        }
+        let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "source" })?
+            .value
+        windowSession.appState.showsFinderWorkflowPicker =
+            url.host?.lowercased() == "organize" && source == "finder"
 
         deeplinkHandler.handle(url: url)
 

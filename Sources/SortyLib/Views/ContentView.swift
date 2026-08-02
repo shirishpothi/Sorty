@@ -168,6 +168,9 @@ public struct ContentView: View {
         }
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
+                if newValue != .organize {
+                    appState.showsFinderWorkflowPicker = false
+                }
                 previousView = oldValue
                 presentNavigationDestination(
                     newValue,
@@ -177,11 +180,13 @@ public struct ContentView: View {
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
             if showPicker {
+                appState.showsFinderWorkflowPicker = false
                 openDirectoryPicker()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openOrganizeDirectoryPickerInMainWindow)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
+            appState.showsFinderWorkflowPicker = false
             appState.currentView = .organize
             appState.showDirectoryPicker = true
         }
@@ -198,6 +203,7 @@ public struct ContentView: View {
         }
         .onReceive(extensionListener.$incomingURL) { url in
             if let url = url {
+                appState.showsFinderWorkflowPicker = true
                 appState.selectedDirectory = url
                 appState.currentView = .organize
                 extensionListener.incomingURL = nil
