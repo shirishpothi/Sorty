@@ -44,13 +44,13 @@ export function LegalPage({
             <Link
               href="/"
               scroll={false}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="legal-back-link"
               data-analytics-action="legal_navigation_opened"
               data-analytics-component="back_link"
               data-analytics-location="legal_page"
               data-analytics-target="home"
             >
-              ← Back to Sorty
+              <span className="legal-back-link-label">← Back to Sorty</span>
             </Link>
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
               {title}
