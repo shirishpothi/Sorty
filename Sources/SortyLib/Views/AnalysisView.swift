@@ -1681,8 +1681,8 @@ private struct StreamingProgressBeam: View {
         ZStack {
             HStack(alignment: .center, spacing: 10) {
                 Text(displayedStage)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .numericTextTransition(
                         animationValue: displayedStage,
                         animation: .easeInOut(duration: 0.28)
