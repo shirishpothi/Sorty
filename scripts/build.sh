@@ -855,6 +855,16 @@ sparkle_framework_has_valid_layout() {
     sparkle_resources_dir "${framework_path}" >/dev/null 2>&1
 }
 
+remove_preserved_bundle_conflicts() {
+    local bundle_path="$1"
+    [ -d "${bundle_path}" ] || return 0
+
+    # Finder/iCloud can leave duplicate files such as "Downloader (1)" in a
+    # preserved bundle. codesign treats files under nested code directories as
+    # code objects, so these duplicates make strict signing fail.
+    find "${bundle_path}" -depth \( -name '* ([0-9])' -o -name '* ([0-9]).*' \) -exec rm -rf {} +
+}
+
 embed_sparkle_framework() {
     local source_framework="$1"
     local target_framework="$2"
@@ -865,12 +875,14 @@ embed_sparkle_framework() {
     fi
 
     if [ "${preserve_existing}" = "true" ] && sparkle_framework_has_valid_layout "${target_framework}"; then
+        remove_preserved_bundle_conflicts "${target_framework}"
         log_detail "Sparkle.framework already present, preserving valid bundle"
         return 0
     fi
 
     rm -rf "${target_framework}"
     ditto "${source_framework}" "${target_framework}"
+    remove_preserved_bundle_conflicts "${target_framework}"
     log_detail "Embedded Sparkle.framework"
 }
 
