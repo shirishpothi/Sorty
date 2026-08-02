@@ -970,54 +970,9 @@ struct AddExclusionRuleView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("Choose a folder", systemImage: "folder.badge.minus")
-                            .font(.subheadline.weight(.semibold))
-
-                        Text("Sorty will leave this folder and everything inside it untouched.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if let selectedFolderURL {
-                            HStack(spacing: 10) {
-                                FolderThumbnailView(
-                                    url: selectedFolderURL,
-                                    size: CGSize(width: 28, height: 28)
-                                )
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(selectedFolderURL.lastPathComponent)
-                                        .font(.subheadline.weight(.medium))
-                                    PrivacySensitivePathText(
-                                        path: selectedFolderURL.deletingLastPathComponent().path
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                }
-
-                                Spacer()
-
-                                Button("Change") {
-                                    showingFolderPicker = true
-                                }
-                                .buttonStyle(.sortyBordered(size: .small))
-                            }
-                        } else {
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                showingFolderPicker = true
-                            } label: {
-                                Label("Choose Folder", systemImage: "folder.badge.minus")
-                            }
-                            .buttonStyle(.onboardingPill)
-                            .accessibilityIdentifier("ChooseExclusionFolderButton")
-                        }
-                    }
-                    .padding(16)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-
                     if selectedFolderURL != nil {
+                        folderPickerCard
+
                         Button("Create a rule instead") {
                             HapticFeedbackManager.shared.selection()
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1028,37 +983,29 @@ struct AddExclusionRuleView: View {
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .frame(maxWidth: .infinity)
                     } else {
-                        HStack(spacing: 12) {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 1)
-                            Text("or create a rule")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize()
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 1)
-                        }
+                        HStack(alignment: .top, spacing: 16) {
+                            folderPickerCard
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("What should Sorty leave alone?")
-                                .font(.subheadline.weight(.semibold))
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("What should Sorty leave alone?")
+                                    .font(.subheadline.weight(.semibold))
 
-                            Picker("Exclusion", selection: $selectedType) {
-                                ForEach(ruleTypes, id: \.self) { type in
-                                    Label(type.friendlyName, systemImage: type.icon)
-                                        .tag(type)
+                                Picker("Exclusion", selection: $selectedType) {
+                                    ForEach(ruleTypes, id: \.self) { type in
+                                        Label(type.friendlyName, systemImage: type.icon)
+                                            .tag(type)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                                .onChange(of: selectedType) { _, _ in
+                                    HapticFeedbackManager.shared.selection()
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .onChange(of: selectedType) { _, _ in
-                                HapticFeedbackManager.shared.selection()
-                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                            .systemLiquidGlassBackground(cornerRadius: 12)
                         }
-                        .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 12)
 
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Details")
@@ -1103,6 +1050,56 @@ struct AddExclusionRuleView: View {
             HapticFeedbackManager.shared.selection()
             selectedFolderURL = url.standardizedFileURL
         }
+    }
+
+    private var folderPickerCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Choose a folder", systemImage: "folder.badge.minus")
+                .font(.subheadline.weight(.semibold))
+
+            Text("Sorty will leave this folder and everything inside it untouched.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let selectedFolderURL {
+                HStack(spacing: 10) {
+                    FolderThumbnailView(
+                        url: selectedFolderURL,
+                        size: CGSize(width: 28, height: 28)
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedFolderURL.lastPathComponent)
+                            .font(.subheadline.weight(.medium))
+                        PrivacySensitivePathText(
+                            path: selectedFolderURL.deletingLastPathComponent().path
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button("Change") {
+                        showingFolderPicker = true
+                    }
+                    .buttonStyle(.sortyBordered(size: .small))
+                }
+            } else {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showingFolderPicker = true
+                } label: {
+                    Label("Choose Folder", systemImage: "folder.badge.minus")
+                }
+                .buttonStyle(.onboardingPill)
+                .accessibilityIdentifier("ChooseExclusionFolderButton")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 
     @ViewBuilder
