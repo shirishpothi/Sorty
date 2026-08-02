@@ -311,7 +311,10 @@ struct MainWindowRootView: View {
     }
 
     private var handledFinderExternalEvents: Set<String> {
-        guard !windowSession.organizer.state.isOperationInProgress else { return [] }
+        // Keep claiming Finder URLs while this session is busy. The deeplink
+        // router opens a request-scoped window when no session is available;
+        // relinquishing the event here also makes SwiftUI create an unscoped
+        // scene, leaving two new windows for one Finder action.
         return ["sorty://organize", "sorty://watched", "sorty://exclude"]
     }
 
