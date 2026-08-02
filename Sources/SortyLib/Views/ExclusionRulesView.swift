@@ -1015,6 +1015,8 @@ struct AddExclusionRuleView: View {
                         HStack(alignment: .top, spacing: 16) {
                             folderPickerCard
 
+                            exclusionChoiceDivider
+
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("What should Sorty leave alone?")
                                     .font(.subheadline.weight(.semibold))
@@ -1129,6 +1131,25 @@ struct AddExclusionRuleView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .systemLiquidGlassBackground(cornerRadius: 12)
+    }
+
+    private var exclusionChoiceDivider: some View {
+        VStack(spacing: 8) {
+            Capsule()
+                .fill(.quaternary)
+                .frame(width: 1, height: 24)
+
+            Text("OR")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.secondary)
+
+            Capsule()
+                .fill(.quaternary)
+                .frame(width: 1, height: 24)
+        }
+        .frame(width: 24)
+        .padding(.top, 86)
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder
