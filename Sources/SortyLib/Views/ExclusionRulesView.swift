@@ -463,19 +463,47 @@ struct ExclusionRulesView: View {
                 .foregroundStyle(.secondary)
 
                 HStack(alignment: .bottom, spacing: 10) {
-                    TextField(naturalLanguageSuggestion, text: $newNLException, axis: .vertical)
-                        .lineLimit(1...4)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isNLExceptionFocused)
-                        .onKeyPress(.tab) {
-                            guard newNLException.isEmpty else { return .ignored }
-                            newNLException = naturalLanguageSuggestion
-                            HapticFeedbackManager.shared.selection()
-                            return .handled
+                    ZStack(alignment: .leading) {
+                        TextField("", text: $newNLException, axis: .vertical)
+                            .lineLimit(1...4)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($isNLExceptionFocused)
+                            .onKeyPress(.tab) {
+                                guard newNLException.isEmpty else { return .ignored }
+                                newNLException = naturalLanguageSuggestion
+                                HapticFeedbackManager.shared.selection()
+                                return .handled
+                            }
+                            .onSubmit {
+                                Task { await reviewAndAddException() }
+                            }
+
+                        if newNLException.isEmpty {
+                            HStack(spacing: 10) {
+                                Text(naturalLanguageSuggestion)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                                    .numericTextTransition(
+                                        animationValue: naturalLanguageSuggestionIndex
+                                    )
+
+                                Spacer(minLength: 0)
+
+                                Text("Tab")
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Color.secondary.opacity(0.10),
+                                        in: RoundedRectangle(cornerRadius: 5)
+                                    )
+                                    .accessibilityHidden(true)
+                            }
+                            .padding(.horizontal, 8)
+                            .allowsHitTesting(false)
                         }
-                        .onSubmit {
-                            Task { await reviewAndAddException() }
-                        }
+                    }
 
                     Button {
                         Task { await reviewAndAddException() }
