@@ -52,7 +52,6 @@ struct ExclusionRulesView: View {
     @State private var isShowingLearningExclusionsInfo = false
     @State private var isShowingNaturalLanguageExceptionsInfo = false
     @State private var isLearningExclusionsExpanded = true
-    @State private var isNaturalLanguageExceptionsExpanded = true
     @FocusState private var isNLExceptionFocused: Bool
 
     private var trimmedSearchText: String {
@@ -149,6 +148,11 @@ struct ExclusionRulesView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 20) {
+                            if !isSearching {
+                                naturalLanguageExceptionsCard
+                                    .animatedAppearance(delay: 0.05)
+                            }
+
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
                                 RuleGroupCard(
@@ -158,7 +162,14 @@ struct ExclusionRulesView: View {
                                     highlightedRuleID: appState.highlightedExclusionRuleID,
                                     infoText: group.0 == "Files & Folders"
                                         ? "Matching files and folders are left untouched and aren't used for learnings."
-                                        : nil
+                                        : nil,
+                                    naturalLanguageExceptions: group.0 == "Files & Folders"
+                                        ? filteredNaturalLanguageExceptions : [],
+                                    onRemoveNaturalLanguageException: { index in
+                                        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+                                            rulesManager.removeNaturalLanguageException(at: index)
+                                        }
+                                    }
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.05)
                             }
@@ -180,10 +191,6 @@ struct ExclusionRulesView: View {
                                     .animatedAppearance(delay: 0.12)
                             }
 
-                            // Natural language exceptions
-                            if !isSearching || !filteredNaturalLanguageExceptions.isEmpty {
-                                naturalLanguageExceptionsCard
-                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
@@ -288,7 +295,7 @@ struct ExclusionRulesView: View {
                 HapticFeedbackManager.shared.tap()
                 showingAddRule = true
             } label: {
-                Label("Add Exclusion", systemImage: "plus")
+                Label("Add Manually", systemImage: "slider.horizontal.3")
             }
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured)
@@ -410,12 +417,11 @@ struct ExclusionRulesView: View {
 
     private var naturalLanguageExceptionsCard: some View {
         SettingsCard(
-            title: "Natural Language Exceptions",
-            icon: "text.bubble",
+            title: "Describe an Exception",
+            icon: "sparkles",
             color: .purple,
-            count: filteredNaturalLanguageExceptions.count,
-            isExpanded: filteredNaturalLanguageExceptions.isEmpty
-                ? nil : $isNaturalLanguageExceptionsExpanded,
+            count: 0,
+            isExpanded: nil,
             headerAccessory: {
                 Image(systemName: "info.circle")
                     .font(.caption)
@@ -425,7 +431,7 @@ struct ExclusionRulesView: View {
                         isPresented: $isShowingNaturalLanguageExceptionsInfo,
                         arrowEdge: .trailing
                     ) {
-                        Text("Describe files Sorty should never touch, in plain English.")
+                        Text("Tell Sorty what to leave alone. It will ask for clarification when the request could mean different things.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -436,42 +442,27 @@ struct ExclusionRulesView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    TextField("e.g. don't touch any npm module files", text: $newNLException)
+                Text("Use ordinary language — you can combine names, folders, file kinds, and context.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    TextField("e.g. Leave unfinished client proposals and anything in Archive alone", text: $newNLException, axis: .vertical)
+                        .lineLimit(2...4)
                         .textFieldStyle(.roundedBorder)
                         .focused($isNLExceptionFocused)
                         .onSubmit {
-                            addException()
+                            Task { await reviewAndAddException() }
                         }
 
                     Button {
-                        Task { await improveExceptionWithAI() }
+                        Task { await reviewAndAddException() }
                     } label: {
                         if isImprovingException {
                             SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         } else {
-                            Image(systemName: "wand.and.stars")
+                            Label("Review & Add", systemImage: "sparkles")
                         }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.purple)
-                    .disabled(
-                        newNLException.trimmingCharacters(in: .whitespaces).isEmpty
-                            || isImprovingException
-                    )
-                    .help("Refine with Sorty")
-                    .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
-                        Button("Edit Exception") {
-                            isNLExceptionFocused = true
-                        }
-                    } message: {
-                        Text(
-                            "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
-                        )
-                    }
-
-                    Button("Add") {
-                        addException()
                     }
                     .buttonStyle(.onboardingPill(size: .small))
                     .onboardingBeamBorder(
@@ -479,42 +470,25 @@ struct ExclusionRulesView: View {
                         active: !newNLException.trimmingCharacters(in: .whitespaces).isEmpty,
                         size: .small
                     )
-                    .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-
-                if !filteredNaturalLanguageExceptions.isEmpty {
-                    Divider()
-
-                    ForEach(filteredNaturalLanguageExceptions, id: \.index) { item in
-                        HStack(spacing: 10) {
-                            Image(systemName: "text.quote")
-                                .font(.caption)
-                                .foregroundColor(.purple)
-
-                            Text(item.exception)
-                                .font(.subheadline)
-                                .lineLimit(2)
-
-                            Spacer()
-
-                            Button {
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-                                    rulesManager.removeNaturalLanguageException(at: item.index)
-                                }
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 14))
-                            }
-                            .buttonStyle(.plain)
+                    .disabled(
+                        newNLException.trimmingCharacters(in: .whitespaces).isEmpty
+                            || isImprovingException
+                    )
+                    .help("Let Sorty review the exception before saving it")
+                    .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
+                        Button("Edit Exception") {
+                            isNLExceptionFocused = true
                         }
-                        .padding(.vertical, 4)
-
-                        if item.index != filteredNaturalLanguageExceptions.last?.index {
-                            Divider()
-                        }
+                    } message: {
+                        Text(
+                            "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Review & Add again."
+                        )
                     }
                 }
+
+                Text("Saved exceptions appear in Files & Folders with a sparkle badge.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -553,16 +527,7 @@ struct ExclusionRulesView: View {
         }
     }
 
-    private func addException() {
-        let trimmed = newNLException.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-            rulesManager.addNaturalLanguageException(trimmed)
-        }
-        newNLException = ""
-    }
-
-    private func improveExceptionWithAI() async {
+    private func reviewAndAddException() async {
         let original = newNLException.trimmingCharacters(in: .whitespaces)
         guard !original.isEmpty else { return }
         isImprovingException = true
@@ -578,7 +543,11 @@ struct ExclusionRulesView: View {
 
             switch outcome {
             case .replacement(let replacement):
-                newNLException = String(replacement.prefix(200))
+                let reviewedException = String(replacement.prefix(200))
+                withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+                    rulesManager.addNaturalLanguageException(reviewedException)
+                }
+                newNLException = ""
                 showImproveExceptionRequest = false
                 HapticFeedbackManager.shared.success()
             case .needsUserInput(let message):
@@ -698,6 +667,8 @@ struct RuleGroupCard: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     let highlightedRuleID: UUID?
     let infoText: String?
+    let naturalLanguageExceptions: [(index: Int, exception: String)]
+    let onRemoveNaturalLanguageException: (Int) -> Void
 
     @State private var isExpanded = true
     @State private var isShowingInfo = false
@@ -712,10 +683,12 @@ struct RuleGroupCard: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
-                        Text("\(rules.count)")
+                        Text("\(rules.count + naturalLanguageExceptions.count)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .numericTextTransition(animationValue: rules.count)
+                            .numericTextTransition(
+                                animationValue: rules.count + naturalLanguageExceptions.count
+                            )
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.secondary.opacity(0.1))
@@ -768,6 +741,16 @@ struct RuleGroupCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(spacing: 0) {
+                    ForEach(naturalLanguageExceptions, id: \.index) { item in
+                        NaturalLanguageExceptionRow(
+                            exception: item.exception,
+                            onDelete: { onRemoveNaturalLanguageException(item.index) }
+                        )
+
+                        Divider()
+                            .padding(.leading, 52)
+                    }
+
                     ForEach(rules) { rule in
                         ExclusionRuleRow(
                             rule: rule,
@@ -792,6 +775,55 @@ struct RuleGroupCard: View {
             isExpanded.toggle()
         }
         HapticFeedbackManager.shared.tap()
+    }
+}
+
+private struct NaturalLanguageExceptionRow: View {
+    let exception: String
+    let onDelete: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.purple)
+                .frame(width: 28, height: 28)
+                .background(Color.purple.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(exception)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(2)
+
+                Label("AI-reviewed exception", systemImage: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+            }
+
+            Spacer()
+
+            if isHovered {
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .contextMenu {
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 }
 
