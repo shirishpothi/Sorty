@@ -274,6 +274,10 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .folderName:
             return "Folders named '\(pattern)'"
         case .pathContains:
+            if pattern.hasPrefix("/") {
+                let folderName = URL(fileURLWithPath: pattern).lastPathComponent
+                return folderName.isEmpty ? "Excluded folder" : "\(folderName) folder"
+            }
             return "Paths containing '\(pattern)'"
         case .regex:
             return "Pattern: \(pattern)"
@@ -293,7 +297,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .systemFiles:
             return "System files"
         case .fileType:
-            return "\(fileTypeCategory?.rawValue ?? "Unknown") files"
+            return fileTypeCategory?.rawValue ?? "Selected file category"
         case .customScript:
             return "Custom script"
         }
@@ -1089,7 +1093,15 @@ public class ExclusionRulesManager: ObservableObject {
     // MARK: - Rule Management
 
     public func addRule(_ rule: ExclusionRule) {
-        rules.append(rule)
+        var labeledRule = rule
+        let suppliedLabel = labeledRule.description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let suppliedLabel, !suppliedLabel.isEmpty {
+            labeledRule.description = suppliedLabel
+        } else {
+            labeledRule.description = nil
+            labeledRule.description = labeledRule.displayDescription
+        }
+        rules.append(labeledRule)
         saveRules()
     }
 

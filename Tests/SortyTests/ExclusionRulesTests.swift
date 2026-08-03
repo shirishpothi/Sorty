@@ -64,6 +64,22 @@ class ExclusionRulesTests: XCTestCase {
     }
 
     @MainActor
+    func testAddingRuleGeneratesLabelWhenMissing() throws {
+        manager.addRule(
+            ExclusionRule(
+                type: .fileSize,
+                description: "   ",
+                numericValue: 2_048,
+                comparisonGreater: true,
+                sizeUnit: .gigabytes
+            )
+        )
+
+        let rule = try XCTUnwrap(manager.rules.last)
+        XCTAssertEqual(rule.description, "Files larger than 2 GB")
+    }
+
+    @MainActor
     func testLegacyNaturalLanguagePathMigratesToStructuredRule() throws {
         let suiteName = "ExclusionRulesTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
