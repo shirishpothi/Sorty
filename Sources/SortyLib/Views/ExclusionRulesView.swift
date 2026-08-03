@@ -108,10 +108,10 @@ struct ExclusionRulesView: View {
     }
 
     private let naturalLanguageExceptionSuggestions = [
-        "Leave unfinished client proposals and anything in Archive alone",
-        "Don't touch folders named Receipts or their contents",
-        "Keep my tax documents and scanned passports where they are",
-        "Leave work in progress from the last two weeks alone",
+        "Exclude folders named Archive and everything inside them",
+        "Exclude folders named Receipts and everything inside them",
+        "Exclude PDF files with tax or passport in the file name",
+        "Exclude video files larger than 1 GB",
     ]
 
     private var naturalLanguageSuggestion: String {
@@ -475,7 +475,7 @@ struct ExclusionRulesView: View {
                                 return .handled
                             }
                             .onSubmit {
-                                Task { await reviewAndAddException() }
+                                addNaturalLanguageException()
                             }
 
                         if newNLException.isEmpty {
@@ -505,34 +505,55 @@ struct ExclusionRulesView: View {
                         }
                     }
 
-                    Button {
-                        Task { await reviewAndAddException() }
-                    } label: {
-                        if isImprovingException {
-                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                        } else {
-                            Label("Review & Add", systemImage: "sparkles")
+                    HStack(spacing: 6) {
+                        Button {
+                            Task { await improveExceptionWithAI() }
+                        } label: {
+                            if isImprovingException {
+                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                                    .frame(width: 58)
+                            } else {
+                                Label("Improve", systemImage: "wand.and.stars")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .contentShape(Rectangle())
+                            }
                         }
-                    }
-                    .buttonStyle(.onboardingPill(size: .small))
-                    .onboardingBeamBorder(
-                        variant: .featured,
-                        active: !newNLException.trimmingCharacters(in: .whitespaces).isEmpty,
-                        size: .small
-                    )
-                    .disabled(
-                        newNLException.trimmingCharacters(in: .whitespaces).isEmpty
-                            || isImprovingException
-                    )
-                    .help("Let Sorty review the exception before saving it")
-                    .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
-                        Button("Edit Exception") {
-                            isNLExceptionFocused = true
-                        }
-                    } message: {
-                        Text(
-                            "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Review & Add again."
+                        .buttonStyle(.plain)
+                        .foregroundColor(.teal)
+                        .disabled(
+                            newNLException.trimmingCharacters(in: .whitespaces).isEmpty
+                                || isImprovingException
                         )
+                        .help("Improve this exception with Sorty")
+                        .accessibilityHint("Rewrites the exception to be clearer and more specific")
+                        .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
+                            Button("Edit Exception") {
+                                isNLExceptionFocused = true
+                            }
+                        } message: {
+                            Text(
+                                "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
+                            )
+                        }
+
+                        Button {
+                            addNaturalLanguageException()
+                        } label: {
+                            Label("Add", systemImage: "plus")
+                        }
+                        .buttonStyle(.onboardingPill(size: .small))
+                        .onboardingBeamBorder(
+                            variant: .featured,
+                            active: !newNLException.trimmingCharacters(in: .whitespaces).isEmpty,
+                            size: .small
+                        )
+                        .disabled(
+                            newNLException.trimmingCharacters(in: .whitespaces).isEmpty
+                                || isImprovingException
+                        )
+                        .help("Add this exception")
                     }
                 }
 
@@ -587,7 +608,7 @@ struct ExclusionRulesView: View {
         }
     }
 
-    private func reviewAndAddException() async {
+    private func improveExceptionWithAI() async {
         let original = newNLException.trimmingCharacters(in: .whitespaces)
         guard !original.isEmpty else { return }
         isImprovingException = true
@@ -603,11 +624,7 @@ struct ExclusionRulesView: View {
 
             switch outcome {
             case .replacement(let replacement):
-                let reviewedException = String(replacement.prefix(200))
-                withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-                    rulesManager.addNaturalLanguageException(reviewedException)
-                }
-                newNLException = ""
+                newNLException = String(replacement.prefix(200))
                 showImproveExceptionRequest = false
                 HapticFeedbackManager.shared.success()
             case .needsUserInput(let message):
@@ -618,6 +635,18 @@ struct ExclusionRulesView: View {
         } catch {
             HapticFeedbackManager.shared.error()
         }
+    }
+
+    private func addNaturalLanguageException() {
+        let exception = newNLException.trimmingCharacters(in: .whitespaces)
+        guard !exception.isEmpty else { return }
+
+        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+            rulesManager.addNaturalLanguageException(String(exception.prefix(200)))
+        }
+        newNLException = ""
+        showImproveExceptionRequest = false
+        HapticFeedbackManager.shared.success()
     }
 }
 
