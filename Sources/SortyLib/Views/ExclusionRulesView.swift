@@ -45,6 +45,7 @@ struct ExclusionRulesView: View {
     @State private var showingLearningExclusionImporter = false
     @State private var searchText = ""
     @State private var newNLException = ""
+    @State private var naturalLanguageSuggestionIndex = 0
     @State private var isImprovingException = false
     @State private var showImproveExceptionRequest = false
     @State private var improveExceptionRequestMessage = ""
@@ -104,6 +105,17 @@ struct ExclusionRulesView: View {
     private var hasSearchResults: Bool {
         !groupedRules.isEmpty || !filteredLearningExclusionPatterns.isEmpty
             || !filteredNaturalLanguageExceptions.isEmpty
+    }
+
+    private let naturalLanguageExceptionSuggestions = [
+        "Leave unfinished client proposals and anything in Archive alone",
+        "Don't touch folders named Receipts or their contents",
+        "Keep my tax documents and scanned passports where they are",
+        "Leave work in progress from the last two weeks alone",
+    ]
+
+    private var naturalLanguageSuggestion: String {
+        naturalLanguageExceptionSuggestions[naturalLanguageSuggestionIndex]
     }
 
     var body: some View {
@@ -442,15 +454,25 @@ struct ExclusionRulesView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Use ordinary language — you can combine names, folders, file kinds, and context.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("Suggestion \(naturalLanguageSuggestionIndex + 1) of \(naturalLanguageExceptionSuggestions.count)")
+                        .numericTextTransition(animationValue: naturalLanguageSuggestionIndex)
+                    Text("• Press Tab to use it")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
                 HStack(alignment: .bottom, spacing: 10) {
-                    TextField("e.g. Leave unfinished client proposals and anything in Archive alone", text: $newNLException, axis: .vertical)
-                        .lineLimit(2...4)
+                    TextField(naturalLanguageSuggestion, text: $newNLException, axis: .vertical)
+                        .lineLimit(1...4)
                         .textFieldStyle(.roundedBorder)
                         .focused($isNLExceptionFocused)
+                        .onKeyPress(.tab) {
+                            guard newNLException.isEmpty else { return .ignored }
+                            newNLException = naturalLanguageSuggestion
+                            HapticFeedbackManager.shared.selection()
+                            return .handled
+                        }
                         .onSubmit {
                             Task { await reviewAndAddException() }
                         }
@@ -486,9 +508,19 @@ struct ExclusionRulesView: View {
                     }
                 }
 
-                Text("Saved exceptions appear in Files & Folders with a sparkle badge.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            }
+        }
+        .task(id: newNLException.isEmpty) {
+            guard newNLException.isEmpty else { return }
+
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled, newNLException.isEmpty else { return }
+
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                    naturalLanguageSuggestionIndex =
+                        (naturalLanguageSuggestionIndex + 1) % naturalLanguageExceptionSuggestions.count
+                }
             }
         }
     }
