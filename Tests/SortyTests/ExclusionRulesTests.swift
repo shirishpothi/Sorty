@@ -62,6 +62,38 @@ class ExclusionRulesTests: XCTestCase {
     }
 
     @MainActor
+    func testLegacyNaturalLanguageExceptionsMigrateWithEnabledState() throws {
+        let suiteName = "ExclusionRulesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(["Leave /Users/test/Archive alone"], forKey: "naturalLanguageExceptions")
+
+        let isolatedManager = ExclusionRulesManager(userDefaults: defaults)
+
+        let exception = try XCTUnwrap(isolatedManager.naturalLanguageExceptions.first)
+        XCTAssertEqual(exception.text, "Leave /Users/test/Archive alone")
+        XCTAssertTrue(exception.isEnabled)
+        XCTAssertEqual(exception.referencedPaths, ["/Users/test/Archive"])
+        XCTAssertNotNil(defaults.data(forKey: "naturalLanguageExceptions"))
+    }
+
+    @MainActor
+    func testDisabledNaturalLanguageExceptionIsOmittedFromPrompts() throws {
+        let suiteName = "ExclusionRulesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let isolatedManager = ExclusionRulesManager(userDefaults: defaults)
+        isolatedManager.addNaturalLanguageException("Leave ~/Documents/Archive alone")
+
+        var exception = try XCTUnwrap(isolatedManager.naturalLanguageExceptions.first)
+        exception.isEnabled = false
+        isolatedManager.updateNaturalLanguageException(exception)
+
+        XCTAssertTrue(isolatedManager.sanitizedExceptionsForPrompt.isEmpty)
+        XCTAssertEqual(exception.referencedPaths, ["~/Documents/Archive"])
+    }
+
+    @MainActor
     func testBlankTextPatternsDoNotExcludeEverything() {
         let blankRules = [
             ExclusionRule(type: .fileExtension, pattern: ""),

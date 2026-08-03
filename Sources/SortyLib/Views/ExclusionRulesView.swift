@@ -82,7 +82,9 @@ struct ExclusionRulesView: View {
 
         return groups.compactMap { (title, types) in
             let rules = filteredRules.filter { types.contains($0.type) }
-            return rules.isEmpty ? nil : (title, rules)
+            let hasNaturalLanguageExceptions =
+                title == "Files & Folders" && !filteredNaturalLanguageExceptions.isEmpty
+            return rules.isEmpty && !hasNaturalLanguageExceptions ? nil : (title, rules)
         }
     }
 
@@ -92,13 +94,14 @@ struct ExclusionRulesView: View {
         return patterns.filter { $0.localizedCaseInsensitiveContains(trimmedSearchText) }
     }
 
-    private var filteredNaturalLanguageExceptions: [(index: Int, exception: String)] {
-        let exceptions = rulesManager.naturalLanguageExceptions.enumerated().map {
-            (index: $0.offset, exception: $0.element)
-        }
+    private var filteredNaturalLanguageExceptions: [NaturalLanguageException] {
+        let exceptions = rulesManager.naturalLanguageExceptions
         guard isSearching else { return exceptions }
-        return exceptions.filter {
-            $0.exception.localizedCaseInsensitiveContains(trimmedSearchText)
+        return exceptions.filter { exception in
+            exception.text.localizedCaseInsensitiveContains(trimmedSearchText)
+                || exception.referencedPaths.contains {
+                    $0.localizedCaseInsensitiveContains(trimmedSearchText)
+                }
         }
     }
 
@@ -177,9 +180,9 @@ struct ExclusionRulesView: View {
                                         : nil,
                                     naturalLanguageExceptions: group.0 == "Files & Folders"
                                         ? filteredNaturalLanguageExceptions : [],
-                                    onRemoveNaturalLanguageException: { index in
+                                    onRemoveNaturalLanguageException: { exception in
                                         withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-                                            rulesManager.removeNaturalLanguageException(at: index)
+                                            rulesManager.removeNaturalLanguageException(id: exception.id)
                                         }
                                     }
                                 )
@@ -753,8 +756,8 @@ struct RuleGroupCard: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     let highlightedRuleID: UUID?
     let infoText: String?
-    let naturalLanguageExceptions: [(index: Int, exception: String)]
-    let onRemoveNaturalLanguageException: (Int) -> Void
+    let naturalLanguageExceptions: [NaturalLanguageException]
+    let onRemoveNaturalLanguageException: (NaturalLanguageException) -> Void
 
     @State private var isExpanded = true
     @State private var isShowingInfo = false
@@ -827,14 +830,17 @@ struct RuleGroupCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(spacing: 0) {
-                    ForEach(naturalLanguageExceptions, id: \.index) { item in
+                    ForEach(naturalLanguageExceptions) { exception in
                         NaturalLanguageExceptionRow(
-                            exception: item.exception,
-                            onDelete: { onRemoveNaturalLanguageException(item.index) }
+                            exception: exception,
+                            rulesManager: rulesManager,
+                            onDelete: { onRemoveNaturalLanguageException(exception) }
                         )
 
-                        Divider()
-                            .padding(.leading, 52)
+                        if exception.id != naturalLanguageExceptions.last?.id || !rules.isEmpty {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
                     }
 
                     ForEach(rules) { rule in
@@ -865,27 +871,57 @@ struct RuleGroupCard: View {
 }
 
 private struct NaturalLanguageExceptionRow: View {
-    let exception: String
+    let exception: NaturalLanguageException
+    @ObservedObject var rulesManager: ExclusionRulesManager
     let onDelete: () -> Void
     @State private var isHovered = false
 
+    private static let systemFolderIcon: NSImage = {
+        NSWorkspace.shared.icon(forFile: "/tmp")
+    }()
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.purple)
+            exceptionIcon
                 .frame(width: 28, height: 28)
-                .background(Color.purple.opacity(0.1))
+                .background((exception.isEnabled ? Color.purple : .secondary).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(exception)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(exception.text)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(exception.isEnabled ? .primary : .secondary)
+                        .lineLimit(2)
 
-                Label("AI-reviewed exception", systemImage: "sparkles")
-                    .font(.caption)
-                    .foregroundStyle(.purple)
+                    Text("Natural Language")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.purple.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+
+                HStack(spacing: 6) {
+                    Text("Natural language exception")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !exception.referencedPaths.isEmpty {
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "folder")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(exception.referencedPaths.joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(exception.referencedPaths.joined(separator: "\n"))
+                    }
+                }
             }
 
             Spacer()
@@ -894,14 +930,36 @@ private struct NaturalLanguageExceptionRow: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                         .font(.caption)
+                        .foregroundStyle(.red)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.red)
                 .transition(.scale.combined(with: .opacity))
             }
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { exception.isEnabled },
+                    set: { isEnabled in
+                        HapticFeedbackManager.shared.selection()
+                        var updatedException = exception
+                        updatedException.isEnabled = isEnabled
+                        rulesManager.updateNaturalLanguageException(updatedException)
+                    }
+                )
+            )
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
+            .accessibilityLabel(
+                exception.isEnabled
+                    ? "Disable exception: \(exception.text)"
+                    : "Enable exception: \(exception.text)"
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
@@ -909,6 +967,25 @@ private struct NaturalLanguageExceptionRow: View {
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .accessibilityAction(named: Text("Delete")) {
+            onDelete()
+        }
+    }
+
+    @ViewBuilder
+    private var exceptionIcon: some View {
+        if exception.referencedPaths.isEmpty {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(exception.isEnabled ? .purple : .secondary)
+        } else {
+            AppKitImageView(
+                image: Self.systemFolderIcon,
+                size: CGSize(width: 16, height: 16),
+                opacity: exception.isEnabled ? 1.0 : 0.5
+            )
+            .frame(width: 16, height: 16)
         }
     }
 }

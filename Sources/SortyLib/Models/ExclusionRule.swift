@@ -929,21 +929,61 @@ public struct ExclusionRulePreset: Identifiable, Sendable {
 
 // MARK: - Exclusion Rules Manager
 
+public struct NaturalLanguageException: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var text: String
+    public var isEnabled: Bool
+
+    public init(id: UUID = UUID(), text: String, isEnabled: Bool = true) {
+        self.id = id
+        self.text = text
+        self.isEnabled = isEnabled
+    }
+
+    public var referencedPaths: [String] {
+        let pattern = #"(?:\"((?:~/|/)[^\"]+)\"|'((?:~/|/)[^']+)'|((?:~/|/)[^\s,;]+))"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        let range = NSRange(text.startIndex..., in: text)
+        var paths: [String] = []
+        for match in expression.matches(in: text, range: range) {
+            for captureIndex in 1..<match.numberOfRanges {
+                let captureRange = match.range(at: captureIndex)
+                guard captureRange.location != NSNotFound,
+                      let range = Range(captureRange, in: text)
+                else { continue }
+
+                let path = String(text[range]).trimmingCharacters(in: CharacterSet(charactersIn: ".!?:)"))
+                if !path.isEmpty, !paths.contains(path) {
+                    paths.append(path)
+                }
+                break
+            }
+        }
+        return paths
+    }
+}
+
 @MainActor
 public class ExclusionRulesManager: ObservableObject {
     public static let legacyLearningsLinkedDescription = "Added from Learnings exclusion"
 
     @Published public private(set) var rules: [ExclusionRule] = []
     @Published public var activePresetName: String?
-    @Published public private(set) var naturalLanguageExceptions: [String] = []
+    @Published public private(set) var naturalLanguageExceptions: [NaturalLanguageException] = []
     @Published public private(set) var compiledMatcher = ExclusionMatcher.empty
 
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
     private let rulesKey = "exclusionRules"
     private let presetKey = "activeExclusionPreset"
     private let nlExceptionsKey = "naturalLanguageExceptions"
 
-    public init() {
+    public convenience init() {
+        self.init(userDefaults: .standard)
+    }
+
+    init(userDefaults: UserDefaults) {
+        self.userDefaults = userDefaults
         loadRules()
         removeLegacyLearningsLinkedRules()
         loadNaturalLanguageExceptions()
@@ -1088,19 +1128,29 @@ public class ExclusionRulesManager: ObservableObject {
     public func addNaturalLanguageException(_ text: String) {
         let sanitized = sanitizeException(text)
         guard !sanitized.isEmpty else { return }
-        naturalLanguageExceptions.append(sanitized)
+        naturalLanguageExceptions.append(NaturalLanguageException(text: sanitized))
         saveNaturalLanguageExceptions()
     }
 
-    public func removeNaturalLanguageException(at index: Int) {
-        guard naturalLanguageExceptions.indices.contains(index) else { return }
-        naturalLanguageExceptions.remove(at: index)
+    public func updateNaturalLanguageException(_ exception: NaturalLanguageException) {
+        guard let index = naturalLanguageExceptions.firstIndex(where: { $0.id == exception.id }) else {
+            return
+        }
+        naturalLanguageExceptions[index] = exception
+        saveNaturalLanguageExceptions()
+    }
+
+    public func removeNaturalLanguageException(id: UUID) {
+        naturalLanguageExceptions.removeAll { $0.id == id }
         saveNaturalLanguageExceptions()
     }
 
     /// Returns sanitized exceptions formatted for injection into AI prompts
     public var sanitizedExceptionsForPrompt: [String] {
-        naturalLanguageExceptions.map { sanitizeException($0) }.filter { !$0.isEmpty }
+        naturalLanguageExceptions
+            .filter(\.isEnabled)
+            .map { sanitizeException($0.text) }
+            .filter { !$0.isEmpty }
     }
 
     /// Sanitizes user input to prevent prompt injection
@@ -1133,13 +1183,24 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     private func loadNaturalLanguageExceptions() {
-        if let saved = userDefaults.stringArray(forKey: nlExceptionsKey) {
+        if let data = userDefaults.data(forKey: nlExceptionsKey),
+           let saved = try? JSONDecoder().decode([NaturalLanguageException].self, from: data) {
             naturalLanguageExceptions = saved
+            return
+        }
+
+        if let legacyExceptions = userDefaults.stringArray(forKey: nlExceptionsKey) {
+            naturalLanguageExceptions = legacyExceptions.compactMap {
+                let text = sanitizeException($0)
+                return text.isEmpty ? nil : NaturalLanguageException(text: text)
+            }
+            saveNaturalLanguageExceptions()
         }
     }
 
     private func saveNaturalLanguageExceptions() {
-        userDefaults.set(naturalLanguageExceptions, forKey: nlExceptionsKey)
+        guard let data = try? JSONEncoder().encode(naturalLanguageExceptions) else { return }
+        userDefaults.set(data, forKey: nlExceptionsKey)
     }
 
     // MARK: - Persistence
