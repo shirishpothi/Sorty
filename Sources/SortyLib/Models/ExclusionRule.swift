@@ -33,7 +33,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
         case .fileExtension: return "Files with an extension"
         case .fileName: return "Files with a name"
         case .folderName: return "Folders with a name"
-        case .pathContains: return "Folder"
+        case .pathContains: return "Paths containing text"
         case .regex: return "Advanced name pattern"
         case .fileSize: return "Files by size"
         case .creationDate: return "Files by creation date"
@@ -103,6 +103,10 @@ public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable, Senda
     case databases = "Databases"
     case other = "Other"
 
+    public static var allCases: [FileTypeCategory] {
+        [.images, .videos, .audio, .documents, .archives, .code, .applications, .fonts, .databases]
+    }
+
     public var id: String { rawValue }
 
     public var extensions: [String] {
@@ -146,6 +150,48 @@ public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+public enum ExclusionSizeUnit: String, Codable, CaseIterable, Identifiable, Sendable {
+    case kilobytes = "KB"
+    case megabytes = "MB"
+    case gigabytes = "GB"
+    case terabytes = "TB"
+
+    public var id: Self { self }
+
+    public var megabyteMultiplier: Double {
+        switch self {
+        case .kilobytes: 1.0 / 1_024.0
+        case .megabytes: 1
+        case .gigabytes: 1_024
+        case .terabytes: 1_048_576
+        }
+    }
+}
+
+public enum ExclusionAgeUnit: String, Codable, CaseIterable, Identifiable, Sendable {
+    case seconds
+    case minutes
+    case hours
+    case days
+    case weeks
+    case months
+    case years
+
+    public var id: Self { self }
+
+    public var secondsMultiplier: Double {
+        switch self {
+        case .seconds: 1
+        case .minutes: 60
+        case .hours: 3_600
+        case .days: 86_400
+        case .weeks: 604_800
+        case .months: 2_592_000
+        case .years: 31_536_000
+        }
+    }
+}
+
 // MARK: - Exclusion Rule Model
 
 public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
@@ -155,12 +201,16 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
     public var isEnabled: Bool
     public var description: String?
     public var isBuiltIn: Bool
+    public var isAIGenerated: Bool?
 
     // For size comparison (in MB)
     public var numericValue: Double?
     // For date comparison direction (true = older than, false = newer than)
     // For size (true = larger than, false = smaller than)
     public var comparisonGreater: Bool?
+    public var sizeUnit: ExclusionSizeUnit?
+    public var ageUnit: ExclusionAgeUnit?
+    public var ageIntervalSeconds: Double?
 
     // For file type category matching
     public var fileTypeCategory: FileTypeCategory?
@@ -178,8 +228,12 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         isEnabled: Bool = true,
         description: String? = nil,
         isBuiltIn: Bool = false,
+        isAIGenerated: Bool = false,
         numericValue: Double? = nil,
         comparisonGreater: Bool? = nil,
+        sizeUnit: ExclusionSizeUnit? = nil,
+        ageUnit: ExclusionAgeUnit? = nil,
+        ageIntervalSeconds: Double? = nil,
         fileTypeCategory: FileTypeCategory? = nil,
         caseSensitive: Bool = false,
         negated: Bool = false
@@ -190,8 +244,12 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         self.isEnabled = isEnabled
         self.description = description
         self.isBuiltIn = isBuiltIn
+        self.isAIGenerated = isAIGenerated
         self.numericValue = numericValue
         self.comparisonGreater = comparisonGreater
+        self.sizeUnit = sizeUnit
+        self.ageUnit = ageUnit
+        self.ageIntervalSeconds = ageIntervalSeconds
         self.fileTypeCategory = fileTypeCategory
         self.caseSensitive = caseSensitive
         self.negated = negated
@@ -221,10 +279,15 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             return "Pattern: \(pattern)"
         case .fileSize:
             let direction = (comparisonGreater ?? true) ? "larger" : "smaller"
-            return "Files \(direction) than \(Int(numericValue ?? 0)) MB"
+            let unit = sizeUnit ?? .megabytes
+            let value = (numericValue ?? 0) / unit.megabyteMultiplier
+            return "Files \(direction) than \(value.formatted(.number.precision(.fractionLength(0...2)))) \(unit.rawValue)"
         case .creationDate, .modificationDate:
             let direction = (comparisonGreater ?? true) ? "older" : "newer"
-            return "Files \(direction) than \(Int(numericValue ?? 0)) days"
+            let unit = ageUnit ?? .days
+            let seconds = ageIntervalSeconds ?? ((numericValue ?? 0) * ExclusionAgeUnit.days.secondsMultiplier)
+            let value = seconds / unit.secondsMultiplier
+            return "Files \(direction) than \(value.formatted(.number.precision(.fractionLength(0...2)))) \(unit.rawValue)"
         case .hiddenFiles:
             return "Hidden files"
         case .systemFiles:
@@ -598,18 +661,14 @@ private struct CompiledExclusionRule: Sendable {
             predicate = .fileSize(limitMB: limitMB, greater: greater)
 
         case .creationDate, .modificationDate:
-            guard let days = rule.numericValue,
-                  days.isFinite,
-                  days >= Double(Int.min),
-                  days <= Double(Int.max),
+            let interval = rule.ageIntervalSeconds
+                ?? ((rule.numericValue ?? 0) * ExclusionAgeUnit.days.secondsMultiplier)
+            guard interval.isFinite,
+                  interval >= 0,
                   let older = rule.comparisonGreater else {
                 return nil
             }
-            let threshold = Calendar.current.date(
-                byAdding: .day,
-                value: -Int(days),
-                to: referenceDate
-            ) ?? referenceDate
+            let threshold = referenceDate.addingTimeInterval(-interval)
             predicate = .date(
                 type: rule.type,
                 threshold: threshold,
@@ -733,7 +792,7 @@ private enum CompiledExclusionPredicate: Sendable {
             let components = caseSensitive
                 ? cache.pathComponents()
                 : cache.lowercasedPathComponents()
-            return components.contains { $0.range(of: pattern) != nil }
+            return components.contains { $0 == Substring(pattern) }
 
         case .pathContains(let pattern, let caseSensitive):
             return caseSensitive
@@ -962,6 +1021,33 @@ public struct NaturalLanguageException: Codable, Identifiable, Hashable, Sendabl
         }
         return paths
     }
+
+    var confidentlyStructuredRule: ExclusionRule? {
+        if let path = referencedPaths.first {
+            let expandedPath = (path as NSString).expandingTildeInPath
+            return ExclusionRule(
+                type: .pathContains,
+                pattern: expandedPath,
+                description: URL(fileURLWithPath: expandedPath).lastPathComponent,
+                isAIGenerated: true
+            )
+        }
+
+        let pattern = #"(?i)folders?\s+named\s+(.+?)(?:\s+and\b|[.!]|$)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text)
+        else { return nil }
+
+        let folderName = text[range].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !folderName.isEmpty else { return nil }
+        return ExclusionRule(
+            type: .folderName,
+            pattern: folderName,
+            description: "\(folderName) folders",
+            isAIGenerated: true
+        )
+    }
 }
 
 @MainActor
@@ -990,6 +1076,7 @@ public class ExclusionRulesManager: ObservableObject {
         if rules.isEmpty {
             setupDefaultRules()
         }
+        migrateConfidentNaturalLanguageExceptions()
         setupNotificationObservers()
     }
 
@@ -1201,6 +1288,26 @@ public class ExclusionRulesManager: ObservableObject {
     private func saveNaturalLanguageExceptions() {
         guard let data = try? JSONEncoder().encode(naturalLanguageExceptions) else { return }
         userDefaults.set(data, forKey: nlExceptionsKey)
+    }
+
+    private func migrateConfidentNaturalLanguageExceptions() {
+        var migratedIDs: Set<UUID> = []
+        for exception in naturalLanguageExceptions {
+            guard let rule = exception.confidentlyStructuredRule else { continue }
+            let isDuplicate = rules.contains {
+                $0.type == rule.type
+                    && $0.pattern.caseInsensitiveCompare(rule.pattern) == .orderedSame
+            }
+            if !isDuplicate {
+                rules.append(rule)
+            }
+            migratedIDs.insert(exception.id)
+        }
+
+        guard !migratedIDs.isEmpty else { return }
+        naturalLanguageExceptions.removeAll { migratedIDs.contains($0.id) }
+        saveRules()
+        saveNaturalLanguageExceptions()
     }
 
     // MARK: - Persistence

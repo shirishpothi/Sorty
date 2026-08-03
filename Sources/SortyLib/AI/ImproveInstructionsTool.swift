@@ -142,3 +142,150 @@ private struct ResponsePayload: Decodable {
     let replacement: String?
     let message: String?
 }
+
+public enum NaturalLanguageExclusionResolverError: LocalizedError, Sendable {
+    case invalidResponse
+    case noRules
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidResponse: "Sorty couldn't turn that description into exclusion rules. Add a little more detail and try again."
+        case .noRules: "No supported exclusion rules were found in that description."
+        }
+    }
+}
+
+public struct NaturalLanguageExclusionResolver: Sendable {
+    public static func resolve(
+        client: any AIClientProtocol,
+        description: String
+    ) async throws -> [ExclusionRule] {
+        let response = try await client.generateText(
+            prompt: "Create exclusion rules for this request:\n<request>\(description)</request>",
+            systemPrompt: systemPrompt,
+            responseFormat: .jsonArray
+        )
+        return try decodeRules(from: response)
+    }
+
+    static func decodeRules(from response: String) throws -> [ExclusionRule] {
+        guard let start = response.firstIndex(of: "["),
+              let end = response.lastIndex(of: "]"),
+              start <= end,
+              let data = String(response[start...end]).data(using: .utf8),
+              let specifications = try? JSONDecoder().decode([Specification].self, from: data)
+        else {
+            throw NaturalLanguageExclusionResolverError.invalidResponse
+        }
+
+        let rules = specifications.prefix(12).compactMap(\.exclusionRule)
+        guard !rules.isEmpty else { throw NaturalLanguageExclusionResolverError.noRules }
+        return rules
+    }
+
+    private static let systemPrompt = """
+    Convert the user's plain-language request into ordinary Sorty exclusion rules. Return only a JSON array.
+    Each object uses: {"kind":"...","pattern":"...","category":"...","value":number,"unit":"...","comparison":"...","description":"..."}.
+    Supported kinds: file_extension, file_name_contains, folder_name, folder_path, file_category, file_size, creation_age, modification_age, hidden_files, system_files, regex.
+    Categories: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases.
+    Size units: KB, MB, GB, TB. Age units: seconds, minutes, hours, days, weeks, months, years. Comparisons: larger, smaller, older, newer.
+    Emit multiple rules when the request names multiple independent matches. Preserve explicit paths exactly. Never invent a path, threshold, extension, name, or category. Use a concise human-readable description for each rule.
+    """
+
+    private struct Specification: Decodable {
+        let kind: String
+        let pattern: String?
+        let category: String?
+        let value: Double?
+        let unit: String?
+        let comparison: String?
+        let description: String?
+
+        var exclusionRule: ExclusionRule? {
+            let trimmedPattern = pattern?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let commonDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            switch kind {
+            case "file_extension":
+                guard !trimmedPattern.isEmpty else { return nil }
+                return rule(type: .fileExtension, pattern: trimmedPattern.trimmingLeadingDotsForResolver)
+            case "file_name_contains":
+                guard !trimmedPattern.isEmpty else { return nil }
+                return rule(type: .fileName, pattern: trimmedPattern)
+            case "folder_name":
+                guard !trimmedPattern.isEmpty else { return nil }
+                return rule(type: .folderName, pattern: trimmedPattern)
+            case "folder_path":
+                guard trimmedPattern.hasPrefix("/") || trimmedPattern.hasPrefix("~/") else { return nil }
+                return rule(
+                    type: .pathContains,
+                    pattern: (trimmedPattern as NSString).expandingTildeInPath
+                )
+            case "file_category":
+                guard let category = FileTypeCategory.allCases.first(where: {
+                    $0.rawValue.caseInsensitiveCompare(self.category ?? "") == .orderedSame
+                }) else { return nil }
+                return ExclusionRule(
+                    type: .fileType,
+                    description: commonDescription,
+                    isAIGenerated: true,
+                    fileTypeCategory: category
+                )
+            case "file_size":
+                guard let value, value > 0,
+                      let sizeUnit = ExclusionSizeUnit(rawValue: unit?.uppercased() ?? ""),
+                      comparison == "larger" || comparison == "smaller"
+                else { return nil }
+                return ExclusionRule(
+                    type: .fileSize,
+                    description: commonDescription,
+                    isAIGenerated: true,
+                    numericValue: value * sizeUnit.megabyteMultiplier,
+                    comparisonGreater: comparison == "larger",
+                    sizeUnit: sizeUnit
+                )
+            case "creation_age", "modification_age":
+                guard let value, value > 0,
+                      let ageUnit = ExclusionAgeUnit(rawValue: unit?.lowercased() ?? ""),
+                      comparison == "older" || comparison == "newer"
+                else { return nil }
+                return ExclusionRule(
+                    type: kind == "creation_age" ? .creationDate : .modificationDate,
+                    description: commonDescription,
+                    isAIGenerated: true,
+                    numericValue: value * ageUnit.secondsMultiplier / ExclusionAgeUnit.days.secondsMultiplier,
+                    comparisonGreater: comparison == "older",
+                    ageUnit: ageUnit,
+                    ageIntervalSeconds: value * ageUnit.secondsMultiplier
+                )
+            case "hidden_files":
+                return rule(type: .hiddenFiles)
+            case "system_files":
+                return rule(type: .systemFiles)
+            case "regex":
+                guard !trimmedPattern.isEmpty,
+                      (try? NSRegularExpression(pattern: trimmedPattern)) != nil else { return nil }
+                return rule(type: .regex, pattern: trimmedPattern)
+            default:
+                return nil
+            }
+        }
+
+        private func rule(type: ExclusionRuleType, pattern: String = "") -> ExclusionRule {
+            ExclusionRule(
+                type: type,
+                pattern: pattern,
+                description: description?.trimmingCharacters(in: .whitespacesAndNewlines),
+                isAIGenerated: true
+            )
+        }
+    }
+}
+
+private extension String {
+    var trimmingLeadingDotsForResolver: String {
+        var value = self
+        while value.hasPrefix(".") { value.removeFirst() }
+        return value
+    }
+}

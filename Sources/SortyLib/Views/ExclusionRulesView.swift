@@ -8,33 +8,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum DateAgeUnit: CaseIterable, Hashable, Identifiable {
-    case days
-    case weeks
-    case months
-    case years
-
-    var id: Self { self }
-
-    var label: String {
-        switch self {
-        case .days: "days ago"
-        case .weeks: "weeks ago"
-        case .months: "months ago"
-        case .years: "years ago"
-        }
-    }
-
-    var daysMultiplier: Double {
-        switch self {
-        case .days: 1
-        case .weeks: 7
-        case .months: 30
-        case .years: 365
-        }
-    }
-}
-
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
@@ -47,6 +20,9 @@ struct ExclusionRulesView: View {
     @State private var newNLException = ""
     @State private var naturalLanguageSuggestionIndex = 0
     @State private var isImprovingException = false
+    @State private var isCreatingExceptionRules = false
+    @State private var showCreateExceptionError = false
+    @State private var createExceptionErrorMessage = ""
     @State private var showImproveExceptionRequest = false
     @State private var improveExceptionRequestMessage = ""
     @State private var learningExclusionSliverTrigger = 0
@@ -176,7 +152,7 @@ struct ExclusionRulesView: View {
                                     rulesManager: rulesManager,
                                     highlightedRuleID: appState.highlightedExclusionRuleID,
                                     infoText: group.0 == "Files & Folders"
-                                        ? "Matching files and folders are left untouched and aren't used for learnings."
+                                        ? "Matching files and folders are excluded from organizations, renames, and learnings."
                                         : nil,
                                     naturalLanguageExceptions: group.0 == "Files & Folders"
                                         ? filteredNaturalLanguageExceptions : [],
@@ -310,7 +286,7 @@ struct ExclusionRulesView: View {
                 HapticFeedbackManager.shared.tap()
                 showingAddRule = true
             } label: {
-                Label("Add Manually", systemImage: "slider.horizontal.3")
+                Label("Add Manual Exclusion", systemImage: "slider.horizontal.3")
             }
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured)
@@ -446,7 +422,7 @@ struct ExclusionRulesView: View {
                         isPresented: $isShowingNaturalLanguageExceptionsInfo,
                         arrowEdge: .trailing
                     ) {
-                        Text("Tell Sorty what to leave alone. It will ask for clarification when the request could mean different things.")
+                        Text("Describe what to exclude. Sorty turns it into the same structured rules available in Add Manual Exclusion.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -474,7 +450,7 @@ struct ExclusionRulesView: View {
                                 return .handled
                             }
                             .onSubmit {
-                                addNaturalLanguageException()
+                                Task { await createRulesFromNaturalLanguage() }
                             }
 
                         if newNLException.isEmpty {
@@ -525,6 +501,7 @@ struct ExclusionRulesView: View {
                         .disabled(
                             newNLException.trimmingCharacters(in: .whitespaces).isEmpty
                                 || isImprovingException
+                                || isCreatingExceptionRules
                         )
                         .help("Improve this exception with Sorty")
                         .accessibilityHint("Rewrites the exception to be clearer and more specific")
@@ -539,9 +516,13 @@ struct ExclusionRulesView: View {
                         }
 
                         Button {
-                            addNaturalLanguageException()
+                            Task { await createRulesFromNaturalLanguage() }
                         } label: {
-                            Label("Add", systemImage: "plus")
+                            if isCreatingExceptionRules {
+                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                            } else {
+                                Label("Create Rules", systemImage: "sparkles")
+                            }
                         }
                         .buttonStyle(.onboardingPill(size: .small))
                         .onboardingBeamBorder(
@@ -552,8 +533,16 @@ struct ExclusionRulesView: View {
                         .disabled(
                             newNLException.trimmingCharacters(in: .whitespaces).isEmpty
                                 || isImprovingException
+                                || isCreatingExceptionRules
                         )
-                        .help("Add this exception")
+                        .help("Turn this description into exclusion rules")
+                        .alert("Couldn't Create Exclusion Rules", isPresented: $showCreateExceptionError) {
+                            Button("Edit Description") {
+                                isNLExceptionFocused = true
+                            }
+                        } message: {
+                            Text(createExceptionErrorMessage)
+                        }
                     }
                 }
 
@@ -637,16 +626,31 @@ struct ExclusionRulesView: View {
         }
     }
 
-    private func addNaturalLanguageException() {
+    private func createRulesFromNaturalLanguage() async {
         let exception = newNLException.trimmingCharacters(in: .whitespaces)
         guard !exception.isEmpty else { return }
+        isCreatingExceptionRules = true
+        defer { isCreatingExceptionRules = false }
 
-        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-            rulesManager.addNaturalLanguageException(String(exception.prefix(200)))
+        do {
+            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let rules = try await NaturalLanguageExclusionResolver.resolve(
+                client: client,
+                description: String(exception.prefix(200))
+            )
+            withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+                for rule in rules {
+                    rulesManager.addRule(rule)
+                }
+            }
+            newNLException = ""
+            showCreateExceptionError = false
+            HapticFeedbackManager.shared.success()
+        } catch {
+            createExceptionErrorMessage = error.localizedDescription
+            showCreateExceptionError = true
+            HapticFeedbackManager.shared.error()
         }
-        newNLException = ""
-        showImproveExceptionRequest = false
-        HapticFeedbackManager.shared.success()
     }
 }
 
@@ -671,7 +675,7 @@ struct EmptyExclusionRulesView: View {
                     .fontWeight(.semibold)
 
                 Text(
-                    "Choose folders or simple rules for anything Sorty should leave untouched."
+                    "Choose folders or rules for anything Sorty should exclude from organizations and renames."
                 )
                 .font(.body)
                 .foregroundStyle(.secondary)
@@ -1029,6 +1033,14 @@ struct ExclusionRuleRow: View {
                             .padding(.vertical, 1)
                             .background(Color.blue.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
+                    } else if rule.isAIGenerated == true {
+                        Text("AI-created")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.purple.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
                 }
 
@@ -1183,10 +1195,10 @@ private enum ExclusionIntent: String, CaseIterable, Identifiable {
 
     var explanation: String {
         switch self {
-        case .folder: "Leave one folder and everything inside it untouched."
-        case .fileKind: "Ignore a familiar category, or one specific file extension."
+        case .folder: "Exclude one folder and everything inside it from organizations and renames."
+        case .fileKind: "Exclude a familiar category, or one specific file extension."
         case .name: "Match text in a file name or an exact folder name."
-        case .properties: "Ignore files above or below a size, or based on their age."
+        case .properties: "Exclude files above or below a size, or based on their age."
         case .advanced: "Hidden files, macOS files, path fragments, and regular expressions."
         }
     }
@@ -1227,7 +1239,7 @@ private enum PropertyChoice: String, CaseIterable, Identifiable {
 private enum AdvancedRuleChoice: String, CaseIterable, Identifiable {
     case hiddenFiles = "Hidden files"
     case systemFiles = "macOS system files"
-    case pathContains = "Path contains text"
+    case pathContains = "Any path containing text"
     case regex = "Regular expression"
 
     var id: Self { self }
@@ -1245,7 +1257,8 @@ struct AddExclusionRuleView: View {
     @State private var description: String = ""
     @State private var numericValue: Double = 100
     @State private var comparisonGreater: Bool = true
-    @State private var dateAgeUnit: DateAgeUnit = .days
+    @State private var sizeUnit: ExclusionSizeUnit = .megabytes
+    @State private var dateAgeUnit: ExclusionAgeUnit = .days
     @State private var selectedFileTypeCategory: FileTypeCategory = .images
     @State private var selectedFolderURL: URL?
     @State private var showingFolderPicker = false
@@ -1267,7 +1280,7 @@ struct AddExclusionRuleView: View {
                 .padding(20)
             }
         }
-        .frame(width: 520, height: 600)
+        .frame(width: 620, height: 620)
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
@@ -1330,7 +1343,7 @@ struct AddExclusionRuleView: View {
     private var intentPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("What should Sorty leave alone?")
+                Text("What should Sorty exclude?")
                     .font(.title3.weight(.semibold))
 
                 Text("Choose the closest match. You’ll only see the settings that apply.")
@@ -1421,19 +1434,12 @@ struct AddExclusionRuleView: View {
     }
 
     private var folderConfiguration: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Folder")
-                .font(.subheadline.weight(.semibold))
-
-            Text("Sorty will leave this folder and everything inside it untouched.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+        VStack(alignment: .leading, spacing: 14) {
             if let selectedFolderURL {
-                HStack(spacing: 10) {
+                HStack(spacing: 14) {
                     FolderThumbnailView(
                         url: selectedFolderURL,
-                        size: CGSize(width: 28, height: 28)
+                        size: CGSize(width: 36, height: 36)
                     )
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -1455,14 +1461,33 @@ struct AddExclusionRuleView: View {
                     .buttonStyle(.sortyBordered(size: .small))
                 }
             } else {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showingFolderPicker = true
-                } label: {
-                    Label("Choose Folder", systemImage: "folder.badge.minus")
+                HStack(spacing: 16) {
+                    Image(systemName: "folder.badge.minus")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .frame(width: 44, height: 44)
+                        .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Choose the folder to exclude")
+                            .font(.subheadline.weight(.semibold))
+                        Text("The folder and everything inside it will be excluded from organizations and renames.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        showingFolderPicker = true
+                    } label: {
+                        Label("Choose Folder", systemImage: "folder.badge.minus")
+                    }
+                    .buttonStyle(.onboardingPill)
+                    .accessibilityIdentifier("ChooseExclusionFolderButton")
                 }
-                .buttonStyle(.onboardingPill)
-                .accessibilityIdentifier("ChooseExclusionFolderButton")
             }
         }
     }
@@ -1510,8 +1535,8 @@ struct AddExclusionRuleView: View {
                 title: nameMatchChoice == .fileName ? "Text in the file name" : "Folder name",
                 placeholder: nameMatchChoice == .fileName ? "draft" : "node_modules",
                 help: nameMatchChoice == .fileName
-                    ? "Any file whose name contains this text will be left alone."
-                    : "Every folder with exactly this name, including its contents, will be left alone."
+                    ? "Any matching file will be excluded from organizations and renames."
+                    : "Every matching folder and its contents will be excluded from organizations and renames."
             )
         }
     }
@@ -1526,35 +1551,53 @@ struct AddExclusionRuleView: View {
             .pickerStyle(.segmented)
 
             if propertyChoice == .fileSize {
-                Picker("Exclude files", selection: $comparisonGreater) {
-                    Text("Larger than").tag(true)
-                    Text("Smaller than").tag(false)
-                }
-                .pickerStyle(.segmented)
+                HStack(spacing: 10) {
+                    Picker("Exclude files", selection: $comparisonGreater) {
+                        Text("Exclude files larger than").tag(true)
+                        Text("Exclude files smaller than").tag(false)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
 
-                HStack {
-                    TextField("Size", value: $numericValue, format: .number)
+                    TextField("100", value: $numericValue, format: .number)
                         .textFieldStyle(.roundedBorder)
-                    Text("MB")
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Picker("Exclude files", selection: $comparisonGreater) {
-                    Text("Older than").tag(true)
-                    Text("Newer than").tag(false)
-                }
-                .pickerStyle(.segmented)
+                        .frame(width: 100)
 
-                HStack {
-                    TextField("Age", value: $numericValue, format: .number)
-                        .textFieldStyle(.roundedBorder)
-
-                    Picker("Age unit", selection: $dateAgeUnit) {
-                        ForEach(DateAgeUnit.allCases) { unit in
-                            Text(unit.label).tag(unit)
+                    Picker("Size unit", selection: $sizeUnit) {
+                        ForEach(ExclusionSizeUnit.allCases) { unit in
+                            Text(unit.rawValue).tag(unit)
                         }
                     }
+                    .labelsHidden()
                     .pickerStyle(.menu)
+                    .frame(width: 82)
+
+                    Spacer()
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Picker("Exclude files", selection: $comparisonGreater) {
+                        Text("Exclude files older than").tag(true)
+                        Text("Exclude files newer than").tag(false)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+
+                    TextField("30", value: $numericValue, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+
+                    Picker("Time unit", selection: $dateAgeUnit) {
+                        ForEach(ExclusionAgeUnit.allCases) { unit in
+                            Text(unit.rawValue).tag(unit)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+
+                    Spacer()
                 }
             }
         }
@@ -1571,9 +1614,9 @@ struct AddExclusionRuleView: View {
 
             switch advancedChoice {
             case .hiddenFiles:
-                explanationRow("Files and folders whose names begin with a period will be left alone.")
+                explanationRow("Files and folders whose names begin with a period will be excluded from organizations and renames.")
             case .systemFiles:
-                explanationRow("Common macOS metadata and system-generated files will be left alone.")
+                explanationRow("Common macOS metadata and system-generated files will be excluded from organizations and renames.")
             case .pathContains:
                 labeledPatternField(
                     title: "Text in the path",
@@ -1687,9 +1730,14 @@ struct AddExclusionRuleView: View {
                 type: selectedRuleType,
                 description: description.isEmpty ? nil : description,
                 numericValue: selectedRuleType == .fileSize
-                    ? numericValue
-                    : numericValue * dateAgeUnit.daysMultiplier,
-                comparisonGreater: comparisonGreater
+                    ? numericValue * sizeUnit.megabyteMultiplier
+                    : numericValue * dateAgeUnit.secondsMultiplier / ExclusionAgeUnit.days.secondsMultiplier,
+                comparisonGreater: comparisonGreater,
+                sizeUnit: selectedRuleType == .fileSize ? sizeUnit : nil,
+                ageUnit: selectedRuleType == .fileSize ? nil : dateAgeUnit,
+                ageIntervalSeconds: selectedRuleType == .fileSize
+                    ? nil
+                    : numericValue * dateAgeUnit.secondsMultiplier
             )
         case .fileType:
             rule = ExclusionRule(

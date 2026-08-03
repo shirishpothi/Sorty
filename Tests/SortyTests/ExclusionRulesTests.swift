@@ -47,9 +47,11 @@ class ExclusionRulesTests: XCTestCase {
         
         let file1 = FileItem(path: "/Library/Cache/data.db", name: "data", extension: "db", size: 0, isDirectory: false)
         let file2 = FileItem(path: "/Documents/data.db", name: "data", extension: "db", size: 0, isDirectory: false)
-        
+        let file3 = FileItem(path: "/Library/CacheBackup/data.db", name: "data", extension: "db", size: 0, isDirectory: false)
+
         XCTAssertTrue(manager.shouldExclude(file1))
         XCTAssertFalse(manager.shouldExclude(file2))
+        XCTAssertFalse(manager.shouldExclude(file3))
     }
     
     @MainActor
@@ -62,7 +64,7 @@ class ExclusionRulesTests: XCTestCase {
     }
 
     @MainActor
-    func testLegacyNaturalLanguageExceptionsMigrateWithEnabledState() throws {
+    func testLegacyNaturalLanguagePathMigratesToStructuredRule() throws {
         let suiteName = "ExclusionRulesTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -70,11 +72,24 @@ class ExclusionRulesTests: XCTestCase {
 
         let isolatedManager = ExclusionRulesManager(userDefaults: defaults)
 
-        let exception = try XCTUnwrap(isolatedManager.naturalLanguageExceptions.first)
-        XCTAssertEqual(exception.text, "Leave /Users/test/Archive alone")
-        XCTAssertTrue(exception.isEnabled)
-        XCTAssertEqual(exception.referencedPaths, ["/Users/test/Archive"])
+        XCTAssertTrue(isolatedManager.naturalLanguageExceptions.isEmpty)
+        let rule = try XCTUnwrap(
+            isolatedManager.rules.first { $0.pattern == "/Users/test/Archive" }
+        )
+        XCTAssertEqual(rule.type, .pathContains)
+        XCTAssertEqual(rule.isAIGenerated, true)
         XCTAssertNotNil(defaults.data(forKey: "naturalLanguageExceptions"))
+    }
+
+    func testFolderNameNaturalLanguageCanMigrateToStructuredRule() throws {
+        let exception = NaturalLanguageException(
+            text: "Exclude any folder named Archive and everything inside it."
+        )
+
+        let rule = try XCTUnwrap(exception.confidentlyStructuredRule)
+        XCTAssertEqual(rule.type, .folderName)
+        XCTAssertEqual(rule.pattern, "Archive")
+        XCTAssertEqual(rule.isAIGenerated, true)
     }
 
     @MainActor
@@ -167,6 +182,32 @@ class ExclusionRulesTests: XCTestCase {
         let refreshedAt = referenceDate.addingTimeInterval(120)
         let refreshed = matcher.refreshed(at: refreshedAt)
         XCTAssertFalse(refreshed.needsRefresh(at: refreshedAt))
+    }
+
+    func testCompiledDateMatcherSupportsMinutes() {
+        let referenceDate = Date(timeIntervalSince1970: 2_000_000_000)
+        let matcher = ExclusionMatcher(
+            rules: [
+                ExclusionRule(
+                    type: .modificationDate,
+                    numericValue: 30.0 / 1_440.0,
+                    comparisonGreater: true,
+                    ageUnit: .minutes,
+                    ageIntervalSeconds: 1_800
+                )
+            ],
+            referenceDate: referenceDate
+        )
+        let oldFile = FileItem(
+            path: "/p/old.txt",
+            name: "old.txt",
+            extension: "txt",
+            size: 0,
+            isDirectory: false,
+            modificationDate: referenceDate.addingTimeInterval(-1_801)
+        )
+
+        XCTAssertTrue(matcher.shouldExclude(oldFile))
     }
 
     func testCompiledMatcherHandlesHundredThousandFilesAcrossConcurrentConsumers() async {
