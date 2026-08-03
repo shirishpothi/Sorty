@@ -458,7 +458,7 @@ struct ExclusionRulesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                HStack(alignment: .bottom, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
                     ZStack(alignment: .leading) {
                         TextField("", text: $newNLException, axis: .vertical)
                             .lineLimit(1...4)
@@ -501,7 +501,7 @@ struct ExclusionRulesView: View {
                         }
                     }
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Button {
                             Task { await improveExceptionWithAI() }
                         } label: {
@@ -517,6 +517,7 @@ struct ExclusionRulesView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .frame(height: 32)
                         .foregroundColor(.teal)
                         .disabled(
                             newNLException.trimmingCharacters(in: .whitespaces).isEmpty
