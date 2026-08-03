@@ -454,13 +454,9 @@ struct ExclusionRulesView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 4) {
-                    Text("Suggestion \(naturalLanguageSuggestionIndex + 1) of \(naturalLanguageExceptionSuggestions.count)")
-                        .numericTextTransition(animationValue: naturalLanguageSuggestionIndex)
-                    Text("• Press Tab to use it")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("Use ordinary language — you can combine names, folders, file kinds, and context.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 HStack(alignment: .bottom, spacing: 10) {
                     ZStack(alignment: .leading) {
