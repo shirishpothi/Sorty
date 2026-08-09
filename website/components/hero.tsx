@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { Cpu, Heart, Monitor, Star, UserX } from 'lucide-react'
+import { Heart, Star } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
 import { GithubIcon } from '@/components/github-icon'
 import { DownloadButton } from '@/components/download-button'
@@ -8,12 +8,6 @@ import { sitePath } from '@/lib/site-paths'
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
-
-const TRUST_ITEMS = [
-  { icon: Monitor, label: 'macOS 15+' },
-  { icon: Cpu, label: 'Apple Silicon & Intel' },
-  { icon: UserX, label: 'No account required' },
-]
 
 export function Hero() {
   return (
@@ -49,7 +43,7 @@ export function Hero() {
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
           AI folder{' '}
-          <span className="highlight-pill inline-block rounded-2xl px-3 py-1">
+          <span className="highlight-pill relative -top-[0.04em] inline-block rounded-2xl px-3 py-1">
             organization
           </span>{' '}
           for your{' '}
@@ -125,17 +119,6 @@ export function Hero() {
           </a>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          {TRUST_ITEMS.map(({ icon: Icon, label }) => (
-            <span
-              key={label}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/45 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-md"
-            >
-              <Icon className="size-3.5 text-primary" />
-              {label}
-            </span>
-          ))}
-        </div>
       </div>
 
       {/* App screenshot */}
