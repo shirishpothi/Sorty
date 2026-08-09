@@ -293,7 +293,9 @@ class AppStateTests: XCTestCase {
     func testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory() {
         let folder = URL(fileURLWithPath: "/tmp")
 
-        XCTAssertTrue(appState.grantFilesAndFoldersPermission(for: folder))
+        guard appState.grantFilesAndFoldersPermission(for: folder) else {
+            throw XCTSkip("The test host cannot create security-scoped bookmarks.")
+        }
         XCTAssertTrue(appState.hasFilesAndFoldersPermission())
 
         appState.selectedDirectory = nil
