@@ -12,7 +12,7 @@ export function SortyLogo({
   return (
     <span className={cn('flex items-center gap-2', className)}>
       <Image
-        src={sitePath('/sorty-icon-40.webp')}
+        src={sitePath('/sorty-icon.webp')}
         alt=""
         width={28}
         height={28}

@@ -70,7 +70,7 @@ export function Hero() {
         <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
           Point{' '}
           <Image
-            src={sitePath('/sorty-icon-40.webp')}
+            src={sitePath('/sorty-icon.webp')}
             alt=""
             width={18}
             height={18}

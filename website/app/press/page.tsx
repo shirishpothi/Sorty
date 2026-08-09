@@ -175,10 +175,10 @@ export default function PressPage() {
             <div className="grid overflow-hidden rounded-3xl border border-border bg-card/35 backdrop-blur-md lg:grid-cols-[0.85fr_1.15fr]">
               <div className="flex min-h-80 items-center justify-center border-b border-border p-10 lg:border-r lg:border-b-0">
                 <Image
-                  src={sitePath('/sorty-icon-96.webp')}
+                  src={sitePath('/sorty-icon.webp')}
                   alt="Sorty app icon"
-                  width={96}
-                  height={96}
+                  width={512}
+                  height={512}
                   className="size-40 rounded-[2.2rem] object-cover shadow-2xl shadow-black/45 sm:size-48"
                   priority
                 />
