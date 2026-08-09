@@ -354,6 +354,7 @@ struct WatchedFolderCard: View {
 
     let folder: WatchedFolder
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
@@ -896,6 +897,9 @@ struct WatchedFolderCard: View {
         .onChange(of: isHighlighted) { _, newValue in
             updateHighlightAnimation(newValue)
         }
+        .onChange(of: controlActiveState) { _, _ in
+            updateHighlightAnimation(isHighlighted)
+        }
         .contextMenu {
             Button("Reveal in Finder") {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
@@ -956,7 +960,7 @@ struct WatchedFolderCard: View {
     }
 
     private func updateHighlightAnimation(_ isActive: Bool) {
-        if isActive {
+        if isActive, controlActiveState != .inactive {
             highlightPulse = false
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 highlightPulse = true
