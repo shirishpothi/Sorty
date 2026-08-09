@@ -7,7 +7,8 @@
 
 import Foundation
 import SwiftUI
-import Beam
+
+import BorderBeamKit
 
 struct PersonaGeneratorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -484,13 +485,13 @@ private struct PersonaGenerationBorderBeam: View {
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.clear)
-            .beam(
-                .medium,
-                palette: .colorful,
+            .borderBeam(
+                .md,
+                colorVariant: .colorful,
                 theme: .dark,
-                active: isAnimationActive,
-                cornerRadius: cornerRadius,
                 duration: rotationDuration,
+                active: isAnimationActive,
+                borderRadius: cornerRadius,
                 strength: 1.0
             )
             .overlay {

@@ -6,8 +6,9 @@
 //  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and Split View layout
 //
 
-import Beam
 import SwiftUI
+
+import BorderBeamKit
 
 struct DuplicatesView: View {
     @EnvironmentObject var appState: AppState
@@ -1959,12 +1960,12 @@ struct ScanProgressViewNew: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         }
-        .beam(
-            .medium,
-            palette: .colorful,
+        .borderBeam(
+            .md,
+            colorVariant: .colorful,
             theme: .dark,
             active: isAnimationActive,
-            cornerRadius: 16,
+            borderRadius: 16,
             strength: 1.0
         )
         .scanProgressReferenceBeamFallback(

@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-import Beam
+import BorderBeamKit
 
 public enum SortyButtonIntent: Equatable {
     case primary
@@ -715,7 +715,7 @@ public enum OnboardingBeamBorderVariant {
     case warning
     case destructive
 
-    var palette: BeamPalette {
+    var palette: BeamColorVariant {
         switch self {
         case .standard: return .colorful
         case .featured: return .sunset
@@ -766,7 +766,7 @@ public extension View {
         active: Bool = true,
         isIntensified: Bool = false,
         includesInteriorGlow: Bool = false,
-        size: BeamSize = .medium
+        size: BeamSize = .md
     ) -> some View {
         overlay {
             OnboardingBeamBorder(
@@ -798,15 +798,14 @@ private struct OnboardingBeamBorder: View {
     var body: some View {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
-            .beam(
+            .borderBeam(
                 size,
-                palette: variant.palette,
+                colorVariant: variant.palette,
                 theme: .dark,
-                active: shouldAnimateBeam,
-                shape: .capsule,
                 duration: 1.96,
-                strength: isIntensified ? variant.strength * 1.2 : variant.strength,
-                lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
+                active: shouldAnimateBeam,
+                borderRadius: 1_000,
+                strength: min(1, isIntensified ? variant.strength * 1.2 : variant.strength)
             )
             .overlay {
                 SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimateBeam)) { timeline in
