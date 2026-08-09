@@ -5,6 +5,7 @@ import { Features } from '@/components/features'
 import { Privacy } from '@/components/privacy'
 import { Pricing } from '@/components/pricing'
 import { Faq } from '@/components/faq'
+import { DiscoveryLinks } from '@/components/discovery-links'
 import { SiteFooter } from '@/components/site-footer'
 import { StructuredData } from '@/components/structured-data'
 
@@ -18,6 +19,7 @@ export default function Page() {
       <Features />
       <Privacy />
       <Pricing />
+      <DiscoveryLinks />
       <Faq />
       <SiteFooter />
     </main>

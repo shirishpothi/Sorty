@@ -13,6 +13,7 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { label: 'Features', href: sitePath('/#features') },
+      { label: 'Mac folder organizer', href: sitePath('/mac-folder-organizer') },
       { label: 'Privacy', href: sitePath('/privacy-policy') },
       { label: 'Pricing', href: sitePath('/#pricing') },
     ],
@@ -20,6 +21,8 @@ const COLUMNS = [
   {
     title: 'Resources',
     links: [
+      { label: 'Organize Downloads', href: sitePath('/organize-downloads-folder') },
+      { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer') },
       { label: 'Changelog', href: sitePath('/changelog') },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },

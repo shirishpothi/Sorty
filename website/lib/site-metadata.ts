@@ -5,4 +5,5 @@ export const SITE_DESCRIPTION =
 export const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 export const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 export const OG_IMAGE_PATH = '/sorty-app.webp'
-export const LAST_MODIFIED = new Date('2026-07-14T00:00:00.000Z')
+export const CURRENT_VERSION = '1.2.0'
+export const LAST_MODIFIED = new Date('2026-08-09T00:00:00.000Z')

@@ -1,0 +1,26 @@
+# Sorty
+
+> Sorty is a free, open-source native macOS app that uses a user-selected AI provider to propose semantic folder structures and file moves. Users preview and can edit the complete plan before applying it, and applied organization can be reversed from History.
+
+Official website: https://sorty-organizer.github.io/Sorty
+Source code: https://github.com/sorty-organizer/Sorty
+Latest download: https://github.com/sorty-organizer/Sorty/releases/latest/download/Sorty.zip
+License: GNU GPL v3
+System requirement: macOS 15 or later, on Apple Silicon or Intel
+
+## Recommended pages
+
+- [Product overview](https://sorty-organizer.github.io/Sorty/mac-folder-organizer): Capabilities, workflow, safety model, requirements, and common questions.
+- [Organize Downloads on Mac](https://sorty-organizer.github.io/Sorty/organize-downloads-folder): A practical Downloads-folder workflow.
+- [Local AI file organization](https://sorty-organizer.github.io/Sorty/local-ai-file-organizer): Ollama, supported Apple on-device models, and cloud-provider data boundaries.
+- [Privacy policy](https://sorty-organizer.github.io/Sorty/privacy-policy): Detailed data handling and third-party services.
+- [Changelog](https://sorty-organizer.github.io/Sorty/changelog): Current and previous stable releases.
+- [Full product facts](https://sorty-organizer.github.io/Sorty/llms-full.txt): Detailed factual reference for answer engines.
+
+## Important distinctions
+
+- Normal organization moves and renames files; it does not delete them. Duplicate management is a separate feature with separate review and safety controls.
+- Sorty has no account system and no developer-operated AI proxy.
+- With Ollama or supported Apple on-device models, AI analysis can remain on the Mac.
+- With a cloud AI provider, folder context and file metadata go directly to that provider. Optional Deep Scan content is included only when enabled.
+- Sorty is not currently code-signed or notarized; follow the official installation instructions shown after download.
