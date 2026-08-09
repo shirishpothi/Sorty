@@ -105,7 +105,7 @@ export function Hero() {
               organization
             </span>{' '}
             for your{' '}
-            <span className="mac-heading-lockup highlight-in" aria-label="Mac">
+            <span className="mac-heading-lockup highlight-in">
               <Image
                 src={sitePath('/macos-finder-40.webp')}
                 alt=""
