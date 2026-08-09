@@ -5,11 +5,11 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   BadgeCheck,
-  Github,
   Images,
   MessageCircle,
   ShieldCheck,
 } from 'lucide-react'
+import { GithubIcon } from '@/components/github-icon'
 import { PageStructuredData } from '@/components/page-structured-data'
 import { Reveal } from '@/components/reveal'
 import { SiteFooter } from '@/components/site-footer'
@@ -368,7 +368,7 @@ export default function PressPage() {
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-card"
                 >
-                  <Github className="size-4" />
+                  <GithubIcon className="size-4" />
                   View source
                   <ArrowUpRight className="size-3.5" />
                 </a>

@@ -718,6 +718,10 @@ final class DuplicateRestorationManagerTests: XCTestCase {
     
     var manager: DuplicateRestorationManager!
     var tempDirectory: URL!
+
+    private func makeDuplicateFileURL(named filename: String = "duplicate.txt") -> URL {
+        tempDirectory.appendingPathComponent("\(tempDirectory.lastPathComponent)-\(filename)")
+    }
     
     @MainActor
     override func setUp() async throws {
@@ -741,7 +745,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Original Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Original Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 16, isDirectory: false)
@@ -763,7 +767,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         
         var duplicates: [FileItem] = []
         for i in 1...3 {
-            let dupFile = tempDirectory.appendingPathComponent("duplicate\(i).txt")
+            let dupFile = makeDuplicateFileURL(named: "duplicate\(i).txt")
             try "Content".write(to: dupFile, atomically: true, encoding: .utf8)
             duplicates.append(FileItem(path: dupFile.path, name: "duplicate\(i)", extension: "txt", size: 7, isDirectory: false))
         }
@@ -783,7 +787,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Original Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Original Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 16, isDirectory: false)
@@ -805,7 +809,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
@@ -823,7 +827,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
@@ -843,7 +847,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
@@ -860,7 +864,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
+        let duplicateFile = makeDuplicateFileURL()
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)

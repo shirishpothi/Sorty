@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { trackWebInteraction } from '@/lib/analytics'
-import { captureWebsiteException } from '@/lib/reliability'
 
 export default function ErrorPage({
   error,
@@ -12,11 +11,13 @@ export default function ErrorPage({
   reset: () => void
 }) {
   useEffect(() => {
-    captureWebsiteException(error, {
-      surface: 'route_error_boundary',
-      handled: true,
-      cause: 'render_failed',
-    })
+    void import('@/lib/reliability').then(({ captureWebsiteException }) =>
+      captureWebsiteException(error, {
+        surface: 'route_error_boundary',
+        handled: true,
+        cause: 'render_failed',
+      }),
+    )
   }, [error])
 
   return (

@@ -228,19 +228,25 @@
   }
 }
 
-/* Soft animated glow used behind the hero */
-@keyframes sorty-float {
+@keyframes hero-glow-float {
   0%, 100% {
-    transform: translateY(0) scale(1);
     opacity: 0.55;
+    transform: translateX(-50%) translateY(0) scale(1);
   }
   50% {
-    transform: translateY(-24px) scale(1.05);
     opacity: 0.8;
+    transform: translateX(-50%) translateY(-24px) scale(1.05);
   }
 }
-.animate-sorty-float {
-  animation: sorty-float 9s ease-in-out infinite;
+.hero-glow {
+  opacity: 0.65;
+  transform: translateX(-50%);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hero-glow {
+    animation: hero-glow-float 9s ease-in-out infinite;
+    will-change: opacity, transform;
+  }
 }
 
 /* Apple-style bright blue download button */
@@ -477,14 +483,25 @@
   filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  --hero-screenshot-tilt: 16deg;
-  --hero-screenshot-scale: 0.985;
   transform-origin: 50% 18%;
-  transform: perspective(900px)
-    rotateX(var(--hero-screenshot-tilt))
-    scale(var(--hero-screenshot-scale));
+  transform: perspective(900px) rotateX(4deg);
   transform-style: preserve-3d;
-  will-change: transform;
+}
+@keyframes hero-screenshot-settle {
+  from {
+    transform: perspective(900px) rotateX(16deg) scale(0.985);
+  }
+  to {
+    transform: perspective(900px) rotateX(0deg) scale(1);
+  }
+}
+@supports (animation-timeline: view()) {
+  .hero-screenshot-card {
+    animation: hero-screenshot-settle linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 45%;
+    will-change: transform;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .download-intent-shell::before {
@@ -492,16 +509,79 @@
     transition: none;
   }
   .hero-screenshot-card {
+    animation: none;
     transform: none;
+  }
+  .hero-glow {
+    animation: none;
+    opacity: 0.65;
+    transform: translateX(-50%);
   }
 }
 .download-beam {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
-  overflow: visible;
+  overflow: hidden;
+  padding: 1px;
   border-radius: 9999px;
   transform: translateZ(0);
   will-change: transform;
   transition: transform 0.3s ease;
+}
+@keyframes download-beam-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.download-beam::before {
+  content: '';
+  position: absolute;
+  inset: -250% -40%;
+  z-index: -1;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 34%,
+    oklch(0.82 0.13 226 / 92%) 43%,
+    oklch(0.7 0.18 256 / 85%) 49%,
+    transparent 58% 100%
+  );
+}
+@media (hover: hover) and (pointer: fine) {
+  .download-beam::before {
+    animation: download-beam-spin 2.4s linear infinite;
+    will-change: transform;
+  }
+}
+.how-step-beam {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 1px;
+}
+.how-step-beam::before {
+  content: '';
+  position: absolute;
+  inset: -120% -35%;
+  z-index: 0;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 38%,
+    oklch(0.92 0 0 / 75%) 47%,
+    oklch(0.68 0.02 250 / 58%) 53%,
+    transparent 62% 100%
+  );
+  opacity: 0;
+  animation: download-beam-spin 2.4s linear infinite paused;
+  transition: opacity 0.22s ease;
+  will-change: opacity, transform;
+}
+.how-step-beam:hover::before,
+.how-step-beam:focus-within::before {
+  opacity: 0.9;
+  animation-play-state: running;
 }
 .download-beam:hover,
 .download-beam:has(.btn-download:focus-visible) {
@@ -512,6 +592,8 @@
   transition-duration: 0.12s;
 }
 .download-beam > .btn-download {
+  position: relative;
+  z-index: 1;
   width: 100%;
 }
 .download-apple-mark {
@@ -792,6 +874,11 @@
     transform: none;
     transition: none;
   }
+  .download-beam::before,
+  .how-step-beam::before,
+  .highlight-pill::after {
+    animation: none;
+  }
   .btn-download:hover::before,
   .btn-download:focus-visible::before,
   .btn-support:hover::before,
@@ -832,17 +919,19 @@
   }
 }
 
-/* Animated gradient highlight for the hero keyword */
-@keyframes highlight-sheen {
-  0% {
-    background-position: 0% 50%;
+/* Gradient highlight for the hero keyword */
+@keyframes highlight-shimmer {
+  0%, 55% {
+    transform: translateX(0) skewX(-18deg);
   }
-  100% {
-    background-position: 200% 50%;
+  78%, 100% {
+    transform: translateX(520%) skewX(-18deg);
   }
 }
 .highlight-pill {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
   background-image: linear-gradient(
     100deg,
     var(--brand) 0%,
@@ -854,25 +943,28 @@
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 25%) inset,
     0 14px 34px -10px oklch(0.62 0.19 256 / 65%);
-  animation: highlight-sheen 6s linear infinite alternate;
 }
-/* Entrance for the highlight: blur + expand in */
-@keyframes highlight-in {
-  from {
-    opacity: 0;
-    filter: blur(12px);
-    transform: translateY(6px) scale(0.9);
+.highlight-pill::after {
+  content: '';
+  position: absolute;
+  inset-block: -30%;
+  left: -32%;
+  width: 24%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(1 0 0 / 38%),
+    transparent
+  );
+  transform: translateX(520%) skewX(-18deg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .highlight-pill::after {
+    animation: highlight-shimmer 6s ease-in-out infinite;
+    will-change: transform;
   }
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
-  }
 }
-.highlight-in {
-  animation: highlight-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
-}
-
 /* Soft blurred dividers between sections */
 .section-seam {
   position: relative;
@@ -910,13 +1002,6 @@
   mask-image: linear-gradient(0deg, #000 0%, transparent 100%);
   pointer-events: none;
   z-index: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .highlight-in,
-  .highlight-pill {
-    animation: none;
-  }
 }
 
 /* Fine pointers use the drawn overlay exclusively; touch keeps native selection. */

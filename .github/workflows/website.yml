@@ -97,7 +97,8 @@ jobs:
           pnpm exec sentry-cli releases new "${NEXT_PUBLIC_SENTRY_RELEASE}"
           pnpm exec sentry-cli releases set-commits \
             "${NEXT_PUBLIC_SENTRY_RELEASE}" \
-            --auto
+            --auto \
+            --ignore-missing
           pnpm exec sentry-cli sourcemaps inject out/_next/static
           pnpm exec sentry-cli sourcemaps upload \
             --release "${NEXT_PUBLIC_SENTRY_RELEASE}" \

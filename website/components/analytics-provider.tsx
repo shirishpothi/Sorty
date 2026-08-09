@@ -8,8 +8,6 @@ import {
   useState,
 } from 'react'
 import { usePathname } from 'next/navigation'
-import posthog from 'posthog-js'
-import { PostHogProvider } from 'posthog-js/react'
 import {
   applyWebsiteAnalyticsPreference,
   isWebsiteAnalyticsEnabled,
@@ -23,7 +21,6 @@ import {
   WEBSITE_ANALYTICS_PREFERENCE_KEY,
   type WebsiteAnalyticsPreference,
 } from '@/lib/analytics'
-import { applyWebsiteReliabilityPreference } from '@/lib/reliability'
 
 type AnalyticsPreferencesContextValue = {
   openPreferences: () => void
@@ -183,7 +180,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   function setAnalyticsPreference(next: WebsiteAnalyticsPreference) {
     window.localStorage.setItem(WEBSITE_ANALYTICS_PREFERENCE_KEY, next)
     applyWebsiteAnalyticsPreference(next)
-    applyWebsiteReliabilityPreference(next)
+    void import('@/lib/reliability').then(
+      ({ applyWebsiteReliabilityPreference }) =>
+        applyWebsiteReliabilityPreference(next),
+    )
     setPreference(next)
     setIsOpen(false)
 
@@ -220,12 +220,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const isEnabled = isWebsiteAnalyticsEnabled()
 
   return (
-    <PostHogProvider client={posthog}>
-      <AnalyticsPreferencesContext.Provider
-        value={{ openPreferences: openAnalyticsPreferences }}
-      >
-        {children}
-        {isOpen && (
+    <AnalyticsPreferencesContext.Provider
+      value={{ openPreferences: openAnalyticsPreferences }}
+    >
+      {children}
+      {isOpen && (
         <div
           className="fixed inset-0 z-[120] grid place-items-end bg-black/50 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
           onMouseDown={(event) => {
@@ -283,9 +282,8 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             </div>
           </section>
         </div>
-        )}
-      </AnalyticsPreferencesContext.Provider>
-    </PostHogProvider>
+      )}
+    </AnalyticsPreferencesContext.Provider>
   )
 }
 

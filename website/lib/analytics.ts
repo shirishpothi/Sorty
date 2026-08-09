@@ -1,6 +1,5 @@
 'use client'
 
-import posthog from 'posthog-js'
 import type { CaptureResult, Properties } from 'posthog-js'
 
 export const WEBSITE_ANALYTICS_PREFERENCE_KEY =
@@ -98,6 +97,9 @@ let previousPagePath: string | undefined
 let analyticsWindowStartedAt = 0
 let analyticsWindowCount = 0
 let analyticsSessionCount = 0
+let posthogClient: (typeof import('posthog-js/dist/module.slim'))['default'] | undefined
+let initializationPromise: Promise<void> | undefined
+const pendingCaptures: Array<{ event: string; properties: Properties }> = []
 
 function shouldCaptureAnalytics(now = Date.now()): boolean {
   if (analyticsSessionCount >= ANALYTICS_MAXIMUM_EVENTS_PER_SESSION) {
@@ -300,7 +302,7 @@ function sanitizeProperty(value: unknown): unknown {
   return value
 }
 
-export function initializeWebsiteAnalytics(): void {
+function startWebsiteAnalytics(): Promise<void> | undefined {
   if (
     typeof window === 'undefined' ||
     isInitialized ||
@@ -315,41 +317,61 @@ export function initializeWebsiteAnalytics(): void {
     return
   }
 
-  isInitialized = true
-  posthog.init(configuration.projectToken, {
-    api_host: configuration.host,
-    ui_host: 'https://us.posthog.com',
-    defaults: '2026-05-30',
-    autocapture: false,
-    capture_pageview: false,
-    capture_pageleave: true,
-    capture_exceptions: false,
-    capture_performance: {
-      web_vitals_allowed_metrics: ['LCP', 'INP', 'CLS'],
-      web_vitals_attribution: false,
+  initializationPromise ??= import('posthog-js/dist/module.slim').then(
+    ({ default: posthog }) => {
+      if (!isWebsiteAnalyticsEnabled()) {
+        initializationPromise = undefined
+        return
+      }
+
+      posthogClient = posthog
+      posthog.init(configuration.projectToken, {
+        api_host: configuration.host,
+        ui_host: 'https://us.posthog.com',
+        defaults: '2026-05-30',
+        autocapture: false,
+        capture_pageview: false,
+        capture_pageleave: true,
+        capture_exceptions: false,
+        capture_performance: {
+          web_vitals_allowed_metrics: ['LCP', 'INP', 'CLS'],
+          web_vitals_attribution: false,
+        },
+        capture_dead_clicks: false,
+        person_profiles: 'never',
+        persistence: 'sessionStorage',
+        disable_persistence: false,
+        disable_session_recording: true,
+        enable_heatmaps: false,
+        disable_surveys: true,
+        advanced_disable_feature_flags: false,
+        disable_external_dependency_loading: true,
+        respect_dnt: true,
+        request_batching: false,
+        before_send: sanitizeEvent,
+      })
+      isInitialized = true
+
+      for (const capture of pendingCaptures.splice(0)) {
+        posthog.capture(capture.event, capture.properties)
+      }
     },
-    capture_dead_clicks: false,
-    person_profiles: 'never',
-    persistence: 'sessionStorage',
-    disable_persistence: false,
-    disable_session_recording: true,
-    enable_heatmaps: false,
-    disable_surveys: true,
-    advanced_disable_feature_flags: false,
-    disable_external_dependency_loading: true,
-    respect_dnt: true,
-    request_batching: false,
-    before_send: sanitizeEvent,
-  })
+  )
+  return initializationPromise
+}
+
+export function initializeWebsiteAnalytics(): void {
+  void startWebsiteAnalytics()
 }
 
 export function applyWebsiteAnalyticsPreference(
   preference: WebsiteAnalyticsPreference,
 ): void {
   if (preference === 'denied') {
+    pendingCaptures.length = 0
     if (isInitialized) {
-      posthog.opt_out_capturing()
-      posthog.featureFlags.reset()
+      posthogClient?.opt_out_capturing()
+      posthogClient?.featureFlags?.reset()
     }
     return
   }
@@ -358,26 +380,30 @@ export function applyWebsiteAnalyticsPreference(
     return
   }
 
-  initializeWebsiteAnalytics()
   if (isInitialized) {
-    posthog.opt_in_capturing({ captureEventName: false })
-  }
-}
-
-function capture(event: string, properties: Properties): void {
-  initializeWebsiteAnalytics()
-  if (
-    !isInitialized ||
-    !isWebsiteAnalyticsEnabled() ||
-    !shouldCaptureAnalytics()
-  ) {
+    posthogClient?.opt_in_capturing({ captureEventName: false })
     return
   }
 
-  posthog.capture(event, {
+  void startWebsiteAnalytics()?.then(() =>
+    posthogClient?.opt_in_capturing({ captureEventName: false }),
+  )
+}
+
+function capture(event: string, properties: Properties): void {
+  if (!isWebsiteAnalyticsEnabled() || !shouldCaptureAnalytics()) {
+    return
+  }
+
+  const safeProperties = {
     ...properties,
     platform_surface: 'website',
-  })
+  }
+  if (isInitialized && posthogClient) {
+    posthogClient.capture(event, safeProperties)
+  } else if (pendingCaptures.length < 100) {
+    pendingCaptures.push({ event, properties: safeProperties })
+  }
 }
 
 export function trackPageView(pathname: string): void {
