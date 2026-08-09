@@ -43,7 +43,7 @@ export function Hero() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-24 -z-10 h-[420px] w-[680px] max-w-[90vw] -translate-x-1/2 rounded-full bg-primary/25 blur-[120px]"
+        className="hero-glow pointer-events-none absolute left-1/2 top-24 -z-10 h-[420px] w-[680px] max-w-[90vw] rounded-full bg-primary/25 blur-[120px]"
       />
 
       <div className="mx-auto max-w-3xl text-center">

@@ -10,6 +10,7 @@ import {
 } from '@/lib/site-metadata'
 import { SelectionHighlighter } from '@/components/selection-highlighter'
 import { RouteScrollReset } from '@/components/route-scroll-reset'
+import { RevealObserver } from '@/components/reveal-observer'
 import { AnalyticsProvider } from '@/components/analytics-provider'
 import './globals.css'
 
@@ -113,6 +114,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AnalyticsProvider>
           <RouteScrollReset />
+          <RevealObserver />
           <SelectionHighlighter />
           {children}
         </AnalyticsProvider>
