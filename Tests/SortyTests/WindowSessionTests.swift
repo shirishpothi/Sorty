@@ -130,17 +130,17 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(capture.value, targetSessionID.uuidString)
     }
 
-    func testWatchedAddDeeplinkDoesNotPersistMissingFolder() {
+    func testWatchedAddDeeplinkAddsMissingFolder() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 
         handle(.watched(action: "add", path: missingPath))
 
         XCTAssertEqual(session.appState.currentView, .watchedFolders)
-        XCTAssertTrue(watchedFoldersManager.folders.isEmpty)
-        XCTAssertNil(session.appState.highlightedWatchedFolderID)
+        XCTAssertEqual(watchedFoldersManager.folders.map(\.path), [missingPath])
+        XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
     }
 
-    func testWatchedAddDeeplinkDoesNotPersistNewFolder() throws {
+    func testWatchedAddDeeplinkAddsNewFolder() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-watch-deeplink-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -149,8 +149,8 @@ final class WindowSessionTests: XCTestCase {
         handle(.watched(action: "add", path: directory.path))
 
         XCTAssertEqual(session.appState.currentView, .watchedFolders)
-        XCTAssertTrue(watchedFoldersManager.folders.isEmpty)
-        XCTAssertNil(session.appState.highlightedWatchedFolderID)
+        XCTAssertEqual(watchedFoldersManager.folders.map(\.path), [directory.standardizedFileURL.path])
+        XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
     }
 
     func testWatchedAddDeeplinkHighlightsExistingStandardizedPath() throws {

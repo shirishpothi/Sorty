@@ -455,9 +455,9 @@ final class ContentMetadataMediaTests: XCTestCase {
     }
 
     func testIsEmptyWithDurationOnly() {
-        // duration alone doesn't make isEmpty false (no mediaInfo, no text, no exif)
+        // Duration is meaningful media metadata even without descriptive fields.
         let metadata = ContentMetadata(duration: 60)
-        XCTAssertTrue(metadata.isEmpty)
+        XCTAssertFalse(metadata.isEmpty)
     }
 
     func testSummaryWithDuration() {
