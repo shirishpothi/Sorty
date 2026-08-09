@@ -74,9 +74,9 @@ public enum OpenSourceCredits {
             url: URL(string: "https://github.com/sparkle-project/Sparkle/blob/master/LICENSE")!
         ),
         CreditItem(
-            name: "Beam",
-            license: "MIT",
-            url: URL(string: "https://github.com/tornikegomareli/beam")!
+            name: "border-beam",
+            license: "MIT · SwiftUI border animation",
+            url: URL(string: "https://github.com/Jakubantalik/border-beam")!
         ),
         CreditItem(
             name: "Permiso",

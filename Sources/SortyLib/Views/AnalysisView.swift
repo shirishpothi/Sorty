@@ -5,10 +5,11 @@
 //  Real-time organization display with streaming progress
 //
 
-import Beam
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
+
+import BorderBeamKit
 
 // MARK: - Analysis Icon Provider
 
@@ -1805,12 +1806,12 @@ private struct StreamingProgressBeam: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         }
-        .beam(
-            .medium,
-            palette: .colorful,
+        .borderBeam(
+            .md,
+            colorVariant: .colorful,
             theme: .dark,
             active: isAnimationActive,
-            cornerRadius: 16,
+            borderRadius: 16,
             strength: 1.0
         )
         .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)

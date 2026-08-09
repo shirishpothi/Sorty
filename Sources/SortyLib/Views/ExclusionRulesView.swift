@@ -532,7 +532,7 @@ struct ExclusionRulesView: View {
                         .onboardingBeamBorder(
                             variant: .featured,
                             active: hasNaturalLanguageExceptionText,
-                            size: .small
+                            size: .sm
                         )
                         .disabled(
                             !hasNaturalLanguageExceptionText
