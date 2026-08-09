@@ -97,6 +97,10 @@ struct ExclusionRulesView: View {
         naturalLanguageExceptionSuggestions[naturalLanguageSuggestionIndex]
     }
 
+    private var hasNaturalLanguageExceptionText: Bool {
+        !newNLException.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         Group {
             if rulesManager.rules.count > 1 {
@@ -441,8 +445,24 @@ struct ExclusionRulesView: View {
                     ZStack(alignment: .leading) {
                         TextField("", text: $newNLException, axis: .vertical)
                             .lineLimit(1...4)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Color.primary.opacity(isNLExceptionFocused ? 0.10 : 0.06),
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(
+                                        isNLExceptionFocused
+                                            ? Color.accentColor.opacity(0.75)
+                                            : Color.primary.opacity(0.12),
+                                        lineWidth: 1
+                                    )
+                            }
                             .focused($isNLExceptionFocused)
+                            .accessibilityLabel("Exception description")
                             .onKeyPress(.tab) {
                                 guard newNLException.isEmpty else { return .ignored }
                                 newNLException = naturalLanguageSuggestion
@@ -481,38 +501,36 @@ struct ExclusionRulesView: View {
                     }
 
                     HStack(spacing: 8) {
-                        Button {
-                            Task { await improveExceptionWithAI() }
-                        } label: {
-                            if isImprovingException {
-                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                                    .frame(width: 58)
-                            } else {
-                                Label("Improve", systemImage: "wand.and.stars")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .contentShape(Rectangle())
+                        if hasNaturalLanguageExceptionText {
+                            Button {
+                                Task { await improveExceptionWithAI() }
+                            } label: {
+                                if isImprovingException {
+                                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                                        .frame(width: 58)
+                                } else {
+                                    Label("Improve", systemImage: "wand.and.stars")
+                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 6)
+                                        .contentShape(Rectangle())
+                                }
                             }
-                        }
-                        .buttonStyle(.plain)
-                        .frame(height: 32)
-                        .foregroundColor(.teal)
-                        .disabled(
-                            newNLException.trimmingCharacters(in: .whitespaces).isEmpty
-                                || isImprovingException
-                                || isCreatingExceptionRules
-                        )
-                        .help("Improve this exception with Sorty")
-                        .accessibilityHint("Rewrites the exception to be clearer and more specific")
-                        .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
-                            Button("Edit Exception") {
-                                isNLExceptionFocused = true
+                            .buttonStyle(.plain)
+                            .frame(height: 32)
+                            .foregroundStyle(.tint)
+                            .disabled(isImprovingException || isCreatingExceptionRules)
+                            .help("Improve this exception with Sorty")
+                            .accessibilityHint("Rewrites the exception to be clearer and more specific")
+                            .alert("Sorty needs more detail", isPresented: $showImproveExceptionRequest) {
+                                Button("Edit Exception") {
+                                    isNLExceptionFocused = true
+                                }
+                            } message: {
+                                Text(
+                                    "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
+                                )
                             }
-                        } message: {
-                            Text(
-                                "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
-                            )
                         }
 
                         Button {
@@ -527,11 +545,11 @@ struct ExclusionRulesView: View {
                         .buttonStyle(.onboardingPill(size: .small))
                         .onboardingBeamBorder(
                             variant: .featured,
-                            active: !newNLException.trimmingCharacters(in: .whitespaces).isEmpty,
+                            active: hasNaturalLanguageExceptionText,
                             size: .small
                         )
                         .disabled(
-                            newNLException.trimmingCharacters(in: .whitespaces).isEmpty
+                            !hasNaturalLanguageExceptionText
                                 || isImprovingException
                                 || isCreatingExceptionRules
                         )
