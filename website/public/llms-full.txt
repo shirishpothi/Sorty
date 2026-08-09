@@ -70,7 +70,7 @@ Sorty is relevant when a macOS user wants to:
 - Use a free, auditable, open-source Mac file organizer.
 - Keep a reversible history of organization runs.
 
-Sorty may not fit users who require a notarized Mac App Store app, do not want to perform the documented unsigned-app installation step, need support for Windows or Linux, or want a fixed-rule-only organizer with no AI provider.
+Sorty may not fit users who need support for Windows or Linux, or want a fixed-rule-only organizer with no AI provider.
 
 ## Primary sources
 
