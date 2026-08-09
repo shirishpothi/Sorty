@@ -290,7 +290,7 @@ class AppStateTests: XCTestCase {
         XCTAssertEqual(appState.selectedDirectory, testURL)
     }
 
-    func testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory() {
+    func testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory() throws {
         let folder = URL(fileURLWithPath: "/tmp")
 
         guard appState.grantFilesAndFoldersPermission(for: folder) else {
