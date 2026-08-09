@@ -1,6 +1,5 @@
 'use client'
 
-import { BorderBeam } from 'border-beam'
 import { Check, Copy, Download, Terminal, X } from 'lucide-react'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
@@ -402,15 +401,7 @@ export function DownloadButton({
         ref={intentShellRef}
         className={cn('download-intent-shell', widthClassName)}
       >
-        <BorderBeam
-          size="sm"
-          colorVariant="ocean"
-          theme="dark"
-          strength={0.92}
-          duration={2.4}
-          borderRadius={999}
-          className={cn('download-beam', widthClassName)}
-        >
+        <div className={cn('download-beam', widthClassName)}>
           <a
             href={href}
             onClick={(event) => {
@@ -425,7 +416,7 @@ export function DownloadButton({
           >
             {children}
           </a>
-        </BorderBeam>
+        </div>
       </span>
 
       {notice}

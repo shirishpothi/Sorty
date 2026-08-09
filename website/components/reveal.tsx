@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ElementType,
@@ -33,16 +32,6 @@ export function Reveal({
   const Tag = (as ?? 'div') as ElementType
   const ref = useRef<HTMLElement>(null)
   const [visible, setVisible] = useState(immediate)
-
-  useLayoutEffect(() => {
-    const node = ref.current
-    if (!node) return
-
-    const bounds = node.getBoundingClientRect()
-    if (bounds.top < window.innerHeight && bounds.bottom > 0) {
-      setVisible(true)
-    }
-  }, [])
 
   useEffect(() => {
     if (visible) return

@@ -228,21 +228,6 @@
   }
 }
 
-/* Soft animated glow used behind the hero */
-@keyframes sorty-float {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-    opacity: 0.55;
-  }
-  50% {
-    transform: translateY(-24px) scale(1.05);
-    opacity: 0.8;
-  }
-}
-.animate-sorty-float {
-  animation: sorty-float 9s ease-in-out infinite;
-}
-
 /* Apple-style bright blue download button */
 .btn-download {
   position: relative;
@@ -477,14 +462,9 @@
   filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
 }
 .hero-screenshot-card {
-  --hero-screenshot-tilt: 16deg;
-  --hero-screenshot-scale: 0.985;
   transform-origin: 50% 18%;
-  transform: perspective(900px)
-    rotateX(var(--hero-screenshot-tilt))
-    scale(var(--hero-screenshot-scale));
+  transform: perspective(900px) rotateX(4deg);
   transform-style: preserve-3d;
-  will-change: transform;
 }
 @media (prefers-reduced-motion: reduce) {
   .download-intent-shell::before {
@@ -832,15 +812,7 @@
   }
 }
 
-/* Animated gradient highlight for the hero keyword */
-@keyframes highlight-sheen {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
-}
+/* Gradient highlight for the hero keyword */
 .highlight-pill {
   position: relative;
   background-image: linear-gradient(
@@ -854,25 +826,7 @@
   box-shadow:
     0 1px 0 0 oklch(1 0 0 / 25%) inset,
     0 14px 34px -10px oklch(0.62 0.19 256 / 65%);
-  animation: highlight-sheen 6s linear infinite alternate;
 }
-/* Entrance for the highlight: blur + expand in */
-@keyframes highlight-in {
-  from {
-    opacity: 0;
-    filter: blur(12px);
-    transform: translateY(6px) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0) scale(1);
-  }
-}
-.highlight-in {
-  animation: highlight-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
-}
-
 /* Soft blurred dividers between sections */
 .section-seam {
   position: relative;
@@ -910,13 +864,6 @@
   mask-image: linear-gradient(0deg, #000 0%, transparent 100%);
   pointer-events: none;
   z-index: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .highlight-in,
-  .highlight-pill {
-    animation: none;
-  }
 }
 
 /* Fine pointers use the drawn overlay exclusively; touch keeps native selection. */

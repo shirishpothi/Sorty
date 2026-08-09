@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { trackWebInteraction } from '@/lib/analytics'
-import { captureWebsiteException } from '@/lib/reliability'
 
 export default function GlobalError({
   error,
@@ -12,11 +11,13 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    captureWebsiteException(error, {
-      surface: 'global_error_boundary',
-      handled: true,
-      cause: 'root_render_failed',
-    })
+    void import('@/lib/reliability').then(({ captureWebsiteException }) =>
+      captureWebsiteException(error, {
+        surface: 'global_error_boundary',
+        handled: true,
+        cause: 'root_render_failed',
+      }),
+    )
   }, [error])
 
   return (
