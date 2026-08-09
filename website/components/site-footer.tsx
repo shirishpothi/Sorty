@@ -24,6 +24,7 @@ const COLUMNS = [
       { label: 'Organize Downloads', href: sitePath('/organize-downloads-folder') },
       { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer') },
       { label: 'Changelog', href: sitePath('/changelog') },
+      { label: 'Press kit', href: sitePath('/press') },
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
       { label: 'Support the dev', href: SPONSOR_URL },
