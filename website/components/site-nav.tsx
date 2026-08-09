@@ -10,7 +10,6 @@ import { DownloadButton } from '@/components/download-button'
 
 const LINKS = [
   { label: 'Features', href: '/#features' },
-  { label: 'Mac organizer', href: '/mac-folder-organizer' },
   { label: 'Changelog', href: '/changelog' },
   { label: 'Privacy', href: '/privacy-policy' },
 ]
