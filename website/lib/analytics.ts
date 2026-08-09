@@ -39,6 +39,7 @@ const POSTHOG_EVENT_ALLOWLIST = new Set([
 const PAGE_NAMES: Record<string, string> = {
   '/': 'home',
   '/changelog': 'changelog',
+  '/press': 'press',
   '/privacy-policy': 'privacy_policy',
   '/terms': 'terms',
 }
