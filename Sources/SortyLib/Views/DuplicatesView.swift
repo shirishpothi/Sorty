@@ -942,9 +942,6 @@ struct UnifiedDuplicateGroupRow: View {
 
             if !group.isExact {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(group.similarityPercentage ?? "")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-
                     Text("Similarity")
                         .font(.caption2.weight(.semibold))
                         .numericTextTransition(animationValue: group.isExact)
