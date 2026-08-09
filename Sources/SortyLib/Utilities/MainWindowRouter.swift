@@ -10,6 +10,7 @@ public extension Notification.Name {
     static let routeDeeplinkInMainWindow = Notification.Name("SortyRouteDeeplinkInMainWindow")
     static let presentSteeringPromptsInMainWindow = Notification.Name("SortyPresentSteeringPromptsInMainWindow")
     static let openOrganizeDirectoryPickerInMainWindow = Notification.Name("SortyOpenOrganizeDirectoryPickerInMainWindow")
+    static let showWatchedFolders = Notification.Name("SortyShowWatchedFolders")
 }
 
 public extension Notification {
@@ -38,19 +39,29 @@ public final class MainWindowRouter {
         weak var window: NSWindow?
         var lastFocusedAt: Date
         var isBusy: Bool
+        var isReady: Bool
 
         init(
             window: NSWindow,
             lastFocusedAt: Date = Date(),
-            isBusy: Bool = false
+            isBusy: Bool = false,
+            isReady: Bool = false
         ) {
             self.window = window
             self.lastFocusedAt = lastFocusedAt
             self.isBusy = isBusy
+            self.isReady = isReady
         }
     }
 
+    private struct PendingNotificationRoute {
+        let name: Notification.Name
+        let userInfo: [AnyHashable: Any]
+        let targetSessionID: UUID?
+    }
+
     private var sessions: [UUID: SessionRecord] = [:]
+    private var pendingNotificationRoutes: [PendingNotificationRoute] = []
 
     private init() {}
 
@@ -90,6 +101,13 @@ public final class MainWindowRouter {
         sessions[sessionID]?.isBusy = isBusy
     }
 
+    public func markReady(sessionID: UUID) {
+        pruneClosedSessions()
+        guard let session = sessions[sessionID] else { return }
+        session.isReady = true
+        deliverPendingNotificationRoutes(to: sessionID)
+    }
+
     public var preferredSessionID: UUID? {
         pruneClosedSessions()
 
@@ -101,9 +119,19 @@ public final class MainWindowRouter {
         return preferredSessionID(in: sessions.filter { !$0.value.isBusy })
     }
 
+    private var preferredReadySessionID: UUID? {
+        pruneClosedSessions()
+        return preferredSessionID(in: sessions.filter(\.value.isReady))
+    }
+
     public var hasOpenSessions: Bool {
         pruneClosedSessions()
         return !sessions.isEmpty
+    }
+
+    public func hasSession(_ sessionID: UUID) -> Bool {
+        pruneClosedSessions()
+        return sessions[sessionID] != nil
     }
 
     private func preferredSessionID(in candidates: [UUID: SessionRecord]) -> UUID? {
@@ -135,12 +163,31 @@ public final class MainWindowRouter {
     public func post(name: Notification.Name, userInfo: [AnyHashable: Any] = [:]) -> Bool {
         guard let preferredSessionID else { return false }
 
-        NotificationCenter.default.post(
-            name: name,
-            object: nil,
-            userInfo: Self.scopedUserInfo(userInfo, targetSessionID: preferredSessionID)
-        )
+        post(name: name, userInfo: userInfo, to: preferredSessionID)
         return true
+    }
+
+    @discardableResult
+    public func postOrQueue(
+        name: Notification.Name,
+        userInfo: [AnyHashable: Any] = [:],
+        targetSessionID: UUID? = nil
+    ) -> Bool {
+        let readySessionID = targetSessionID.flatMap { sessions[$0]?.isReady == true ? $0 : nil } ??
+            (targetSessionID == nil ? preferredReadySessionID : nil)
+        guard let readySessionID else {
+            pendingNotificationRoutes.append(
+                PendingNotificationRoute(
+                    name: name,
+                    userInfo: userInfo,
+                    targetSessionID: targetSessionID
+                )
+            )
+            return true
+        }
+
+        post(name: name, userInfo: userInfo, to: readySessionID)
+        return false
     }
 
     @discardableResult
@@ -172,6 +219,36 @@ public final class MainWindowRouter {
 
         activateWindow(for: sessionID)
         return true
+    }
+
+    private func deliverPendingNotificationRoutes(to sessionID: UUID) {
+        let routes = pendingNotificationRoutes.filter {
+            $0.targetSessionID == nil || $0.targetSessionID == sessionID
+        }
+        guard !routes.isEmpty else { return }
+        pendingNotificationRoutes.removeAll {
+            $0.targetSessionID == nil || $0.targetSessionID == sessionID
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            for route in routes {
+                self.post(name: route.name, userInfo: route.userInfo, to: sessionID)
+            }
+            _ = self.activateWindow(for: sessionID)
+        }
+    }
+
+    private func post(
+        name: Notification.Name,
+        userInfo: [AnyHashable: Any],
+        to sessionID: UUID
+    ) {
+        NotificationCenter.default.post(
+            name: name,
+            object: nil,
+            userInfo: Self.scopedUserInfo(userInfo, targetSessionID: sessionID)
+        )
     }
 
     @discardableResult

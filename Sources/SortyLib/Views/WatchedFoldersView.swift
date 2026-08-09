@@ -353,6 +353,7 @@ struct WatchedFolderCard: View {
     }
 
     let folder: WatchedFolder
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
@@ -361,6 +362,15 @@ struct WatchedFolderCard: View {
     @State private var isHovered = false
     @State private var highlightPulse = false
     @State private var accessRecoveryError: AccessRecoveryError?
+    @State private var isConfirmingReviewDiscard = false
+    @State private var isConfirmingFolderRemoval = false
+
+    private var hasSavedReview: Bool {
+        if case .awaitingReview = watchedFoldersManager.activityByFolder[folder.id] {
+            return true
+        }
+        return false
+    }
 
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
@@ -637,11 +647,19 @@ struct WatchedFolderCard: View {
                 } else if case .awaitingReview = activity {
                     Button("Review") {
                         HapticFeedbackManager.shared.tap()
-                        NotificationCenter.default.post(
+                        _ = MainWindowRouter.shared.post(
                             name: .showOrganizationPreview,
-                            object: nil,
-                            userInfo: ["folderPath": folder.path]
+                            userInfo: [
+                                "folderPath": folder.path,
+                                "isWatchedReview": true
+                            ]
                         )
+                    }
+                    .buttonStyle(.link)
+                    .controlSize(.mini)
+
+                    Button("Discard Plan", role: .destructive) {
+                        isConfirmingReviewDiscard = true
                     }
                     .buttonStyle(.link)
                     .controlSize(.mini)
@@ -698,10 +716,7 @@ struct WatchedFolderCard: View {
             .accessibilityLabel("Configure \(folder.name)")
 
             Button {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    watchedFoldersManager.removeFolder(folder)
-                }
+                requestFolderRemoval()
             } label: {
                 Image(systemName: "trash")
                     .font(.caption)
@@ -890,10 +905,7 @@ struct WatchedFolderCard: View {
             }
             Divider()
             Button("Remove", role: .destructive) {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    watchedFoldersManager.removeFolder(folder)
-                }
+                requestFolderRemoval()
             }
         }
         .sheet(isPresented: $showingConfig, onDismiss: openPendingFullOrganization) {
@@ -905,7 +917,42 @@ struct WatchedFolderCard: View {
             )
                 .modalBounce()
         }
+        .alert("Discard Saved Plan?", isPresented: $isConfirmingReviewDiscard) {
+            Button("Keep Plan", role: .cancel) {}
+            Button("Discard Plan", role: .destructive) {
+                HapticFeedbackManager.shared.tap()
+                NotificationCenter.default.post(
+                    name: .discardWatchedFolderReview,
+                    object: folder.id
+                )
+            }
+        } message: {
+            Text("Sorty will forget this plan without moving any files. New changes waiting for this watched folder can then be organized.")
+        }
+        .alert("Remove Watched Folder?", isPresented: $isConfirmingFolderRemoval) {
+            Button("Keep Folder", role: .cancel) {}
+            Button("Remove Folder and Discard Plan", role: .destructive) {
+                removeFolder()
+            }
+        } message: {
+            Text("Removing \"\(folder.name)\" will also discard its saved review plan. No files will be moved.")
+        }
 
+    }
+
+    private func requestFolderRemoval() {
+        if hasSavedReview {
+            isConfirmingFolderRemoval = true
+        } else {
+            removeFolder()
+        }
+    }
+
+    private func removeFolder() {
+        HapticFeedbackManager.shared.tap()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+            watchedFoldersManager.removeFolder(folder)
+        }
     }
 
     private func updateHighlightAnimation(_ isActive: Bool) {
@@ -1050,7 +1097,7 @@ struct WatchedFolderConfigView: View {
 
                             Text(selectedApplyPolicy == .autoApply
                                 ? "Sorty applies the plan as soon as it is ready."
-                                : "Sorty keeps the plan unchanged and notifies you to review it before applying.")
+                                : "Sorty saves the plan and notifies you to review it. It stays ready until you apply or discard it, even if you close Sorty.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)

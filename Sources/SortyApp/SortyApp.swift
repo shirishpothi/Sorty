@@ -27,6 +27,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if canImport(SortyLib)
             ReliabilityManager.shared.startIfAuthorized()
+            _ = NotificationManager.shared
         #endif
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
     }

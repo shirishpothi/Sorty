@@ -47,7 +47,7 @@ public extension NSNotification.Name {
 }
 
 /// Detailed statistics for batch organization summary
-public struct BatchSummaryStats: Sendable {
+public struct BatchSummaryStats: Codable, Sendable {
     public let filesMoved: Int
     public let foldersCreated: Int
     public let filesRenamed: Int
@@ -126,7 +126,18 @@ private enum NativeNotificationActionIdentifier {
 
 private enum NativeNotificationUserInfoKey {
     static let folderPath = "folderPath"
+    static let folderName = "folderName"
     static let notificationType = "notificationType"
+    static let fileCount = "fileCount"
+    static let canUndo = "canUndo"
+    static let isAutomated = "isAutomated"
+    static let message = "message"
+    static let isCritical = "isCritical"
+    static let canRetry = "canRetry"
+    static let batchStats = "batchStats"
+    static let planID = "planID"
+    static let isWatchedReview = "isWatchedReview"
+    static let originSessionID = "originSessionID"
 }
 
 private enum CuratedNotificationActionRole {
@@ -204,15 +215,24 @@ private enum NotificationFailureClass {
 }
 
 private final class NativeNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    private final class CompletionHandlerBox: @unchecked Sendable {
+        let handler: () -> Void
+
+        init(_ handler: @escaping () -> Void) {
+            self.handler = handler
+        }
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let completion = CompletionHandlerBox(completionHandler)
         Task { @MainActor in
             NotificationManager.shared.handleNativeNotificationResponse(response)
+            completion.handler()
         }
-        completionHandler()
     }
 
     func userNotificationCenter(
@@ -231,7 +251,13 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
     /// Types of notifications the app can show
     public enum NotificationType: Sendable {
         case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool, isAutomated: Bool = false)
-        case previewReady(folderName: String, folderPath: String? = nil)
+        case previewReady(
+            folderName: String,
+            folderPath: String? = nil,
+            planID: UUID? = nil,
+            originSessionID: UUID? = nil,
+            isWatchedReview: Bool = false
+        )
         case processingError(message: String, folderPath: String? = nil, isCritical: Bool, canRetry: Bool, isAutomated: Bool = false)
         case batchSummary(stats: BatchSummaryStats, isAutomated: Bool = false)
         case watchedFolderStarted(fileCount: Int, folderName: String, folderPath: String)
@@ -265,7 +291,7 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
             switch self {
             case .processingComplete(_, _, let folderPath, _, _):
                 return folderPath
-            case .previewReady(_, let folderPath):
+            case .previewReady(_, let folderPath, _, _, _):
                 return folderPath
             case .processingError(_, let folderPath, _, _, _):
                 return folderPath
@@ -908,22 +934,22 @@ public class NotificationManager: ObservableObject {
         switch type {
         case .processingComplete(let fileCount, let folderName, _, _, _):
             return (
-                "Processing Complete",
-                "Organized \(fileCount) file\(fileCount == 1 ? "" : "s") in \(folderName)",
+                "\(folderName) Organized",
+                "Sorty organized \(fileCount) file\(fileCount == 1 ? "" : "s"). Open Sorty to review what changed.",
                 "checkmark.circle.fill",
                 .green
             )
-        case .previewReady(let folderName, _):
+        case .previewReady(let folderName, _, _, _, _):
             return (
-                "Preview Ready",
-                "Your organization preview for \(folderName) is ready to review",
+                "Review \(folderName)",
+                "Your plan is saved. Review and adjust it before Sorty moves any files.",
                 "eye.fill",
                 .blue
             )
         case .processingError(let message, _, let isCritical, _, _):
             return (
-                isCritical ? "Critical Error" : "Processing Error",
-                message,
+                isCritical ? "Sorty Needs Attention" : "Couldn't Organize Files",
+                "\(message) Open Sorty to review details and recover.",
                 isCritical ? "xmark.octagon.fill" : "exclamationmark.triangle.fill",
                 isCritical ? .red : .orange
             )
@@ -956,20 +982,20 @@ public class NotificationManager: ObservableObject {
             
             if parts.isEmpty && stats.errorsEncountered == 0 {
                 // No operations performed
-                message = "No files to organize"
+                message = "No files needed organizing. Open Sorty to review the result."
                 title = "Organization Complete"
                 iconColor = .secondary
             } else if stats.errorsEncountered > 0 {
                 let errorSuffix = " with \(stats.errorsEncountered) error\(stats.errorsEncountered == 1 ? "" : "s")"
                 if parts.isEmpty {
-                    message = "Completed\(errorSuffix) in \(durationStr)"
+                    message = "Completed\(errorSuffix) in \(durationStr). Open Sorty to recover."
                 } else {
-                    message = "\(parts.joined(separator: ", "))\(errorSuffix) (\(durationStr))"
+                    message = "\(parts.joined(separator: ", "))\(errorSuffix) in \(durationStr). Open Sorty to review."
                 }
                 title = stats.folderName.isEmpty ? "Organization Complete" : "Organized \(stats.folderName)"
                 iconColor = .orange
             } else {
-                message = "\(parts.joined(separator: ", ")) (\(durationStr))"
+                message = "\(parts.joined(separator: ", ")) in \(durationStr). Open Sorty to review what changed."
                 title = stats.folderName.isEmpty ? "Organization Complete" : "Organized \(stats.folderName)"
                 iconColor = .green
             }
@@ -978,7 +1004,7 @@ public class NotificationManager: ObservableObject {
         case .watchedFolderStarted(let fileCount, let folderName, _):
             return (
                 "Organizing \(folderName)",
-                "Detected \(fileCount) new addition\(fileCount == 1 ? "" : "s"). Organizing now.",
+                "Sorty found \(fileCount) new file\(fileCount == 1 ? "" : "s"). You'll be notified when it finishes.",
                 "folder.fill.badge.gearshape",
                 .blue
             )
@@ -1229,26 +1255,105 @@ public class NotificationManager: ObservableObject {
         ]
 
         switch type {
-        case .processingComplete(_, _, let folderPath, _, _):
+        case .processingComplete(let fileCount, let folderName, let folderPath, let canUndo, let isAutomated):
+            userInfo[NativeNotificationUserInfoKey.fileCount] = fileCount
+            userInfo[NativeNotificationUserInfoKey.folderName] = folderName
+            userInfo[NativeNotificationUserInfoKey.canUndo] = canUndo
+            userInfo[NativeNotificationUserInfoKey.isAutomated] = isAutomated
             if let path = folderPath {
                 userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
-        case .previewReady(_, let folderPath):
+        case .previewReady(let folderName, let folderPath, let planID, let originSessionID, let isWatchedReview):
+            userInfo[NativeNotificationUserInfoKey.folderName] = folderName
+            userInfo[NativeNotificationUserInfoKey.planID] = planID?.uuidString
+            userInfo[NativeNotificationUserInfoKey.originSessionID] = originSessionID?.uuidString
+            userInfo[NativeNotificationUserInfoKey.isWatchedReview] = isWatchedReview
             if let path = folderPath {
                 userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
-        case .processingError(_, let folderPath, _, _, _):
+        case .processingError(let message, let folderPath, let isCritical, let canRetry, let isAutomated):
+            userInfo[NativeNotificationUserInfoKey.message] = message
+            userInfo[NativeNotificationUserInfoKey.isCritical] = isCritical
+            userInfo[NativeNotificationUserInfoKey.canRetry] = canRetry
+            userInfo[NativeNotificationUserInfoKey.isAutomated] = isAutomated
             if let path = folderPath {
                 userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
-        case .batchSummary(let stats, _):
+        case .batchSummary(let stats, let isAutomated):
+            userInfo[NativeNotificationUserInfoKey.batchStats] = try? JSONEncoder().encode(stats).base64EncodedString()
+            userInfo[NativeNotificationUserInfoKey.isAutomated] = isAutomated
             if let path = stats.folderPath {
                 userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
-        default:
-            break
+        case .watchedFolderStarted(let fileCount, let folderName, let folderPath):
+            userInfo[NativeNotificationUserInfoKey.fileCount] = fileCount
+            userInfo[NativeNotificationUserInfoKey.folderName] = folderName
+            userInfo[NativeNotificationUserInfoKey.folderPath] = folderPath
+        case .info(let title, let message):
+            userInfo[NativeNotificationUserInfoKey.folderName] = title
+            userInfo[NativeNotificationUserInfoKey.message] = message
         }
         return userInfo
+    }
+
+    private func nativeNotificationType(from content: UNNotificationContent) -> NotificationType? {
+        let userInfo = content.userInfo
+        guard let type = userInfo[NativeNotificationUserInfoKey.notificationType] as? String else {
+            return .info(title: content.title, message: content.body)
+        }
+
+        let folderPath = userInfo[NativeNotificationUserInfoKey.folderPath] as? String
+        let folderName = userInfo[NativeNotificationUserInfoKey.folderName] as? String ??
+            folderPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Files"
+        let fileCount = userInfo[NativeNotificationUserInfoKey.fileCount] as? Int ?? 0
+        let isAutomated = userInfo[NativeNotificationUserInfoKey.isAutomated] as? Bool ?? false
+
+        switch type {
+        case "processingComplete":
+            return .processingComplete(
+                fileCount: fileCount,
+                folderName: folderName,
+                folderPath: folderPath,
+                canUndo: userInfo[NativeNotificationUserInfoKey.canUndo] as? Bool ?? false,
+                isAutomated: isAutomated
+            )
+        case "previewReady":
+            return .previewReady(
+                folderName: folderName,
+                folderPath: folderPath,
+                planID: (userInfo[NativeNotificationUserInfoKey.planID] as? String).flatMap(UUID.init(uuidString:)),
+                originSessionID: (userInfo[NativeNotificationUserInfoKey.originSessionID] as? String).flatMap(UUID.init(uuidString:)),
+                isWatchedReview: userInfo[NativeNotificationUserInfoKey.isWatchedReview] as? Bool ?? false
+            )
+        case "processingError":
+            return .processingError(
+                message: userInfo[NativeNotificationUserInfoKey.message] as? String ?? content.body,
+                folderPath: folderPath,
+                isCritical: userInfo[NativeNotificationUserInfoKey.isCritical] as? Bool ?? false,
+                canRetry: userInfo[NativeNotificationUserInfoKey.canRetry] as? Bool ?? false,
+                isAutomated: isAutomated
+            )
+        case "batchSummary":
+            guard let encodedStats = userInfo[NativeNotificationUserInfoKey.batchStats] as? String,
+                  let data = Data(base64Encoded: encodedStats),
+                  let stats = try? JSONDecoder().decode(BatchSummaryStats.self, from: data) else {
+                return .batchSummary(
+                    stats: BatchSummaryStats(folderName: folderName, folderPath: folderPath),
+                    isAutomated: isAutomated
+                )
+            }
+            return .batchSummary(stats: stats, isAutomated: isAutomated)
+        case "watchedFolderStarted":
+            guard let folderPath else { return nil }
+            return .watchedFolderStarted(fileCount: fileCount, folderName: folderName, folderPath: folderPath)
+        case "info":
+            return .info(
+                title: userInfo[NativeNotificationUserInfoKey.folderName] as? String ?? content.title,
+                message: userInfo[NativeNotificationUserInfoKey.message] as? String ?? content.body
+            )
+        default:
+            return .info(title: content.title, message: content.body)
+        }
     }
 
     private func ensureNativeCategoryIdentifier(for actions: [CuratedNotificationAction]) -> String? {
@@ -1280,8 +1385,10 @@ public class NotificationManager: ObservableObject {
     func handleNativeNotificationResponse(_ response: UNNotificationResponse) {
         let identifier = response.notification.request.identifier
         let actionHandler = pendingNativeActionHandlers.removeValue(forKey: identifier)
-        let notificationType = pendingNativeNotificationTypes.removeValue(forKey: identifier)
-        let actions = pendingNativeActions.removeValue(forKey: identifier) ?? []
+        let notificationType = pendingNativeNotificationTypes.removeValue(forKey: identifier) ??
+            nativeNotificationType(from: response.notification.request.content)
+        let actions = pendingNativeActions.removeValue(forKey: identifier) ??
+            notificationType.map(notificationActions(for:)) ?? []
 
         switch response.actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -1346,8 +1453,6 @@ public class NotificationManager: ObservableObject {
 
         case .previewReady:
             add(100, reviewAction())
-            add(90, applyAction())
-            add(75, redoWithModelAction())
 
         case .processingError(let message, let folderPath, _, let canRetry, let isAutomated):
             let failureClass = NotificationFailureClass(message: message)
@@ -1463,11 +1568,7 @@ public class NotificationManager: ObservableObject {
         case .guardedConfirmation:
             activateAppForNotificationAction()
             if let confirmationNotificationName = curatedAction.confirmationNotificationName {
-                NotificationCenter.default.post(
-                    name: confirmationNotificationName,
-                    object: nil,
-                    userInfo: notificationUserInfo(for: type)
-                )
+                postMainWindowNotification(confirmationNotificationName, type: type)
             }
             trackAnalytics(.action, type: .info(title: "action", message: String(describing: curatedAction.action)), backend: backend, detail: "requested confirmation: \(curatedAction.label)")
         }
@@ -1539,33 +1640,41 @@ public class NotificationManager: ObservableObject {
             postMainWindowNotification(.showOrganizationPreview, type: type)
             await actionHandler?(.showDetails)
             trackAnalytics(.action, type: .info(title: "action", message: "defaultPreview"), backend: backend, detail: "default click")
-        case .processingError:
+        case .processingComplete, .processingError, .batchSummary:
             activateAppForNotificationAction()
             postMainWindowNotification(.showOrganizationDetails, type: type)
             await actionHandler?(.showDetails)
             trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
-        default:
-            if let path = type.folderPath {
-                NotificationCenter.default.post(name: .openOrganizedFolder, object: nil, userInfo: [NativeNotificationUserInfoKey.folderPath: path])
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
-                await actionHandler?(.openFolder(path: path))
-                trackAnalytics(.action, type: .info(title: "action", message: "defaultOpen"), backend: backend, detail: "default click")
-            } else {
-                activateAppForNotificationAction()
-                postMainWindowNotification(.showOrganizationDetails, type: type)
-                await actionHandler?(.showDetails)
-                trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
-            }
+        case .watchedFolderStarted:
+            activateAppForNotificationAction()
+            postMainWindowNotification(.showWatchedFolders, type: type)
+            trackAnalytics(.action, type: .info(title: "action", message: "defaultWatchedFolders"), backend: backend, detail: "default click")
+        case .info:
+            activateAppForNotificationAction()
+            await actionHandler?(.showDetails)
+            trackAnalytics(.action, type: .info(title: "action", message: "defaultActivate"), backend: backend, detail: "default click")
         }
     }
 
     private func postMainWindowNotification(_ name: Notification.Name, type: NotificationType) {
         let userInfo = notificationUserInfo(for: type)
-        if MainWindowRouter.shared.post(name: name, userInfo: userInfo) {
-            return
+        let originSessionID: UUID?
+        if case .previewReady(_, _, _, let origin, _) = type,
+           let origin,
+           MainWindowRouter.shared.hasSession(origin) {
+            originSessionID = origin
+        } else {
+            originSessionID = nil
         }
-
-        NotificationCenter.default.post(name: name, object: nil, userInfo: userInfo)
+        let didQueue = MainWindowRouter.shared.postOrQueue(
+            name: name,
+            userInfo: userInfo,
+            targetSessionID: originSessionID
+        )
+        if didQueue,
+           let openURL = DeeplinkHandler.url(for: .open(path: nil)) {
+            NSWorkspace.shared.open(openURL)
+        }
     }
 
     private func notificationUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
@@ -1574,6 +1683,11 @@ public class NotificationManager: ObservableObject {
         ]
         if let path = type.folderPath {
             userInfo[NativeNotificationUserInfoKey.folderPath] = path
+        }
+        if case .previewReady(_, _, let planID, let originSessionID, let isWatchedReview) = type {
+            userInfo[NativeNotificationUserInfoKey.planID] = planID?.uuidString
+            userInfo[NativeNotificationUserInfoKey.originSessionID] = originSessionID?.uuidString
+            userInfo[NativeNotificationUserInfoKey.isWatchedReview] = isWatchedReview
         }
         return userInfo
     }

@@ -444,6 +444,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             syncRunningOrganizationRegistrationIfNeeded(from: oldValue, to: state)
         }
     }
+    public var windowSessionID: UUID?
     @Published public var progress: Double = 0.0
     @Published public var currentPlan: OrganizationPlan?
     private var preparedPlanModeOverride: OrganizationMode?
@@ -1501,7 +1502,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 NotificationManager.shared.show(
                     .previewReady(
                         folderName: directory.lastPathComponent,
-                        folderPath: directory.path
+                        folderPath: directory.path,
+                        planID: currentPlan?.id,
+                        originSessionID: windowSessionID
                     )
                 )
                 AnalyticsManager.shared.captureWorkflow(
@@ -1546,7 +1549,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             NotificationManager.shared.show(
                 .previewReady(
                     folderName: directory.lastPathComponent,
-                    folderPath: directory.path
+                    folderPath: directory.path,
+                    planID: validatedPlan.id,
+                    originSessionID: windowSessionID
                 )
             )
 

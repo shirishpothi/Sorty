@@ -445,22 +445,7 @@ struct ExclusionRulesView: View {
                     ZStack(alignment: .leading) {
                         TextField("", text: $newNLException, axis: .vertical)
                             .lineLimit(1...4)
-                            .textFieldStyle(.plain)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Color.primary.opacity(isNLExceptionFocused ? 0.10 : 0.06),
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .strokeBorder(
-                                        isNLExceptionFocused
-                                            ? Color.accentColor.opacity(0.75)
-                                            : Color.primary.opacity(0.12),
-                                        lineWidth: 1
-                                    )
-                            }
+                            .textFieldStyle(.roundedBorder)
                             .focused($isNLExceptionFocused)
                             .accessibilityLabel("Exception description")
                             .onKeyPress(.tab) {
@@ -531,6 +516,7 @@ struct ExclusionRulesView: View {
                                     "\(improveExceptionRequestMessage)\n\nEdit the exception above, then click Improve again."
                                 )
                             }
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
                         }
 
                         Button {
@@ -562,6 +548,10 @@ struct ExclusionRulesView: View {
                             Text(createExceptionErrorMessage)
                         }
                     }
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.82),
+                        value: hasNaturalLanguageExceptionText
+                    )
                 }
 
             }

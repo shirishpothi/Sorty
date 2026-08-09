@@ -12,6 +12,7 @@ public extension Notification.Name {
     static let autoOrganizeDisabledGlobally = Notification.Name("autoOrganizeDisabledGlobally")
     static let retryWatchedFolderBatch = Notification.Name("retryWatchedFolderBatch")
     static let discardWatchedFolderBatch = Notification.Name("discardWatchedFolderBatch")
+    static let discardWatchedFolderReview = Notification.Name("discardWatchedFolderReview")
 }
 
 public enum FolderAccessStatus: String, Codable, Sendable {

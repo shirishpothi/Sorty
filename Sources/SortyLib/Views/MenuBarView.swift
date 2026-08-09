@@ -645,7 +645,15 @@ private struct WatchedFolderMenuItem: View {
             } label: {
                 Label("Remove from Watch List", systemImage: "trash")
             }
+            .disabled(isAwaitingReview)
         }
+    }
+
+    private var isAwaitingReview: Bool {
+        if case .awaitingReview = watchedFoldersManager.activityByFolder[folder.id] {
+            return true
+        }
+        return false
     }
 }
 

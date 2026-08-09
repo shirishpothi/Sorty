@@ -576,12 +576,12 @@ final class NotificationSettingsExtendedTests: XCTestCase {
 @MainActor
 final class NotificationActionCurationTests: XCTestCase {
 
-    func testPreviewReadyActionsPrioritizeReviewThenApply() {
+    func testPreviewReadyActionsRequireReviewBeforeApply() {
         let labels = NotificationManager.shared.notificationActionLabels(
             for: .previewReady(folderName: "Inbox", folderPath: "/tmp/Inbox")
         )
 
-        XCTAssertEqual(labels, ["Review Plan", "Apply Now", "Try Another Model"])
+        XCTAssertEqual(labels, ["Review Plan"])
     }
 
     func testProcessingCompleteActionsStayShortAndUseful() {

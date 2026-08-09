@@ -155,23 +155,61 @@ struct MainWindowRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
                 let folderPath = notification.userInfo?["folderPath"] as? String
-                _ = coordinator?.presentPendingReview(
-                    folderPath: folderPath,
-                    in: windowSession.organizer
-                )
+                let planID = (notification.userInfo?["planID"] as? String).flatMap(UUID.init(uuidString:))
+                let isWatchedReview = notification.userInfo?["isWatchedReview"] as? Bool ?? false
+                let isCurrentManualPreview = !isWatchedReview &&
+                    windowSession.organizer.state == .ready &&
+                    planID != nil &&
+                    windowSession.organizer.currentPlan?.id == planID &&
+                    folderPath != nil &&
+                    windowSession.organizer.currentDirectory?.standardizedFileURL.path == folderPath.map {
+                        URL(fileURLWithPath: $0).standardizedFileURL.path
+                    }
+                let reviewPresentation = isWatchedReview
+                    ? coordinator?.presentPendingReview(
+                        folderPath: folderPath,
+                        planID: planID,
+                        sessionID: windowSession.id,
+                        in: windowSession.organizer
+                    ) ?? .unavailable
+                    : .unavailable
+                if case .activatedExisting = reviewPresentation {
+                    return
+                }
+                let didPresentReview: Bool
+                if case .presented = reviewPresentation {
+                    didPresentReview = true
+                } else {
+                    didPresentReview = false
+                }
                 withAnimation(.pageTransition) {
-                    if windowSession.appState.selectedDirectory == nil,
+                    if (didPresentReview || isCurrentManualPreview),
                        let currentDirectory = windowSession.organizer.currentDirectory {
                         windowSession.appState.selectedDirectory = currentDirectory
+                        windowSession.appState.currentView = .organize
+                    } else if isWatchedReview || planID == nil {
+                        windowSession.appState.currentView = .watchedFolders
+                    } else if windowSession.organizer.currentPlan == nil,
+                              !windowSession.organizer.state.isOperationInProgress,
+                              let folderPath {
+                        windowSession.appState.selectedDirectory = URL(fileURLWithPath: folderPath)
+                        windowSession.appState.currentView = .organize
+                    } else {
+                        windowSession.appState.currentView = .history
                     }
-                    windowSession.appState.currentView = .organize
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showWatchedFolders)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
+                withAnimation(.pageTransition) {
+                    windowSession.appState.currentView = .watchedFolders
                 }
             }
     }
 
     private var contentWithLifecycle: some View {
         contentWithEnvironment
-            .task {
+            .task(id: coordinator != nil) {
                 let calibrate: ((WatchedFolder) -> Void)? = coordinator.map { coord in
                     { folder in coord.calibrateFolder(folder) }
                 }
@@ -199,6 +237,9 @@ struct MainWindowRootView: View {
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
                 presentWhatsNewIfNeeded()
+                if coordinator != nil {
+                    MainWindowRouter.shared.markReady(sessionID: windowSession.id)
+                }
             }
             .onChange(of: launchRequest?.id) { _, _ in
                 processLaunchRequestIfNeeded()

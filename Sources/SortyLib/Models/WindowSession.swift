@@ -18,6 +18,7 @@ public final class WindowSession: ObservableObject {
         self.id = id
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)
         self.organizer = FolderOrganizer(history: history)
+        self.organizer.windowSessionID = id
     }
 
     public func configureIfNeeded(
