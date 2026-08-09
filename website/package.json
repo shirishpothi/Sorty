@@ -11,6 +11,12 @@
     "start": "next start",
     "lint": "eslint ."
   },
+  "browserslist": [
+    "Chrome >= 120",
+    "Edge >= 120",
+    "Firefox >= 121",
+    "Safari >= 17"
+  ],
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@highlighters/core": "^1.2.0",
