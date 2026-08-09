@@ -12,6 +12,7 @@ import { SelectionHighlighter } from '@/components/selection-highlighter'
 import { RouteScrollReset } from '@/components/route-scroll-reset'
 import { RevealObserver } from '@/components/reveal-observer'
 import { AnalyticsProvider } from '@/components/analytics-provider'
+import { WebMCPTools } from '@/components/webmcp-tools'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -116,6 +117,7 @@ export default function RootLayout({
           <RouteScrollReset />
           <RevealObserver />
           <SelectionHighlighter />
+          <WebMCPTools />
           {children}
         </AnalyticsProvider>
       </body>
