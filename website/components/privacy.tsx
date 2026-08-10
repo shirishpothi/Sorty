@@ -34,7 +34,7 @@ export function Privacy() {
     >
       <div className="mx-auto max-w-5xl">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-medium text-primary">Privacy, in plain language</p>
+          <p className="text-sm font-medium text-primary">Privacy</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
             Your files never reach us. Ever.
           </h2>
@@ -60,7 +60,7 @@ export function Privacy() {
             />
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
               <Lock className="size-3.5" />
-              Private by architecture, not by promise
+              No Sorty server sees your files
             </span>
             <p className="mx-auto mt-4 max-w-2xl text-balance text-lg font-medium leading-relaxed sm:text-xl">
               Sorty can&apos;t leak what it never receives. With no backend, the
@@ -68,8 +68,7 @@ export function Privacy() {
               <span className="text-primary">zero visibility</span> into your
               files. Cloud AI providers only see contents when{' '}
               <span className="text-primary">Deep Scan</span> is on — your call,
-              every time. Website measurement is cookieless and anonymous, and
-              app analytics stays off until you choose otherwise.
+              every time.
             </p>
           </div>
         </Reveal>
