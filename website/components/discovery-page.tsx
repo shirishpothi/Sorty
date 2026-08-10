@@ -293,9 +293,19 @@ export function DiscoveryPage({ page }: { page: DiscoveryPageData }) {
 
                   <div
                     id={`step-${index + 1}`}
-                    className="how-step-beam min-w-0 flex-1 rounded-3xl"
+                    className={
+                      page.slug === 'mac-folder-organizer'
+                        ? 'min-w-0 flex-1'
+                        : 'how-step-beam min-w-0 flex-1 rounded-3xl'
+                    }
                   >
-                    <div className="relative z-10 h-full rounded-3xl border border-border bg-background/65 p-6 backdrop-blur-md transition-colors hover:border-white/25">
+                    <div
+                      className={
+                        page.slug === 'mac-folder-organizer'
+                          ? 'h-full rounded-2xl border border-border bg-card p-6'
+                          : 'relative z-10 h-full rounded-3xl border border-border bg-background/65 p-6 backdrop-blur-md transition-colors hover:border-white/25'
+                      }
+                    >
                       <h3 className="text-lg font-medium">{step.title}</h3>
                       <p className="mt-3 text-sm leading-6 text-muted-foreground">
                         {step.text}

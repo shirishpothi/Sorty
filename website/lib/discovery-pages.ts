@@ -57,14 +57,6 @@ export const DISCOVERY_PAGES: DiscoveryPage[] = [
         paragraphs: [
           'Use the Finder extension to start from a folder, save personas for different kinds of work, or add a watched folder for recurring organization. Sorty also learns from accepted placements and corrections so future suggestions can better match your preferences.',
         ],
-        points: [
-          'Native SwiftUI app for macOS 15 or later',
-          'Works on Apple Silicon and Intel Macs',
-          'Finder integration, menu bar access, and watched folders',
-          'Organization History with rollback support',
-          'Free under the GNU GPL v3, with source code on GitHub',
-          'A complete preview before any proposed move is applied',
-        ],
       },
       {
         title: 'Privacy depends on the provider you choose',
