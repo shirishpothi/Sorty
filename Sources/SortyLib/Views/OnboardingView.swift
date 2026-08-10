@@ -145,10 +145,14 @@ public struct OnboardingView: View {
                 } else {
                     ScrollView(.vertical) {
                         stepContent
-                            .frame(maxWidth: .infinity, minHeight: 480)
+                            .frame(minHeight: 480)
                     }
                     .scrollIndicators(.hidden)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Let the surrounding VStack propose the remaining height.
+                    // Flexible frames on both the scroll view and its child make
+                    // their ideal heights depend on each other while this subtree
+                    // is inserted, which can recurse inside AttributeGraph.
+                    .layoutPriority(1)
                     .clipped()
                 }
 
