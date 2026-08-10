@@ -412,6 +412,7 @@ export function DownloadButton({
               }
             }}
             className={cn('btn-download flex items-center rounded-full', className)}
+            data-webmcp-download
             {...props}
           >
             {children}

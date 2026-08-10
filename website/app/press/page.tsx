@@ -175,10 +175,10 @@ export default function PressPage() {
             <div className="grid overflow-hidden rounded-3xl border border-border bg-card/35 backdrop-blur-md lg:grid-cols-[0.85fr_1.15fr]">
               <div className="flex min-h-80 items-center justify-center border-b border-border p-10 lg:border-r lg:border-b-0">
                 <Image
-                  src={sitePath('/sorty-icon-96.webp')}
+                  src={sitePath('/sorty-icon.webp')}
                   alt="Sorty app icon"
-                  width={96}
-                  height={96}
+                  width={512}
+                  height={512}
                   className="size-40 rounded-[2.2rem] object-cover shadow-2xl shadow-black/45 sm:size-48"
                   priority
                 />
@@ -349,28 +349,26 @@ export default function PressPage() {
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-pretty leading-relaxed text-muted-foreground">
                 For interviews, additional formats, fact-checking, or other
-                press requests, reach the project publicly through GitHub.
+                press requests, contact the developer directly.
               </p>
               <div className="mt-7 flex flex-wrap justify-center gap-3">
                 <a
-                  href={`${GITHUB_URL}/discussions`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
+                  href="mailto:shirish.pothi.27@gmail.com"
+                  className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-sm transition-[transform,box-shadow,opacity] duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:opacity-90 hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
                 >
-                  <MessageCircle className="size-4" />
-                  Contact the project
-                  <ArrowUpRight className="size-3.5" />
+                  <MessageCircle className="size-4 transition-transform duration-200 ease-out group-hover:scale-110" />
+                  Contact the developer
+                  <ArrowUpRight className="size-3.5 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </a>
                 <a
                   href={GITHUB_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-card"
+                  className="group inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-medium transition-[transform,background-color,border-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:border-foreground/25 hover:bg-card hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
                 >
-                  <GithubIcon className="size-4" />
+                  <GithubIcon className="size-4 transition-transform duration-200 ease-out group-hover:scale-110" />
                   View source
-                  <ArrowUpRight className="size-3.5" />
+                  <ArrowUpRight className="size-3.5 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </a>
               </div>
               <p className="mt-6 text-xs text-muted-foreground">

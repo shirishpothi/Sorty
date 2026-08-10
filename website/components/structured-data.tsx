@@ -21,7 +21,7 @@ export function StructuredData() {
         '@id': `${SITE_URL}/#organization`,
         name: SITE_NAME,
         url: SITE_URL,
-        logo: `${SITE_URL}/sorty-icon-96.webp`,
+        logo: `${SITE_URL}/sorty-icon.webp`,
         sameAs: [GITHUB_URL],
       },
       {

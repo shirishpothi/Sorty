@@ -9,12 +9,6 @@ const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 
-const TRUST_ITEMS = [
-  { icon: Monitor, label: 'macOS 15+' },
-  { icon: Cpu, label: 'Apple Silicon & Intel' },
-  { icon: UserX, label: 'No account required' },
-]
-
 export function Hero() {
   return (
     <section
@@ -49,7 +43,7 @@ export function Hero() {
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
           AI folder{' '}
-          <span className="highlight-pill inline-block rounded-2xl px-3 py-1">
+          <span className="highlight-pill relative -top-[0.04em] inline-block rounded-2xl px-3 py-1">
             organization
           </span>{' '}
           for your{' '}
@@ -70,7 +64,7 @@ export function Hero() {
         <p className="mx-auto mt-6 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
           Point{' '}
           <Image
-            src={sitePath('/sorty-icon-40.webp')}
+            src={sitePath('/sorty-icon.webp')}
             alt=""
             width={18}
             height={18}
@@ -81,7 +75,6 @@ export function Hero() {
           Preview every change, apply when ready, and undo anytime; your files
           never leave your Mac unless you say so.
         </p>
-
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <DownloadButton
             id="download"

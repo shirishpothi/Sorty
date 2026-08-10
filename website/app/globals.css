@@ -559,29 +559,39 @@
   isolation: isolate;
   overflow: hidden;
   padding: 1px;
+  border-radius: 1.5rem;
+  background: var(--border);
 }
 .how-step-beam::before {
   content: '';
   position: absolute;
-  inset: -120% -35%;
+  inset: -150%;
   z-index: 0;
   pointer-events: none;
   background: conic-gradient(
-    from 0deg,
-    transparent 0 38%,
-    oklch(0.92 0 0 / 75%) 47%,
-    oklch(0.68 0.02 250 / 58%) 53%,
-    transparent 62% 100%
+    from 210deg,
+    transparent 0deg 270deg,
+    oklch(0.64 0.2 250 / 35%) 285deg,
+    oklch(0.8 0.15 230 / 98%) 305deg,
+    oklch(0.68 0.2 256 / 95%) 325deg,
+    transparent 345deg 360deg
   );
-  opacity: 0;
-  animation: download-beam-spin 2.4s linear infinite paused;
-  transition: opacity 0.22s ease;
-  will-change: opacity, transform;
+  animation: how-step-beam-spin 5s linear infinite;
+  will-change: transform;
 }
-.how-step-beam:hover::before,
-.how-step-beam:focus-within::before {
-  opacity: 0.9;
-  animation-play-state: running;
+@keyframes how-step-beam-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.how-step-beam > div {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+}
+.how-step-beam:hover > div,
+.how-step-beam:focus-within > div {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--card) 82%, transparent);
 }
 .download-beam:hover,
 .download-beam:has(.btn-download:focus-visible) {
