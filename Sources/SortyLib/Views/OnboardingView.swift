@@ -1893,16 +1893,10 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 window.setFrameOrigin(NSPoint(x: centeredOrigin.x, y: loweredY))
             }
 
-            // Start fully transparent and slowly fade the whole window in so the
-            // onboarding materializes rather than popping into existence.
-            window.alphaValue = 0
-            DispatchQueue.main.async {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 1.4
-                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    window.animator().alphaValue = 1
-                }
-            }
+            // Keep the window itself fully opaque so the opening screen is crisp.
+            // OnboardingIntroView owns the staged reveal of its individual elements.
+            window.alphaValue = 1
+            window.makeKey()
         }
 
         private func restore() {
