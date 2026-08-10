@@ -14,6 +14,7 @@ const COLUMNS = [
     links: [
       { label: 'Features', href: sitePath('/#features') },
       { label: 'Mac folder organizer', href: sitePath('/mac-folder-organizer') },
+      { label: 'Compare organizers', href: sitePath('/compare') },
       { label: 'Privacy', href: sitePath('/privacy-policy') },
       { label: 'Pricing', href: sitePath('/#pricing') },
     ],
@@ -25,10 +26,15 @@ const COLUMNS = [
       { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer') },
       { label: 'Changelog', href: sitePath('/changelog') },
       { label: 'Press kit', href: sitePath('/press') },
+      { label: 'FAQ', href: sitePath('/#faq') },
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
       { label: 'Support the dev', href: SPONSOR_URL },
-      { label: 'FAQ', href: sitePath('/#faq') },
     ],
   },
   {
@@ -54,8 +60,8 @@ export function SiteFooter() {
         <DiaGradient blur={15} peak={0.98} valley={0.55} strength={0.72} />
       </div>
 
-      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-4 md:gap-10">
-        <div className="col-span-2 md:col-span-1">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-5 lg:gap-10">
+        <div className="col-span-2 lg:col-span-1">
           <SortyLogo />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
             AI folder organization for your Mac. Free, open source, and private

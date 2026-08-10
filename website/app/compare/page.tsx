@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import { ComparisonPage } from '@/components/comparison-page'
 import { OG_IMAGE_PATH, SITE_NAME, SITE_URL } from '@/lib/site-metadata'
 
-const title = 'Sorty vs Hazel vs Folder Tidy vs Declutter'
+const title = 'Sorty vs Hazel vs Folder Tidy vs Sparkle'
 const description =
-  'Compare Mac file organizers by AI, rules, preview-before-apply, automation, undo, privacy, and open-source availability. See where Sorty, Hazel, Folder Tidy, and Declutter differ.'
+  'Compare Mac file organizers by AI, rules, preview-before-apply, automation, undo, privacy, and open-source availability. See where Sorty, Hazel, Folder Tidy, and Sparkle differ.'
 
 export const metadata: Metadata = {
   title,
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'Sorty vs Hazel',
     'Hazel alternative Mac',
     'Folder Tidy alternative',
-    'Declutter alternative Mac',
+    'Sparkle alternative Mac',
     'best Mac file organizer',
     'AI file organizer comparison',
     'Mac folder automation comparison',

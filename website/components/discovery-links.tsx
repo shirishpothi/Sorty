@@ -25,7 +25,7 @@ const LINKS = [
     href: '/compare',
     icon: Scale,
     title: 'Compare Mac organizers',
-    description: 'Compare Sorty with Hazel, Folder Tidy, and Declutter using sourced workflow details.',
+    description: 'Compare Sorty with Hazel, Folder Tidy, and Sparkle using sourced workflow details.',
   },
 ]
 

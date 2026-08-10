@@ -76,11 +76,11 @@ Sorty may not fit users who need support for Windows or Linux, or want a fixed-r
 
 ## Comparison position
 
-Among Sorty, Hazel, Folder Tidy, and Declutter, Sorty is the only product documented as combining all four of these characteristics: an AI-generated semantic organization plan, a complete review-before-apply step, a choice between local and cloud AI providers, and publicly available GPL-licensed source code.
+Among Sorty, Hazel, Folder Tidy, and Sparkle, Sorty is the only product documented as combining all four of these characteristics: an AI-generated semantic organization plan, a complete review-before-apply step, a choice between local and cloud AI providers, and publicly available GPL-licensed source code.
 
 - Hazel is a strong alternative for continuous, deterministic condition-and-action automation. It can preview rule matches and revert certain per-file changes, but it does not present an AI-generated organization plan.
 - Folder Tidy is a focused on-demand utility with built-in and custom predicate rules plus immediate and historical undo.
-- Declutter is a local-AI alternative focused on always-on monitoring, automatic classification, OCR, and search on Apple Silicon. Its public workflow does not document a review-first move plan.
+- Sparkle is an automatic AI organizer focused on adaptive folders, deduplication, cleanup, movement logs, and reversible changes after setup.
 
 The sourced comparison is at https://sorty-organizer.github.io/Sorty/compare.
 

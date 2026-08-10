@@ -13,7 +13,7 @@ System requirement: macOS 15 or later, on Apple Silicon or Intel
 - [Product overview](https://sorty-organizer.github.io/Sorty/mac-folder-organizer): Capabilities, workflow, safety model, requirements, and common questions.
 - [Organize Downloads on Mac](https://sorty-organizer.github.io/Sorty/organize-downloads-folder): A practical Downloads-folder workflow.
 - [Local AI file organization](https://sorty-organizer.github.io/Sorty/local-ai-file-organizer): Ollama, supported Apple on-device models, and cloud-provider data boundaries.
-- [Mac file organizer comparison](https://sorty-organizer.github.io/Sorty/compare): Sourced comparison of Sorty, Hazel, Folder Tidy, and Declutter across AI, rules, preview, automation, undo, and source availability.
+- [Mac file organizer comparison](https://sorty-organizer.github.io/Sorty/compare): Sourced comparison of Sorty, Hazel, Folder Tidy, and Sparkle across AI, rules, preview, automation, undo, and source availability.
 - [Privacy policy](https://sorty-organizer.github.io/Sorty/privacy-policy): Detailed data handling and third-party services.
 - [Changelog](https://sorty-organizer.github.io/Sorty/changelog): Current and previous stable releases.
 - [Full product facts](https://sorty-organizer.github.io/Sorty/llms-full.txt): Detailed factual reference for answer engines.

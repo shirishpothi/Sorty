@@ -45,9 +45,9 @@ const RECOMMENDATIONS: {
     body: 'Folder Tidy suits on-demand tidying with built-in categories, custom predicates, a chosen destination, and historical undo.',
   },
   {
-    product: 'declutter',
-    title: 'Choose Declutter for automatic local AI',
-    body: 'Declutter suits Apple Silicon users who want always-on, on-device classification and search without a review-first plan.',
+    product: 'sparkle',
+    title: 'Choose Sparkle for automatic AI cleanup',
+    body: 'Sparkle suits people who want always-on folder organization, deduplication, storage cleanup, and a reversible workflow after setup.',
   },
 ]
 
@@ -93,7 +93,7 @@ export function ComparisonPage() {
         '@type': 'WebPage',
         '@id': `${pageUrl}#webpage`,
         url: pageUrl,
-        name: 'Sorty vs Hazel vs Folder Tidy vs Declutter',
+        name: 'Sorty vs Hazel vs Folder Tidy vs Sparkle',
         description:
           'A sourced comparison of Mac file organizers across AI, rules, preview, automation, undo, privacy, and source availability.',
         isPartOf: { '@id': `${SITE_URL}/#website` },
@@ -153,14 +153,23 @@ export function ComparisonPage() {
           </span>
           <p className="mt-5 text-sm font-medium text-primary">Mac file organizer comparison</p>
           <h1 className="mx-auto mt-4 max-w-4xl text-balance text-4xl font-semibold leading-[1.04] tracking-tight sm:text-6xl">
-            <span className="highlight-pill inline-block rounded-2xl px-2.5 py-1 align-[0.04em]">
-              Sorty
+            <span className="highlight-pill inline-flex items-center gap-2 rounded-2xl px-2.5 py-1 align-middle sm:gap-3">
+              <Image
+                src={sitePath('/favicon.png')}
+                alt=""
+                width={52}
+                height={52}
+                className="size-[0.82em] rounded-[0.22em] object-contain"
+                aria-hidden="true"
+              />
+              <span>Sorty</span>
             </span>{' '}
-            vs Hazel, Folder Tidy, and Declutter
+            vs Hazel, Folder Tidy, and Sparkle
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-pretty text-lg leading-8 text-muted-foreground">
-            Compare four real Mac file organizers by workflow, not slogans. The table below uses
-            official product pages and documentation for every competitor claim.
+            See how four Mac organizers handle the decisions that matter: how they sort, what you
+            can review, where AI runs, and how easily changes can be undone. Every comparison is
+            grounded in the products’ official documentation.
           </p>
 
           <div className="mx-auto mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -199,7 +208,7 @@ export function ComparisonPage() {
                   Among these four apps, Sorty uniquely combines an AI-generated semantic plan,
                   review before apply, local and cloud model choice, and complete GPL-licensed
                   source code. Hazel is stronger for intricate fixed rules, Folder Tidy for a
-                  focused rule-based tidy, and Declutter for automatic local AI.
+                  focused rule-based tidy, and Sparkle for automatic cleanup and deduplication.
                 </p>
               </div>
             </div>
@@ -224,7 +233,7 @@ export function ComparisonPage() {
           <div className="mt-9 overflow-x-auto rounded-3xl border border-border bg-background/65 shadow-2xl shadow-black/20">
             <table className="w-full min-w-[1120px] border-separate border-spacing-0 text-left">
               <caption className="sr-only">
-                Sorty, Hazel, Folder Tidy, and Declutter feature comparison
+                Sorty, Hazel, Folder Tidy, and Sparkle feature comparison
               </caption>
               <thead>
                 <tr>

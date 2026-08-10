@@ -1,4 +1,4 @@
-export type ComparisonProductId = 'sorty' | 'hazel' | 'folder-tidy' | 'declutter'
+export type ComparisonProductId = 'sorty' | 'hazel' | 'folder-tidy' | 'sparkle'
 
 export type ComparisonStatus = 'strong' | 'partial' | 'neutral'
 
@@ -36,7 +36,7 @@ export const COMPARISON_PRODUCTS: ComparisonProduct[] = [
   {
     id: 'hazel',
     name: 'Hazel',
-    logo: '/comparisons/hazel.webp',
+    logo: '/comparisons/hazel.png',
     logoAlt: 'Hazel app icon',
     url: 'https://www.noodlesoft.com/',
     shortDescription: 'Powerful condition-and-action automation for watched folders.',
@@ -52,13 +52,13 @@ export const COMPARISON_PRODUCTS: ComparisonProduct[] = [
     bestFor: 'People who want a focused, rule-based tidy operation with historical undo.',
   },
   {
-    id: 'declutter',
-    name: 'Declutter',
-    logo: '/comparisons/declutter.png',
-    logoAlt: 'Declutter app icon',
-    url: 'https://declutter.pholidlabs.com/',
-    shortDescription: 'Automatic, always-on file organization using local AI.',
-    bestFor: 'Apple Silicon users who prefer automatic local classification and search.',
+    id: 'sparkle',
+    name: 'Sparkle',
+    logo: '/comparisons/sparkle.png',
+    logoAlt: 'Sparkle app icon',
+    url: 'https://makeitsparkle.co/',
+    shortDescription: 'Automatic AI organization with adaptive folders, cleanup, and deduplication.',
+    bestFor: 'People who want an always-on organizer that also helps reclaim storage.',
   },
 ]
 
@@ -69,8 +69,8 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
     values: {
       sorty: { status: 'strong', text: 'AI proposes folders from names, metadata, context, and optional Deep Scan.' },
       hazel: { status: 'partial', text: 'User-authored conditions inspect names, dates, contents, metadata, and more.' },
-      'folder-tidy': { status: 'partial', text: '20 built-in rules plus custom predicate rules.' },
-      declutter: { status: 'strong', text: 'Local extension, visual, OCR, and semantic classification.' },
+      'folder-tidy': { status: 'partial', text: '22 built-in rules plus custom predicate rules.' },
+      sparkle: { status: 'strong', text: 'AI uses file names, types, and supported content to build an adaptive folder structure.' },
     },
   },
   {
@@ -80,7 +80,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
       sorty: { status: 'strong', text: 'Yes. Review, edit, or reject every proposed move before Apply.' },
       hazel: { status: 'partial', text: 'Preview a rule against an item or inspect rule status; not a full move plan.' },
       'folder-tidy': { status: 'partial', text: 'Configure rules and destinations before a tidy; no item-by-item move plan is documented.' },
-      declutter: { status: 'neutral', text: 'The official workflow describes automatic moves; a review-first plan is not documented.' },
+      sparkle: { status: 'partial', text: 'You approve the folder structure, then Sparkle automatically sorts new files after a Recents delay.' },
     },
   },
   {
@@ -90,7 +90,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
       sorty: { status: 'strong', text: 'Choose local Ollama or supported Apple models, or a cloud provider.' },
       hazel: { status: 'neutral', text: 'No AI provider required; rules run on the Mac.' },
       'folder-tidy': { status: 'neutral', text: 'No AI provider required; predicates run on the Mac.' },
-      declutter: { status: 'strong', text: 'Local AI on Apple Silicon; the official site says file data stays on-device.' },
+      sparkle: { status: 'partial', text: 'Sparkle documents encrypted processing and zero content retention, but does not describe a local-model option.' },
     },
   },
   {
@@ -100,7 +100,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
       sorty: { status: 'strong', text: 'Run manually, start from Finder, or configure watched folders.' },
       hazel: { status: 'strong', text: 'Continuously watches selected folders and runs matching rules.' },
       'folder-tidy': { status: 'partial', text: 'Run a tidy on a chosen source and destination folder.' },
-      declutter: { status: 'strong', text: 'Always-on monitoring automatically classifies and moves new files.' },
+      sparkle: { status: 'strong', text: 'Continuously organizes selected folders after setup; organization can be paused.' },
     },
   },
   {
@@ -110,7 +110,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
       sorty: { status: 'strong', text: 'Organization History records applied runs and supports rollback.' },
       hazel: { status: 'partial', text: 'Revert supported changes per file; some actions cannot be reverted.' },
       'folder-tidy': { status: 'strong', text: 'Immediate and later undo restore files and the original structure.' },
-      declutter: { status: 'neutral', text: 'An undo or organization-history workflow is not documented on the official site.' },
+      sparkle: { status: 'strong', text: 'Movement logs show where files went, and Revert restores files to their previous locations.' },
     },
   },
   {
@@ -120,7 +120,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
       sorty: { status: 'strong', text: 'Yes. Full source is public under GNU GPL v3.' },
       hazel: { status: 'neutral', text: 'Commercial app; no public source repository is offered.' },
       'folder-tidy': { status: 'neutral', text: 'Commercial app distributed under an end-user license.' },
-      declutter: { status: 'neutral', text: 'No public source repository is linked from the official site.' },
+      sparkle: { status: 'neutral', text: 'Commercial app; no public source repository is linked from the official site.' },
     },
   },
 ]
@@ -147,8 +147,12 @@ export const COMPARISON_SOURCES = [
     href: 'https://www.tunabellysoftware.com/folder_tidy/releasenotes/',
   },
   {
-    label: 'Declutter product page',
-    href: 'https://declutter.pholidlabs.com/',
+    label: 'Sparkle product page',
+    href: 'https://makeitsparkle.co/',
+  },
+  {
+    label: 'Sparkle workflow guide',
+    href: 'https://help.makeitsparkle.co/en/articles/13225419-how-sparkle-works',
   },
   {
     label: 'Sorty source and documentation',
