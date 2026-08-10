@@ -29,6 +29,8 @@ struct SimulatedDemoAnimationView: View {
     @State private var showUndoBadge: Bool = false
     @State private var transitionParticles: Bool = false
     @State private var fileRotations: [Double] = []
+    @State private var fileBobOffsets: [CGFloat] = []
+    @State private var fileBobDurations: [Double] = []
     @State private var fileBobbing: Bool = false
     @State private var confettiActive: Bool = false
     @State private var displayedFileCount: Int = 0
@@ -143,6 +145,8 @@ struct SimulatedDemoAnimationView: View {
             files = sampleFiles
             folders = sampleFolders
             fileRotations = (0..<sampleFiles.count).map { _ in Double.random(in: -15...15) }
+            fileBobOffsets = (0..<sampleFiles.count).map { _ in CGFloat.random(in: -6...6) }
+            fileBobDurations = (0..<sampleFiles.count).map { _ in Double.random(in: 1.5...2.5) }
             startAnimation()
         }
         .onDisappear {
@@ -183,10 +187,10 @@ struct SimulatedDemoAnimationView: View {
             ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
                 fileIcon(for: file)
                     .offset(messyOffset(for: index))
-                    .offset(y: fileBobbing ? CGFloat.random(in: -6...6) : 0)
+                    .offset(y: fileBobbing && fileBobOffsets.indices.contains(index) ? fileBobOffsets[index] : 0)
                     .rotationEffect(.degrees(fileRotations.indices.contains(index) ? fileRotations[index] : 0))
                     .animation(
-                        .easeInOut(duration: Double.random(in: 1.5...2.5))
+                        .easeInOut(duration: fileBobDurations.indices.contains(index) ? fileBobDurations[index] : 2)
                             .repeatForever(autoreverses: true),
                         value: fileBobbing
                     )
@@ -1050,7 +1054,7 @@ struct TransitionParticleView: View {
             ForEach(0..<particleCount, id: \.self) { index in
                 Circle()
                     .fill(color.opacity(0.6))
-                    .frame(width: CGFloat.random(in: 4...8), height: CGFloat.random(in: 4...8))
+                    .frame(width: particleSize(for: index), height: particleSize(for: index))
                     .offset(particleOffset(for: index))
                     .opacity(isActive ? 0 : 0.8)
                     .blur(radius: isActive ? 2 : 0)
@@ -1060,12 +1064,19 @@ struct TransitionParticleView: View {
     }
     
     private func particleOffset(for index: Int) -> CGSize {
-        let angle = Double(index) * (360.0 / Double(particleCount)) + Double.random(in: -10...10)
-        let radius: CGFloat = isActive ? CGFloat.random(in: 60...100) : 0
+        let angle = Double(index) * (360.0 / Double(particleCount))
+            + seededDemoValue(index: index, salt: 1, range: -10...10)
+        let radius = isActive
+            ? CGFloat(seededDemoValue(index: index, salt: 2, range: 60...100))
+            : 0
         return CGSize(
             width: cos(angle * .pi / 180) * radius,
             height: sin(angle * .pi / 180) * radius
         )
+    }
+
+    private func particleSize(for index: Int) -> CGFloat {
+        CGFloat(seededDemoValue(index: index, salt: 3, range: 4...8))
     }
 }
 
@@ -1081,7 +1092,7 @@ struct ConfettiBurstView: View {
             ForEach(0..<particleCount, id: \.self) { index in
                 Circle()
                     .fill(confettiColors[index % confettiColors.count].opacity(0.8))
-                    .frame(width: CGFloat.random(in: 4...10), height: CGFloat.random(in: 4...10))
+                    .frame(width: particleSize(for: index), height: particleSize(for: index))
                     .offset(confettiOffset(for: index))
                     .opacity(isActive ? 0 : 1)
                     .scaleEffect(isActive ? 0.3 : 1)
@@ -1091,13 +1102,29 @@ struct ConfettiBurstView: View {
     }
     
     private func confettiOffset(for index: Int) -> CGSize {
-        let angle = Double(index) * (360.0 / Double(particleCount)) + Double.random(in: -20...20)
-        let radius: CGFloat = isActive ? CGFloat.random(in: 80...160) : 0
+        let angle = Double(index) * (360.0 / Double(particleCount))
+            + seededDemoValue(index: index, salt: 4, range: -20...20)
+        let radius = isActive
+            ? CGFloat(seededDemoValue(index: index, salt: 5, range: 80...160))
+            : 0
         return CGSize(
             width: cos(angle * .pi / 180) * radius,
             height: sin(angle * .pi / 180) * radius
         )
     }
+
+    private func particleSize(for index: Int) -> CGFloat {
+        CGFloat(seededDemoValue(index: index, salt: 6, range: 4...10))
+    }
+}
+
+private func seededDemoValue(index: Int, salt: Int, range: ClosedRange<Double>) -> Double {
+    var value = UInt64(truncatingIfNeeded: index &* 1_103_515_245 &+ salt &* 12_345)
+    value ^= value >> 16
+    value &*= 0x7feb_352d
+    value ^= value >> 15
+    let unit = Double(value % 10_000) / 9_999
+    return range.lowerBound + (range.upperBound - range.lowerBound) * unit
 }
 
 // MARK: - Organizing Sliver Effect
