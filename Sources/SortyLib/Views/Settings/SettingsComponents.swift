@@ -29,6 +29,7 @@ extension EnvironmentValues {
 
 private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.settingsFocusDismissAction) private var dismissFocus
     @Environment(\.settingsFocusTarget) private var focusTarget
     @State private var isBreathing = false
@@ -85,6 +86,9 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
             .onChange(of: reduceMotion) { _, _ in
                 updateBreathingAnimation(isFocused)
             }
+            .onChange(of: controlActiveState) { _, _ in
+                updateBreathingAnimation(isFocused)
+            }
             .simultaneousGesture(
                 TapGesture().onEnded {
                     guard isFocused else { return }
@@ -94,7 +98,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
     }
 
     private func updateBreathingAnimation(_ shouldBreathe: Bool) {
-        guard shouldBreathe, !reduceMotion else {
+        guard shouldBreathe, !reduceMotion, controlActiveState != .inactive else {
             withAnimation(.easeOut(duration: 0.2)) {
                 isBreathing = false
             }

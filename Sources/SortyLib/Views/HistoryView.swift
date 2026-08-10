@@ -9,7 +9,7 @@
 import AppKit
 import SwiftUI
 
-private struct HistoryImpactSummary: Equatable {
+private struct HistoryImpactSummary: Equatable, Sendable {
     var filesOrganized = 0
     var foldersCreated = 0
     var totalSessions = 0
@@ -33,7 +33,7 @@ private struct HistoryImpactSummary: Equatable {
     }
 }
 
-private struct HistorySessionRow: Identifiable, Equatable {
+private struct HistorySessionRow: Identifiable, Equatable, Sendable {
     let id: UUID
     let directoryPath: String
     let folderName: String
@@ -69,7 +69,7 @@ private struct HistorySessionRow: Identifiable, Equatable {
     }
 }
 
-private struct HistorySessionRecord: Equatable {
+private struct HistorySessionRecord: Equatable, Sendable {
     let row: HistorySessionRow
     let directoryPath: String
     let source: OrganizationEntrySource
@@ -82,6 +82,29 @@ private struct HistorySessionRecord: Equatable {
         source = entry.source
         isUndone = entry.isUndone
         hasOperations = !(entry.operations?.isEmpty ?? true)
+    }
+}
+
+private struct HistorySnapshot: Sendable {
+    let entries: [OrganizationHistoryEntry]
+    let records: [HistorySessionRecord]
+    let impactSummary: HistoryImpactSummary
+
+    init?(entries: [OrganizationHistoryEntry]) {
+        var records: [HistorySessionRecord] = []
+        records.reserveCapacity(entries.count)
+
+        for (index, entry) in entries.enumerated() {
+            if index.isMultiple(of: 64), Task.isCancelled {
+                return nil
+            }
+            records.append(HistorySessionRecord(entry: entry, thumbnailLoadIndex: index))
+        }
+
+        guard !Task.isCancelled else { return nil }
+        self.entries = entries
+        self.records = records
+        impactSummary = HistoryImpactSummary(entries: entries)
     }
 }
 
@@ -106,6 +129,8 @@ struct HistoryView: View {
     @State private var filteredWatchedEntries: [HistorySessionRow] = []
     @State private var impactSummary = HistoryImpactSummary()
     @State private var displayedEntryCount = 50
+    @State private var isPreparingHistorySnapshot = false
+    @State private var historySnapshotTask: Task<Void, Never>?
     private let pageSize = 50
 
     private var hasFilteredEntries: Bool {
@@ -223,18 +248,24 @@ struct HistoryView: View {
 
     var body: some View {
         Group {
-            if cachedEntries.count > 1 {
+            if isPreparingHistorySnapshot, cachedEntries.isEmpty {
+                HistoryLoadingStateView()
+            } else if cachedEntries.count > 1 {
                 content
                     .searchable(text: $searchText, prompt: "Search folders")
             } else {
                 content
             }
         }
+        .animatedAppearance(delay: 0.03)
         .onReceive(organizer.history.$entries) { entries in
-            refreshHistorySnapshot(entries)
+            prepareHistorySnapshot(entries)
             if entries.count <= 1 {
                 searchText = ""
             }
+        }
+        .onDisappear {
+            historySnapshotTask?.cancel()
         }
     }
 
@@ -445,14 +476,27 @@ struct HistoryView: View {
         }
     }
 
-    private func refreshHistorySnapshot(_ entries: [OrganizationHistoryEntry]) {
-        let records = entries.enumerated().map { index, entry in
-            HistorySessionRecord(entry: entry, thumbnailLoadIndex: index)
+    private func prepareHistorySnapshot(_ entries: [OrganizationHistoryEntry]) {
+        historySnapshotTask?.cancel()
+        isPreparingHistorySnapshot = true
+
+        historySnapshotTask = Task { @MainActor in
+            let worker = Task.detached(priority: .userInitiated) {
+                HistorySnapshot(entries: entries)
+            }
+            let snapshot = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+
+            guard !Task.isCancelled, let snapshot else { return }
+            cachedEntries = snapshot.entries
+            cachedSessionRecords = snapshot.records
+            impactSummary = snapshot.impactSummary
+            refreshFilteredEntries(in: snapshot.records)
+            isPreparingHistorySnapshot = false
         }
-        cachedEntries = entries
-        cachedSessionRecords = records
-        impactSummary = HistoryImpactSummary(entries: entries)
-        refreshFilteredEntries(in: records)
     }
 
     private func refreshFilteredEntries() {
@@ -561,6 +605,29 @@ struct HistoryView: View {
         }
 
         return organizer.history.entries.first
+    }
+}
+
+private struct HistoryLoadingStateView: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                .symbolEffect(.pulse)
+                .accessibilityHidden(true)
+
+            Text("Loading History")
+                .font(.title3.weight(.semibold))
+
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .emptyStateWorkflowGradient(isVisible: true)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Loading history")
     }
 }
 

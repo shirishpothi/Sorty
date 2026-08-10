@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct OrganizingMascotView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isAnimating = false
     @State private var orbitingURLs: [URL] = []
     @State private var cachedOrbitingURLs: [URL] = []
@@ -63,7 +64,10 @@ struct OrganizingMascotView: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: frameInterval, paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(
+            minimumInterval: frameInterval,
+            paused: reduceMotion || controlActiveState == .inactive
+        )) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             
             ZStack {

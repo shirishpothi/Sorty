@@ -5,9 +5,9 @@
 //  Centralized button styles for the application
 //
 
+import AppKit
+import QuartzCore
 import SwiftUI
-
-import BorderBeamKit
 
 public enum SortyButtonIntent: Equatable {
     case primary
@@ -715,39 +715,6 @@ public enum OnboardingBeamBorderVariant {
     case warning
     case destructive
 
-    var palette: BeamColorVariant {
-        switch self {
-        case .standard: return .colorful
-        case .featured: return .sunset
-        case .info: return .ocean
-        case .success: return .ocean
-        case .warning: return .sunset
-        case .destructive: return .sunset
-        }
-    }
-
-    var strength: Double {
-        switch self {
-        case .standard: return 0.86
-        case .featured: return 1.0
-        case .info: return 0.9
-        case .success: return 0.92
-        case .warning: return 0.96
-        case .destructive: return 1.0
-        }
-    }
-
-    var lensStrength: Double {
-        switch self {
-        case .standard: return 1.8
-        case .featured: return 3.0
-        case .info: return 2.2
-        case .success: return 2.3
-        case .warning: return 2.8
-        case .destructive: return 3.0
-        }
-    }
-
     var fallbackOpacity: Double {
         switch self {
         case .standard: return 0.82
@@ -765,16 +732,14 @@ public extension View {
         variant: OnboardingBeamBorderVariant = .standard,
         active: Bool = true,
         isIntensified: Bool = false,
-        includesInteriorGlow: Bool = false,
-        size: BeamSize = .md
+        includesInteriorGlow: Bool = false
     ) -> some View {
         overlay {
             OnboardingBeamBorder(
                 variant: variant,
                 active: active,
                 isIntensified: isIntensified,
-                includesInteriorGlow: includesInteriorGlow,
-                size: size
+                includesInteriorGlow: includesInteriorGlow
             )
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -787,7 +752,6 @@ private struct OnboardingBeamBorder: View {
     let active: Bool
     let isIntensified: Bool
     let includesInteriorGlow: Bool
-    let size: BeamSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -798,43 +762,29 @@ private struct OnboardingBeamBorder: View {
     var body: some View {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
-            .borderBeam(
-                size,
-                colorVariant: variant.palette,
-                theme: .dark,
-                duration: 1.96,
-                active: shouldAnimateBeam,
-                borderRadius: 1_000,
-                strength: min(1, isIntensified ? variant.strength * 1.2 : variant.strength)
-            )
             .overlay {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimateBeam)) { timeline in
-                    let phase = shouldAnimateBeam ? timeline.date.timeIntervalSinceReferenceDate / 1.96 : 0.31
+                ZStack {
+                    RetainedFallbackBeamBorder(
+                        stops: fallbackStops,
+                        active: active,
+                        isIntensified: isIntensified,
+                        shouldAnimate: shouldAnimateBeam,
+                        opacity: isIntensified ? 1 : variant.fallbackOpacity
+                    )
 
-                    fallbackBorder(phase: phase)
-                        .opacity(active ? (isIntensified ? 1 : variant.fallbackOpacity) : 0)
-                        .animation(.easeOut(duration: 0.22), value: active)
-                        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isIntensified)
+                    if includesInteriorGlow {
+                        SwiftUI.TimelineView(.animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: !shouldAnimateBeam
+                        )) { timeline in
+                            let phase = shouldAnimateBeam
+                                ? timeline.date.timeIntervalSinceReferenceDate / 1.96
+                                : 0.31
+                            beamInteriorGlow(phase: phase)
+                        }
+                    }
                 }
             }
-    }
-
-    private func fallbackBorder(phase: TimeInterval) -> some View {
-        ZStack {
-            if includesInteriorGlow {
-                beamInteriorGlow(phase: phase)
-            }
-
-            Capsule()
-                .strokeBorder(
-                    AngularGradient(
-                        stops: fallbackStops,
-                        center: .center,
-                        angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                    ),
-                    lineWidth: isIntensified ? 1.35 : 1
-                )
-        }
     }
 
     private func beamInteriorGlow(phase: TimeInterval) -> some View {
@@ -1005,6 +955,190 @@ private struct OnboardingBeamBorder: View {
                 InteriorGlowSpot(x: 1.00, y: 0.27, width: 11, height: 12, color: Color(red: 1.0, green: 0.35, blue: 0.27), opacity: 0.14, activeOpacity: 0.21),
             ]
         }
+    }
+}
+
+/// Keeps the fallback beam's conic gradient and capsule mask in retained
+/// Core Animation layers. The fallback remains visually identical, but its
+/// rotation no longer rebuilds a SwiftUI gradient subtree 30 times a second.
+private struct RetainedFallbackBeamBorder: NSViewRepresentable {
+    let stops: [Gradient.Stop]
+    let active: Bool
+    let isIntensified: Bool
+    let shouldAnimate: Bool
+    let opacity: Double
+
+    func makeNSView(context: Context) -> RetainedFallbackBeamBorderView {
+        RetainedFallbackBeamBorderView()
+    }
+
+    func updateNSView(_ nsView: RetainedFallbackBeamBorderView, context: Context) {
+        nsView.update(
+            colors: stops.map { NSColor($0.color).cgColor },
+            locations: stops.map { NSNumber(value: $0.location) },
+            active: active,
+            isIntensified: isIntensified,
+            shouldAnimate: shouldAnimate,
+            opacity: Float(opacity)
+        )
+    }
+}
+
+private final class RetainedFallbackBeamBorderView: NSView {
+    private static let duration: CFTimeInterval = 1.96
+    private static let pausedPhase = 0.31
+
+    private let gradientLayer = CAGradientLayer()
+    private let strokeMask = CAShapeLayer()
+    private var isBeamAnimating = false
+    private var currentLineWidth: CGFloat = 1
+    private var targetOpacity: Float = 0
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        layer?.opacity = 0
+        layer?.addSublayer(gradientLayer)
+        layer?.mask = strokeMask
+
+        gradientLayer.type = .conic
+        gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
+        strokeMask.fillColor = NSColor.clear.cgColor
+        strokeMask.strokeColor = NSColor.white.cgColor
+        strokeMask.lineCap = .round
+        strokeMask.lineWidth = currentLineWidth
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        let diameter = hypot(bounds.width, bounds.height)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.frame = CGRect(
+            x: bounds.midX - diameter / 2,
+            y: bounds.midY - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+        strokeMask.frame = bounds
+        strokeMask.path = CGPath(
+            roundedRect: bounds.insetBy(dx: currentLineWidth / 2, dy: currentLineWidth / 2),
+            cornerWidth: bounds.height / 2,
+            cornerHeight: bounds.height / 2,
+            transform: nil
+        )
+        CATransaction.commit()
+    }
+
+    func update(
+        colors: [CGColor],
+        locations: [NSNumber],
+        active: Bool,
+        isIntensified: Bool,
+        shouldAnimate: Bool,
+        opacity: Float
+    ) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.colors = colors
+        gradientLayer.locations = locations
+        CATransaction.commit()
+
+        updateLineWidth(isIntensified ? 1.35 : 1)
+        updateOpacity(active ? opacity : 0)
+
+        if shouldAnimate {
+            startAnimatingIfNeeded()
+        } else {
+            stopAnimating()
+        }
+    }
+
+    private func updateLineWidth(_ lineWidth: CGFloat) {
+        guard currentLineWidth != lineWidth else { return }
+        let previousWidth = strokeMask.presentation()?.lineWidth ?? currentLineWidth
+        currentLineWidth = lineWidth
+
+        let animation = CABasicAnimation(keyPath: "lineWidth")
+        animation.fromValue = previousWidth
+        animation.toValue = lineWidth
+        animation.duration = 0.22
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        strokeMask.add(animation, forKey: "fallbackBeamLineWidth")
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        strokeMask.lineWidth = lineWidth
+        CATransaction.commit()
+        needsLayout = true
+    }
+
+    private func updateOpacity(_ opacity: Float) {
+        guard targetOpacity != opacity else { return }
+        targetOpacity = opacity
+        let previousOpacity = layer?.presentation()?.opacity ?? layer?.opacity ?? 0
+
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = previousOpacity
+        animation.toValue = opacity
+        animation.duration = 0.22
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer?.add(animation, forKey: "fallbackBeamOpacity")
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.opacity = opacity
+        CATransaction.commit()
+    }
+
+    private func startAnimatingIfNeeded() {
+        guard !isBeamAnimating else { return }
+        isBeamAnimating = true
+        let phase = Date().timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: Self.duration) / Self.duration
+        let angle = phase * 2 * Double.pi
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.setValue(angle, forKeyPath: "transform.rotation.z")
+        CATransaction.commit()
+
+        let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotation.fromValue = angle
+        rotation.toValue = angle + 2 * Double.pi
+        rotation.duration = Self.duration
+        rotation.repeatCount = .infinity
+        rotation.timingFunction = CAMediaTimingFunction(name: .linear)
+        gradientLayer.add(rotation, forKey: "fallbackBeamRotation")
+    }
+
+    private func stopAnimating() {
+        guard isBeamAnimating || gradientLayer.animation(forKey: "fallbackBeamRotation") != nil else {
+            setPausedPhase()
+            return
+        }
+        isBeamAnimating = false
+        gradientLayer.removeAnimation(forKey: "fallbackBeamRotation")
+        setPausedPhase()
+    }
+
+    private func setPausedPhase() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.setValue(
+            Self.pausedPhase * 2 * Double.pi,
+            forKeyPath: "transform.rotation.z"
+        )
+        CATransaction.commit()
     }
 }
 

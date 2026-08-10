@@ -531,8 +531,7 @@ struct ExclusionRulesView: View {
                         .buttonStyle(.onboardingPill(size: .small))
                         .onboardingBeamBorder(
                             variant: .featured,
-                            active: hasNaturalLanguageExceptionText,
-                            size: .sm
+                            active: hasNaturalLanguageExceptionText
                         )
                         .disabled(
                             !hasNaturalLanguageExceptionText

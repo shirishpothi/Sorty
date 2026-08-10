@@ -369,6 +369,8 @@ struct PulsingLoadingModifier: ViewModifier {
 struct ShimmerModifier: ViewModifier {
     let isLoading: Bool
 
+    @Environment(\.controlActiveState) private var controlActiveState
+
     private let bandWidthRatio: CGFloat = 0.42
     private let shimmerAngle = Angle(degrees: 18)
     private let shimmerSpeed: Double = 1.15
@@ -383,7 +385,10 @@ struct ShimmerModifier: ViewModifier {
                         let bandWidth = width * bandWidthRatio
                         let travelDistance = width + (bandWidth * 2)
 
-                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
+                        SwiftUI.TimelineView(.animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: !isLoading || controlActiveState == .inactive
+                        )) { context in
                             let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
                             let progress = elapsed - floor(elapsed)
                             let offsetX = (progress * travelDistance) - bandWidth
@@ -421,6 +426,7 @@ struct TextShimmerModifier: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.controlActiveState) private var controlActiveState
 
     private let bandWidthRatio: CGFloat = 0.62
     private let shimmerAngle = Angle(degrees: 8)
@@ -454,7 +460,10 @@ struct TextShimmerModifier: ViewModifier {
                             .rotationEffect(shimmerAngle)
                             .offset(x: (width - bandWidth) * 0.18)
                         } else {
-                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
+                            SwiftUI.TimelineView(.animation(
+                                minimumInterval: 1.0 / 30.0,
+                                paused: !isLoading || controlActiveState == .inactive
+                            )) { context in
                                 let elapsed = (context.date.timeIntervalSinceReferenceDate + phaseOffset) * shimmerSpeed
                                 let progress = elapsed - floor(elapsed)
                                 let easedProgress = progress * progress * (3 - (2 * progress))
@@ -604,6 +613,7 @@ public enum TransitionStyles {
 /// Animated loading dots view
 public struct LoadingDotsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     let dotCount: Int
     let dotSize: CGFloat
@@ -621,7 +631,10 @@ public struct LoadingDotsView: View {
         if reduceMotion {
             dots(at: 0)
         } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+            SwiftUI.TimelineView(.animation(
+                minimumInterval: 1.0 / 12.0,
+                paused: controlActiveState == .inactive
+            )) { timeline in
                 dots(at: timeline.date.timeIntervalSinceReferenceDate)
             }
             .drawingGroup(opaque: false)
@@ -673,12 +686,16 @@ public struct BouncingSpinner: View {
 
 /// Bouncing dots animation for AI reasoning indicator
 public struct BouncingDotsView: View {
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var animationPhase: Int = 0
     
     public init() {}
     
     public var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 0.15)) { timeline in
+        SwiftUI.TimelineView(.animation(
+            minimumInterval: 0.15,
+            paused: controlActiveState == .inactive
+        )) { timeline in
             bouncingDots(at: timeline.date.timeIntervalSinceReferenceDate)
         }
     }

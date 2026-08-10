@@ -31,7 +31,14 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
+        if let window = nsView.window {
+            context.coordinator.install(in: window, updateManager: updateManager)
+        }
         context.coordinator.update(for: updateManager.updateState)
+    }
+
+    public static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -44,8 +51,9 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
         private weak var installedWindow: NSWindow?
 
         func install(in window: NSWindow, updateManager: SparkleUpdateManager) {
-            guard installedWindow !== window else { return }
-            installedWindow = window
+            guard installedWindow !== window || buttonView?.superview == nil else { return }
+
+            uninstall()
 
             guard let titlebarContainer = window.standardWindowButton(.closeButton)?.superview else { return }
 
@@ -62,8 +70,15 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
                 ])
             }
 
+            installedWindow = window
             self.buttonView = button
             update(for: updateManager.updateState)
+        }
+
+        func uninstall() {
+            buttonView?.removeFromSuperview()
+            buttonView = nil
+            installedWindow = nil
         }
 
         func update(for state: SparkleUpdateManager.UpdateState) {
@@ -593,9 +608,11 @@ final class UpdateButtonNSView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
-        if isPressed || isBusy { return }
+        if isPressed { return }
         isHovered = false
-        setExpanded(false, animated: true)
+        if !isBusy {
+            setExpanded(false, animated: true)
+        }
         applyVisualState(animated: true)
     }
 

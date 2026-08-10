@@ -593,6 +593,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         // Always allow same state (no-op)
         if currentState == newState {
+            enforceResumeCheckpointLifetime(for: newState)
             state = newState
             return true
         }
@@ -601,6 +602,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let isValid = force || OrganizationState.canTransition(from: currentState, to: newState)
         
         if isValid {
+            enforceResumeCheckpointLifetime(for: newState)
             state = newState
             return true
         } else {
@@ -612,6 +614,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
             return false
         }
+    }
+
+    private func enforceResumeCheckpointLifetime(for newState: OrganizationState) {
+        if case .organizing = newState {
+            return
+        }
+        if case .error(let error) = newState, Self.isTimeoutFailure(error) {
+            return
+        }
+        resumeCheckpoint = nil
     }
     
     /// Convenience method to reset to idle state
@@ -1340,6 +1352,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         scannedFilePathLookup = Dictionary(grouping: publishedFiles, by: { $0.displayName.lowercased() })
             .mapValues { $0.map { $0.path } }
     }
+
+    /// Releases scan and request data that is only needed while generating a plan.
+    /// Timeout checkpoints deliberately retain their inputs so continuing remains lossless.
+    private func releasePlanGenerationTransients(
+        preservingResumeCheckpoint: Bool = false,
+        preservingScanDisplay: Bool = false
+    ) {
+        guard !preservingResumeCheckpoint else { return }
+        if !preservingScanDisplay {
+            scannedFiles = []
+            scannedFilePathLookup = [:]
+            streamFileIDTable = [:]
+        }
+        resumeCheckpoint = nil
+    }
     
     public func didComplete(content: String) {
         if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1496,6 +1523,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     currentPlan = OrganizationPlan(
                         notes: "This folder is empty. Add files and try again."
                     )
+                    releasePlanGenerationTransients(preservingScanDisplay: true)
                     updateState(.ready, stage: "No files found to organize", progress: 1.0)
                 }
 
@@ -1542,7 +1570,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 currentPlan = validatedPlan
-                resumeCheckpoint = nil
+                releasePlanGenerationTransients(preservingScanDisplay: true)
                 updateState(.ready, stage: "Ready!", progress: 1.0)
             }
 
@@ -2164,7 +2192,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 imagePayload: checkpoint.imagePayload
             )
             currentPlan = validatedPlan
-            resumeCheckpoint = nil
+            releasePlanGenerationTransients(preservingScanDisplay: true)
             updateState(.ready, stage: "Ready!", progress: 1.0)
         }
         defer { currentTask = nil }
@@ -3066,6 +3094,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentInsight = ""
         insightHistory = []
         insightsCache = nil
+        releasePlanGenerationTransients()
         transition(to: .idle, force: true)
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
@@ -3105,6 +3134,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             resetToIdle()
             return
         }
+
+        releasePlanGenerationTransients(
+            preservingResumeCheckpoint: Self.isTimeoutFailure(error)
+        )
 
         transition(to: .error(error), force: true)
         errorMessage = displayMessage
@@ -4936,6 +4969,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             blockingExclusionRule = nil
             scannedFileCount = 0
             scannedFiles = []
+            scannedFilePathLookup = [:]
+            streamFileIDTable = [:]
             detectedDuplicates = []
             measuredWorkProgress = nil
             visionAnalysisSummary = nil

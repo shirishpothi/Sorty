@@ -8,6 +8,7 @@ struct MinsangGlassLoader: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var phase = LoaderPhase.base
     @State private var hasPresented = false
     @State private var nextAlternatePhase = LoaderPhase.dual
@@ -28,7 +29,7 @@ struct MinsangGlassLoader: View {
     private static let fullTurnDuration = (2 * Double.pi) / Double(moverSpeed)
 
     private var shouldAnimate: Bool {
-        isActive && !reduceMotion
+        isActive && !reduceMotion && controlActiveState != .inactive
     }
 
     var body: some View {
@@ -62,6 +63,11 @@ struct MinsangGlassLoader: View {
         }
         .onChange(of: reduceMotion) { _, isReduced in
             if isReduced {
+                phase = .base
+            }
+        }
+        .onChange(of: controlActiveState) { _, activeState in
+            if activeState == .inactive {
                 phase = .base
             }
         }

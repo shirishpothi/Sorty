@@ -25,7 +25,6 @@ public struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var commandFlagsMonitor: Any?
     @State private var personaHighlightDismissalTask: Task<Void, Never>?
-    @State private var navigationPresentationTask: Task<Void, Never>?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
     public init() {}
@@ -68,7 +67,6 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
             personaHighlightDismissalTask?.cancel()
-            navigationPresentationTask?.cancel()
         }
         .onChange(of: analytics.consent) { _, newConsent in
             guard newConsent == .granted, appState.hasCompletedOnboarding else { return }
@@ -252,14 +250,11 @@ public struct ContentView: View {
         _ view: AppState.AppView,
         previousScreen: String?
     ) {
-        navigationPresentationTask?.cancel()
-        navigationPresentationTask = Task { @MainActor in
-            // Let the sidebar commit its selection before constructing the destination page.
-            await Task.yield()
-            guard !Task.isCancelled, appState.currentView == view else { return }
-            displayedView = view
-            captureMainScreen(view, previousScreen: previousScreen)
-        }
+        // The selection binding has already committed before this callback.
+        // Deferring the destination by an extra run-loop turn made every cold
+        // navigation feel slower and left the previous page visible for a frame.
+        displayedView = view
+        captureMainScreen(view, previousScreen: previousScreen)
     }
 
     private func analyticsScreenName(for view: AppState.AppView) -> String? {

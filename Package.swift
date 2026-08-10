@@ -18,7 +18,6 @@ let package = Package(
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
         // package variant that preserves the same overlay UI on macOS 15.
         .package(path: "Packages/Permiso"),
-        .package(path: "Packages/BorderBeamKit"),
         .package(
             url: "https://github.com/PostHog/posthog-ios.git",
             exact: "3.68.2"
@@ -34,7 +33,6 @@ let package = Package(
             name: "SortyLib",
             dependencies: [
                 .product(name: "Permiso", package: "Permiso"),
-                .product(name: "BorderBeamKit", package: "BorderBeamKit"),
                 .product(name: "PostHog", package: "posthog-ios"),
                 .product(name: "Sentry", package: "sentry-cocoa"),
                 .product(name: "Sparkle", package: "Sparkle")

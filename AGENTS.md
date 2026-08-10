@@ -2,17 +2,15 @@
 
 - Native SwiftUI macOS 15+ folder organizer, Swift 6, SPM plus `Sorty.xcodeproj`.
 - Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness[-settings|-organize]` launches targeted harnesses.
-- For minor changes, do not run local verification such as `make now` or `make dev`; commit and push the narrow diff for Blacksmith to validate.
-- Quality gates run on Blacksmith by default; push changes and use GitHub/Blacksmith checks for build, tests, app bundle, prerelease, and release validation unless the user explicitly asks for local testing.
-- Local `make ci`, `make test`, and `make test-full` are diagnostics only and must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
+- For minor changes, do not run local verification such as `make now` or `make dev`;
+- Local `make ci`, `make test`, and `make test-full` must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
 - Tests are valuable when they are focused. Avoid endless smoke tests, low-signal coverage, and regression tests whose only purpose is preserving behavior that has been deliberately deleted.
-- Prefer frequent small commits and pushes on `main` over large local-only batches. After each coherent change or fix, commit with a clear message and push so Blacksmith can validate the current branch early.
-- Use `[skip ci]` generously for minor documentation, copy, or local-only instruction changes because Blacksmith CI runs are expensive and limited.
+- Always prefer frequent small commits and pushes on `main` over large local-only batches. After each coherent change or fix or thread, commit with a clear message.
+- Use `[skip ci]` generously unless otherwise specified
 - If more work remains after a push, keep going in follow-up commits on the same branch instead of waiting for a perfect final batch.
 - Propose bold ideas when they can meaningfully improve the product or workflow; do not limit recommendations to conservative changes.
 - Be careful with destructive actions that the user did not explicitly request, and confirm the intended scope before taking them.
-- Single test: `swift test --scratch-path "$HOME/Library/Caches/Sorty/build" --disable-dependency-cache --disable-sandbox --filter SortyTests.TestClass/testMethod`; never run a repository-local `swift build` or `swift test` without that scratch path because it creates a second `.build` dependency cache. Use `make test-ui` only to confirm UI tests are currently disabled.
-- No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests when useful, and Blacksmith CI as the quality gate.
+- No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
 - Main targets: `Sources/SortyLib` shared app logic, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
 - Keep reusable product code in `SortyLib`; `SortyApp` should contain entry/window glue only. New app/extension/widget files need matching Xcode target membership.
@@ -26,7 +24,6 @@
 - Naming/style: `UpperCamelCase` types, `lowerCamelCase` members/tests/enum cases, predicate-style booleans, typed `LocalizedError` enums with clear user-facing descriptions.
 - Prefer Swift 6 concurrency (`async/await`, `Task { @MainActor in ... }`) and mutate UI state only on the main actor.
 - Tests use XCTest in `Tests/SortyTests`; prefer `MockAIClient`, temp dirs in `setUp()`, cleanup in `tearDown()`, and keep `accessibilityIdentifier`s on interactive UI.
-- UI polish is required: subtle hover feedback, compact spacing, short `.spring()`/`.easeInOut` transitions, and `HapticFeedbackManager.shared` (`selection`, `light`/`tap`, `success`, `error`).
+- UI polish is required: subtle hover feedback, compact spacing, short `.spring()`/`.easeInOut` transitions, and `HapticFeedbackManager.shared` (`selection`, `light`/`tap`, `success`, `error`), as well as UI consistency with the rest of the app.
 - Liquid-glass UI must use `systemLiquidGlassBackground(...)` and `.systemLiquidGlassPopover(cornerRadius: 12)` only; never fake it with materials, blur, gradients, or clear-popover hacks.
 - Feature flags: `defaults write com.sorty.app <key> -bool true`; detailed guides live in `docs/agent-guides/`.
-- Other rule files checked: `.github/copilot-instructions.md` is folded into this file; no Cursor, Claude, Windsurf, Cline, or Goose rules were present.
