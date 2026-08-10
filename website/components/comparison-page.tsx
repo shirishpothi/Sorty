@@ -5,16 +5,13 @@ import {
   Check,
   CircleDotDashed,
   Download,
-  ExternalLink,
   Minus,
   Scale,
-  ShieldCheck,
   Sparkles,
 } from 'lucide-react'
 import {
   COMPARISON_PRODUCTS,
   COMPARISON_ROWS,
-  COMPARISON_SOURCES,
   type ComparisonCell,
   type ComparisonProductId,
 } from '@/lib/comparison-data'
@@ -358,34 +355,6 @@ export function ComparisonPage() {
             })}
           </div>
 
-          <Reveal className="mt-10 rounded-3xl border border-border bg-card/30 p-6 sm:p-8">
-            <div className="flex items-start gap-4">
-              <ShieldCheck className="mt-0.5 size-6 shrink-0 text-primary" />
-              <div>
-                <h2 className="text-xl font-semibold">Sources and comparison method</h2>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                  Product behavior was checked against official documentation on August 10,
-                  2026. “Not documented” means the vendor’s public material did not describe
-                  that capability; it is not a claim that the capability can never exist.
-                </p>
-                <ul className="mt-5 flex flex-wrap gap-2">
-                  {COMPARISON_SOURCES.map((source) => (
-                    <li key={source.href}>
-                      <a
-                        href={source.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                      >
-                        {source.label}
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 
