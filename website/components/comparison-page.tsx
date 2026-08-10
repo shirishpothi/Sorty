@@ -5,6 +5,7 @@ import {
   Check,
   CircleDotDashed,
   Download,
+  ExternalLink,
   Minus,
   Scale,
   Sparkles,
