@@ -143,16 +143,12 @@ public struct OnboardingView: View {
                     stepContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ScrollView(.vertical) {
-                        stepContent
-                            .frame(minHeight: 480)
-                    }
-                    .scrollIndicators(.hidden)
-                    // Let the surrounding VStack propose the remaining height.
-                    // Flexible frames on both the scroll view and its child make
-                    // their ideal heights depend on each other while this subtree
-                    // is inserted, which can recurse inside AttributeGraph.
-                    .layoutPriority(1)
+                    // Each step is designed for the enforced onboarding window
+                    // minimum. Give it the VStack's finite remaining size instead
+                    // of measuring its full-height layout inside a vertical scroll
+                    // proposal, which creates a circular ideal-height dependency.
+                    stepContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                 }
 
@@ -340,9 +336,8 @@ public struct OnboardingView: View {
         introTransitionTask?.cancel()
         introTransitionTask = Task { @MainActor in
             // Materialize the first workflow step in a non-animated transaction.
-            // The prior GeometryReader -> ScrollView -> flexible-frame insertion
-            // was animated as one layout mutation and could recurse inside
-            // AttributeGraph before the provider page produced its first frame.
+            // The flow is inserted without animation so its fixed window layout
+            // settles before the provider page begins its presentation effects.
             var preparation = Transaction(animation: nil)
             preparation.disablesAnimations = true
             withTransaction(preparation) {

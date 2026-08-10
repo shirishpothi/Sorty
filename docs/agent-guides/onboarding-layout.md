@@ -2,15 +2,15 @@
 
 The onboarding window has a minimum content size of 1100 by 720 points. Its
 main `VStack` owns the vertical allocation between the progress rail, step
-content, and navigation controls.
+content, and navigation controls. Non-completion steps receive the stack's
+finite remaining size directly.
 
-For non-completion steps, keep the vertical `ScrollView` free of
-`maxHeight: .infinity`, and do not put a `maxWidth: .infinity` flexible frame
-directly around its step content. The stack proposes the remaining height and
-the scroll view uses `layoutPriority(1)`. Making the scroll view and its child
-both fill all available space creates a circular ideal-size dependency during
+Do not wrap the whole step in a vertical `ScrollView`. Step roots use spacers
+and flexible-height frames to fill the onboarding window; asking a scroll view
+to find their unbounded ideal height creates a circular size dependency during
 the intro-to-flow insertion and can trigger an AttributeGraph recursive-layout
-abort.
+abort. If one section needs overflow, keep its scroll view local and give it an
+explicit finite height, as in the custom-persona list.
 
 Animate presentation properties such as opacity and offset only after the flow
 hierarchy has been inserted without animation. Do not animate insertion of the
