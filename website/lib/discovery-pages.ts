@@ -19,7 +19,7 @@ export const DISCOVERY_PAGES: DiscoveryPage[] = [
   {
     slug: 'mac-folder-organizer',
     eyebrow: 'Mac folder organizer',
-    title: 'A Mac folder organizer that lets you review the plan first',
+    title: 'Organize your Mac. Review every move.',
     description:
       'Sorty is a free, open-source AI folder organizer for macOS. Organize files by meaning, preview every proposed move, customize the plan, and undo applied changes.',
     summary:

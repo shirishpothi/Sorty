@@ -561,22 +561,22 @@
   padding: 1px;
   border-radius: 1.5rem;
   background: var(--border);
+  transform: translateZ(0);
 }
 .how-step-beam::before {
   content: '';
   position: absolute;
-  inset: -150%;
+  inset: -250% -40%;
   z-index: 0;
   pointer-events: none;
   background: conic-gradient(
-    from 210deg,
-    transparent 0deg 270deg,
-    oklch(0.64 0.2 250 / 35%) 285deg,
-    oklch(0.8 0.15 230 / 98%) 305deg,
-    oklch(0.68 0.2 256 / 95%) 325deg,
-    transparent 345deg 360deg
+    from 0deg,
+    transparent 0 34%,
+    oklch(0.82 0.13 226 / 92%) 43%,
+    oklch(0.7 0.18 256 / 85%) 49%,
+    transparent 58% 100%
   );
-  animation: how-step-beam-spin 5s linear infinite;
+  animation: how-step-beam-spin 2.4s linear infinite;
   will-change: transform;
 }
 @keyframes how-step-beam-spin {
@@ -586,12 +586,12 @@
 }
 .how-step-beam > div {
   border-color: transparent;
-  background: color-mix(in oklch, var(--card) 88%, transparent);
+  background: var(--card);
 }
 .how-step-beam:hover > div,
 .how-step-beam:focus-within > div {
   border-color: transparent;
-  background: color-mix(in oklch, var(--card) 82%, transparent);
+  background: color-mix(in oklch, var(--card) 96%, white);
 }
 .download-beam:hover,
 .download-beam:has(.btn-download:focus-visible) {

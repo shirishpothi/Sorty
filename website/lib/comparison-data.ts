@@ -94,16 +94,6 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
     },
   },
   {
-    feature: 'Automation model',
-    explanation: 'Whether organization is manual, optional automation, or always-on monitoring.',
-    values: {
-      sorty: { status: 'strong', text: 'Run manually, start from Finder, or configure watched folders.' },
-      hazel: { status: 'strong', text: 'Continuously watches selected folders and runs matching rules.' },
-      'folder-tidy': { status: 'partial', text: 'Run a tidy on a chosen source and destination folder.' },
-      sparkle: { status: 'strong', text: 'Continuously organizes selected folders after setup; organization can be paused.' },
-    },
-  },
-  {
     feature: 'Undo and recovery',
     explanation: 'How the app helps reverse organization changes.',
     values: {
@@ -114,7 +104,7 @@ export const COMPARISON_ROWS: ComparisonRow[] = [
     },
   },
   {
-    feature: 'Source availability',
+    feature: 'Open source',
     explanation: 'Whether the complete app source is publicly available under an open-source license.',
     values: {
       sorty: { status: 'strong', text: 'Yes. Full source is public under GNU GPL v3.' },

@@ -114,10 +114,9 @@ function HeroTitle({ slug, title }: { slug: string; title: string }) {
   if (slug === 'mac-folder-organizer') {
     return (
       <>
-        A Mac folder organizer{' '}
-        <span className="text-muted-foreground">that lets you</span>{' '}
+        Organize your Mac.{' '}
         <span className="highlight-pill inline-block rounded-2xl px-2.5 py-1 align-[0.04em]">
-          review the plan first
+          Review every move.
         </span>
       </>
     )
@@ -323,14 +322,14 @@ export function DiscoveryPage({ page }: { page: DiscoveryPageData }) {
                 ))}
               </div>
               {section.points && (
-                <ul className="mt-6 grid auto-rows-fr gap-3 sm:grid-cols-2">
+                <ul className="mt-6 grid auto-rows-fr gap-3 lg:grid-cols-2">
                   {section.points.map((point) => (
                     <li
                       key={point}
-                      className="flex h-full gap-3 rounded-2xl border border-border bg-card/35 p-4 text-sm leading-6 text-foreground/90"
+                      className="flex h-full items-start gap-3 rounded-2xl border border-border bg-card/35 p-4 text-left text-sm leading-6 text-foreground/90"
                     >
                       <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                      {point}
+                      <span className="min-w-0">{point}</span>
                     </li>
                   ))}
                 </ul>
