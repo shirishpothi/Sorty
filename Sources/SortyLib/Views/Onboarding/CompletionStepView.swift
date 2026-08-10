@@ -138,8 +138,8 @@ private struct CompletionCelebrationBackdrop: View {
                     ForEach(0..<7, id: \.self) { index in
                         FloatingParticle(
                             delay: Double(index) * 0.4,
-                            size: completionParticleSize(for: index),
-                            xPosition: completionParticlePosition(for: index)
+                            size: CGFloat.random(in: 3...6),
+                            xPosition: CGFloat.random(in: -200...200)
                         )
                     }
                 }
@@ -147,14 +147,6 @@ private struct CompletionCelebrationBackdrop: View {
                 .transition(.opacity)
             }
         }
-    }
-
-    private func completionParticleSize(for index: Int) -> CGFloat {
-        3 + CGFloat((index * 17 + 5) % 30) / 10
-    }
-
-    private func completionParticlePosition(for index: Int) -> CGFloat {
-        -200 + CGFloat((index * 137 + 43) % 400)
     }
 }
 

@@ -69,8 +69,8 @@ export function HowItWorks() {
                 </span>
               </div>
 
-              <div className="how-step-beam min-w-0 flex-1 rounded-3xl">
-                <div className="relative z-10 h-full rounded-3xl border border-border bg-card/40 p-5 backdrop-blur-md transition-colors hover:border-white/25 sm:p-6">
+              <div className="min-w-0 flex-1">
+                <div className="h-full rounded-2xl border border-border bg-card p-5 sm:p-6">
                   <h3 className="text-lg font-medium">{step.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     {step.body}
