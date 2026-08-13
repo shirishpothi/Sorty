@@ -54,14 +54,10 @@ public struct ProviderSelectionStepView: View {
     @State private var hasCopiedCode = false
     @State private var availableModels: [String] = []
     @State private var isLoadingModels = false
-    @State private var isHoveringUsername = false
-    @State private var isHoveringCodexEmail = false
     @State private var isShowingAPIKey = false
     @State private var isShowingModelPopover = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexVerifyButtonState: CodexActionVisualState = .idle
-    @State private var isHoveringCodexTerminalButton = false
-    @State private var isHoveringCodexVerifyButton = false
     @State private var codexSignInAttempt = 0
     @State private var apiKeyDraft = ""
     @State private var apiURLDraft = ""
@@ -300,31 +296,7 @@ public struct ProviderSelectionStepView: View {
                         Text("Signed in as")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        ZStack {
-                            Text(copilotAuth.username ?? "User")
-                                .opacity(isHoveringUsername ? 0 : 1)
-                                .blur(radius: 10)
-
-                            Text(copilotAuth.username ?? "User")
-                                .opacity(isHoveringUsername ? 1 : 0)
-                        }
-                            .font(.headline)
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 6)
-                            .clipShape(Capsule())
-                            .padding(.vertical, -4)
-                            .padding(.horizontal, -6)
-                            .animation(
-                                isHoveringUsername
-                                    ? .easeOut(duration: 0.34)
-                                    : .easeInOut(duration: 0.24),
-                                value: isHoveringUsername
-                            )
-                            .onHover { hovering in
-                                guard hovering != isHoveringUsername else { return }
-                                isHoveringUsername = hovering
-                                HapticFeedbackManager.shared.light()
-                            }
+                        CopilotUsernameRevealText(value: copilotAuth.username ?? "User")
                     }
 
                     Spacer()
@@ -638,14 +610,7 @@ public struct ProviderSelectionStepView: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                         if let email = codexAuth.accountEmail {
-                            Text(email)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringCodexEmail) ? 4 : 0)
-                                .animation(.spring(), value: isHoveringCodexEmail)
-                                .onHover { hovering in
-                                    isHoveringCodexEmail = hovering
-                                }
+                            CodexEmailRevealText(value: email)
                         }
                     }
 
@@ -675,27 +640,16 @@ public struct ProviderSelectionStepView: View {
                     onboardingCommandBlock("codex login")
                 }
 
-                Button {
-                    startCodexTerminalSignIn()
-                } label: {
-                    CodexActionButtonLabel(
-                        idleTitle: "Open Terminal & Sign In",
-                        activatingTitle: "Opening Terminal...",
-                        successTitle: "Terminal Opened",
-                        failureTitle: "Could Not Open Terminal",
-                        idleSymbol: "terminal",
-                        state: codexTerminalButtonState,
-                        isHovered: isHoveringCodexTerminalButton
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CodexTerminalSignInButton")
-                .onHover { hovering in
-                    if hovering && !isHoveringCodexTerminalButton {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    isHoveringCodexTerminalButton = hovering
-                }
+                OnboardingCodexActionButton(
+                    idleTitle: "Open Terminal & Sign In",
+                    activatingTitle: "Opening Terminal...",
+                    successTitle: "Terminal Opened",
+                    failureTitle: "Could Not Open Terminal",
+                    idleSymbol: "terminal",
+                    state: codexTerminalButtonState,
+                    accessibilityIdentifier: "CodexTerminalSignInButton",
+                    action: startCodexTerminalSignIn
+                )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Step 2: Verify")
@@ -704,27 +658,16 @@ public struct ProviderSelectionStepView: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                Button {
-                    manuallyVerifyCodexCLI()
-                } label: {
-                    CodexActionButtonLabel(
-                        idleTitle: "Verify Codex CLI",
-                        activatingTitle: "Verifying...",
-                        successTitle: "Verified",
-                        failureTitle: "Verification Failed",
-                        idleSymbol: "checkmark.shield",
-                        state: codexVerifyButtonState,
-                        isHovered: isHoveringCodexVerifyButton
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CodexVerifyButton")
-                .onHover { hovering in
-                    if hovering && !isHoveringCodexVerifyButton {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    isHoveringCodexVerifyButton = hovering
-                }
+                OnboardingCodexActionButton(
+                    idleTitle: "Verify Codex CLI",
+                    activatingTitle: "Verifying...",
+                    successTitle: "Verified",
+                    failureTitle: "Verification Failed",
+                    idleSymbol: "checkmark.shield",
+                    state: codexVerifyButtonState,
+                    accessibilityIdentifier: "CodexVerifyButton",
+                    action: manuallyVerifyCodexCLI
+                )
 
                 HStack(spacing: 8) {
                     BouncingSpinner(size: 10, color: .secondary)
@@ -1241,6 +1184,94 @@ private struct ProviderTestConnectionButton: View {
             reduceMotion ? nil : .easeInOut(duration: 0.16),
             value: isHovering
         )
+    }
+}
+
+private struct CopilotUsernameRevealText: View {
+    let value: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack {
+            Text(value)
+                .opacity(isHovering ? 0 : 1)
+                .blur(radius: 10)
+
+            Text(value)
+                .opacity(isHovering ? 1 : 0)
+        }
+        .font(.headline)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .clipShape(Capsule())
+        .padding(.vertical, -4)
+        .padding(.horizontal, -6)
+        .animation(
+            reduceMotion
+                ? nil
+                : (isHovering ? .easeOut(duration: 0.34) : .easeInOut(duration: 0.24)),
+            value: isHovering
+        )
+        .onHover { hovering in
+            guard hovering != isHovering else { return }
+            isHovering = hovering
+            HapticFeedbackManager.shared.light()
+        }
+    }
+}
+
+private struct CodexEmailRevealText: View {
+    let value: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    var body: some View {
+        Text(value)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .blur(radius: FeatureFlags.privacyModeEnabled && !isHovering ? 4 : 0)
+            .animation(reduceMotion ? nil : .spring(), value: isHovering)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
+}
+
+private struct OnboardingCodexActionButton: View {
+    let idleTitle: String
+    let activatingTitle: String
+    let successTitle: String
+    let failureTitle: String
+    let idleSymbol: String
+    let state: CodexActionVisualState
+    let accessibilityIdentifier: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            CodexActionButtonLabel(
+                idleTitle: idleTitle,
+                activatingTitle: activatingTitle,
+                successTitle: successTitle,
+                failureTitle: failureTitle,
+                idleSymbol: idleSymbol,
+                state: state,
+                isHovered: isHovering
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .onHover { hovering in
+            if hovering && !isHovering {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovering = hovering
+        }
     }
 }
 

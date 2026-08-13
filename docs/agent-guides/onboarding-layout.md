@@ -146,6 +146,8 @@ settled, and only probe Apple model availability when that provider is active.
 Keep hover-only connection-button state in its button leaf; provider changes
 and connection-result transitions animate their right-pane/status subtrees,
 not the entire two-pane provider step.
+Account privacy reveals and Codex action-button hover state follow the same leaf
+ownership rule, so pointer movement never invalidates the provider root.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
 queue. Pause permission video playback and set the full-screen backdrop blur to
