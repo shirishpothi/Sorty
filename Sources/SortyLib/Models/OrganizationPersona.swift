@@ -152,6 +152,7 @@ public class PersonaManager: ObservableObject {
     }
     
     public func selectPersona(_ persona: PersonaType) {
+        guard selectedPersona != persona || selectedCustomPersonaId != nil else { return }
         selectedPersona = persona
         selectedCustomPersonaId = nil
         savePersona()
@@ -159,6 +160,7 @@ public class PersonaManager: ObservableObject {
     }
     
     public func selectCustomPersona(_ id: String) {
+        guard selectedCustomPersonaId != id else { return }
         selectedCustomPersonaId = id
         saveCustomPersonaId()
     }

@@ -75,11 +75,8 @@ public struct WorkflowSelectionStepView: View {
                             isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
                         ) {
                             HapticFeedbackManager.shared.selection()
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
-                                personaManager.selectPersona(persona)
-                                personaManager.selectedCustomPersonaId = nil
-                                runtimeController.appState?.personaGeneratorPresentationContext = nil
-                            }
+                            personaManager.selectPersona(persona)
+                            runtimeController.appState?.personaGeneratorPresentationContext = nil
                         }
                     }
                 }
@@ -186,10 +183,8 @@ public struct WorkflowSelectionStepView: View {
                         }
                     }
                 ) {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
-                        personaManager.selectCustomPersona(persona.id)
-                        runtimeController.appState?.personaGeneratorPresentationContext = nil
-                    }
+                    personaManager.selectCustomPersona(persona.id)
+                    runtimeController.appState?.personaGeneratorPresentationContext = nil
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -223,6 +218,7 @@ struct OnboardingPersonaCard: View {
     let action: () -> Void
     
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         Button(action: action) {
@@ -288,6 +284,10 @@ struct OnboardingPersonaCard: View {
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+            value: isSelected
+        )
     }
 
     private var cardFill: Color {
@@ -323,6 +323,7 @@ struct OnboardingCustomPersonaCard: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let selectionAccent = Color.teal
 
     var body: some View {
@@ -412,6 +413,10 @@ struct OnboardingCustomPersonaCard: View {
             isHovered = hovering
         }
         .animation(.easeOut(duration: 0.18), value: isHovered)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+            value: isSelected
+        )
     }
 
     private var fullBody: some View {
@@ -543,9 +548,7 @@ struct GeneratePersonaButton: View {
     
     var body: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                action()
-            }
+            action()
             HapticFeedbackManager.shared.selection()
         } label: {
             VStack(spacing: 8) {
@@ -604,9 +607,7 @@ struct CompactGeneratePersonaButton: View {
 
     var body: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                action()
-            }
+            action()
             HapticFeedbackManager.shared.selection()
         } label: {
             HStack(spacing: 12) {
