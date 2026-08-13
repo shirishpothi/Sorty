@@ -86,6 +86,12 @@ stale model lists. The onboarding-specific Copilot catalog request is likewise
 single-flight and is cancelled when the provider pane disappears or selection
 moves away from Copilot.
 
+GitHub Copilot authentication follows the same distinct-state rule: cancelled
+status checks stop before publishing, profile refresh stays inside the single
+coalesced check, and terminal device-flow errors end polling. Never keep
+publishing the same error or auth fields into the provider step after polling
+has already failed.
+
 Keep scheduling and event bookkeeping out of SwiftUI state. Trackpad swipe
 deltas, cancellable task handles, service references used only by actions, and
 queued demo work items live in stable non-observable controllers; mutating them

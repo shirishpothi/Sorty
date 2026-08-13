@@ -133,10 +133,14 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
 
     private func persistAuthState(authenticated: Bool, username: String? = nil) {
-        defaults.set(authenticated, forKey: persistedAuthStateKey)
+        if defaults.bool(forKey: persistedAuthStateKey) != authenticated {
+            defaults.set(authenticated, forKey: persistedAuthStateKey)
+        }
         if let username {
-            defaults.set(username, forKey: persistedUsernameKey)
-        } else {
+            if defaults.string(forKey: persistedUsernameKey) != username {
+                defaults.set(username, forKey: persistedUsernameKey)
+            }
+        } else if defaults.object(forKey: persistedUsernameKey) != nil {
             defaults.removeObject(forKey: persistedUsernameKey)
         }
     }
@@ -152,15 +156,18 @@ public class GitHubCopilotAuthManager: ObservableObject {
         let hadPersistedSignedInState = defaults.bool(forKey: persistedAuthStateKey)
 
         let accessToken = await KeychainManager.getAsync(key: "github_access_token")
+        guard !Task.isCancelled else { return }
         let hasAccessToken = !(accessToken?.isEmpty ?? true)
         var hasValidCachedCopilotToken = Self.hasValidCachedCopilotToken(
             cachedToken: await KeychainManager.getAsync(key: "github_copilot_token"),
             expiry: UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date
         )
+        guard !Task.isCancelled else { return }
 
         // A Copilot token without an underlying GitHub access token is not recoverable.
         if !hasAccessToken && hasValidCachedCopilotToken {
             await invalidateCachedCopilotTokenNow()
+            guard !Task.isCancelled else { return }
             hasValidCachedCopilotToken = false
         }
 
@@ -169,27 +176,33 @@ public class GitHubCopilotAuthManager: ObservableObject {
             hasValidCachedCopilotToken: hasValidCachedCopilotToken
         )
 
-        self.isAuthenticated = hasRecoverableAuthState
+        if isAuthenticated != hasRecoverableAuthState {
+            isAuthenticated = hasRecoverableAuthState
+        }
 
-        if self.isAuthenticated {
-            self.username = self.username ?? defaults.string(forKey: persistedUsernameKey)
-            persistAuthState(authenticated: true, username: self.username)
-            self.authError = nil
+        if isAuthenticated {
+            let restoredUsername = username ?? defaults.string(forKey: persistedUsernameKey)
+            if username != restoredUsername {
+                username = restoredUsername
+            }
+            persistAuthState(authenticated: true, username: username)
+            if authError != nil {
+                authError = nil
+            }
         } else if hadPersistedSignedInState {
             // Persisted UI state without any recoverable token path is stale.
             persistAuthState(authenticated: false)
-            self.isAuthenticated = false
-            self.username = nil
-        } else {
-            self.isAuthenticated = false
-            self.username = nil
+            if username != nil {
+                username = nil
+            }
+        } else if username != nil {
+            username = nil
         }
 
-        if hasAccessToken {
-            // Optionally fetch user profile to confirm validity and get username
-            Task {
-                await fetchUserProfile()
-            }
+        if hasAccessToken, !Task.isCancelled {
+            // Keep profile refresh inside the coalesced authentication task so
+            // repeated onboarding appearances cannot fan out duplicate fetches.
+            await fetchUserProfile()
         }
     }
 
@@ -205,7 +218,9 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     func startDeviceFlow() async throws {
-        self.authError = nil
+        if authError != nil {
+            authError = nil
+        }
         let url = URL(string: "https://github.com/login/device/code")!
         try ensureNetworkAllowed(url)
         var request = URLRequest(url: url)
@@ -242,24 +257,41 @@ public class GitHubCopilotAuthManager: ObservableObject {
     
     private func startPolling(interval: Double, deviceCode: String) {
         pollTask?.cancel()
-        isPolling = true
+        if !isPolling {
+            isPolling = true
+        }
         
         pollTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                } catch {
+                    return
+                }
                 
                 do {
                     let token = try await requestAccessToken(deviceCode: deviceCode)
                     // Success!
                     guard await KeychainManager.saveAsync(key: "github_access_token", value: token) else {
-                        self.authError = "Authentication succeeded but token could not be saved. Please check Keychain access and try again."
-                        self.isPolling = false
+                        let message = "Authentication succeeded but token could not be saved. Please check Keychain access and try again."
+                        if self.authError != message {
+                            self.authError = message
+                        }
+                        if self.isPolling {
+                            self.isPolling = false
+                        }
                         return
                     }
-                    self.isAuthenticated = true
+                    if !self.isAuthenticated {
+                        self.isAuthenticated = true
+                    }
                     self.persistAuthState(authenticated: true, username: self.username)
-                    self.isPolling = false
-                    self.deviceCodeResponse = nil
+                    if self.isPolling {
+                        self.isPolling = false
+                    }
+                    if self.deviceCodeResponse != nil {
+                        self.deviceCodeResponse = nil
+                    }
                     await fetchUserProfile()
                     return
                 } catch GitHubAuthError.authorizationPending {
@@ -271,11 +303,14 @@ public class GitHubCopilotAuthManager: ObservableObject {
                     continue
                 } catch {
                     LogManager.shared.log("Error polling for token: \(error)", level: .error, category: "AuthManager")
-                    await MainActor.run {
-                        self.authError = "Authentication failed: \(error.localizedDescription)"
-                        self.isPolling = false
-                        return
+                    let message = "Authentication failed: \(error.localizedDescription)"
+                    if self.authError != message {
+                        self.authError = message
                     }
+                    if self.isPolling {
+                        self.isPolling = false
+                    }
+                    return
                 }
             }
         }
@@ -349,7 +384,9 @@ public class GitHubCopilotAuthManager: ObservableObject {
             
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let login = json["login"] as? String {
-                self.username = login
+                if username != login {
+                    username = login
+                }
                 persistAuthState(authenticated: true, username: login)
             } else if isAuthenticated {
                 persistAuthState(authenticated: true, username: username)
@@ -364,12 +401,20 @@ public class GitHubCopilotAuthManager: ObservableObject {
             _ = await KeychainManager.deleteAsync(key: "github_access_token")
         }
         invalidateCachedCopilotToken()
-        self.isAuthenticated = false
-        self.username = nil
+        if isAuthenticated {
+            isAuthenticated = false
+        }
+        if username != nil {
+            username = nil
+        }
         persistAuthState(authenticated: false)
         self.pollTask?.cancel()
-        self.isPolling = false
-        self.deviceCodeResponse = nil
+        if isPolling {
+            isPolling = false
+        }
+        if deviceCodeResponse != nil {
+            deviceCodeResponse = nil
+        }
     }
 
     func invalidateCachedCopilotToken() {
@@ -402,8 +447,12 @@ public class GitHubCopilotAuthManager: ObservableObject {
         let hasAccessToken = !(accessToken?.isEmpty ?? true)
         guard hasAccessToken else {
             await invalidateCachedCopilotTokenNow()
-            isAuthenticated = false
-            username = nil
+            if isAuthenticated {
+                isAuthenticated = false
+            }
+            if username != nil {
+                username = nil
+            }
             persistAuthState(authenticated: false)
             throw GitHubAuthError.notAuthenticated
         }
