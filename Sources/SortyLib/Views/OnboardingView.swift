@@ -7,6 +7,8 @@
 //
 
 import AppKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -517,7 +519,7 @@ private struct OnboardingProviderStatusResolver: View {
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     let onStatus: (ProviderSetupStatus) -> Void
 
-    private struct Inputs: Equatable {
+    private struct Inputs: Equatable, Sendable {
         let config: AIConfig
         let isGitHubCopilotAuthenticated: Bool
         let isCodexAuthenticated: Bool
@@ -541,7 +543,7 @@ private struct OnboardingProviderStatusResolver: View {
         let inputs = inputs
         Color.clear
             .task(id: inputs) {
-                onStatus(
+                let status = await Task.detached(priority: .userInitiated) {
                     OnboardingSetupValidator.providerStatus(
                         context: ProviderSetupContext(
                             config: inputs.config,
@@ -552,7 +554,9 @@ private struct OnboardingProviderStatusResolver: View {
                             appleFoundationModelStatus: inputs.appleFoundationModelStatus
                         )
                     )
-                )
+                }.value
+                guard !Task.isCancelled else { return }
+                onStatus(status)
             }
             .accessibilityHidden(true)
     }
@@ -634,8 +638,7 @@ private struct OnboardingIntroView: View {
     @Environment(\.controlActiveState) private var controlActiveState
     @State private var iconScale: CGFloat = 0.86
     @State private var iconOpacity: Double = 0
-    @State private var glowOpacity: Double = 0
-    @State private var glowRadius: CGFloat = 28
+    @State private var glowVisible = false
     @State private var chromeRevealed = false
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
@@ -680,11 +683,13 @@ private struct OnboardingIntroView: View {
             VStack(spacing: 26) {
                 VStack(spacing: 20) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 44, style: .continuous)
-                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.30))
-                            .frame(width: 220, height: 220)
-                            .blur(radius: glowRadius)
-                            .opacity(glowOpacity)
+                        RetainedIntroGlow(
+                            isVisible: glowVisible,
+                            reduceMotion: reduceMotion,
+                            isActive: controlActiveState != .inactive
+                        )
+                        .frame(width: 220, height: 220)
+                        .accessibilityHidden(true)
 
                         SortyEnergyScanIcon(
                             image: NSApp.applicationIconImage,
@@ -779,8 +784,7 @@ private struct OnboardingIntroView: View {
         if reduceMotion {
             iconScale = 1
             iconOpacity = 1
-            glowOpacity = 1
-            glowRadius = 38
+            glowVisible = true
             chromeRevealed = true
             textOpacity = 1
             textOffset = 0
@@ -820,12 +824,7 @@ private struct OnboardingIntroView: View {
         withAnimation(.spring(response: 0.9, dampingFraction: 0.88)) {
             iconScale = 1
         }
-        withAnimation(.easeOut(duration: 1.2).delay(0.2)) {
-            glowOpacity = 1
-        }
-        withAnimation(.easeInOut(duration: 1.5).delay(0.4)) {
-            glowRadius = 38
-        }
+        glowVisible = true
 
         Task { @MainActor in
             // Phase 2 — backdrop, title, and button.
@@ -847,6 +846,160 @@ private struct OnboardingIntroView: View {
         }
     }
 
+}
+
+private struct RetainedIntroGlow: NSViewRepresentable {
+    let isVisible: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
+
+    func makeNSView(context: Context) -> RetainedIntroGlowView {
+        RetainedIntroGlowView()
+    }
+
+    func updateNSView(_ nsView: RetainedIntroGlowView, context: Context) {
+        nsView.update(
+            isVisible: isVisible,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
+    }
+}
+
+/// Preserves the intro's 28-to-38 point Gaussian bloom on one retained layer.
+/// SwiftUI no longer rerenders the blurred 220-point shape during the reveal.
+@MainActor
+private final class RetainedIntroGlowView: NSView {
+    private let glowLayer = CALayer()
+    private let glowShapeLayer = CALayer()
+    private let blurFilter = CIFilter.gaussianBlur()
+    private var hasStartedReveal = false
+    private var isPaused = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+
+        blurFilter.name = "introGlowBlur"
+        blurFilter.radius = 28
+        glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
+            .withAlphaComponent(0.30)
+            .cgColor
+        glowShapeLayer.cornerRadius = 44
+        glowLayer.opacity = 0
+        glowLayer.filters = [blurFilter]
+        glowLayer.addSublayer(glowShapeLayer)
+        layer?.addSublayer(glowLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let blurOutset: CGFloat = 60
+        glowLayer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
+        glowShapeLayer.frame = CGRect(
+            x: blurOutset,
+            y: blurOutset,
+            width: bounds.width,
+            height: bounds.height
+        )
+        CATransaction.commit()
+    }
+
+    func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
+        glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
+            .withAlphaComponent(0.30)
+            .cgColor
+
+        if reduceMotion {
+            finishImmediately(isVisible: isVisible)
+        } else if isVisible, !hasStartedReveal {
+            startReveal()
+        } else if !isVisible {
+            resetReveal()
+        }
+
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func startReveal() {
+        hasStartedReveal = true
+        let now = glowLayer.convertTime(CACurrentMediaTime(), from: nil)
+
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0
+        opacity.toValue = 1
+        opacity.beginTime = now + 0.2
+        opacity.duration = 1.2
+        opacity.fillMode = .backwards
+        opacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        glowLayer.add(opacity, forKey: "introGlowOpacity")
+
+        let blur = CABasicAnimation(keyPath: "filters.introGlowBlur.inputRadius")
+        blur.fromValue = 28
+        blur.toValue = 38
+        blur.beginTime = now + 0.4
+        blur.duration = 1.5
+        blur.fillMode = .backwards
+        blur.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        glowLayer.add(blur, forKey: "introGlowRadius")
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        glowLayer.opacity = 1
+        blurFilter.radius = 38
+        CATransaction.commit()
+    }
+
+    private func finishImmediately(isVisible: Bool) {
+        hasStartedReveal = isVisible
+        glowLayer.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        glowLayer.opacity = isVisible ? 1 : 0
+        blurFilter.radius = 38
+        CATransaction.commit()
+    }
+
+    private func resetReveal() {
+        hasStartedReveal = false
+        glowLayer.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        glowLayer.opacity = 0
+        blurFilter.radius = 28
+        CATransaction.commit()
+    }
+
+    private func pauseIfNeeded() {
+        guard !isPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
 }
 
 struct SortyEnergyScanIcon: View {

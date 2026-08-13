@@ -5,10 +5,13 @@
 //  Animated demo simulation for the onboarding demo step
 //
 
+import AppKit
+import QuartzCore
 import SwiftUI
 
 struct SimulatedDemoAnimationView: View {
     let onComplete: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var phase: DemoPhase = .messy
     @State private var scannedFileIndex = -1
@@ -193,8 +196,10 @@ struct SimulatedDemoAnimationView: View {
                     .offset(y: fileBobbing && fileBobOffsets.indices.contains(index) ? fileBobOffsets[index] : 0)
                     .rotationEffect(.degrees(fileRotations.indices.contains(index) ? fileRotations[index] : 0))
                     .animation(
-                        .easeInOut(duration: fileBobDurations.indices.contains(index) ? fileBobDurations[index] : 2)
-                            .repeatForever(autoreverses: true),
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: fileBobDurations.indices.contains(index) ? fileBobDurations[index] : 2)
+                                .repeatForever(autoreverses: true),
                         value: fileBobbing
                     )
             }
@@ -307,9 +312,15 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private var organizingView: some View {
-        HStack(spacing: 60) {
+        let unorganizedFiles = files.filter { !$0.isOrganized }
+        let organizedCounts = Dictionary(
+            grouping: files.lazy.filter(\.isOrganized),
+            by: \.targetFolder
+        ).mapValues(\.count)
+
+        return HStack(spacing: 60) {
             VStack(spacing: 8) {
-                ForEach(files.filter { !$0.isOrganized }) { file in
+                ForEach(unorganizedFiles) { file in
                     fileIcon(for: file)
                         .background(
                             fileIcon(for: file)
@@ -331,7 +342,11 @@ struct SimulatedDemoAnimationView: View {
                     Image(systemName: "arrow.right")
                         .font(.title)
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                        .symbolEffect(.pulse.byLayer, options: .repeating)
+                        .symbolEffect(
+                            .pulse.byLayer,
+                            options: .repeating,
+                            isActive: !reduceMotion
+                        )
                     
                     // Sliver animation overlay
                     OrganizingSliverEffect()
@@ -352,7 +367,10 @@ struct SimulatedDemoAnimationView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(folders) { folder in
                     if folder.isVisible {
-                        folderRow(for: folder)
+                        folderRow(
+                            for: folder,
+                            organizedCount: organizedCounts[folder.name, default: 0]
+                        )
                             .overlay(
                                 FolderSliverEffect(isVisible: folder.isVisible)
                             )
@@ -466,7 +484,10 @@ struct SimulatedDemoAnimationView: View {
         )
     }
     
-    private func folderRow(for folder: DemoFolderNode) -> some View {
+    private func folderRow(
+        for folder: DemoFolderNode,
+        organizedCount: Int
+    ) -> some View {
         HStack(spacing: 8) {
             Image(systemName: folder.icon)
                 .foregroundStyle(folder.color)
@@ -478,12 +499,11 @@ struct SimulatedDemoAnimationView: View {
             
             Spacer()
             
-            let count = files.filter { $0.targetFolder == folder.name && $0.isOrganized }.count
-            if count > 0 {
-                Text("\(count)")
+            if organizedCount > 0 {
+                Text("\(organizedCount)")
                     .font(.caption.bold())
                     .foregroundStyle(.white)
-                    .numericTextTransition(animationValue: count)
+                    .numericTextTransition(animationValue: organizedCount)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(folder.color))
@@ -832,42 +852,6 @@ private struct DemoScanningLine: View {
     }
 }
 
-// MARK: - Demo Floating Particle
-
-private struct DemoFloatingParticle: View {
-    let index: Int
-    @State private var offset: CGSize = .zero
-    @State private var opacity: Double = 0
-
-    private var particleSize: CGFloat {
-        CGFloat(seededDemoValue(index: index, salt: 7, range: 2...5))
-    }
-
-    var body: some View {
-        Circle()
-            .fill(Color.white.opacity(opacity))
-            .frame(width: particleSize, height: particleSize)
-            .offset(offset)
-            .onAppear {
-                let randomX = CGFloat.random(in: -300...300)
-                let randomY = CGFloat.random(in: -300...300)
-                offset = CGSize(width: randomX, height: randomY)
-
-                withAnimation(
-                    .easeInOut(duration: Double.random(in: 3...6))
-                    .repeatForever(autoreverses: true)
-                    .delay(Double(index) * 0.2)
-                ) {
-                    offset = CGSize(
-                        width: randomX + CGFloat.random(in: -120...120),
-                        height: randomY + CGFloat.random(in: -120...120)
-                    )
-                    opacity = Double.random(in: 0.1...0.3)
-                }
-            }
-    }
-}
-
 // MARK: - Demo Models
 
 struct DemoFileNode: Identifiable {
@@ -954,6 +938,7 @@ struct DemoPersonaCard: View {
     let icon: String
     let color: Color
     @Binding var isApplying: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         HStack(spacing: 12) {
@@ -965,7 +950,11 @@ struct DemoPersonaCard: View {
                 Image(systemName: icon)
                     .font(.system(size: 20))
                     .foregroundStyle(color)
-                    .symbolEffect(.pulse.byLayer, options: .repeating, value: isApplying)
+                    .symbolEffect(
+                        .pulse.byLayer,
+                        options: .repeating,
+                        isActive: isApplying && !reduceMotion
+                    )
             }
             
             VStack(alignment: .leading, spacing: 2) {
@@ -1032,14 +1021,18 @@ struct PrivacyBadge: View {
 // MARK: - Undo Safety Badge
 struct UndoSafetyBadge: View {
     let isVisible: Bool
-    @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.uturn.backward.circle.fill")
                     .font(.system(size: 24))
-                    .symbolEffect(.pulse.byLayer, options: .repeating, value: isPulsing)
+                    .symbolEffect(
+                        .pulse.byLayer,
+                        options: .repeating,
+                        isActive: isVisible && !reduceMotion
+                    )
                 
                 Text("Undo Available")
                     .font(.headline.bold())
@@ -1059,14 +1052,6 @@ struct UndoSafetyBadge: View {
         )
         .opacity(isVisible ? 1 : 0)
         .scaleEffect(isVisible ? 1 : 0.8)
-        .onAppear {
-            if isVisible {
-                isPulsing = true
-            }
-        }
-        .onChange(of: isVisible) { _, newValue in
-            isPulsing = newValue
-        }
     }
 }
 
@@ -1156,35 +1141,96 @@ private func seededDemoValue(index: Int, salt: Int, range: ClosedRange<Double>) 
 
 // MARK: - Organizing Sliver Effect
 struct OrganizingSliverEffect: View {
-    @State private var sliverPhase: CGFloat = 0
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
     var body: some View {
-        GeometryReader { geometry in
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            .clear,
-                            .white.opacity(0.4),
-                            .purple.opacity(0.3),
-                            .white.opacity(0.4),
-                            .clear
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 20)
-                .offset(x: -30 + sliverPhase * (geometry.size.width + 60))
-                .blur(radius: 2)
-        }
+        RetainedOrganizingSliver(
+            shouldAnimate: !reduceMotion && controlActiveState != .inactive
+        )
         .frame(width: 50, height: 30)
         .clipped()
-        .onAppear {
-            withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                sliverPhase = 1
-            }
-        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OrganizingSliverGraphic: View {
+    var body: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        .white.opacity(0.4),
+                        .purple.opacity(0.3),
+                        .white.opacity(0.4),
+                        .clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: 20, height: 30)
+            .blur(radius: 2)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct RetainedOrganizingSliver: NSViewRepresentable {
+    let shouldAnimate: Bool
+
+    func makeNSView(context: Context) -> RetainedOrganizingSliverView {
+        RetainedOrganizingSliverView()
+    }
+
+    func updateNSView(_ nsView: RetainedOrganizingSliverView, context: Context) {
+        nsView.setAnimating(shouldAnimate)
+    }
+}
+
+@MainActor
+private final class RetainedOrganizingSliverView: NSView {
+    private let host = NSHostingView(rootView: OrganizingSliverGraphic())
+    private var isAnimating = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        setAccessibilityElement(false)
+        host.wantsLayer = true
+        addSubview(host)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        host.frame = CGRect(x: 0, y: 0, width: 20, height: bounds.height)
+    }
+
+    func setAnimating(_ shouldAnimate: Bool) {
+        guard isAnimating != shouldAnimate else { return }
+        isAnimating = shouldAnimate
+        host.layer?.removeAnimation(forKey: "organizingSliverTravel")
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        host.layer?.opacity = shouldAnimate ? 1 : 0
+        host.layer?.setAffineTransform(.identity)
+        CATransaction.commit()
+
+        guard shouldAnimate else { return }
+        let travel = CABasicAnimation(keyPath: "transform.translation.x")
+        travel.fromValue = -30
+        travel.toValue = 80
+        travel.duration = 1.2
+        travel.repeatCount = .infinity
+        travel.timingFunction = CAMediaTimingFunction(name: .linear)
+        host.layer?.add(travel, forKey: "organizingSliverTravel")
     }
 }
 

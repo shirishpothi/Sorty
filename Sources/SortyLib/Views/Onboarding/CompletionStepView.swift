@@ -166,6 +166,8 @@ private struct CompletionCelebrationBackdrop: View {
     let revealOpacity: Double
     let showParticles: Bool
     let exitTriggered: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         ZStack {
@@ -175,28 +177,150 @@ private struct CompletionCelebrationBackdrop: View {
                     .transition(.opacity)
             }
 
-            if showParticles {
-                ZStack {
-                    ForEach(0..<7, id: \.self) { index in
-                        FloatingParticle(
-                            delay: Double(index) * 0.4,
-                            size: completionParticleSize(for: index),
-                            xPosition: completionParticlePosition(for: index)
-                        )
-                    }
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            RetainedCompletionParticles(
+                isVisible: showParticles && !exitTriggered,
+                reduceMotion: reduceMotion,
+                isActive: controlActiveState != .inactive
+            )
+            .frame(width: 520, height: 420)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
-    private func completionParticleSize(for index: Int) -> CGFloat {
-        3 + CGFloat((index * 17 + 5) % 30) / 10
+}
+
+private struct RetainedCompletionParticles: NSViewRepresentable {
+    let isVisible: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
+
+    func makeNSView(context: Context) -> RetainedCompletionParticlesView {
+        RetainedCompletionParticlesView()
     }
 
-    private func completionParticlePosition(for index: Int) -> CGFloat {
-        -200 + CGFloat((index * 137 + 43) % 400)
+    func updateNSView(_ nsView: RetainedCompletionParticlesView, context: Context) {
+        nsView.update(
+            isVisible: isVisible,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
+    }
+}
+
+@MainActor
+private final class RetainedCompletionParticlesView: NSView {
+    private let particleLayers = (0..<7).map { _ in CAShapeLayer() }
+    private var isAnimating = false
+    private var isPaused = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+        particleLayers.forEach {
+            $0.fillColor = NSColor.white.withAlphaComponent(0.30).cgColor
+            $0.opacity = 0
+            layer?.addSublayer($0)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        for (index, particleLayer) in particleLayers.enumerated() {
+            let size = 3 + CGFloat((index * 17 + 5) % 30) / 10
+            particleLayer.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            particleLayer.path = CGPath(ellipseIn: particleLayer.bounds, transform: nil)
+            particleLayer.position = CGPoint(
+                x: bounds.midX - 200 + CGFloat((index * 137 + 43) % 400),
+                y: bounds.midY - 80
+            )
+        }
+    }
+
+    func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
+        if reduceMotion || !isVisible {
+            stopAnimating()
+        } else if !isAnimating {
+            startAnimating()
+        }
+
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func startAnimating() {
+        isAnimating = true
+        for (index, particleLayer) in particleLayers.enumerated() {
+            let now = particleLayer.convertTime(CACurrentMediaTime(), from: nil)
+            let duration = 3 + seededParticleValue(index: index, range: 0...3)
+            let travel = CABasicAnimation(keyPath: "transform.translation.y")
+            travel.fromValue = 0
+            travel.toValue = 300
+            travel.beginTime = now + Double(index) * 0.4
+            travel.duration = duration
+            travel.repeatCount = .infinity
+            travel.fillMode = .backwards
+            travel.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            particleLayer.add(travel, forKey: "completionParticleTravel")
+
+            let opacity = CABasicAnimation(keyPath: "opacity")
+            opacity.fromValue = 0
+            opacity.toValue = 0.6
+            opacity.beginTime = now + Double(index) * 0.4
+            opacity.duration = 1
+            opacity.fillMode = .backwards
+            opacity.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            particleLayer.add(opacity, forKey: "completionParticleOpacity")
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            particleLayer.opacity = 0.6
+            CATransaction.commit()
+        }
+    }
+
+    private func stopAnimating() {
+        isAnimating = false
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        particleLayers.forEach {
+            $0.removeAnimation(forKey: "completionParticleTravel")
+            $0.removeAnimation(forKey: "completionParticleOpacity")
+            $0.opacity = 0
+        }
+        CATransaction.commit()
+    }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
+
+    private func seededParticleValue(index: Int, range: ClosedRange<Double>) -> Double {
+        let value = Double((index * 53 + 17) % 101) / 100
+        return range.lowerBound + (range.upperBound - range.lowerBound) * value
     }
 }
 

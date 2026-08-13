@@ -25,9 +25,12 @@ Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow
 uses retained Core Animation gradient layers and pauses while Sorty is inactive;
 do not replace it with a full-screen composited blur that redraws every frame.
 The intro orbit keeps its native material-backed chips mounted and updates only
-their layers from a display link. Its energy scan and the completion blob/ripple
-motion likewise use retained layers; do not move those continuous effects back
-into broad SwiftUI state or frame timelines. The full-window color climb is a
+their layers from a display link. Its Gaussian glow and energy scan, plus the
+completion blob, ripple, and particle motion, likewise use retained layers; do
+not move those continuous effects back into broad SwiftUI state or frame
+timelines. The optional demo's continuous organizing sliver follows the same
+rule, and its per-file/folder collections are derived once per mutation rather
+than repeatedly filtered in row builders. The full-window color climb is a
 single asynchronous Canvas render pass; keep its gradient stops and blend mode
 together rather than rebuilding multiple full-screen gradient subtrees during
 every step transition.
@@ -49,7 +52,9 @@ observing their other state. Provider input is drafted locally and committed
 after typing settles so Keychain writes, model refreshes, and connection tests
 do not compete with each keystroke. The provider grid is an Equatable leaf keyed
 only by the selected provider, so draft/status changes do not rebuild its glass
-cards and cached logos. Pause other motion when it is not visible,
+cards and cached logos. Provider readiness is resolved from an Equatable input
+snapshot off the main actor; never query Keychain from a view body or navigation
+render pass. Pause other motion when it is not visible,
 prewarm file icons over the intro reveal, and keep particle geometry
 deterministic across `body` updates so invalidation does not generate new
 animation targets.
@@ -57,3 +62,6 @@ animation targets.
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
+Likewise, a permission video representable must treat an unchanged URL/player
+pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
+queue.

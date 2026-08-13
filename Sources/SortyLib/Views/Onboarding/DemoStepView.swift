@@ -157,7 +157,7 @@ private struct DemoCompletionHighlights: View {
 
 public struct DemoStepView: View {
     let onComplete: () -> Void
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var organizer: FolderOrganizer?
     @State private var settingsViewModel: SettingsViewModel?
     @State private var organizerState: OrganizationState = .idle
@@ -166,7 +166,6 @@ public struct DemoStepView: View {
     @State private var selectedDirectory: URL?
     @State private var demoState: DemoState = .intro
     @State private var showPreviewTree = false
-    @State private var showSimulatedDemo = true
     @State private var isDropTargeted = false
     
     enum DemoState {
@@ -200,7 +199,11 @@ public struct DemoStepView: View {
                             .font(.system(size: 48))
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                             .symbolReplaceTransition(animationValue: demoState)
-                            .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
+                            .symbolEffect(
+                                .pulse.byLayer,
+                                options: .repeating,
+                                isActive: demoState == .simulatedDemo && !reduceMotion
+                            )
 
                         Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -312,7 +315,11 @@ public struct DemoStepView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .symbolEffect(.pulse.byLayer, options: .repeating)
+                    .symbolEffect(
+                        .pulse.byLayer,
+                        options: .repeating,
+                        isActive: !reduceMotion
+                    )
             }
             
             VStack(spacing: 12) {

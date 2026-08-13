@@ -970,8 +970,9 @@ private struct LoopingPermissionVideoView: NSViewRepresentable {
 
         func configure(url: URL, playerLayer: AVPlayerLayer) {
             if currentURL == url, let player {
-                playerLayer.player = player
-                player.play()
+                if playerLayer.player !== player {
+                    playerLayer.player = player
+                }
                 return
             }
 

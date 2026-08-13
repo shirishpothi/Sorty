@@ -7,6 +7,29 @@
 
 import SwiftUI
 
+private struct ProviderReadinessInputs: Equatable, Sendable {
+    let config: AIConfig
+    let isGitHubCopilotAuthenticated: Bool
+    let isCodexAuthenticated: Bool
+    let isCodexInstalled: Bool
+    let isAppleFoundationModelAvailable: Bool
+    let appleFoundationModelStatus: String?
+}
+
+private struct ProviderReadinessSnapshot: Equatable, Sendable {
+    let setupStatus: ProviderSetupStatus
+    let canTestConnection: Bool
+
+    static let initial = ProviderReadinessSnapshot(
+        setupStatus: ProviderSetupStatus(
+            isReady: false,
+            title: "Setup required",
+            message: "Choose and configure an AI provider before continuing."
+        ),
+        canTestConnection: false
+    )
+}
+
 public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
@@ -35,6 +58,7 @@ public struct ProviderSelectionStepView: View {
     @State private var apiURLDraft = ""
     @State private var apiKeyCommitTask: Task<Void, Never>?
     @State private var apiURLCommitTask: Task<Void, Never>?
+    @State private var readinessSnapshot = ProviderReadinessSnapshot.initial
 
     enum ConnectionTestStatus {
         case idle
@@ -46,8 +70,8 @@ public struct ProviderSelectionStepView: View {
     public init() {}
 
     public var body: some View {
-        let setupStatus = providerSetupStatus
-        let canTest = canTestConnection
+        let setupStatus = readinessSnapshot.setupStatus
+        let canTest = readinessSnapshot.canTestConnection
 
         HStack(spacing: 34) {
             VStack(alignment: .leading, spacing: 22) {
@@ -210,6 +234,14 @@ public struct ProviderSelectionStepView: View {
             apiKeyCommitTask?.cancel()
             apiURLCommitTask?.cancel()
             testDebounceTask?.cancel()
+        }
+        .task(id: readinessInputs) {
+            let inputs = readinessInputs
+            let snapshot = await Task.detached(priority: .userInitiated) {
+                Self.resolveReadiness(from: inputs)
+            }.value
+            guard !Task.isCancelled, readinessSnapshot != snapshot else { return }
+            readinessSnapshot = snapshot
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
@@ -798,35 +830,46 @@ public struct ProviderSelectionStepView: View {
         }
     }
 
-    @ViewBuilder
-    private var providerReadinessView: some View {
-        ProviderReadinessStatusView(status: providerSetupStatus)
+    private var readinessInputs: ProviderReadinessInputs {
+        ProviderReadinessInputs(
+            config: settingsViewModel.config,
+            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+            isCodexAuthenticated: codexAuth.isAuthenticated,
+            isCodexInstalled: codexAuth.isCodexInstalled,
+            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+            appleFoundationModelStatus: settingsViewModel.appleModelStatus
+        )
     }
 
-    private var canTestConnection: Bool {
-        let provider = settingsViewModel.config.provider
-        if provider == .appleFoundationModel {
-            return provider.isAvailable
-        }
-        if provider == .githubCopilot {
-            return copilotAuth.isAuthenticated
-        }
-        if provider == .ollama {
-            return true // Ollama doesn't require API key
-        }
-        return ProviderAuthResolver.hasRequiredCredential(for: provider, config: settingsViewModel.config)
-    }
-
-    private var providerSetupStatus: ProviderSetupStatus {
-        OnboardingSetupValidator.providerStatus(
+    nonisolated private static func resolveReadiness(
+        from inputs: ProviderReadinessInputs
+    ) -> ProviderReadinessSnapshot {
+        let setupStatus = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
-                config: settingsViewModel.config,
-                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
-                isCodexAuthenticated: codexAuth.isAuthenticated,
-                isCodexInstalled: codexAuth.isCodexInstalled,
-                isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
-                appleFoundationModelStatus: settingsViewModel.appleModelStatus
+                config: inputs.config,
+                isGitHubCopilotAuthenticated: inputs.isGitHubCopilotAuthenticated,
+                isCodexAuthenticated: inputs.isCodexAuthenticated,
+                isCodexInstalled: inputs.isCodexInstalled,
+                isAppleFoundationModelAvailable: inputs.isAppleFoundationModelAvailable,
+                appleFoundationModelStatus: inputs.appleFoundationModelStatus
             )
+        )
+        let provider = inputs.config.provider
+        let canTestConnection: Bool
+        switch provider {
+        case .appleFoundationModel, .ollama:
+            canTestConnection = true
+        case .githubCopilot:
+            canTestConnection = inputs.isGitHubCopilotAuthenticated
+        default:
+            canTestConnection = ProviderAuthResolver.hasRequiredCredential(
+                for: provider,
+                config: inputs.config
+            )
+        }
+        return ProviderReadinessSnapshot(
+            setupStatus: setupStatus,
+            canTestConnection: canTestConnection
         )
     }
 
@@ -938,7 +981,7 @@ public struct ProviderSelectionStepView: View {
 
         testDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            if !Task.isCancelled && canTestConnection {
+            if !Task.isCancelled && readinessSnapshot.canTestConnection {
                 await MainActor.run {
                     testConnection()
                 }
