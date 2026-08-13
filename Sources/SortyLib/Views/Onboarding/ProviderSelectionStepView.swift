@@ -32,7 +32,6 @@ private struct ProviderReadinessSnapshot: Equatable, Sendable {
 
 public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var hasAppeared = false
@@ -204,7 +203,7 @@ public struct ProviderSelectionStepView: View {
                 copilotAuth.checkAuthenticationStatus()
             }
             if settingsViewModel.config.provider == .openAI {
-                openAIAuth.checkAuthenticationStatus()
+                codexAuth.checkStatus()
             }
             settingsViewModel.refreshAppleModelStatus()
         }
@@ -218,7 +217,7 @@ public struct ProviderSelectionStepView: View {
                 copilotAuth.checkAuthenticationStatus()
             }
             if newProvider == .openAI {
-                openAIAuth.checkAuthenticationStatus()
+                codexAuth.checkStatus()
             }
             settingsViewModel.refreshAppleModelStatus()
         }
@@ -621,7 +620,6 @@ public struct ProviderSelectionStepView: View {
 
                     Button("Sign Out") {
                         codexAuth.signOut()
-                        openAIAuth.synchronizeWithCodexStatus()
                         scheduleConnectionTest()
                     }
                     .buttonStyle(.sortyBordered)
@@ -905,9 +903,7 @@ public struct ProviderSelectionStepView: View {
         settingsViewModel.updateAvailableModels(force: true)
         scheduleConnectionTest()
         if method == .accountSignIn {
-            openAIAuth.checkAuthenticationStatus()
-        } else {
-            openAIAuth.synchronizeWithCodexStatus()
+            codexAuth.checkStatus()
         }
     }
 
@@ -1037,7 +1033,6 @@ public struct ProviderSelectionStepView: View {
     private func verifyCodexSignInStatus() async -> Bool {
         let wasAuthenticated = codexAuth.isAuthenticated
         await codexAuth.refreshStatus()
-        openAIAuth.synchronizeWithCodexStatus()
         let becameAuthenticated = codexAuth.isAuthenticated && !wasAuthenticated
         if becameAuthenticated {
             settingsViewModel.updateAvailableModels(force: true)
