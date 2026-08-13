@@ -704,9 +704,14 @@ private struct CompletionAnalyticsPreference: View {
 private final class CompletionAudioController {
     static let shared = CompletionAudioController()
     private var player: AVAudioPlayer?
+    private var revealAccent: NSSound?
     private var fadeTask: Task<Void, Never>?
 
     func prepare() {
+        if revealAccent == nil {
+            revealAccent = NSSound(named: "Glass")
+            revealAccent?.volume = 0.15
+        }
         guard player == nil else { return }
         let soundURL = SortyResources.finalOnboardingSoundURL()
             ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
@@ -730,6 +735,11 @@ private final class CompletionAudioController {
         player?.currentTime = 0
         player?.volume = 0.3
         player?.play()
+    }
+
+    func playRevealAccent() {
+        prepare()
+        revealAccent?.play()
     }
 
     func fadeOutAndStop(duration: TimeInterval) {
@@ -894,11 +904,9 @@ public struct CompletionStepView: View {
                 showGlowRing = true
             }
 
-            // Play a subtle system sound as the checkmark appears
-            if let sound = NSSound(named: "Glass") {
-                sound.volume = 0.15
-                sound.play()
-            }
+            // The sound is resolved during onboarding prewarm, so this frame
+            // only starts playback while the checkmark animation begins.
+            audioController.playRevealAccent()
 
             // Phase 4: Particles + tips stagger in (0.9s after start)
             try? await Task.sleep(nanoseconds: 300_000_000)

@@ -42,8 +42,9 @@ conic layer so several permission actions do not each create an independent
 SwiftUI/Metal display clock. The large intro and completion calls to action use
 the richer Metal renderer, with the retained conic layer only as their
 static/inactive fallback. Never stack both animated renderers on one control.
-Prewarm completion audio before reaching the completion step; constructing an
-`AVAudioPlayer` must not compete with the first celebration frame.
+Prewarm completion audio and its reveal accent before reaching the completion
+step; constructing an `AVAudioPlayer` or resolving `NSSound` must not compete
+with celebration frames.
 
 Keep broad observable objects out of animated step roots. Permission and demo
 adapters project only the status values their layouts consume, and the root
