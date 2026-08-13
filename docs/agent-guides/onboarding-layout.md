@@ -64,4 +64,6 @@ regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
-queue.
+queue. Pause permission video playback and set the full-screen backdrop blur to
+its inactive state while Sorty is deactivated, then resume their retained
+instances when the app becomes active.

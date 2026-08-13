@@ -1756,9 +1756,27 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in self?.hostWillClose() }
+                },
+                center.addObserver(
+                    forName: NSApplication.didResignActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.setBackdropActive(false) }
+                },
+                center.addObserver(
+                    forName: NSApplication.didBecomeActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.setBackdropActive(true)
+                        self?.updatePanelFrame()
+                    }
                 }
             ]
 
+            setBackdropActive(NSApp.isActive)
             updatePanelFrame()
             DispatchQueue.main.async { [weak self] in
                 self?.updatePanelFrame()
@@ -1833,6 +1851,12 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             }
             backdropPanel?.order(.below, relativeTo: window.windowNumber)
             fadeInPanelIfNeeded()
+        }
+
+        private func setBackdropActive(_ isActive: Bool) {
+            (backdropPanel?.contentView as? NSVisualEffectView)?.state = isActive
+                ? .active
+                : .inactive
         }
 
         private func dismissPanel(immediately: Bool = false) {

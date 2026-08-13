@@ -950,12 +950,12 @@ private struct LoopingPermissionVideoView: NSViewRepresentable {
     func makeNSView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
         view.playerLayer.videoGravity = .resizeAspectFill
-        context.coordinator.configure(url: url, playerLayer: view.playerLayer)
+        context.coordinator.configure(url: url, playerView: view)
         return view
     }
 
     func updateNSView(_ nsView: PlayerLayerView, context: Context) {
-        context.coordinator.configure(url: url, playerLayer: nsView.playerLayer)
+        context.coordinator.configure(url: url, playerView: nsView)
     }
 
     static func dismantleNSView(_ nsView: PlayerLayerView, coordinator: Coordinator) {
@@ -963,12 +963,17 @@ private struct LoopingPermissionVideoView: NSViewRepresentable {
         nsView.playerLayer.player = nil
     }
 
+    @MainActor
     final class Coordinator {
         private var currentURL: URL?
         private var player: AVQueuePlayer?
         private var looper: AVPlayerLooper?
+        private weak var playerView: PlayerLayerView?
+        private var observers: [NSObjectProtocol] = []
 
-        func configure(url: URL, playerLayer: AVPlayerLayer) {
+        func configure(url: URL, playerView: PlayerLayerView) {
+            self.playerView = playerView
+            let playerLayer = playerView.playerLayer
             if currentURL == url, let player {
                 if playerLayer.player !== player {
                     playerLayer.player = player
@@ -986,14 +991,42 @@ private struct LoopingPermissionVideoView: NSViewRepresentable {
             currentURL = url
             playerLayer.player = queuePlayer
             queuePlayer.play()
+            installActivityObserversIfNeeded()
         }
 
         func stop() {
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
+            observers.removeAll()
             player?.pause()
             player?.removeAllItems()
             player = nil
             looper = nil
             currentURL = nil
+        }
+
+        private func installActivityObserversIfNeeded() {
+            guard observers.isEmpty else { return }
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(
+                    forName: NSApplication.didResignActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.player?.pause() }
+                },
+                center.addObserver(
+                    forName: NSApplication.didBecomeActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        guard self?.playerView?.window?.isVisible == true else { return }
+                        self?.player?.play()
+                    }
+                }
+            ]
         }
     }
 }
