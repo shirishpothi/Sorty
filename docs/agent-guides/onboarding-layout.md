@@ -42,10 +42,12 @@ The intro orbit keeps its native material-backed chips mounted. Its idle sine
 components run as additive Core Animation keyframes, while a display link wakes
 only for the interactive hover-collapse spring. Its Gaussian glow and energy
 scan, plus the completion blob, ripple, and particle motion, likewise use
-retained layers; do
-not move those continuous effects back into broad SwiftUI state or frame
-timelines. The optional demo's continuous organizing sliver follows the same
-rule, and its per-file/folder collections are derived once per mutation rather
+retained layers; do not move those continuous effects back into broad SwiftUI
+state or frame timelines. The completion reveal rasterizes its large blurred
+artwork once and animates retained scale and opacity through the same two phases;
+Reduce Motion keeps the reveal as a short opacity fade. The optional demo's
+continuous organizing sliver follows the same rule, and its per-file/folder
+collections are derived once per mutation rather
 than repeatedly filtered in row builders. The full-window color climb uses
 retained accent, shade, and additive radial-gradient layers. Step changes
 animate only their colors and geometry; do not restore a full-window SwiftUI

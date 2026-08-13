@@ -21,54 +21,68 @@ private enum CompletionPalette {
 // MARK: - Completion Reveal Blob
 
 /// A vibrant gradient blob that expands from center for the completion celebration
-private struct CompletionRevealBlob: View {
+private struct CompletionRevealBlob: NSViewRepresentable {
     let scale: CGFloat
     let opacity: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
 
+    func makeNSView(context: Context) -> RetainedCompletionRevealBlobView {
+        RetainedCompletionRevealBlobView()
+    }
+
+    func updateNSView(_ nsView: RetainedCompletionRevealBlobView, context: Context) {
+        nsView.update(
+            scale: scale,
+            opacity: opacity,
+            reduceMotion: reduceMotion,
+            shouldAnimateFloatingGlow: !reduceMotion && controlActiveState != .inactive
+        )
+    }
+}
+
+private struct CompletionRevealBaseGraphic: View {
     var body: some View {
-        ZStack {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            CompletionPalette.accent.opacity(0.30),
-                            CompletionPalette.softRose.opacity(0.18),
-                            CompletionPalette.deepRose.opacity(0.08),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
+        Ellipse()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        CompletionPalette.accent.opacity(0.30),
+                        CompletionPalette.softRose.opacity(0.18),
+                        CompletionPalette.deepRose.opacity(0.08),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 300
                 )
-                .frame(width: 600, height: 500)
-                .blur(radius: 60)
-
-            RetainedCompletionFloatingGlow(
-                shouldAnimate: !reduceMotion && controlActiveState != .inactive
             )
-            .frame(width: 570, height: 520)
+            .frame(width: 600, height: 500)
+            .blur(radius: 60)
+            .frame(width: 600, height: 520)
+            .accessibilityHidden(true)
+    }
+}
 
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.15),
-                            CompletionPalette.accent.opacity(0.16),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 120
-                    )
+private struct CompletionRevealHighlightGraphic: View {
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color.white.opacity(0.15),
+                        CompletionPalette.accent.opacity(0.16),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 120
                 )
-                .frame(width: 240, height: 240)
-                .blur(radius: 30)
-        }
-        .scaleEffect(scale)
-        .opacity(opacity)
+            )
+            .frame(width: 240, height: 240)
+            .blur(radius: 30)
+            .frame(width: 600, height: 520)
+            .accessibilityHidden(true)
     }
 }
 
@@ -91,18 +105,6 @@ private struct CompletionFloatingGlowGraphic: View {
             .blur(radius: 50)
             .frame(width: 570, height: 520)
             .accessibilityHidden(true)
-    }
-}
-
-private struct RetainedCompletionFloatingGlow: NSViewRepresentable {
-    let shouldAnimate: Bool
-
-    func makeNSView(context: Context) -> RetainedCompletionFloatingGlowView {
-        RetainedCompletionFloatingGlowView()
-    }
-
-    func updateNSView(_ nsView: RetainedCompletionFloatingGlowView, context: Context) {
-        nsView.setAnimating(shouldAnimate)
     }
 }
 
@@ -161,6 +163,127 @@ private final class RetainedCompletionFloatingGlowView: NSView {
     }
 }
 
+/// Rasterizes the two large blurred primitives once, then lets the compositor
+/// animate the same reveal scale and opacity without re-rendering their blur.
+@MainActor
+private final class RetainedCompletionRevealBlobView: NSView {
+    private let baseHost = NSHostingView(rootView: CompletionRevealBaseGraphic())
+    private let floatingGlow = RetainedCompletionFloatingGlowView()
+    private let highlightHost = NSHostingView(rootView: CompletionRevealHighlightGraphic())
+    private var hasConfiguredPresentation = false
+    private var targetScale: CGFloat = 0.05
+    private var targetOpacity: Float = 0
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        setAccessibilityElement(false)
+
+        baseHost.wantsLayer = true
+        baseHost.layer?.shouldRasterize = true
+        highlightHost.wantsLayer = true
+        highlightHost.layer?.shouldRasterize = true
+        addSubview(baseHost)
+        addSubview(floatingGlow)
+        addSubview(highlightHost)
+
+        applyModelValues()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        let scale = window?.backingScaleFactor ?? 2
+        baseHost.layer?.rasterizationScale = scale
+        highlightHost.layer?.rasterizationScale = scale
+    }
+
+    override func layout() {
+        super.layout()
+        baseHost.frame = bounds
+        floatingGlow.frame = CGRect(
+            x: bounds.midX - 285,
+            y: bounds.midY - 260,
+            width: 570,
+            height: 520
+        )
+        highlightHost.frame = bounds
+    }
+
+    func update(
+        scale: CGFloat,
+        opacity: Double,
+        reduceMotion: Bool,
+        shouldAnimateFloatingGlow: Bool
+    ) {
+        floatingGlow.setAnimating(shouldAnimateFloatingGlow)
+
+        let resolvedScale = reduceMotion ? 1 : scale
+        let resolvedOpacity = Float(opacity)
+        guard !hasConfiguredPresentation
+                || targetScale != resolvedScale
+                || targetOpacity != resolvedOpacity else { return }
+
+        let previousOpacity = targetOpacity
+        targetScale = resolvedScale
+        targetOpacity = resolvedOpacity
+
+        guard hasConfiguredPresentation else {
+            hasConfiguredPresentation = true
+            applyModelValues()
+            return
+        }
+
+        if reduceMotion {
+            let opacityAnimation = CABasicAnimation(keyPath: "opacity")
+            opacityAnimation.fromValue = layer?.presentation()?.opacity ?? layer?.opacity ?? 0
+            opacityAnimation.toValue = resolvedOpacity
+            opacityAnimation.duration = 0.25
+            opacityAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer?.add(opacityAnimation, forKey: "completionRevealOpacity")
+            applyModelValues()
+            return
+        }
+
+        let isReceding = resolvedOpacity < previousOpacity
+        let duration: CFTimeInterval = isReceding ? 1.2 : 1.0
+        let timing = CAMediaTimingFunction(
+            name: isReceding ? .easeInEaseOut : .easeOut
+        )
+
+        if let layer {
+            let scaleAnimation = CABasicAnimation(keyPath: "transform.scale")
+            scaleAnimation.fromValue = layer.presentation()?.value(forKeyPath: "transform.scale")
+                ?? layer.value(forKeyPath: "transform.scale")
+            scaleAnimation.toValue = resolvedScale
+            scaleAnimation.duration = duration
+            scaleAnimation.timingFunction = timing
+            layer.add(scaleAnimation, forKey: "completionRevealScale")
+
+            let opacityAnimation = CABasicAnimation(keyPath: "opacity")
+            opacityAnimation.fromValue = layer.presentation()?.opacity ?? layer.opacity
+            opacityAnimation.toValue = resolvedOpacity
+            opacityAnimation.duration = duration
+            opacityAnimation.timingFunction = timing
+            layer.add(opacityAnimation, forKey: "completionRevealOpacity")
+        }
+
+        applyModelValues()
+    }
+
+    private func applyModelValues() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.setValue(targetScale, forKeyPath: "transform.scale")
+        layer?.opacity = targetOpacity
+        CATransaction.commit()
+    }
+}
+
 private struct CompletionCelebrationBackdrop: View {
     let revealScale: CGFloat
     let revealOpacity: Double
@@ -173,6 +296,7 @@ private struct CompletionCelebrationBackdrop: View {
         ZStack {
             if !exitTriggered {
                 CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
+                    .frame(width: 600, height: 520)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -920,10 +1044,8 @@ public struct CompletionStepView: View {
         audioController.play()
 
         // Phase 1: Gradient blob reveal (0 - 1.0s)
-        withAnimation(.easeOut(duration: 1.0)) {
-            revealScale = 1.2
-            revealOpacity = 1.0
-        }
+        revealScale = 1.2
+        revealOpacity = 1.0
 
         // Phase 2+: async sequence stored for cancellation on disappear
         runtimeController.animationTask = Task { @MainActor in
@@ -931,10 +1053,8 @@ public struct CompletionStepView: View {
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
 
-            withAnimation(.easeInOut(duration: 1.2)) {
-                revealOpacity = 0.3
-                revealScale = 1.5
-            }
+            revealOpacity = 0.3
+            revealScale = 1.5
 
             // Phase 3: Checkmark + glow ring appear (0.6s after start)
             try? await Task.sleep(nanoseconds: 100_000_000)
