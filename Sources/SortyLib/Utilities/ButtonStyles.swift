@@ -819,15 +819,7 @@ private struct OnboardingBeamBorder: View {
                     )
 
                     if includesInteriorGlow {
-                        SwiftUI.TimelineView(.animation(
-                            minimumInterval: 1.0 / 30.0,
-                            paused: !shouldAnimateBeam
-                        )) { timeline in
-                            let phase = shouldAnimateBeam
-                                ? timeline.date.timeIntervalSinceReferenceDate / 1.96
-                                : 0.31
-                            beamInteriorGlow(phase: phase)
-                        }
+                        beamInteriorGlow
                     }
                 }
             }
@@ -854,7 +846,7 @@ private struct OnboardingBeamBorder: View {
         }
     }
 
-    private func beamInteriorGlow(phase: TimeInterval) -> some View {
+    private var beamInteriorGlow: some View {
         GeometryReader { proxy in
             let size = proxy.size
             let scale = max(1, min(size.width, size.height) / 36)
@@ -880,17 +872,10 @@ private struct OnboardingBeamBorder: View {
             .blur(radius: isIntensified ? 5 : 6)
             .opacity(isIntensified ? 0.92 : 0.62)
             .mask {
-                Capsule()
-                    .fill(
-                        AngularGradient(
-                            stops: interiorConicStops,
-                            center: .center,
-                            angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                        )
-                    )
-            }
-            .mask {
-                Capsule().inset(by: 1)
+                RetainedInteriorGlowMask(
+                    stops: interiorConicStops,
+                    shouldAnimate: shouldAnimateBeam
+                )
             }
         }
         .compositingGroup()
@@ -974,18 +959,6 @@ private struct OnboardingBeamBorder: View {
         }
     }
 
-    private var fallbackInteriorStops: [Gradient.Stop] {
-        [
-            .init(color: .clear, location: 0.00),
-            .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(isIntensified ? 0.14 : 0.10), location: 0.15),
-            .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(isIntensified ? 0.26 : 0.20), location: 0.25),
-            .init(color: .white.opacity(isIntensified ? 0.20 : 0.16), location: 0.32),
-            .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(isIntensified ? 0.18 : 0.14), location: 0.40),
-            .init(color: .clear, location: 0.58),
-            .init(color: .clear, location: 1.00),
-        ]
-    }
-
     private var interiorConicStops: [Gradient.Stop] {
         [
             .init(color: .clear, location: 0.00),
@@ -1022,6 +995,115 @@ private struct OnboardingBeamBorder: View {
                 InteriorGlowSpot(x: 1.00, y: 0.27, width: 11, height: 12, color: Color(red: 1.0, green: 0.35, blue: 0.27), opacity: 0.14, activeOpacity: 0.21),
             ]
         }
+    }
+}
+
+/// Keeps the CTA interior glow's angular mask on the compositor. The colored
+/// glow and blur hierarchy stays static until its inputs change instead of
+/// being rebuilt by a SwiftUI timeline on every animation frame.
+private struct RetainedInteriorGlowMask: NSViewRepresentable {
+    let stops: [Gradient.Stop]
+    let shouldAnimate: Bool
+
+    func makeNSView(context: Context) -> RetainedInteriorGlowMaskView {
+        RetainedInteriorGlowMaskView()
+    }
+
+    func updateNSView(_ nsView: RetainedInteriorGlowMaskView, context: Context) {
+        nsView.update(
+            colors: stops.map { NSColor($0.color).cgColor },
+            locations: stops.map { NSNumber(value: $0.location) },
+            shouldAnimate: shouldAnimate
+        )
+    }
+}
+
+private final class RetainedInteriorGlowMaskView: NSView {
+    private static let duration: CFTimeInterval = 1.96
+    private static let pausedPhase = 0.31
+
+    private let gradientLayer = CAGradientLayer()
+    private let capsuleMask = CAShapeLayer()
+    private var isAnimating = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.addSublayer(gradientLayer)
+
+        gradientLayer.type = .conic
+        gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
+        gradientLayer.mask = capsuleMask
+        capsuleMask.fillColor = NSColor.white.cgColor
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.frame = bounds
+        capsuleMask.frame = bounds
+        capsuleMask.path = CGPath(
+            roundedRect: bounds.insetBy(dx: 1, dy: 1),
+            cornerWidth: max(0, bounds.height / 2 - 1),
+            cornerHeight: max(0, bounds.height / 2 - 1),
+            transform: nil
+        )
+        CATransaction.commit()
+    }
+
+    func update(colors: [CGColor], locations: [NSNumber], shouldAnimate: Bool) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.colors = colors
+        gradientLayer.locations = locations
+        CATransaction.commit()
+
+        if shouldAnimate {
+            startAnimatingIfNeeded()
+        } else {
+            stopAnimating()
+        }
+    }
+
+    private func startAnimatingIfNeeded() {
+        guard !isAnimating else { return }
+        isAnimating = true
+        let phase = Date().timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: Self.duration) / Self.duration
+        let angle = phase * 2 * Double.pi
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.setValue(angle, forKeyPath: "transform.rotation.z")
+        CATransaction.commit()
+
+        let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotation.fromValue = angle
+        rotation.toValue = angle + 2 * Double.pi
+        rotation.duration = Self.duration
+        rotation.repeatCount = .infinity
+        rotation.timingFunction = CAMediaTimingFunction(name: .linear)
+        gradientLayer.add(rotation, forKey: "interiorGlowMaskRotation")
+    }
+
+    private func stopAnimating() {
+        isAnimating = false
+        gradientLayer.removeAnimation(forKey: "interiorGlowMaskRotation")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.setValue(
+            Self.pausedPhase * 2 * Double.pi,
+            forKeyPath: "transform.rotation.z"
+        )
+        CATransaction.commit()
     }
 }
 

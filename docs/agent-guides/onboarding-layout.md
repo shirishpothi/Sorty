@@ -42,6 +42,9 @@ conic layer so several permission actions do not each create an independent
 SwiftUI/Metal display clock. The large intro and completion calls to action use
 the richer Metal renderer, with the retained conic layer only as their
 static/inactive fallback. Never stack both animated renderers on one control.
+The optional CTA interior glow keeps its radial glow and blur tree static and
+rotates only a retained Core Animation conic mask; do not restore its 30 fps
+SwiftUI timeline.
 Prewarm completion audio and its reveal accent before reaching the completion
 step; map the bundled audio data off the main actor so constructing an
 `AVAudioPlayer` or resolving `NSSound` does not compete with celebration frames.
