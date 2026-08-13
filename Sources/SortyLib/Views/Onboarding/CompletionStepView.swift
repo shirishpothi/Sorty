@@ -5,7 +5,9 @@
 //  Completion step of the onboarding flow
 //
 
+import AppKit
 import AVFoundation
+import QuartzCore
 import SwiftUI
 
 @MainActor
@@ -22,7 +24,8 @@ private enum CompletionPalette {
 private struct CompletionRevealBlob: View {
     let scale: CGFloat
     let opacity: Double
-    @State private var colorPhase: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         ZStack {
@@ -43,22 +46,10 @@ private struct CompletionRevealBlob: View {
                 .frame(width: 600, height: 500)
                 .blur(radius: 60)
 
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            CompletionPalette.softRose.opacity(0.18),
-                            CompletionPalette.accent.opacity(0.12),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 250
-                    )
-                )
-                .frame(width: 450, height: 400)
-                .blur(radius: 50)
-                .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
+            RetainedCompletionFloatingGlow(
+                shouldAnimate: !reduceMotion && controlActiveState != .inactive
+            )
+            .frame(width: 570, height: 520)
 
             Circle()
                 .fill(
@@ -78,44 +69,95 @@ private struct CompletionRevealBlob: View {
         }
         .scaleEffect(scale)
         .opacity(opacity)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
-                colorPhase = .pi * 2
-            }
-        }
     }
 }
 
-// MARK: - Completion Glow Ring
-
-/// A pulsing glow ring behind the checkmark icon during reveal
-private struct CompletionGlowRing: View {
-    let isActive: Bool
-    @State private var pulseScale: CGFloat = 1.0
-
+private struct CompletionFloatingGlowGraphic: View {
     var body: some View {
-        Circle()
-            .stroke(
-                AngularGradient(
+        Ellipse()
+            .fill(
+                RadialGradient(
                     colors: [
-                        CompletionPalette.softRose.opacity(0.86),
-                        CompletionPalette.accent.opacity(0.78),
-                        CompletionPalette.deepRose.opacity(0.46),
-                        CompletionPalette.softRose.opacity(0.86)
+                        CompletionPalette.softRose.opacity(0.18),
+                        CompletionPalette.accent.opacity(0.12),
+                        Color.clear
                     ],
-                    center: .center
-                ),
-                lineWidth: 3
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 250
+                )
             )
-            .frame(width: 140, height: 140)
-            .scaleEffect(isActive ? pulseScale : 0.5)
-            .opacity(isActive ? 0.6 : 0)
-            .blur(radius: 8)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                    pulseScale = 1.15
-                }
-            }
+            .frame(width: 450, height: 400)
+            .blur(radius: 50)
+            .frame(width: 570, height: 520)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct RetainedCompletionFloatingGlow: NSViewRepresentable {
+    let shouldAnimate: Bool
+
+    func makeNSView(context: Context) -> RetainedCompletionFloatingGlowView {
+        RetainedCompletionFloatingGlowView()
+    }
+
+    func updateNSView(_ nsView: RetainedCompletionFloatingGlowView, context: Context) {
+        nsView.setAnimating(shouldAnimate)
+    }
+}
+
+@MainActor
+private final class RetainedCompletionFloatingGlowView: NSView {
+    private let host = NSHostingView(rootView: CompletionFloatingGlowGraphic())
+    private var isAnimating = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        setAccessibilityElement(false)
+        host.wantsLayer = true
+        addSubview(host)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        host.frame = bounds
+    }
+
+    func setAnimating(_ shouldAnimate: Bool) {
+        guard shouldAnimate != isAnimating else { return }
+        isAnimating = shouldAnimate
+        host.layer?.removeAnimation(forKey: "completionFloatingGlowPosition")
+
+        guard shouldAnimate else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            host.layer?.setAffineTransform(.identity)
+            CATransaction.commit()
+            return
+        }
+
+        let phases = stride(from: 0, through: 64, by: 1).map { index in
+            let phase = Double(index) / 64 * 2 * Double.pi
+            return phase
+        }
+        let horizontal = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        horizontal.values = phases.map { NSNumber(value: 30 * sin($0)) }
+        let vertical = CAKeyframeAnimation(keyPath: "transform.translation.y")
+        vertical.values = phases.map { NSNumber(value: -20 * cos($0)) }
+
+        let group = CAAnimationGroup()
+        group.animations = [horizontal, vertical]
+        group.duration = 4
+        group.repeatCount = .infinity
+        group.autoreverses = true
+        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        host.layer?.add(group, forKey: "completionFloatingGlowPosition")
     }
 }
 
@@ -185,41 +227,151 @@ private struct CompletionRippleField: View {
     let hasAppeared: Bool
     let showGlowRing: Bool
     let exitTriggered: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
-        ZStack {
-            if !exitTriggered {
-                CompletionGlowRing(isActive: showGlowRing)
-                    .transition(.opacity)
-
-                ForEach(0..<3, id: \.self) { index in
-                    CompletionRipple(index: index, hasAppeared: hasAppeared)
-                }
-            }
-        }
+        RetainedCompletionHeroEffects(
+            isVisible: !exitTriggered && showGlowRing && hasAppeared,
+            shouldAnimate: !reduceMotion && controlActiveState != .inactive
+        )
+        .frame(width: 240, height: 240)
+        .transition(.opacity)
     }
 }
 
-private struct CompletionRipple: View {
-    let index: Int
-    let hasAppeared: Bool
-
-    private var diameter: CGFloat { CGFloat(140 + index * 30) }
-    private var strokeOpacity: Double { 0.18 - Double(index) * 0.04 }
-    private var delay: Double { Double(index) * 0.3 }
-
+private struct CompletionGlowRingGraphic: View {
     var body: some View {
         Circle()
-            .stroke(CompletionPalette.softRose.opacity(strokeOpacity), lineWidth: 2)
-            .frame(width: diameter, height: diameter)
-            .scaleEffect(hasAppeared ? 1.2 : 0.8)
-            .opacity(hasAppeared ? 0 : 1)
-            .animation(
-                .easeOut(duration: 1.5)
-                    .repeatForever(autoreverses: false)
-                    .delay(delay),
-                value: hasAppeared
+            .stroke(
+                AngularGradient(
+                    colors: [
+                        CompletionPalette.softRose.opacity(0.86),
+                        CompletionPalette.accent.opacity(0.78),
+                        CompletionPalette.deepRose.opacity(0.46),
+                        CompletionPalette.softRose.opacity(0.86)
+                    ],
+                    center: .center
+                ),
+                lineWidth: 3
             )
+            .frame(width: 140, height: 140)
+            .blur(radius: 8)
+            .frame(width: 180, height: 180)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct RetainedCompletionHeroEffects: NSViewRepresentable {
+    let isVisible: Bool
+    let shouldAnimate: Bool
+
+    func makeNSView(context: Context) -> RetainedCompletionHeroEffectsView {
+        RetainedCompletionHeroEffectsView()
+    }
+
+    func updateNSView(_ nsView: RetainedCompletionHeroEffectsView, context: Context) {
+        nsView.update(isVisible: isVisible, shouldAnimate: shouldAnimate)
+    }
+}
+
+@MainActor
+private final class RetainedCompletionHeroEffectsView: NSView {
+    private let glowHost = NSHostingView(rootView: CompletionGlowRingGraphic())
+    private let rippleLayers = (0..<3).map { _ in CAShapeLayer() }
+    private var isVisible = false
+    private var isAnimating = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        setAccessibilityElement(false)
+
+        glowHost.wantsLayer = true
+        glowHost.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        addSubview(glowHost)
+
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            rippleLayer.fillColor = NSColor.clear.cgColor
+            rippleLayer.strokeColor = NSColor(
+                CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04)
+            ).cgColor
+            rippleLayer.lineWidth = 2
+            layer?.insertSublayer(rippleLayer, below: glowHost.layer)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        glowHost.frame = CGRect(
+            x: bounds.midX - 90,
+            y: bounds.midY - 90,
+            width: 180,
+            height: 180
+        )
+        glowHost.layer?.position = CGPoint(x: bounds.midX, y: bounds.midY)
+
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            let diameter = CGFloat(140 + index * 30)
+            let frame = CGRect(
+                x: bounds.midX - diameter / 2,
+                y: bounds.midY - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            rippleLayer.frame = frame
+            rippleLayer.path = CGPath(ellipseIn: rippleLayer.bounds, transform: nil)
+        }
+    }
+
+    func update(isVisible: Bool, shouldAnimate: Bool) {
+        let visibilityChanged = self.isVisible != isVisible
+        let animationChanged = self.isAnimating != shouldAnimate
+        self.isVisible = isVisible
+        self.isAnimating = shouldAnimate
+        guard visibilityChanged || animationChanged else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        glowHost.layer?.opacity = isVisible ? 0.6 : 0
+        rippleLayers.forEach { $0.opacity = isVisible && !shouldAnimate ? 0.10 : 0 }
+        CATransaction.commit()
+
+        glowHost.layer?.removeAnimation(forKey: "completionGlowPulse")
+        rippleLayers.forEach { $0.removeAllAnimations() }
+        guard isVisible && shouldAnimate else { return }
+
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1
+        pulse.toValue = 1.15
+        pulse.duration = 2
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        glowHost.layer?.add(pulse, forKey: "completionGlowPulse")
+
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 0.8
+            scale.toValue = 1.2
+
+            let opacity = CABasicAnimation(keyPath: "opacity")
+            opacity.fromValue = 1
+            opacity.toValue = 0
+
+            let group = CAAnimationGroup()
+            group.animations = [scale, opacity]
+            group.duration = 1.5
+            group.beginTime = CACurrentMediaTime() + Double(index) * 0.3
+            group.repeatCount = .infinity
+            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            rippleLayer.add(group, forKey: "completionRipple")
+        }
     }
 }
 
@@ -315,7 +467,7 @@ private struct CompletionPrimaryAction: View {
             }
         }
         .buttonStyle(.onboardingPill(size: .large))
-        .onboardingBeamBorder(variant: .featured, active: !isChecking)
+        .onboardingBeamBorder(variant: .featured, active: !isChecking, size: .medium)
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
         .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
@@ -424,6 +576,45 @@ private struct CompletionAnalyticsPreference: View {
 
 // MARK: - Completion Step View
 
+@MainActor
+private final class CompletionAudioController {
+    private var player: AVAudioPlayer?
+    private var fadeTask: Task<Void, Never>?
+
+    func play() {
+        fadeTask?.cancel()
+        fadeTask = nil
+
+        let soundURL = SortyResources.finalOnboardingSoundURL()
+            ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
+        guard let soundURL else { return }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: soundURL)
+            player.numberOfLoops = 0
+            player.volume = 0.3
+            player.prepareToPlay()
+            player.play()
+            self.player = player
+        } catch {
+            print("[CompletionStepView] Failed to play Final Onboarding sound: \(error)")
+        }
+    }
+
+    func fadeOutAndStop(duration: TimeInterval) {
+        fadeTask?.cancel()
+        guard let player else { return }
+        player.setVolume(0, fadeDuration: duration)
+        fadeTask = Task { @MainActor [weak self, weak player] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            player?.stop()
+            self?.player = nil
+            self?.fadeTask = nil
+        }
+    }
+}
+
 public struct CompletionStepView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
@@ -442,8 +633,7 @@ public struct CompletionStepView: View {
     @State private var tipsAppeared = false
     @State private var animationTask: Task<Void, Never>?
 
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var audioFadeTask: Task<Void, Never>?
+    @State private var audioController = CompletionAudioController()
     @State private var readinessState: ReadinessState = .idle
     @State private var isAnalyticsEnabled = true
 
@@ -523,7 +713,7 @@ public struct CompletionStepView: View {
 
     private func startRevealSequence() {
         // Play audio immediately
-        playFinalOnboardingSound()
+        audioController.play()
 
         // Phase 1: Gradient blob reveal (0 - 1.0s)
         withAnimation(.easeOut(duration: 1.0)) {
@@ -571,49 +761,8 @@ public struct CompletionStepView: View {
         }
     }
 
-    // MARK: - Audio
-
-    private func playFinalOnboardingSound() {
-        audioFadeTask?.cancel()
-        audioFadeTask = nil
-
-        let soundURL: URL? = {
-            if let url = SortyResources.finalOnboardingSoundURL() {
-                return url
-            }
-            if let url = Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav") {
-                return url
-            }
-            return nil
-        }()
-
-        guard let url = soundURL else { return }
-
-        do {
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.numberOfLoops = 0
-            player.volume = 0.3
-            player.play()
-            audioPlayer = player
-        } catch {
-            print("[CompletionStepView] Failed to play Final Onboarding sound: \(error)")
-        }
-    }
-
     private func fadeOutAndStopAudio(duration: TimeInterval) {
-        audioFadeTask?.cancel()
-
-        guard let player = audioPlayer else { return }
-
-        player.setVolume(0, fadeDuration: duration)
-        audioFadeTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-
-            player.stop()
-            audioPlayer = nil
-            audioFadeTask = nil
-        }
+        audioController.fadeOutAndStop(duration: duration)
     }
 
     // MARK: - Exit Transition

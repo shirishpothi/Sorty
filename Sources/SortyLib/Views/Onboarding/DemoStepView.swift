@@ -158,8 +158,10 @@ private struct DemoCompletionHighlights: View {
 public struct DemoStepView: View {
     let onComplete: () -> Void
     
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @State private var organizer: FolderOrganizer?
+    @State private var settingsViewModel: SettingsViewModel?
+    @State private var organizerState: OrganizationState = .idle
+    @State private var currentPlan: OrganizationPlan?
     @State private var hasAppeared = false
     @State private var selectedDirectory: URL?
     @State private var demoState: DemoState = .intro
@@ -284,8 +286,15 @@ public struct DemoStepView: View {
                     isDropTargeted = false
                 }
             }
-            .onChange(of: organizer.state) { _, newState in
-                handleStateChange(newState)
+            .background {
+                DemoEnvironmentResolver { organizer, settingsViewModel, state, plan in
+                    self.organizer = organizer
+                    self.settingsViewModel = settingsViewModel
+                    organizerState = state
+                    currentPlan = plan
+                    handleStateChange(state)
+                }
+                .frame(width: 0, height: 0)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Demo Step")
@@ -516,7 +525,7 @@ public struct DemoStepView: View {
     @ViewBuilder
     private var completeView: some View {
         DemoCompletionView(
-            plan: organizer.currentPlan,
+            plan: currentPlan,
             showPreviewTree: $showPreviewTree,
             onComplete: onComplete
         )
@@ -536,7 +545,7 @@ public struct DemoStepView: View {
     }
 
     private var statusText: String {
-        switch organizer.state {
+        switch organizerState {
         case .scanning: return "Analyzing Your Files"
         case .organizing: return "Creating Organization Plan"
         case .applying: return "Applying Changes"
@@ -546,7 +555,7 @@ public struct DemoStepView: View {
     }
     
     private var statusDescription: String {
-        switch organizer.state {
+        switch organizerState {
         case .scanning: return "Examining file names, types, and patterns..."
         case .organizing: return "Sorty is designing the perfect folder structure..."
         case .applying: return "Moving files to their new homes..."
@@ -586,7 +595,9 @@ public struct DemoStepView: View {
     }
     
     private func startDemo() {
-        guard let directory = selectedDirectory else { return }
+        guard let directory = selectedDirectory,
+              let organizer,
+              let settingsViewModel else { return }
         
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             demoState = .analyzing
@@ -628,6 +639,26 @@ public struct DemoStepView: View {
                 break
             }
         }
+    }
+}
+
+/// Narrows the demo's broad environment subscriptions to the two values that
+/// affect presentation. Streaming organizer progress still reaches this tiny
+/// adapter, but no longer rebuilds both animated demo panes.
+private struct DemoEnvironmentResolver: View {
+    @EnvironmentObject private var organizer: FolderOrganizer
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    let onSnapshot: (FolderOrganizer, SettingsViewModel, OrganizationState, OrganizationPlan?) -> Void
+
+    var body: some View {
+        Color.clear
+            .onAppear {
+                onSnapshot(organizer, settingsViewModel, organizer.state, organizer.currentPlan)
+            }
+            .onChange(of: organizer.state) { _, state in
+                onSnapshot(organizer, settingsViewModel, state, organizer.currentPlan)
+            }
+            .accessibilityHidden(true)
     }
 }
 

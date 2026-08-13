@@ -14,7 +14,7 @@ import Permiso
 
 public struct PermissionsStepView: View {
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
-    @EnvironmentObject private var appState: AppState
+    @State private var appState: AppState?
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
@@ -23,8 +23,8 @@ public struct PermissionsStepView: View {
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var notificationManager = NotificationManager.shared
-    @EnvironmentObject private var automationManager: AutomationManager
+    private let notificationManager = NotificationManager.shared
+    @State private var automationManager: AutomationManager?
 
     public init(hasRequiredPermissions: Binding<Bool>) {
         self._hasRequiredPermissions = hasRequiredPermissions
@@ -149,6 +149,15 @@ public struct PermissionsStepView: View {
             }
             checkPermissions()
         }
+        .background {
+            PermissionsEnvironmentResolver { manager, appState in
+                guard automationManager !== manager || self.appState !== appState else { return }
+                automationManager = manager
+                self.appState = appState
+                checkPermissions()
+            }
+            .frame(width: 0, height: 0)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             checkPermissions()
         }
@@ -187,6 +196,7 @@ public struct PermissionsStepView: View {
 
         permissionStates[.fullDiskAccess] = fullDiskAccessState()
 
+        guard let automationManager else { return }
         automationManager.checkPermissions(enableChecksIfNeeded: false)
         switch automationManager.automationStatus {
         case .granted:
@@ -214,6 +224,7 @@ public struct PermissionsStepView: View {
             isFullDiskAccessConfirmationPresented = true
 
         case .automation:
+            guard let automationManager else { return }
             permissionStates[.automation] = .pending
             automationManager.requestAutomationPermissionCheck()
             permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
@@ -352,7 +363,7 @@ public struct PermissionsStepView: View {
 
         if panel.runModal() == .OK,
            let url = panel.url,
-           appState.grantFilesAndFoldersPermission(for: url) {
+           appState?.grantFilesAndFoldersPermission(for: url) == true {
             hasRequiredPermissions = true
             permissionStates[.filesAndFolders] = .granted
             HapticFeedbackManager.shared.success()
@@ -1051,6 +1062,22 @@ private struct PermissionActionButton: View {
         case .bordered:
             return .init(isSecondary: true, size: .small)
         }
+    }
+}
+
+/// Resolves the app-owned manager without subscribing the entire permissions
+/// layout to its Finder-selection timer and unrelated published state.
+private struct PermissionsEnvironmentResolver: View {
+    @EnvironmentObject private var automationManager: AutomationManager
+    @EnvironmentObject private var appState: AppState
+    let onResolve: (AutomationManager, AppState) -> Void
+
+    var body: some View {
+        Color.clear
+            .onAppear {
+                onResolve(automationManager, appState)
+            }
+            .accessibilityHidden(true)
     }
 }
 

@@ -11,7 +11,7 @@ struct SimulatedDemoAnimationView: View {
     let onComplete: () -> Void
     
     @State private var phase: DemoPhase = .messy
-    @State private var scanProgress: CGFloat = 0
+    @State private var scannedFileIndex = -1
     @State private var currentThought: String = ""
     @State private var thoughtOpacity: Double = 0
     @State private var files: [DemoFileNode] = []
@@ -38,6 +38,7 @@ struct SimulatedDemoAnimationView: View {
     @State private var displayedPercent: Int = 0
     @State private var organizingTrailOpacities: [UUID: Bool] = [:]
     @State private var animationTask: Task<Void, Never>?
+    @State private var scanHighlightTask: Task<Void, Never>?
     @State private var pendingWorkItems: [DispatchWorkItem] = []
 
     @StateObject private var audioManager = OnboardingAudioManager()
@@ -152,6 +153,8 @@ struct SimulatedDemoAnimationView: View {
         .onDisappear {
             animationTask?.cancel()
             animationTask = nil
+            scanHighlightTask?.cancel()
+            scanHighlightTask = nil
             pendingWorkItems.forEach { $0.cancel() }
             pendingWorkItems.removeAll()
             audioManager.stopAll()
@@ -211,36 +214,12 @@ struct SimulatedDemoAnimationView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(SortyDesignSystem.Colors.resolvedAccent, lineWidth: 2)
-                            .opacity(scanLinePosition(for: index) ? 1 : 0)
-                            .animation(.easeInOut(duration: 0.2), value: scanLinePosition(for: index))
+                            .opacity(abs(scannedFileIndex - index) <= 1 ? 1 : 0)
+                            .animation(.easeInOut(duration: 0.2), value: scannedFileIndex)
                     )
             }
             
-            // Scanning line with glow trail
-            ZStack {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.accentColor.opacity(0), .accentColor.opacity(0.12), .accentColor.opacity(0)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 240, height: 480)
-                    .blur(radius: 8)
-                    .offset(x: -300 + scanProgress * 600 - 20)
-
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.accentColor.opacity(0), .accentColor.opacity(0.45), .accentColor.opacity(0)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: 150, height: 480)
-                    .offset(x: -300 + scanProgress * 600)
-            }
+            DemoScanningLine()
             
             // Privacy badge at bottom
             VStack {
@@ -549,12 +528,6 @@ struct SimulatedDemoAnimationView: View {
         return positions[index % positions.count]
     }
     
-    private func scanLinePosition(for index: Int) -> Bool {
-        let normalizedProgress = scanProgress
-        let fileProgress = CGFloat(index) / CGFloat(files.count)
-        return abs(normalizedProgress - fileProgress) < 0.15
-    }
-    
     private func startAnimation() {
         animationTask = Task { @MainActor in
             // Phase 1: Messy (let the user absorb the initial state)
@@ -577,9 +550,7 @@ struct SimulatedDemoAnimationView: View {
             audioManager.startAmbientPulse(interval: 0.8)
             showThought(aiThoughts[0]) // "Scanning file types..."
 
-            withAnimation(.easeInOut(duration: 2.5)) {
-                scanProgress = 1.0
-            }
+            startScanHighlights()
 
             try? await Task.sleep(nanoseconds: 900_000_000)
             guard !Task.isCancelled else { return }
@@ -765,6 +736,18 @@ struct SimulatedDemoAnimationView: View {
             HapticFeedbackManager.shared.success()
         }
     }
+
+    private func startScanHighlights() {
+        scanHighlightTask?.cancel()
+        scannedFileIndex = -1
+        scanHighlightTask = Task { @MainActor in
+            for index in files.indices {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled else { return }
+                scannedFileIndex = index
+            }
+        }
+    }
     
     private func showThought(_ thought: String) {
         withAnimation(.easeInOut(duration: 0.4)) {
@@ -802,6 +785,50 @@ struct SimulatedDemoAnimationView: View {
         let workItem = DispatchWorkItem(block: action)
         pendingWorkItems.append(workItem)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+}
+
+/// Owns the scan line's per-frame animation so it does not invalidate the
+/// forty-state simulated-demo root for the full 2.5-second sweep.
+private struct DemoScanningLine: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.accentColor.opacity(0), .accentColor.opacity(0.12), .accentColor.opacity(0)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 240, height: 480)
+                .blur(radius: 8)
+                .offset(x: -320 + progress * 600)
+
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [.accentColor.opacity(0), .accentColor.opacity(0.45), .accentColor.opacity(0)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 150, height: 480)
+                .offset(x: -300 + progress * 600)
+        }
+        .onAppear {
+            if reduceMotion {
+                progress = 0.5
+            } else {
+                withAnimation(.easeInOut(duration: 2.5)) {
+                    progress = 1
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

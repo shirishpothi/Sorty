@@ -768,7 +768,7 @@ public extension View {
         active: Bool = true,
         isIntensified: Bool = false,
         includesInteriorGlow: Bool = false,
-        size: BeamSize = .medium
+        size: BeamSize = .small
     ) -> some View {
         overlay {
             OnboardingBeamBorder(
@@ -815,9 +815,11 @@ private struct OnboardingBeamBorder: View {
                 ZStack {
                     RetainedFallbackBeamBorder(
                         stops: fallbackStops,
-                        active: active,
+                        // This is the fallback/static presentation, not a
+                        // second animated beam stacked over Metal.
+                        active: active && !shouldAnimateBeam,
                         isIntensified: isIntensified,
-                        shouldAnimate: shouldAnimateBeam,
+                        shouldAnimate: false,
                         opacity: isIntensified ? 1 : variant.fallbackOpacity
                     )
 

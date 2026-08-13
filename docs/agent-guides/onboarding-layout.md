@@ -24,8 +24,21 @@ opacity. Do not animate insertion of the step layout itself.
 Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow
 uses retained Core Animation gradient layers and pauses while Sorty is inactive;
 do not replace it with a full-screen composited blur that redraws every frame.
-Button beam fallbacks likewise use a retained conic gradient layer alongside
-the Metal beam; do not add a second SwiftUI timeline for the same border.
-Pause other timelines when their motion is not visible, prewarm file icons over
-the intro reveal, and keep particle geometry deterministic across `body`
-updates so view invalidation does not generate new animation targets.
+The intro orbit keeps its native material-backed chips mounted and updates only
+their layers from a display link. Its energy scan and the completion blob/ripple
+motion likewise use retained layers; do not move those continuous effects back
+into broad SwiftUI state or frame timelines.
+
+An active beam uses one animated renderer: the Metal beam. The retained conic
+gradient is only the static/inactive fallback, not a second animation stacked
+over it. Use the button-sized beam tuning for pills and reserve the medium
+tuning for the large intro and completion calls to action.
+
+Keep broad observable objects out of animated step roots. Permission and demo
+adapters project only the status values their layouts consume, and the root
+subscribes to `AppState` only at the completion destination. Provider input is
+drafted locally and committed after typing settles so Keychain writes, model
+refreshes, and connection tests do not compete with each keystroke. Pause other
+motion when it is not visible, prewarm file icons over the intro reveal, and
+keep particle geometry deterministic across `body` updates so invalidation does
+not generate new animation targets.

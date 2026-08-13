@@ -11,7 +11,7 @@ import SwiftUI
 public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
-    @EnvironmentObject var appState: AppState
+    @State private var appState: AppState?
     @State private var hasAppeared = false
     
     public init() {}
@@ -74,7 +74,7 @@ public struct WorkflowSelectionStepView: View {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 personaManager.selectPersona(persona)
                                 personaManager.selectedCustomPersonaId = nil
-                                appState.personaGeneratorPresentationContext = nil
+                                appState?.personaGeneratorPresentationContext = nil
                             }
                         }
                     }
@@ -145,12 +145,18 @@ public struct WorkflowSelectionStepView: View {
         .onAppear {
             withAnimation { hasAppeared = true }
         }
+        .background {
+            WorkflowAppStateResolver { appState in
+                self.appState = appState
+            }
+            .frame(width: 0, height: 0)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workflow Selection Step")
     }
 
     private func presentPersonaGenerator() {
-        appState.personaGeneratorPresentationContext = .onboarding
+        appState?.personaGeneratorPresentationContext = .onboarding
     }
 
     private var customPersonaGrid: some View {
@@ -175,7 +181,7 @@ public struct WorkflowSelectionStepView: View {
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         personaManager.selectCustomPersona(persona.id)
-                        appState.personaGeneratorPresentationContext = nil
+                        appState?.personaGeneratorPresentationContext = nil
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -185,6 +191,19 @@ public struct WorkflowSelectionStepView: View {
 }
 
 // MARK: - Supporting Views
+
+private struct WorkflowAppStateResolver: View {
+    @EnvironmentObject private var appState: AppState
+    let onResolve: (AppState) -> Void
+
+    var body: some View {
+        Color.clear
+            .onAppear {
+                onResolve(appState)
+            }
+            .accessibilityHidden(true)
+    }
+}
 
 struct OnboardingPersonaCard: View {
     let persona: PersonaType
