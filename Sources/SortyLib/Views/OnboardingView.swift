@@ -617,7 +617,7 @@ private struct OnboardingIntroView: View {
                 .allowsHitTesting(false)
                 .opacity(chromeRevealed ? 0.92 : 0)
 
-            OnboardingIntroInteractionLayer(
+            OnboardingIntroContentLayer(
                 icons: fileIcons,
                 filesVisible: filesAppeared,
                 iconScale: iconScale,
@@ -732,9 +732,9 @@ private struct OnboardingIntroView: View {
 
 }
 
-/// Owns the pointer-driven intro state so CTA hover updates only the orbit and
-/// button presentation instead of re-evaluating the full reveal/audio root.
-private struct OnboardingIntroInteractionLayer: View {
+/// Keeps the continuously animated intro content isolated from the reveal and
+/// audio state owned by the surrounding onboarding step.
+private struct OnboardingIntroContentLayer: View {
     let icons: [String: NSImage]
     let filesVisible: Bool
     let iconScale: CGFloat
@@ -746,10 +746,6 @@ private struct OnboardingIntroInteractionLayer: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
-    @State private var introFrame: CGRect = .zero
-    @State private var buttonFrame: CGRect = .zero
-    @State private var isHoveringButton = false
-
     var body: some View {
         ZStack {
             // The chip views and their native materials stay mounted while a
@@ -757,11 +753,8 @@ private struct OnboardingIntroInteractionLayer: View {
             OnboardingOrbitField(
                 icons: icons,
                 filesVisible: filesVisible,
-                isCollapsed: isHoveringButton,
-                collapseOrigin: CGSize(
-                    width: buttonFrame.midX - introFrame.midX,
-                    height: buttonFrame.midY - introFrame.midY
-                ),
+                isCollapsed: false,
+                collapseOrigin: .zero,
                 reduceMotion: reduceMotion,
                 isActive: controlActiveState != .inactive
             )
@@ -810,41 +803,14 @@ private struct OnboardingIntroInteractionLayer: View {
                     }
                 }
                 .buttonStyle(.onboardingPill(size: .large))
-                .onboardingBeamBorder(
-                    variant: .featured,
-                    isIntensified: isHoveringButton,
-                    includesInteriorGlow: isHoveringButton,
-                    size: .medium
-                )
+                .onboardingBeamBorder()
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { frame in
-                    if buttonFrame != frame {
-                        buttonFrame = frame
-                    }
-                }
-                .onHover { hovering in
-                    isHoveringButton = hovering
-                }
-                .scaleEffect(isHoveringButton ? 1.035 : 1)
                 .opacity(textOpacity)
                 .offset(y: textOffset)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.82),
-                    value: isHoveringButton
-                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onGeometryChange(for: CGRect.self) { proxy in
-            proxy.frame(in: .global)
-        } action: { frame in
-            if introFrame != frame {
-                introFrame = frame
-            }
-        }
     }
 }
 
