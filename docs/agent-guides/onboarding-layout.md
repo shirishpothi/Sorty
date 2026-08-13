@@ -42,11 +42,11 @@ inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
 Cache invariant retained-layer palettes at construction and only rebuild
 variant-specific colors when the variant changes.
-The intro orbit keeps its native material-backed chips mounted. Its idle sine
-components run as additive Core Animation keyframes. The full-window AppKit
-container returns `nil` from `hitTest` so pointer movement never traverses the
-decorative hosting-view subtree, and identical representable inputs must not
-rewrite the chips' base layers. Its Gaussian glow and energy
+The intro orbit draws each decorative file chip once in a layer-backed AppKit
+view; do not restore live SwiftUI materials or hosting trees for moving cards.
+Its idle sine components run as additive Core Animation keyframes. The
+full-window AppKit container returns `nil` from `hitTest`, and identical
+representable inputs must not rewrite the chips' base layers. Its Gaussian glow and energy
 scan, plus the completion blob, ripple, and particle motion, likewise use
 retained layers; do not move those continuous effects back into broad SwiftUI
 state or frame timelines. The completion reveal rasterizes its large blurred
