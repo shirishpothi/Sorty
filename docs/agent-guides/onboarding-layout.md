@@ -43,8 +43,10 @@ re-remove animations or rewrite layer opacity and phase.
 Cache invariant retained-layer palettes at construction and only rebuild
 variant-specific colors when the variant changes.
 The intro orbit keeps its native material-backed chips mounted. Its idle sine
-components run as additive Core Animation keyframes, while a display link wakes
-only for the interactive hover-collapse spring. Its Gaussian glow and energy
+components run as additive Core Animation keyframes. The full-window AppKit
+container returns `nil` from `hitTest` so pointer movement never traverses the
+decorative hosting-view subtree, and identical representable inputs must not
+rewrite the chips' base layers. Its Gaussian glow and energy
 scan, plus the completion blob, ripple, and particle motion, likewise use
 retained layers; do not move those continuous effects back into broad SwiftUI
 state or frame timelines. The completion reveal rasterizes its large blurred
@@ -64,15 +66,15 @@ disabled under Reduce Motion; their fully revealed state remains unchanged.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
 layer clock while inactive, so it never restarts its delay or keyframes merely
 because focus moved to another app.
-The intro CTA, orbit collapse, and their geometry probes own hover state in one
-full-size interaction leaf; crossing the CTA must not invalidate the reveal or
-audio root.
+The intro CTA does not drive the orbit or measure global pointer geometry;
+pointer movement must not invalidate the reveal, audio, or file-animation root.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent
-SwiftUI/Metal display clock. The large intro and completion calls to action use
-the richer Metal renderer, with the retained conic layer only as their
-static/inactive fallback. Never stack both animated renderers on one control.
+SwiftUI/Metal display clock. The intro CTA uses this same retained onboarding
+beam; the large completion call to action uses the richer Metal renderer, with
+the retained conic layer only as its static/inactive fallback. Never stack both
+animated renderers on one control.
 Retained button beams pause their conic layer clocks while the window is
 inactive and resume at the same phase; they only reset to the static fallback
 when animation is actually disabled or Reduce Motion is enabled.

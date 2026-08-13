@@ -1375,8 +1375,17 @@ private final class OnboardingOrbitFieldView: NSView {
     private var filesVisible = false
     private var reduceMotion = false
     private var isActive = true
+    private var configuredIcons: [String: NSImage] = [:]
 
     override var isFlipped: Bool { true }
+
+    /// The orbit spans the full intro window but is entirely decorative. Keep
+    /// AppKit from traversing its material-backed hosting views for every mouse
+    /// event; SwiftUI's `allowsHitTesting(false)` does not prevent that native
+    /// subtree walk inside an `NSViewRepresentable`.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1422,8 +1431,20 @@ private final class OnboardingOrbitFieldView: NSView {
         reduceMotion: Bool,
         isActive: Bool
     ) {
-        installHosts(icons: icons)
-        updateHostedIcons(icons)
+        let iconsChanged = !iconsMatchConfiguredImages(icons)
+        let stateChanged = self.filesVisible != filesVisible
+            || collapseTarget != (isCollapsed ? 1 : 0)
+            || self.collapseOrigin != collapseOrigin
+            || self.reduceMotion != reduceMotion
+            || self.isActive != isActive
+
+        guard iconsChanged || stateChanged else { return }
+
+        if iconsChanged {
+            installHosts(icons: icons)
+            updateHostedIcons(icons)
+            configuredIcons = icons
+        }
 
         if self.filesVisible != filesVisible {
             self.filesVisible = filesVisible
@@ -1447,6 +1468,13 @@ private final class OnboardingOrbitFieldView: NSView {
         updateMotionState()
         if idleAnimationStartedAt == nil {
             renderFrame()
+        }
+    }
+
+    private func iconsMatchConfiguredImages(_ icons: [String: NSImage]) -> Bool {
+        guard icons.count == configuredIcons.count else { return false }
+        return icons.allSatisfy { key, image in
+            configuredIcons[key] === image
         }
     }
 
