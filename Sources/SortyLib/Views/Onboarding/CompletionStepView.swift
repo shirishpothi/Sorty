@@ -499,6 +499,7 @@ private struct CompletionHero: View {
     let showGlowRing: Bool
     let exitTriggered: Bool
     let contentDismissed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -511,7 +512,10 @@ private struct CompletionHero: View {
         }
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.3)
-        .animation(.spring(response: 0.9, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.9, dampingFraction: 0.7).delay(0.1),
+            value: hasAppeared
+        )
         .scaleEffect(contentDismissed ? 0.8 : 1.0)
         .opacity(contentDismissed ? 0 : 1)
     }
@@ -725,6 +729,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 
 private struct CompletionCheckmarkIcon: View {
     let hasAppeared: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -739,7 +744,7 @@ private struct CompletionCheckmarkIcon: View {
             Image(systemName: "checkmark")
                 .font(.system(size: 42, weight: .bold, design: .rounded))
                 .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
-                .symbolEffect(.bounce, value: hasAppeared)
+                .symbolEffect(.bounce, value: reduceMotion ? false : hasAppeared)
         }
     }
 }
@@ -747,6 +752,7 @@ private struct CompletionCheckmarkIcon: View {
 private struct CompletionCopy: View {
     let hasAppeared: Bool
     let contentDismissed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 10) {
@@ -754,7 +760,10 @@ private struct CompletionCopy: View {
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 20)
-                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.2), value: hasAppeared)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(0.2),
+                    value: hasAppeared
+                )
 
             Text("Drop in a folder, preview the plan, and undo anything you change.")
                 .font(.system(size: 17, weight: .medium, design: .rounded))
@@ -764,7 +773,10 @@ private struct CompletionCopy: View {
                 .frame(maxWidth: 420)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 15)
-                .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.4), value: hasAppeared)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(0.4),
+                    value: hasAppeared
+                )
         }
         .opacity(contentDismissed ? 0 : 1)
         .offset(y: contentDismissed ? 30 : 0)
@@ -774,6 +786,7 @@ private struct CompletionCopy: View {
 private struct CompletionTipsGrid: View {
     let tipsAppeared: Bool
     let contentDismissed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
@@ -796,7 +809,10 @@ private struct CompletionTipsGrid: View {
             .frame(width: 190, alignment: .leading)
             .opacity(tipsAppeared ? 1 : 0)
             .offset(y: tipsAppeared ? 0 : 12)
-            .animation(.spring(response: 0.6, dampingFraction: 0.85).delay(delay), value: tipsAppeared)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85).delay(delay),
+                value: tipsAppeared
+            )
     }
 }
 
@@ -805,6 +821,7 @@ private struct CompletionPrimaryAction: View {
     let contentDismissed: Bool
     let isChecking: Bool
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -820,7 +837,10 @@ private struct CompletionPrimaryAction: View {
         .disabled(isChecking)
         .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
         .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
-        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.05), value: tipsAppeared)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(1.05),
+            value: tipsAppeared
+        )
         .padding(.top, 6)
         .accessibilityIdentifier("OnboardingCompleteButton")
     }
@@ -1089,7 +1109,9 @@ public struct CompletionStepView: View {
                     .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
                     .offset(y: tipsAppeared ? (contentDismissed ? 40 : 0) : 12)
                     .animation(
-                        .spring(response: 0.65, dampingFraction: 0.85).delay(0.95),
+                        reduceMotion
+                            ? nil
+                            : .spring(response: 0.65, dampingFraction: 0.85).delay(0.95),
                         value: tipsAppeared
                     )
                 CompletionPrimaryAction(

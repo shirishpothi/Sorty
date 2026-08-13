@@ -55,6 +55,8 @@ Canvas or multiple gradient subtrees that redraw throughout every transition.
 When Sorty becomes inactive, completion glow and ripple layers pause their
 existing layer time and resume from the same phase instead of rebuilding their
 infinite animation groups.
+Completion copy, tips, checkmark, analytics, and CTA entrance springs are also
+disabled under Reduce Motion; their fully revealed state remains unchanged.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
 layer clock while inactive, so it never restarts its delay or keyframes merely
 because focus moved to another app.
