@@ -795,7 +795,11 @@ private struct OnboardingBeamBorder: View {
     @Environment(\.controlActiveState) private var controlActiveState
 
     private var shouldAnimateBeam: Bool {
-        active && !reduceMotion && controlActiveState != .inactive
+        active && !reduceMotion
+    }
+
+    private var isAnimationActive: Bool {
+        controlActiveState != .inactive
     }
 
     private var usesRetainedRenderer: Bool {
@@ -815,6 +819,7 @@ private struct OnboardingBeamBorder: View {
                         active: active && (usesRetainedRenderer || !shouldAnimateBeam),
                         isIntensified: isIntensified,
                         shouldAnimate: usesRetainedRenderer && shouldAnimateBeam,
+                        isAnimationActive: isAnimationActive,
                         opacity: isIntensified ? 1 : variant.fallbackOpacity
                     )
 
@@ -833,11 +838,11 @@ private struct OnboardingBeamBorder: View {
         } else {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
-            .beam(
+                .beam(
                 size,
                 palette: variant.palette,
                 theme: .dark,
-                active: shouldAnimateBeam,
+                active: shouldAnimateBeam && isAnimationActive,
                 shape: .capsule,
                 duration: 1.96,
                 strength: isIntensified ? variant.strength * 1.2 : variant.strength,
@@ -873,7 +878,8 @@ private struct OnboardingBeamBorder: View {
             .opacity(isIntensified ? 0.92 : 0.62)
             .mask {
                 RetainedInteriorGlowMask(
-                    shouldAnimate: shouldAnimateBeam
+                    shouldAnimate: shouldAnimateBeam,
+                    isAnimationActive: isAnimationActive
                 )
             }
         }
@@ -989,13 +995,17 @@ private struct OnboardingBeamBorder: View {
 /// being rebuilt by a SwiftUI timeline on every animation frame.
 private struct RetainedInteriorGlowMask: NSViewRepresentable {
     let shouldAnimate: Bool
+    let isAnimationActive: Bool
 
     func makeNSView(context: Context) -> RetainedInteriorGlowMaskView {
         RetainedInteriorGlowMaskView()
     }
 
     func updateNSView(_ nsView: RetainedInteriorGlowMaskView, context: Context) {
-        nsView.update(shouldAnimate: shouldAnimate)
+        nsView.update(
+            shouldAnimate: shouldAnimate,
+            isAnimationActive: isAnimationActive
+        )
     }
 }
 
@@ -1006,6 +1016,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
     private let gradientLayer = CAGradientLayer()
     private let capsuleMask = CAShapeLayer()
     private var isAnimating = false
+    private var isPaused = false
     private var hasSetPausedPhase = false
 
     override init(frame frameRect: NSRect) {
@@ -1054,9 +1065,14 @@ private final class RetainedInteriorGlowMaskView: NSView {
         CATransaction.commit()
     }
 
-    func update(shouldAnimate: Bool) {
+    func update(shouldAnimate: Bool, isAnimationActive: Bool) {
         if shouldAnimate {
             startAnimatingIfNeeded()
+            if isAnimationActive {
+                resumeIfNeeded()
+            } else {
+                pauseIfNeeded()
+            }
         } else {
             stopAnimating()
         }
@@ -1085,7 +1101,8 @@ private final class RetainedInteriorGlowMaskView: NSView {
     }
 
     private func stopAnimating() {
-        guard isAnimating || !hasSetPausedPhase else { return }
+        guard isAnimating || isPaused || !hasSetPausedPhase else { return }
+        resumeIfNeeded()
         isAnimating = false
         gradientLayer.removeAnimation(forKey: "interiorGlowMaskRotation")
         CATransaction.begin()
@@ -1097,6 +1114,24 @@ private final class RetainedInteriorGlowMaskView: NSView {
         CATransaction.commit()
         hasSetPausedPhase = true
     }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused else { return }
+        let pausedTime = gradientLayer.convertTime(CACurrentMediaTime(), from: nil)
+        gradientLayer.speed = 0
+        gradientLayer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused else { return }
+        let pausedTime = gradientLayer.timeOffset
+        gradientLayer.speed = 1
+        gradientLayer.timeOffset = 0
+        gradientLayer.beginTime = 0
+        gradientLayer.beginTime = gradientLayer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
 }
 
 /// Keeps the fallback beam's conic gradient and capsule mask in retained
@@ -1107,6 +1142,7 @@ private struct RetainedFallbackBeamBorder: NSViewRepresentable {
     let active: Bool
     let isIntensified: Bool
     let shouldAnimate: Bool
+    let isAnimationActive: Bool
     let opacity: Double
 
     func makeNSView(context: Context) -> RetainedFallbackBeamBorderView {
@@ -1119,6 +1155,7 @@ private struct RetainedFallbackBeamBorder: NSViewRepresentable {
             active: active,
             isIntensified: isIntensified,
             shouldAnimate: shouldAnimate,
+            isAnimationActive: isAnimationActive,
             opacity: Float(opacity)
         )
     }
@@ -1131,6 +1168,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
     private let gradientLayer = CAGradientLayer()
     private let strokeMask = CAShapeLayer()
     private var isBeamAnimating = false
+    private var isPaused = false
     private var currentLineWidth: CGFloat = 1
     private var targetOpacity: Float = 0
     private var hasSetPausedPhase = false
@@ -1186,6 +1224,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
         active: Bool,
         isIntensified: Bool,
         shouldAnimate: Bool,
+        isAnimationActive: Bool,
         opacity: Float
     ) {
         if configuredVariant != variant {
@@ -1203,6 +1242,11 @@ private final class RetainedFallbackBeamBorderView: NSView {
 
         if shouldAnimate {
             startAnimatingIfNeeded()
+            if isAnimationActive {
+                resumeIfNeeded()
+            } else {
+                pauseIfNeeded()
+            }
         } else {
             stopAnimating()
         }
@@ -1268,12 +1312,14 @@ private final class RetainedFallbackBeamBorderView: NSView {
     }
 
     private func stopAnimating() {
-        guard isBeamAnimating || gradientLayer.animation(forKey: "fallbackBeamRotation") != nil else {
+        guard isBeamAnimating || isPaused
+                || gradientLayer.animation(forKey: "fallbackBeamRotation") != nil else {
             if !hasSetPausedPhase {
                 setPausedPhase()
             }
             return
         }
+        resumeIfNeeded()
         isBeamAnimating = false
         gradientLayer.removeAnimation(forKey: "fallbackBeamRotation")
         setPausedPhase()
@@ -1288,6 +1334,24 @@ private final class RetainedFallbackBeamBorderView: NSView {
         )
         CATransaction.commit()
         hasSetPausedPhase = true
+    }
+
+    private func pauseIfNeeded() {
+        guard isBeamAnimating, !isPaused else { return }
+        let pausedTime = gradientLayer.convertTime(CACurrentMediaTime(), from: nil)
+        gradientLayer.speed = 0
+        gradientLayer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused else { return }
+        let pausedTime = gradientLayer.timeOffset
+        gradientLayer.speed = 1
+        gradientLayer.timeOffset = 0
+        gradientLayer.beginTime = 0
+        gradientLayer.beginTime = gradientLayer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
     }
 }
 

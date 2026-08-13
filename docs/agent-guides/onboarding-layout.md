@@ -64,6 +64,9 @@ conic layer so several permission actions do not each create an independent
 SwiftUI/Metal display clock. The large intro and completion calls to action use
 the richer Metal renderer, with the retained conic layer only as their
 static/inactive fallback. Never stack both animated renderers on one control.
+Retained button beams pause their conic layer clocks while the window is
+inactive and resume at the same phase; they only reset to the static fallback
+when animation is actually disabled or Reduce Motion is enabled.
 The optional CTA interior glow keeps its radial glow and blur tree static and
 rotates only a retained Core Animation conic mask; do not restore its 30 fps
 SwiftUI timeline.
