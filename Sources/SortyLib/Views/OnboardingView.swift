@@ -588,6 +588,7 @@ extension OnboardingStep: OnboardingStepValidating {
 
 @MainActor
 private final class OnboardingIntroTaskController {
+    var audioPrewarmTask: Task<Void, Never>?
     var iconPrewarmTask: Task<Void, Never>?
     var revealGeneration = 0
 }
@@ -722,6 +723,7 @@ private struct OnboardingIntroView: View {
         }
         .onDisappear {
             taskController.revealGeneration += 1
+            taskController.audioPrewarmTask?.cancel()
             taskController.iconPrewarmTask?.cancel()
             audio.stopAll()
         }
@@ -739,6 +741,7 @@ private struct OnboardingIntroView: View {
     private func runIntroReveal() {
         taskController.revealGeneration += 1
         let generation = taskController.revealGeneration
+        taskController.audioPrewarmTask?.cancel()
         taskController.iconPrewarmTask?.cancel()
 
         if reduceMotion {
@@ -767,9 +770,15 @@ private struct OnboardingIntroView: View {
             )
         }
 
-        // Defer audio so the AVAudioEngine + AVAudioSourceNode setup runs
-        // after the first paint settles, not on the same runloop tick as
-        // the icon reveal.
+        // Read the bundled audio bytes off-main during the quiet opening beat,
+        // leaving the original 450 ms playback cue free of file I/O.
+        taskController.audioPrewarmTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+            await audio.prepareBackgroundMelody()
+        }
+
+        // Keep playback at the original cue after the first paint settles.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(450))
             guard generation == taskController.revealGeneration else { return }

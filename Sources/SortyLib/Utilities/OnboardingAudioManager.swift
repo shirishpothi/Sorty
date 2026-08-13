@@ -7,10 +7,10 @@
 //  looping pentatonic melody with a bass drone, replacing system sounds.
 //
 
-import Foundation
-import AVFoundation
 import AppKit
+import AVFoundation
 import Combine
+import Foundation
 
 @MainActor
 class OnboardingAudioManager: ObservableObject {
@@ -53,6 +53,7 @@ class OnboardingAudioManager: ObservableObject {
     nonisolated(unsafe) private let state = AudioState()
 
     private var audioPlayer: AVAudioPlayer?
+    private var preparedAudioData: Data?
 
     // MARK: - Constants
 
@@ -101,25 +102,36 @@ class OnboardingAudioManager: ObservableObject {
         case complete
     }
 
-    /// Start the synthesized background melody loop.
+    /// Load the bundled soundtrack without putting file I/O on a reveal frame.
+    func prepareBackgroundMelody() async {
+        guard preparedAudioData == nil, audioPlayer == nil, !state.isRunning,
+              let soundURL = resolvedBackgroundMelodyURL()
+        else { return }
+
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
+        }.value
+
+        guard !Task.isCancelled, audioPlayer == nil, !state.isRunning else { return }
+        preparedAudioData = data
+    }
+
+    /// Start the bundled background melody, falling back to the synthesized loop.
     func startBackgroundMelody() {
         guard !state.isRunning else { return }
-        
-        let soundURL: URL? = {
-            if let url = SortyResources.onboardingSoundURL() {
-                print("[OnboardingAudioManager] Found OnboardingSound.wav: \(url.path)")
-                return url
-            }
-            if let url = Bundle.main.url(forResource: "OnboardingSound", withExtension: "wav") {
-                print("[OnboardingAudioManager] Found OnboardingSound.wav in main bundle: \(url.path)")
-                return url
-            }
-            return nil
-        }()
-        
-        if let url = soundURL {
+
+        let soundURL = resolvedBackgroundMelodyURL()
+        if preparedAudioData != nil || soundURL != nil {
             do {
-                let player = try AVAudioPlayer(contentsOf: url)
+                let player: AVAudioPlayer
+                if let data = preparedAudioData {
+                    preparedAudioData = nil
+                    player = try AVAudioPlayer(data: data)
+                } else if let soundURL {
+                    player = try AVAudioPlayer(contentsOf: soundURL)
+                } else {
+                    return
+                }
                 player.numberOfLoops = 0
                 player.volume = 0.25
                 player.play()
@@ -137,6 +149,11 @@ class OnboardingAudioManager: ObservableObject {
         // Fallback to synthesized melody
         setupAndStartEngine()
         isPlaying = true
+    }
+
+    private func resolvedBackgroundMelodyURL() -> URL? {
+        SortyResources.onboardingSoundURL()
+            ?? Bundle.main.url(forResource: "OnboardingSound", withExtension: "wav")
     }
 
     /// Play a phase-transition accent.  Use soft, ambient system sounds
