@@ -30,6 +30,15 @@ private struct ProviderReadinessSnapshot: Equatable, Sendable {
     )
 }
 
+@MainActor
+private final class ProviderSelectionTaskController {
+    var testDebounceTask: Task<Void, Never>?
+    var codexTerminalResetTask: Task<Void, Never>?
+    var codexVerifyResetTask: Task<Void, Never>?
+    var apiKeyCommitTask: Task<Void, Never>?
+    var apiURLCommitTask: Task<Void, Never>?
+}
+
 public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
@@ -37,7 +46,7 @@ public struct ProviderSelectionStepView: View {
     @State private var hasAppeared = false
     @State private var connectionStatus: ConnectionTestStatus = .idle
     @State private var connectionError: String?
-    @State private var testDebounceTask: Task<Void, Never>?
+    @State private var taskController = ProviderSelectionTaskController()
     @State private var hasCopiedCode = false
     @State private var availableModels: [String] = []
     @State private var isLoadingModels = false
@@ -50,13 +59,9 @@ public struct ProviderSelectionStepView: View {
     @State private var isHoveringCodexTerminalButton = false
     @State private var isHoveringCodexVerifyButton = false
     @State private var isHoveringTestConnectionButton = false
-    @State private var codexTerminalResetTask: Task<Void, Never>?
-    @State private var codexVerifyResetTask: Task<Void, Never>?
     @State private var codexSignInAttempt = 0
     @State private var apiKeyDraft = ""
     @State private var apiURLDraft = ""
-    @State private var apiKeyCommitTask: Task<Void, Never>?
-    @State private var apiURLCommitTask: Task<Void, Never>?
     @State private var readinessSnapshot = ProviderReadinessSnapshot.initial
 
     enum ConnectionTestStatus {
@@ -208,10 +213,10 @@ public struct ProviderSelectionStepView: View {
             settingsViewModel.refreshAppleModelStatus()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
-            apiKeyCommitTask?.cancel()
-            apiURLCommitTask?.cancel()
-            apiKeyCommitTask = nil
-            apiURLCommitTask = nil
+            taskController.apiKeyCommitTask?.cancel()
+            taskController.apiURLCommitTask?.cancel()
+            taskController.apiKeyCommitTask = nil
+            taskController.apiURLCommitTask = nil
             synchronizeInputDrafts()
             if newProvider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
@@ -222,7 +227,7 @@ public struct ProviderSelectionStepView: View {
             settingsViewModel.refreshAppleModelStatus()
         }
         .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
-            guard apiKeyCommitTask == nil else { return }
+            guard taskController.apiKeyCommitTask == nil else { return }
             let value = apiKey ?? ""
             if apiKeyDraft != value {
                 apiKeyDraft = value
@@ -230,9 +235,9 @@ public struct ProviderSelectionStepView: View {
         }
         .onDisappear {
             commitInputDrafts()
-            apiKeyCommitTask?.cancel()
-            apiURLCommitTask?.cancel()
-            testDebounceTask?.cancel()
+            taskController.apiKeyCommitTask?.cancel()
+            taskController.apiURLCommitTask?.cancel()
+            taskController.testDebounceTask?.cancel()
         }
         .task(id: readinessInputs) {
             let inputs = readinessInputs
@@ -918,12 +923,12 @@ public struct ProviderSelectionStepView: View {
         let normalizedDraft = apiKeyDraft.isEmpty ? nil : apiKeyDraft
         guard normalizedDraft != settingsViewModel.config.apiKey else { return }
 
-        apiKeyCommitTask?.cancel()
-        apiKeyCommitTask = Task { @MainActor in
+        taskController.apiKeyCommitTask?.cancel()
+        taskController.apiKeyCommitTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(550))
             guard !Task.isCancelled else { return }
             commitAPIKeyDraft()
-            apiKeyCommitTask = nil
+            taskController.apiKeyCommitTask = nil
         }
     }
 
@@ -933,18 +938,18 @@ public struct ProviderSelectionStepView: View {
         let normalizedDraft = apiURLDraft.isEmpty ? nil : apiURLDraft
         guard normalizedDraft != settingsViewModel.config.apiURL else { return }
 
-        apiURLCommitTask?.cancel()
-        apiURLCommitTask = Task { @MainActor in
+        taskController.apiURLCommitTask?.cancel()
+        taskController.apiURLCommitTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(550))
             guard !Task.isCancelled else { return }
             commitAPIURLDraft()
-            apiURLCommitTask = nil
+            taskController.apiURLCommitTask = nil
         }
     }
 
     private func commitAPIKeyDraft() {
-        apiKeyCommitTask?.cancel()
-        apiKeyCommitTask = nil
+        taskController.apiKeyCommitTask?.cancel()
+        taskController.apiKeyCommitTask = nil
         let normalizedDraft = apiKeyDraft.isEmpty ? nil : apiKeyDraft
         guard normalizedDraft != settingsViewModel.config.apiKey else { return }
         settingsViewModel.updateAPIKey(apiKeyDraft)
@@ -952,8 +957,8 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func commitAPIURLDraft() {
-        apiURLCommitTask?.cancel()
-        apiURLCommitTask = nil
+        taskController.apiURLCommitTask?.cancel()
+        taskController.apiURLCommitTask = nil
         let provider = settingsViewModel.config.provider
         guard provider == .openAICompatible || provider == .ollama else { return }
         let normalizedDraft = apiURLDraft.isEmpty ? nil : apiURLDraft
@@ -968,10 +973,10 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func scheduleConnectionTest() {
-        testDebounceTask?.cancel()
+        taskController.testDebounceTask?.cancel()
         connectionStatus = .idle
 
-        testDebounceTask = Task {
+        taskController.testDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
             if !Task.isCancelled && readinessSnapshot.canTestConnection {
                 await MainActor.run {
@@ -1111,8 +1116,8 @@ public struct ProviderSelectionStepView: View {
 
     @MainActor
     private func scheduleCodexTerminalButtonReset() {
-        codexTerminalResetTask?.cancel()
-        codexTerminalResetTask = Task {
+        taskController.codexTerminalResetTask?.cancel()
+        taskController.codexTerminalResetTask = Task {
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             await MainActor.run {
                 codexTerminalButtonState = .idle
@@ -1122,8 +1127,8 @@ public struct ProviderSelectionStepView: View {
 
     @MainActor
     private func scheduleCodexVerifyButtonReset() {
-        codexVerifyResetTask?.cancel()
-        codexVerifyResetTask = Task {
+        taskController.codexVerifyResetTask?.cancel()
+        taskController.codexVerifyResetTask = Task {
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             await MainActor.run {
                 codexVerifyButtonState = .idle

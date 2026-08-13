@@ -27,15 +27,11 @@ public struct OnboardingView: View {
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isAdvancing = false
-    @State private var swipeMonitor: Any?
-    @State private var isHoveringStepIndicator = false
-    @State private var swipeAccumulatedTranslation: CGFloat = 0
-    @State private var hasTriggeredSwipeForGesture = false
+    @State private var swipeController = OnboardingSwipeController()
     @State private var hasConfiguredWindowChrome = false
     @State private var isIntroVisible = true
     @State private var isFlowPrepared = false
     @State private var isDismissingIntro = false
-    @State private var introTransitionTask: Task<Void, Never>?
     @AccessibilityFocusState private var isProviderStepAccessibilityFocused: Bool
 
     private let swipeThreshold: CGFloat = 42
@@ -173,7 +169,7 @@ public struct OnboardingView: View {
             OnboardingCompletionAudio.prewarm()
         }
         .onDisappear {
-            introTransitionTask?.cancel()
+            swipeController.introTransitionTask?.cancel()
             removeSwipeMonitor()
         }
     }
@@ -284,7 +280,7 @@ public struct OnboardingView: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .onHover { isHovering in
-                isHoveringStepIndicator = isHovering
+                swipeController.isHoveringStepIndicator = isHovering
                 if !isHovering {
                     resetSwipeTracking()
                 }
@@ -326,7 +322,7 @@ public struct OnboardingView: View {
         HapticFeedbackManager.shared.selection()
 
         isDismissingIntro = true
-        introTransitionTask?.cancel()
+        swipeController.introTransitionTask?.cancel()
 
         var preparation = Transaction(animation: nil)
         preparation.disablesAnimations = true
@@ -334,7 +330,7 @@ public struct OnboardingView: View {
             isFlowPrepared = true
         }
 
-        introTransitionTask = Task { @MainActor in
+        swipeController.introTransitionTask = Task { @MainActor in
             // Resolve the provider step's finite layout before animating only
             // presentation properties. This keeps layout insertion out of the
             // AttributeGraph animation transaction.
@@ -420,29 +416,29 @@ public struct OnboardingView: View {
     }
 
     private func installSwipeMonitorIfNeeded() {
-        guard swipeMonitor == nil else { return }
+        guard swipeController.monitor == nil else { return }
 
-        swipeMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+        swipeController.monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
             handleSwipeEvent(event)
         }
     }
 
     private func removeSwipeMonitor() {
-        if let monitor = swipeMonitor {
+        if let monitor = swipeController.monitor {
             NSEvent.removeMonitor(monitor)
-            swipeMonitor = nil
+            swipeController.monitor = nil
         }
         resetSwipeTracking()
-        isHoveringStepIndicator = false
+        swipeController.isHoveringStepIndicator = false
     }
 
     private func resetSwipeTracking() {
-        swipeAccumulatedTranslation = 0
-        hasTriggeredSwipeForGesture = false
+        swipeController.accumulatedTranslation = 0
+        swipeController.hasTriggeredGesture = false
     }
 
     private func handleSwipeEvent(_ event: NSEvent) -> NSEvent? {
-        guard isHoveringStepIndicator else { return event }
+        guard swipeController.isHoveringStepIndicator else { return event }
 
         let deltaX =
             event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 8
@@ -462,7 +458,7 @@ public struct OnboardingView: View {
             return nil
         }
 
-        guard !hasTriggeredSwipeForGesture else {
+        guard !swipeController.hasTriggeredGesture else {
             if event.phase == .ended || event.phase == .cancelled {
                 resetSwipeTracking()
             }
@@ -470,16 +466,16 @@ public struct OnboardingView: View {
         }
 
         let physicalDeltaX = event.isDirectionInvertedFromDevice ? deltaX : -deltaX
-        swipeAccumulatedTranslation += physicalDeltaX
+        swipeController.accumulatedTranslation += physicalDeltaX
 
-        if swipeAccumulatedTranslation <= -swipeThreshold {
-            hasTriggeredSwipeForGesture = true
+        if swipeController.accumulatedTranslation <= -swipeThreshold {
+            swipeController.hasTriggeredGesture = true
             navigateForwardFromControls()
             return nil
         }
 
-        if swipeAccumulatedTranslation >= swipeThreshold {
-            hasTriggeredSwipeForGesture = true
+        if swipeController.accumulatedTranslation >= swipeThreshold {
+            swipeController.hasTriggeredGesture = true
             navigateToPreviousStep()
             return nil
         }
@@ -490,6 +486,18 @@ public struct OnboardingView: View {
 
         return nil
     }
+}
+
+/// Holds event-monitor bookkeeping that has no visual representation. Keeping
+/// gesture deltas outside SwiftUI state prevents every trackpad event from
+/// invalidating the onboarding root and its active step hierarchy.
+@MainActor
+private final class OnboardingSwipeController {
+    var monitor: Any?
+    var introTransitionTask: Task<Void, Never>?
+    var isHoveringStepIndicator = false
+    var accumulatedTranslation: CGFloat = 0
+    var hasTriggeredGesture = false
 }
 
 /// Keeps AppState publications scoped to the completion destination instead
@@ -631,6 +639,11 @@ extension OnboardingStep: OnboardingStepValidating {
 
 // MARK: - Onboarding Title Bar
 
+@MainActor
+private final class OnboardingIntroTaskController {
+    var iconPrewarmTask: Task<Void, Never>?
+}
+
 private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
@@ -648,7 +661,7 @@ private struct OnboardingIntroView: View {
     @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
-    @State private var iconPrewarmTask: Task<Void, Never>?
+    @State private var taskController = OnboardingIntroTaskController()
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
@@ -762,7 +775,7 @@ private struct OnboardingIntroView: View {
         }
         .onDisappear {
             revealGeneration += 1
-            iconPrewarmTask?.cancel()
+            taskController.iconPrewarmTask?.cancel()
             audio.stopAll()
         }
     }
@@ -779,7 +792,7 @@ private struct OnboardingIntroView: View {
     private func runIntroReveal() {
         revealGeneration += 1
         let generation = revealGeneration
-        iconPrewarmTask?.cancel()
+        taskController.iconPrewarmTask?.cancel()
 
         if reduceMotion {
             iconScale = 1
@@ -796,7 +809,7 @@ private struct OnboardingIntroView: View {
 
         // Resolve cold NSWorkspace icons one at a time during the quiet opening
         // reveal instead of batching every lookup on the frame chips appear.
-        iconPrewarmTask = Task { @MainActor in
+        taskController.iconPrewarmTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
             guard generation == revealGeneration, !Task.isCancelled else { return }
             await OnboardingFileIconProvider.prewarmIcons(

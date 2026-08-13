@@ -14,7 +14,6 @@ import Permiso
 
 public struct PermissionsStepView: View {
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
-    @State private var appState: AppState?
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
@@ -24,7 +23,7 @@ public struct PermissionsStepView: View {
     @State private var didOpenFullDiskAccessSettings = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let notificationManager = NotificationManager.shared
-    @State private var automationManager: AutomationManager?
+    @State private var taskController = PermissionsTaskController()
 
     public init(hasRequiredPermissions: Binding<Bool>) {
         self._hasRequiredPermissions = hasRequiredPermissions
@@ -62,7 +61,9 @@ public struct PermissionsStepView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
                 .animation(
-                    .spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
+                    value: hasAppeared
+                )
 
                 Spacer()
             }
@@ -151,15 +152,20 @@ public struct PermissionsStepView: View {
         }
         .background {
             PermissionsEnvironmentResolver { manager, appState in
-                guard automationManager !== manager || self.appState !== appState else { return }
-                automationManager = manager
-                self.appState = appState
+                guard taskController.automationManager !== manager
+                        || taskController.appState !== appState else { return }
+                taskController.automationManager = manager
+                taskController.appState = appState
                 checkPermissions()
             }
             .frame(width: 0, height: 0)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             checkPermissions()
+        }
+        .onDisappear {
+            taskController.permissionRefreshTask?.cancel()
+            taskController.permissionRefreshTask = nil
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
@@ -184,27 +190,44 @@ public struct PermissionsStepView: View {
     }
 
     private func checkPermissions() {
-        if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
+        if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey),
+           !hasRequiredPermissions {
             hasRequiredPermissions = true
         }
-        permissionStates[.filesAndFolders] = hasRequiredPermissions ? .granted : .unknown
 
-        Task { @MainActor in
+        taskController.permissionRefreshTask?.cancel()
+        let filesAndFoldersState: PermissionState = hasRequiredPermissions ? .granted : .unknown
+        let didOpenFullDiskAccessSettings = didOpenFullDiskAccessSettings
+        let automationManager = taskController.automationManager
+
+        taskController.permissionRefreshTask = Task { @MainActor in
+            async let canReadProtectedLocation = Task.detached(priority: .utility) {
+                Self.canReadProtectedFullDiskAccessLocation()
+            }.value
             await notificationManager.checkNotificationPermission()
-            permissionStates[.notifications] = notificationState(for: notificationManager.notificationPermissionStatus)
-        }
+            let hasProtectedLocationAccess = await canReadProtectedLocation
+            guard !Task.isCancelled else { return }
 
-        permissionStates[.fullDiskAccess] = fullDiskAccessState()
+            automationManager?.checkPermissions(enableChecksIfNeeded: false)
+            let automationState = automationManager.map {
+                permissionState(for: $0.automationStatus)
+            } ?? .unknown
+            let refreshedStates: [PermissionType: PermissionState] = [
+                .filesAndFolders: filesAndFoldersState,
+                .fullDiskAccess: fullDiskAccessState(
+                    canReadProtectedLocation: hasProtectedLocationAccess,
+                    didOpenSettings: didOpenFullDiskAccessSettings
+                ),
+                .automation: automationState,
+                .notifications: notificationState(
+                    for: notificationManager.notificationPermissionStatus
+                )
+            ]
 
-        guard let automationManager else { return }
-        automationManager.checkPermissions(enableChecksIfNeeded: false)
-        switch automationManager.automationStatus {
-        case .granted:
-            permissionStates[.automation] = .granted
-        case .denied:
-            permissionStates[.automation] = .denied
-        case .unknown:
-            permissionStates[.automation] = .unknown
+            if permissionStates != refreshedStates {
+                permissionStates = refreshedStates
+            }
+            taskController.permissionRefreshTask = nil
         }
     }
 
@@ -224,7 +247,7 @@ public struct PermissionsStepView: View {
             isFullDiskAccessConfirmationPresented = true
 
         case .automation:
-            guard let automationManager else { return }
+            guard let automationManager = taskController.automationManager else { return }
             permissionStates[.automation] = .pending
             automationManager.requestAutomationPermissionCheck()
             permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
@@ -264,21 +287,24 @@ public struct PermissionsStepView: View {
             panel: .fullDiskAccess,
             sourceFrameInScreen: fullDiskAccessSourceFrameInScreen,
             onCancel: {
-                permissionStates[.fullDiskAccess] = fullDiskAccessState()
                 fullDiskAccessSourceFrameInScreen = nil
+                checkPermissions()
             }
         )
     }
 
-    private func fullDiskAccessState() -> PermissionState {
-        if canReadProtectedFullDiskAccessLocation() {
-            return didOpenFullDiskAccessSettings ? .restartRequired : .granted
+    private func fullDiskAccessState(
+        canReadProtectedLocation: Bool,
+        didOpenSettings: Bool
+    ) -> PermissionState {
+        if canReadProtectedLocation {
+            return didOpenSettings ? .restartRequired : .granted
         }
 
-        return didOpenFullDiskAccessSettings ? .pending : .unknown
+        return didOpenSettings ? .pending : .unknown
     }
 
-    private func canReadProtectedFullDiskAccessLocation() -> Bool {
+    nonisolated private static func canReadProtectedFullDiskAccessLocation() -> Bool {
         let fileManager = FileManager.default
         let protectedDirectories = [
             "Library/Mail",
@@ -363,7 +389,7 @@ public struct PermissionsStepView: View {
 
         if panel.runModal() == .OK,
            let url = panel.url,
-           appState?.grantFilesAndFoldersPermission(for: url) == true {
+           taskController.appState?.grantFilesAndFoldersPermission(for: url) == true {
             hasRequiredPermissions = true
             permissionStates[.filesAndFolders] = .granted
             HapticFeedbackManager.shared.success()
@@ -375,6 +401,13 @@ public struct PermissionsStepView: View {
 }
 
 // MARK: - Supporting Types
+
+@MainActor
+private final class PermissionsTaskController {
+    weak var automationManager: AutomationManager?
+    weak var appState: AppState?
+    var permissionRefreshTask: Task<Void, Never>?
+}
 
 enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     case filesAndFolders = "Files & Folders"
@@ -472,7 +505,7 @@ enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum PermissionState: Sendable {
+enum PermissionState: Sendable, Equatable {
     case unknown
     case pending
     case granted

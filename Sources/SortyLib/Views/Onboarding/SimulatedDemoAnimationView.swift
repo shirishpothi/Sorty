@@ -9,6 +9,13 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
+@MainActor
+private final class SimulatedDemoTaskController {
+    var animationTask: Task<Void, Never>?
+    var scanHighlightTask: Task<Void, Never>?
+    var pendingWorkItems: [DispatchWorkItem] = []
+}
+
 struct SimulatedDemoAnimationView: View {
     let onComplete: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -40,9 +47,7 @@ struct SimulatedDemoAnimationView: View {
     @State private var displayedFolderCount: Int = 0
     @State private var displayedPercent: Int = 0
     @State private var organizingTrailOpacities: [UUID: Bool] = [:]
-    @State private var animationTask: Task<Void, Never>?
-    @State private var scanHighlightTask: Task<Void, Never>?
-    @State private var pendingWorkItems: [DispatchWorkItem] = []
+    @State private var taskController = SimulatedDemoTaskController()
 
     @StateObject private var audioManager = OnboardingAudioManager()
 
@@ -154,12 +159,12 @@ struct SimulatedDemoAnimationView: View {
             startAnimation()
         }
         .onDisappear {
-            animationTask?.cancel()
-            animationTask = nil
-            scanHighlightTask?.cancel()
-            scanHighlightTask = nil
-            pendingWorkItems.forEach { $0.cancel() }
-            pendingWorkItems.removeAll()
+            taskController.animationTask?.cancel()
+            taskController.animationTask = nil
+            taskController.scanHighlightTask?.cancel()
+            taskController.scanHighlightTask = nil
+            taskController.pendingWorkItems.forEach { $0.cancel() }
+            taskController.pendingWorkItems.removeAll()
             audioManager.stopAll()
         }
     }
@@ -549,7 +554,7 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private func startAnimation() {
-        animationTask = Task { @MainActor in
+        taskController.animationTask = Task { @MainActor in
             // Phase 1: Messy (let the user absorb the initial state)
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard !Task.isCancelled else { return }
@@ -758,9 +763,9 @@ struct SimulatedDemoAnimationView: View {
     }
 
     private func startScanHighlights() {
-        scanHighlightTask?.cancel()
+        taskController.scanHighlightTask?.cancel()
         scannedFileIndex = -1
-        scanHighlightTask = Task { @MainActor in
+        taskController.scanHighlightTask = Task { @MainActor in
             for index in files.indices {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard !Task.isCancelled else { return }
@@ -803,7 +808,7 @@ struct SimulatedDemoAnimationView: View {
     /// Schedule a cancellable work item on the main queue
     private func scheduleWorkItem(delay: TimeInterval, action: @escaping () -> Void) {
         let workItem = DispatchWorkItem(block: action)
-        pendingWorkItems.append(workItem)
+        taskController.pendingWorkItems.append(workItem)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }

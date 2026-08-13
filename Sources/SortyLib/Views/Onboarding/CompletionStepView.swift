@@ -753,10 +753,16 @@ enum OnboardingCompletionAudio {
     }
 }
 
+@MainActor
+private final class CompletionRuntimeController {
+    weak var settingsViewModel: SettingsViewModel?
+    weak var appState: AppState?
+    var animationTask: Task<Void, Never>?
+}
+
 public struct CompletionStepView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var settingsViewModel: SettingsViewModel?
-    @State private var appState: AppState?
+    @State private var runtimeController = CompletionRuntimeController()
 
     let providerSetupStatus: ProviderSetupStatus
     let onFinish: () -> Void
@@ -768,7 +774,6 @@ public struct CompletionStepView: View {
     @State private var showGlowRing = false
     @State private var showParticles = false
     @State private var tipsAppeared = false
-    @State private var animationTask: Task<Void, Never>?
 
     private let audioController = CompletionAudioController.shared
     @State private var readinessState: ReadinessState = .idle
@@ -842,14 +847,14 @@ public struct CompletionStepView: View {
             startRevealSequence()
         }
         .onDisappear {
-            animationTask?.cancel()
-            animationTask = nil
+            runtimeController.animationTask?.cancel()
+            runtimeController.animationTask = nil
             fadeOutAndStopAudio(duration: 0.25)
         }
         .background {
             CompletionEnvironmentResolver { settingsViewModel, appState in
-                self.settingsViewModel = settingsViewModel
-                self.appState = appState
+                runtimeController.settingsViewModel = settingsViewModel
+                runtimeController.appState = appState
             }
             .frame(width: 0, height: 0)
         }
@@ -870,7 +875,7 @@ public struct CompletionStepView: View {
         }
 
         // Phase 2+: async sequence stored for cancellation on disappear
-        animationTask = Task { @MainActor in
+        runtimeController.animationTask = Task { @MainActor in
             // Phase 2: Background fades in, blob fades/expands (0.5s after start)
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
@@ -982,7 +987,8 @@ public struct CompletionStepView: View {
         readinessState = .idle
         startTransition()
 
-        guard let viewModel = settingsViewModel, let state = appState else {
+        guard let viewModel = runtimeController.settingsViewModel,
+              let state = runtimeController.appState else {
             readinessState = .failed("Sorty is still preparing your setup. Try again in a moment.")
             return
         }
@@ -1001,7 +1007,8 @@ public struct CompletionStepView: View {
     }
 
     private func skipVerificationAndFinish() {
-        guard let settingsViewModel, let appState else { return }
+        guard let settingsViewModel = runtimeController.settingsViewModel,
+              let appState = runtimeController.appState else { return }
         appState.startSetupRepair(
             message: "Sorty could not verify \(settingsViewModel.config.provider.displayName) during onboarding. Finish provider setup in Settings before organizing files.",
             navigateToSettings: true

@@ -11,7 +11,8 @@ import SwiftUI
 public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
-    @State private var appState: AppState?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var runtimeController = WorkflowRuntimeController()
     @State private var hasAppeared = false
     
     public init() {}
@@ -49,7 +50,10 @@ public struct WorkflowSelectionStepView: View {
                 .frame(maxWidth: 350)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
+                    value: hasAppeared
+                )
 
                 Spacer()
             }
@@ -71,10 +75,10 @@ public struct WorkflowSelectionStepView: View {
                             isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
                         ) {
                             HapticFeedbackManager.shared.selection()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
                                 personaManager.selectPersona(persona)
                                 personaManager.selectedCustomPersonaId = nil
-                                appState?.personaGeneratorPresentationContext = nil
+                                runtimeController.appState?.personaGeneratorPresentationContext = nil
                             }
                         }
                     }
@@ -139,15 +143,18 @@ public struct WorkflowSelectionStepView: View {
             .padding(.trailing, 72)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
+                value: hasAppeared
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .onAppear {
-            withAnimation { hasAppeared = true }
+            withAnimation(reduceMotion ? nil : .default) { hasAppeared = true }
         }
         .background {
             WorkflowAppStateResolver { appState in
-                self.appState = appState
+                runtimeController.appState = appState
             }
             .frame(width: 0, height: 0)
         }
@@ -156,7 +163,7 @@ public struct WorkflowSelectionStepView: View {
     }
 
     private func presentPersonaGenerator() {
-        appState?.personaGeneratorPresentationContext = .onboarding
+        runtimeController.appState?.personaGeneratorPresentationContext = .onboarding
     }
 
     private var customPersonaGrid: some View {
@@ -179,15 +186,20 @@ public struct WorkflowSelectionStepView: View {
                         }
                     }
                 ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
                         personaManager.selectCustomPersona(persona.id)
-                        appState?.personaGeneratorPresentationContext = nil
+                        runtimeController.appState?.personaGeneratorPresentationContext = nil
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
     }
+}
+
+@MainActor
+private final class WorkflowRuntimeController {
+    weak var appState: AppState?
 }
 
 // MARK: - Supporting Views

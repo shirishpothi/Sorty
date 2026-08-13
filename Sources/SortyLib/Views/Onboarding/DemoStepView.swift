@@ -158,8 +158,7 @@ private struct DemoCompletionHighlights: View {
 public struct DemoStepView: View {
     let onComplete: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var organizer: FolderOrganizer?
-    @State private var settingsViewModel: SettingsViewModel?
+    @State private var runtimeController = DemoRuntimeController()
     @State private var organizerState: OrganizationState = .idle
     @State private var currentPlan: OrganizationPlan?
     @State private var hasAppeared = false
@@ -291,8 +290,8 @@ public struct DemoStepView: View {
             }
             .background {
                 DemoEnvironmentResolver { organizer, settingsViewModel, state, plan in
-                    self.organizer = organizer
-                    self.settingsViewModel = settingsViewModel
+                    runtimeController.organizer = organizer
+                    runtimeController.settingsViewModel = settingsViewModel
                     organizerState = state
                     currentPlan = plan
                     handleStateChange(state)
@@ -603,8 +602,8 @@ public struct DemoStepView: View {
     
     private func startDemo() {
         guard let directory = selectedDirectory,
-              let organizer,
-              let settingsViewModel else { return }
+              let organizer = runtimeController.organizer,
+              let settingsViewModel = runtimeController.settingsViewModel else { return }
         
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             demoState = .analyzing
@@ -647,6 +646,12 @@ public struct DemoStepView: View {
             }
         }
     }
+}
+
+@MainActor
+private final class DemoRuntimeController {
+    weak var organizer: FolderOrganizer?
+    weak var settingsViewModel: SettingsViewModel?
 }
 
 /// Narrows the demo's broad environment subscriptions to the two values that

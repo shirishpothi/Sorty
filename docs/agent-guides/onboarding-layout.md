@@ -70,6 +70,13 @@ cancel superseded presentation tasks and apply results only when their captured
 provider is still selected, preventing rapid selection changes from publishing
 stale model lists.
 
+Keep scheduling and event bookkeeping out of SwiftUI state. Trackpad swipe
+deltas, cancellable task handles, service references used only by actions, and
+queued demo work items live in stable non-observable controllers; mutating them
+must not invalidate an active step. Permission refreshes coalesce duplicate
+requests, enumerate protected locations off the main actor, and publish one
+permission-state snapshot instead of redrawing the full step once per row.
+
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
