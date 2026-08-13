@@ -1391,6 +1391,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private var orbitDisplayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval?
     private var orbitPhase: CFTimeInterval = 0
+    private var idleAnimationStartedAt: CFTimeInterval?
     private var collapseProgress: CGFloat = 0
     private var collapseVelocity: CGFloat = 0
     private var collapseTarget: CGFloat = 0
@@ -1419,6 +1420,7 @@ private final class OnboardingOrbitFieldView: NSView {
         if window != nil {
             installDisplayLinkIfNeeded()
         } else {
+            stopIdleAnimations(preservingPhase: false)
             revealWorkItems.forEach { $0.cancel() }
             revealWorkItems.removeAll()
             orbitDisplayLink?.invalidate()
@@ -1429,7 +1431,11 @@ private final class OnboardingOrbitFieldView: NSView {
 
     override func layout() {
         super.layout()
-        renderFrame()
+        if idleAnimationStartedAt != nil {
+            configureIdleBaseLayers()
+        } else {
+            renderFrame()
+        }
     }
 
     func update(
@@ -1448,6 +1454,10 @@ private final class OnboardingOrbitFieldView: NSView {
             updateReveal(visible: filesVisible)
         }
 
+        if collapseTarget != (isCollapsed ? 1 : 0), idleAnimationStartedAt != nil {
+            stopIdleAnimations(preservingPhase: true)
+        }
+
         self.collapseOrigin = collapseOrigin
         self.reduceMotion = reduceMotion
         self.isActive = isActive
@@ -1458,8 +1468,10 @@ private final class OnboardingOrbitFieldView: NSView {
             collapseVelocity = 0
         }
 
-        updateDisplayLinkState()
-        renderFrame()
+        updateMotionState()
+        if idleAnimationStartedAt == nil {
+            renderFrame()
+        }
     }
 
     private func installHosts(icons: [String: NSImage]) {
@@ -1523,13 +1535,36 @@ private final class OnboardingOrbitFieldView: NSView {
         )
         displayLink.add(to: .main, forMode: .common)
         orbitDisplayLink = displayLink
-        updateDisplayLinkState()
+        updateMotionState()
     }
 
-    private func updateDisplayLinkState() {
-        let shouldPause = !filesVisible || !isActive || reduceMotion
-        orbitDisplayLink?.isPaused = shouldPause
-        if shouldPause {
+    private func updateMotionState() {
+        let springIsMoving = abs(collapseProgress - collapseTarget) > 0.0005
+            || abs(collapseVelocity) > 0.0005
+        let shouldRunIdleAnimations = filesVisible
+            && isActive
+            && !reduceMotion
+            && collapseTarget == 0
+            && !springIsMoving
+
+        if shouldRunIdleAnimations {
+            if idleAnimationStartedAt == nil {
+                startIdleAnimationsIfNeeded()
+            } else {
+                configureIdleBaseLayers()
+            }
+            orbitDisplayLink?.isPaused = true
+            lastTimestamp = nil
+            return
+        }
+
+        if idleAnimationStartedAt != nil {
+            stopIdleAnimations(preservingPhase: !reduceMotion)
+        }
+
+        let shouldDriveSpring = filesVisible && isActive && !reduceMotion && springIsMoving
+        orbitDisplayLink?.isPaused = !shouldDriveSpring
+        if !shouldDriveSpring {
             lastTimestamp = nil
         }
     }
@@ -1541,7 +1576,139 @@ private final class OnboardingOrbitFieldView: NSView {
         orbitPhase += delta
         advanceCollapseSpring(delta: delta)
         renderFrame()
+        updateMotionState()
     }
+
+    private func startIdleAnimationsIfNeeded() {
+        guard idleAnimationStartedAt == nil, !bounds.isEmpty else { return }
+        let startedAt = CACurrentMediaTime()
+        idleAnimationStartedAt = startedAt
+        configureIdleBaseLayers()
+
+        for file in OnboardingOrbitFile.files {
+            guard let chipLayer = hosts[file.id]?.layer else { continue }
+            let localStartTime = chipLayer.convertTime(startedAt, from: nil)
+            chipLayer.add(
+                sineAnimation(
+                    keyPath: "position.x",
+                    amplitude: file.orbitWidth * 1.18,
+                    angularSpeed: file.driftSpeed,
+                    phase: file.driftPhase + .pi / 2,
+                    beginTime: localStartTime
+                ),
+                forKey: "idleOrbitX"
+            )
+            chipLayer.add(
+                sineAnimation(
+                    keyPath: "position.x",
+                    amplitude: file.driftRadius * 1.28,
+                    angularSpeed: 0.42,
+                    phase: file.driftPhase + .pi / 2,
+                    beginTime: localStartTime
+                ),
+                forKey: "idleDriftX"
+            )
+            chipLayer.add(
+                sineAnimation(
+                    keyPath: "position.y",
+                    amplitude: file.orbitHeight * 1.22,
+                    angularSpeed: file.driftSpeed,
+                    phase: file.driftPhase,
+                    beginTime: localStartTime
+                ),
+                forKey: "idleOrbitY"
+            )
+            chipLayer.add(
+                sineAnimation(
+                    keyPath: "position.y",
+                    amplitude: file.driftRadius * 1.32,
+                    angularSpeed: 0.35,
+                    phase: file.driftPhase,
+                    beginTime: localStartTime
+                ),
+                forKey: "idleDriftY"
+            )
+            chipLayer.add(
+                sineAnimation(
+                    keyPath: "transform.rotation.z",
+                    amplitude: 3 * .pi / 180,
+                    angularSpeed: 0.7,
+                    phase: file.driftPhase,
+                    beginTime: localStartTime
+                ),
+                forKey: "idleRotation"
+            )
+        }
+    }
+
+    private func stopIdleAnimations(preservingPhase: Bool) {
+        guard let startedAt = idleAnimationStartedAt else { return }
+        if preservingPhase {
+            orbitPhase += max(0, CACurrentMediaTime() - startedAt)
+        }
+        idleAnimationStartedAt = nil
+        for host in hosts.values {
+            Self.idleAnimationKeys.forEach { host.layer?.removeAnimation(forKey: $0) }
+        }
+        renderFrame()
+    }
+
+    private func configureIdleBaseLayers() {
+        guard !bounds.isEmpty else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for file in OnboardingOrbitFile.files {
+            guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
+            let fittingSize = hostSizes[file.id] ?? host.fittingSize
+            if host.bounds.size != fittingSize {
+                host.frame = CGRect(origin: .zero, size: fittingSize)
+            }
+            chipLayer.position = CGPoint(
+                x: bounds.midX + file.baseX,
+                y: bounds.midY + file.baseY
+            )
+            chipLayer.setAffineTransform(
+                CGAffineTransform(rotationAngle: file.rotation * .pi / 180)
+                    .scaledBy(x: file.scale, y: file.scale)
+            )
+            chipLayer.opacity = 1
+        }
+        CATransaction.commit()
+    }
+
+    private func sineAnimation(
+        keyPath: String,
+        amplitude: CGFloat,
+        angularSpeed: Double,
+        phase: Double,
+        beginTime: CFTimeInterval
+    ) -> CAKeyframeAnimation {
+        let sampleCount = 120
+        let startingPhase = phase + angularSpeed * orbitPhase
+        let animation = CAKeyframeAnimation(keyPath: keyPath)
+        animation.values = (0...sampleCount).map { index in
+            let progress = Double(index) / Double(sampleCount)
+            return NSNumber(value: Double(amplitude) * sin(startingPhase + progress * 2 * .pi))
+        }
+        animation.keyTimes = (0...sampleCount).map { index in
+            NSNumber(value: Double(index) / Double(sampleCount))
+        }
+        animation.duration = 2 * .pi / angularSpeed
+        animation.beginTime = beginTime
+        animation.repeatCount = .infinity
+        animation.calculationMode = .linear
+        animation.isAdditive = true
+        animation.isRemovedOnCompletion = false
+        return animation
+    }
+
+    private static let idleAnimationKeys = [
+        "idleOrbitX",
+        "idleDriftX",
+        "idleOrbitY",
+        "idleDriftY",
+        "idleRotation"
+    ]
 
     private func advanceCollapseSpring(delta: CFTimeInterval) {
         let displacement = collapseProgress - collapseTarget

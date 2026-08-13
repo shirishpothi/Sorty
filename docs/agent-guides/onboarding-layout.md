@@ -24,9 +24,11 @@ opacity. Do not animate insertion of the step layout itself.
 Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow
 uses retained Core Animation gradient layers and pauses while Sorty is inactive;
 do not replace it with a full-screen composited blur that redraws every frame.
-The intro orbit keeps its native material-backed chips mounted and updates only
-their layers from a display link. Its Gaussian glow and energy scan, plus the
-completion blob, ripple, and particle motion, likewise use retained layers; do
+The intro orbit keeps its native material-backed chips mounted. Its idle sine
+components run as additive Core Animation keyframes, while a display link wakes
+only for the interactive hover-collapse spring. Its Gaussian glow and energy
+scan, plus the completion blob, ripple, and particle motion, likewise use
+retained layers; do
 not move those continuous effects back into broad SwiftUI state or frame
 timelines. The optional demo's continuous organizing sliver follows the same
 rule, and its per-file/folder collections are derived once per mutation rather
