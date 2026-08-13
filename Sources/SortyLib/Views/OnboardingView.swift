@@ -1289,100 +1289,40 @@ private enum OnboardingFileIconProvider {
     }
 }
 
-/// Draws a decorative file card once into its backing layer. Live SwiftUI
-/// material views are deliberately avoided here: moving ten effect-backed
-/// hosting trees competes with AppKit's cursor-event compositing path.
-@MainActor
-private final class OnboardingOrbitFileChipView: NSView {
-    private var icon: NSImage
-    private let label: String
-    private let labelFont: NSFont
-    private let labelSize: CGSize
+private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
+    let file: OnboardingOrbitFile
+    let icon: NSImage
 
-    override var isFlipped: Bool { true }
-
-    init(file: OnboardingOrbitFile, icon: NSImage) {
-        let label = "\(file.name).\(file.ext)"
-        let labelFont = NSFont.systemFont(ofSize: 11, weight: .medium)
-        let labelSize = (label as NSString).size(withAttributes: [.font: labelFont])
-        self.icon = icon
-        self.label = label
-        self.labelFont = labelFont
-        self.labelSize = labelSize
-        let width = ceil(max(66, labelSize.width + 16) + 20)
-        super.init(frame: CGRect(x: 0, y: 0, width: width, height: 89))
-
-        wantsLayer = true
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
-        layer?.masksToBounds = false
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.30
-        layer?.shadowRadius = 16
-        layer?.shadowOffset = CGSize(width: 0, height: -12)
-        layer?.shouldRasterize = true
-        layer?.rasterizationScale = NSScreen.main?.backingScaleFactor ?? 2
-        setAccessibilityElement(false)
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.file.id == rhs.file.id && lhs.icon === rhs.icon
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 46, height: 46)
 
-    override func layout() {
-        super.layout()
-        layer?.shadowPath = CGPath(
-            roundedRect: bounds,
-            cornerWidth: 16,
-            cornerHeight: 16,
-            transform: nil
+            Text("\(file.name).\(file.ext)")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.82))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
         )
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-
-        let cardPath = NSBezierPath(
-            roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-            xRadius: 16,
-            yRadius: 16
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
-        NSColor(calibratedWhite: 0.16, alpha: 0.88).setFill()
-        cardPath.fill()
-        NSColor.white.withAlphaComponent(0.10).setStroke()
-        cardPath.lineWidth = 1
-        cardPath.stroke()
-
-        icon.draw(
-            in: CGRect(x: bounds.midX - 23, y: 10, width: 46, height: 46),
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1,
-            respectFlipped: true,
-            hints: [.interpolation: NSImageInterpolation.high]
-        )
-
-        let labelRect = CGRect(
-            x: bounds.midX - (labelSize.width + 16) / 2,
-            y: 62,
-            width: labelSize.width + 16,
-            height: 17
-        )
-        NSColor(calibratedWhite: 0.24, alpha: 0.90).setFill()
-        NSBezierPath(roundedRect: labelRect, xRadius: 8.5, yRadius: 8.5).fill()
-        (label as NSString).draw(
-            at: CGPoint(x: labelRect.minX + 8, y: labelRect.minY + 2),
-            withAttributes: [
-                .font: labelFont,
-                .foregroundColor: NSColor.labelColor.withAlphaComponent(0.82)
-            ]
-        )
-    }
-
-    func update(icon: NSImage) {
-        guard self.icon !== icon else { return }
-        self.icon = icon
-        needsDisplay = true
+        .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
+        .accessibilityHidden(true)
     }
 }
 
@@ -1410,8 +1350,9 @@ private struct OnboardingOrbitField: NSViewRepresentable {
     }
 }
 
-/// Keeps every pre-rendered file chip mounted and updates only its backing
-/// layer's position, transform, and opacity.
+/// Keeps every material-backed file chip mounted and updates only layer
+/// position, transform, and opacity from a display link. The orbit equations,
+/// cadence, hover target, and spring response match the former SwiftUI path.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
     private static let orbitRate: Float = 24
@@ -1419,7 +1360,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private static let springResponse = 0.55
     private static let springDamping = 0.85
 
-    private var hosts: [UUID: OnboardingOrbitFileChipView] = [:]
+    private var hosts: [UUID: NSHostingView<OnboardingOrbitFileChip>] = [:]
     private var hostedIcons: [UUID: NSImage] = [:]
     private var hostSizes: [UUID: CGSize] = [:]
     private var revealWorkItems: [DispatchWorkItem] = []
@@ -1540,12 +1481,14 @@ private final class OnboardingOrbitFieldView: NSView {
     private func installHosts(icons: [String: NSImage]) {
         for file in OnboardingOrbitFile.files where hosts[file.id] == nil {
             let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
-            let host = OnboardingOrbitFileChipView(file: file, icon: icon)
+            let host = NSHostingView(rootView: OnboardingOrbitFileChip(file: file, icon: icon))
+            host.wantsLayer = true
+            host.layer?.masksToBounds = false
             host.alphaValue = 0
             addSubview(host)
             hosts[file.id] = host
             hostedIcons[file.id] = icon
-            hostSizes[file.id] = host.frame.size
+            hostSizes[file.id] = host.fittingSize
         }
     }
 
@@ -1554,7 +1497,8 @@ private final class OnboardingOrbitFieldView: NSView {
             let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
             guard hostedIcons[file.id] !== icon, let host = hosts[file.id] else { continue }
             hostedIcons[file.id] = icon
-            host.update(icon: icon)
+            host.rootView = OnboardingOrbitFileChip(file: file, icon: icon)
+            hostSizes[file.id] = host.fittingSize
         }
     }
 
