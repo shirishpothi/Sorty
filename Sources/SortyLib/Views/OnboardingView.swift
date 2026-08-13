@@ -52,7 +52,6 @@ public struct OnboardingView: View {
                     OnboardingBottomGradient(progress: gradientProgress)
                         .ignoresSafeArea()
                         .allowsHitTesting(false)
-                        .animation(.easeInOut(duration: 0.65), value: gradientProgress)
 
                     VStack(spacing: 0) {
                         // Pinned with a fixed top padding so it doesn't shift between steps.
@@ -2457,72 +2456,224 @@ private final class OnboardingScreenEdgeGlowView: NSView {
     }
 }
 
-struct OnboardingBottomGradient: View {
-    @Environment(\.colorScheme) private var colorScheme
-
+struct OnboardingBottomGradient: NSViewRepresentable {
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
     var progress: Double = 0
     var showsBaseColor = true
 
-    var body: some View {
-        let clamped = max(0, min(1, progress))
-        // Let the accent grow through the flow, then settle into a single
-        // rose field on completion with the strongest color around the final
-        // call to action.
-        let completion = clamped * clamped
-        let radialEnd = 680 + completion * 560
+    func makeNSView(context: Context) -> RetainedOnboardingBottomGradientView {
+        RetainedOnboardingBottomGradientView()
+    }
+
+    func updateNSView(_ nsView: RetainedOnboardingBottomGradientView, context: Context) {
+        nsView.update(
+            progress: progress,
+            showsBaseColor: showsBaseColor,
+            isDark: context.environment.colorScheme == .dark,
+            reduceMotion: context.environment.accessibilityReduceMotion
+        )
+    }
+}
+
+/// Retains the full-window color field as three gradient layers. Step changes
+/// animate only layer colors and geometry instead of asking a SwiftUI Canvas to
+/// redraw the entire window throughout every transition.
+final class RetainedOnboardingBottomGradientView: NSView {
+    private static let transitionDuration: CFTimeInterval = 0.65
+
+    private let accentGradient = CAGradientLayer()
+    private let topShadeGradient = CAGradientLayer()
+    private let radialGlowGradient = CAGradientLayer()
+    private var currentProgress: Double?
+    private var currentShowsBaseColor: Bool?
+    private var currentIsDark: Bool?
+    private var reduceMotion = false
+    private var lastLayoutBounds = CGRect.zero
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        layer?.addSublayer(accentGradient)
+        layer?.addSublayer(topShadeGradient)
+        layer?.addSublayer(radialGlowGradient)
+
+        accentGradient.startPoint = CGPoint(x: 0.5, y: 1)
+        accentGradient.locations = [0, 0.42, 1]
+        topShadeGradient.startPoint = CGPoint(x: 0.5, y: 0)
+        topShadeGradient.endPoint = CGPoint(x: 0.5, y: 1)
+        topShadeGradient.locations = [0, 0.32, 0.64]
+        radialGlowGradient.type = .radial
+        radialGlowGradient.startPoint = CGPoint(x: 0.5, y: 0.5)
+        radialGlowGradient.endPoint = CGPoint(x: 1, y: 0.5)
+        radialGlowGradient.locations = [0, 0.42, 1]
+        radialGlowGradient.compositingFilter = CIFilter(name: "CIAdditionCompositing")
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        guard bounds != lastLayoutBounds else { return }
+        lastLayoutBounds = bounds
+        applyPresentation(animated: false)
+    }
+
+    func update(
+        progress: Double,
+        showsBaseColor: Bool,
+        isDark: Bool,
+        reduceMotion: Bool
+    ) {
+        let clampedProgress = max(0, min(1, progress))
+        let progressChanged = currentProgress != clampedProgress
+        let appearanceChanged = currentIsDark != isDark
+        let baseChanged = currentShowsBaseColor != showsBaseColor
+        let motionChanged = self.reduceMotion != reduceMotion
+        guard progressChanged || appearanceChanged || baseChanged || motionChanged else { return }
+
+        let hasPresentedBefore = currentProgress != nil
+        currentProgress = clampedProgress
+        currentShowsBaseColor = showsBaseColor
+        currentIsDark = isDark
+        self.reduceMotion = reduceMotion
+        applyPresentation(animated: hasPresentedBefore && progressChanged && !reduceMotion)
+    }
+
+    private func applyPresentation(animated: Bool) {
+        guard let progress = currentProgress,
+              let showsBaseColor = currentShowsBaseColor,
+              let isDark = currentIsDark,
+              !bounds.isEmpty else { return }
+
+        let completion = progress * progress
         let intensity = 0.98 + completion * 0.28
-        let bottomOpacity = colorScheme == .dark ? 0.42 : 0.52
-        let midOpacity = colorScheme == .dark ? 0.22 : 0.28
-        let glowOpacity = colorScheme == .dark ? 0.28 : 0.36
+        let bottomOpacity = isDark ? 0.42 : 0.52
+        let midOpacity = isDark ? 0.22 : 0.28
+        let glowOpacity = isDark ? 0.28 : 0.36
+        let accent = NSColor(SortyDesignSystem.Colors.resolvedAccent)
 
-        Canvas(opaque: showsBaseColor, colorMode: .linear, rendersAsynchronously: true) { context, size in
-            let bounds = Path(CGRect(origin: .zero, size: size))
-            if showsBaseColor {
-                context.fill(bounds, with: .color(Color(NSColor.windowBackgroundColor)))
-            }
+        layer?.backgroundColor = showsBaseColor
+            ? NSColor.windowBackgroundColor.cgColor
+            : NSColor.clear.cgColor
 
-            context.fill(
-                bounds,
-                with: .linearGradient(
-                    Gradient(stops: [
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(bottomOpacity * intensity), location: 0.00),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * intensity), location: 0.42),
-                    .init(color: Color.clear, location: 1.00)
-                    ]),
-                    startPoint: CGPoint(x: size.width * 0.5, y: size.height),
-                    endPoint: CGPoint(x: size.width * 0.5, y: size.height * (0.68 - clamped * 0.56))
-                )
+        let accentColors = [
+            accent.withAlphaComponent(bottomOpacity * intensity).cgColor,
+            accent.withAlphaComponent(midOpacity * intensity).cgColor,
+            accent.withAlphaComponent(0).cgColor
+        ]
+        let accentEndPoint = CGPoint(x: 0.5, y: 0.68 - progress * 0.56)
+        let shadeColors = [
+            NSColor.black.withAlphaComponent(isDark ? 0.18 : 0.10).cgColor,
+            NSColor.black.withAlphaComponent(isDark ? 0.04 : 0.02).cgColor,
+            NSColor.clear.cgColor
+        ]
+        let radialColors = [
+            accent.withAlphaComponent(glowOpacity * intensity).cgColor,
+            accent.withAlphaComponent(0.16 * intensity).cgColor,
+            accent.withAlphaComponent(0).cgColor
+        ]
+        let radialRadius = 680 + completion * 560
+        let radialCenter = CGPoint(
+            x: bounds.midX,
+            y: bounds.height * (1.02 - progress * 0.18)
+        )
+        let radialFrame = CGRect(
+            x: radialCenter.x - radialRadius,
+            y: radialCenter.y - radialRadius,
+            width: radialRadius * 2,
+            height: radialRadius * 2
+        )
+
+        let duration = animated ? Self.transitionDuration : 0
+        update(
+            accentGradient,
+            frame: bounds,
+            colors: accentColors,
+            endPoint: accentEndPoint,
+            duration: duration
+        )
+        update(
+            topShadeGradient,
+            frame: bounds,
+            colors: shadeColors,
+            endPoint: CGPoint(x: 0.5, y: 1),
+            duration: 0
+        )
+        update(
+            radialGlowGradient,
+            frame: radialFrame,
+            colors: radialColors,
+            endPoint: CGPoint(x: 1, y: 0.5),
+            duration: duration
+        )
+    }
+
+    private func update(
+        _ gradient: CAGradientLayer,
+        frame: CGRect,
+        colors: [CGColor],
+        endPoint: CGPoint,
+        duration: CFTimeInterval
+    ) {
+        if duration > 0 {
+            addAnimation(
+                to: gradient,
+                keyPath: "colors",
+                from: gradient.presentation()?.colors ?? gradient.colors,
+                to: colors,
+                duration: duration
             )
-
-            context.fill(
-                bounds,
-                with: .linearGradient(
-                    Gradient(stops: [
-                    .init(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.10), location: 0.00),
-                    .init(color: Color.black.opacity(colorScheme == .dark ? 0.04 : 0.02), location: 0.32),
-                    .init(color: Color.clear, location: 0.64)
-                    ]),
-                    startPoint: CGPoint(x: size.width * 0.5, y: 0),
-                    endPoint: CGPoint(x: size.width * 0.5, y: size.height)
-                )
+            addAnimation(
+                to: gradient,
+                keyPath: "endPoint",
+                from: gradient.presentation()?.endPoint ?? gradient.endPoint,
+                to: endPoint,
+                duration: duration
             )
-
-            context.blendMode = .plusLighter
-            context.fill(
-                bounds,
-                with: .radialGradient(
-                    Gradient(stops: [
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(glowOpacity * intensity), location: 0.00),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.16 * intensity), location: 0.42),
-                    .init(color: Color.clear, location: 1.00)
-                    ]),
-                    center: CGPoint(x: size.width * 0.5, y: size.height * (1.02 - clamped * 0.18)),
-                    startRadius: 0,
-                    endRadius: radialEnd
-                )
+            addAnimation(
+                to: gradient,
+                keyPath: "position",
+                from: gradient.presentation()?.position ?? gradient.position,
+                to: CGPoint(x: frame.midX, y: frame.midY),
+                duration: duration
             )
+            addAnimation(
+                to: gradient,
+                keyPath: "bounds",
+                from: gradient.presentation()?.bounds ?? gradient.bounds,
+                to: CGRect(origin: .zero, size: frame.size),
+                duration: duration
+            )
+        } else {
+            gradient.removeAllAnimations()
         }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradient.frame = frame
+        gradient.colors = colors
+        gradient.endPoint = endPoint
+        CATransaction.commit()
+    }
+
+    private func addAnimation(
+        to layer: CALayer,
+        keyPath: String,
+        from: Any?,
+        to: Any,
+        duration: CFTimeInterval
+    ) {
+        let animation = CABasicAnimation(keyPath: keyPath)
+        animation.fromValue = from
+        animation.toValue = to
+        animation.duration = duration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(animation, forKey: "onboardingGradient.\(keyPath)")
     }
 }
 

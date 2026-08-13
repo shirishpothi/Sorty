@@ -32,10 +32,10 @@ retained layers; do
 not move those continuous effects back into broad SwiftUI state or frame
 timelines. The optional demo's continuous organizing sliver follows the same
 rule, and its per-file/folder collections are derived once per mutation rather
-than repeatedly filtered in row builders. The full-window color climb is a
-single asynchronous Canvas render pass; keep its gradient stops and blend mode
-together rather than rebuilding multiple full-screen gradient subtrees during
-every step transition.
+than repeatedly filtered in row builders. The full-window color climb uses
+retained accent, shade, and additive radial-gradient layers. Step changes
+animate only their colors and geometry; do not restore a full-window SwiftUI
+Canvas or multiple gradient subtrees that redraw throughout every transition.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent
