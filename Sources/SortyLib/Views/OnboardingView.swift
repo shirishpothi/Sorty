@@ -1000,7 +1000,8 @@ struct SortyEnergyScanIcon: View {
             startDelay: startDelay,
             sweepDuration: sweepDuration,
             repeats: repeats,
-            shouldAnimate: !reduceMotion && controlActiveState != .inactive
+            reduceMotion: reduceMotion,
+            isActive: controlActiveState != .inactive
         )
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -1014,7 +1015,8 @@ private struct RetainedEnergyScanIcon: NSViewRepresentable {
     let startDelay: TimeInterval
     let sweepDuration: TimeInterval
     let repeats: Bool
-    let shouldAnimate: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
 
     func makeNSView(context: Context) -> RetainedEnergyScanIconView {
         RetainedEnergyScanIconView()
@@ -1028,7 +1030,8 @@ private struct RetainedEnergyScanIcon: NSViewRepresentable {
             delay: startDelay,
             duration: sweepDuration,
             repeats: repeats,
-            shouldAnimate: shouldAnimate
+            reduceMotion: reduceMotion,
+            isActive: isActive
         )
     }
 }
@@ -1036,7 +1039,7 @@ private struct RetainedEnergyScanIcon: NSViewRepresentable {
 /// Renders the icon once and moves retained gradient layers for the scan.
 /// This replaces a 60 Hz SwiftUI rebuild of the image, mask, blur, and blend.
 @MainActor
-private final class RetainedEnergyScanIconView: NSView {
+private final class RetainedEnergyScanIconView: NSView, @preconcurrency CAAnimationDelegate {
     private let imageLayer = CALayer()
     private let scanContainer = CALayer()
     private let imageMask = CALayer()
@@ -1046,6 +1049,7 @@ private final class RetainedEnergyScanIconView: NSView {
     private var configuredImage: NSImage?
     private var configuredSize: CGFloat = 0
     private var isAnimating = false
+    private var isPaused = false
     private var hasCompletedSingleSweep = false
 
     override init(frame frameRect: NSRect) {
@@ -1118,7 +1122,8 @@ private final class RetainedEnergyScanIconView: NSView {
         delay: TimeInterval,
         duration: TimeInterval,
         repeats: Bool,
-        shouldAnimate: Bool
+        reduceMotion: Bool,
+        isActive: Bool
     ) {
         if configuredImage !== image || configuredSize != size {
             configuredImage = image
@@ -1131,10 +1136,16 @@ private final class RetainedEnergyScanIconView: NSView {
             needsLayout = true
         }
 
-        if shouldAnimate && !hasCompletedSingleSweep {
-            startAnimatingIfNeeded(delay: delay, duration: duration, repeats: repeats)
-        } else {
+        if reduceMotion || hasCompletedSingleSweep {
             stopAnimating()
+            return
+        }
+
+        startAnimatingIfNeeded(delay: delay, duration: duration, repeats: repeats)
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
         }
     }
 
@@ -1152,28 +1163,49 @@ private final class RetainedEnergyScanIconView: NSView {
         let group = CAAnimationGroup()
         group.animations = [translation, opacity]
         group.duration = duration
-        group.beginTime = CACurrentMediaTime() + delay
+        group.beginTime = movingBand.convertTime(CACurrentMediaTime(), from: nil) + delay
         group.fillMode = .backwards
         group.repeatCount = repeats ? .infinity : 0
+        group.delegate = self
+        group.setValue(!repeats, forKey: "isSingleEnergyScanSweep")
         movingBand.add(group, forKey: "energyScanSweep")
-
-        if !repeats {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay + duration) { [weak self] in
-                guard let self, self.isAnimating else { return }
-                self.hasCompletedSingleSweep = true
-                self.stopAnimating()
-            }
-        }
     }
 
     private func stopAnimating() {
-        guard isAnimating || movingBand.animation(forKey: "energyScanSweep") != nil else { return }
+        guard isAnimating || isPaused
+                || movingBand.animation(forKey: "energyScanSweep") != nil else { return }
+        resumeIfNeeded()
         isAnimating = false
         movingBand.removeAnimation(forKey: "energyScanSweep")
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         movingBand.opacity = 0
         CATransaction.commit()
+    }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused else { return }
+        let pausedTime = movingBand.convertTime(CACurrentMediaTime(), from: nil)
+        movingBand.speed = 0
+        movingBand.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused else { return }
+        let pausedTime = movingBand.timeOffset
+        movingBand.speed = 1
+        movingBand.timeOffset = 0
+        movingBand.beginTime = 0
+        movingBand.beginTime = movingBand.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
+
+    func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+        guard flag,
+              anim.value(forKey: "isSingleEnergyScanSweep") as? Bool == true else { return }
+        hasCompletedSingleSweep = true
+        stopAnimating()
     }
 }
 
