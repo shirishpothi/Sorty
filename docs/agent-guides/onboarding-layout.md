@@ -52,6 +52,9 @@ than repeatedly filtered in row builders. The full-window color climb uses
 retained accent, shade, and additive radial-gradient layers. Step changes
 animate only their colors and geometry; do not restore a full-window SwiftUI
 Canvas or multiple gradient subtrees that redraw throughout every transition.
+When Sorty becomes inactive, completion glow and ripple layers pause their
+existing layer time and resume from the same phase instead of rebuilding their
+infinite animation groups.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent

@@ -36,7 +36,7 @@ private struct CompletionRevealBlob: NSViewRepresentable {
             scale: scale,
             opacity: opacity,
             reduceMotion: reduceMotion,
-            shouldAnimateFloatingGlow: !reduceMotion && controlActiveState != .inactive
+            isActive: controlActiveState != .inactive
         )
     }
 }
@@ -112,6 +112,7 @@ private struct CompletionFloatingGlowGraphic: View {
 private final class RetainedCompletionFloatingGlowView: NSView {
     private let host = NSHostingView(rootView: CompletionFloatingGlowGraphic())
     private var isAnimating = false
+    private var isPaused = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -131,18 +132,23 @@ private final class RetainedCompletionFloatingGlowView: NSView {
         host.frame = bounds
     }
 
-    func setAnimating(_ shouldAnimate: Bool) {
-        guard shouldAnimate != isAnimating else { return }
-        isAnimating = shouldAnimate
-        host.layer?.removeAnimation(forKey: "completionFloatingGlowPosition")
-
-        guard shouldAnimate else {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            host.layer?.setAffineTransform(.identity)
-            CATransaction.commit()
+    func update(reduceMotion: Bool, isActive: Bool) {
+        if reduceMotion {
+            stopAnimating()
             return
         }
+
+        startAnimatingIfNeeded()
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func startAnimatingIfNeeded() {
+        guard !isAnimating else { return }
+        isAnimating = true
 
         let phases = stride(from: 0, through: 64, by: 1).map { index in
             let phase = Double(index) / 64 * 2 * Double.pi
@@ -160,6 +166,35 @@ private final class RetainedCompletionFloatingGlowView: NSView {
         group.autoreverses = true
         group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         host.layer?.add(group, forKey: "completionFloatingGlowPosition")
+    }
+
+    private func stopAnimating() {
+        guard isAnimating || isPaused else { return }
+        resumeIfNeeded()
+        isAnimating = false
+        host.layer?.removeAnimation(forKey: "completionFloatingGlowPosition")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        host.layer?.setAffineTransform(.identity)
+        CATransaction.commit()
+    }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused, let layer = host.layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer = host.layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
     }
 }
 
@@ -218,9 +253,9 @@ private final class RetainedCompletionRevealBlobView: NSView {
         scale: CGFloat,
         opacity: Double,
         reduceMotion: Bool,
-        shouldAnimateFloatingGlow: Bool
+        isActive: Bool
     ) {
-        floatingGlow.setAnimating(shouldAnimateFloatingGlow)
+        floatingGlow.update(reduceMotion: reduceMotion, isActive: isActive)
 
         let resolvedScale = reduceMotion ? 1 : scale
         let resolvedOpacity = Float(opacity)
@@ -492,7 +527,8 @@ private struct CompletionRippleField: View {
     var body: some View {
         RetainedCompletionHeroEffects(
             isVisible: !exitTriggered && showGlowRing && hasAppeared,
-            shouldAnimate: !reduceMotion && controlActiveState != .inactive
+            reduceMotion: reduceMotion,
+            isActive: controlActiveState != .inactive
         )
         .frame(width: 240, height: 240)
         .transition(.opacity)
@@ -523,14 +559,19 @@ private struct CompletionGlowRingGraphic: View {
 
 private struct RetainedCompletionHeroEffects: NSViewRepresentable {
     let isVisible: Bool
-    let shouldAnimate: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
 
     func makeNSView(context: Context) -> RetainedCompletionHeroEffectsView {
         RetainedCompletionHeroEffectsView()
     }
 
     func updateNSView(_ nsView: RetainedCompletionHeroEffectsView, context: Context) {
-        nsView.update(isVisible: isVisible, shouldAnimate: shouldAnimate)
+        nsView.update(
+            isVisible: isVisible,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
     }
 }
 
@@ -540,6 +581,9 @@ private final class RetainedCompletionHeroEffectsView: NSView {
     private let rippleLayers = (0..<3).map { _ in CAShapeLayer() }
     private var isVisible = false
     private var isAnimating = false
+    private var isPaused = false
+    private var lastReduceMotion: Bool?
+    private var lastIsActive: Bool?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -588,22 +632,41 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         }
     }
 
-    func update(isVisible: Bool, shouldAnimate: Bool) {
+    func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
         let visibilityChanged = self.isVisible != isVisible
-        let animationChanged = self.isAnimating != shouldAnimate
+        let motionChanged = lastReduceMotion != reduceMotion
+        let activityChanged = lastIsActive != isActive
         self.isVisible = isVisible
-        self.isAnimating = shouldAnimate
-        guard visibilityChanged || animationChanged else { return }
+        lastReduceMotion = reduceMotion
+        lastIsActive = isActive
+        guard visibilityChanged || motionChanged || activityChanged else { return }
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowHost.layer?.opacity = isVisible ? 0.6 : 0
-        rippleLayers.forEach { $0.opacity = isVisible && !shouldAnimate ? 0.10 : 0 }
+        rippleLayers.forEach { $0.opacity = isVisible && reduceMotion ? 0.10 : 0 }
         CATransaction.commit()
 
-        glowHost.layer?.removeAnimation(forKey: "completionGlowPulse")
-        rippleLayers.forEach { $0.removeAllAnimations() }
-        guard isVisible && shouldAnimate else { return }
+        guard isVisible else {
+            stopAnimating()
+            return
+        }
+        guard !reduceMotion else {
+            stopAnimating()
+            return
+        }
+
+        startAnimatingIfNeeded()
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func startAnimatingIfNeeded() {
+        guard !isAnimating else { return }
+        isAnimating = true
 
         let pulse = CABasicAnimation(keyPath: "transform.scale")
         pulse.fromValue = 1
@@ -631,6 +694,32 @@ private final class RetainedCompletionHeroEffectsView: NSView {
             group.timingFunction = CAMediaTimingFunction(name: .easeOut)
             rippleLayer.add(group, forKey: "completionRipple")
         }
+    }
+
+    private func stopAnimating() {
+        guard isAnimating || isPaused else { return }
+        resumeIfNeeded()
+        isAnimating = false
+        glowHost.layer?.removeAnimation(forKey: "completionGlowPulse")
+        rippleLayers.forEach { $0.removeAllAnimations() }
+    }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
     }
 }
 
