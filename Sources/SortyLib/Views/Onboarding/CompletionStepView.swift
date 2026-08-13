@@ -578,13 +578,12 @@ private struct CompletionAnalyticsPreference: View {
 
 @MainActor
 private final class CompletionAudioController {
+    static let shared = CompletionAudioController()
     private var player: AVAudioPlayer?
     private var fadeTask: Task<Void, Never>?
 
-    func play() {
-        fadeTask?.cancel()
-        fadeTask = nil
-
+    func prepare() {
+        guard player == nil else { return }
         let soundURL = SortyResources.finalOnboardingSoundURL()
             ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
         guard let soundURL else { return }
@@ -594,11 +593,19 @@ private final class CompletionAudioController {
             player.numberOfLoops = 0
             player.volume = 0.3
             player.prepareToPlay()
-            player.play()
             self.player = player
         } catch {
-            print("[CompletionStepView] Failed to play Final Onboarding sound: \(error)")
+            print("[CompletionStepView] Failed to prepare Final Onboarding sound: \(error)")
         }
+    }
+
+    func play() {
+        fadeTask?.cancel()
+        fadeTask = nil
+        prepare()
+        player?.currentTime = 0
+        player?.volume = 0.3
+        player?.play()
     }
 
     func fadeOutAndStop(duration: TimeInterval) {
@@ -612,6 +619,13 @@ private final class CompletionAudioController {
             self?.player = nil
             self?.fadeTask = nil
         }
+    }
+}
+
+@MainActor
+enum OnboardingCompletionAudio {
+    static func prewarm() {
+        CompletionAudioController.shared.prepare()
     }
 }
 
@@ -632,7 +646,7 @@ public struct CompletionStepView: View {
     @State private var tipsAppeared = false
     @State private var animationTask: Task<Void, Never>?
 
-    @State private var audioController = CompletionAudioController()
+    private let audioController = CompletionAudioController.shared
     @State private var readinessState: ReadinessState = .idle
     @State private var isAnalyticsEnabled = true
 

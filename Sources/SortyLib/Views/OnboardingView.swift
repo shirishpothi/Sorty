@@ -163,6 +163,13 @@ public struct OnboardingView: View {
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
+        .task {
+            // Leave the intro's first frames uncontended, then prepare the
+            // completion sound long before the user can reach that step.
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            OnboardingCompletionAudio.prewarm()
+        }
         .onDisappear {
             introTransitionTask?.cancel()
             removeSwipeMonitor()

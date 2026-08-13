@@ -1200,7 +1200,7 @@ private struct ProviderSelectionGrid: View, Equatable {
     let selectedProvider: AIProvider
     let onSelect: (AIProvider) -> Void
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.selectedProvider == rhs.selectedProvider
     }
 
