@@ -844,6 +844,9 @@ private final class RetainedIntroGlowView: NSView {
     private let blurFilter = CIFilter.gaussianBlur()
     private var hasStartedReveal = false
     private var isPaused = false
+    private var lastIsVisible: Bool?
+    private var lastReduceMotion: Bool?
+    private var lastIsActive: Bool?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -884,6 +887,13 @@ private final class RetainedIntroGlowView: NSView {
     }
 
     func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
+        guard lastIsVisible != isVisible
+                || lastReduceMotion != reduceMotion
+                || lastIsActive != isActive else { return }
+        lastIsVisible = isVisible
+        lastReduceMotion = reduceMotion
+        lastIsActive = isActive
+
         glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
             .withAlphaComponent(0.30)
             .cgColor
@@ -1048,6 +1058,7 @@ private final class RetainedEnergyScanIconView: NSView {
         imageMask.contentsGravity = .resizeAspect
         scanContainer.mask = imageMask
         scanContainer.compositingFilter = "plusL"
+        movingBand.opacity = 0
         gradientLayer.colors = [
             NSColor.clear.cgColor,
             NSColor(srgbRed: 0.84, green: 0.18, blue: 1, alpha: 0.36).cgColor,
@@ -1156,6 +1167,7 @@ private final class RetainedEnergyScanIconView: NSView {
     }
 
     private func stopAnimating() {
+        guard isAnimating || movingBand.animation(forKey: "energyScanSweep") != nil else { return }
         isAnimating = false
         movingBand.removeAnimation(forKey: "energyScanSweep")
         CATransaction.begin()

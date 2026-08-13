@@ -1025,6 +1025,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
     private let gradientLayer = CAGradientLayer()
     private let capsuleMask = CAShapeLayer()
     private var isAnimating = false
+    private var hasSetPausedPhase = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1076,6 +1077,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
     private func startAnimatingIfNeeded() {
         guard !isAnimating else { return }
         isAnimating = true
+        hasSetPausedPhase = false
         let phase = Date().timeIntervalSinceReferenceDate
             .truncatingRemainder(dividingBy: Self.duration) / Self.duration
         let angle = phase * 2 * Double.pi
@@ -1095,6 +1097,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
     }
 
     private func stopAnimating() {
+        guard isAnimating || !hasSetPausedPhase else { return }
         isAnimating = false
         gradientLayer.removeAnimation(forKey: "interiorGlowMaskRotation")
         CATransaction.begin()
@@ -1104,6 +1107,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
             forKeyPath: "transform.rotation.z"
         )
         CATransaction.commit()
+        hasSetPausedPhase = true
     }
 }
 
@@ -1142,6 +1146,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
     private var isBeamAnimating = false
     private var currentLineWidth: CGFloat = 1
     private var targetOpacity: Float = 0
+    private var hasSetPausedPhase = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1252,6 +1257,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
     private func startAnimatingIfNeeded() {
         guard !isBeamAnimating else { return }
         isBeamAnimating = true
+        hasSetPausedPhase = false
         let phase = Date().timeIntervalSinceReferenceDate
             .truncatingRemainder(dividingBy: Self.duration) / Self.duration
         let angle = phase * 2 * Double.pi
@@ -1272,7 +1278,9 @@ private final class RetainedFallbackBeamBorderView: NSView {
 
     private func stopAnimating() {
         guard isBeamAnimating || gradientLayer.animation(forKey: "fallbackBeamRotation") != nil else {
-            setPausedPhase()
+            if !hasSetPausedPhase {
+                setPausedPhase()
+            }
             return
         }
         isBeamAnimating = false
@@ -1288,6 +1296,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
             forKeyPath: "transform.rotation.z"
         )
         CATransaction.commit()
+        hasSetPausedPhase = true
     }
 }
 

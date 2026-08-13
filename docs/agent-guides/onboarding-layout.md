@@ -33,6 +33,9 @@ directly rather than wrapped in another animation transaction.
 Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow
 uses retained Core Animation gradient layers and pauses while Sorty is inactive;
 do not replace it with a full-screen composited blur that redraws every frame.
+Retained-effect adapters also guard identical visibility, motion, and activity
+inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
+re-remove animations or rewrite layer opacity and phase.
 The intro orbit keeps its native material-backed chips mounted. Its idle sine
 components run as additive Core Animation keyframes, while a display link wakes
 only for the interactive hover-collapse spring. Its Gaussian glow and energy
@@ -111,6 +114,9 @@ permission-state snapshot instead of redrawing the full step once per row.
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
+Permission action frame probes measure only during AppKit layout or actual
+window geometry notifications, coalesce same-runloop reports, and treat normal
+SwiftUI representable updates as bookkeeping rather than another measurement.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
 queue. Pause permission video playback and set the full-screen backdrop blur to

@@ -213,6 +213,9 @@ private final class RetainedCompletionParticlesView: NSView {
     private let particleLayers = (0..<7).map { _ in CAShapeLayer() }
     private var isAnimating = false
     private var isPaused = false
+    private var lastIsVisible: Bool?
+    private var lastReduceMotion: Bool?
+    private var lastIsActive: Bool?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -245,6 +248,13 @@ private final class RetainedCompletionParticlesView: NSView {
     }
 
     func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
+        guard lastIsVisible != isVisible
+                || lastReduceMotion != reduceMotion
+                || lastIsActive != isActive else { return }
+        lastIsVisible = isVisible
+        lastReduceMotion = reduceMotion
+        lastIsActive = isActive
+
         if reduceMotion || !isVisible {
             stopAnimating()
         } else if !isAnimating {
@@ -289,6 +299,7 @@ private final class RetainedCompletionParticlesView: NSView {
     }
 
     private func stopAnimating() {
+        guard isAnimating else { return }
         isAnimating = false
         CATransaction.begin()
         CATransaction.setDisableActions(true)
