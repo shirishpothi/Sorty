@@ -225,7 +225,10 @@ public struct DemoStepView: View {
                     .frame(maxWidth: leftContentMaxWidth)
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(x: hasAppeared ? 0 : -20)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
+                        value: hasAppeared
+                    )
 
                     Spacer()
                 }
@@ -268,7 +271,10 @@ public struct DemoStepView: View {
                 .padding(.horizontal, horizontalPadding)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : 20)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
+                    value: hasAppeared
+                )
             }
             .siriDropZone(
                 cornerRadius: 22,
@@ -281,7 +287,7 @@ public struct DemoStepView: View {
                 handleDrop(providers: providers)
             }
             .onAppear {
-                withAnimation { hasAppeared = true }
+                hasAppeared = true
             }
             .onChange(of: demoState) { _, newState in
                 if newState != .selectDirectory {

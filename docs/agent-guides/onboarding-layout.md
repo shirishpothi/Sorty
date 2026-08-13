@@ -19,6 +19,12 @@ Prepare the flow hierarchy in a transaction with animations disabled, allow its
 finite layout to resolve, and then animate presentation properties such as
 opacity. Do not animate insertion of the step layout itself.
 
+Drive each entrance state from one animation boundary. Set `hasAppeared`
+directly when its panes already have value-scoped spring modifiers; wrapping
+that same mutation in `withAnimation` creates a second broad transaction and
+can animate unrelated work during the first render. Gate those local springs
+with Reduce Motion.
+
 ## Animation performance
 
 Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow

@@ -145,9 +145,7 @@ public struct PermissionsStepView: View {
             .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86).delay(0.12), value: hasAppeared)
         }
         .onAppear {
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86)) {
-                hasAppeared = true
-            }
+            hasAppeared = true
             checkPermissions()
         }
         .background {

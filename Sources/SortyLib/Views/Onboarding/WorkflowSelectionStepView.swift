@@ -150,7 +150,7 @@ public struct WorkflowSelectionStepView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .onAppear {
-            withAnimation(reduceMotion ? nil : .default) { hasAppeared = true }
+            hasAppeared = true
         }
         .background {
             WorkflowAppStateResolver { appState in

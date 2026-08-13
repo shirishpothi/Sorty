@@ -44,6 +44,7 @@ public struct ProviderSelectionStepView: View {
     private let onSetupStatusChange: ((ProviderSetupStatus) -> Void)?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var hasAppeared = false
     @State private var connectionStatus: ConnectionTestStatus = .idle
@@ -109,7 +110,10 @@ public struct ProviderSelectionStepView: View {
                 .frame(maxWidth: 350)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
+                    value: hasAppeared
+                )
 
                 Spacer()
             }
@@ -203,11 +207,14 @@ public struct ProviderSelectionStepView: View {
             .padding(.trailing, 72)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
+                value: hasAppeared
+            )
         }
         .onAppear {
             synchronizeInputDrafts()
-            withAnimation { hasAppeared = true }
+            hasAppeared = true
             if settingsViewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }

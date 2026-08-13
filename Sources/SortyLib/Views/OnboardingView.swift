@@ -698,14 +698,15 @@ private struct OnboardingIntroView: View {
                     }
                 }
                 .onHover { hovering in
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
-                        isHoveringButton = hovering
-                    }
+                    isHoveringButton = hovering
                 }
                 .scaleEffect(isHoveringButton ? 1.035 : 1)
                 .opacity(textOpacity)
                 .offset(y: textOffset)
-                .animation(.spring(response: 0.36, dampingFraction: 0.82), value: isHoveringButton)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.82),
+                    value: isHoveringButton
+                )
             }
         }
         .onGeometryChange(for: CGRect.self) { proxy in
