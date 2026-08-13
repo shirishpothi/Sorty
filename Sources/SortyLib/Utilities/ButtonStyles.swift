@@ -709,7 +709,7 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
     }
 }
 
-public enum OnboardingBeamBorderVariant {
+public enum OnboardingBeamBorderVariant: Equatable {
     case standard
     case featured
     case info
@@ -808,7 +808,7 @@ private struct OnboardingBeamBorder: View {
             .overlay {
                 ZStack {
                     RetainedFallbackBeamBorder(
-                        stops: fallbackStops,
+                        variant: variant,
                         // Button-sized beams keep the same conic motion on
                         // retained layers. Larger CTAs use the richer Metal
                         // shader, with this layer only as their static fallback.
@@ -873,7 +873,6 @@ private struct OnboardingBeamBorder: View {
             .opacity(isIntensified ? 0.92 : 0.62)
             .mask {
                 RetainedInteriorGlowMask(
-                    stops: interiorConicStops,
                     shouldAnimate: shouldAnimateBeam
                 )
             }
@@ -882,7 +881,9 @@ private struct OnboardingBeamBorder: View {
         .blendMode(.screen)
     }
 
-    private var fallbackStops: [Gradient.Stop] {
+    fileprivate static func fallbackStops(
+        for variant: OnboardingBeamBorderVariant
+    ) -> [Gradient.Stop] {
         switch variant {
         case .standard:
             return [
@@ -959,21 +960,6 @@ private struct OnboardingBeamBorder: View {
         }
     }
 
-    private var interiorConicStops: [Gradient.Stop] {
-        [
-            .init(color: .clear, location: 0.00),
-            .init(color: .clear, location: 0.22),
-            .init(color: .white.opacity(0.12), location: 0.28),
-            .init(color: .white.opacity(0.40), location: 0.36),
-            .init(color: .white.opacity(1.00), location: 0.46),
-            .init(color: .white.opacity(1.00), location: 0.82),
-            .init(color: .white.opacity(0.40), location: 0.88),
-            .init(color: .white.opacity(0.12), location: 0.94),
-            .init(color: .clear, location: 0.97),
-            .init(color: .clear, location: 1.00),
-        ]
-    }
-
     private var interiorGlowSpots: [InteriorGlowSpot] {
         switch variant {
         case .standard, .info, .success:
@@ -1002,7 +988,6 @@ private struct OnboardingBeamBorder: View {
 /// glow and blur hierarchy stays static until its inputs change instead of
 /// being rebuilt by a SwiftUI timeline on every animation frame.
 private struct RetainedInteriorGlowMask: NSViewRepresentable {
-    let stops: [Gradient.Stop]
     let shouldAnimate: Bool
 
     func makeNSView(context: Context) -> RetainedInteriorGlowMaskView {
@@ -1010,11 +995,7 @@ private struct RetainedInteriorGlowMask: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: RetainedInteriorGlowMaskView, context: Context) {
-        nsView.update(
-            colors: stops.map { NSColor($0.color).cgColor },
-            locations: stops.map { NSNumber(value: $0.location) },
-            shouldAnimate: shouldAnimate
-        )
+        nsView.update(shouldAnimate: shouldAnimate)
     }
 }
 
@@ -1035,6 +1016,19 @@ private final class RetainedInteriorGlowMaskView: NSView {
         gradientLayer.type = .conic
         gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
         gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
+        gradientLayer.colors = [
+            NSColor.clear.cgColor,
+            NSColor.clear.cgColor,
+            NSColor.white.withAlphaComponent(0.12).cgColor,
+            NSColor.white.withAlphaComponent(0.40).cgColor,
+            NSColor.white.cgColor,
+            NSColor.white.cgColor,
+            NSColor.white.withAlphaComponent(0.40).cgColor,
+            NSColor.white.withAlphaComponent(0.12).cgColor,
+            NSColor.clear.cgColor,
+            NSColor.clear.cgColor,
+        ]
+        gradientLayer.locations = [0, 0.22, 0.28, 0.36, 0.46, 0.82, 0.88, 0.94, 0.97, 1]
         gradientLayer.mask = capsuleMask
         capsuleMask.fillColor = NSColor.white.cgColor
         setAccessibilityElement(false)
@@ -1060,13 +1054,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
         CATransaction.commit()
     }
 
-    func update(colors: [CGColor], locations: [NSNumber], shouldAnimate: Bool) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        gradientLayer.colors = colors
-        gradientLayer.locations = locations
-        CATransaction.commit()
-
+    func update(shouldAnimate: Bool) {
         if shouldAnimate {
             startAnimatingIfNeeded()
         } else {
@@ -1115,7 +1103,7 @@ private final class RetainedInteriorGlowMaskView: NSView {
 /// Core Animation layers. The fallback remains visually identical, but its
 /// rotation no longer rebuilds a SwiftUI gradient subtree 30 times a second.
 private struct RetainedFallbackBeamBorder: NSViewRepresentable {
-    let stops: [Gradient.Stop]
+    let variant: OnboardingBeamBorderVariant
     let active: Bool
     let isIntensified: Bool
     let shouldAnimate: Bool
@@ -1127,8 +1115,7 @@ private struct RetainedFallbackBeamBorder: NSViewRepresentable {
 
     func updateNSView(_ nsView: RetainedFallbackBeamBorderView, context: Context) {
         nsView.update(
-            colors: stops.map { NSColor($0.color).cgColor },
-            locations: stops.map { NSNumber(value: $0.location) },
+            variant: variant,
             active: active,
             isIntensified: isIntensified,
             shouldAnimate: shouldAnimate,
@@ -1147,6 +1134,7 @@ private final class RetainedFallbackBeamBorderView: NSView {
     private var currentLineWidth: CGFloat = 1
     private var targetOpacity: Float = 0
     private var hasSetPausedPhase = false
+    private var configuredVariant: OnboardingBeamBorderVariant?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1194,18 +1182,21 @@ private final class RetainedFallbackBeamBorderView: NSView {
     }
 
     func update(
-        colors: [CGColor],
-        locations: [NSNumber],
+        variant: OnboardingBeamBorderVariant,
         active: Bool,
         isIntensified: Bool,
         shouldAnimate: Bool,
         opacity: Float
     ) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        gradientLayer.colors = colors
-        gradientLayer.locations = locations
-        CATransaction.commit()
+        if configuredVariant != variant {
+            configuredVariant = variant
+            let stops = OnboardingBeamBorder.fallbackStops(for: variant)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            gradientLayer.colors = stops.map { NSColor($0.color).cgColor }
+            gradientLayer.locations = stops.map { NSNumber(value: $0.location) }
+            CATransaction.commit()
+        }
 
         updateLineWidth(isIntensified ? 1.35 : 1)
         updateOpacity(active ? opacity : 0)

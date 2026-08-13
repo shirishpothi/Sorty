@@ -36,6 +36,8 @@ do not replace it with a full-screen composited blur that redraws every frame.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
+Cache invariant retained-layer palettes at construction and only rebuild
+variant-specific colors when the variant changes.
 The intro orbit keeps its native material-backed chips mounted. Its idle sine
 components run as additive Core Animation keyframes, while a display link wakes
 only for the interactive hover-collapse spring. Its Gaussian glow and energy
