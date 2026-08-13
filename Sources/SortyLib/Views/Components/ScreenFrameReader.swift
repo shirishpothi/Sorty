@@ -15,22 +15,39 @@ struct ScreenFrameReader: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: ProbeView, context: Context) {
-        nsView.onFrameChange = context.coordinator.update(frameInScreen:)
-        nsView.reportFrameIfNeeded()
+        // SwiftUI state updates do not imply that AppKit geometry changed.
+        // Layout and window notifications below own frame measurement.
+        context.coordinator.bind(frameInScreen: $frameInScreen)
     }
 
     @MainActor
     final class Coordinator {
         private var frameInScreen: Binding<CGRect>
+        private var pendingFrame: CGRect?
+        private var isUpdateScheduled = false
 
         init(frameInScreen: Binding<CGRect>) {
             self.frameInScreen = frameInScreen
         }
 
+        func bind(frameInScreen: Binding<CGRect>) {
+            self.frameInScreen = frameInScreen
+        }
+
         func update(frameInScreen: CGRect) {
             guard self.frameInScreen.wrappedValue != frameInScreen else { return }
+            pendingFrame = frameInScreen
+            guard !isUpdateScheduled else { return }
+            isUpdateScheduled = true
+
             DispatchQueue.main.async { @MainActor [weak self] in
-                self?.frameInScreen.wrappedValue = frameInScreen
+                guard let self else { return }
+                isUpdateScheduled = false
+                guard let pendingFrame else { return }
+                self.pendingFrame = nil
+                if self.frameInScreen.wrappedValue != pendingFrame {
+                    self.frameInScreen.wrappedValue = pendingFrame
+                }
             }
         }
     }
