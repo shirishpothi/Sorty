@@ -146,7 +146,6 @@ public struct PermissionsStepView: View {
         }
         .onAppear {
             hasAppeared = true
-            checkPermissions()
         }
         .background {
             PermissionsEnvironmentResolver { manager, appState in
