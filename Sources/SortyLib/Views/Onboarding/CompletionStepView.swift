@@ -1096,7 +1096,7 @@ public struct CompletionStepView: View {
                 exitTriggered: exitTriggered
             )
 
-            VStack(spacing: 24) {
+            VStack(spacing: 16) {
                 CompletionHero(
                     hasAppeared: hasAppeared,
                     showGlowRing: showGlowRing,
@@ -1128,7 +1128,6 @@ public struct CompletionStepView: View {
                 }
             }
             .padding(.horizontal, 48)
-            .padding(.vertical, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
         .onAppear(perform: startRevealSequence)
