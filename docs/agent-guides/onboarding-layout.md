@@ -23,7 +23,10 @@ Drive each entrance state from one animation boundary. Set `hasAppeared`
 directly when its panes already have value-scoped spring modifiers; wrapping
 that same mutation in `withAnimation` creates a second broad transaction and
 can animate unrelated work during the first render. Gate those local springs
-with Reduce Motion.
+with Reduce Motion. The completion sequence follows this rule too: its
+checkmark, copy, tips, and CTA own their staggered springs, while retained glow
+and particle layers own their motion, so their trigger states are assigned
+directly rather than wrapped in another animation transaction.
 
 ## Animation performance
 

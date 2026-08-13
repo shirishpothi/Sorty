@@ -929,10 +929,8 @@ public struct CompletionStepView: View {
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard !Task.isCancelled else { return }
 
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
-                hasAppeared = true
-                showGlowRing = true
-            }
+            hasAppeared = true
+            showGlowRing = true
 
             // The sound is resolved during onboarding prewarm, so this frame
             // only starts playback while the checkmark animation begins.
@@ -942,13 +940,8 @@ public struct CompletionStepView: View {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
 
-            withAnimation(.easeIn(duration: 0.8)) {
-                showParticles = true
-            }
-
-            withAnimation {
-                tipsAppeared = true
-            }
+            showParticles = true
+            tipsAppeared = true
         }
     }
 
