@@ -45,7 +45,9 @@ publishers feed the root through a distinct, value-semantic provider-readiness
 snapshot; the completion celebration resolves service references without
 observing their other state. Provider input is drafted locally and committed
 after typing settles so Keychain writes, model refreshes, and connection tests
-do not compete with each keystroke. Pause other motion when it is not visible,
+do not compete with each keystroke. The provider grid is an Equatable leaf keyed
+only by the selected provider, so draft/status changes do not rebuild its glass
+cards and cached logos. Pause other motion when it is not visible,
 prewarm file icons over the intro reveal, and keep particle geometry
 deterministic across `body` updates so invalidation does not generate new
 animation targets.

@@ -43,12 +43,6 @@ public struct ProviderSelectionStepView: View {
         case failed
     }
 
-    let providers = AIProvider.userSelectableProviders
-    private let providerGridColumns = Array(
-        repeating: GridItem(.flexible(), spacing: 8),
-        count: 3
-    )
-
     public init() {}
 
     public var body: some View {
@@ -112,16 +106,11 @@ public struct ProviderSelectionStepView: View {
                     }
                     .frame(maxWidth: 640)
 
-                    LazyVGrid(columns: providerGridColumns, spacing: 8) {
-                        ForEach(providers, id: \.self) { provider in
-                            OnboardingProviderRow(
-                                provider: provider,
-                                isSelected: settingsViewModel.config.provider == provider
-                            ) {
-                                selectProvider(provider)
-                            }
-                        }
-                    }
+                    ProviderSelectionGrid(
+                        selectedProvider: settingsViewModel.config.provider,
+                        onSelect: selectProvider
+                    )
+                    .equatable()
                     .frame(maxWidth: 640)
 
                     if settingsViewModel.config.provider != .appleFoundationModel {
@@ -1203,6 +1192,34 @@ private struct ProviderReadinessStatusView: View {
 }
 
 // MARK: - Supporting Views
+
+/// The provider grid is visually independent from credential drafts and
+/// connection status. Equatable isolation keeps its nine glass/logo cards out
+/// of API-key keystroke and status-update rebuilds.
+private struct ProviderSelectionGrid: View, Equatable {
+    let selectedProvider: AIProvider
+    let onSelect: (AIProvider) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.selectedProvider == rhs.selectedProvider
+    }
+
+    var body: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+            spacing: 8
+        ) {
+            ForEach(AIProvider.userSelectableProviders, id: \.self) { provider in
+                OnboardingProviderRow(
+                    provider: provider,
+                    isSelected: selectedProvider == provider
+                ) {
+                    onSelect(provider)
+                }
+            }
+        }
+    }
+}
 
 struct PrivacyFeatureRow: View {
     let icon: String
