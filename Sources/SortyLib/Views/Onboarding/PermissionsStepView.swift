@@ -593,7 +593,7 @@ struct PermissionRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(rowFill)
         )
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)

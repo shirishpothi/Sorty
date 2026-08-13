@@ -49,3 +49,7 @@ do not compete with each keystroke. Pause other motion when it is not visible,
 prewarm file icons over the intro reveal, and keep particle geometry
 deterministic across `body` updates so invalidation does not generate new
 animation targets.
+
+Use interactive Liquid Glass only for controls. Permission rows keep native
+regular glass but leave pointer-responsive glass to their contained buttons;
+the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.

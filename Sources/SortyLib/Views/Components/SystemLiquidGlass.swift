@@ -70,14 +70,38 @@ extension View {
     }
 
     @ViewBuilder
-    func systemLiquidGlassBackground(cornerRadius: CGFloat, clear: Bool = false) -> some View {
+    func systemLiquidGlassBackground(
+        cornerRadius: CGFloat,
+        clear: Bool = false,
+        interactive: Bool = true
+    ) -> some View {
         if #available(macOS 26.0, *) {
-            self.background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(
-                        clear ? .clear.interactive() : .regular.interactive(),
-                        in: .rect(cornerRadius: cornerRadius))
+            if clear {
+                if interactive {
+                    self.background {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(.clear)
+                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+                    }
+                } else {
+                    self.background {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(.clear)
+                            .glassEffect(.clear, in: .rect(cornerRadius: cornerRadius))
+                    }
+                }
+            } else if interactive {
+                self.background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                }
+            } else {
+                self.background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.clear)
+                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                }
             }
         } else {
             self
