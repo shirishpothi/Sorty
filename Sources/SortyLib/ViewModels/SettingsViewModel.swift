@@ -401,7 +401,9 @@ public class SettingsViewModel: ObservableObject {
     public func updateAvailableModels(force: Bool = false) {
         modelRefreshTask?.cancel()
         let provider = config.provider
-        isLoadingModels = true
+        if !isLoadingModels {
+            isLoadingModels = true
+        }
 
         modelRefreshTask = Task { [weak self] in
             guard let self else { return }

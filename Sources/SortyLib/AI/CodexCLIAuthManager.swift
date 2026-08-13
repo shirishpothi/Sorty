@@ -60,6 +60,12 @@ public final class CodexCLIAuthManager: ObservableObject {
     private var deviceAuthOutput = ""
     private var statusRefreshTask: Task<Void, Never>?
 
+    private struct StatusProbe: Sendable {
+        let isInstalled: Bool
+        let status: LoginStatus
+        let accountEmail: String?
+    }
+
     private nonisolated static var codexHomeURL: URL {
         let environment = ProcessInfo.processInfo.environment
         if let codexHome = environment["CODEX_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -99,7 +105,13 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     nonisolated static func readLoginStatus() -> LoginStatus {
-        if let codexExecutablePath = resolveCodexExecutablePath() {
+        readLoginStatus(codexExecutablePath: resolveCodexExecutablePath())
+    }
+
+    private nonisolated static func readLoginStatus(
+        codexExecutablePath: String?
+    ) -> LoginStatus {
+        if let codexExecutablePath {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: codexExecutablePath)
             process.arguments = ["login", "status"]
@@ -174,23 +186,32 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     private func performStatusRefresh() async {
-        let installed = await Task.detached(priority: .userInitiated) {
-            Self.resolveCodexExecutablePath() != nil
+        let probe = await Task.detached(priority: .userInitiated) {
+            let executablePath = Self.resolveCodexExecutablePath()
+            let status = Self.readLoginStatus(codexExecutablePath: executablePath)
+            let accountEmail: String?
+            switch status {
+            case .chatGPT, .accessToken:
+                accountEmail = Self.extractEmail(from: Self.readIDToken())
+            default:
+                accountEmail = nil
+            }
+            return StatusProbe(
+                isInstalled: executablePath != nil,
+                status: status,
+                accountEmail: accountEmail
+            )
         }.value
 
-        let status = await Task.detached(priority: .userInitiated) {
-            Self.readLoginStatus()
-        }.value
-
-        if isCodexInstalled != installed {
-            isCodexInstalled = installed
+        if isCodexInstalled != probe.isInstalled {
+            isCodexInstalled = probe.isInstalled
         }
 
-        switch status {
+        switch probe.status {
         case .chatGPT, .accessToken:
             applyPublishedStatus(
                 isAuthenticated: true,
-                accountEmail: extractEmail(from: Self.readIDToken()),
+                accountEmail: probe.accountEmail,
                 authError: nil
             )
             markDeviceAuthAuthorizedIfNeeded()
@@ -502,7 +523,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         return String(normalizedOutput[codeRange])
     }
 
-    private func extractEmail(from idToken: String?) -> String? {
+    private nonisolated static func extractEmail(from idToken: String?) -> String? {
         guard let idToken else { return nil }
         let parts = idToken.split(separator: ".")
         guard parts.count >= 2 else { return nil }
