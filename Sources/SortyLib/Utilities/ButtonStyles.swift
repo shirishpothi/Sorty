@@ -9,6 +9,8 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
+import Beam
+
 public enum SortyButtonIntent: Equatable {
     case primary
     case secondary
@@ -715,6 +717,39 @@ public enum OnboardingBeamBorderVariant {
     case warning
     case destructive
 
+    var palette: BeamPalette {
+        switch self {
+        case .standard: return .colorful
+        case .featured: return .sunset
+        case .info: return .ocean
+        case .success: return .ocean
+        case .warning: return .sunset
+        case .destructive: return .sunset
+        }
+    }
+
+    var strength: Double {
+        switch self {
+        case .standard: return 0.86
+        case .featured: return 1.0
+        case .info: return 0.9
+        case .success: return 0.92
+        case .warning: return 0.96
+        case .destructive: return 1.0
+        }
+    }
+
+    var lensStrength: Double {
+        switch self {
+        case .standard: return 1.8
+        case .featured: return 3.0
+        case .info: return 2.2
+        case .success: return 2.3
+        case .warning: return 2.8
+        case .destructive: return 3.0
+        }
+    }
+
     var fallbackOpacity: Double {
         switch self {
         case .standard: return 0.82
@@ -732,14 +767,16 @@ public extension View {
         variant: OnboardingBeamBorderVariant = .standard,
         active: Bool = true,
         isIntensified: Bool = false,
-        includesInteriorGlow: Bool = false
+        includesInteriorGlow: Bool = false,
+        size: BeamSize = .medium
     ) -> some View {
         overlay {
             OnboardingBeamBorder(
                 variant: variant,
                 active: active,
                 isIntensified: isIntensified,
-                includesInteriorGlow: includesInteriorGlow
+                includesInteriorGlow: includesInteriorGlow,
+                size: size
             )
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -752,16 +789,28 @@ private struct OnboardingBeamBorder: View {
     let active: Bool
     let isIntensified: Bool
     let includesInteriorGlow: Bool
+    let size: BeamSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     private var shouldAnimateBeam: Bool {
-        active && !reduceMotion
+        active && !reduceMotion && controlActiveState != .inactive
     }
 
     var body: some View {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
+            .beam(
+                size,
+                palette: variant.palette,
+                theme: .dark,
+                active: shouldAnimateBeam,
+                shape: .capsule,
+                duration: 1.96,
+                strength: isIntensified ? variant.strength * 1.2 : variant.strength,
+                lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
+            )
             .overlay {
                 ZStack {
                     RetainedFallbackBeamBorder(

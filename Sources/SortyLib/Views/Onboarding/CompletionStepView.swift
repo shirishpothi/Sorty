@@ -57,8 +57,8 @@ private struct CompletionRevealBlob: View {
                     )
                 )
                 .frame(width: 450, height: 400)
-                .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
                 .blur(radius: 50)
+                .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
 
             Circle()
                 .fill(
@@ -138,8 +138,8 @@ private struct CompletionCelebrationBackdrop: View {
                     ForEach(0..<7, id: \.self) { index in
                         FloatingParticle(
                             delay: Double(index) * 0.4,
-                            size: CGFloat.random(in: 3...6),
-                            xPosition: CGFloat.random(in: -200...200)
+                            size: completionParticleSize(for: index),
+                            xPosition: completionParticlePosition(for: index)
                         )
                     }
                 }
@@ -147,6 +147,14 @@ private struct CompletionCelebrationBackdrop: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    private func completionParticleSize(for index: Int) -> CGFloat {
+        3 + CGFloat((index * 17 + 5) % 30) / 10
+    }
+
+    private func completionParticlePosition(for index: Int) -> CGFloat {
+        -200 + CGFloat((index * 137 + 43) % 400)
     }
 }
 
@@ -421,7 +429,6 @@ public struct CompletionStepView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
-    @ObservedObject private var analytics = AnalyticsManager.shared
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
     let onFinish: () -> Void
@@ -429,7 +436,6 @@ public struct CompletionStepView: View {
     // Entry animation states
     @State private var revealScale: CGFloat = 0.05
     @State private var revealOpacity: Double = 0
-    @State private var backgroundRevealed = false
     @State private var hasAppeared = false
     @State private var showGlowRing = false
     @State private var showParticles = false
@@ -501,7 +507,7 @@ public struct CompletionStepView: View {
             .offset(y: -6)
         }
         .onAppear {
-            isAnalyticsEnabled = analytics.consent != .denied
+            isAnalyticsEnabled = AnalyticsManager.shared.consent != .denied
             startRevealSequence()
         }
         .onDisappear {
@@ -532,7 +538,6 @@ public struct CompletionStepView: View {
             guard !Task.isCancelled else { return }
 
             withAnimation(.easeInOut(duration: 1.2)) {
-                backgroundRevealed = true
                 revealOpacity = 0.3
                 revealScale = 1.5
             }
@@ -720,7 +725,7 @@ public struct CompletionStepView: View {
 
     private func startTransition() {
         guard !exitTriggered else { return }
-        analytics.setConsent(isAnalyticsEnabled ? .granted : .denied)
+        AnalyticsManager.shared.setConsent(isAnalyticsEnabled ? .granted : .denied)
         let exitDuration = reduceMotion ? 0 : 0.52
         HapticFeedbackManager.shared.success()
         fadeOutAndStopAudio(duration: exitDuration)
@@ -730,7 +735,6 @@ public struct CompletionStepView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: exitDuration)) {
             exitTriggered = true
             contentDismissed = true
-            backgroundRevealed = false
             showParticles = false
             showGlowRing = false
             revealOpacity = 0

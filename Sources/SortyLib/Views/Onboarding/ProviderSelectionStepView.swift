@@ -82,85 +82,95 @@ public struct ProviderSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .padding(.leading, 72)
 
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Provider")
-                        .font(.title3.weight(.semibold))
-                    Spacer()
-                    Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
-                        .numericTextTransition(
-                            animationValue: providerSetupStatus.isReady
-                        )
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
-                }
-                .frame(maxWidth: 640)
+            // This pane can exceed the minimum onboarding height for providers
+            // with multi-step setup. Keep overflow local to the pane so the
+            // whole-step layout still receives a finite height proposal.
+            GeometryReader { viewport in
+                ScrollView(.vertical) {
+                    VStack(spacing: 12) {
+                    HStack {
+                        Text("Provider")
+                            .font(.title3.weight(.semibold))
+                        Spacer()
+                        Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                            .numericTextTransition(
+                                animationValue: providerSetupStatus.isReady
+                            )
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                    }
+                    .frame(maxWidth: 640)
 
-                LazyVGrid(columns: providerGridColumns, spacing: 8) {
-                    ForEach(providers, id: \.self) { provider in
-                        OnboardingProviderRow(
-                            provider: provider,
-                            isSelected: settingsViewModel.config.provider == provider
-                        ) {
-                            selectProvider(provider)
+                    LazyVGrid(columns: providerGridColumns, spacing: 8) {
+                        ForEach(providers, id: \.self) { provider in
+                            OnboardingProviderRow(
+                                provider: provider,
+                                isSelected: settingsViewModel.config.provider == provider
+                            ) {
+                                selectProvider(provider)
+                            }
                         }
                     }
-                }
-                .frame(maxWidth: 640)
+                    .frame(maxWidth: 640)
 
-                if settingsViewModel.config.provider != .appleFoundationModel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 10) {
-                            Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
-                                .font(.system(size: 16, weight: .semibold))
-                                .symbolReplaceTransition(
-                                    animationValue: providerSetupStatus.isReady
-                                )
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Configure \(settingsViewModel.config.provider.displayName)")
-                                    .font(.subheadline.weight(.semibold))
-                                    .numericTextTransition(
-                                        animationValue: settingsViewModel.config.provider
-                                    )
-
-                                Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .numericTextTransition(
+                    if settingsViewModel.config.provider != .appleFoundationModel {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 10) {
+                                Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
+                                    .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .symbolReplaceTransition(
                                         animationValue: providerSetupStatus.isReady
                                     )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Configure \(settingsViewModel.config.provider.displayName)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .numericTextTransition(
+                                            animationValue: settingsViewModel.config.provider
+                                        )
+
+                                    Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .numericTextTransition(
+                                            animationValue: providerSetupStatus.isReady
+                                        )
+                                }
+
+                                Spacer()
+
                             }
 
-                            Spacer()
-
-                        }
-
-                        Group {
-                            if settingsViewModel.config.provider == .githubCopilot {
-                                onboardingCopilotConfig
-                            } else {
-                                providerConfigSection
+                            Group {
+                                if settingsViewModel.config.provider == .githubCopilot {
+                                    onboardingCopilotConfig
+                                } else {
+                                    providerConfigSection
+                                }
                             }
                         }
+                        .padding(16)
+                        .systemLiquidGlassBackground(cornerRadius: 14)
+                        .frame(maxWidth: 430)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
                     }
-                    .padding(16)
-                    .systemLiquidGlassBackground(cornerRadius: 14)
-                    .frame(maxWidth: 430)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                    .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
-                }
 
-                connectionStatusView
-                    .frame(maxWidth: 430)
-                    .padding(.top, 4)
+                        connectionStatusView
+                            .frame(maxWidth: 430)
+                            .padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: viewport.size.height, alignment: .center)
+                    .padding(.vertical, 12)
+                }
+                .scrollIndicators(.automatic)
             }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity, alignment: .center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.trailing, 72)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)

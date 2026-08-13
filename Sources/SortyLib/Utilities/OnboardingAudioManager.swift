@@ -17,7 +17,7 @@ class OnboardingAudioManager: ObservableObject {
     nonisolated(unsafe) private static let defaultMelodyVolume: Float = 0.20
     nonisolated(unsafe) private static let defaultBassVolume: Float = 0.12
 
-    @Published var isPlaying = false
+    private(set) var isPlaying = false
 
     // MARK: - Audio Engine State (nonisolated(unsafe) for audio-thread access)
 

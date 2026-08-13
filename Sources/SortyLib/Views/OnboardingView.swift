@@ -15,9 +15,8 @@ import UniformTypeIdentifiers
 
 public struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var personaManager: PersonaManager
-    @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
@@ -32,6 +31,10 @@ public struct OnboardingView: View {
     @State private var hasTriggeredSwipeForGesture = false
     @State private var hasConfiguredWindowChrome = false
     @State private var isIntroVisible = true
+    @State private var isFlowPrepared = false
+    @State private var isDismissingIntro = false
+    @State private var introTransitionTask: Task<Void, Never>?
+    @AccessibilityFocusState private var isProviderStepAccessibilityFocused: Bool
 
     private let swipeThreshold: CGFloat = 42
 
@@ -40,9 +43,9 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                if !isIntroVisible {
+        ZStack {
+            if isFlowPrepared {
+                ZStack {
                     Color(NSColor.windowBackgroundColor)
                         .ignoresSafeArea()
 
@@ -85,16 +88,13 @@ public struct OnboardingView: View {
                             stepContent
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
-                            ScrollView(.vertical) {
-                                stepContent
-                                    .frame(
-                                        maxWidth: .infinity,
-                                        minHeight: max(480, geometry.size.height - 238)
-                                    )
-                            }
-                            .scrollIndicators(.hidden)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
+                            // Step roots use spacers and flexible height. Give
+                            // them this VStack's finite remaining allocation;
+                            // measuring them in an unbounded vertical scroll
+                            // proposal creates a recursive ideal-height cycle.
+                            stepContent
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
                         }
 
                         if currentStep != .completion {
@@ -114,17 +114,20 @@ public struct OnboardingView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .transition(.opacity)
                 }
-
-                if isIntroVisible {
-                    OnboardingIntroView {
-                        dismissIntro()
-                    }
-                        .transition(.opacity)
-                }
-
+                .opacity(isIntroVisible ? 0 : 1)
+                .allowsHitTesting(!isIntroVisible && !isDismissingIntro)
+                .accessibilityHidden(isIntroVisible)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if isIntroVisible {
+                OnboardingIntroView {
+                    dismissIntro()
+                }
+                .transition(.opacity)
+                .allowsHitTesting(!isDismissingIntro)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(
             minWidth: SortyDesignSystem.Sizing.windowOnboardingWidth,
             minHeight: SortyDesignSystem.Sizing.windowOnboardingHeight
@@ -154,6 +157,7 @@ public struct OnboardingView: View {
             installSwipeMonitorIfNeeded()
         }
         .onDisappear {
+            introTransitionTask?.cancel()
             removeSwipeMonitor()
         }
     }
@@ -163,6 +167,7 @@ public struct OnboardingView: View {
         switch currentStep {
         case .provider:
             ProviderSelectionStepView()
+                .accessibilityFocused($isProviderStepAccessibilityFocused)
                 .transition(TransitionStyles.slideFromRight)
         case .permissions:
             PermissionsStepView(hasRequiredPermissions: $hasFilesAndFoldersPermission)
@@ -317,10 +322,49 @@ public struct OnboardingView: View {
     }
 
     private func dismissIntro() {
-        guard isIntroVisible else { return }
+        guard isIntroVisible, !isDismissingIntro else { return }
         HapticFeedbackManager.shared.selection()
-        withAnimation(.easeInOut(duration: 0.55)) {
-            isIntroVisible = false
+
+        isDismissingIntro = true
+        introTransitionTask?.cancel()
+
+        var preparation = Transaction(animation: nil)
+        preparation.disablesAnimations = true
+        withTransaction(preparation) {
+            isFlowPrepared = true
+        }
+
+        introTransitionTask = Task { @MainActor in
+            // Resolve the provider step's finite layout before animating only
+            // presentation properties. This keeps layout insertion out of the
+            // AttributeGraph animation transaction.
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            if reduceMotion {
+                withTransaction(preparation) {
+                    isIntroVisible = false
+                    isDismissingIntro = false
+                }
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                isProviderStepAccessibilityFocused = true
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 0.55)) {
+                isIntroVisible = false
+            }
+
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            isProviderStepAccessibilityFocused = true
+
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled else { return }
+            withTransaction(preparation) {
+                isDismissingIntro = false
+            }
         }
     }
 
@@ -522,6 +566,7 @@ private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var iconScale: CGFloat = 0.86
     @State private var iconOpacity: Double = 0
     @State private var glowOpacity: Double = 0
@@ -536,6 +581,9 @@ private struct OnboardingIntroView: View {
     @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
+    @State private var orbitEpoch = Date()
+    @State private var orbitPausedAt: Date?
+    @State private var iconPrewarmTask: Task<Void, Never>?
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
@@ -550,22 +598,20 @@ private struct OnboardingIntroView: View {
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
             // the Get Started button while it is hovered.
-            // The timeline never pauses while the chips are visible: pausing it
-            // froze `context.date`, so resuming made every chip jump to a new
-            // orbital position (the hover "glitching"), and the old
-            // ambient-motion timeout stopped the drift entirely after a few
-            // seconds. 24 fps keeps the always-on drift cheap.
+            // Keep the orbit live while Sorty is active. Inactive windows pause
+            // without a resume jump because orbitEpoch excludes paused time.
             SwiftUI.TimelineView(.animation(
                 minimumInterval: 1.0 / 24.0,
-                paused: reduceMotion || !filesAppeared
+                paused: reduceMotion || controlActiveState == .inactive || !filesAppeared
             )) { context in
-                let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+                let phase = reduceMotion ? 0 : context.date.timeIntervalSince(orbitEpoch)
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
                         OnboardingOrbitFileChip(
                             file: file,
                             icon: fileIcons[file.ext] ?? OnboardingFileIconProvider.placeholder
                         )
+                            .equatable()
                             .modifier(
                                 OrbitChipPlacement(
                                     collapseProgress: collapseProgress,
@@ -663,7 +709,11 @@ private struct OnboardingIntroView: View {
         }
         .onDisappear {
             revealGeneration += 1
+            iconPrewarmTask?.cancel()
             audio.stopAll()
+        }
+        .onChange(of: controlActiveState, initial: true) { _, activeState in
+            updateOrbitClock(for: activeState)
         }
     }
 
@@ -679,6 +729,7 @@ private struct OnboardingIntroView: View {
     private func runIntroReveal() {
         revealGeneration += 1
         let generation = revealGeneration
+        iconPrewarmTask?.cancel()
 
         if reduceMotion {
             iconScale = 1
@@ -692,6 +743,19 @@ private struct OnboardingIntroView: View {
             filesAppeared = true
             audio.startBackgroundMelody()
             return
+        }
+
+        // Resolve cold NSWorkspace icons one at a time during the quiet opening
+        // reveal instead of batching every lookup on the frame chips appear.
+        iconPrewarmTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard generation == revealGeneration, !Task.isCancelled else { return }
+            await OnboardingFileIconProvider.prewarmIcons(
+                for: OnboardingOrbitFile.files,
+                generationIsCurrent: {
+                    generation == revealGeneration && !Task.isCancelled
+                }
+            )
         }
 
         // Defer audio so the AVAudioEngine + AVAudioSourceNode setup runs
@@ -753,6 +817,16 @@ private struct OnboardingIntroView: View {
             height: getStartedButtonFrame.midY - introFrame.midY + file.collapseY * 0.18
         )
     }
+
+    private func updateOrbitClock(for activeState: ControlActiveState) {
+        let now = Date()
+        if activeState == .inactive {
+            orbitPausedAt = orbitPausedAt ?? now
+        } else if let orbitPausedAt {
+            orbitEpoch = orbitEpoch.addingTimeInterval(now.timeIntervalSince(orbitPausedAt))
+            self.orbitPausedAt = nil
+        }
+    }
 }
 
 /// Blends each orbit chip between its live orbital placement and its
@@ -796,10 +870,14 @@ struct SortyEnergyScanIcon: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appearedAt: Date?
+    @State private var isSweepRunning = false
     @State private var sweepFinished = false
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || sweepFinished)) { context in
+        SwiftUI.TimelineView(.animation(
+            minimumInterval: 1.0 / 60.0,
+            paused: reduceMotion || !isSweepRunning || sweepFinished
+        )) { context in
             EnergyScanIconFrame(
                 image: image,
                 size: size,
@@ -810,18 +888,24 @@ struct SortyEnergyScanIcon: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
-        .onAppear {
+        .task {
             guard appearedAt == nil else { return }
             appearedAt = Date()
+
+            // Do not request identical frames during the fixed start delay.
+            guard !reduceMotion else { return }
+            try? await Task.sleep(for: .seconds(startDelay))
+            guard !Task.isCancelled else { return }
+            isSweepRunning = true
 
             // A single deliberate sweep, then the timeline pauses for good.
             // The looping version re-scanned the icon every few seconds,
             // which read as restless rather than polished.
-            guard !repeats, !reduceMotion else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(startDelay + sweepDuration + 0.1))
-                sweepFinished = true
-            }
+            guard !repeats else { return }
+            try? await Task.sleep(for: .seconds(sweepDuration + 0.1))
+            guard !Task.isCancelled else { return }
+            isSweepRunning = false
+            sweepFinished = true
         }
     }
 
@@ -968,6 +1052,18 @@ private enum OnboardingFileIconProvider {
         )
     }
 
+    static func prewarmIcons(
+        for files: [OnboardingOrbitFile],
+        generationIsCurrent: () -> Bool
+    ) async {
+        var resolvedExtensions = Set<String>()
+        for file in files where resolvedExtensions.insert(file.ext).inserted {
+            guard generationIsCurrent() else { return }
+            _ = icon(for: file.ext)
+            try? await Task.sleep(for: .milliseconds(45))
+        }
+    }
+
     static func icon(for ext: String) -> NSImage {
         if let cached = cache[ext] {
             return cached
@@ -983,9 +1079,13 @@ private enum OnboardingFileIconProvider {
     }
 }
 
-private struct OnboardingOrbitFileChip: View {
+private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
     let file: OnboardingOrbitFile
     let icon: NSImage
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.file.id == rhs.file.id && lhs.icon === rhs.icon
+    }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -1013,58 +1113,6 @@ private struct OnboardingOrbitFileChip: View {
         )
         .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
         .accessibilityHidden(true)
-    }
-}
-
-private struct OnboardingScreenEdgeGlow: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)
-        ) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 5.6) / 5.6
-            let pulse = reduceMotion ? 0.35 : (1 - cos(phase * 2 * .pi)) / 2
-            let strength = 0.46 + pulse * 0.30
-
-            ZStack {
-                edgeGradient(startPoint: .top, endPoint: .bottom, strength: strength)
-                edgeGradient(startPoint: .bottom, endPoint: .top, strength: strength)
-                edgeGradient(startPoint: .leading, endPoint: .trailing, strength: strength)
-                edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
-            }
-            .compositingGroup()
-            .blur(radius: 16 + pulse * 7)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private func edgeGradient(
-        startPoint: UnitPoint,
-        endPoint: UnitPoint,
-        strength: Double
-    ) -> some View {
-        LinearGradient(
-            stops: [
-                .init(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength),
-                    location: 0
-                ),
-                .init(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.45),
-                    location: 0.045
-                ),
-                .init(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.14),
-                    location: 0.10
-                ),
-                .init(color: .clear, location: 0.17)
-            ],
-            startPoint: startPoint,
-            endPoint: endPoint
-        )
     }
 }
 
@@ -1100,10 +1148,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private var isHostClosing = false
 
         func attach(to window: NSWindow?) {
-            guard hostWindow !== window else {
-                updatePanelFrame()
-                return
-            }
+            guard hostWindow !== window else { return }
 
             removeObservers()
             pendingDismissal?.cancel()
@@ -1242,7 +1287,9 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                 return
             }
 
-            backdropPanel?.setFrame(screen.frame, display: true)
+            if backdropPanel?.frame != screen.frame {
+                backdropPanel?.setFrame(screen.frame, display: true)
+            }
             backdropPanel?.order(.below, relativeTo: window.windowNumber)
             fadeInPanelIfNeeded()
         }
@@ -1335,10 +1382,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private var isHostClosing = false
 
         func attach(to window: NSWindow?) {
-            guard hostWindow !== window else {
-                showPanelIfPossible()
-                return
-            }
+            guard hostWindow !== window else { return }
 
             removeObservers()
             pendingDismissal?.cancel()
@@ -1393,6 +1437,20 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     Task { @MainActor in self?.showPanelIfPossible() }
                 },
                 center.addObserver(
+                    forName: NSApplication.didBecomeActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.showPanelIfPossible() }
+                },
+                center.addObserver(
+                    forName: NSApplication.didResignActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.setGlowAnimationActive(false) }
+                },
+                center.addObserver(
                     forName: NSWindow.willCloseNotification,
                     object: window,
                     queue: .main
@@ -1442,7 +1500,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 .ignoresCycle,
                 .stationary
             ]
-            panel.contentView = NSHostingView(rootView: OnboardingScreenEdgeGlow())
+            panel.contentView = OnboardingScreenEdgeGlowView()
             return panel
         }
 
@@ -1454,7 +1512,9 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 hidePanelImmediately()
                 return
             }
-            glowPanel?.setFrame(screen.frame, display: true)
+            if glowPanel?.frame != screen.frame {
+                glowPanel?.setFrame(screen.frame, display: true)
+            }
         }
 
         private func showPanelIfPossible() {
@@ -1464,7 +1524,17 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
             updatePanelFrame()
             glowPanel?.alphaValue = 1
+            setGlowAnimationActive(NSApp.isActive)
             glowPanel?.order(.below, relativeTo: window.windowNumber)
+        }
+
+        private func setGlowAnimationActive(_ isActive: Bool) {
+            guard let glowView = glowPanel?.contentView as? OnboardingScreenEdgeGlowView else { return }
+            if isActive {
+                glowView.startAnimating()
+            } else {
+                glowView.pauseAnimating()
+            }
         }
 
         private func dismissPanel(immediately: Bool = false) {
@@ -1490,6 +1560,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func hidePanelImmediately() {
+            (glowPanel?.contentView as? OnboardingScreenEdgeGlowView)?.stopAnimating()
             glowPanel?.orderOut(nil)
             glowPanel?.alphaValue = 0
         }
@@ -1508,6 +1579,180 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             super.viewDidMoveToWindow()
             onWindowChanged?(window)
         }
+    }
+}
+
+/// Draws the animated screen-edge glow with retained Core Animation layers.
+/// The former SwiftUI timeline rebuilt and blurred four screen-sized gradients
+/// every frame; these layers animate only opacity on the render server.
+private final class OnboardingScreenEdgeGlowView: NSView {
+    private let topGradient = CAGradientLayer()
+    private let bottomGradient = CAGradientLayer()
+    private let leadingGradient = CAGradientLayer()
+    private let trailingGradient = CAGradientLayer()
+    private var isAnimating = false
+    private var isAnimationPaused = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        [topGradient, bottomGradient, leadingGradient, trailingGradient].forEach {
+            layer?.addSublayer($0)
+        }
+        configureGradients()
+        setAccessibilityElement(false)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(displayOptionsDidChange(_:)),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+        )
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        let verticalDepth = bounds.height * 0.17
+        let horizontalDepth = bounds.width * 0.17
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        topGradient.frame = CGRect(
+            x: bounds.minX,
+            y: bounds.maxY - verticalDepth,
+            width: bounds.width,
+            height: verticalDepth
+        )
+        bottomGradient.frame = CGRect(
+            x: bounds.minX,
+            y: bounds.minY,
+            width: bounds.width,
+            height: verticalDepth
+        )
+        leadingGradient.frame = CGRect(
+            x: bounds.minX,
+            y: bounds.minY,
+            width: horizontalDepth,
+            height: bounds.height
+        )
+        trailingGradient.frame = CGRect(
+            x: bounds.maxX - horizontalDepth,
+            y: bounds.minY,
+            width: horizontalDepth,
+            height: bounds.height
+        )
+        CATransaction.commit()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        configureGradients()
+    }
+
+    func startAnimating() {
+        let gradients = [topGradient, bottomGradient, leadingGradient, trailingGradient]
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            stopAnimating()
+            gradients.forEach { $0.opacity = 0.86 }
+            return
+        }
+        if isAnimationPaused {
+            resumeAnimating()
+            return
+        }
+        guard !isAnimating else { return }
+        isAnimating = true
+
+        let pulse = CABasicAnimation(keyPath: "opacity")
+        pulse.fromValue = 0.70
+        pulse.toValue = 1.0
+        pulse.duration = 2.8
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        gradients.forEach { $0.add(pulse, forKey: "onboardingEdgePulse") }
+    }
+
+    func pauseAnimating() {
+        guard isAnimating, !isAnimationPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isAnimationPaused = true
+    }
+
+    func stopAnimating() {
+        isAnimating = false
+        isAnimationPaused = false
+        layer?.speed = 1
+        layer?.timeOffset = 0
+        layer?.beginTime = 0
+        let gradients = [topGradient, bottomGradient, leadingGradient, trailingGradient]
+        gradients.forEach {
+            $0.removeAnimation(forKey: "onboardingEdgePulse")
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradients.forEach { $0.opacity = 0.86 }
+        CATransaction.commit()
+    }
+
+    private func resumeAnimating() {
+        guard isAnimating, isAnimationPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isAnimationPaused = false
+    }
+
+    private func refreshMotionPreference() {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            stopAnimating()
+        } else if NSApp.isActive, window?.isVisible == true {
+            startAnimating()
+        }
+    }
+
+    @objc private func displayOptionsDidChange(_ notification: Notification) {
+        refreshMotionPreference()
+    }
+
+    private func configureGradients() {
+        let accent = resolvedAccentColor
+        let colors = [
+            accent.withAlphaComponent(0.74).cgColor,
+            accent.withAlphaComponent(0.33).cgColor,
+            accent.withAlphaComponent(0.10).cgColor,
+            accent.withAlphaComponent(0).cgColor
+        ]
+        let locations: [NSNumber] = [0, 0.24, 0.58, 1]
+
+        [topGradient, bottomGradient, leadingGradient, trailingGradient].forEach {
+            $0.colors = colors
+            $0.locations = locations
+        }
+        topGradient.startPoint = CGPoint(x: 0.5, y: 1)
+        topGradient.endPoint = CGPoint(x: 0.5, y: 0)
+        bottomGradient.startPoint = CGPoint(x: 0.5, y: 0)
+        bottomGradient.endPoint = CGPoint(x: 0.5, y: 1)
+        leadingGradient.startPoint = CGPoint(x: 0, y: 0.5)
+        leadingGradient.endPoint = CGPoint(x: 1, y: 0.5)
+        trailingGradient.startPoint = CGPoint(x: 1, y: 0.5)
+        trailingGradient.endPoint = CGPoint(x: 0, y: 0.5)
+    }
+
+    private var resolvedAccentColor: NSColor {
+        let raw = UserDefaults.standard.object(forKey: "AppleAccentColor")
+        if let value = raw as? Int, value >= 0 {
+            return .controlAccentColor
+        }
+        return NSColor(srgbRed: 0.850, green: 0.235, blue: 0.353, alpha: 1)
     }
 }
 
@@ -1609,10 +1854,8 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        if let window = nsView.window {
-            context.coordinator.configure(window: window)
-            notifyAfterWindowLayoutSettles()
-        }
+        // Window attachment is handled once by WindowAttachedView. Ordinary
+        // SwiftUI updates must not enqueue window work or configuration state.
     }
 
     private func notifyAfterWindowLayoutSettles() {
