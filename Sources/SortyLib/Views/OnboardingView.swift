@@ -16,11 +16,12 @@ import UniformTypeIdentifiers
 public struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var codexAuth: CodexCLIAuthManager
-    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
-
     @State private var currentStep: OnboardingStep = .provider
+    @State private var providerSetupStatus = ProviderSetupStatus(
+        isReady: false,
+        title: "Setup required",
+        message: "Choose and configure an AI provider before continuing."
+    )
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isAdvancing = false
@@ -151,6 +152,11 @@ public struct OnboardingView: View {
                 }
                 OnboardingScreenBackdropBlurPresenter()
                 OnboardingScreenEdgeGlowPresenter()
+                OnboardingProviderStatusResolver { status in
+                    if providerSetupStatus != status {
+                        providerSetupStatus = status
+                    }
+                }
             }
             .frame(width: 0, height: 0)
         )
@@ -185,7 +191,8 @@ public struct OnboardingView: View {
             .transition(TransitionStyles.slideFromRight)
         case .completion:
             OnboardingCompletionDestination(
-                hasCompletedOnboarding: $hasCompletedOnboarding
+                hasCompletedOnboarding: $hasCompletedOnboarding,
+                providerSetupStatus: providerSetupStatus
             )
             .transition(TransitionStyles.scaleAndFade)
         }
@@ -296,22 +303,10 @@ public struct OnboardingView: View {
         return Double(index) / Double(active.count - 1)
     }
 
-    private var providerSetupContext: ProviderSetupContext {
-        ProviderSetupContext(
-            config: settingsViewModel.config,
-            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
-            isCodexAuthenticated: codexAuth.isAuthenticated,
-            isCodexInstalled: codexAuth.isCodexInstalled,
-            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
-            appleFoundationModelStatus: settingsViewModel.appleModelStatus
-        )
-    }
-
     private var currentStepValidation: OnboardingStepValidationResult {
         currentStep.synchronousValidation(
             in: OnboardingStepValidationContext(
-                providerSetupStatus: OnboardingSetupValidator.providerStatus(
-                    context: providerSetupContext),
+                providerSetupStatus: providerSetupStatus,
                 hasRequiredPermissions: hasFilesAndFoldersPermission
             )
         )
@@ -392,8 +387,7 @@ public struct OnboardingView: View {
         guard !isAdvancing else { return }
 
         let validationContext = OnboardingStepValidationContext(
-            providerSetupStatus: OnboardingSetupValidator.providerStatus(
-                context: providerSetupContext),
+            providerSetupStatus: providerSetupStatus,
             hasRequiredPermissions: hasFilesAndFoldersPermission
         )
 
@@ -494,15 +488,66 @@ public struct OnboardingView: View {
 private struct OnboardingCompletionDestination: View {
     @Binding var hasCompletedOnboarding: Bool
     @EnvironmentObject private var appState: AppState
+    let providerSetupStatus: ProviderSetupStatus
 
     var body: some View {
-        CompletionStepView {
+        CompletionStepView(providerSetupStatus: providerSetupStatus) {
             HapticFeedbackManager.shared.success()
             // The user just saw a long completion reveal. Skip the extra
             // ReadyToOrganizeView entrance cascade on the first main screen.
             appState.hasPresentedReadyToOrganize = true
             hasCompletedOnboarding = true
         }
+    }
+}
+
+/// Keeps broad settings/auth publications in a zero-size leaf. The expensive
+/// credential resolver runs only when the value-semantic readiness inputs
+/// actually change, and only a distinct status reaches the onboarding root.
+private struct OnboardingProviderStatusResolver: View {
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
+    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
+    let onStatus: (ProviderSetupStatus) -> Void
+
+    private struct Inputs: Equatable {
+        let config: AIConfig
+        let isGitHubCopilotAuthenticated: Bool
+        let isCodexAuthenticated: Bool
+        let isCodexInstalled: Bool
+        let isAppleFoundationModelAvailable: Bool
+        let appleFoundationModelStatus: String?
+    }
+
+    private var inputs: Inputs {
+        Inputs(
+            config: settingsViewModel.config,
+            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+            isCodexAuthenticated: codexAuth.isAuthenticated,
+            isCodexInstalled: codexAuth.isCodexInstalled,
+            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+            appleFoundationModelStatus: settingsViewModel.appleModelStatus
+        )
+    }
+
+    var body: some View {
+        let inputs = inputs
+        Color.clear
+            .task(id: inputs) {
+                onStatus(
+                    OnboardingSetupValidator.providerStatus(
+                        context: ProviderSetupContext(
+                            config: inputs.config,
+                            isGitHubCopilotAuthenticated: inputs.isGitHubCopilotAuthenticated,
+                            isCodexAuthenticated: inputs.isCodexAuthenticated,
+                            isCodexInstalled: inputs.isCodexInstalled,
+                            isAppleFoundationModelAvailable: inputs.isAppleFoundationModelAvailable,
+                            appleFoundationModelStatus: inputs.appleFoundationModelStatus
+                        )
+                    )
+                )
+            }
+            .accessibilityHidden(true)
     }
 }
 

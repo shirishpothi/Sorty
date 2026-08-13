@@ -617,11 +617,10 @@ private final class CompletionAudioController {
 
 public struct CompletionStepView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var settingsViewModel: SettingsViewModel
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
-    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
+    @State private var settingsViewModel: SettingsViewModel?
+    @State private var appState: AppState?
 
+    let providerSetupStatus: ProviderSetupStatus
     let onFinish: () -> Void
 
     // Entry animation states
@@ -647,7 +646,11 @@ public struct CompletionStepView: View {
         case failed(String)
     }
 
-    public init(onFinish: @escaping () -> Void) {
+    public init(
+        providerSetupStatus: ProviderSetupStatus,
+        onFinish: @escaping () -> Void
+    ) {
+        self.providerSetupStatus = providerSetupStatus
         self.onFinish = onFinish
     }
 
@@ -704,6 +707,13 @@ public struct CompletionStepView: View {
             animationTask?.cancel()
             animationTask = nil
             fadeOutAndStopAudio(duration: 0.25)
+        }
+        .background {
+            CompletionEnvironmentResolver { settingsViewModel, appState in
+                self.settingsViewModel = settingsViewModel
+                self.appState = appState
+            }
+            .frame(width: 0, height: 0)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Completion Step")
@@ -818,19 +828,6 @@ public struct CompletionStepView: View {
         )
     }
 
-    private var providerSetupStatus: ProviderSetupStatus {
-        OnboardingSetupValidator.providerStatus(
-            context: ProviderSetupContext(
-                config: settingsViewModel.config,
-                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
-                isCodexAuthenticated: codexAuth.isAuthenticated,
-                isCodexInstalled: codexAuth.isCodexInstalled,
-                isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
-                appleFoundationModelStatus: settingsViewModel.appleModelStatus
-            )
-        )
-    }
-
     private func verifyAndFinish() {
         let configurationStatus = providerSetupStatus
         guard configurationStatus.isReady else {
@@ -847,8 +844,10 @@ public struct CompletionStepView: View {
         readinessState = .idle
         startTransition()
 
-        let viewModel = settingsViewModel
-        let state = appState
+        guard let viewModel = settingsViewModel, let state = appState else {
+            readinessState = .failed("Sorty is still preparing your setup. Try again in a moment.")
+            return
+        }
         Task { @MainActor in
             do {
                 try await viewModel.testConnection()
@@ -864,6 +863,7 @@ public struct CompletionStepView: View {
     }
 
     private func skipVerificationAndFinish() {
+        guard let settingsViewModel, let appState else { return }
         appState.startSetupRepair(
             message: "Sorty could not verify \(settingsViewModel.config.provider.displayName) during onboarding. Finish provider setup in Settings before organizing files.",
             navigateToSettings: true
@@ -892,6 +892,22 @@ public struct CompletionStepView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + exitDuration) {
             onFinish()
         }
+    }
+}
+
+/// Resolves service references without making the animated completion tree an
+/// observer of their unrelated published state.
+private struct CompletionEnvironmentResolver: View {
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var appState: AppState
+    let onResolve: (SettingsViewModel, AppState) -> Void
+
+    var body: some View {
+        Color.clear
+            .onAppear {
+                onResolve(settingsViewModel, appState)
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -979,7 +995,14 @@ struct QuickTipRow: View {
 #Preview {
     let codexAuthManager = CodexCLIAuthManager()
 
-    CompletionStepView(onFinish: {})
+    CompletionStepView(
+        providerSetupStatus: ProviderSetupStatus(
+            isReady: true,
+            title: "Setup complete",
+            message: "Provider is ready."
+        ),
+        onFinish: {}
+    )
         .environmentObject(SettingsViewModel())
         .environmentObject(AppState())
         .environmentObject(codexAuthManager)

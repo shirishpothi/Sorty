@@ -40,9 +40,12 @@ static/inactive fallback. Never stack both animated renderers on one control.
 
 Keep broad observable objects out of animated step roots. Permission and demo
 adapters project only the status values their layouts consume, and the root
-subscribes to `AppState` only at the completion destination. Provider input is
-drafted locally and committed after typing settles so Keychain writes, model
-refreshes, and connection tests do not compete with each keystroke. Pause other
-motion when it is not visible, prewarm file icons over the intro reveal, and
-keep particle geometry deterministic across `body` updates so invalidation does
-not generate new animation targets.
+subscribes to `AppState` only at the completion destination. Settings and auth
+publishers feed the root through a distinct, value-semantic provider-readiness
+snapshot; the completion celebration resolves service references without
+observing their other state. Provider input is drafted locally and committed
+after typing settles so Keychain writes, model refreshes, and connection tests
+do not compete with each keystroke. Pause other motion when it is not visible,
+prewarm file icons over the intro reveal, and keep particle geometry
+deterministic across `body` updates so invalidation does not generate new
+animation targets.
