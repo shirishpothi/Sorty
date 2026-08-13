@@ -45,10 +45,11 @@ Prewarm completion audio before reaching the completion step; constructing an
 
 Keep broad observable objects out of animated step roots. Permission and demo
 adapters project only the status values their layouts consume, and the root
-subscribes to `AppState` only at the completion destination. Settings and auth
-publishers feed the root through a distinct, value-semantic provider-readiness
-snapshot; the completion celebration resolves service references without
-observing their other state. Provider input is drafted locally and committed
+subscribes to `AppState` only at the completion destination. The provider step
+owns the single value-semantic readiness calculation and passes only a distinct
+setup status to the root; do not add a second root auth/settings observer. The
+completion celebration resolves service references without observing their
+other state. Provider input is drafted locally and committed
 after typing settles so Keychain writes, model refreshes, and connection tests
 do not compete with each keystroke. The provider grid is an Equatable leaf keyed
 only by the selected provider, so draft/status changes do not rebuild its glass
@@ -68,7 +69,9 @@ manager it renders directly; do not also subscribe its entire layout to the
 subscription-auth mirror merely to trigger refresh methods. Model refreshes
 cancel superseded presentation tasks and apply results only when their captured
 provider is still selected, preventing rapid selection changes from publishing
-stale model lists.
+stale model lists. The onboarding-specific Copilot catalog request is likewise
+single-flight and is cancelled when the provider pane disappears or selection
+moves away from Copilot.
 
 Keep scheduling and event bookkeeping out of SwiftUI state. Trackpad swipe
 deltas, cancellable task handles, service references used only by actions, and

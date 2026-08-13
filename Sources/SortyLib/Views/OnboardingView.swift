@@ -150,11 +150,6 @@ public struct OnboardingView: View {
                 }
                 OnboardingScreenBackdropBlurPresenter()
                 OnboardingScreenEdgeGlowPresenter()
-                OnboardingProviderStatusResolver { status in
-                    if providerSetupStatus != status {
-                        providerSetupStatus = status
-                    }
-                }
             }
             .frame(width: 0, height: 0)
         )
@@ -178,7 +173,11 @@ public struct OnboardingView: View {
     private var stepContent: some View {
         switch currentStep {
         case .provider:
-            ProviderSelectionStepView()
+            ProviderSelectionStepView { status in
+                if providerSetupStatus != status {
+                    providerSetupStatus = status
+                }
+            }
                 .accessibilityFocused($isProviderStepAccessibilityFocused)
                 .transition(TransitionStyles.slideFromRight)
         case .permissions:
@@ -518,58 +517,6 @@ private struct OnboardingCompletionDestination: View {
     }
 }
 
-/// Keeps broad settings/auth publications in a zero-size leaf. The expensive
-/// credential resolver runs only when the value-semantic readiness inputs
-/// actually change, and only a distinct status reaches the onboarding root.
-private struct OnboardingProviderStatusResolver: View {
-    @EnvironmentObject private var settingsViewModel: SettingsViewModel
-    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
-    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
-    let onStatus: (ProviderSetupStatus) -> Void
-
-    private struct Inputs: Equatable, Sendable {
-        let config: AIConfig
-        let isGitHubCopilotAuthenticated: Bool
-        let isCodexAuthenticated: Bool
-        let isCodexInstalled: Bool
-        let isAppleFoundationModelAvailable: Bool
-        let appleFoundationModelStatus: String?
-    }
-
-    private var inputs: Inputs {
-        Inputs(
-            config: settingsViewModel.config,
-            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
-            isCodexAuthenticated: codexAuth.isAuthenticated,
-            isCodexInstalled: codexAuth.isCodexInstalled,
-            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
-            appleFoundationModelStatus: settingsViewModel.appleModelStatus
-        )
-    }
-
-    var body: some View {
-        let inputs = inputs
-        Color.clear
-            .task(id: inputs) {
-                let status = await Task.detached(priority: .userInitiated) {
-                    OnboardingSetupValidator.providerStatus(
-                        context: ProviderSetupContext(
-                            config: inputs.config,
-                            isGitHubCopilotAuthenticated: inputs.isGitHubCopilotAuthenticated,
-                            isCodexAuthenticated: inputs.isCodexAuthenticated,
-                            isCodexInstalled: inputs.isCodexInstalled,
-                            isAppleFoundationModelAvailable: inputs.isAppleFoundationModelAvailable,
-                            appleFoundationModelStatus: inputs.appleFoundationModelStatus
-                        )
-                    )
-                }.value
-                guard !Task.isCancelled else { return }
-                onStatus(status)
-            }
-            .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Onboarding Step Enum
 
 enum OnboardingStep: Int, CaseIterable {
@@ -642,6 +589,7 @@ extension OnboardingStep: OnboardingStepValidating {
 @MainActor
 private final class OnboardingIntroTaskController {
     var iconPrewarmTask: Task<Void, Never>?
+    var revealGeneration = 0
 }
 
 private struct OnboardingIntroView: View {
@@ -660,7 +608,6 @@ private struct OnboardingIntroView: View {
     @State private var introFrame: CGRect = .zero
     @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
-    @State private var revealGeneration = 0
     @State private var taskController = OnboardingIntroTaskController()
     @StateObject private var audio = OnboardingAudioManager()
 
@@ -774,7 +721,7 @@ private struct OnboardingIntroView: View {
             runIntroReveal()
         }
         .onDisappear {
-            revealGeneration += 1
+            taskController.revealGeneration += 1
             taskController.iconPrewarmTask?.cancel()
             audio.stopAll()
         }
@@ -790,8 +737,8 @@ private struct OnboardingIntroView: View {
     /// `revealGeneration` counter cancels any in-flight reveal if the view
     /// disappears before the sequence finishes.
     private func runIntroReveal() {
-        revealGeneration += 1
-        let generation = revealGeneration
+        taskController.revealGeneration += 1
+        let generation = taskController.revealGeneration
         taskController.iconPrewarmTask?.cancel()
 
         if reduceMotion {
@@ -811,11 +758,11 @@ private struct OnboardingIntroView: View {
         // reveal instead of batching every lookup on the frame chips appear.
         taskController.iconPrewarmTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
-            guard generation == revealGeneration, !Task.isCancelled else { return }
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             await OnboardingFileIconProvider.prewarmIcons(
                 for: OnboardingOrbitFile.files,
                 generationIsCurrent: {
-                    generation == revealGeneration && !Task.isCancelled
+                    generation == taskController.revealGeneration && !Task.isCancelled
                 }
             )
         }
@@ -825,7 +772,7 @@ private struct OnboardingIntroView: View {
         // the icon reveal.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(450))
-            guard generation == revealGeneration else { return }
+            guard generation == taskController.revealGeneration else { return }
             audio.startBackgroundMelody()
         }
 
@@ -842,7 +789,7 @@ private struct OnboardingIntroView: View {
         Task { @MainActor in
             // Phase 2 — backdrop, title, and button.
             try? await Task.sleep(for: .milliseconds(1700))
-            guard generation == revealGeneration else { return }
+            guard generation == taskController.revealGeneration else { return }
             withAnimation(.easeInOut(duration: 0.9)) {
                 chromeRevealed = true
             }
@@ -853,7 +800,7 @@ private struct OnboardingIntroView: View {
 
             // Phase 3 — file chips drift in once everything has settled.
             try? await Task.sleep(for: .milliseconds(650))
-            guard generation == revealGeneration else { return }
+            guard generation == taskController.revealGeneration else { return }
             fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
         }

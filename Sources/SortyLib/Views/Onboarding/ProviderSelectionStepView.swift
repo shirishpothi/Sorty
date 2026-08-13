@@ -37,9 +37,11 @@ private final class ProviderSelectionTaskController {
     var codexVerifyResetTask: Task<Void, Never>?
     var apiKeyCommitTask: Task<Void, Never>?
     var apiURLCommitTask: Task<Void, Never>?
+    var copilotModelTask: Task<Void, Never>?
 }
 
 public struct ProviderSelectionStepView: View {
+    private let onSetupStatusChange: ((ProviderSetupStatus) -> Void)?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
@@ -71,7 +73,9 @@ public struct ProviderSelectionStepView: View {
         case failed
     }
 
-    public init() {}
+    public init(onSetupStatusChange: ((ProviderSetupStatus) -> Void)? = nil) {
+        self.onSetupStatusChange = onSetupStatusChange
+    }
 
     public var body: some View {
         let setupStatus = readinessSnapshot.setupStatus
@@ -213,6 +217,11 @@ public struct ProviderSelectionStepView: View {
             settingsViewModel.refreshAppleModelStatus()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            taskController.copilotModelTask?.cancel()
+            taskController.copilotModelTask = nil
+            if newProvider != .githubCopilot {
+                isLoadingModels = false
+            }
             taskController.apiKeyCommitTask?.cancel()
             taskController.apiURLCommitTask?.cancel()
             taskController.apiKeyCommitTask = nil
@@ -238,14 +247,19 @@ public struct ProviderSelectionStepView: View {
             taskController.apiKeyCommitTask?.cancel()
             taskController.apiURLCommitTask?.cancel()
             taskController.testDebounceTask?.cancel()
+            taskController.copilotModelTask?.cancel()
+            taskController.copilotModelTask = nil
         }
         .task(id: readinessInputs) {
             let inputs = readinessInputs
             let snapshot = await Task.detached(priority: .userInitiated) {
                 Self.resolveReadiness(from: inputs)
             }.value
-            guard !Task.isCancelled, readinessSnapshot != snapshot else { return }
-            readinessSnapshot = snapshot
+            guard !Task.isCancelled else { return }
+            if readinessSnapshot != snapshot {
+                readinessSnapshot = snapshot
+            }
+            onSetupStatusChange?(snapshot.setupStatus)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
@@ -305,9 +319,12 @@ public struct ProviderSelectionStepView: View {
                     Spacer()
 
                     Button("Sign Out") {
+                        taskController.copilotModelTask?.cancel()
+                        taskController.copilotModelTask = nil
                         copilotAuth.signOut()
                         connectionStatus = .idle
                         availableModels = []
+                        isLoadingModels = false
                     }
                     .buttonStyle(.sortyBordered)
                     .controlSize(.small)
@@ -1137,43 +1154,51 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func fetchCopilotModels() {
-        guard settingsViewModel.config.provider == .githubCopilot, copilotAuth.isAuthenticated else { return }
+        guard settingsViewModel.config.provider == .githubCopilot,
+              copilotAuth.isAuthenticated,
+              taskController.copilotModelTask == nil else { return }
 
         let loadStartedAt = Date()
+        let config = settingsViewModel.config
         isLoadingModels = true
-        Task {
+        taskController.copilotModelTask = Task { @MainActor in
             do {
-                if let client = try AIClientFactory.createClient(config: settingsViewModel.config) as? GitHubCopilotClient {
-                    let models = try await client.fetchAvailableModels()
-                    await MainActor.run {
-                        availableModels = models
-                        // Ensure current model is valid
-                        if !models.contains(settingsViewModel.config.model) {
-                            settingsViewModel.config.model = models.first ?? AIProvider.githubCopilot.defaultModel
-                        }
-                        isLoadingModels = false
-                        AnalyticsManager.shared.captureWorkflow(
-                            workflow: "model_catalog",
-                            stage: "loaded",
-                            outcome: "success",
-                            properties: AnalyticsManager.durationProperties(
-                                Date().timeIntervalSince(loadStartedAt)
-                            ).merging(["source": "onboarding"]) { current, _ in current }
-                        )
-                    }
-                }
-            } catch {
-                await MainActor.run {
+                guard let client = try AIClientFactory.createClient(config: config) as? GitHubCopilotClient else {
                     isLoadingModels = false
-                    AnalyticsManager.shared.captureWorkflow(
-                        workflow: "model_catalog",
-                        stage: "loaded",
-                        outcome: "failed",
-                        properties: AnalyticsManager.durationProperties(
-                            Date().timeIntervalSince(loadStartedAt)
-                        ).merging(["source": "onboarding"]) { current, _ in current }
-                    )
+                    taskController.copilotModelTask = nil
+                    return
                 }
+                let models = try await client.fetchAvailableModels()
+                guard !Task.isCancelled,
+                      settingsViewModel.config.provider == .githubCopilot else { return }
+                if availableModels != models {
+                    availableModels = models
+                }
+                if !models.contains(settingsViewModel.config.model) {
+                    settingsViewModel.config.model = models.first ?? AIProvider.githubCopilot.defaultModel
+                }
+                isLoadingModels = false
+                taskController.copilotModelTask = nil
+                AnalyticsManager.shared.captureWorkflow(
+                    workflow: "model_catalog",
+                    stage: "loaded",
+                    outcome: "success",
+                    properties: AnalyticsManager.durationProperties(
+                        Date().timeIntervalSince(loadStartedAt)
+                    ).merging(["source": "onboarding"]) { current, _ in current }
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                isLoadingModels = false
+                taskController.copilotModelTask = nil
+                AnalyticsManager.shared.captureWorkflow(
+                    workflow: "model_catalog",
+                    stage: "loaded",
+                    outcome: "failed",
+                    properties: AnalyticsManager.durationProperties(
+                        Date().timeIntervalSince(loadStartedAt)
+                    ).merging(["source": "onboarding"]) { current, _ in current }
+                )
             }
         }
     }
