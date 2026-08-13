@@ -596,7 +596,6 @@ private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var iconScale: CGFloat = 0.86
     @State private var iconOpacity: Double = 0
     @State private var glowVisible = false
@@ -605,9 +604,6 @@ private struct OnboardingIntroView: View {
     @State private var textOffset: CGFloat = 14
     @State private var filesAppeared = false
     @State private var fileIcons: [String: NSImage] = [:]
-    @State private var introFrame: CGRect = .zero
-    @State private var getStartedButtonFrame: CGRect = .zero
-    @State private var isHoveringButton = false
     @State private var taskController = OnboardingIntroTaskController()
     @StateObject private var audio = OnboardingAudioManager()
 
@@ -621,99 +617,18 @@ private struct OnboardingIntroView: View {
                 .allowsHitTesting(false)
                 .opacity(chromeRevealed ? 0.92 : 0)
 
-            // The chip views and their native materials stay mounted while a
-            // display-linked AppKit container updates only their backing-layer
-            // transforms. This preserves the exact orbit without diffing and
-            // laying out ten SwiftUI subtrees 24 times per second.
-            OnboardingOrbitField(
+            OnboardingIntroInteractionLayer(
                 icons: fileIcons,
                 filesVisible: filesAppeared,
-                isCollapsed: isHoveringButton,
-                collapseOrigin: CGSize(
-                    width: getStartedButtonFrame.midX - introFrame.midX,
-                    height: getStartedButtonFrame.midY - introFrame.midY
-                ),
-                reduceMotion: reduceMotion,
-                isActive: controlActiveState != .inactive
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-
-            VStack(spacing: 26) {
-                VStack(spacing: 20) {
-                    ZStack {
-                        RetainedIntroGlow(
-                            isVisible: glowVisible,
-                            reduceMotion: reduceMotion,
-                            isActive: controlActiveState != .inactive
-                        )
-                        .frame(width: 220, height: 220)
-                        .accessibilityHidden(true)
-
-                        SortyEnergyScanIcon(
-                            image: NSApp.applicationIconImage,
-                            size: 156,
-                            cornerRadius: 34
-                        )
-                            .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), radius: 34, x: 0, y: 0)
-                            .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
-                            .accessibilityHidden(true)
-                    }
-                    .scaleEffect(iconScale)
-                    .opacity(iconOpacity)
-
-                    Text("Welcome to Sorty")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary.opacity(0.88))
-                        .opacity(textOpacity)
-                        .offset(y: textOffset)
-                }
-
-                Button {
-                    HapticFeedbackManager.shared.success()
-                    audio.stopAll()
-                    onGetStarted()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Get Started")
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                .buttonStyle(.onboardingPill(size: .large))
-                .onboardingBeamBorder(
-                    variant: .featured,
-                    isIntensified: isHoveringButton,
-                    includesInteriorGlow: isHoveringButton,
-                    size: .medium
-                )
-                .keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("OnboardingAdvanceButton")
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
-                } action: { frame in
-                    if getStartedButtonFrame != frame {
-                        getStartedButtonFrame = frame
-                    }
-                }
-                .onHover { hovering in
-                    isHoveringButton = hovering
-                }
-                .scaleEffect(isHoveringButton ? 1.035 : 1)
-                .opacity(textOpacity)
-                .offset(y: textOffset)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.82),
-                    value: isHoveringButton
-                )
-            }
-        }
-        .onGeometryChange(for: CGRect.self) { proxy in
-            proxy.frame(in: .global)
-        } action: { frame in
-            if introFrame != frame {
-                introFrame = frame
+                iconScale: iconScale,
+                iconOpacity: iconOpacity,
+                glowVisible: glowVisible,
+                textOpacity: textOpacity,
+                textOffset: textOffset
+            ) {
+                HapticFeedbackManager.shared.success()
+                audio.stopAll()
+                onGetStarted()
             }
         }
         .accessibilityElement(children: .contain)
@@ -815,6 +730,122 @@ private struct OnboardingIntroView: View {
         }
     }
 
+}
+
+/// Owns the pointer-driven intro state so CTA hover updates only the orbit and
+/// button presentation instead of re-evaluating the full reveal/audio root.
+private struct OnboardingIntroInteractionLayer: View {
+    let icons: [String: NSImage]
+    let filesVisible: Bool
+    let iconScale: CGFloat
+    let iconOpacity: Double
+    let glowVisible: Bool
+    let textOpacity: Double
+    let textOffset: CGFloat
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @State private var introFrame: CGRect = .zero
+    @State private var buttonFrame: CGRect = .zero
+    @State private var isHoveringButton = false
+
+    var body: some View {
+        ZStack {
+            // The chip views and their native materials stay mounted while a
+            // retained AppKit container updates only backing-layer transforms.
+            OnboardingOrbitField(
+                icons: icons,
+                filesVisible: filesVisible,
+                isCollapsed: isHoveringButton,
+                collapseOrigin: CGSize(
+                    width: buttonFrame.midX - introFrame.midX,
+                    height: buttonFrame.midY - introFrame.midY
+                ),
+                reduceMotion: reduceMotion,
+                isActive: controlActiveState != .inactive
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
+            VStack(spacing: 26) {
+                VStack(spacing: 20) {
+                    ZStack {
+                        RetainedIntroGlow(
+                            isVisible: glowVisible,
+                            reduceMotion: reduceMotion,
+                            isActive: controlActiveState != .inactive
+                        )
+                        .frame(width: 220, height: 220)
+                        .accessibilityHidden(true)
+
+                        SortyEnergyScanIcon(
+                            image: NSApp.applicationIconImage,
+                            size: 156,
+                            cornerRadius: 34
+                        )
+                        .shadow(
+                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22),
+                            radius: 34
+                        )
+                        .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
+                        .accessibilityHidden(true)
+                    }
+                    .scaleEffect(iconScale)
+                    .opacity(iconOpacity)
+
+                    Text("Welcome to Sorty")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.88))
+                        .opacity(textOpacity)
+                        .offset(y: textOffset)
+                }
+
+                Button(action: action) {
+                    HStack(spacing: 8) {
+                        Text("Get Started")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.onboardingPill(size: .large))
+                .onboardingBeamBorder(
+                    variant: .featured,
+                    isIntensified: isHoveringButton,
+                    includesInteriorGlow: isHoveringButton,
+                    size: .medium
+                )
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("OnboardingAdvanceButton")
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    if buttonFrame != frame {
+                        buttonFrame = frame
+                    }
+                }
+                .onHover { hovering in
+                    isHoveringButton = hovering
+                }
+                .scaleEffect(isHoveringButton ? 1.035 : 1)
+                .opacity(textOpacity)
+                .offset(y: textOffset)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.82),
+                    value: isHoveringButton
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            if introFrame != frame {
+                introFrame = frame
+            }
+        }
+    }
 }
 
 private struct RetainedIntroGlow: NSViewRepresentable {

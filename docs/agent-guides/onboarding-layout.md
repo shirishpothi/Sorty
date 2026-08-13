@@ -58,6 +58,9 @@ infinite animation groups.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
 layer clock while inactive, so it never restarts its delay or keyframes merely
 because focus moved to another app.
+The intro CTA, orbit collapse, and their geometry probes own hover state in one
+full-size interaction leaf; crossing the CTA must not invalidate the reveal or
+audio root.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent
