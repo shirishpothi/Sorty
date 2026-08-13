@@ -134,7 +134,8 @@ glass-card collections throughout the real app, including onboarding.
 Persona selection springs belong to the cards whose selection state changes;
 do not wrap shared-manager or generator-presentation mutations in a broad
 workflow animation transaction. Selection managers guard identical values, and
-callers must not repeat state normalization the manager already performs.
+publish and persist only the selection fields that actually change; callers
+must not repeat state normalization the manager already performs.
 
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
