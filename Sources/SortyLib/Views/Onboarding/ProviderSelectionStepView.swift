@@ -32,6 +32,7 @@ private struct ProviderReadinessSnapshot: Equatable, Sendable {
 
 @MainActor
 private final class ProviderSelectionTaskController {
+    var initialProviderRefreshTask: Task<Void, Never>?
     var testDebounceTask: Task<Void, Never>?
     var codexTerminalResetTask: Task<Void, Never>?
     var codexVerifyResetTask: Task<Void, Never>?
@@ -215,15 +216,11 @@ public struct ProviderSelectionStepView: View {
         .onAppear {
             synchronizeInputDrafts()
             hasAppeared = true
-            if settingsViewModel.config.provider == .githubCopilot {
-                copilotAuth.checkAuthenticationStatus()
-            }
-            if settingsViewModel.config.provider == .openAI {
-                codexAuth.checkStatus()
-            }
-            settingsViewModel.refreshAppleModelStatus()
+            scheduleInitialProviderRefresh()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            taskController.initialProviderRefreshTask?.cancel()
+            taskController.initialProviderRefreshTask = nil
             taskController.copilotModelTask?.cancel()
             taskController.copilotModelTask = nil
             if newProvider != .githubCopilot {
@@ -240,7 +237,9 @@ public struct ProviderSelectionStepView: View {
             if newProvider == .openAI {
                 codexAuth.checkStatus()
             }
-            settingsViewModel.refreshAppleModelStatus()
+            if newProvider == .appleFoundationModel {
+                settingsViewModel.refreshAppleModelStatus()
+            }
         }
         .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
             guard taskController.apiKeyCommitTask == nil else { return }
@@ -251,6 +250,8 @@ public struct ProviderSelectionStepView: View {
         }
         .onDisappear {
             commitInputDrafts()
+            taskController.initialProviderRefreshTask?.cancel()
+            taskController.initialProviderRefreshTask = nil
             taskController.apiKeyCommitTask?.cancel()
             taskController.apiURLCommitTask?.cancel()
             taskController.testDebounceTask?.cancel()
@@ -941,6 +942,30 @@ public struct ProviderSelectionStepView: View {
         apiURLDraft = settingsViewModel.config.apiURL
             ?? settingsViewModel.config.provider.defaultAPIURL
             ?? ""
+    }
+
+    private func scheduleInitialProviderRefresh() {
+        taskController.initialProviderRefreshTask?.cancel()
+        let provider = settingsViewModel.config.provider
+        taskController.initialProviderRefreshTask = Task { @MainActor in
+            // Keep process/keychain/model probes off the provider pane's first
+            // reveal frames. Existing manager state still renders immediately.
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled,
+                  settingsViewModel.config.provider == provider else { return }
+
+            switch provider {
+            case .githubCopilot:
+                copilotAuth.checkAuthenticationStatus()
+            case .openAI:
+                codexAuth.checkStatus()
+            case .appleFoundationModel:
+                settingsViewModel.refreshAppleModelStatus()
+            default:
+                break
+            }
+            taskController.initialProviderRefreshTask = nil
+        }
     }
 
     private func scheduleAPIKeyCommit() {

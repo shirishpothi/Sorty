@@ -119,6 +119,8 @@ window geometry notifications, coalesce same-runloop reports, and treat normal
 SwiftUI representable updates as bookkeeping rather than another measurement.
 The resolved-manager callback owns the initial permission refresh; do not also
 launch an identical parent `onAppear` refresh before those managers arrive.
+Delay provider CLI/auth/model preflight until the initial pane reveal has
+settled, and only probe Apple model availability when that provider is active.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
 queue. Pause permission video playback and set the full-screen backdrop blur to
