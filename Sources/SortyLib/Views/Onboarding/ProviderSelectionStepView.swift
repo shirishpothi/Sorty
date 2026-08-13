@@ -30,6 +30,11 @@ public struct ProviderSelectionStepView: View {
     @State private var isHoveringTestConnectionButton = false
     @State private var codexTerminalResetTask: Task<Void, Never>?
     @State private var codexVerifyResetTask: Task<Void, Never>?
+    @State private var codexSignInAttempt = 0
+    @State private var apiKeyDraft = ""
+    @State private var apiURLDraft = ""
+    @State private var apiKeyCommitTask: Task<Void, Never>?
+    @State private var apiURLCommitTask: Task<Void, Never>?
 
     enum ConnectionTestStatus {
         case idle
@@ -47,6 +52,9 @@ public struct ProviderSelectionStepView: View {
     public init() {}
 
     public var body: some View {
+        let setupStatus = providerSetupStatus
+        let canTest = canTestConnection
+
         HStack(spacing: 34) {
             VStack(alignment: .leading, spacing: 22) {
                 Spacer()
@@ -92,15 +100,15 @@ public struct ProviderSelectionStepView: View {
                         Text("Provider")
                             .font(.title3.weight(.semibold))
                         Spacer()
-                        Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
+                        Text(setupStatus.isReady ? "Ready" : "Setup required")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                            .foregroundStyle(setupStatus.isReady ? .green : .orange)
                             .numericTextTransition(
-                                animationValue: providerSetupStatus.isReady
+                                animationValue: setupStatus.isReady
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                            .background((setupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
                     }
                     .frame(maxWidth: 640)
 
@@ -119,11 +127,11 @@ public struct ProviderSelectionStepView: View {
                     if settingsViewModel.config.provider != .appleFoundationModel {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 10) {
-                                Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                    .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
+                                Image(systemName: setupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
+                                    .foregroundStyle(setupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
                                     .font(.system(size: 16, weight: .semibold))
                                     .symbolReplaceTransition(
-                                        animationValue: providerSetupStatus.isReady
+                                        animationValue: setupStatus.isReady
                                     )
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -133,11 +141,11 @@ public struct ProviderSelectionStepView: View {
                                             animationValue: settingsViewModel.config.provider
                                         )
 
-                                    Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
+                                    Text(setupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .numericTextTransition(
-                                            animationValue: providerSetupStatus.isReady
+                                            animationValue: setupStatus.isReady
                                         )
                                 }
 
@@ -160,7 +168,7 @@ public struct ProviderSelectionStepView: View {
                         .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
                     }
 
-                        connectionStatusView
+                        connectionStatusView(canTest: canTest)
                             .frame(maxWidth: 430)
                             .padding(.top, 4)
                     }
@@ -177,25 +185,42 @@ public struct ProviderSelectionStepView: View {
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
         .onAppear {
+            synchronizeInputDrafts()
             withAnimation { hasAppeared = true }
             if settingsViewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }
             if settingsViewModel.config.provider == .openAI {
                 openAIAuth.checkAuthenticationStatus()
-                codexAuth.checkStatus()
             }
             settingsViewModel.refreshAppleModelStatus()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            apiKeyCommitTask?.cancel()
+            apiURLCommitTask?.cancel()
+            apiKeyCommitTask = nil
+            apiURLCommitTask = nil
+            synchronizeInputDrafts()
             if newProvider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }
             if newProvider == .openAI {
                 openAIAuth.checkAuthenticationStatus()
-                codexAuth.checkStatus()
             }
             settingsViewModel.refreshAppleModelStatus()
+        }
+        .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
+            guard apiKeyCommitTask == nil else { return }
+            let value = apiKey ?? ""
+            if apiKeyDraft != value {
+                apiKeyDraft = value
+            }
+        }
+        .onDisappear {
+            commitInputDrafts()
+            apiKeyCommitTask?.cancel()
+            apiURLCommitTask?.cancel()
+            testDebounceTask?.cancel()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
@@ -205,6 +230,7 @@ public struct ProviderSelectionStepView: View {
             currentModel: settingsViewModel.config.model,
             contextMessage: "Choose the provider and model Sorty will use for organization."
         ) { provider, model in
+            commitInputDrafts()
             settingsViewModel.config.provider = provider
             settingsViewModel.config.model = model
             if let defaultURL = provider.defaultAPIURL {
@@ -408,14 +434,12 @@ public struct ProviderSelectionStepView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    TextField("https://api.example.com", text: Binding(
-                        get: { settingsViewModel.config.apiURL ?? settingsViewModel.config.provider.defaultAPIURL ?? "" },
-                        set: {
-                            settingsViewModel.config.apiURL = $0.isEmpty ? nil : $0
-                            scheduleConnectionTest()
-                        }
-                    ))
+                    TextField("https://api.example.com", text: $apiURLDraft)
                     .textFieldStyle(.roundedBorder)
+                    .onChange(of: apiURLDraft) { _, _ in
+                        scheduleAPIURLCommit()
+                    }
+                    .onSubmit(commitAPIURLDraft)
 
                     Text(settingsViewModel.config.provider == .ollama ?
                          "Default: http://localhost:11434" :
@@ -505,23 +529,24 @@ public struct ProviderSelectionStepView: View {
         Group {
             if isShowingAPIKey && FeatureFlags.privacyModeEnabled {
                 TextField("Enter your API key", text: Binding(
-                    get: { settingsViewModel.config.apiKey ?? "" },
+                    get: { apiKeyDraft },
                     set: {
-                        settingsViewModel.updateAPIKey($0)
-                        scheduleConnectionTest()
+                        apiKeyDraft = $0
+                        scheduleAPIKeyCommit()
                     }
                 ))
             } else {
                 SecureField("Enter your API key", text: Binding(
-                    get: { settingsViewModel.config.apiKey ?? "" },
+                    get: { apiKeyDraft },
                     set: {
-                        settingsViewModel.updateAPIKey($0)
-                        scheduleConnectionTest()
+                        apiKeyDraft = $0
+                        scheduleAPIKeyCommit()
                     }
                 ))
             }
         }
         .textFieldStyle(.roundedBorder)
+        .onSubmit(commitAPIKeyDraft)
 
         if let url = settingsViewModel.config.provider.apiKeyURL {
             HStack(spacing: 4) {
@@ -673,7 +698,8 @@ public struct ProviderSelectionStepView: View {
                 }
             }
         }
-        .task {
+        .task(id: codexSignInAttempt) {
+            guard codexSignInAttempt > 0 else { return }
             await autoVerifyCodexSignInLoop()
         }
     }
@@ -702,7 +728,7 @@ public struct ProviderSelectionStepView: View {
     }
 
     @ViewBuilder
-    private var connectionStatusView: some View {
+    private func connectionStatusView(canTest: Bool) -> some View {
         VStack(spacing: 12) {
             Group {
                 switch connectionStatus {
@@ -718,7 +744,7 @@ public struct ProviderSelectionStepView: View {
                     .buttonStyle(.onboardingPill)
                     .onboardingBeamBorder(
                         variant: .featured,
-                        active: isHoveringTestConnectionButton && canTestConnection,
+                        active: isHoveringTestConnectionButton && canTest,
                         isIntensified: isHoveringTestConnectionButton,
                         includesInteriorGlow: isHoveringTestConnectionButton
                     )
@@ -727,8 +753,8 @@ public struct ProviderSelectionStepView: View {
                             isHoveringTestConnectionButton = hovering
                         }
                     }
-                    .disabled(!canTestConnection)
-                    .opacity(canTestConnection ? 1.0 : 0.5)
+                    .disabled(!canTest)
+                    .opacity(canTest ? 1.0 : 0.5)
 
                 case .testing:
                     HStack(spacing: 8) {
@@ -817,6 +843,7 @@ public struct ProviderSelectionStepView: View {
 
     private func selectProvider(_ provider: AIProvider) {
         HapticFeedbackManager.shared.selection()
+        commitInputDrafts()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             settingsViewModel.config.provider = provider
             if let defaultURL = provider.defaultAPIURL {
@@ -840,6 +867,7 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func setAuthMethod(_ method: ProviderAuthMethod) {
+        commitInputDrafts()
         var next = settingsViewModel.config
         let provider = next.provider
         next.setAuthMethod(method, for: provider)
@@ -853,6 +881,66 @@ public struct ProviderSelectionStepView: View {
         settingsViewModel.updateAvailableModels(force: true)
         scheduleConnectionTest()
         openAIAuth.checkAuthenticationStatus()
+    }
+
+    private func synchronizeInputDrafts() {
+        apiKeyDraft = settingsViewModel.config.apiKey ?? ""
+        apiURLDraft = settingsViewModel.config.apiURL
+            ?? settingsViewModel.config.provider.defaultAPIURL
+            ?? ""
+    }
+
+    private func scheduleAPIKeyCommit() {
+        let normalizedDraft = apiKeyDraft.isEmpty ? nil : apiKeyDraft
+        guard normalizedDraft != settingsViewModel.config.apiKey else { return }
+
+        apiKeyCommitTask?.cancel()
+        apiKeyCommitTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled else { return }
+            commitAPIKeyDraft()
+            apiKeyCommitTask = nil
+        }
+    }
+
+    private func scheduleAPIURLCommit() {
+        let provider = settingsViewModel.config.provider
+        guard provider == .openAICompatible || provider == .ollama else { return }
+        let normalizedDraft = apiURLDraft.isEmpty ? nil : apiURLDraft
+        guard normalizedDraft != settingsViewModel.config.apiURL else { return }
+
+        apiURLCommitTask?.cancel()
+        apiURLCommitTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled else { return }
+            commitAPIURLDraft()
+            apiURLCommitTask = nil
+        }
+    }
+
+    private func commitAPIKeyDraft() {
+        apiKeyCommitTask?.cancel()
+        apiKeyCommitTask = nil
+        let normalizedDraft = apiKeyDraft.isEmpty ? nil : apiKeyDraft
+        guard normalizedDraft != settingsViewModel.config.apiKey else { return }
+        settingsViewModel.updateAPIKey(apiKeyDraft)
+        scheduleConnectionTest()
+    }
+
+    private func commitAPIURLDraft() {
+        apiURLCommitTask?.cancel()
+        apiURLCommitTask = nil
+        let provider = settingsViewModel.config.provider
+        guard provider == .openAICompatible || provider == .ollama else { return }
+        let normalizedDraft = apiURLDraft.isEmpty ? nil : apiURLDraft
+        guard normalizedDraft != settingsViewModel.config.apiURL else { return }
+        settingsViewModel.config.apiURL = normalizedDraft
+        scheduleConnectionTest()
+    }
+
+    private func commitInputDrafts() {
+        commitAPIKeyDraft()
+        commitAPIURLDraft()
     }
 
     private func scheduleConnectionTest() {
@@ -961,6 +1049,7 @@ public struct ProviderSelectionStepView: View {
     private func startCodexTerminalSignIn() {
         HapticFeedbackManager.shared.tap()
         codexTerminalButtonState = .activating
+        codexSignInAttempt += 1
         codexAuth.openTerminalWithLogin()
 
         if codexAuth.authError == nil {

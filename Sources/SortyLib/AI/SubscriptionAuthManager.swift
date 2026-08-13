@@ -44,8 +44,12 @@ public final class SubscriptionAuthManager: ObservableObject {
         Task { [weak self] in
             await codex.refreshStatus()
             guard let self else { return }
-            self.isAuthenticated = codex.isAuthenticated
-            self.accountLabel = codex.accountEmail
+            if self.isAuthenticated != codex.isAuthenticated {
+                self.isAuthenticated = codex.isAuthenticated
+            }
+            if self.accountLabel != codex.accountEmail {
+                self.accountLabel = codex.accountEmail
+            }
         }
     }
 

@@ -17,7 +17,6 @@ public struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
@@ -43,6 +42,8 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
+        let validation = currentStepValidation
+
         ZStack {
             if isFlowPrepared {
                 ZStack {
@@ -98,7 +99,7 @@ public struct OnboardingView: View {
                         }
 
                         if currentStep != .completion {
-                            navigationControls
+                            navigationControls(validation: validation)
                                 .padding(.horizontal, 40)
                                 .padding(.top, 12)
                                 .padding(.bottom, 12)
@@ -138,7 +139,7 @@ public struct OnboardingView: View {
         .onChange(of: currentStep) { _, _ in
             advanceValidationMessage = nil
         }
-        .onChange(of: currentStepValidation.canAdvance) { _, canAdvance in
+        .onChange(of: validation.canAdvance) { _, canAdvance in
             if canAdvance {
                 advanceValidationMessage = nil
             }
@@ -183,21 +184,16 @@ public struct OnboardingView: View {
             })
             .transition(TransitionStyles.slideFromRight)
         case .completion:
-            CompletionStepView(onFinish: {
-                HapticFeedbackManager.shared.success()
-                // Skip the staggered ReadyToOrganizeView cascade on first
-                // appearance — the user just saw a long reveal animation in
-                // the onboarding completion step, so an additional 0.4s of
-                // staggered fade-ins on the main screen reads as lag rather
-                // than polish.
-                appState.hasPresentedReadyToOrganize = true
-                hasCompletedOnboarding = true
-            })
+            OnboardingCompletionDestination(
+                hasCompletedOnboarding: $hasCompletedOnboarding
+            )
             .transition(TransitionStyles.scaleAndFade)
         }
     }
 
-    private var navigationControls: some View {
+    private func navigationControls(
+        validation: OnboardingStepValidationResult
+    ) -> some View {
         let sideControlWidth: CGFloat = 180
         let backHidden = (currentStep == OnboardingStep.activeCases.first || currentStep == .completion)
 
@@ -253,12 +249,12 @@ public struct OnboardingView: View {
                                 }
                                 .buttonStyle(.onboardingPill)
                                 .onboardingBeamBorder(
-                                    active: currentStepValidation.canAdvance && !isAdvancing
+                                    active: validation.canAdvance && !isAdvancing
                                 )
                                 .keyboardShortcut(.rightArrow, modifiers: [])
-                                .disabled(!currentStepValidation.canAdvance || isAdvancing)
+                                .disabled(!validation.canAdvance || isAdvancing)
                                 .opacity(
-                                    currentStepValidation.canAdvance && !isAdvancing ? 1.0 : 0.5
+                                    validation.canAdvance && !isAdvancing ? 1.0 : 0.5
                                 )
                                 .accessibilityIdentifier("OnboardingAdvanceButton")
                             }
@@ -493,6 +489,23 @@ public struct OnboardingView: View {
     }
 }
 
+/// Keeps AppState publications scoped to the completion destination instead
+/// of invalidating the entire onboarding root throughout every step.
+private struct OnboardingCompletionDestination: View {
+    @Binding var hasCompletedOnboarding: Bool
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        CompletionStepView {
+            HapticFeedbackManager.shared.success()
+            // The user just saw a long completion reveal. Skip the extra
+            // ReadyToOrganizeView entrance cascade on the first main screen.
+            appState.hasPresentedReadyToOrganize = true
+            hasCompletedOnboarding = true
+        }
+    }
+}
+
 // MARK: - Onboarding Step Enum
 
 enum OnboardingStep: Int, CaseIterable {
@@ -576,13 +589,10 @@ private struct OnboardingIntroView: View {
     @State private var textOffset: CGFloat = 14
     @State private var filesAppeared = false
     @State private var fileIcons: [String: NSImage] = [:]
-    @State private var collapseProgress: CGFloat = 0
     @State private var introFrame: CGRect = .zero
     @State private var getStartedButtonFrame: CGRect = .zero
     @State private var isHoveringButton = false
     @State private var revealGeneration = 0
-    @State private var orbitEpoch = Date()
-    @State private var orbitPausedAt: Date?
     @State private var iconPrewarmTask: Task<Void, Never>?
     @StateObject private var audio = OnboardingAudioManager()
 
@@ -596,41 +606,24 @@ private struct OnboardingIntroView: View {
                 .allowsHitTesting(false)
                 .opacity(chromeRevealed ? 0.92 : 0)
 
-            // Real macOS file-type icons drift in a loose orbit, then tuck into
-            // the Get Started button while it is hovered.
-            // Keep the orbit live while Sorty is active. Inactive windows pause
-            // without a resume jump because orbitEpoch excludes paused time.
-            SwiftUI.TimelineView(.animation(
-                minimumInterval: 1.0 / 24.0,
-                paused: reduceMotion || controlActiveState == .inactive || !filesAppeared
-            )) { context in
-                let phase = reduceMotion ? 0 : context.date.timeIntervalSince(orbitEpoch)
-                ZStack {
-                    ForEach(OnboardingOrbitFile.files) { file in
-                        OnboardingOrbitFileChip(
-                            file: file,
-                            icon: fileIcons[file.ext] ?? OnboardingFileIconProvider.placeholder
-                        )
-                            .equatable()
-                            .modifier(
-                                OrbitChipPlacement(
-                                    collapseProgress: collapseProgress,
-                                    orbitOffset: orbitOffset(for: file, phase: phase),
-                                    collapseOffset: collapseOffset(for: file),
-                                    orbitRotation: file.rotation + sin(phase * 0.7 + file.driftPhase) * 3,
-                                    orbitScale: file.scale
-                                )
-                            )
-                            .opacity(filesAppeared ? 1 : 0)
-                            .animation(
-                                .spring(response: 0.7, dampingFraction: 0.86)
-                                    .delay(file.appearDelay),
-                                value: filesAppeared
-                            )
-                    }
-                }
-                .allowsHitTesting(false)
-            }
+            // The chip views and their native materials stay mounted while a
+            // display-linked AppKit container updates only their backing-layer
+            // transforms. This preserves the exact orbit without diffing and
+            // laying out ten SwiftUI subtrees 24 times per second.
+            OnboardingOrbitField(
+                icons: fileIcons,
+                filesVisible: filesAppeared,
+                isCollapsed: isHoveringButton,
+                collapseOrigin: CGSize(
+                    width: getStartedButtonFrame.midX - introFrame.midX,
+                    height: getStartedButtonFrame.midY - introFrame.midY
+                ),
+                reduceMotion: reduceMotion,
+                isActive: controlActiveState != .inactive
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             VStack(spacing: 26) {
                 VStack(spacing: 20) {
@@ -672,23 +665,24 @@ private struct OnboardingIntroView: View {
                     }
                 }
                 .buttonStyle(.onboardingPill(size: .large))
-                .onboardingBeamBorder(variant: .featured, isIntensified: isHoveringButton, includesInteriorGlow: isHoveringButton)
+                .onboardingBeamBorder(
+                    variant: .featured,
+                    isIntensified: isHoveringButton,
+                    includesInteriorGlow: isHoveringButton,
+                    size: .medium
+                )
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .onGeometryChange(for: CGRect.self) { proxy in
                     proxy.frame(in: .global)
                 } action: { frame in
-                    getStartedButtonFrame = frame
+                    if getStartedButtonFrame != frame {
+                        getStartedButtonFrame = frame
+                    }
                 }
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                         isHoveringButton = hovering
-                    }
-                    // Only the collapse blend is animated; the orbit keeps
-                    // running underneath, so entering/leaving hover mid-flight
-                    // always springs to the chips' live positions.
-                    withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        collapseProgress = hovering ? 1 : 0
                     }
                 }
                 .scaleEffect(isHoveringButton ? 1.035 : 1)
@@ -700,7 +694,9 @@ private struct OnboardingIntroView: View {
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .global)
         } action: { frame in
-            introFrame = frame
+            if introFrame != frame {
+                introFrame = frame
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Sorty")
@@ -711,9 +707,6 @@ private struct OnboardingIntroView: View {
             revealGeneration += 1
             iconPrewarmTask?.cancel()
             audio.stopAll()
-        }
-        .onChange(of: controlActiveState, initial: true) { _, activeState in
-            updateOrbitClock(for: activeState)
         }
     }
 
@@ -802,62 +795,6 @@ private struct OnboardingIntroView: View {
         }
     }
 
-    private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
-        let orbitalAngle = phase * file.driftSpeed + file.driftPhase
-        let orbitalX = cos(orbitalAngle) * file.orbitWidth * 1.18
-        let orbitalY = sin(orbitalAngle) * file.orbitHeight * 1.22
-        let driftX = cos(phase * 0.42 + file.driftPhase) * file.driftRadius * 1.28
-        let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
-        return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
-    }
-
-    private func collapseOffset(for file: OnboardingOrbitFile) -> CGSize {
-        CGSize(
-            width: getStartedButtonFrame.midX - introFrame.midX + file.collapseX * 0.65,
-            height: getStartedButtonFrame.midY - introFrame.midY + file.collapseY * 0.18
-        )
-    }
-
-    private func updateOrbitClock(for activeState: ControlActiveState) {
-        let now = Date()
-        if activeState == .inactive {
-            orbitPausedAt = orbitPausedAt ?? now
-        } else if let orbitPausedAt {
-            orbitEpoch = orbitEpoch.addingTimeInterval(now.timeIntervalSince(orbitPausedAt))
-            self.orbitPausedAt = nil
-        }
-    }
-}
-
-/// Blends each orbit chip between its live orbital placement and its
-/// collapsed position inside the Get Started button. `collapseProgress` is the only
-/// animated value — the orbit inputs update on every timeline tick — so the
-/// hover collapse can be entered and exited mid-flight without position
-/// jumps, and the orbit itself never freezes.
-private struct OrbitChipPlacement: ViewModifier, Animatable {
-    var collapseProgress: CGFloat
-    var orbitOffset: CGSize
-    var collapseOffset: CGSize
-    var orbitRotation: Double
-    var orbitScale: CGFloat
-
-    nonisolated var animatableData: CGFloat {
-        get { collapseProgress }
-        set { collapseProgress = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        let t = min(max(collapseProgress, 0), 1)
-        let collapseOpacity = 1 - max(0, (t - 0.72) / 0.28)
-        content
-            .rotationEffect(.degrees(orbitRotation * Double(1 - t)))
-            .scaleEffect(orbitScale + (0.08 - orbitScale) * t)
-            .offset(
-                x: orbitOffset.width + (collapseOffset.width - orbitOffset.width) * t,
-                y: orbitOffset.height + (collapseOffset.height - orbitOffset.height) * t
-            )
-            .opacity(Double(collapseOpacity))
-    }
 }
 
 struct SortyEnergyScanIcon: View {
@@ -869,56 +806,188 @@ struct SortyEnergyScanIcon: View {
     var repeats = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var appearedAt: Date?
-    @State private var isSweepRunning = false
-    @State private var sweepFinished = false
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(
-            minimumInterval: 1.0 / 60.0,
-            paused: reduceMotion || !isSweepRunning || sweepFinished
-        )) { context in
-            EnergyScanIconFrame(
-                image: image,
-                size: size,
-                cornerRadius: cornerRadius,
-                phase: phase(at: context.date),
-                reduceMotion: reduceMotion
-            )
-        }
+        RetainedEnergyScanIcon(
+            image: image,
+            size: size,
+            cornerRadius: cornerRadius,
+            startDelay: startDelay,
+            sweepDuration: sweepDuration,
+            repeats: repeats,
+            shouldAnimate: !reduceMotion && controlActiveState != .inactive
+        )
         .frame(width: size, height: size)
         .accessibilityHidden(true)
-        .task {
-            guard appearedAt == nil else { return }
-            appearedAt = Date()
+    }
+}
 
-            // Do not request identical frames during the fixed start delay.
-            guard !reduceMotion else { return }
-            try? await Task.sleep(for: .seconds(startDelay))
-            guard !Task.isCancelled else { return }
-            isSweepRunning = true
+private struct RetainedEnergyScanIcon: NSViewRepresentable {
+    let image: NSImage
+    let size: CGFloat
+    let cornerRadius: CGFloat
+    let startDelay: TimeInterval
+    let sweepDuration: TimeInterval
+    let repeats: Bool
+    let shouldAnimate: Bool
 
-            // A single deliberate sweep, then the timeline pauses for good.
-            // The looping version re-scanned the icon every few seconds,
-            // which read as restless rather than polished.
-            guard !repeats else { return }
-            try? await Task.sleep(for: .seconds(sweepDuration + 0.1))
-            guard !Task.isCancelled else { return }
-            isSweepRunning = false
-            sweepFinished = true
+    func makeNSView(context: Context) -> RetainedEnergyScanIconView {
+        RetainedEnergyScanIconView()
+    }
+
+    func updateNSView(_ nsView: RetainedEnergyScanIconView, context: Context) {
+        nsView.update(
+            image: image,
+            size: size,
+            cornerRadius: cornerRadius,
+            delay: startDelay,
+            duration: sweepDuration,
+            repeats: repeats,
+            shouldAnimate: shouldAnimate
+        )
+    }
+}
+
+/// Renders the icon once and moves retained gradient layers for the scan.
+/// This replaces a 60 Hz SwiftUI rebuild of the image, mask, blur, and blend.
+@MainActor
+private final class RetainedEnergyScanIconView: NSView {
+    private let imageLayer = CALayer()
+    private let scanContainer = CALayer()
+    private let imageMask = CALayer()
+    private let movingBand = CALayer()
+    private let gradientLayer = CAGradientLayer()
+    private let scanLine = CAShapeLayer()
+    private var configuredImage: NSImage?
+    private var configuredSize: CGFloat = 0
+    private var isAnimating = false
+    private var hasCompletedSingleSweep = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        setAccessibilityElement(false)
+
+        imageLayer.contentsGravity = .resizeAspect
+        imageMask.contentsGravity = .resizeAspect
+        scanContainer.mask = imageMask
+        scanContainer.compositingFilter = "plusL"
+        gradientLayer.colors = [
+            NSColor.clear.cgColor,
+            NSColor(srgbRed: 0.84, green: 0.18, blue: 1, alpha: 0.36).cgColor,
+            NSColor.white.withAlphaComponent(0.90).cgColor,
+            NSColor(srgbRed: 1, green: 0.16, blue: 0.42, alpha: 0.82).cgColor,
+            NSColor(srgbRed: 1, green: 0.48, blue: 0.14, alpha: 0.32).cgColor,
+            NSColor.clear.cgColor
+        ]
+        gradientLayer.locations = [0, 0.20, 0.48, 0.60, 0.78, 1]
+        gradientLayer.startPoint = CGPoint(x: 0.5, y: 1)
+        gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
+        scanLine.fillColor = NSColor.white.withAlphaComponent(0.86).cgColor
+        scanLine.opacity = 0.72
+        movingBand.addSublayer(gradientLayer)
+        movingBand.addSublayer(scanLine)
+        scanContainer.addSublayer(movingBand)
+        layer?.addSublayer(imageLayer)
+        layer?.addSublayer(scanContainer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        let lineHeight = max(1.5, bounds.width * 0.012)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        imageLayer.frame = bounds
+        scanContainer.frame = bounds
+        imageMask.frame = scanContainer.bounds
+        movingBand.bounds = CGRect(x: 0, y: 0, width: bounds.width * 1.7, height: bounds.height * 0.42)
+        movingBand.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        movingBand.setAffineTransform(CGAffineTransform(rotationAngle: -11 * .pi / 180))
+        gradientLayer.frame = movingBand.bounds
+        scanLine.frame = CGRect(
+            x: movingBand.bounds.midX - bounds.width * 1.45 / 2,
+            y: movingBand.bounds.midY - lineHeight / 2,
+            width: bounds.width * 1.45,
+            height: lineHeight
+        )
+        scanLine.path = CGPath(
+            roundedRect: scanLine.bounds,
+            cornerWidth: lineHeight / 2,
+            cornerHeight: lineHeight / 2,
+            transform: nil
+        )
+        CATransaction.commit()
+    }
+
+    func update(
+        image: NSImage,
+        size: CGFloat,
+        cornerRadius: CGFloat,
+        delay: TimeInterval,
+        duration: TimeInterval,
+        repeats: Bool,
+        shouldAnimate: Bool
+    ) {
+        if configuredImage !== image || configuredSize != size {
+            configuredImage = image
+            configuredSize = size
+            var proposedRect = CGRect(origin: .zero, size: CGSize(width: size, height: size))
+            let contents = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
+            imageLayer.contents = contents
+            imageMask.contents = contents
+            layer?.cornerRadius = cornerRadius
+            needsLayout = true
+        }
+
+        if shouldAnimate && !hasCompletedSingleSweep {
+            startAnimatingIfNeeded(delay: delay, duration: duration, repeats: repeats)
+        } else {
+            stopAnimating()
         }
     }
 
-    private func phase(at date: Date) -> Double {
-        if reduceMotion { return 0.92 }
-        guard let appearedAt else { return 0 }
+    private func startAnimatingIfNeeded(delay: TimeInterval, duration: TimeInterval, repeats: Bool) {
+        guard !isAnimating else { return }
+        isAnimating = true
+        let samples = (0...64).map { Double($0) / 64 }
+        let eased = samples.map { $0 * $0 * (3 - 2 * $0) }
 
-        let elapsed = date.timeIntervalSince(appearedAt) - startDelay
-        guard elapsed > 0 else { return 0 }
-        if repeats {
-            return elapsed.truncatingRemainder(dividingBy: sweepDuration) / sweepDuration
+        let translation = CAKeyframeAnimation(keyPath: "transform.translation.y")
+        translation.values = eased.map { NSNumber(value: (-0.74 + $0 * 1.48) * configuredSize) }
+        let opacity = CAKeyframeAnimation(keyPath: "opacity")
+        opacity.values = samples.map { NSNumber(value: sin($0 * .pi) * 0.88) }
+
+        let group = CAAnimationGroup()
+        group.animations = [translation, opacity]
+        group.duration = duration
+        group.beginTime = CACurrentMediaTime() + delay
+        group.fillMode = .backwards
+        group.repeatCount = repeats ? .infinity : 0
+        movingBand.add(group, forKey: "energyScanSweep")
+
+        if !repeats {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay + duration) { [weak self] in
+                guard let self, self.isAnimating else { return }
+                self.hasCompletedSingleSweep = true
+                self.stopAnimating()
+            }
         }
-        return min(elapsed / sweepDuration, 1)
+    }
+
+    private func stopAnimating() {
+        isAnimating = false
+        movingBand.removeAnimation(forKey: "energyScanSweep")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        movingBand.opacity = 0
+        CATransaction.commit()
     }
 }
 
@@ -1114,6 +1183,273 @@ private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
         .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
         .accessibilityHidden(true)
     }
+}
+
+private struct OnboardingOrbitField: NSViewRepresentable {
+    let icons: [String: NSImage]
+    let filesVisible: Bool
+    let isCollapsed: Bool
+    let collapseOrigin: CGSize
+    let reduceMotion: Bool
+    let isActive: Bool
+
+    func makeNSView(context: Context) -> OnboardingOrbitFieldView {
+        OnboardingOrbitFieldView()
+    }
+
+    func updateNSView(_ nsView: OnboardingOrbitFieldView, context: Context) {
+        nsView.update(
+            icons: icons,
+            filesVisible: filesVisible,
+            isCollapsed: isCollapsed,
+            collapseOrigin: collapseOrigin,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
+    }
+}
+
+/// Keeps every material-backed file chip mounted and updates only layer
+/// position, transform, and opacity from a display link. The orbit equations,
+/// cadence, hover target, and spring response match the former SwiftUI path.
+@MainActor
+private final class OnboardingOrbitFieldView: NSView {
+    private static let orbitRate: Float = 24
+    private static let interactionRate: Float = 60
+    private static let springResponse = 0.55
+    private static let springDamping = 0.85
+
+    private var hosts: [UUID: NSHostingView<OnboardingOrbitFileChip>] = [:]
+    private var hostedIcons: [UUID: NSImage] = [:]
+    private var hostSizes: [UUID: CGSize] = [:]
+    private var revealWorkItems: [DispatchWorkItem] = []
+    private var orbitDisplayLink: CADisplayLink?
+    private var lastTimestamp: CFTimeInterval?
+    private var orbitPhase: CFTimeInterval = 0
+    private var collapseProgress: CGFloat = 0
+    private var collapseVelocity: CGFloat = 0
+    private var collapseTarget: CGFloat = 0
+    private var collapseOrigin: CGSize = .zero
+    private var filesVisible = false
+    private var reduceMotion = false
+    private var isActive = true
+
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+        installHosts(icons: [:])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            installDisplayLinkIfNeeded()
+        } else {
+            revealWorkItems.forEach { $0.cancel() }
+            revealWorkItems.removeAll()
+            orbitDisplayLink?.invalidate()
+            orbitDisplayLink = nil
+            lastTimestamp = nil
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        renderFrame()
+    }
+
+    func update(
+        icons: [String: NSImage],
+        filesVisible: Bool,
+        isCollapsed: Bool,
+        collapseOrigin: CGSize,
+        reduceMotion: Bool,
+        isActive: Bool
+    ) {
+        installHosts(icons: icons)
+        updateHostedIcons(icons)
+
+        if self.filesVisible != filesVisible {
+            self.filesVisible = filesVisible
+            updateReveal(visible: filesVisible)
+        }
+
+        self.collapseOrigin = collapseOrigin
+        self.reduceMotion = reduceMotion
+        self.isActive = isActive
+        collapseTarget = isCollapsed ? 1 : 0
+
+        if reduceMotion {
+            collapseProgress = collapseTarget
+            collapseVelocity = 0
+        }
+
+        updateDisplayLinkState()
+        renderFrame()
+    }
+
+    private func installHosts(icons: [String: NSImage]) {
+        for file in OnboardingOrbitFile.files where hosts[file.id] == nil {
+            let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
+            let host = NSHostingView(rootView: OnboardingOrbitFileChip(file: file, icon: icon))
+            host.wantsLayer = true
+            host.layer?.masksToBounds = false
+            host.alphaValue = 0
+            addSubview(host)
+            hosts[file.id] = host
+            hostedIcons[file.id] = icon
+            hostSizes[file.id] = host.fittingSize
+        }
+    }
+
+    private func updateHostedIcons(_ icons: [String: NSImage]) {
+        for file in OnboardingOrbitFile.files {
+            let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
+            guard hostedIcons[file.id] !== icon, let host = hosts[file.id] else { continue }
+            hostedIcons[file.id] = icon
+            host.rootView = OnboardingOrbitFileChip(file: file, icon: icon)
+            hostSizes[file.id] = host.fittingSize
+        }
+    }
+
+    private func updateReveal(visible: Bool) {
+        revealWorkItems.forEach { $0.cancel() }
+        revealWorkItems.removeAll()
+
+        guard visible else {
+            hosts.values.forEach { $0.alphaValue = 0 }
+            return
+        }
+
+        for file in OnboardingOrbitFile.files {
+            guard let host = hosts[file.id] else { continue }
+            let workItem = DispatchWorkItem { [weak host] in
+                guard let host else { return }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.7
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    host.animator().alphaValue = 1
+                }
+            }
+            revealWorkItems.append(workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + file.appearDelay, execute: workItem)
+        }
+    }
+
+    private func installDisplayLinkIfNeeded() {
+        guard orbitDisplayLink == nil else { return }
+        let displayLink = self.displayLink(
+            target: self,
+            selector: #selector(displayLinkDidFire(_:))
+        )
+        displayLink.preferredFrameRateRange = CAFrameRateRange(
+            minimum: Self.orbitRate,
+            maximum: Self.interactionRate,
+            preferred: Self.orbitRate
+        )
+        displayLink.add(to: .main, forMode: .common)
+        orbitDisplayLink = displayLink
+        updateDisplayLinkState()
+    }
+
+    private func updateDisplayLinkState() {
+        let shouldPause = !filesVisible || !isActive || reduceMotion
+        orbitDisplayLink?.isPaused = shouldPause
+        if shouldPause {
+            lastTimestamp = nil
+        }
+    }
+
+    @objc private func displayLinkDidFire(_ sender: CADisplayLink) {
+        let timestamp = sender.timestamp
+        let delta = min(max(timestamp - (lastTimestamp ?? timestamp), 0), 1.0 / 15.0)
+        lastTimestamp = timestamp
+        orbitPhase += delta
+        advanceCollapseSpring(delta: delta)
+        renderFrame()
+    }
+
+    private func advanceCollapseSpring(delta: CFTimeInterval) {
+        let displacement = collapseProgress - collapseTarget
+        guard abs(displacement) > 0.0005 || abs(collapseVelocity) > 0.0005 else {
+            collapseProgress = collapseTarget
+            collapseVelocity = 0
+            orbitDisplayLink?.preferredFrameRateRange = CAFrameRateRange(
+                minimum: Self.orbitRate,
+                maximum: Self.interactionRate,
+                preferred: Self.orbitRate
+            )
+            return
+        }
+
+        orbitDisplayLink?.preferredFrameRateRange = CAFrameRateRange(
+            minimum: Self.orbitRate,
+            maximum: Self.interactionRate,
+            preferred: Self.interactionRate
+        )
+        let omega = 2 * Double.pi / Self.springResponse
+        let acceleration = -omega * omega * Double(displacement)
+            - 2 * Self.springDamping * omega * Double(collapseVelocity)
+        collapseVelocity += CGFloat(acceleration * delta)
+        collapseProgress += collapseVelocity * CGFloat(delta)
+    }
+
+    private func renderFrame() {
+        guard !bounds.isEmpty else { return }
+        let phase = reduceMotion ? 0 : orbitPhase
+        let t = min(max(collapseProgress, 0), 1)
+        let collapseOpacity = 1 - max(0, (t - 0.72) / 0.28)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for file in OnboardingOrbitFile.files {
+            guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
+            let fittingSize = hostSizes[file.id] ?? host.fittingSize
+            let orbit = orbitOffset(for: file, phase: phase)
+            let collapse = CGSize(
+                width: collapseOrigin.width + file.collapseX * 0.65,
+                height: collapseOrigin.height + file.collapseY * 0.18
+            )
+            let offset = CGSize(
+                width: orbit.width + (collapse.width - orbit.width) * t,
+                height: orbit.height + (collapse.height - orbit.height) * t
+            )
+            let center = CGPoint(x: bounds.midX + offset.width, y: bounds.midY + offset.height)
+            if host.bounds.size != fittingSize {
+                host.frame = CGRect(origin: .zero, size: fittingSize)
+            }
+            chipLayer.position = center
+
+            let rotation = (file.rotation + sin(phase * 0.7 + file.driftPhase) * 3)
+                * Double(1 - t)
+            let scale = file.scale + (0.08 - file.scale) * t
+            chipLayer.setAffineTransform(
+                CGAffineTransform(rotationAngle: rotation * .pi / 180)
+                    .scaledBy(x: scale, y: scale)
+            )
+            chipLayer.opacity = Float(collapseOpacity)
+        }
+        CATransaction.commit()
+    }
+
+    private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
+        let orbitalAngle = phase * file.driftSpeed + file.driftPhase
+        let orbitalX = cos(orbitalAngle) * file.orbitWidth * 1.18
+        let orbitalY = sin(orbitalAngle) * file.orbitHeight * 1.22
+        let driftX = cos(phase * 0.42 + file.driftPhase) * file.driftRadius * 1.28
+        let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
+        return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
+    }
+
 }
 
 /// Places a visual-effect surface behind the onboarding window, leaving the

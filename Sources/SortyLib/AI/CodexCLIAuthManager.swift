@@ -166,29 +166,55 @@ public final class CodexCLIAuthManager: ObservableObject {
             Self.readLoginStatus()
         }.value
 
-        isCodexInstalled = installed
+        if isCodexInstalled != installed {
+            isCodexInstalled = installed
+        }
 
         switch status {
         case .chatGPT, .accessToken:
-            isAuthenticated = true
-            accountEmail = extractEmail(from: Self.readIDToken())
-            authError = nil
+            applyPublishedStatus(
+                isAuthenticated: true,
+                accountEmail: extractEmail(from: Self.readIDToken()),
+                authError: nil
+            )
             markDeviceAuthAuthorizedIfNeeded()
 
         case .apiKey:
-            isAuthenticated = false
-            accountEmail = nil
-            authError = "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
+            applyPublishedStatus(
+                isAuthenticated: false,
+                accountEmail: nil,
+                authError: "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
+            )
 
         case .notLoggedIn:
-            isAuthenticated = false
-            accountEmail = nil
-            authError = nil
+            applyPublishedStatus(
+                isAuthenticated: false,
+                accountEmail: nil,
+                authError: nil
+            )
 
         case .unavailable(let message):
-            isAuthenticated = false
-            accountEmail = nil
-            authError = message
+            applyPublishedStatus(
+                isAuthenticated: false,
+                accountEmail: nil,
+                authError: message
+            )
+        }
+    }
+
+    private func applyPublishedStatus(
+        isAuthenticated: Bool,
+        accountEmail: String?,
+        authError: String?
+    ) {
+        if self.isAuthenticated != isAuthenticated {
+            self.isAuthenticated = isAuthenticated
+        }
+        if self.accountEmail != accountEmail {
+            self.accountEmail = accountEmail
+        }
+        if self.authError != authError {
+            self.authError = authError
         }
     }
 

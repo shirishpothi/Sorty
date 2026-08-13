@@ -1,6 +1,9 @@
+import AppKit
 import SwiftUI
 
 public struct ProviderLogoView: View {
+    @MainActor private static var imageCache: [AIProvider: NSImage] = [:]
+
     public let provider: AIProvider
     public var size: CGFloat = 24
 
@@ -15,7 +18,6 @@ public struct ProviderLogoView: View {
         }
 
         if let nsImage = resolvedProviderImage() {
-            nsImage.isTemplate = usesTemplateRendering
             return Image(nsImage: nsImage)
         }
 
@@ -27,21 +29,22 @@ public struct ProviderLogoView: View {
     }
 
     private func resolvedProviderImage() -> NSImage? {
-        if let image = SortyResources.image(named: provider.logoImageName), isUsableProviderImage(image) {
-            return image
+        if let cached = Self.imageCache[provider] {
+            return cached
         }
 
-        // AppKit named lookup covers assets compiled into the app-level catalog.
-        if let image = NSImage(named: NSImage.Name(provider.logoImageName)), isUsableProviderImage(image) {
-            return image
-        }
+        let resolved = SortyResources.image(named: provider.logoImageName)
+            ?? NSImage(named: NSImage.Name(provider.logoImageName))
+            ?? SortyResources.image(named: provider.logoImageName, withExtension: "png")
 
-        // Last fallback: ask resource loader for explicit PNG file lookup.
-        if let image = SortyResources.image(named: provider.logoImageName, withExtension: "png"), isUsableProviderImage(image) {
-            return image
-        }
+        guard let resolved, isUsableProviderImage(resolved),
+              let prepared = resolved.copy() as? NSImage else { return nil }
 
-        return nil
+        // Asset images are shared. Cache a prepared copy so body evaluation
+        // never mutates global NSImage rendering state or repeats lookup work.
+        prepared.isTemplate = usesTemplateRendering
+        Self.imageCache[provider] = prepared
+        return prepared
     }
 
     private func isUsableProviderImage(_ image: NSImage) -> Bool {
