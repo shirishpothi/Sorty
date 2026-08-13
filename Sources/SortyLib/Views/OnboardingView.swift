@@ -1403,6 +1403,7 @@ private final class OnboardingOrbitFieldView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window != nil {
+            updateHostRasterizationScale()
             installDisplayLinkIfNeeded()
         } else {
             stopIdleAnimations(preservingPhase: false)
@@ -1484,11 +1485,25 @@ private final class OnboardingOrbitFieldView: NSView {
             let host = NSHostingView(rootView: OnboardingOrbitFileChip(file: file, icon: icon))
             host.wantsLayer = true
             host.layer?.masksToBounds = false
+            host.layer?.shouldRasterize = true
+            host.layer?.rasterizationScale = window?.backingScaleFactor ?? 2
             host.alphaValue = 0
             addSubview(host)
             hosts[file.id] = host
             hostedIcons[file.id] = icon
             hostSizes[file.id] = host.fittingSize
+        }
+    }
+
+    /// Cache each finished material card as one compositor surface. The cards'
+    /// contents change only when their resolved file icons change, while their
+    /// position and transform animate continuously. Rasterizing at the native
+    /// backing scale preserves the material appearance without asking ten live
+    /// SwiftUI effect trees to re-composite during pointer-event processing.
+    private func updateHostRasterizationScale() {
+        let scale = window?.backingScaleFactor ?? 2
+        for host in hosts.values {
+            host.layer?.rasterizationScale = scale
         }
     }
 
