@@ -5,6 +5,10 @@ main `VStack` owns the vertical allocation between the progress rail, step
 content, and navigation controls. Non-completion steps receive the stack's
 finite remaining size directly.
 
+The completion step keeps 24 points of vertical content padding inside that
+finite allocation. Keep it centered rather than applying a fixed vertical
+offset so the final action has balanced breathing room above and below.
+
 Do not wrap a whole step in a vertical `ScrollView`. Step roots use spacers and
 flexible-height frames to fill the onboarding window; asking a scroll view to
 find their unbounded ideal height creates a circular size dependency during the

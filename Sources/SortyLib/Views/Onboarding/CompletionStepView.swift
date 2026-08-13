@@ -1128,8 +1128,8 @@ public struct CompletionStepView: View {
                 }
             }
             .padding(.horizontal, 48)
+            .padding(.vertical, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(y: -6)
         }
         .onAppear(perform: startRevealSequence)
         .onDisappear {
