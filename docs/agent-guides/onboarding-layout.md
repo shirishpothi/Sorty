@@ -43,8 +43,9 @@ SwiftUI/Metal display clock. The large intro and completion calls to action use
 the richer Metal renderer, with the retained conic layer only as their
 static/inactive fallback. Never stack both animated renderers on one control.
 Prewarm completion audio and its reveal accent before reaching the completion
-step; constructing an `AVAudioPlayer` or resolving `NSSound` must not compete
-with celebration frames. The intro similarly maps its bundled soundtrack data
+step; map the bundled audio data off the main actor so constructing an
+`AVAudioPlayer` or resolving `NSSound` does not compete with celebration frames.
+The intro similarly maps its bundled soundtrack data
 off the main actor during the opening beat, then starts playback at the original
 cue; do not move that file read back onto the icon-reveal frame.
 

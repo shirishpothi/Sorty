@@ -707,14 +707,24 @@ private final class CompletionAudioController {
     private var revealAccent: NSSound?
     private var fadeTask: Task<Void, Never>?
 
-    func prepare() {
+    func prepare() async {
         if revealAccent == nil {
             revealAccent = NSSound(named: "Glass")
             revealAccent?.volume = 0.15
         }
         guard player == nil else { return }
-        let soundURL = SortyResources.finalOnboardingSoundURL()
-            ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
+        guard let soundURL = resolvedSoundURL() else { return }
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
+        }.value
+        guard !Task.isCancelled, player == nil, let data else { return }
+
+        preparePlayer(data: data)
+    }
+
+    private func prepareSynchronouslyIfNeeded() {
+        guard player == nil else { return }
+        let soundURL = resolvedSoundURL()
         guard let soundURL else { return }
 
         do {
@@ -728,17 +738,37 @@ private final class CompletionAudioController {
         }
     }
 
+    private func preparePlayer(data: Data) {
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.numberOfLoops = 0
+            player.volume = 0.3
+            player.prepareToPlay()
+            self.player = player
+        } catch {
+            print("[CompletionStepView] Failed to prepare Final Onboarding sound: \(error)")
+        }
+    }
+
+    private func resolvedSoundURL() -> URL? {
+        SortyResources.finalOnboardingSoundURL()
+            ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
+    }
+
     func play() {
         fadeTask?.cancel()
         fadeTask = nil
-        prepare()
+        prepareSynchronouslyIfNeeded()
         player?.currentTime = 0
         player?.volume = 0.3
         player?.play()
     }
 
     func playRevealAccent() {
-        prepare()
+        if revealAccent == nil {
+            revealAccent = NSSound(named: "Glass")
+            revealAccent?.volume = 0.15
+        }
         revealAccent?.play()
     }
 
@@ -758,8 +788,8 @@ private final class CompletionAudioController {
 
 @MainActor
 enum OnboardingCompletionAudio {
-    static func prewarm() {
-        CompletionAudioController.shared.prepare()
+    static func prewarm() async {
+        await CompletionAudioController.shared.prepare()
     }
 }
 

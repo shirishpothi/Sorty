@@ -161,7 +161,7 @@ public struct OnboardingView: View {
             // completion sound long before the user can reach that step.
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
-            OnboardingCompletionAudio.prewarm()
+            await OnboardingCompletionAudio.prewarm()
         }
         .onDisappear {
             swipeController.introTransitionTask?.cancel()
