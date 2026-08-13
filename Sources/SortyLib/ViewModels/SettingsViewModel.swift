@@ -153,6 +153,7 @@ public class SettingsViewModel: ObservableObject {
     private let providerHealthCheckFailedOnceForUITestsKey = "uitestProviderHealthCheckFailedOnce"
     private var saveTask: Task<Void, Never>?
     private var credentialTask: Task<Void, Never>?
+    private var modelRefreshTask: Task<Void, Never>?
     private var credentialHydrationID: UUID?
     private var credentialHydrationProvider: AIProvider?
     private var isApplyingConfigMutation = false
@@ -398,35 +399,36 @@ public class SettingsViewModel: ObservableObject {
     }
     
     public func updateAvailableModels(force: Bool = false) {
-        Task {
+        modelRefreshTask?.cancel()
+        let provider = config.provider
+        isLoadingModels = true
+
+        modelRefreshTask = Task { [weak self] in
+            guard let self else { return }
             let loadStartedAt = Date()
-            await MainActor.run {
-                self.isLoadingModels = true
+            await ModelCatalog.shared.refresh(provider: provider, force: force)
+            guard !Task.isCancelled, self.config.provider == provider else { return }
+
+            let catalogModels = ModelCatalog.shared.cachedModels(for: provider)
+            let resolvedModels = catalogModels.isEmpty
+                ? provider.recommendedModels
+                : catalogModels.map(\.id)
+
+            if self.availableModels != resolvedModels {
+                self.availableModels = resolvedModels
             }
-            
-            await ModelCatalog.shared.refresh(provider: config.provider, force: force)
-            let catalogModels = ModelCatalog.shared.cachedModels(for: config.provider)
-            
-            await MainActor.run {
-                if !catalogModels.isEmpty {
-                    self.availableModels = catalogModels.map { $0.id }
-                } else {
-                    self.availableModels = config.provider.recommendedModels
-                }
-                
-                if !self.availableModels.isEmpty && !self.availableModels.contains(self.config.model) {
-                    self.config.model = self.availableModels.first ?? config.provider.defaultModel
-                }
-                self.isLoadingModels = false
-                AnalyticsManager.shared.captureWorkflow(
-                    workflow: "model_catalog",
-                    stage: "loaded",
-                    outcome: catalogModels.isEmpty ? "fallback" : "success",
-                    properties: AnalyticsManager.durationProperties(
-                        Date().timeIntervalSince(loadStartedAt)
-                    ).merging(["source": "settings"]) { current, _ in current }
-                )
+            if !resolvedModels.isEmpty && !resolvedModels.contains(self.config.model) {
+                self.config.model = resolvedModels.first ?? provider.defaultModel
             }
+            self.isLoadingModels = false
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "model_catalog",
+                stage: "loaded",
+                outcome: catalogModels.isEmpty ? "fallback" : "success",
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(loadStartedAt)
+                ).merging(["source": "settings"]) { current, _ in current }
+            )
         }
     }
 

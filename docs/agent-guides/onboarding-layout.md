@@ -59,6 +59,14 @@ prewarm file icons over the intro reveal, and keep particle geometry
 deterministic across `body` updates so invalidation does not generate new
 animation targets.
 
+Treat provider selection and authentication as single-flight work. A provider
+change already normalizes its URL, credential requirement, and default model in
+`SettingsViewModel`; onboarding must not repeat those mutations. Concurrent
+Codex status requests share one CLI probe, and manual verification awaits that
+resolved state before updating its button. Model refreshes cancel superseded
+presentation tasks and apply results only when their captured provider is still
+selected, preventing rapid selection changes from publishing stale model lists.
+
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.

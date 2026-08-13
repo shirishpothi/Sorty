@@ -254,10 +254,6 @@ public struct ProviderSelectionStepView: View {
             commitInputDrafts()
             settingsViewModel.config.provider = provider
             settingsViewModel.config.model = model
-            if let defaultURL = provider.defaultAPIURL {
-                settingsViewModel.config.apiURL = defaultURL
-            }
-            settingsViewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
         }
     }
 
@@ -625,7 +621,7 @@ public struct ProviderSelectionStepView: View {
 
                     Button("Sign Out") {
                         codexAuth.signOut()
-                        openAIAuth.checkAuthenticationStatus()
+                        openAIAuth.synchronizeWithCodexStatus()
                         scheduleConnectionTest()
                     }
                     .buttonStyle(.sortyBordered)
@@ -878,10 +874,6 @@ public struct ProviderSelectionStepView: View {
         commitInputDrafts()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             settingsViewModel.config.provider = provider
-            if let defaultURL = provider.defaultAPIURL {
-                settingsViewModel.config.apiURL = defaultURL
-            }
-            settingsViewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
             connectionStatus = .idle
             connectionError = nil
         }
@@ -912,7 +904,11 @@ public struct ProviderSelectionStepView: View {
         HapticFeedbackManager.shared.selection()
         settingsViewModel.updateAvailableModels(force: true)
         scheduleConnectionTest()
-        openAIAuth.checkAuthenticationStatus()
+        if method == .accountSignIn {
+            openAIAuth.checkAuthenticationStatus()
+        } else {
+            openAIAuth.synchronizeWithCodexStatus()
+        }
     }
 
     private func synchronizeInputDrafts() {
@@ -1036,12 +1032,12 @@ public struct ProviderSelectionStepView: View {
         }
     }
 
-    @MainActor
     @discardableResult
-    private func verifyCodexSignInStatus() -> Bool {
+    @MainActor
+    private func verifyCodexSignInStatus() async -> Bool {
         let wasAuthenticated = codexAuth.isAuthenticated
-        codexAuth.checkStatus()
-        openAIAuth.checkAuthenticationStatus()
+        await codexAuth.refreshStatus()
+        openAIAuth.synchronizeWithCodexStatus()
         let becameAuthenticated = codexAuth.isAuthenticated && !wasAuthenticated
         if becameAuthenticated {
             settingsViewModel.updateAvailableModels(force: true)
@@ -1052,9 +1048,7 @@ public struct ProviderSelectionStepView: View {
 
     private func autoVerifyCodexSignInLoop() async {
         while !Task.isCancelled {
-            let becameAuthenticated = await MainActor.run {
-                verifyCodexSignInStatus()
-            }
+            let becameAuthenticated = await verifyCodexSignInStatus()
 
             if becameAuthenticated {
                 await MainActor.run {
@@ -1100,22 +1094,24 @@ public struct ProviderSelectionStepView: View {
         HapticFeedbackManager.shared.tap()
         codexVerifyButtonState = .activating
 
-        let becameAuthenticated = verifyCodexSignInStatus()
-        if codexAuth.isAuthenticated || becameAuthenticated {
-            codexVerifyButtonState = .success
-            HapticFeedbackManager.shared.success()
-            scheduleCodexVerifyButtonReset()
-            return
-        }
+        Task { @MainActor in
+            let becameAuthenticated = await verifyCodexSignInStatus()
+            if codexAuth.isAuthenticated || becameAuthenticated {
+                codexVerifyButtonState = .success
+                HapticFeedbackManager.shared.success()
+                scheduleCodexVerifyButtonReset()
+                return
+            }
 
-        codexVerifyButtonState = .failure
-        HapticFeedbackManager.shared.error()
-        if !codexAuth.isCodexInstalled {
-            codexAuth.authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
-        } else if codexAuth.authError == nil {
-            codexAuth.authError = "Auth tokens not found. Run 'codex login' first."
+            codexVerifyButtonState = .failure
+            HapticFeedbackManager.shared.error()
+            if !codexAuth.isCodexInstalled {
+                codexAuth.authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
+            } else if codexAuth.authError == nil {
+                codexAuth.authError = "Auth tokens not found. Run 'codex login' first."
+            }
+            scheduleCodexVerifyButtonReset()
         }
-        scheduleCodexVerifyButtonReset()
     }
 
     @MainActor

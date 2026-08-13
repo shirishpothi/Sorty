@@ -58,6 +58,7 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     private var deviceAuthProcess: Process?
     private var deviceAuthOutput = ""
+    private var statusRefreshTask: Task<Void, Never>?
 
     private nonisolated static var codexHomeURL: URL {
         let environment = ProcessInfo.processInfo.environment
@@ -158,6 +159,21 @@ public final class CodexCLIAuthManager: ObservableObject {
     /// performed on a detached background task and only the resulting state is
     /// applied back on the main actor.
     public func refreshStatus() async {
+        if let statusRefreshTask {
+            await statusRefreshTask.value
+            return
+        }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performStatusRefresh()
+        }
+        statusRefreshTask = task
+        await task.value
+        statusRefreshTask = nil
+    }
+
+    private func performStatusRefresh() async {
         let installed = await Task.detached(priority: .userInitiated) {
             Self.resolveCodexExecutablePath() != nil
         }.value

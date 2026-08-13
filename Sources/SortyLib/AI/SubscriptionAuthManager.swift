@@ -44,12 +44,18 @@ public final class SubscriptionAuthManager: ObservableObject {
         Task { [weak self] in
             await codex.refreshStatus()
             guard let self else { return }
-            if self.isAuthenticated != codex.isAuthenticated {
-                self.isAuthenticated = codex.isAuthenticated
-            }
-            if self.accountLabel != codex.accountEmail {
-                self.accountLabel = codex.accountEmail
-            }
+            self.synchronizeWithCodexStatus()
+        }
+    }
+
+    /// Mirrors the already-resolved Codex state without launching another CLI probe.
+    func synchronizeWithCodexStatus() {
+        guard provider == .openAI else { return }
+        if isAuthenticated != codexAuthManager.isAuthenticated {
+            isAuthenticated = codexAuthManager.isAuthenticated
+        }
+        if accountLabel != codexAuthManager.accountEmail {
+            accountLabel = codexAuthManager.accountEmail
         }
     }
 
