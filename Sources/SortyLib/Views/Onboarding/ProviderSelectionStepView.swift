@@ -62,13 +62,12 @@ public struct ProviderSelectionStepView: View {
     @State private var codexVerifyButtonState: CodexActionVisualState = .idle
     @State private var isHoveringCodexTerminalButton = false
     @State private var isHoveringCodexVerifyButton = false
-    @State private var isHoveringTestConnectionButton = false
     @State private var codexSignInAttempt = 0
     @State private var apiKeyDraft = ""
     @State private var apiURLDraft = ""
     @State private var readinessSnapshot = ProviderReadinessSnapshot.initial
 
-    enum ConnectionTestStatus {
+    enum ConnectionTestStatus: Equatable {
         case idle
         case testing
         case success
@@ -211,6 +210,10 @@ public struct ProviderSelectionStepView: View {
             .animation(
                 reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
                 value: hasAppeared
+            )
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+                value: settingsViewModel.config.provider
             )
         }
         .onAppear {
@@ -778,28 +781,7 @@ public struct ProviderSelectionStepView: View {
             Group {
                 switch connectionStatus {
                 case .idle:
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "bolt.horizontal.circle.fill")
-                            Text("Test Connection")
-                        }
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .onboardingBeamBorder(
-                        variant: .featured,
-                        active: isHoveringTestConnectionButton && canTest,
-                        isIntensified: isHoveringTestConnectionButton,
-                        includesInteriorGlow: isHoveringTestConnectionButton
-                    )
-                    .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.16)) {
-                            isHoveringTestConnectionButton = hovering
-                        }
-                    }
-                    .disabled(!canTest)
-                    .opacity(canTest ? 1.0 : 0.5)
+                    ProviderTestConnectionButton(canTest: canTest, action: testConnection)
 
                 case .testing:
                     HStack(spacing: 8) {
@@ -851,6 +833,7 @@ public struct ProviderSelectionStepView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
+            .animation(reduceMotion ? nil : .default, value: connectionStatus)
         }
     }
 
@@ -900,11 +883,9 @@ public struct ProviderSelectionStepView: View {
     private func selectProvider(_ provider: AIProvider) {
         HapticFeedbackManager.shared.selection()
         commitInputDrafts()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            settingsViewModel.config.provider = provider
-            connectionStatus = .idle
-            connectionError = nil
-        }
+        settingsViewModel.config.provider = provider
+        connectionStatus = .idle
+        connectionError = nil
     }
 
     private var supportsSubscriptionAuthUI: Bool {
@@ -1043,9 +1024,7 @@ public struct ProviderSelectionStepView: View {
             do {
                 try await settingsViewModel.testConnection()
                 await MainActor.run {
-                    withAnimation {
-                        connectionStatus = .success
-                    }
+                    connectionStatus = .success
                     HapticFeedbackManager.shared.success()
                 }
             } catch let decodingError as DecodingError {
@@ -1064,18 +1043,14 @@ public struct ProviderSelectionStepView: View {
                     context = decodingError.localizedDescription
                 }
                 await MainActor.run {
-                    withAnimation {
-                        connectionStatus = .failed
-                        connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
-                    }
+                    connectionStatus = .failed
+                    connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
                     HapticFeedbackManager.shared.error()
                 }
             } catch {
                 await MainActor.run {
-                    withAnimation {
-                        connectionStatus = .failed
-                        connectionError = error.localizedDescription
-                    }
+                    connectionStatus = .failed
+                    connectionError = error.localizedDescription
                     HapticFeedbackManager.shared.error()
                 }
             }
@@ -1233,6 +1208,39 @@ public struct ProviderSelectionStepView: View {
                 )
             }
         }
+    }
+}
+
+private struct ProviderTestConnectionButton: View {
+    let canTest: Bool
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal.circle.fill")
+                Text("Test Connection")
+            }
+        }
+        .buttonStyle(.onboardingPill)
+        .onboardingBeamBorder(
+            variant: .featured,
+            active: isHovering && canTest,
+            isIntensified: isHovering,
+            includesInteriorGlow: isHovering
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .disabled(!canTest)
+        .opacity(canTest ? 1 : 0.5)
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.16),
+            value: isHovering
+        )
     }
 }
 

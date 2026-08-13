@@ -143,6 +143,9 @@ If another lifecycle event requests permission state while a refresh is in
 flight, coalesce it into one follow-up pass instead of overlapping system probes.
 Delay provider CLI/auth/model preflight until the initial pane reveal has
 settled, and only probe Apple model availability when that provider is active.
+Keep hover-only connection-button state in its button leaf; provider changes
+and connection-result transitions animate their right-pane/status subtrees,
+not the entire two-pane provider step.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
 queue. Pause permission video playback and set the full-screen backdrop blur to
