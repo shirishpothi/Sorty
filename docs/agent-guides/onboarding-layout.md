@@ -123,6 +123,9 @@ queued demo work items live in stable non-observable controllers; mutating them
 must not invalidate an active step. Permission refreshes coalesce duplicate
 requests, enumerate protected locations off the main actor, and publish one
 permission-state snapshot instead of redrawing the full step once per row.
+The workflow step renders only persisted custom personas. Never inject stress
+fixtures in `CustomPersonaStore` initialization: that materializes large
+glass-card collections throughout the real app, including onboarding.
 
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;

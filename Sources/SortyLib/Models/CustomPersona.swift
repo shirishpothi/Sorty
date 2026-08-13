@@ -132,25 +132,7 @@ public class CustomPersonaStore: ObservableObject {
     
     public init() {
         loadPersonas()
-        if customPersonas.count < 100 {
-            let existingNames = Set(customPersonas.map(\.name))
-            customPersonas.append(contentsOf: Self.placeholderPersonas.filter {
-                !existingNames.contains($0.name)
-            }.prefix(max(0, 100 - customPersonas.count)))
-        }
         setupNotificationObservers()
-    }
-
-    /// Temporary data for exercising long persona lists during local UI work.
-    private static var placeholderPersonas: [CustomPersona] {
-        (1...100).map { index in
-            CustomPersona(
-                name: "Placeholder Persona \(index)",
-                icon: personaIconOptions[(index - 1) % personaIconOptions.count],
-                description: "Temporary persona for list and scroll testing.",
-                promptModifier: "Use placeholder organization preferences for persona \(index)."
-            )
-        }
     }
     
     private func setupNotificationObservers() {
