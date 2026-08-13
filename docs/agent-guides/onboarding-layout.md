@@ -54,7 +54,9 @@ subscribes to `AppState` only at the completion destination. The provider step
 owns the single value-semantic readiness calculation and passes only a distinct
 setup status to the root; do not add a second root auth/settings observer. The
 completion celebration resolves service references without observing their
-other state. Provider input is drafted locally and committed
+other state, and seeds its analytics preference when the view is created rather
+than publishing a corrective state update on its first frame. Provider input is
+drafted locally and committed
 after typing settles so Keychain writes, model refreshes, and connection tests
 do not compete with each keystroke. The provider grid is an Equatable leaf keyed
 only by the selected provider, so draft/status changes do not rebuild its glass

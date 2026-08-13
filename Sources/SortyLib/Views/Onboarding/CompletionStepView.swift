@@ -805,6 +805,9 @@ public struct CompletionStepView: View {
     ) {
         self.providerSetupStatus = providerSetupStatus
         self.onFinish = onFinish
+        _isAnalyticsEnabled = State(
+            initialValue: AnalyticsManager.shared.consent != .denied
+        )
     }
 
     public var body: some View {
@@ -852,10 +855,7 @@ public struct CompletionStepView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .offset(y: -6)
         }
-        .onAppear {
-            isAnalyticsEnabled = AnalyticsManager.shared.consent != .denied
-            startRevealSequence()
-        }
+        .onAppear(perform: startRevealSequence)
         .onDisappear {
             runtimeController.animationTask?.cancel()
             runtimeController.animationTask = nil
