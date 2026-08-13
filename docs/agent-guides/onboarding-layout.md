@@ -27,12 +27,16 @@ do not replace it with a full-screen composited blur that redraws every frame.
 The intro orbit keeps its native material-backed chips mounted and updates only
 their layers from a display link. Its energy scan and the completion blob/ripple
 motion likewise use retained layers; do not move those continuous effects back
-into broad SwiftUI state or frame timelines.
+into broad SwiftUI state or frame timelines. The full-window color climb is a
+single asynchronous Canvas render pass; keep its gradient stops and blend mode
+together rather than rebuilding multiple full-screen gradient subtrees during
+every step transition.
 
-An active beam uses one animated renderer: the Metal beam. The retained conic
-gradient is only the static/inactive fallback, not a second animation stacked
-over it. Use the button-sized beam tuning for pills and reserve the medium
-tuning for the large intro and completion calls to action.
+An active beam uses one animated renderer. Button-sized pills use the retained
+conic layer so several permission actions do not each create an independent
+SwiftUI/Metal display clock. The large intro and completion calls to action use
+the richer Metal renderer, with the retained conic layer only as their
+static/inactive fallback. Never stack both animated renderers on one control.
 
 Keep broad observable objects out of animated step roots. Permission and demo
 adapters project only the status values their layouts consume, and the root

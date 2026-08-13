@@ -798,28 +798,23 @@ private struct OnboardingBeamBorder: View {
         active && !reduceMotion && controlActiveState != .inactive
     }
 
+    private var usesRetainedRenderer: Bool {
+        if case .small = size { return true }
+        return false
+    }
+
     var body: some View {
-        Capsule()
-            .strokeBorder(.clear, lineWidth: 1)
-            .beam(
-                size,
-                palette: variant.palette,
-                theme: .dark,
-                active: shouldAnimateBeam,
-                shape: .capsule,
-                duration: 1.96,
-                strength: isIntensified ? variant.strength * 1.2 : variant.strength,
-                lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
-            )
+        beamBase
             .overlay {
                 ZStack {
                     RetainedFallbackBeamBorder(
                         stops: fallbackStops,
-                        // This is the fallback/static presentation, not a
-                        // second animated beam stacked over Metal.
-                        active: active && !shouldAnimateBeam,
+                        // Button-sized beams keep the same conic motion on
+                        // retained layers. Larger CTAs use the richer Metal
+                        // shader, with this layer only as their static fallback.
+                        active: active && (usesRetainedRenderer || !shouldAnimateBeam),
                         isIntensified: isIntensified,
-                        shouldAnimate: false,
+                        shouldAnimate: usesRetainedRenderer && shouldAnimateBeam,
                         opacity: isIntensified ? 1 : variant.fallbackOpacity
                     )
 
@@ -836,6 +831,27 @@ private struct OnboardingBeamBorder: View {
                     }
                 }
             }
+    }
+
+    @ViewBuilder
+    private var beamBase: some View {
+        if usesRetainedRenderer {
+            Capsule()
+                .strokeBorder(.clear, lineWidth: 1)
+        } else {
+        Capsule()
+            .strokeBorder(.clear, lineWidth: 1)
+            .beam(
+                size,
+                palette: variant.palette,
+                theme: .dark,
+                active: shouldAnimateBeam,
+                shape: .capsule,
+                duration: 1.96,
+                strength: isIntensified ? variant.strength * 1.2 : variant.strength,
+                lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
+            )
+        }
     }
 
     private func beamInteriorGlow(phase: TimeInterval) -> some View {
