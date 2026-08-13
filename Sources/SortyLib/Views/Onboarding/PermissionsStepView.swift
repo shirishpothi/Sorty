@@ -163,6 +163,7 @@ public struct PermissionsStepView: View {
         .onDisappear {
             taskController.permissionRefreshTask?.cancel()
             taskController.permissionRefreshTask = nil
+            taskController.isPermissionRefreshPending = false
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
@@ -192,7 +193,10 @@ public struct PermissionsStepView: View {
             hasRequiredPermissions = true
         }
 
-        taskController.permissionRefreshTask?.cancel()
+        if taskController.permissionRefreshTask != nil {
+            taskController.isPermissionRefreshPending = true
+            return
+        }
         let filesAndFoldersState: PermissionState = hasRequiredPermissions ? .granted : .unknown
         let didOpenFullDiskAccessSettings = didOpenFullDiskAccessSettings
         let automationManager = taskController.automationManager
@@ -204,6 +208,15 @@ public struct PermissionsStepView: View {
             await notificationManager.checkNotificationPermission()
             let hasProtectedLocationAccess = await canReadProtectedLocation
             guard !Task.isCancelled else { return }
+
+            let shouldRefreshAgain = taskController.isPermissionRefreshPending
+            taskController.isPermissionRefreshPending = false
+            taskController.permissionRefreshTask = nil
+
+            if shouldRefreshAgain {
+                checkPermissions()
+                return
+            }
 
             automationManager?.checkPermissions(enableChecksIfNeeded: false)
             let automationState = automationManager.map {
@@ -224,7 +237,6 @@ public struct PermissionsStepView: View {
             if permissionStates != refreshedStates {
                 permissionStates = refreshedStates
             }
-            taskController.permissionRefreshTask = nil
         }
     }
 
@@ -404,6 +416,7 @@ private final class PermissionsTaskController {
     weak var automationManager: AutomationManager?
     weak var appState: AppState?
     var permissionRefreshTask: Task<Void, Never>?
+    var isPermissionRefreshPending = false
 }
 
 enum PermissionType: String, CaseIterable, Identifiable, Sendable {

@@ -119,6 +119,8 @@ window geometry notifications, coalesce same-runloop reports, and treat normal
 SwiftUI representable updates as bookkeeping rather than another measurement.
 The resolved-manager callback owns the initial permission refresh; do not also
 launch an identical parent `onAppear` refresh before those managers arrive.
+If another lifecycle event requests permission state while a refresh is in
+flight, coalesce it into one follow-up pass instead of overlapping system probes.
 Delay provider CLI/auth/model preflight until the initial pane reveal has
 settled, and only probe Apple model availability when that provider is active.
 Likewise, a permission video representable must treat an unchanged URL/player
