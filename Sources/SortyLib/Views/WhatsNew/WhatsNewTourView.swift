@@ -532,12 +532,6 @@ public struct WhatsNewTourView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .onboardingBeamBorder(
-            variant: currentPage == pages.count - 1 ? .featured : .info,
-            active: true,
-            isIntensified: isActionHovering,
-            includesInteriorGlow: isActionHovering
-        )
         .contentShape(Capsule())
         .offset(y: reduceMotion ? 0 : (isActionHovering ? -1 : 0))
         .animation(reduceMotion ? nil : .smooth(duration: 0.30), value: isActionHovering)
