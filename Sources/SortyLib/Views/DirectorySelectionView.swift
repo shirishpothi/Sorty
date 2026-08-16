@@ -5,6 +5,7 @@
 //  Folder selection with drag-drop support and enhanced animations
 //
 
+import Beam
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -13,6 +14,7 @@ struct DirectorySelectionView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
@@ -68,6 +70,14 @@ struct DirectorySelectionView: View {
                     .padding(.vertical, 10)
                 }
                 .buttonStyle(.onboardingPill)
+                .beam(
+                    .small,
+                    palette: .ocean,
+                    theme: .dark,
+                    active: !reduceMotion && controlActiveState != .inactive,
+                    shape: .capsule,
+                    strength: 1
+                )
                 .contentShape(Capsule())
                 .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
