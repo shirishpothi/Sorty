@@ -53,7 +53,6 @@ class OnboardingAudioManager: ObservableObject {
     nonisolated(unsafe) private let state = AudioState()
 
     private var audioPlayer: AVAudioPlayer?
-    private var preparedAudioData: Data?
 
     // MARK: - Constants
 
@@ -102,9 +101,9 @@ class OnboardingAudioManager: ObservableObject {
         case complete
     }
 
-    /// Load the bundled soundtrack without putting file I/O on a reveal frame.
+    /// Load and prepare the bundled soundtrack before a reveal begins.
     func prepareBackgroundMelody() async {
-        guard preparedAudioData == nil, audioPlayer == nil, !state.isRunning,
+        guard audioPlayer == nil, !state.isRunning,
               let soundURL = resolvedBackgroundMelodyURL()
         else { return }
 
@@ -112,29 +111,45 @@ class OnboardingAudioManager: ObservableObject {
             try? Data(contentsOf: soundURL, options: .mappedIfSafe)
         }.value
 
-        guard !Task.isCancelled, audioPlayer == nil, !state.isRunning else { return }
-        preparedAudioData = data
+        guard !Task.isCancelled, audioPlayer == nil, !state.isRunning, let data else { return }
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.numberOfLoops = 0
+            player.volume = 0.25
+            player.prepareToPlay()
+            audioPlayer = player
+        } catch {
+            print("[OnboardingAudioManager] Failed to prepare OnboardingSound.wav: \(error)")
+        }
     }
 
     /// Start the bundled background melody, falling back to the synthesized loop.
-    func startBackgroundMelody() {
+    func startBackgroundMelody(after delay: TimeInterval = 0) {
         guard !state.isRunning else { return }
 
-        let soundURL = resolvedBackgroundMelodyURL()
-        if preparedAudioData != nil || soundURL != nil {
+        if let audioPlayer {
+            audioPlayer.currentTime = 0
+            audioPlayer.volume = 0.25
+            if delay > 0 {
+                audioPlayer.play(atTime: audioPlayer.deviceCurrentTime + delay)
+            } else {
+                audioPlayer.play()
+            }
+            state.isRunning = true
+            isPlaying = true
+            return
+        }
+
+        if let soundURL = resolvedBackgroundMelodyURL() {
             do {
-                let player: AVAudioPlayer
-                if let data = preparedAudioData {
-                    preparedAudioData = nil
-                    player = try AVAudioPlayer(data: data)
-                } else if let soundURL {
-                    player = try AVAudioPlayer(contentsOf: soundURL)
-                } else {
-                    return
-                }
+                let player = try AVAudioPlayer(contentsOf: soundURL)
                 player.numberOfLoops = 0
                 player.volume = 0.25
-                player.play()
+                if delay > 0 {
+                    player.play(atTime: player.deviceCurrentTime + delay)
+                } else {
+                    player.play()
+                }
                 audioPlayer = player
                 state.isRunning = true
                 isPlaying = true

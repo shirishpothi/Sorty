@@ -72,6 +72,10 @@ Resolve the intro's real file icons before starting its first animation, mount
 no placeholder card hosts, and never replace card images mid-reveal. Finder
 Sync registration repair may restart Finder, so defer automatic repair until
 onboarding is complete instead of running it behind the startup animation.
+Prepare the intro's `AVAudioPlayer` fully before the icon's first visible frame
+and schedule its cue on the player's audio clock. Constructing, preparing, or
+starting the player from a main-actor timer during the icon spring causes a
+visible hitch.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy

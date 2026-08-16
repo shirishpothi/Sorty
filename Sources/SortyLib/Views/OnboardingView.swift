@@ -701,9 +701,12 @@ private struct OnboardingIntroView: View {
         fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
         onRevealPhaseChanged(.icon)
 
-        Task { @MainActor in
-            // Commit the hidden, fully configured card hosts before starting
-            // any visible animation.
+        taskController.audioPrewarmTask = Task { @MainActor in
+            // Construct and prepare the player before the icon's first visible
+            // frame, then schedule its cue on the audio clock so no main-actor
+            // audio work lands during the icon spring.
+            await audio.prepareBackgroundMelody()
+            audio.startBackgroundMelody(after: 0.45)
             await Task.yield()
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             beginAnimatedReveal(generation: generation)
@@ -711,22 +714,6 @@ private struct OnboardingIntroView: View {
     }
 
     private func beginAnimatedReveal(generation: Int) {
-
-        // Read the bundled audio bytes off-main during the quiet opening beat,
-        // leaving the original 450 ms playback cue free of file I/O.
-        taskController.audioPrewarmTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(180))
-            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
-            await audio.prepareBackgroundMelody()
-        }
-
-        // Keep playback at the original cue after the first paint settles.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(450))
-            guard generation == taskController.revealGeneration else { return }
-            audio.startBackgroundMelody()
-        }
-
         // Phase 1 — the icon materializes with a clean fade + settle (no
         // blur-in) while the glow blooms around it.
         withAnimation(.easeOut(duration: 1.0)) {
