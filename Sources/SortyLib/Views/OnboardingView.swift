@@ -15,6 +15,13 @@ import UniformTypeIdentifiers
 
 // MARK: - Main Onboarding View
 
+private enum OnboardingIntroRevealPhase: Int {
+    case icon
+    case screenGlow
+    case window
+    case files
+}
+
 public struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -30,6 +37,7 @@ public struct OnboardingView: View {
     @State private var swipeController = OnboardingSwipeController()
     @State private var hasConfiguredWindowChrome = false
     @State private var isIntroVisible = true
+    @State private var introRevealPhase = OnboardingIntroRevealPhase.icon
     @State private var isFlowPrepared = false
     @State private var isDismissingIntro = false
     @AccessibilityFocusState private var isProviderStepAccessibilityFocused: Bool
@@ -119,9 +127,12 @@ public struct OnboardingView: View {
             }
 
             if isIntroVisible {
-                OnboardingIntroView {
-                    dismissIntro()
-                }
+                OnboardingIntroView(
+                    onRevealPhaseChanged: { phase in
+                        introRevealPhase = phase
+                    },
+                    onGetStarted: dismissIntro
+                )
                 .transition(.opacity)
                 .allowsHitTesting(!isDismissingIntro)
             }
@@ -147,12 +158,18 @@ public struct OnboardingView: View {
                 OnboardingWindowTitleConfigurator {
                     hasConfiguredWindowChrome = true
                 }
-                OnboardingScreenBackdropBlurPresenter()
+                OnboardingScreenBackdropBlurPresenter(
+                    isVisible: introRevealPhase.rawValue
+                        >= OnboardingIntroRevealPhase.window.rawValue
+                )
             }
             .frame(width: 0, height: 0)
         )
         .overlay(alignment: .topLeading) {
-            OnboardingScreenEdgeGlowPresenter()
+            OnboardingScreenEdgeGlowPresenter(
+                isVisible: introRevealPhase.rawValue
+                    >= OnboardingIntroRevealPhase.screenGlow.rawValue
+            )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -160,10 +177,12 @@ public struct OnboardingView: View {
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
-        .task {
-            // Leave the intro's first frames uncontended, then prepare the
-            // completion sound long before the user can reach that step.
-            try? await Task.sleep(for: .seconds(3))
+        .task(id: isIntroVisible) {
+            // Keep completion-audio construction out of the intro's final
+            // reveal frames. It is still prepared long before completion once
+            // the provider step has settled.
+            guard !isIntroVisible else { return }
+            try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             await OnboardingCompletionAudio.prewarm()
         }
@@ -598,6 +617,7 @@ private final class OnboardingIntroTaskController {
 }
 
 private struct OnboardingIntroView: View {
+    let onRevealPhaseChanged: (OnboardingIntroRevealPhase) -> Void
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -673,9 +693,12 @@ private struct OnboardingIntroView: View {
             textOffset = 0
             fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
+            onRevealPhaseChanged(.files)
             audio.startBackgroundMelody()
             return
         }
+
+        onRevealPhaseChanged(.icon)
 
         // Resolve cold NSWorkspace icons one at a time during the quiet opening
         // reveal instead of batching every lookup on the frame chips appear.
@@ -716,9 +739,16 @@ private struct OnboardingIntroView: View {
         glowVisible = true
 
         Task { @MainActor in
-            // Phase 2 — backdrop, title, and button.
-            try? await Task.sleep(for: .milliseconds(1700))
+            // Let the icon establish the first frame before bringing the
+            // screen-edge glow forward in its own fade.
+            try? await Task.sleep(for: .milliseconds(600))
             guard generation == taskController.revealGeneration else { return }
+            onRevealPhaseChanged(.screenGlow)
+
+            // Phase 2 — backdrop, title, and button.
+            try? await Task.sleep(for: .milliseconds(1100))
+            guard generation == taskController.revealGeneration else { return }
+            onRevealPhaseChanged(.window)
             withAnimation(.easeInOut(duration: 0.9)) {
                 chromeRevealed = true
             }
@@ -732,6 +762,7 @@ private struct OnboardingIntroView: View {
             guard generation == taskController.revealGeneration else { return }
             fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
+            onRevealPhaseChanged(.files)
         }
     }
 
@@ -1886,6 +1917,8 @@ private struct OnboardingScreenEdgeGlow: View {
 /// Places a visual-effect surface behind the onboarding window, leaving the
 /// Sorty window clear while softening the rest of the current screen.
 private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
+    let isVisible: Bool
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -1895,10 +1928,12 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
         }
+        context.coordinator.setVisible(isVisible)
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.setVisible(isVisible)
         context.coordinator.attach(to: nsView.window)
     }
 
@@ -1913,6 +1948,13 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private var observers: [NSObjectProtocol] = []
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
+        private var isVisible = false
+
+        func setVisible(_ isVisible: Bool) {
+            guard self.isVisible != isVisible else { return }
+            self.isVisible = isVisible
+            updatePanelFrame()
+        }
 
         func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
@@ -2030,6 +2072,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
         private func updatePanelFrame() {
             guard let window = hostWindow,
+                  isVisible,
                   window.isVisible,
                   !window.isMiniaturized,
                   let screen = window.screen ?? NSScreen.main else {
@@ -2098,6 +2141,8 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 }
 
 private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
+    let isVisible: Bool
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -2107,6 +2152,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
         }
+        context.coordinator.setVisible(isVisible)
         DispatchQueue.main.async {
             context.coordinator.attach(to: view.window)
         }
@@ -2114,6 +2160,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.setVisible(isVisible)
         DispatchQueue.main.async {
             context.coordinator.attach(to: nsView.window)
         }
@@ -2130,6 +2177,13 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private var observers: [NSObjectProtocol] = []
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
+        private var isVisible = false
+
+        func setVisible(_ isVisible: Bool) {
+            guard self.isVisible != isVisible else { return }
+            self.isVisible = isVisible
+            showPanelIfPossible()
+        }
 
         func attach(to window: NSWindow?) {
             guard hostWindow !== window else {
@@ -2223,6 +2277,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
             panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            panel.alphaValue = 0
             panel.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
@@ -2248,13 +2303,26 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func showPanelIfPossible() {
-            guard let window = hostWindow, window.isVisible, !window.isMiniaturized else {
+            guard isVisible,
+                  let window = hostWindow,
+                  window.isVisible,
+                  !window.isMiniaturized else {
                 hidePanelImmediately()
                 return
             }
             updatePanelFrame()
-            glowPanel?.alphaValue = 1
-            glowPanel?.orderFrontRegardless()
+            fadeInPanelIfNeeded()
+        }
+
+        private func fadeInPanelIfNeeded() {
+            guard let glowPanel, glowPanel.alphaValue == 0 else { return }
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
+            glowPanel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                glowPanel.animator().alphaValue = 1
+            }
         }
 
         private func dismissPanel(immediately: Bool = false) {
@@ -2627,16 +2695,11 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 window.setFrameOrigin(NSPoint(x: centeredOrigin.x, y: loweredY))
             }
 
-            // Start fully transparent and slowly fade the whole window in so the
-            // onboarding materializes rather than popping into existence.
-            window.alphaValue = 0
-            DispatchQueue.main.async {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 1.4
-                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    window.animator().alphaValue = 1
-                }
-            }
+            // The intro's retained icon and phase-driven panels own the reveal.
+            // A second whole-window fade completes out of sync with those
+            // surfaces and produces a visible flash at the phase boundary.
+            window.alphaValue = 1
+            window.makeKey()
         }
 
         private func restore() {
