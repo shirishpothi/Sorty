@@ -39,10 +39,6 @@ glow, blur, material, or other translucent panels across a monitor behind the
 onboarding window: windows underneath update as the cursor moves, forcing
 WindowServer to recompose that monitor-sized stack and starving the orbit's
 compositor frames even while Sorty's main thread is idle.
-The window-edge glow is the narrow exception: keep its auxiliary surface bounded
-to a small outset around the onboarding frame, attach it below the parent window,
-ignore mouse events, and animate retained Core Animation opacity and shadow blur.
-Reduce Motion must leave a static glow rather than running the pulse.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
