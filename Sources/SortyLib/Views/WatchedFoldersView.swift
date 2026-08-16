@@ -564,17 +564,6 @@ struct WatchedFolderCard: View {
         .foregroundStyle(.red)
     }
 
-    private var lostAccessLabel: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "lock.slash.fill")
-                .font(.caption2)
-            Text("Access Lost")
-                .font(.caption2)
-        }
-        .foregroundStyle(.orange)
-        .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
-    }
-
     private var grantAccessButton: some View {
         Button("Grant Access") {
             let panel = NSOpenPanel()
@@ -615,10 +604,7 @@ struct WatchedFolderCard: View {
         if !folder.exists {
             missingFolderStatus
         } else if folder.accessStatus == .lost {
-            HStack(spacing: 6) {
-                lostAccessLabel
-                grantAccessButton
-            }
+            grantAccessButton
         }
     }
 
