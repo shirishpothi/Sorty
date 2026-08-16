@@ -39,11 +39,6 @@ glow, blur, material, or other translucent panels across a monitor behind the
 onboarding window: windows underneath update as the cursor moves, forcing
 WindowServer to recompose that monitor-sized stack and starving the orbit's
 compositor frames even while Sorty's main thread is idle.
-The window glow is an in-bounds perimeter effect: retained conic-gradient
-layers provide a soft inner bloom and crisp edge without creating content
-behind the window. Rotate only those compositor layers, pause their shared
-clock while Sorty is inactive, and keep a static perimeter when Reduce Motion
-is enabled.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
