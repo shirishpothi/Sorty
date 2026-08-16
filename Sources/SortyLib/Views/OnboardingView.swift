@@ -770,8 +770,10 @@ private struct OnboardingIntroContentLayer: View {
     @State private var introSize: CGSize = .zero
     @State private var buttonCenter: CGPoint = .zero
     @State private var isHoveringButton = false
+    @State private var hoverExitTask: Task<Void, Never>?
 
     private static let coordinateSpace = "OnboardingIntroContentLayer"
+    private static let hoverExitGracePeriod = Duration.milliseconds(110)
 
     var body: some View {
         ZStack {
@@ -851,9 +853,7 @@ private struct OnboardingIntroContentLayer: View {
                         }
                 }
                 .onHover { hovering in
-                    if isHoveringButton != hovering {
-                        isHoveringButton = hovering
-                    }
+                    updateButtonHover(hovering)
                 }
                 .opacity(textOpacity)
                 .offset(y: textOffset)
@@ -867,6 +867,30 @@ private struct OnboardingIntroContentLayer: View {
             if introSize != size {
                 introSize = size
             }
+        }
+        .onDisappear {
+            hoverExitTask?.cancel()
+            hoverExitTask = nil
+        }
+    }
+
+    /// Collapse immediately on entry, but forgive a very short pointer exit.
+    /// This prevents edge jitter from repeatedly reversing the file spring
+    /// while still restoring the orbit promptly after a deliberate exit.
+    private func updateButtonHover(_ hovering: Bool) {
+        hoverExitTask?.cancel()
+        hoverExitTask = nil
+
+        if hovering {
+            isHoveringButton = true
+            return
+        }
+
+        hoverExitTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.hoverExitGracePeriod)
+            guard !Task.isCancelled else { return }
+            isHoveringButton = false
+            hoverExitTask = nil
         }
     }
 }
@@ -1394,9 +1418,10 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 /// position, transform, and opacity from a display link.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
-    private static let animationRate: Float = 60
-    private static let springResponse = 0.55
-    private static let springDamping = 0.85
+    private static let minimumAnimationRate: Float = 60
+    private static let preferredAnimationRate: Float = 120
+    private static let springResponse = 0.48
+    private static let springDamping = 0.9
 
     private var hosts: [UUID: NSHostingView<OnboardingOrbitFileChip>] = [:]
     private var hostedIcons: [UUID: NSImage] = [:]
@@ -1596,9 +1621,9 @@ private final class OnboardingOrbitFieldView: NSView {
             selector: #selector(displayLinkDidFire(_:))
         )
         displayLink.preferredFrameRateRange = CAFrameRateRange(
-            minimum: Self.animationRate,
-            maximum: Self.animationRate,
-            preferred: Self.animationRate
+            minimum: Self.minimumAnimationRate,
+            maximum: Self.preferredAnimationRate,
+            preferred: Self.preferredAnimationRate
         )
         displayLink.add(to: .main, forMode: .common)
         orbitDisplayLink = displayLink
@@ -1753,7 +1778,7 @@ private final class OnboardingOrbitFieldView: NSView {
         // Sample the curve at the highest refresh rate this animation targets.
         // A fixed 120 samples leaves long, slow orbits with visibly stepped
         // velocity even though Core Animation interpolates their positions.
-        let sampleCount = max(120, Int(ceil(duration * Double(Self.animationRate))))
+        let sampleCount = max(120, Int(ceil(duration * Double(Self.preferredAnimationRate))))
         let startingPhase = phase + angularSpeed * orbitPhase
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...sampleCount).map { index in
@@ -1781,17 +1806,25 @@ private final class OnboardingOrbitFieldView: NSView {
     ]
 
     private func advanceCollapseSpring(delta: CFTimeInterval) {
-        let displacement = collapseProgress - collapseTarget
-        guard abs(displacement) > 0.0005 || abs(collapseVelocity) > 0.0005 else {
+        var remainingTime = delta
+        guard abs(collapseProgress - collapseTarget) > 0.0005 || abs(collapseVelocity) > 0.0005 else {
             collapseProgress = collapseTarget
             collapseVelocity = 0
             return
         }
+
         let omega = 2 * Double.pi / Self.springResponse
-        let acceleration = -omega * omega * Double(displacement)
-            - 2 * Self.springDamping * omega * Double(collapseVelocity)
-        collapseVelocity += CGFloat(acceleration * delta)
-        collapseProgress += collapseVelocity * CGFloat(delta)
+        // Substep missed or uneven display-link frames so the reversible
+        // spring remains stable instead of visibly snapping after a hitch.
+        while remainingTime > 0 {
+            let step = min(remainingTime, 1.0 / Double(Self.preferredAnimationRate))
+            let displacement = collapseProgress - collapseTarget
+            let acceleration = -omega * omega * Double(displacement)
+                - 2 * Self.springDamping * omega * Double(collapseVelocity)
+            collapseVelocity += CGFloat(acceleration * step)
+            collapseProgress += collapseVelocity * CGFloat(step)
+            remainingTime -= step
+        }
     }
 
     private func renderFrame() {
