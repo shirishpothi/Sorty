@@ -1,15 +1,6 @@
 {
-  "originHash" : "58d16c0cb295ea86d4512adfd70d56f90b098073409ca06e3ff75a5b3abdc880",
+  "originHash" : "2b8b9e1e539ceb07d1fb4d8034c28246003fc681ba897d2064cdbb126a3a1710",
   "pins" : [
-    {
-      "identity" : "beam",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tornikegomareli/beam.git",
-      "state" : {
-        "revision" : "96eb0e2973326d2bce7bc3d4da3950b2fdfbf437",
-        "version" : "0.1.0"
-      }
-    },
     {
       "identity" : "posthog-ios",
       "kind" : "remoteSourceControl",

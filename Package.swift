@@ -18,7 +18,9 @@ let package = Package(
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
         // package variant that preserves the same overlay UI on macOS 15.
         .package(path: "Packages/Permiso"),
-        .package(url: "https://github.com/tornikegomareli/beam.git", from: "0.1.0"),
+        // Beam 0.1.0 is vendored so its shader loader can resolve SwiftPM
+        // resources from a signed macOS app's Contents/Resources directory.
+        .package(path: "Packages/Beam"),
         .package(
             url: "https://github.com/PostHog/posthog-ios.git",
             exact: "3.68.2"

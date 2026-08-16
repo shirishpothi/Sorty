@@ -693,6 +693,43 @@ copy_swiftpm_dependency_resource_bundles() {
     done < <(find "${build_dir}" -path "*/${BUILD_CONFIG}/*.bundle" -type d | sort)
 }
 
+compile_beam_metal_library() {
+    local resources_dir="$1"
+    local bundle_dir="${resources_dir}/Beam_Beam.bundle"
+    local shader_dir="${PROJECT_DIR}/Packages/Beam/Sources/Beam/Shaders"
+    local metal_library="${bundle_dir}/default.metallib"
+
+    if [ ! -d "${bundle_dir}" ] || [ ! -f "${shader_dir}/Common.h" ]; then
+        return 0
+    fi
+
+    local temp_dir
+    temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/sorty-beam.XXXXXX")"
+    local air_files=()
+    local shader_source
+
+    log_detail "Compiling Beam Metal shaders"
+    while IFS= read -r shader_source; do
+        local metal_air="${temp_dir}/$(basename "${shader_source}" .metal).air"
+        if ! xcrun --sdk macosx metal -I "${shader_dir}" -c "${shader_source}" -o "${metal_air}"; then
+            rm -rf "${temp_dir}"
+            log_failure "Beam Metal shader compilation failed"
+            return 1
+        fi
+        air_files+=("${metal_air}")
+    done < <(find "${shader_dir}" -maxdepth 1 -type f -name '*.metal' | LC_ALL=C sort)
+
+    if ! xcrun --sdk macosx metallib "${air_files[@]}" -o "${metal_library}"; then
+        rm -rf "${temp_dir}"
+        log_failure "Beam Metal library linking failed"
+        return 1
+    fi
+
+    rm -rf "${temp_dir}"
+    rm -f "${bundle_dir}"/*.metal
+    log_detail "Compiled Beam default.metallib"
+}
+
 compile_asset_catalog() {
     local resources_dir="$1"
     local app_path="$2"
@@ -1400,6 +1437,8 @@ else
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
     compile_string_catalogs "${RESOURCES_DIR}"
     copy_swiftpm_dependency_resource_bundles "${RESOURCES_DIR}" "${BUILD_DIR}"
+    compile_beam_metal_library "${RESOURCES_DIR}"
+    rm -rf "${RESOURCES_DIR}/BorderBeamKit_BorderBeamKit.bundle"
 
     # Compile Assets.xcassets into Assets.car
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"

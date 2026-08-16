@@ -14,11 +14,14 @@ Important implementation details:
 - Do not add the small square elapsed-time pill below the card. It was removed
   because it was visually noisy and did not match the requested reference.
 - Sorty's `make now` path builds a manual SwiftPM app bundle. In that bundle,
-  Beam's package shader resource lookup can fail silently, leaving the card
-  with no visible border animation even though `.beam(...)` is present.
-- The card also has `referenceBeamFallback(cornerRadius:active:)` so the border
-  remains visible if Beam's package shader resource lookup fails in the manual
-  app bundle.
+  SwiftPM leaves Beam's shader sources uncompiled. `scripts/build.sh` must
+  compile the package's `.metal` resources into
+  `Contents/Resources/Beam_Beam.bundle/default.metallib`. Sorty's vendored
+  Beam 0.1.0 loader checks that signed macOS resource location before falling
+  back to `Bundle.module`. Otherwise `.beam(...)` can build successfully but
+  render no border in a shipped app.
+- The progress card also has `referenceBeamFallback(cornerRadius:active:)` so
+  the border remains visible if Beam's package shader lookup fails.
   layered above the Beam modifier. This fallback is intentionally lightweight:
   one `SwiftUI.TimelineView`-driven 1px animated angular border, no blur/glow
   pass, no extra pill animation. The earlier blurred fallback was visibly laggy.
