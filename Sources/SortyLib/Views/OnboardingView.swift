@@ -1853,9 +1853,11 @@ private struct OnboardingScreenEdgeGlow: View {
                 edgeGradient(startPoint: .leading, endPoint: .trailing, strength: strength)
                 edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .compositingGroup()
             .blur(radius: 18 + pulse * 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -2224,7 +2226,10 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 .ignoresCycle,
                 .stationary
             ]
-            panel.contentView = NSHostingView(rootView: OnboardingScreenEdgeGlow())
+            let glowView = NSHostingView(rootView: OnboardingScreenEdgeGlow())
+            glowView.sizingOptions = []
+            glowView.autoresizingMask = [.width, .height]
+            panel.contentView = glowView
             return panel
         }
 
@@ -2246,7 +2251,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
             updatePanelFrame()
             glowPanel?.alphaValue = 1
-            glowPanel?.orderFrontRegardless()
+            glowPanel?.order(.above, relativeTo: window.windowNumber)
         }
 
         private func dismissPanel(immediately: Bool = false) {
