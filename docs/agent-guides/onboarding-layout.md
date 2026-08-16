@@ -81,11 +81,6 @@ Prepare the intro's `AVAudioPlayer` fully before the icon's first visible frame
 and schedule its cue on the player's audio clock. Constructing, preparing, or
 starting the player from a main-actor timer during the icon spring causes a
 visible hitch.
-The intro title keeps "Welcome to" as native rounded text and reveals `Sorty`
-once in the system-provided Snell Roundhand cursive face, beginning with the
-chrome reveal. Do not loop the wordmark or drive it from a frame timer. Reduce
-Motion renders the completed word immediately while preserving the title's
-accessibility label.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy

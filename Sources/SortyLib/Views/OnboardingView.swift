@@ -623,7 +623,6 @@ private struct OnboardingIntroView: View {
     @State private var chromeRevealed = false
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
-    @State private var titleDrawProgress: CGFloat = 0
     @State private var filesAppeared = false
     @State private var fileIcons: [String: NSImage] = [:]
     @State private var taskController = OnboardingIntroTaskController()
@@ -646,8 +645,7 @@ private struct OnboardingIntroView: View {
                 iconOpacity: iconOpacity,
                 glowVisible: glowVisible,
                 textOpacity: textOpacity,
-                textOffset: textOffset,
-                titleDrawProgress: titleDrawProgress
+                textOffset: textOffset
             ) {
                 HapticFeedbackManager.shared.success()
                 audio.stopAll()
@@ -687,7 +685,6 @@ private struct OnboardingIntroView: View {
             chromeRevealed = true
             textOpacity = 1
             textOffset = 0
-            titleDrawProgress = 1
             fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
             onRevealPhaseChanged(.files)
@@ -742,9 +739,6 @@ private struct OnboardingIntroView: View {
                 textOpacity = 1
                 textOffset = 0
             }
-            withAnimation(.easeOut(duration: 1.35).delay(0.2)) {
-                titleDrawProgress = 1
-            }
 
             // Phase 3 — file chips drift in once everything has settled.
             try? await Task.sleep(for: .milliseconds(650))
@@ -766,7 +760,6 @@ private struct OnboardingIntroContentLayer: View {
     let glowVisible: Bool
     let textOpacity: Double
     let textOffset: CGFloat
-    let titleDrawProgress: CGFloat
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -821,20 +814,8 @@ private struct OnboardingIntroContentLayer: View {
                     .scaleEffect(iconScale)
                     .opacity(iconOpacity)
 
-                    HStack(alignment: .center, spacing: 10) {
-                        Text("Welcome to")
-                            .font(.system(size: 38, weight: .bold, design: .rounded))
-
-                        Text("Sorty")
-                            .font(.custom("Snell Roundhand", fixedSize: 52))
-                            .fontWeight(.bold)
-                            .frame(width: 126, height: 54, alignment: .leading)
-                            .mask(alignment: .leading) {
-                                Rectangle()
-                                    .frame(width: 126 * titleDrawProgress)
-                            }
-                            .accessibilityHidden(true)
-                    }
+                    Text("Welcome to Sorty")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary.opacity(0.88))
                         .opacity(textOpacity)
                         .offset(y: textOffset)
