@@ -861,7 +861,7 @@ private struct UnavailableDuplicateFilesPopover: View {
                 Text(file.reason.description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(file.url.deletingLastPathComponent().path)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

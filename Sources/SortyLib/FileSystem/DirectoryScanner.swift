@@ -6,6 +6,7 @@
 //
 
 import CryptoKit
+import Darwin
 import Foundation
 import os.log
 
@@ -19,16 +20,87 @@ struct DuplicateScanInventory: Sendable {
 
 struct UnavailableDuplicateFile: Identifiable, Hashable, Sendable {
     enum Reason: Hashable, Sendable {
-        case metadata
-        case contents
+        case permissionDenied
+        case fileMissing
+        case cloudFileUnavailable
+        case storageUnavailable
+        case changedWhileScanning
+        case other(stage: String, systemMessage: String)
 
         var description: String {
             switch self {
-            case .metadata:
-                return "File information could not be read."
-            case .contents:
-                return "File contents could not be read."
+            case .permissionDenied:
+                return "Sorty does not have permission to read this file."
+            case .fileMissing:
+                return "The file was moved or deleted during the scan."
+            case .cloudFileUnavailable:
+                return "The cloud file is not downloaded or its provider is unavailable."
+            case .storageUnavailable:
+                return "The drive or network location is no longer available."
+            case .changedWhileScanning:
+                return "The file changed while Sorty was reading it."
+            case .other(let stage, let systemMessage):
+                return "\(stage) failed: \(systemMessage)"
             }
+        }
+
+        static func metadata(error: Error, at url: URL) -> Self {
+            classify(error: error, at: url, stage: "Reading file information")
+        }
+
+        static func contents(failure: HashUtility.ReadFailure, at url: URL) -> Self {
+            classify(
+                domain: failure.domain,
+                code: failure.code,
+                message: failure.message,
+                at: url,
+                stage: "Reading file contents"
+            )
+        }
+
+        private static func classify(error: Error, at url: URL, stage: String) -> Self {
+            let nsError = error as NSError
+            return classify(
+                domain: nsError.domain,
+                code: nsError.code,
+                message: nsError.localizedDescription,
+                at: url,
+                stage: stage
+            )
+        }
+
+        private static func classify(
+            domain: String,
+            code: Int,
+            message: String,
+            at url: URL,
+            stage: String
+        ) -> Self {
+            if domain == NSCocoaErrorDomain, code == NSFileReadNoPermissionError {
+                return .permissionDenied
+            }
+            if domain == NSPOSIXErrorDomain, code == Int(EACCES) || code == Int(EPERM) {
+                return .permissionDenied
+            }
+            if message == "The file changed while it was being read." {
+                return .changedWhileScanning
+            }
+
+            let pathComponents = Set(url.standardizedFileURL.pathComponents.map { $0.lowercased() })
+            let isCloudPath = pathComponents.contains("cloudstorage")
+                || pathComponents.contains("mobile documents")
+                || pathComponents.contains("dropbox")
+            if isCloudPath {
+                return .cloudFileUnavailable
+            }
+
+            if !FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) {
+                return .storageUnavailable
+            }
+            if !FileManager.default.fileExists(atPath: url.path) {
+                return .fileMissing
+            }
+            return .other(stage: stage, systemMessage: message)
         }
     }
 
@@ -268,9 +340,15 @@ actor DirectoryScanner {
         while let fileURL = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
 
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys) else {
+            let resourceValues: URLResourceValues
+            do {
+                resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
+            } catch {
                 unavailableFiles.append(
-                    UnavailableDuplicateFile(path: fileURL.path, reason: .metadata)
+                    UnavailableDuplicateFile(
+                        path: fileURL.path,
+                        reason: .metadata(error: error, at: fileURL)
+                    )
                 )
                 continue
             }

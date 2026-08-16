@@ -291,20 +291,20 @@ public actor DuplicateDetector {
         let sampleConcurrencyLimit = min(maximumConcurrentHashers, pendingSampleIndices.count)
         var nextSampleIndex = 0
 
-        await withTaskGroup(of: (Int, HashUtility.SampleFingerprint?).self) { group in
+        await withTaskGroup(of: (Int, HashUtility.ReadResult<HashUtility.SampleFingerprint>).self) { group in
             for _ in 0..<sampleConcurrencyLimit {
                 let index = pendingSampleIndices[nextSampleIndex]
                 nextSampleIndex += 1
                 group.addTask(priority: .utility) {
-                    let fingerprint = HashUtility.computeSampleFingerprint(
+                    let result = HashUtility.computeSampleFingerprintResult(
                         for: URL(fileURLWithPath: files[index].path)
                     )
-                    return (index, fingerprint)
+                    return (index, result)
                 }
             }
 
-            while let (index, fingerprint) = await group.next() {
-                if let fingerprint, fingerprint.isFullFileHash {
+            while let (index, result) = await group.next() {
+                if case .success(let fingerprint) = result, fingerprint.isFullFileHash {
                     let key = Self.cacheKey(for: files[index])
                     storeCachedHash(fingerprint.digest, for: key)
                     Self.record(
@@ -314,16 +314,20 @@ public actor DuplicateDetector {
                     )
                     hashedCount += 1
                     completedCount += 1
-                } else if let fingerprint {
+                } else if case .success(let fingerprint) = result {
                     Self.record(
                         index: index,
                         for: fingerprint.digest,
                         in: &sampledIndicesByDigest
                     )
                     sampledCount += 1
-                } else {
+                } else if case .failure(let failure) = result {
+                    let fileURL = URL(fileURLWithPath: files[index].path)
                     unavailableFiles.append(
-                        UnavailableDuplicateFile(path: files[index].path, reason: .contents)
+                        UnavailableDuplicateFile(
+                            path: files[index].path,
+                            reason: .contents(failure: failure, at: fileURL)
+                        )
                     )
                     completedCount += 1
                 }
@@ -336,10 +340,10 @@ public actor DuplicateDetector {
                     let nextIndex = pendingSampleIndices[nextSampleIndex]
                     nextSampleIndex += 1
                     group.addTask(priority: .utility) {
-                        let fingerprint = HashUtility.computeSampleFingerprint(
+                        let result = HashUtility.computeSampleFingerprintResult(
                             for: URL(fileURLWithPath: files[nextIndex].path)
                         )
-                        return (nextIndex, fingerprint)
+                        return (nextIndex, result)
                     }
                 } else if Task.isCancelled {
                     group.cancelAll()
@@ -362,27 +366,31 @@ public actor DuplicateDetector {
         let fullHashConcurrencyLimit = min(maximumConcurrentHashers, pendingFullHashIndices.count)
         var nextFullHashIndex = 0
 
-        await withTaskGroup(of: (Int, String?).self) { group in
+        await withTaskGroup(of: (Int, HashUtility.ReadResult<String>).self) { group in
             for _ in 0..<fullHashConcurrencyLimit {
                 let index = pendingFullHashIndices[nextFullHashIndex]
                 nextFullHashIndex += 1
                 group.addTask(priority: .utility) {
-                    let hash = HashUtility.computeSHA256(
+                    let result = HashUtility.computeSHA256Result(
                         for: URL(fileURLWithPath: files[index].path)
                     )
-                    return (index, hash)
+                    return (index, result)
                 }
             }
 
-            while let (index, hash) = await group.next() {
-                if let hash {
+            while let (index, result) = await group.next() {
+                if case .success(let hash) = result {
                     let key = Self.cacheKey(for: files[index])
                     storeCachedHash(hash, for: key)
                     Self.record(index: index, for: hash, in: &indicesByHash)
                     hashedCount += 1
-                } else {
+                } else if case .failure(let failure) = result {
+                    let fileURL = URL(fileURLWithPath: files[index].path)
                     unavailableFiles.append(
-                        UnavailableDuplicateFile(path: files[index].path, reason: .contents)
+                        UnavailableDuplicateFile(
+                            path: files[index].path,
+                            reason: .contents(failure: failure, at: fileURL)
+                        )
                     )
                 }
 
@@ -395,10 +403,10 @@ public actor DuplicateDetector {
                     let nextIndex = pendingFullHashIndices[nextFullHashIndex]
                     nextFullHashIndex += 1
                     group.addTask(priority: .utility) {
-                        let hash = HashUtility.computeSHA256(
+                        let result = HashUtility.computeSHA256Result(
                             for: URL(fileURLWithPath: files[nextIndex].path)
                         )
-                        return (nextIndex, hash)
+                        return (nextIndex, result)
                     }
                 } else if Task.isCancelled {
                     group.cancelAll()
