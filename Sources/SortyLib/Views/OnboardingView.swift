@@ -2109,6 +2109,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
     final class Coordinator {
         private weak var configuredWindow: NSWindow?
+        private var glowController: OnboardingWindowGlowController?
         private var originalTitleVisibility: NSWindow.TitleVisibility?
         private var originalTitlebarAppearsTransparent: Bool?
         private var originalStyleMask: NSWindow.StyleMask?
@@ -2139,6 +2140,10 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             window.isOpaque = false
             window.hasShadow = false
             window.isMovableByWindowBackground = true
+
+            let glowController = OnboardingWindowGlowController(parentWindow: window)
+            self.glowController = glowController
+            glowController.install()
 
             // Pin the window to the onboarding minimum content size before the
             // first paint so it never visibly resizes/reframes after appearing.
@@ -2173,6 +2178,8 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
         private func restore() {
             guard let window = configuredWindow else { return }
+            glowController?.remove()
+            glowController = nil
             if let originalStyleMask {
                 window.styleMask = originalStyleMask
             }
@@ -2214,6 +2221,157 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             guard let window else { return }
             onWindowAttached?(window)
         }
+    }
+}
+
+@MainActor
+private final class OnboardingWindowGlowController {
+    fileprivate static let outset: CGFloat = 46
+
+    private weak var parentWindow: NSWindow?
+    private let glowWindow: NSPanel
+    private let glowView = OnboardingWindowGlowView()
+    private var observers: [NSObjectProtocol] = []
+
+    init(parentWindow: NSWindow) {
+        self.parentWindow = parentWindow
+        glowWindow = NSPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        glowWindow.backgroundColor = .clear
+        glowWindow.isOpaque = false
+        glowWindow.hasShadow = false
+        glowWindow.ignoresMouseEvents = true
+        glowWindow.collectionBehavior = [.transient, .ignoresCycle]
+        glowWindow.contentView = glowView
+    }
+
+    func install() {
+        guard let parentWindow else { return }
+        updateFrame()
+        glowView.setMotionEnabled(!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        parentWindow.addChildWindow(glowWindow, ordered: .below)
+        glowWindow.orderFront(nil)
+
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(
+                forName: NSWindow.didMoveNotification,
+                object: parentWindow,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateFrame() }
+            },
+            center.addObserver(
+                forName: NSWindow.didResizeNotification,
+                object: parentWindow,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateFrame() }
+            },
+            center.addObserver(
+                forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.glowView.setMotionEnabled(
+                        !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    )
+                }
+            }
+        ]
+    }
+
+    func remove() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+        glowView.setMotionEnabled(false)
+        if let parentWindow {
+            parentWindow.removeChildWindow(glowWindow)
+        }
+        glowWindow.orderOut(nil)
+    }
+
+    private func updateFrame() {
+        guard let parentWindow else { return }
+        let outset = Self.outset
+        glowWindow.setFrame(
+            parentWindow.frame.insetBy(dx: -outset, dy: -outset),
+            display: true
+        )
+    }
+}
+
+private final class OnboardingWindowGlowView: NSView {
+    private let glowLayer = CAShapeLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+
+        glowLayer.fillColor = NSColor.clear.cgColor
+        glowLayer.strokeColor = NSColor.controlAccentColor.withAlphaComponent(0.72).cgColor
+        glowLayer.lineWidth = 3
+        glowLayer.shadowColor = NSColor.controlAccentColor.cgColor
+        glowLayer.shadowOpacity = 0.72
+        glowLayer.shadowRadius = 25
+        glowLayer.shadowOffset = .zero
+        glowLayer.compositingFilter = "screenBlendMode"
+        layer?.addSublayer(glowLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        let inset = OnboardingWindowGlowController.outset
+        let windowBounds = bounds.insetBy(dx: inset, dy: inset)
+        let path = CGPath(
+            roundedRect: windowBounds.insetBy(dx: 1.5, dy: 1.5),
+            cornerWidth: 12,
+            cornerHeight: 12,
+            transform: nil
+        )
+        glowLayer.frame = bounds
+        glowLayer.path = path
+        glowLayer.shadowPath = path
+    }
+
+    func setMotionEnabled(_ isEnabled: Bool) {
+        glowLayer.removeAnimation(forKey: "onboardingWindowGlowPulse")
+
+        guard isEnabled else {
+            glowLayer.opacity = 0.58
+            glowLayer.shadowRadius = 22
+            return
+        }
+
+        glowLayer.opacity = 0.46
+        glowLayer.shadowRadius = 19
+
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.42
+        opacity.toValue = 0.92
+
+        let blur = CABasicAnimation(keyPath: "shadowRadius")
+        blur.fromValue = 18
+        blur.toValue = 34
+
+        let pulse = CAAnimationGroup()
+        pulse.animations = [opacity, blur]
+        pulse.duration = 2.8
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        glowLayer.add(pulse, forKey: "onboardingWindowGlowPulse")
     }
 }
 
