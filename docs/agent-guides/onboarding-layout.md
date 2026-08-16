@@ -101,7 +101,12 @@ because focus moved to another app.
 The intro CTA changes the orbit's collapse target only when hover enters or
 exits. Resolve the button center inside the intro's local coordinate space;
 never measure global pointer geometry or publish per-mouse-move state. Hover
-must not invalidate the reveal or audio root. Keep this CTA's system glass
+must not invalidate the reveal or audio root. Enter the collapsed state
+immediately, but give hover exit a short cancellable grace period so a quick
+boundary crossing does not reverse the file spring before re-entry. Keep the
+collapse driven by one continuous, reversible progress value; use a subtle
+curved path and fade only near the button rather than staging independent file
+timers that cannot reverse cleanly. Keep this CTA's system glass
 noninteractive: its explicit hover state owns the collapse interaction, while
 interactive glass would independently track every pointer move.
 

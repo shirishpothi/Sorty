@@ -770,6 +770,7 @@ private struct OnboardingIntroContentLayer: View {
     @State private var introSize: CGSize = .zero
     @State private var buttonCenter: CGPoint = .zero
     @State private var isHoveringButton = false
+    @State private var hoverExitTask: Task<Void, Never>?
 
     private static let coordinateSpace = "OnboardingIntroContentLayer"
 
@@ -851,8 +852,17 @@ private struct OnboardingIntroContentLayer: View {
                         }
                 }
                 .onHover { hovering in
-                    if isHoveringButton != hovering {
-                        isHoveringButton = hovering
+                    hoverExitTask?.cancel()
+
+                    if hovering {
+                        hoverExitTask = nil
+                        isHoveringButton = true
+                    } else {
+                        hoverExitTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(90))
+                            guard !Task.isCancelled else { return }
+                            isHoveringButton = false
+                        }
                     }
                 }
                 .opacity(textOpacity)
@@ -867,6 +877,10 @@ private struct OnboardingIntroContentLayer: View {
             if introSize != size {
                 introSize = size
             }
+        }
+        .onDisappear {
+            hoverExitTask?.cancel()
+            hoverExitTask = nil
         }
     }
 }
@@ -1394,9 +1408,10 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 /// position, transform, and opacity from a display link.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
-    private static let animationRate: Float = 60
-    private static let springResponse = 0.55
-    private static let springDamping = 0.85
+    private static let interactionFrameRate: Float = 120
+    private static let idleSampleRate = 60.0
+    private static let springResponse = 0.48
+    private static let springDamping = 0.90
 
     private var hosts: [UUID: NSHostingView<OnboardingOrbitFileChip>] = [:]
     private var hostedIcons: [UUID: NSImage] = [:]
@@ -1596,9 +1611,9 @@ private final class OnboardingOrbitFieldView: NSView {
             selector: #selector(displayLinkDidFire(_:))
         )
         displayLink.preferredFrameRateRange = CAFrameRateRange(
-            minimum: Self.animationRate,
-            maximum: Self.animationRate,
-            preferred: Self.animationRate
+            minimum: 60,
+            maximum: Self.interactionFrameRate,
+            preferred: Self.interactionFrameRate
         )
         displayLink.add(to: .main, forMode: .common)
         orbitDisplayLink = displayLink
@@ -1753,7 +1768,7 @@ private final class OnboardingOrbitFieldView: NSView {
         // Sample the curve at the highest refresh rate this animation targets.
         // A fixed 120 samples leaves long, slow orbits with visibly stepped
         // velocity even though Core Animation interpolates their positions.
-        let sampleCount = max(120, Int(ceil(duration * Double(Self.animationRate))))
+        let sampleCount = max(120, Int(ceil(duration * Self.idleSampleRate)))
         let startingPhase = phase + angularSpeed * orbitPhase
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...sampleCount).map { index in
@@ -1798,7 +1813,8 @@ private final class OnboardingOrbitFieldView: NSView {
         guard !bounds.isEmpty else { return }
         let phase = reduceMotion ? 0 : orbitPhase
         let t = min(max(collapseProgress, 0), 1)
-        let collapseOpacity = 1 - max(0, (t - 0.72) / 0.28)
+        let fadeProgress = min(max((t - 0.70) / 0.30, 0), 1)
+        let collapseOpacity = 1 - fadeProgress * fadeProgress * (3 - 2 * fadeProgress)
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -1810,9 +1826,13 @@ private final class OnboardingOrbitFieldView: NSView {
                 width: collapseOrigin.width + file.collapseX * 0.65,
                 height: collapseOrigin.height + file.collapseY * 0.18
             )
+            let travelX = collapse.width - orbit.width
+            let travelY = collapse.height - orbit.height
+            let travelLength = max(hypot(travelX, travelY), 1)
+            let arc = sin(t * .pi) * (10 + abs(file.rotation) * 0.45)
             let offset = CGSize(
-                width: orbit.width + (collapse.width - orbit.width) * t,
-                height: orbit.height + (collapse.height - orbit.height) * t
+                width: orbit.width + travelX * t - travelY / travelLength * arc,
+                height: orbit.height + travelY * t + travelX / travelLength * arc
             )
             let center = CGPoint(x: bounds.midX + offset.width, y: bounds.midY + offset.height)
             if host.bounds.size != fittingSize {
