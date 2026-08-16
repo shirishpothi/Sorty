@@ -506,7 +506,7 @@ public struct WhatsNewTourView: View {
             colorVariant: .ocean,
             theme: .dark,
             active: !reduceMotion,
-            borderRadius: 999
+            borderRadius: 22
         )
         .overlay {
             GeometryReader { proxy in
