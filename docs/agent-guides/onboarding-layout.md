@@ -45,8 +45,10 @@ re-remove animations or rewrite layer opacity and phase.
 Cache invariant retained-layer palettes at construction and only rebuild
 variant-specific colors when the variant changes.
 The intro orbit keeps its original material-backed SwiftUI chips mounted. Its
-idle sine components run as additive Core Animation keyframes. Each finished
-chip is rasterized at the window's native backing scale, preserving its material
+idle sine components run as additive Core Animation keyframes sampled at the
+interaction refresh rate; do not reduce them to a fixed sample count because
+the slower cycles expose stepped velocity. Each finished chip is rasterized at
+the window's native backing scale, preserving its material
 appearance while pointer-event processing moves one cached compositor surface
 per file. The full-window AppKit container returns `nil` from `hitTest` so
 pointer movement never traverses the decorative card subtree, and identical

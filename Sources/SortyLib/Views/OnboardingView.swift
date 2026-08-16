@@ -1740,7 +1740,11 @@ private final class OnboardingOrbitFieldView: NSView {
         phase: Double,
         beginTime: CFTimeInterval
     ) -> CAKeyframeAnimation {
-        let sampleCount = 120
+        let duration = 2 * Double.pi / angularSpeed
+        // Sample the curve at the highest refresh rate this animation targets.
+        // A fixed 120 samples leaves long, slow orbits with visibly stepped
+        // velocity even though Core Animation interpolates their positions.
+        let sampleCount = max(120, Int(ceil(duration * Double(Self.interactionRate))))
         let startingPhase = phase + angularSpeed * orbitPhase
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...sampleCount).map { index in
@@ -1750,7 +1754,7 @@ private final class OnboardingOrbitFieldView: NSView {
         animation.keyTimes = (0...sampleCount).map { index in
             NSNumber(value: Double(index) / Double(sampleCount))
         }
-        animation.duration = 2 * .pi / angularSpeed
+        animation.duration = duration
         animation.beginTime = beginTime
         animation.repeatCount = .infinity
         animation.calculationMode = .linear
