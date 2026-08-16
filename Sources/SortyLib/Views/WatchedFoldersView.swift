@@ -631,42 +631,56 @@ struct WatchedFolderCard: View {
             Label(snoozedActivityText(until: until), systemImage: "clock.badge.pause")
                 .foregroundStyle(.orange)
         } else if let activity = watchedFoldersManager.activityByFolder[folder.id] {
-            HStack(spacing: 8) {
-                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Label {
-                        let status = activityText(activity, now: context.date)
-                        Text(status)
-                            .numericTextTransition(animationValue: status)
-                    } icon: {
-                        Image(systemName: activityIcon(activity))
+            if case .awaitingReview(let count) = activity {
+                awaitingReviewLine(fileCount: count)
+            } else {
+                HStack(spacing: 8) {
+                    SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Label {
+                            let status = activityText(activity, now: context.date)
+                            Text(status)
+                                .numericTextTransition(animationValue: status)
+                        } icon: {
+                            Image(systemName: activityIcon(activity))
+                        }
+                    }
+
+                    if case .parked = activity {
+                        pendingBatchButton("Retry", notification: .retryWatchedFolderBatch)
+                        pendingBatchButton("Discard", notification: .discardWatchedFolderBatch)
                     }
                 }
-
-                if case .parked = activity {
-                    pendingBatchButton("Retry", notification: .retryWatchedFolderBatch)
-                    pendingBatchButton("Discard", notification: .discardWatchedFolderBatch)
-                } else if case .awaitingReview = activity {
-                    Button("Review") {
-                        HapticFeedbackManager.shared.tap()
-                        _ = MainWindowRouter.shared.post(
-                            name: .showOrganizationPreview,
-                            userInfo: [
-                                "folderPath": folder.path,
-                                "isWatchedReview": true
-                            ]
-                        )
-                    }
-                    .buttonStyle(.link)
-                    .controlSize(.mini)
-
-                    Button("Discard Plan", role: .destructive) {
-                        isConfirmingReviewDiscard = true
-                    }
-                    .buttonStyle(.link)
-                    .controlSize(.mini)
-                }
+                .foregroundStyle(activityColor(activity))
             }
-            .foregroundStyle(activityColor(activity))
+        }
+    }
+
+    private func awaitingReviewLine(fileCount: Int) -> some View {
+        HStack(spacing: 8) {
+            Label(
+                "\(fileCount) file\(fileCount == 1 ? "" : "s") ready",
+                systemImage: "eye.fill"
+            )
+            .foregroundStyle(.secondary)
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                _ = MainWindowRouter.shared.post(
+                    name: .showOrganizationPreview,
+                    userInfo: [
+                        "folderPath": folder.path,
+                        "isWatchedReview": true
+                    ]
+                )
+            } label: {
+                Label("Review", systemImage: "arrow.right")
+            }
+            .buttonStyle(.sortyProminent(intent: .primary, size: .mini))
+
+            Button("Discard", role: .destructive) {
+                isConfirmingReviewDiscard = true
+            }
+            .buttonStyle(.sortyBordered(intent: .destructive, size: .mini))
         }
     }
 
