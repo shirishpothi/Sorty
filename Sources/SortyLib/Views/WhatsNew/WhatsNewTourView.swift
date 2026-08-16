@@ -1,4 +1,5 @@
 import AppKit
+import BorderBeamKit
 import SwiftUI
 
 public struct WhatsNewTourView: View {
@@ -500,6 +501,13 @@ public struct WhatsNewTourView: View {
                 .numericTextTransition(animationValue: currentPage)
         }
         .buttonStyle(.onboardingPill)
+        .borderBeam(
+            .md,
+            colorVariant: .ocean,
+            theme: .dark,
+            active: !reduceMotion,
+            borderRadius: 999
+        )
         .overlay {
             GeometryReader { proxy in
                 Ellipse()
