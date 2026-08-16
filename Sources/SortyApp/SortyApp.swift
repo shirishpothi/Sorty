@@ -371,6 +371,7 @@ struct SortyApp: App {
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = true
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @StateObject private var settingsViewModel: SettingsViewModel
     @StateObject private var personaManager = PersonaManager()
@@ -518,12 +519,20 @@ struct SortyApp: App {
     private func mainWindowIntegrationHandlers<Content: View>(_ content: Content) -> some View {
         content
             .onChange(of: finderIntegrationEnabled) { _, newValue in
-                if newValue {
+                if newValue, hasCompletedOnboarding {
                     ExtensionCommunication.beginMonitoringFinderSyncRuntime()
                     Task {
                         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
                         await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                     }
+                }
+            }
+            .onChange(of: hasCompletedOnboarding) { _, isComplete in
+                guard isComplete, finderIntegrationEnabled else { return }
+                ExtensionCommunication.beginMonitoringFinderSyncRuntime()
+                Task {
+                    _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                    await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                 }
             }
             .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
@@ -592,10 +601,12 @@ struct SortyApp: App {
             storageLocationsManager: storageLocationsManager
         )
 
-        ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-        Task {
-            _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-            await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
+        if hasCompletedOnboarding, finderIntegrationEnabled {
+            ExtensionCommunication.beginMonitoringFinderSyncRuntime()
+            Task {
+                _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
+            }
         }
 
         if coordinator == nil {

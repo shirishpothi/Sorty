@@ -612,7 +612,6 @@ extension OnboardingStep: OnboardingStepValidating {
 @MainActor
 private final class OnboardingIntroTaskController {
     var audioPrewarmTask: Task<Void, Never>?
-    var iconPrewarmTask: Task<Void, Never>?
     var revealGeneration = 0
 }
 
@@ -664,7 +663,6 @@ private struct OnboardingIntroView: View {
         .onDisappear {
             taskController.revealGeneration += 1
             taskController.audioPrewarmTask?.cancel()
-            taskController.iconPrewarmTask?.cancel()
             audio.stopAll()
         }
     }
@@ -682,7 +680,6 @@ private struct OnboardingIntroView: View {
         taskController.revealGeneration += 1
         let generation = taskController.revealGeneration
         taskController.audioPrewarmTask?.cancel()
-        taskController.iconPrewarmTask?.cancel()
 
         if reduceMotion {
             iconScale = 1
@@ -698,20 +695,22 @@ private struct OnboardingIntroView: View {
             return
         }
 
+        // Resolve the real file icons before the first animated frame. Mounting
+        // placeholder cards and replacing them through NSWorkspace during the
+        // icon reveal creates a visible compositor disturbance.
+        fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
         onRevealPhaseChanged(.icon)
 
-        // Resolve cold NSWorkspace icons one at a time during the quiet opening
-        // reveal instead of batching every lookup on the frame chips appear.
-        taskController.iconPrewarmTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(120))
+        Task { @MainActor in
+            // Commit the hidden, fully configured card hosts before starting
+            // any visible animation.
+            await Task.yield()
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
-            await OnboardingFileIconProvider.prewarmIcons(
-                for: OnboardingOrbitFile.files,
-                generationIsCurrent: {
-                    generation == taskController.revealGeneration && !Task.isCancelled
-                }
-            )
+            beginAnimatedReveal(generation: generation)
         }
+    }
+
+    private func beginAnimatedReveal(generation: Int) {
 
         // Read the bundled audio bytes off-main during the quiet opening beat,
         // leaving the original 450 ms playback cue free of file I/O.
@@ -760,7 +759,6 @@ private struct OnboardingIntroView: View {
             // Phase 3 — file chips drift in once everything has settled.
             try? await Task.sleep(for: .milliseconds(650))
             guard generation == taskController.revealGeneration else { return }
-            fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
             filesAppeared = true
             onRevealPhaseChanged(.files)
         }
@@ -1320,11 +1318,6 @@ private struct OnboardingOrbitFile: Identifiable {
 @MainActor
 private enum OnboardingFileIconProvider {
     private static var cache: [String: NSImage] = [:]
-    private static let placeholderImage = NSWorkspace.shared.icon(forFileType: "")
-
-    static var placeholder: NSImage {
-        placeholderImage
-    }
 
     static func icons(for files: [OnboardingOrbitFile]) -> [String: NSImage] {
         Dictionary(
@@ -1332,18 +1325,6 @@ private enum OnboardingFileIconProvider {
                 (ext, icon(for: ext))
             }
         )
-    }
-
-    static func prewarmIcons(
-        for files: [OnboardingOrbitFile],
-        generationIsCurrent: () -> Bool
-    ) async {
-        var resolvedExtensions = Set<String>()
-        for file in files where resolvedExtensions.insert(file.ext).inserted {
-            guard generationIsCurrent() else { return }
-            _ = icon(for: file.ext)
-            try? await Task.sleep(for: .milliseconds(45))
-        }
     }
 
     static func icon(for ext: String) -> NSImage {
@@ -1552,7 +1533,7 @@ private final class OnboardingOrbitFieldView: NSView {
 
     private func installHosts(icons: [String: NSImage]) {
         for file in OnboardingOrbitFile.files where hosts[file.id] == nil {
-            let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
+            guard let icon = icons[file.ext] else { continue }
             let host = NSHostingView(rootView: OnboardingOrbitFileChip(file: file, icon: icon))
             host.wantsLayer = true
             host.layer?.masksToBounds = false
@@ -1578,7 +1559,7 @@ private final class OnboardingOrbitFieldView: NSView {
 
     private func updateHostedIcons(_ icons: [String: NSImage]) {
         for file in OnboardingOrbitFile.files {
-            let icon = icons[file.ext] ?? OnboardingFileIconProvider.placeholder
+            guard let icon = icons[file.ext] else { continue }
             guard hostedIcons[file.id] !== icon, let host = hosts[file.id] else { continue }
             hostedIcons[file.id] = icon
             host.rootView = OnboardingOrbitFileChip(file: file, icon: icon)

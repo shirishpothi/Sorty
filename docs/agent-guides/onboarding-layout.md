@@ -68,6 +68,10 @@ an independent whole-window fade finishes out of sync with the glow and blur
 panels and creates a phase-boundary flash. Defer completion-audio preparation
 until after the intro is dismissed so player construction cannot interrupt the
 last file-card reveal.
+Resolve the intro's real file icons before starting its first animation, mount
+no placeholder card hosts, and never replace card images mid-reveal. Finder
+Sync registration repair may restart Finder, so defer automatic repair until
+onboarding is complete instead of running it behind the startup animation.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy
