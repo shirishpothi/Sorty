@@ -1,9 +1,44 @@
+import Combine
 import Foundation
 import XCTest
 @testable import SortyLib
 
 @MainActor
 final class SettingsViewModelStartupTests: XCTestCase {
+    func testProviderSwitchPublishesOneNormalizedConfigUpdate() throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var storedConfig = AIConfig.default
+        storedConfig.provider = .openRouter
+        defaults.set(try JSONEncoder().encode(storedConfig), forKey: "aiConfig")
+
+        let credentialStore = SettingsCredentialStore(
+            load: { _ in nil },
+            save: { _, _ in true },
+            saveImmediately: { _, _ in true },
+            delete: { _ in true }
+        )
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: credentialStore,
+            observesNotifications: false
+        )
+        var configPublicationCount = 0
+        let cancellable = viewModel.$config.dropFirst().sink { _ in
+            configPublicationCount += 1
+        }
+
+        viewModel.config.provider = .ollama
+
+        XCTAssertEqual(configPublicationCount, 2)
+        XCTAssertEqual(viewModel.config.provider, .ollama)
+        XCTAssertEqual(viewModel.config.apiURL, AIProvider.ollama.defaultAPIURL)
+        XCTAssertEqual(viewModel.config.model, AIProvider.ollama.defaultModel)
+        withExtendedLifetime(cancellable) {}
+    }
+
     func testInitializationDoesNotWaitForCredentialLookup() throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

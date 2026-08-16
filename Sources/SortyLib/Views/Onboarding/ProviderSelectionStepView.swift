@@ -207,10 +207,6 @@ public struct ProviderSelectionStepView: View {
                 reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
                 value: hasAppeared
             )
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
-                value: settingsViewModel.config.provider
-            )
         }
         .onAppear {
             synchronizeInputDrafts()
