@@ -1395,8 +1395,7 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 /// position, transform, and opacity from a display link.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
-    private static let orbitRate: Float = 24
-    private static let interactionRate: Float = 60
+    private static let animationRate: Float = 60
     private static let springResponse = 0.55
     private static let springDamping = 0.85
 
@@ -1404,6 +1403,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private var hostedIcons: [UUID: NSImage] = [:]
     private var hostSizes: [UUID: CGSize] = [:]
     private var revealWorkItems: [DispatchWorkItem] = []
+    private var revealedFileIDs: Set<UUID> = []
     private var orbitDisplayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval?
     private var orbitPhase: CFTimeInterval = 0
@@ -1560,23 +1560,34 @@ private final class OnboardingOrbitFieldView: NSView {
         revealWorkItems.removeAll()
 
         guard visible else {
+            revealedFileIDs.removeAll()
             hosts.values.forEach { $0.alphaValue = 0 }
             return
         }
 
         for file in OnboardingOrbitFile.files {
-            guard let host = hosts[file.id] else { continue }
-            let workItem = DispatchWorkItem { [weak host] in
-                guard let host else { return }
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.7
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    host.animator().alphaValue = 1
-                }
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.reveal(file: file)
             }
             revealWorkItems.append(workItem)
             DispatchQueue.main.asyncAfter(deadline: .now() + file.appearDelay, execute: workItem)
         }
+    }
+
+    private func reveal(file: OnboardingOrbitFile) {
+        guard let chipLayer = hosts[file.id]?.layer else { return }
+        revealedFileIDs.insert(file.id)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        chipLayer.opacity = 1
+        CATransaction.commit()
+
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0
+        opacity.toValue = 1
+        opacity.duration = 0.7
+        opacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        chipLayer.add(opacity, forKey: "revealOpacity")
     }
 
     private func installDisplayLinkIfNeeded() {
@@ -1586,9 +1597,9 @@ private final class OnboardingOrbitFieldView: NSView {
             selector: #selector(displayLinkDidFire(_:))
         )
         displayLink.preferredFrameRateRange = CAFrameRateRange(
-            minimum: Self.orbitRate,
-            maximum: Self.interactionRate,
-            preferred: Self.orbitRate
+            minimum: Self.animationRate,
+            maximum: Self.animationRate,
+            preferred: Self.animationRate
         )
         displayLink.add(to: .main, forMode: .common)
         orbitDisplayLink = displayLink
@@ -1728,7 +1739,6 @@ private final class OnboardingOrbitFieldView: NSView {
                 CGAffineTransform(rotationAngle: file.rotation * .pi / 180)
                     .scaledBy(x: file.scale, y: file.scale)
             )
-            chipLayer.opacity = 1
         }
         CATransaction.commit()
     }
@@ -1744,7 +1754,7 @@ private final class OnboardingOrbitFieldView: NSView {
         // Sample the curve at the highest refresh rate this animation targets.
         // A fixed 120 samples leaves long, slow orbits with visibly stepped
         // velocity even though Core Animation interpolates their positions.
-        let sampleCount = max(120, Int(ceil(duration * Double(Self.interactionRate))))
+        let sampleCount = max(120, Int(ceil(duration * Double(Self.animationRate))))
         let startingPhase = phase + angularSpeed * orbitPhase
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...sampleCount).map { index in
@@ -1776,19 +1786,8 @@ private final class OnboardingOrbitFieldView: NSView {
         guard abs(displacement) > 0.0005 || abs(collapseVelocity) > 0.0005 else {
             collapseProgress = collapseTarget
             collapseVelocity = 0
-            orbitDisplayLink?.preferredFrameRateRange = CAFrameRateRange(
-                minimum: Self.orbitRate,
-                maximum: Self.interactionRate,
-                preferred: Self.orbitRate
-            )
             return
         }
-
-        orbitDisplayLink?.preferredFrameRateRange = CAFrameRateRange(
-            minimum: Self.orbitRate,
-            maximum: Self.interactionRate,
-            preferred: Self.interactionRate
-        )
         let omega = 2 * Double.pi / Self.springResponse
         let acceleration = -omega * omega * Double(displacement)
             - 2 * Self.springDamping * omega * Double(collapseVelocity)
@@ -1829,7 +1828,9 @@ private final class OnboardingOrbitFieldView: NSView {
                 CGAffineTransform(rotationAngle: rotation * .pi / 180)
                     .scaledBy(x: scale, y: scale)
             )
-            chipLayer.opacity = Float(collapseOpacity)
+            chipLayer.opacity = revealedFileIDs.contains(file.id)
+                ? Float(collapseOpacity)
+                : 0
         }
         CATransaction.commit()
     }
@@ -1845,38 +1846,26 @@ private final class OnboardingOrbitFieldView: NSView {
 
 }
 private struct OnboardingScreenEdgeGlow: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)
-        ) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 5.6) / 5.6
-            let pulse = reduceMotion ? 0.35 : (1 - cos(phase * 2 * .pi)) / 2
-            let strength = 0.38 + pulse * 0.34
-
-            ZStack {
-                edgeGradient(startPoint: .top, endPoint: .bottom, strength: strength)
-                edgeGradient(startPoint: .bottom, endPoint: .top, strength: strength)
-                edgeGradient(startPoint: .leading, endPoint: .trailing, strength: strength)
-                edgeGradient(startPoint: .trailing, endPoint: .leading, strength: strength)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .compositingGroup()
-            .blur(radius: 18 + pulse * 8)
+        ZStack {
+            edgeGradient(startPoint: .top, endPoint: .bottom)
+            edgeGradient(startPoint: .bottom, endPoint: .top)
+            edgeGradient(startPoint: .leading, endPoint: .trailing)
+            edgeGradient(startPoint: .trailing, endPoint: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .compositingGroup()
+        .blur(radius: 22)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
     private func edgeGradient(
         startPoint: UnitPoint,
-        endPoint: UnitPoint,
-        strength: Double
+        endPoint: UnitPoint
     ) -> some View {
-        LinearGradient(
+        let strength = 0.55
+        return LinearGradient(
             stops: [
                 .init(
                     color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength),

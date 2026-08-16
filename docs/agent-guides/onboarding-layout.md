@@ -53,6 +53,11 @@ appearance while pointer-event processing moves one cached compositor surface
 per file. The full-window AppKit container returns `nil` from `hitTest` so
 pointer movement never traverses the decorative card subtree, and identical
 representable inputs must not rewrite the chips' base layers.
+Keep the screen-edge glow static while the intro orbit is visible. Rebuilding
+and blurring four screen-sized SwiftUI gradients on a frame timeline competes
+with the card compositor for frames without adding meaningful motion. Card
+visibility belongs exclusively to the staggered reveal; base-layer positioning
+must not force layer opacity before the first centered layout is complete.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy
