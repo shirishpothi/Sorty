@@ -6,6 +6,7 @@
 //  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and Split View layout
 //
 
+import Beam
 import SwiftUI
 
 struct DuplicatesView: View {
@@ -1787,13 +1788,9 @@ private struct ScanningPulseIcon: View {
     let color: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(
-            minimumInterval: 1.0 / 30.0,
-            paused: reduceMotion || controlActiveState == .inactive
-        )) {
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) {
             timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             let pulse = reduceMotion ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
@@ -1962,6 +1959,14 @@ struct ScanProgressViewNew: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         }
+        .beam(
+            .medium,
+            palette: .colorful,
+            theme: .dark,
+            active: isAnimationActive,
+            cornerRadius: 16,
+            strength: 1.0
+        )
         .scanProgressReferenceBeamFallback(
             cornerRadius: 16, active: true, includesInteriorGlow: true
         )

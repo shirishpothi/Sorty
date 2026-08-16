@@ -282,7 +282,6 @@ struct SortyGradientCircularTrackProgress: View {
     var isIndeterminate: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var animatedProgress: Double = 0
 
     private var clampedProgress: Double {
@@ -290,10 +289,7 @@ struct SortyGradientCircularTrackProgress: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(
-            minimumInterval: 1.0 / 30.0,
-            paused: reduceMotion || controlActiveState == .inactive || !isIndeterminate
-        )) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
             let segmentSpan = 0.24
             let phase =
@@ -461,13 +457,9 @@ struct SortyGradientCircularLoader: View {
     var lineWidth: CGFloat = 3
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(
-            minimumInterval: 1.0 / 30.0,
-            paused: reduceMotion || controlActiveState == .inactive
-        )) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             let rotation = reduceMotion ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
             let pulse = (sin(time * 2.2) + 1) * 0.5

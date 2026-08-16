@@ -76,7 +76,6 @@ public final class FolderWatcher: @unchecked Sendable {
     private static let streamLatency: TimeInterval = 1
     private static let retryDelay: TimeInterval = 0.25
     private static let healthCheckInterval: TimeInterval = 60
-    private static let healthCheckLeeway: DispatchTimeInterval = .seconds(10)
     private static let reconciliationInterval: TimeInterval = 300
     private static let maximumExplicitRootsPerAnchor = 512
     private static let maximumPendingScans = 128
@@ -1305,7 +1304,7 @@ public final class FolderWatcher: @unchecked Sendable {
             queue: nil
         ) { [weak self] _ in
             self?.queue.async { [weak self] in
-                self?.scheduleFullReconciliationIfDue()
+                self?.scheduleFullReconciliation()
             }
         })
     }
@@ -1328,14 +1327,6 @@ public final class FolderWatcher: @unchecked Sendable {
         guard !watchedFolders.isEmpty else { return }
         scheduleRecoveryScans(affectedBy: "/")
         lastReconciliationAt = Date()
-    }
-
-    private func scheduleFullReconciliationIfDue() {
-        guard Date().timeIntervalSince(lastReconciliationAt)
-            >= Self.reconciliationInterval else {
-            return
-        }
-        scheduleFullReconciliation()
     }
 
     private func scheduleCursorPersistence() {
@@ -1395,15 +1386,17 @@ public final class FolderWatcher: @unchecked Sendable {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(
             deadline: .now() + Self.healthCheckInterval,
-            repeating: Self.healthCheckInterval,
-            leeway: Self.healthCheckLeeway
+            repeating: Self.healthCheckInterval
         )
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             if self.stream == nil, !self.isSuspendedForBackpressure {
                 self.rebuildStream()
             }
-            self.scheduleFullReconciliationIfDue()
+            if Date().timeIntervalSince(self.lastReconciliationAt)
+                >= Self.reconciliationInterval {
+                self.scheduleFullReconciliation()
+            }
         }
         timer.resume()
         healthTimer = timer

@@ -5,6 +5,7 @@
 //  Real-time organization display with streaming progress
 //
 
+import Beam
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
@@ -1610,12 +1611,7 @@ private struct RenameFileIcon: View {
 private struct RenameShiftIndicator: View {
     let isActive: Bool
     let isUnchanged: Bool
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var pulse = false
-
-    private var shouldAnimate: Bool {
-        isActive && controlActiveState != .inactive
-    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -1635,38 +1631,27 @@ private struct RenameShiftIndicator: View {
         }
         .frame(width: 56)
         .onAppear {
-            updatePulseAnimation()
-        }
-        .onChange(of: isActive) { _, _ in
-            updatePulseAnimation()
-        }
-        .onChange(of: controlActiveState) { _, _ in
-            updatePulseAnimation()
-        }
-    }
-
-    private func updatePulseAnimation() {
-        guard controlActiveState != .inactive else {
-            pulse = false
-            return
-        }
-        guard shouldAnimate else {
-            withAnimation(.smooth(duration: 0.2)) {
-                pulse = false
+            guard isActive else { return }
+            withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
+                pulse = true
             }
-            return
         }
-
-        pulse = false
-        withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
-            pulse = true
+        .onChange(of: isActive) { _, active in
+            if active {
+                withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            } else {
+                withAnimation(.smooth(duration: 0.2)) {
+                    pulse = false
+                }
+            }
         }
     }
 }
 
 private struct RenameGenerationSkeletonRow: View {
     var delay: Double = 0
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isOn = false
 
     var body: some View {
@@ -1685,22 +1670,9 @@ private struct RenameGenerationSkeletonRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .onAppear {
-            updateAnimation()
-        }
-        .onChange(of: controlActiveState) { _, _ in
-            updateAnimation()
-        }
-    }
-
-    private func updateAnimation() {
-        guard controlActiveState != .inactive else {
-            isOn = false
-            return
-        }
-
-        isOn = false
-        withAnimation(.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
-            isOn = true
+            withAnimation(.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
+                isOn = true
+            }
         }
     }
 }
@@ -1833,6 +1805,14 @@ private struct StreamingProgressBeam: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         }
+        .beam(
+            .medium,
+            palette: .colorful,
+            theme: .dark,
+            active: isAnimationActive,
+            cornerRadius: 16,
+            strength: 1.0
+        )
         .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -2993,7 +2973,6 @@ public struct FlowLayout: Layout {
 }
 
 private struct PingRingView: View {
-    @Environment(\.controlActiveState) private var controlActiveState
     @State private var ping = false
 
     var body: some View {
@@ -3003,23 +2982,10 @@ private struct PingRingView: View {
             .scaleEffect(ping ? 2.0 : 1.0)
             .drawingGroup(opaque: false)
             .onAppear {
-                updateAnimation()
+                withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
+                    ping = true
+                }
             }
-            .onChange(of: controlActiveState) { _, _ in
-                updateAnimation()
-            }
-    }
-
-    private func updateAnimation() {
-        guard controlActiveState != .inactive else {
-            ping = false
-            return
-        }
-
-        ping = false
-        withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
-            ping = true
-        }
     }
 }
 
