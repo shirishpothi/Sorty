@@ -99,16 +99,11 @@ The intro's one-shot energy sweep uses Core Animation completion and pauses its
 layer clock while inactive, so it never restarts its delay or keyframes merely
 because focus moved to another app.
 The intro CTA changes the orbit's collapse target only when hover enters or
-after a 110 ms cancellable exit grace period. Entry collapses immediately;
-re-entry during that grace period cancels expansion so edge jitter cannot
-repeatedly reverse the spring. Resolve the button center inside the intro's
-local coordinate space; never measure global pointer geometry or publish
-per-mouse-move state. Drive the reversible spring at the display's available
-refresh rate and substep delayed frames to preserve its velocity through a
-real direction change. Hover must not invalidate the reveal or audio root.
-Keep this CTA's system glass noninteractive: its explicit hover state owns the
-collapse interaction, while interactive glass would independently track every
-pointer move.
+exits. Resolve the button center inside the intro's local coordinate space;
+never measure global pointer geometry or publish per-mouse-move state. Hover
+must not invalidate the reveal or audio root. Keep this CTA's system glass
+noninteractive: its explicit hover state owns the collapse interaction, while
+interactive glass would independently track every pointer move.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent
