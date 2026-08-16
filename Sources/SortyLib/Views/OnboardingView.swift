@@ -2107,6 +2107,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         Coordinator()
     }
 
+    @MainActor
     final class Coordinator {
         private weak var configuredWindow: NSWindow?
         private var glowController: OnboardingWindowGlowController?
@@ -2209,10 +2210,13 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         }
 
         deinit {
-            restore()
+            MainActor.assumeIsolated {
+                restore()
+            }
         }
     }
 
+    @MainActor
     final class WindowAttachedView: NSView {
         var onWindowAttached: ((NSWindow) -> Void)?
 
