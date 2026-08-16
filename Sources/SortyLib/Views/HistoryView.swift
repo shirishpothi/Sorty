@@ -244,6 +244,7 @@ struct HistoryView: View {
                 ZStack(alignment: .topLeading) {
                     HistoryEmptyStateView()
                         .transition(TransitionStyles.scaleAndFade)
+                        .animatedAppearance(delay: 0.08)
 
                     HistoryHeader(
                         totalSessions: impactSummary.totalSessions,
@@ -253,6 +254,7 @@ struct HistoryView: View {
                             appState.clearHistoryWithConfirmation()
                         }
                     )
+                    .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -265,6 +267,7 @@ struct HistoryView: View {
                         appState.clearHistoryWithConfirmation()
                     }
                 )
+                .animatedAppearance(delay: 0.03)
 
                 Divider()
 
@@ -276,6 +279,7 @@ struct HistoryView: View {
                         historyEntriesScroll
                             .background(Color(NSColor.windowBackgroundColor))
                             .transition(TransitionStyles.slideFromRight)
+                            .animatedAppearance(delay: 0.08)
                     }
                 }
             }

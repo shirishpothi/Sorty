@@ -1411,17 +1411,17 @@ private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                )
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(Color.primary.opacity(0.025))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
         .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
         .accessibilityHidden(true)
     }

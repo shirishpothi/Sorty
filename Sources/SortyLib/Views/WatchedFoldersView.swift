@@ -45,9 +45,15 @@ struct WatchedFoldersView: View {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                ForEach(watchedFoldersManager.folders) { folder in
+                                ForEach(
+                                    Array(watchedFoldersManager.folders.enumerated()),
+                                    id: \.element.id
+                                ) { index, folder in
                                     WatchedFolderCard(folder: folder)
                                         .id(folder.id)
+                                        .animatedAppearance(
+                                            delay: 0.05 + min(Double(index), 8) * 0.04
+                                        )
                                 }
                             }
                             .padding(20)
@@ -872,10 +878,15 @@ struct WatchedFolderCard: View {
 
     private var controlsView: some View {
         HStack(spacing: 12) {
-            if isHovered {
-                quickActionsView
-                    .transition(.scale.combined(with: .opacity))
-            }
+            quickActionsView
+                .opacity(isHovered ? 1 : 0)
+                .scaleEffect(reduceMotion || isHovered ? 1 : 0.96)
+                .allowsHitTesting(isHovered)
+                .accessibilityHidden(!isHovered)
+                .animation(
+                    reduceMotion ? nil : .easeOut(duration: 0.15),
+                    value: isHovered
+                )
 
             watchToggle
         }
@@ -893,7 +904,14 @@ struct WatchedFolderCard: View {
         }
         .padding(16)
         .contentShape(Rectangle())
-        .background(cardBackgroundColor)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(cardBackgroundColor)
+                .animation(
+                    reduceMotion ? nil : .easeOut(duration: 0.15),
+                    value: isHovered
+                )
+        }
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
@@ -903,8 +921,10 @@ struct WatchedFolderCard: View {
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
         .opacity(folder.exists ? 1.0 : 0.8)
         .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            guard hovering != isHovered else { return }
+            isHovered = hovering
+        }
         .onAppear {
             updateHighlightAnimation(isHighlighted)
         }

@@ -495,14 +495,24 @@ struct TextShimmerModifier: ViewModifier {
 /// Animated appearance modifier for list items - subtle version
 struct AnimatedAppearanceModifier: ViewModifier {
     let delay: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     func body(content: Content) -> some View {
         content
-            .offset(y: appeared ? 0 : 8)
-            .opacity(appeared ? 1 : 0.4)
+            .offset(y: reduceMotion || appeared ? 0 : 8)
+            .opacity(reduceMotion || appeared ? 1 : 0.4)
             .onAppear {
+                guard !reduceMotion else {
+                    appeared = true
+                    return
+                }
                 withAnimation(.easeOut(duration: 0.2).delay(delay)) {
+                    appeared = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, isEnabled in
+                if isEnabled {
                     appeared = true
                 }
             }
