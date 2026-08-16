@@ -74,7 +74,7 @@ struct DirectorySelectionView: View {
                     .small,
                     palette: .ocean,
                     theme: .dark,
-                    active: !reduceMotion && controlActiveState != .inactive,
+                    active: hasAppeared && !reduceMotion && controlActiveState != .inactive,
                     shape: .capsule,
                     strength: 1
                 )
