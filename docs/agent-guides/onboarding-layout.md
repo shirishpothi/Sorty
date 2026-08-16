@@ -34,22 +34,29 @@ directly rather than wrapped in another animation transaction.
 
 ## Animation performance
 
-Keep screen-sized effects out of SwiftUI frame timelines. The screen-edge glow
-uses retained Core Animation gradient layers and pauses while Sorty is inactive;
-do not replace it with a full-screen composited blur that redraws every frame.
+Keep screen-sized effects out of onboarding entirely. Do not place dimming,
+glow, blur, material, or other translucent panels across a monitor behind the
+onboarding window: windows underneath update as the cursor moves, forcing
+WindowServer to recompose that monitor-sized stack and starving the orbit's
+compositor frames even while Sorty's main thread is idle. The intro halo is a
+window-local retained gradient panel with a fixed 56-point outset. It follows
+only window move/resize events, ignores mouse events, and pulses on the render
+server; never expand it to the display frame or drive it from pointer movement.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
 Cache invariant retained-layer palettes at construction and only rebuild
 variant-specific colors when the variant changes.
-The intro orbit keeps its native material-backed chips mounted. Its idle sine
-components run as additive Core Animation keyframes. Each finished chip is
-rasterized at the window's native backing scale, so its original material
-appearance is preserved while pointer-event processing moves only one cached
-compositor surface per file. The full-window AppKit container returns `nil`
-from `hitTest` so pointer movement never traverses the decorative hosting-view
-subtree, and identical representable inputs must not rewrite the chips' base
-layers. Its Gaussian glow and energy
+The intro orbit keeps its original material-backed SwiftUI chips mounted. Its
+idle sine components run as additive Core Animation keyframes. Each finished
+chip is rasterized at the window's native backing scale, preserving its material
+appearance while pointer-event processing moves one cached compositor surface
+per file. The full-window AppKit container returns `nil` from `hitTest` so
+pointer movement never traverses the decorative card subtree, and identical
+representable inputs must not rewrite the chips' base layers.
+Pause the orbit while Sorty is inactive, preserving its phase for a clean
+resume; moving the pointer to another display without deactivating Sorty must
+not affect it. Its Gaussian glow and energy
 scan, plus the completion blob, ripple, and particle motion, likewise use
 retained layers; do not move those continuous effects back into broad SwiftUI
 state or frame timelines. The completion reveal rasterizes its large blurred
@@ -69,8 +76,12 @@ disabled under Reduce Motion; their fully revealed state remains unchanged.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
 layer clock while inactive, so it never restarts its delay or keyframes merely
 because focus moved to another app.
-The intro CTA does not drive the orbit or measure global pointer geometry;
-pointer movement must not invalidate the reveal, audio, or file-animation root.
+The intro CTA changes the orbit's collapse target only when hover enters or
+exits. Resolve the button center inside the intro's local coordinate space;
+never measure global pointer geometry or publish per-mouse-move state. Hover
+must not invalidate the reveal or audio root. Keep this CTA's system glass
+noninteractive: its explicit hover state owns the collapse interaction, while
+interactive glass would independently track every pointer move.
 
 An active beam uses one animated renderer. Button-sized pills use the retained
 conic layer so several permission actions do not each create an independent
@@ -165,6 +176,5 @@ Account privacy reveals and Codex action-button hover state follow the same leaf
 ownership rule, so pointer movement never invalidates the provider root.
 Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
-queue. Pause permission video playback and set the full-screen backdrop blur to
-its inactive state while Sorty is deactivated, then resume their retained
-instances when the app becomes active.
+queue. Pause permission video playback while Sorty is deactivated, then resume
+its retained instance when the app becomes active.

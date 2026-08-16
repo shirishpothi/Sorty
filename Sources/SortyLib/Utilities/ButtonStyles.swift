@@ -225,10 +225,16 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     var isSecondary: Bool = false
     var size: ControlSize = .regular
+    var isGlassInteractive: Bool = true
     
-    public init(isSecondary: Bool = false, size: ControlSize = .regular) {
+    public init(
+        isSecondary: Bool = false,
+        size: ControlSize = .regular,
+        isGlassInteractive: Bool = true
+    ) {
         self.isSecondary = isSecondary
         self.size = size
+        self.isGlassInteractive = isGlassInteractive
     }
     
     public func makeBody(configuration: Configuration) -> some View {
@@ -316,7 +322,10 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                     }
                 }
             )
-            .systemLiquidGlassBackground(cornerRadius: 999)
+            .systemLiquidGlassBackground(
+                cornerRadius: 999,
+                interactive: isGlassInteractive
+            )
             .shadow(
                 color: isSecondary
                     ? Color.black.opacity(colorScheme == .dark ? 0.14 : 0.05)
@@ -702,6 +711,16 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
     
     public static func onboardingPill(size: ControlSize) -> OnboardingPillButtonStyle {
         OnboardingPillButtonStyle(size: size)
+    }
+
+    public static func onboardingPill(
+        size: ControlSize,
+        isGlassInteractive: Bool
+    ) -> OnboardingPillButtonStyle {
+        OnboardingPillButtonStyle(
+            size: size,
+            isGlassInteractive: isGlassInteractive
+        )
     }
     
     public static func onboardingPill(isSecondary: Bool, size: ControlSize = .regular) -> OnboardingPillButtonStyle {

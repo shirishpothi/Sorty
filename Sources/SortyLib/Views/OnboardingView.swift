@@ -147,8 +147,7 @@ public struct OnboardingView: View {
                 OnboardingWindowTitleConfigurator {
                     hasConfiguredWindowChrome = true
                 }
-                OnboardingScreenBackdropBlurPresenter()
-                OnboardingScreenEdgeGlowPresenter()
+                OnboardingWindowGlowPresenter()
             }
             .frame(width: 0, height: 0)
         )
@@ -732,8 +731,8 @@ private struct OnboardingIntroView: View {
 
 }
 
-/// Keeps the continuously animated intro content isolated from the reveal and
-/// audio state owned by the surrounding onboarding step.
+/// Keeps pointer-driven intro state isolated from the reveal and audio state
+/// owned by the surrounding onboarding step.
 private struct OnboardingIntroContentLayer: View {
     let icons: [String: NSImage]
     let filesVisible: Bool
@@ -746,15 +745,22 @@ private struct OnboardingIntroContentLayer: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @State private var introSize: CGSize = .zero
+    @State private var buttonCenter: CGPoint = .zero
+    @State private var isHoveringButton = false
+
+    private static let coordinateSpace = "OnboardingIntroContentLayer"
+
     var body: some View {
         ZStack {
-            // The chip views and their native materials stay mounted while a
-            // retained AppKit container updates only backing-layer transforms.
             OnboardingOrbitField(
                 icons: icons,
                 filesVisible: filesVisible,
-                isCollapsed: false,
-                collapseOrigin: .zero,
+                isCollapsed: isHoveringButton,
+                collapseOrigin: CGSize(
+                    width: buttonCenter.x - introSize.width / 2,
+                    height: buttonCenter.y - introSize.height / 2
+                ),
                 reduceMotion: reduceMotion,
                 isActive: controlActiveState != .inactive
             )
@@ -802,15 +808,44 @@ private struct OnboardingIntroContentLayer: View {
                             .font(.system(size: 13, weight: .semibold))
                     }
                 }
-                .buttonStyle(.onboardingPill(size: .large))
+                .buttonStyle(
+                    .onboardingPill(
+                        size: .large,
+                        isGlassInteractive: false
+                    )
+                )
                 .onboardingBeamBorder()
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
+                .background {
+                    Color.clear
+                        .onGeometryChange(for: CGPoint.self) { proxy in
+                            let frame = proxy.frame(in: .named(Self.coordinateSpace))
+                            return CGPoint(x: frame.midX, y: frame.midY)
+                        } action: { center in
+                            if buttonCenter != center {
+                                buttonCenter = center
+                            }
+                        }
+                }
+                .onHover { hovering in
+                    if isHoveringButton != hovering {
+                        isHoveringButton = hovering
+                    }
+                }
                 .opacity(textOpacity)
                 .offset(y: textOffset)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .coordinateSpace(name: Self.coordinateSpace)
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { size in
+            if introSize != size {
+                introSize = size
+            }
+        }
     }
 }
 
@@ -1351,8 +1386,7 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 }
 
 /// Keeps every material-backed file chip mounted and updates only layer
-/// position, transform, and opacity from a display link. The orbit equations,
-/// cadence, hover target, and spring response match the former SwiftUI path.
+/// position, transform, and opacity from a display link.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
     private static let orbitRate: Float = 24
@@ -1497,9 +1531,7 @@ private final class OnboardingOrbitFieldView: NSView {
 
     /// Cache each finished material card as one compositor surface. The cards'
     /// contents change only when their resolved file icons change, while their
-    /// position and transform animate continuously. Rasterizing at the native
-    /// backing scale preserves the material appearance without asking ten live
-    /// SwiftUI effect trees to re-composite during pointer-event processing.
+    /// position and transform animate continuously.
     private func updateHostRasterizationScale() {
         let scale = window?.backingScaleFactor ?? 2
         for host in hosts.values {
@@ -1803,267 +1835,12 @@ private final class OnboardingOrbitFieldView: NSView {
 
 }
 
-/// Places a visual-effect surface behind the onboarding window, leaving the
-/// Sorty window clear while softening the rest of the current screen.
-private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+/// Keeps the onboarding halo local to the window. Unlike the former
+/// monitor-sized panel, this surface cannot make pointer updates elsewhere on
+/// the display recompose a full-screen translucent layer.
+private struct OnboardingWindowGlowPresenter: NSViewRepresentable {
+    fileprivate static let glowOutset: CGFloat = 56
 
-    func makeNSView(context: Context) -> NSView {
-        let view = ScreenTrackingView()
-        view.onWindowChanged = { window in
-            context.coordinator.attach(to: window)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.attach(to: nsView.window)
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.dismiss()
-    }
-
-    @MainActor
-    final class Coordinator {
-        private weak var hostWindow: NSWindow?
-        private var backdropPanel: NSPanel?
-        private var observers: [NSObjectProtocol] = []
-        private var pendingDismissal: DispatchWorkItem?
-        private var isHostClosing = false
-
-        func attach(to window: NSWindow?) {
-            guard hostWindow !== window else { return }
-
-            removeObservers()
-            pendingDismissal?.cancel()
-            pendingDismissal = nil
-            isHostClosing = false
-            hostWindow = window
-
-            guard let window else {
-                dismissPanel()
-                return
-            }
-
-            if backdropPanel == nil {
-                backdropPanel = makeBackdropPanel()
-            }
-
-            let center = NotificationCenter.default
-            observers = [
-                center.addObserver(
-                    forName: NSWindow.didBecomeKeyNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didMoveNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didResizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didChangeScreenNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didMiniaturizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.hidePanelImmediately() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didDeminiaturizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.hostWillClose() }
-                },
-                center.addObserver(
-                    forName: NSApplication.didResignActiveNotification,
-                    object: nil,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.setBackdropActive(false) }
-                },
-                center.addObserver(
-                    forName: NSApplication.didBecomeActiveNotification,
-                    object: nil,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.setBackdropActive(true)
-                        self?.updatePanelFrame()
-                    }
-                }
-            ]
-
-            setBackdropActive(NSApp.isActive)
-            updatePanelFrame()
-            DispatchQueue.main.async { [weak self] in
-                self?.updatePanelFrame()
-            }
-        }
-
-        func dismiss() {
-            dismiss(immediately: isHostClosing)
-        }
-
-        private func hostWillClose() {
-            isHostClosing = true
-            dismiss(immediately: true)
-        }
-
-        private func dismiss(immediately: Bool) {
-            removeObservers()
-            dismissPanel(immediately: immediately)
-            hostWindow = nil
-        }
-
-        private func makeBackdropPanel() -> NSPanel {
-            let panel = NSPanel(
-                contentRect: .zero,
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            panel.isOpaque = false
-            panel.hasShadow = false
-            panel.ignoresMouseEvents = true
-            panel.hidesOnDeactivate = false
-            panel.isReleasedWhenClosed = false
-            panel.level = .normal
-            panel.alphaValue = 0
-            panel.collectionBehavior = [
-                .canJoinAllSpaces,
-                .fullScreenAuxiliary,
-                .ignoresCycle,
-                .stationary
-            ]
-
-            let backdrop = NSVisualEffectView()
-            backdrop.material = .fullScreenUI
-            backdrop.blendingMode = .behindWindow
-            backdrop.state = .active
-
-            // A whisper of dimming on top of the blur separates the onboarding
-            // window from the desktop without muddying the frosted look.
-            let dimmingView = NSView()
-            dimmingView.wantsLayer = true
-            dimmingView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.10).cgColor
-            dimmingView.autoresizingMask = [.width, .height]
-            dimmingView.frame = backdrop.bounds
-            backdrop.addSubview(dimmingView)
-
-            panel.contentView = backdrop
-            return panel
-        }
-
-        private func updatePanelFrame() {
-            guard let window = hostWindow,
-                  window.isVisible,
-                  !window.isMiniaturized,
-                  let screen = window.screen ?? NSScreen.main else {
-                hidePanelImmediately()
-                return
-            }
-
-            if backdropPanel?.frame != screen.frame {
-                backdropPanel?.setFrame(screen.frame, display: true)
-            }
-            backdropPanel?.order(.below, relativeTo: window.windowNumber)
-            fadeInPanelIfNeeded()
-        }
-
-        private func setBackdropActive(_ isActive: Bool) {
-            (backdropPanel?.contentView as? NSVisualEffectView)?.state = isActive
-                ? .active
-                : .inactive
-        }
-
-        private func dismissPanel(immediately: Bool = false) {
-            guard let backdropPanel else { return }
-            pendingDismissal?.cancel()
-            let duration = immediately || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
-
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = duration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                backdropPanel.animator().alphaValue = 0
-            }
-
-            let dismissal = DispatchWorkItem { [weak self, weak backdropPanel] in
-                guard let self, self.backdropPanel === backdropPanel else { return }
-                backdropPanel?.orderOut(nil)
-                backdropPanel?.close()
-                self.backdropPanel = nil
-                self.pendingDismissal = nil
-            }
-            pendingDismissal = dismissal
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: dismissal)
-        }
-
-        private func hidePanelImmediately() {
-            backdropPanel?.orderOut(nil)
-            backdropPanel?.alphaValue = 0
-        }
-
-        private func fadeInPanelIfNeeded() {
-            guard let backdropPanel, backdropPanel.alphaValue == 0 else { return }
-            guard !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency else {
-                return
-            }
-            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.9
-
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = duration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                backdropPanel.animator().alphaValue = 0.62
-            }
-        }
-
-        private func removeObservers() {
-            let center = NotificationCenter.default
-            observers.forEach(center.removeObserver)
-            observers.removeAll()
-        }
-    }
-
-    private final class ScreenTrackingView: NSView {
-        var onWindowChanged: ((NSWindow?) -> Void)?
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            onWindowChanged?(window)
-        }
-    }
-}
-
-private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -2121,6 +1898,13 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 },
                 center.addObserver(
                     forName: NSWindow.didMoveNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didResizeNotification,
                     object: window,
                     queue: .main
                 ) { [weak self] _ in
@@ -2208,23 +1992,25 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             panel.collectionBehavior = [
                 .canJoinAllSpaces,
                 .fullScreenAuxiliary,
-                .ignoresCycle,
-                .stationary
+                .ignoresCycle
             ]
-            panel.contentView = OnboardingScreenEdgeGlowView()
+            panel.contentView = OnboardingWindowGlowView()
             return panel
         }
 
         private func updatePanelFrame() {
             guard let window = hostWindow,
                   window.isVisible,
-                  !window.isMiniaturized,
-                  let screen = window.screen ?? NSScreen.main else {
+                  !window.isMiniaturized else {
                 hidePanelImmediately()
                 return
             }
-            if glowPanel?.frame != screen.frame {
-                glowPanel?.setFrame(screen.frame, display: true)
+            let frame = window.frame.insetBy(
+                dx: -OnboardingWindowGlowPresenter.glowOutset,
+                dy: -OnboardingWindowGlowPresenter.glowOutset
+            )
+            if glowPanel?.frame != frame {
+                glowPanel?.setFrame(frame, display: true)
             }
         }
 
@@ -2240,7 +2026,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func setGlowAnimationActive(_ isActive: Bool) {
-            guard let glowView = glowPanel?.contentView as? OnboardingScreenEdgeGlowView else { return }
+            guard let glowView = glowPanel?.contentView as? OnboardingWindowGlowView else { return }
             if isActive {
                 glowView.startAnimating()
             } else {
@@ -2271,7 +2057,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func hidePanelImmediately() {
-            (glowPanel?.contentView as? OnboardingScreenEdgeGlowView)?.stopAnimating()
+            (glowPanel?.contentView as? OnboardingWindowGlowView)?.stopAnimating()
             glowPanel?.orderOut(nil)
             glowPanel?.alphaValue = 0
         }
@@ -2293,10 +2079,12 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     }
 }
 
-/// Draws the animated screen-edge glow with retained Core Animation layers.
-/// The former SwiftUI timeline rebuilt and blurred four screen-sized gradients
-/// every frame; these layers animate only opacity on the render server.
-private final class OnboardingScreenEdgeGlowView: NSView {
+/// Draws the animated window halo with retained Core Animation layers. The
+/// onboarding window covers the center; only the narrow outer gradient is
+/// visible, and its pulse runs entirely on the render server.
+private final class OnboardingWindowGlowView: NSView {
+    private static let glowDepth: CGFloat = OnboardingWindowGlowPresenter.glowOutset
+
     private let topGradient = CAGradientLayer()
     private let bottomGradient = CAGradientLayer()
     private let leadingGradient = CAGradientLayer()
@@ -2328,8 +2116,8 @@ private final class OnboardingScreenEdgeGlowView: NSView {
 
     override func layout() {
         super.layout()
-        let verticalDepth = bounds.height * 0.17
-        let horizontalDepth = bounds.width * 0.17
+        let verticalDepth = min(Self.glowDepth, bounds.height / 2)
+        let horizontalDepth = min(Self.glowDepth, bounds.width / 2)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         topGradient.frame = CGRect(
@@ -2448,14 +2236,14 @@ private final class OnboardingScreenEdgeGlowView: NSView {
             $0.colors = colors
             $0.locations = locations
         }
-        topGradient.startPoint = CGPoint(x: 0.5, y: 1)
-        topGradient.endPoint = CGPoint(x: 0.5, y: 0)
-        bottomGradient.startPoint = CGPoint(x: 0.5, y: 0)
-        bottomGradient.endPoint = CGPoint(x: 0.5, y: 1)
-        leadingGradient.startPoint = CGPoint(x: 0, y: 0.5)
-        leadingGradient.endPoint = CGPoint(x: 1, y: 0.5)
-        trailingGradient.startPoint = CGPoint(x: 1, y: 0.5)
-        trailingGradient.endPoint = CGPoint(x: 0, y: 0.5)
+        topGradient.startPoint = CGPoint(x: 0.5, y: 0)
+        topGradient.endPoint = CGPoint(x: 0.5, y: 1)
+        bottomGradient.startPoint = CGPoint(x: 0.5, y: 1)
+        bottomGradient.endPoint = CGPoint(x: 0.5, y: 0)
+        leadingGradient.startPoint = CGPoint(x: 1, y: 0.5)
+        leadingGradient.endPoint = CGPoint(x: 0, y: 0.5)
+        trailingGradient.startPoint = CGPoint(x: 0, y: 0.5)
+        trailingGradient.endPoint = CGPoint(x: 1, y: 0.5)
     }
 
     private var resolvedAccentColor: NSColor {
