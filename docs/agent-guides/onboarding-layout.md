@@ -53,6 +53,11 @@ appearance while pointer-event processing moves one cached compositor surface
 per file. The full-window AppKit container returns `nil` from `hitTest` so
 pointer movement never traverses the decorative card subtree, and identical
 representable inputs must not rewrite the chips' base layers.
+Resolve every workspace icon into one immutable 46-point Retina bitmap and
+prebuild the initial keyframe payloads while the intro icon owns the stage.
+Shared, lazy multi-representation icons can change on their first moving draw,
+and constructing all 50 keyframe arrays at the file reveal competes with the
+cards' first material rasterization.
 Keep the screen-edge glow static while the intro orbit is visible. Rebuilding
 and blurring four screen-sized SwiftUI gradients on a frame timeline competes
 with the card compositor for frames without adding meaningful motion. Card

@@ -1319,6 +1319,8 @@ private struct OnboardingOrbitFile: Identifiable {
 @MainActor
 private enum OnboardingFileIconProvider {
     private static var cache: [String: NSImage] = [:]
+    private static let iconPointSize = NSSize(width: 46, height: 46)
+    private static let iconScale: CGFloat = 2
 
     static func icons(for files: [OnboardingOrbitFile]) -> [String: NSImage] {
         Dictionary(
@@ -1332,13 +1334,58 @@ private enum OnboardingFileIconProvider {
         if let cached = cache[ext] {
             return cached
         }
-        let image: NSImage
+        let workspaceImage: NSImage
         if let type = UTType(filenameExtension: ext) {
-            image = NSWorkspace.shared.icon(for: type)
+            workspaceImage = NSWorkspace.shared.icon(for: type)
         } else {
-            image = NSWorkspace.shared.icon(forFileType: ext)
+            workspaceImage = NSWorkspace.shared.icon(forFileType: ext)
         }
+        let image = rasterizedIcon(workspaceImage)
         cache[ext] = image
+        return image
+    }
+
+    /// `NSWorkspace` returns shared, multi-representation images whose best
+    /// representation may be decoded or replaced on a later draw. Resolve one
+    /// immutable Retina bitmap before the reveal so moving cards never trigger
+    /// icon decoding or representation changes mid-animation.
+    private static func rasterizedIcon(_ source: NSImage) -> NSImage {
+        let pixelsWide = Int(iconPointSize.width * iconScale)
+        let pixelsHigh = Int(iconPointSize.height * iconScale)
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            let copy = source.copy() as? NSImage ?? source
+            copy.size = iconPointSize
+            return copy
+        }
+
+        bitmap.size = iconPointSize
+        NSGraphicsContext.saveGraphicsState()
+        if let context = NSGraphicsContext(bitmapImageRep: bitmap) {
+            NSGraphicsContext.current = context
+            context.imageInterpolation = .high
+            source.draw(
+                in: NSRect(origin: .zero, size: iconPointSize),
+                from: .zero,
+                operation: .copy,
+                fraction: 1
+            )
+            context.flushGraphics()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        let image = NSImage(size: iconPointSize)
+        image.addRepresentation(bitmap)
         return image
     }
 }
@@ -1431,6 +1478,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private var reduceMotion = false
     private var isActive = true
     private var configuredIcons: [String: NSImage] = [:]
+    private var preparedInitialIdleAnimations: [UUID: [String: CAKeyframeAnimation]] = [:]
 
     override var isFlipped: Bool { true }
 
@@ -1500,6 +1548,7 @@ private final class OnboardingOrbitFieldView: NSView {
             installHosts(icons: icons)
             updateHostedIcons(icons)
             configuredIcons = icons
+            prepareInitialIdleAnimationsIfNeeded()
         }
 
         if self.filesVisible != filesVisible {
@@ -1680,7 +1729,9 @@ private final class OnboardingOrbitFieldView: NSView {
             guard let chipLayer = hosts[file.id]?.layer else { continue }
             let localStartTime = chipLayer.convertTime(startedAt, from: nil)
             chipLayer.add(
-                sineAnimation(
+                initialOrCurrentSineAnimation(
+                    for: file,
+                    animationKey: "idleOrbitX",
                     keyPath: "position.x",
                     amplitude: file.orbitWidth * 1.18,
                     angularSpeed: file.driftSpeed,
@@ -1690,7 +1741,9 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleOrbitX"
             )
             chipLayer.add(
-                sineAnimation(
+                initialOrCurrentSineAnimation(
+                    for: file,
+                    animationKey: "idleDriftX",
                     keyPath: "position.x",
                     amplitude: file.driftRadius * 1.28,
                     angularSpeed: 0.42,
@@ -1700,7 +1753,9 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleDriftX"
             )
             chipLayer.add(
-                sineAnimation(
+                initialOrCurrentSineAnimation(
+                    for: file,
+                    animationKey: "idleOrbitY",
                     keyPath: "position.y",
                     amplitude: file.orbitHeight * 1.22,
                     angularSpeed: file.driftSpeed,
@@ -1710,7 +1765,9 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleOrbitY"
             )
             chipLayer.add(
-                sineAnimation(
+                initialOrCurrentSineAnimation(
+                    for: file,
+                    animationKey: "idleDriftY",
                     keyPath: "position.y",
                     amplitude: file.driftRadius * 1.32,
                     angularSpeed: 0.35,
@@ -1720,7 +1777,9 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleDriftY"
             )
             chipLayer.add(
-                sineAnimation(
+                initialOrCurrentSineAnimation(
+                    for: file,
+                    animationKey: "idleRotation",
                     keyPath: "transform.rotation.z",
                     amplitude: 3 * .pi / 180,
                     angularSpeed: 0.7,
@@ -1730,7 +1789,78 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleRotation"
             )
         }
+        preparedInitialIdleAnimations.removeAll()
         CATransaction.commit()
+    }
+
+    /// Build the initial 50 keyframe payloads while the intro icon owns the
+    /// stage. Creating thousands of boxed values when the cards first become
+    /// visible otherwise competes with their material rasterization.
+    private func prepareInitialIdleAnimationsIfNeeded() {
+        guard preparedInitialIdleAnimations.isEmpty, orbitPhase == 0 else { return }
+        for file in OnboardingOrbitFile.files where hosts[file.id] != nil {
+            preparedInitialIdleAnimations[file.id] = [
+                "idleOrbitX": sineAnimation(
+                    keyPath: "position.x",
+                    amplitude: file.orbitWidth * 1.18,
+                    angularSpeed: file.driftSpeed,
+                    phase: file.driftPhase + .pi / 2,
+                    beginTime: 0
+                ),
+                "idleDriftX": sineAnimation(
+                    keyPath: "position.x",
+                    amplitude: file.driftRadius * 1.28,
+                    angularSpeed: 0.42,
+                    phase: file.driftPhase + .pi / 2,
+                    beginTime: 0
+                ),
+                "idleOrbitY": sineAnimation(
+                    keyPath: "position.y",
+                    amplitude: file.orbitHeight * 1.22,
+                    angularSpeed: file.driftSpeed,
+                    phase: file.driftPhase,
+                    beginTime: 0
+                ),
+                "idleDriftY": sineAnimation(
+                    keyPath: "position.y",
+                    amplitude: file.driftRadius * 1.32,
+                    angularSpeed: 0.35,
+                    phase: file.driftPhase,
+                    beginTime: 0
+                ),
+                "idleRotation": sineAnimation(
+                    keyPath: "transform.rotation.z",
+                    amplitude: 3 * .pi / 180,
+                    angularSpeed: 0.7,
+                    phase: file.driftPhase,
+                    beginTime: 0
+                )
+            ]
+        }
+    }
+
+    private func initialOrCurrentSineAnimation(
+        for file: OnboardingOrbitFile,
+        animationKey: String,
+        keyPath: String,
+        amplitude: CGFloat,
+        angularSpeed: Double,
+        phase: Double,
+        beginTime: CFTimeInterval
+    ) -> CAKeyframeAnimation {
+        if orbitPhase == 0,
+           let prepared = preparedInitialIdleAnimations[file.id]?[animationKey]?.copy()
+            as? CAKeyframeAnimation {
+            prepared.beginTime = beginTime
+            return prepared
+        }
+        return sineAnimation(
+            keyPath: keyPath,
+            amplitude: amplitude,
+            angularSpeed: angularSpeed,
+            phase: phase,
+            beginTime: beginTime
+        )
     }
 
     private func stopIdleAnimations(preservingPhase: Bool) {
