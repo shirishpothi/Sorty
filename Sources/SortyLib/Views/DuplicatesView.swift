@@ -1058,15 +1058,6 @@ struct UnifiedDuplicateGroupRow: View {
             }
             .layoutPriority(1)
 
-            if !group.isExact {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Similarity")
-                        .font(.caption2.weight(.semibold))
-                        .numericTextTransition(animationValue: group.isExact)
-                }
-                .foregroundStyle(badgeColor)
-                .fixedSize(horizontal: true, vertical: false)
-            }
         }
         .padding(.vertical, 7)
         .frame(minHeight: 64)
