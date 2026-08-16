@@ -821,43 +821,10 @@ private struct OnboardingBeamBorder: View {
         controlActiveState != .inactive
     }
 
-    private var usesRetainedRenderer: Bool {
-        if case .small = size { return true }
-        return false
-    }
-
     var body: some View {
-        beamBase
-            .overlay {
-                ZStack {
-                    RetainedFallbackBeamBorder(
-                        variant: variant,
-                        // Button-sized beams keep the same conic motion on
-                        // retained layers. Larger CTAs use the richer Metal
-                        // shader, with this layer only as their static fallback.
-                        active: active && (usesRetainedRenderer || !shouldAnimateBeam),
-                        isIntensified: isIntensified,
-                        shouldAnimate: usesRetainedRenderer && shouldAnimateBeam,
-                        isAnimationActive: isAnimationActive,
-                        opacity: isIntensified ? 1 : variant.fallbackOpacity
-                    )
-
-                    if includesInteriorGlow {
-                        beamInteriorGlow
-                    }
-                }
-            }
-    }
-
-    @ViewBuilder
-    private var beamBase: some View {
-        if usesRetainedRenderer {
-            Capsule()
-                .strokeBorder(.clear, lineWidth: 1)
-        } else {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
-                .beam(
+            .beam(
                 size,
                 palette: variant.palette,
                 theme: .dark,
@@ -867,7 +834,24 @@ private struct OnboardingBeamBorder: View {
                 strength: isIntensified ? variant.strength * 1.2 : variant.strength,
                 lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
             )
-        }
+            .overlay {
+                ZStack {
+                    RetainedFallbackBeamBorder(
+                        variant: variant,
+                        // Preserve a visible static border when motion is
+                        // disabled; never stack it over the animated Beam.
+                        active: active && (!shouldAnimateBeam || !isAnimationActive),
+                        isIntensified: isIntensified,
+                        shouldAnimate: false,
+                        isAnimationActive: isAnimationActive,
+                        opacity: isIntensified ? 1 : variant.fallbackOpacity
+                    )
+
+                    if includesInteriorGlow {
+                        beamInteriorGlow
+                    }
+                }
+            }
     }
 
     private var beamInteriorGlow: some View {
