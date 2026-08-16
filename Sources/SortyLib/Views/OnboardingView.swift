@@ -148,10 +148,15 @@ public struct OnboardingView: View {
                     hasConfiguredWindowChrome = true
                 }
                 OnboardingScreenBackdropBlurPresenter()
-                OnboardingScreenEdgeGlowPresenter()
             }
             .frame(width: 0, height: 0)
         )
+        .overlay(alignment: .topLeading) {
+            OnboardingScreenEdgeGlowPresenter()
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
@@ -2109,11 +2114,16 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
         }
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: view.window)
+        }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.attach(to: nsView.window)
+        DispatchQueue.main.async {
+            context.coordinator.attach(to: nsView.window)
+        }
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -2251,7 +2261,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
             updatePanelFrame()
             glowPanel?.alphaValue = 1
-            glowPanel?.order(.above, relativeTo: window.windowNumber)
+            glowPanel?.orderFrontRegardless()
         }
 
         private func dismissPanel(immediately: Bool = false) {
