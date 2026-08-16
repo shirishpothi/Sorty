@@ -1665,6 +1665,13 @@ private final class OnboardingOrbitFieldView: NSView {
         guard idleAnimationStartedAt == nil, !bounds.isEmpty else { return }
         let startedAt = CACurrentMediaTime()
         idleAnimationStartedAt = startedAt
+
+        // Commit the base-layer reset and all additive orbit animations as one
+        // compositor update. Committing the base positions first exposes a
+        // single frame with every chip at its unanimated resting point when
+        // the expansion spring hands back to the idle orbit.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         configureIdleBaseLayers()
 
         for file in OnboardingOrbitFile.files {
@@ -1721,6 +1728,7 @@ private final class OnboardingOrbitFieldView: NSView {
                 forKey: "idleRotation"
             )
         }
+        CATransaction.commit()
     }
 
     private func stopIdleAnimations(preservingPhase: Bool) {

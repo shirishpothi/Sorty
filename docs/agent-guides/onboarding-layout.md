@@ -106,7 +106,10 @@ immediately, but give hover exit a short cancellable grace period so a quick
 boundary crossing does not reverse the file spring before re-entry. Keep the
 collapse driven by one continuous, reversible progress value; use a subtle
 curved path and fade only near the button rather than staging independent file
-timers that cannot reverse cleanly. Keep this CTA's system glass
+timers that cannot reverse cleanly. When the expansion spring finishes, install
+the idle orbit's base layers and additive animations in one Core Animation
+transaction; committing the base positions separately produces a one-frame
+snap before orbiting resumes. Keep this CTA's system glass
 noninteractive: its explicit hover state owns the collapse interaction, while
 interactive glass would independently track every pointer move.
 
