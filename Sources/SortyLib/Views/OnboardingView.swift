@@ -1409,7 +1409,7 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
     private static let interactionFrameRate: Float = 120
-    private static let idleSampleRate = 60.0
+    private static let idleSampleRate = 120.0
     private static let springResponse = 0.48
     private static let springDamping = 0.90
 
