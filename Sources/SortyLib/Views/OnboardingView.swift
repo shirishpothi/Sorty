@@ -1422,6 +1422,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private var lastTimestamp: CFTimeInterval?
     private var orbitPhase: CFTimeInterval = 0
     private var idleAnimationStartedAt: CFTimeInterval?
+    private var idleAnimationBasePhase: CFTimeInterval = 0
     private var collapseProgress: CGFloat = 0
     private var collapseVelocity: CGFloat = 0
     private var collapseTarget: CGFloat = 0
@@ -1665,6 +1666,7 @@ private final class OnboardingOrbitFieldView: NSView {
         guard idleAnimationStartedAt == nil, !bounds.isEmpty else { return }
         let startedAt = CACurrentMediaTime()
         idleAnimationStartedAt = startedAt
+        idleAnimationBasePhase = orbitPhase
 
         // Commit the base-layer reset and all additive orbit animations as one
         // compositor update. Committing the base positions first exposes a
@@ -1737,10 +1739,13 @@ private final class OnboardingOrbitFieldView: NSView {
             orbitPhase += max(0, CACurrentMediaTime() - startedAt)
         }
         idleAnimationStartedAt = nil
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         for host in hosts.values {
             Self.idleAnimationKeys.forEach { host.layer?.removeAnimation(forKey: $0) }
         }
         renderFrame()
+        CATransaction.commit()
     }
 
     private func configureIdleBaseLayers() {
@@ -1750,15 +1755,18 @@ private final class OnboardingOrbitFieldView: NSView {
         for file in OnboardingOrbitFile.files {
             guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
             let fittingSize = hostSizes[file.id] ?? host.fittingSize
+            let orbit = orbitOffset(for: file, phase: idleAnimationBasePhase)
             if host.bounds.size != fittingSize {
                 host.frame = CGRect(origin: .zero, size: fittingSize)
             }
             chipLayer.position = CGPoint(
-                x: bounds.midX + file.baseX,
-                y: bounds.midY + file.baseY
+                x: bounds.midX + orbit.width,
+                y: bounds.midY + orbit.height
             )
+            let rotation = file.rotation
+                + sin(idleAnimationBasePhase * 0.7 + file.driftPhase) * 3
             chipLayer.setAffineTransform(
-                CGAffineTransform(rotationAngle: file.rotation * .pi / 180)
+                CGAffineTransform(rotationAngle: rotation * .pi / 180)
                     .scaledBy(x: file.scale, y: file.scale)
             )
         }
@@ -1778,10 +1786,12 @@ private final class OnboardingOrbitFieldView: NSView {
         // velocity even though Core Animation interpolates their positions.
         let sampleCount = max(120, Int(ceil(duration * Self.idleSampleRate)))
         let startingPhase = phase + angularSpeed * orbitPhase
+        let startingValue = Double(amplitude) * sin(startingPhase)
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = (0...sampleCount).map { index in
             let progress = Double(index) / Double(sampleCount)
-            return NSNumber(value: Double(amplitude) * sin(startingPhase + progress * 2 * .pi))
+            let value = Double(amplitude) * sin(startingPhase + progress * 2 * .pi)
+            return NSNumber(value: value - startingValue)
         }
         animation.keyTimes = (0...sampleCount).map { index in
             NSNumber(value: Double(index) / Double(sampleCount))
