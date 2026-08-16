@@ -91,18 +91,12 @@ public class SettingsViewModel: ObservableObject {
 
                 // Load the new provider's API key from its keychain slot
                 // Skip for GitHub Copilot — auth is handled by GitHubCopilotAuthManager, not apiKey
-                var normalizedConfig = config
-                normalizedConfig.apiKey = nil
-                normalizedConfig.apiURL = newProvider.defaultAPIURL
-                normalizedConfig.requiresAPIKey = newProvider.typicallyRequiresAPIKey
-                normalizedConfig.visionDetailLevel = VisionDetailLevel.defaultFor(provider: newProvider)
-                normalizedConfig.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel
-
-                // Publish the provider-dependent reset as one coherent update.
-                // Assigning each field through the @Published property separately
-                // invalidates every SettingsViewModel observer for every field.
                 isApplyingConfigMutation = true
-                config = normalizedConfig
+                config.apiKey = nil
+                config.apiURL = newProvider.defaultAPIURL
+                config.requiresAPIKey = newProvider.typicallyRequiresAPIKey
+                config.visionDetailLevel = VisionDetailLevel.defaultFor(provider: newProvider)
+                config.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel
                 isApplyingConfigMutation = false
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
