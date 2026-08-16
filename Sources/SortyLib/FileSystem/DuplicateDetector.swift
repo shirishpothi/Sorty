@@ -198,7 +198,7 @@ public actor DuplicateDetector {
         public let sampledCount: Int
         public let hashedCount: Int
         public let cacheHitCount: Int
-        public let unreadableCount: Int
+        let unavailableFiles: [UnavailableDuplicateFile]
     }
 
     private var hashCache: [HashCacheKey: String] = [:]
@@ -239,7 +239,7 @@ public actor DuplicateDetector {
                 sampledCount: 0,
                 hashedCount: 0,
                 cacheHitCount: 0,
-                unreadableCount: 0
+                unavailableFiles: []
             )
         }
 
@@ -256,7 +256,7 @@ public actor DuplicateDetector {
         var cacheHitCount = 0
         var sampledCount = 0
         var hashedCount = 0
-        var unreadableCount = 0
+        var unavailableFiles: [UnavailableDuplicateFile] = []
         let progressStride = max(1, min(1_024, candidateCount / 200))
 
         for index in candidateIndices {
@@ -322,7 +322,9 @@ public actor DuplicateDetector {
                     )
                     sampledCount += 1
                 } else {
-                    unreadableCount += 1
+                    unavailableFiles.append(
+                        UnavailableDuplicateFile(path: files[index].path, reason: .contents)
+                    )
                     completedCount += 1
                 }
 
@@ -379,7 +381,9 @@ public actor DuplicateDetector {
                     Self.record(index: index, for: hash, in: &indicesByHash)
                     hashedCount += 1
                 } else {
-                    unreadableCount += 1
+                    unavailableFiles.append(
+                        UnavailableDuplicateFile(path: files[index].path, reason: .contents)
+                    )
                 }
 
                 completedCount += 1
@@ -420,7 +424,7 @@ public actor DuplicateDetector {
             sampledCount: sampledCount,
             hashedCount: hashedCount,
             cacheHitCount: cacheHitCount,
-            unreadableCount: unreadableCount
+            unavailableFiles: unavailableFiles
         )
     }
     
@@ -554,6 +558,7 @@ public class DuplicateDetectionManager: ObservableObject {
     @Published public private(set) var hashedFileCount: Int = 0
     @Published public private(set) var hashCacheHitCount: Int = 0
     @Published public private(set) var unreadableFileCount: Int = 0
+    @Published private(set) var unavailableFiles: [UnavailableDuplicateFile] = []
     @Published public private(set) var semanticAnalyzedFileCount: Int = 0
     @Published public private(set) var semanticSkippedFileCount: Int = 0
     @Published public private(set) var scanDuration: TimeInterval = 0
@@ -593,7 +598,7 @@ public class DuplicateDetectionManager: ObservableObject {
             semanticCandidates: eligibleFiles,
             scannedFileCount: eligibleFiles.count,
             semanticSkippedFileCount: 0,
-            preflightUnreadableFileCount: 0,
+            preflightUnavailableFiles: [],
             settings: settings
         )
     }
@@ -607,7 +612,7 @@ public class DuplicateDetectionManager: ObservableObject {
             semanticCandidates: inventory.semanticCandidates,
             scannedFileCount: inventory.scannedFileCount,
             semanticSkippedFileCount: inventory.semanticSkippedFileCount,
-            preflightUnreadableFileCount: inventory.unreadableFileCount,
+            preflightUnavailableFiles: inventory.unavailableFiles,
             settings: settings
         )
     }
@@ -617,7 +622,7 @@ public class DuplicateDetectionManager: ObservableObject {
         semanticCandidates: [FileItem],
         scannedFileCount totalScannedFileCount: Int,
         semanticSkippedFileCount skippedSemanticFileCount: Int,
-        preflightUnreadableFileCount: Int,
+        preflightUnavailableFiles: [UnavailableDuplicateFile],
         settings: DuplicateSettings
     ) async {
         let scanStartedAt = Date()
@@ -641,7 +646,8 @@ public class DuplicateDetectionManager: ObservableObject {
         sampledFileCount = 0
         hashedFileCount = 0
         hashCacheHitCount = 0
-        unreadableFileCount = preflightUnreadableFileCount
+        unavailableFiles = preflightUnavailableFiles
+        unreadableFileCount = unavailableFiles.count
         semanticAnalyzedFileCount = 0
         semanticSkippedFileCount = skippedSemanticFileCount
         scanDuration = 0
@@ -683,7 +689,10 @@ public class DuplicateDetectionManager: ObservableObject {
         sampledFileCount = exactResult.sampledCount
         hashedFileCount = exactResult.hashedCount
         hashCacheHitCount = exactResult.cacheHitCount
-        unreadableFileCount += exactResult.unreadableCount
+        unavailableFiles.append(contentsOf: exactResult.unavailableFiles)
+        unavailableFiles = Array(Dictionary(grouping: unavailableFiles, by: \.path).compactMap(\.value.first))
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        unreadableFileCount = unavailableFiles.count
         
         if Task.isCancelled {
             isScanning = false
@@ -785,6 +794,7 @@ public class DuplicateDetectionManager: ObservableObject {
         hashedFileCount = 0
         hashCacheHitCount = 0
         unreadableFileCount = 0
+        unavailableFiles = []
         semanticAnalyzedFileCount = 0
         semanticSkippedFileCount = 0
         scanDuration = 0

@@ -14,7 +14,29 @@ struct DuplicateScanInventory: Sendable {
     let semanticCandidates: [FileItem]
     let scannedFileCount: Int
     let semanticSkippedFileCount: Int
-    let unreadableFileCount: Int
+    let unavailableFiles: [UnavailableDuplicateFile]
+}
+
+struct UnavailableDuplicateFile: Identifiable, Hashable, Sendable {
+    enum Reason: Hashable, Sendable {
+        case metadata
+        case contents
+
+        var description: String {
+            switch self {
+            case .metadata:
+                return "File information could not be read."
+            case .contents:
+                return "File contents could not be read."
+            }
+        }
+    }
+
+    let path: String
+    let reason: Reason
+
+    var id: String { path }
+    var url: URL { URL(fileURLWithPath: path) }
 }
 
 actor DirectoryScanner {
@@ -241,13 +263,15 @@ actor DirectoryScanner {
         var semanticLimitExceeded = false
         var eligibleFileCount = 0
         var exactCandidateCount = 0
-        var unreadableFileCount = 0
+        var unavailableFiles: [UnavailableDuplicateFile] = []
 
         while let fileURL = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
 
             guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys) else {
-                unreadableFileCount += 1
+                unavailableFiles.append(
+                    UnavailableDuplicateFile(path: fileURL.path, reason: .metadata)
+                )
                 continue
             }
 
@@ -332,7 +356,7 @@ actor DirectoryScanner {
                 semanticCandidates: semanticCandidates,
                 scannedFileCount: eligibleFileCount,
                 semanticSkippedFileCount: semanticLimitExceeded ? eligibleFileCount : 0,
-                unreadableFileCount: unreadableFileCount
+                unavailableFiles: unavailableFiles
             )
         }
 
@@ -342,7 +366,7 @@ actor DirectoryScanner {
                 semanticCandidates: semanticCandidates,
                 scannedFileCount: eligibleFileCount,
                 semanticSkippedFileCount: 0,
-                unreadableFileCount: unreadableFileCount
+                unavailableFiles: unavailableFiles
             )
         }
 
@@ -432,7 +456,7 @@ actor DirectoryScanner {
             semanticCandidates: [],
             scannedFileCount: eligibleFileCount,
             semanticSkippedFileCount: semanticLimitExceeded ? eligibleFileCount : 0,
-            unreadableFileCount: unreadableFileCount
+            unavailableFiles: unavailableFiles
         )
     }
 

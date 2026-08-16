@@ -6,6 +6,7 @@
 //  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and Split View layout
 //
 
+import AppKit
 import Beam
 import SwiftUI
 
@@ -264,7 +265,8 @@ struct DuplicatesView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     DuplicatesResultsSidebarHeader(
                         manager: detectionManager,
-                        showsStats: settingsViewModel.config.showStatsForNerds
+                        showsStats: settingsViewModel.config.showStatsForNerds,
+                        onScanAgain: startScan
                     )
 
                     Divider()
@@ -717,6 +719,8 @@ struct DuplicatesHeaderNew: View {
 private struct DuplicatesResultsSidebarHeader: View {
     @ObservedObject var manager: DuplicateDetectionManager
     let showsStats: Bool
+    let onScanAgain: () -> Void
+    @State private var showsUnavailableFiles = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -736,14 +740,38 @@ private struct DuplicatesResultsSidebarHeader: View {
             }
 
             if manager.unreadableFileCount > 0 {
-                Label(
-                    "\(manager.unreadableFileCount) file\(manager.unreadableFileCount == 1 ? " was" : "s were") unavailable and excluded from these results.",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
+                Button {
+                    HapticFeedbackManager.shared.selection()
+                    showsUnavailableFiles.toggle()
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .accessibilityHidden(true)
+                        Text(
+                            "\(manager.unreadableFileCount) file\(manager.unreadableFileCount == 1 ? " was" : "s were") unavailable and excluded from these results."
+                        )
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
                 .numericTextTransition(animationValue: manager.unreadableFileCount)
+                .accessibilityHint("Shows the unavailable files and recovery options")
+                .popover(isPresented: $showsUnavailableFiles, arrowEdge: .trailing) {
+                    UnavailableDuplicateFilesPopover(
+                        files: manager.unavailableFiles,
+                        onScanAgain: {
+                            showsUnavailableFiles = false
+                            onScanAgain()
+                        }
+                    )
+                }
             }
 
             if manager.semanticSkippedFileCount > 0 {
@@ -772,6 +800,96 @@ private struct DuplicatesResultsSidebarHeader: View {
         let similar = "\(manager.semanticGroupCount) similarity match\(manager.semanticGroupCount == 1 ? "" : "es")"
         let recoverable = "\(manager.formattedSavings) safely recoverable"
         return [exact, similar, recoverable].joined(separator: " • ")
+    }
+}
+
+private struct UnavailableDuplicateFilesPopover: View {
+    let files: [UnavailableDuplicateFile]
+    let onScanAgain: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Unavailable Files")
+                    .font(.headline)
+                Text("Reconnect external drives or download cloud files, then scan again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(16)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(files) { file in
+                        unavailableFileRow(file)
+                        if file.id != files.last?.id {
+                            Divider()
+                                .padding(.leading, 44)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Scan Again", action: onScanAgain)
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.onboardingPill(size: .small))
+            }
+            .padding(12)
+        }
+        .frame(width: 390)
+    }
+
+    private func unavailableFileRow(_ file: UnavailableDuplicateFile) -> some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: file.path))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(file.url.lastPathComponent)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                Text(file.reason.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(file.url.deletingLastPathComponent().path)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 8)
+
+            Menu {
+                Button("Reveal in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                }
+                Button("Copy Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(file.path, forType: .string)
+                    HapticFeedbackManager.shared.success()
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .accessibilityLabel("Options for \(file.url.lastPathComponent)")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
     }
 }
 
