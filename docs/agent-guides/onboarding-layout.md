@@ -122,13 +122,9 @@ transaction for the same reason. Keep this CTA's system glass
 noninteractive: its explicit hover state owns the collapse interaction, while
 interactive glass would independently track every pointer move.
 
-An active onboarding beam uses the original Beam renderer at every control
-size. The retained conic layer is only a static fallback while the window is
-inactive, Reduce Motion is enabled, or the beam is otherwise disabled. Never
-stack both renderers as animated layers on one control.
-The optional CTA interior glow keeps its radial glow and blur tree static and
-rotates only a retained Core Animation conic mask; do not restore its 30 fps
-SwiftUI timeline.
+Do not add rotating border-beam treatments to onboarding or related primary
+controls. Their button styles, static borders, and direct hover or press
+feedback provide the intended emphasis without a continuously animated edge.
 Prewarm completion audio and its reveal accent before reaching the completion
 step; map the bundled audio data off the main actor so constructing an
 `AVAudioPlayer` or resolving `NSSound` does not compete with celebration frames.

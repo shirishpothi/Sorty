@@ -1501,12 +1501,6 @@ struct HistoryEmptyStateView: View {
                 Text("Start Organizing")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(
-                variant: .featured,
-                active: hasAppeared,
-                isIntensified: isHovered,
-                includesInteriorGlow: isHovered
-            )
             .controlSize(.large)
             .contentShape(Capsule())
             .scaleEffect(isHovered ? 1.03 : 1.0)

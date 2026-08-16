@@ -16,7 +16,6 @@ struct DirectorySelectionView: View {
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
-    @State private var isBrowseBeamPressed = false
 
     @State private var iconBounce = false
     @State private var hasAppeared = false
@@ -57,7 +56,7 @@ struct DirectorySelectionView: View {
                         screen: "organize",
                         feature: "folder_selection"
                     )
-                    triggerBrowseBeamPress()
+                    selectDirectory()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
@@ -69,12 +68,6 @@ struct DirectorySelectionView: View {
                     .padding(.vertical, 10)
                 }
                 .buttonStyle(.onboardingPill)
-                .onboardingBeamBorder(
-                    variant: .info,
-                    active: hasAppeared,
-                    isIntensified: isBrowseHovering || isBrowseBeamPressed,
-                    includesInteriorGlow: isBrowseHovering || isBrowseBeamPressed
-                )
                 .contentShape(Capsule())
                 .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
@@ -318,20 +311,6 @@ struct DirectorySelectionView: View {
         reduceMotion
             ? .easeOut(duration: 0.1)
             : .spring(response: 0.38, dampingFraction: 0.86)
-    }
-
-    private func triggerBrowseBeamPress() {
-        withAnimation(.spring(response: 0.2, dampingFraction: 0.78)) {
-            isBrowseBeamPressed = true
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 140_000_000)
-            selectDirectory()
-            withAnimation(.easeOut(duration: 0.24)) {
-                isBrowseBeamPressed = false
-            }
-        }
     }
 
     private func openMenuBarTip() {

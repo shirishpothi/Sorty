@@ -188,7 +188,6 @@ struct WatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .success)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
         .padding()
@@ -216,7 +215,6 @@ struct EmptyWatchedFoldersView: View {
     let onAddFolder: () -> Void
     let onAddSuggestedFolder: (URL) -> Void
     @State private var hasAppeared = false
-    @State private var beamHasAppeared = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -268,7 +266,6 @@ struct EmptyWatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
@@ -277,9 +274,6 @@ struct EmptyWatchedFoldersView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 hasAppeared = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                beamHasAppeared = true
             }
         }
     }

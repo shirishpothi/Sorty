@@ -832,7 +832,6 @@ private struct CompletionPrimaryAction: View {
             }
         }
         .buttonStyle(.onboardingPill(size: .large))
-        .onboardingBeamBorder(variant: .featured, active: !isChecking, size: .medium)
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
         .opacity(tipsAppeared && !contentDismissed ? 1 : 0)

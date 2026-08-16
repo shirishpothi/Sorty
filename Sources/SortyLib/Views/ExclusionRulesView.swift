@@ -293,7 +293,6 @@ struct ExclusionRulesView: View {
                 Label("Add Manual Exclusion", systemImage: "slider.horizontal.3")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddExclusionRuleButton")
         }
         .padding()
@@ -529,11 +528,6 @@ struct ExclusionRulesView: View {
                             }
                         }
                         .buttonStyle(.onboardingPill(size: .small))
-                        .onboardingBeamBorder(
-                            variant: .featured,
-                            active: hasNaturalLanguageExceptionText,
-                            size: .small
-                        )
                         .disabled(
                             !hasNaturalLanguageExceptionText
                                 || isImprovingException
@@ -667,7 +661,6 @@ struct ExclusionRulesView: View {
 struct EmptyExclusionRulesView: View {
     let onAddRule: () -> Void
     @State private var hasAppeared = false
-    @State private var beamHasAppeared = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -700,7 +693,6 @@ struct EmptyExclusionRulesView: View {
                 Label("Add Exclusion", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
@@ -709,9 +701,6 @@ struct EmptyExclusionRulesView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 hasAppeared = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                beamHasAppeared = true
             }
         }
     }
@@ -1336,7 +1325,6 @@ struct AddExclusionRuleView: View {
                     addRule()
                 }
                 .buttonStyle(.onboardingPill)
-                .onboardingBeamBorder(variant: .warning, active: isValidInput)
                 .disabled(!isValidInput)
                 .keyboardShortcut(.return, modifiers: [.command])
             } else {
