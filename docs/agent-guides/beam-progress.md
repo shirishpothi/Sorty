@@ -2,6 +2,8 @@
 
 Sorty's organization analysis screen uses the Beam playground card shape for
 the visible progress surface in `Sources/SortyLib/Views/AnalysisView.swift`.
+The What’s New CTA uses the same package’s small ocean beam with a capsule
+shape in `Sources/SortyLib/Views/WhatsNew/WhatsNewTourView.swift`.
 
 Important implementation details:
 
@@ -14,13 +16,9 @@ Important implementation details:
 - Sorty's `make now` path builds a manual SwiftPM app bundle. In that bundle,
   Beam's package shader resource lookup can fail silently, leaving the card
   with no visible border animation even though `.beam(...)` is present.
-- BorderBeamKit also ships its shader as SwiftPM source. The manual app-bundle
-  path must compile `BeamShaders.metal` into
-  `Contents/Resources/BorderBeamKit_BorderBeamKit.bundle/default.metallib`.
-  The vendored package explicitly prefers that embedded bundle because the
-  generated `Bundle.module` accessor otherwise falls back to the raw build
-  bundle, making SwiftUI display the shader layer's white source rectangle.
-- For that reason, the card also has `referenceBeamFallback(cornerRadius:active:)`
+- The card also has `referenceBeamFallback(cornerRadius:active:)` so the border
+  remains visible if Beam's package shader resource lookup fails in the manual
+  app bundle.
   layered above the Beam modifier. This fallback is intentionally lightweight:
   one `SwiftUI.TimelineView`-driven 1px animated angular border, no blur/glow
   pass, no extra pill animation. The earlier blurred fallback was visibly laggy.

@@ -79,11 +79,6 @@ public enum OpenSourceCredits {
             url: URL(string: "https://github.com/tornikegomareli/beam")!
         ),
         CreditItem(
-            name: "Border Beam",
-            license: "MIT",
-            url: URL(string: "https://github.com/Jakubantalik/Libraries")!
-        ),
-        CreditItem(
             name: "Permiso",
             license: "MIT",
             url: URL(string: "https://github.com/jevonmao/Permiso")!

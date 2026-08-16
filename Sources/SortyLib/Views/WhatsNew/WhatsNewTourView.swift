@@ -1,5 +1,5 @@
 import AppKit
-import BorderBeamKit
+import Beam
 import SwiftUI
 
 public struct WhatsNewTourView: View {
@@ -501,14 +501,13 @@ public struct WhatsNewTourView: View {
                 .numericTextTransition(animationValue: currentPage)
         }
         .buttonStyle(.onboardingPill)
-        .borderBeam(
-            .md,
-            colorVariant: .ocean,
+        .beam(
+            .small,
+            palette: .ocean,
             theme: .dark,
             active: !reduceMotion,
-            borderRadius: 22,
-            brightness: 2.6,
-            saturation: 1.25
+            shape: .capsule,
+            strength: 1
         )
         .overlay {
             GeometryReader { proxy in
