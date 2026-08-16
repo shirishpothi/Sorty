@@ -14,6 +14,10 @@ Important implementation details:
 - Sorty's `make now` path builds a manual SwiftPM app bundle. In that bundle,
   Beam's package shader resource lookup can fail silently, leaving the card
   with no visible border animation even though `.beam(...)` is present.
+- BorderBeamKit also ships its shader as SwiftPM source. The manual app-bundle
+  path must compile `BeamShaders.metal` into
+  `BorderBeamKit_BorderBeamKit.bundle/default.metallib`; otherwise SwiftUI
+  displays the shader layer's white source rectangle instead of the beam.
 - For that reason, the card also has `referenceBeamFallback(cornerRadius:active:)`
   layered above the Beam modifier. This fallback is intentionally lightweight:
   one `SwiftUI.TimelineView`-driven 1px animated angular border, no blur/glow

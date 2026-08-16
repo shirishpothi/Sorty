@@ -693,6 +693,35 @@ copy_swiftpm_dependency_resource_bundles() {
     done < <(find "${build_dir}" -path "*/${BUILD_CONFIG}/*.bundle" -type d | sort)
 }
 
+compile_border_beam_metal_library() {
+    local resources_dir="$1"
+    local bundle_dir="${resources_dir}/BorderBeamKit_BorderBeamKit.bundle"
+    local shader_source="${bundle_dir}/BeamShaders.metal"
+    local metal_library="${bundle_dir}/default.metallib"
+
+    if [ ! -f "${shader_source}" ]; then
+        return 0
+    fi
+
+    local metal_air
+    metal_air="$(mktemp "${TMPDIR:-/tmp}/sorty-border-beam.XXXXXX.air")"
+
+    log_detail "Compiling BorderBeamKit Metal shaders"
+    if ! xcrun --sdk macosx metal -c "${shader_source}" -o "${metal_air}"; then
+        rm -f "${metal_air}"
+        log_failure "BorderBeamKit Metal shader compilation failed"
+        return 1
+    fi
+    if ! xcrun --sdk macosx metallib "${metal_air}" -o "${metal_library}"; then
+        rm -f "${metal_air}"
+        log_failure "BorderBeamKit Metal library linking failed"
+        return 1
+    fi
+
+    rm -f "${metal_air}" "${shader_source}"
+    log_detail "Compiled BorderBeamKit default.metallib"
+}
+
 compile_asset_catalog() {
     local resources_dir="$1"
     local app_path="$2"
@@ -1400,6 +1429,7 @@ else
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
     compile_string_catalogs "${RESOURCES_DIR}"
     copy_swiftpm_dependency_resource_bundles "${RESOURCES_DIR}" "${BUILD_DIR}"
+    compile_border_beam_metal_library "${RESOURCES_DIR}"
 
     # Compile Assets.xcassets into Assets.car
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
