@@ -38,7 +38,10 @@ Keep screen-sized effects out of onboarding entirely. Do not place dimming,
 glow, blur, material, or other translucent panels across a monitor behind the
 onboarding window: windows underneath update as the cursor moves, forcing
 WindowServer to recompose that monitor-sized stack and starving the orbit's
-compositor frames even while Sorty's main thread is idle.
+compositor frames even while Sorty's main thread is idle. The intro halo is a
+window-local retained gradient panel with a fixed 56-point outset. It follows
+only window move/resize events, ignores mouse events, and pulses on the render
+server; never expand it to the display frame or drive it from pointer movement.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
