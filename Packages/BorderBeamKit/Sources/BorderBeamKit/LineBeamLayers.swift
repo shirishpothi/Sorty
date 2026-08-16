@@ -171,7 +171,7 @@ struct LineBeamLayers: View {
         matrix: [Float],
         opacity: Double
     ) -> some View {
-        let shader = ShaderLibrary.bundle(.module).beamBlobLayer(
+        let shader = ShaderLibrary.bundle(BorderBeamResources.bundle).beamBlobLayer(
             .float2(0, 0),
             .float2(size),
             .float(config.radius),

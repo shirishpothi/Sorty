@@ -217,7 +217,7 @@ struct RotateBeamLayers: View {
         shadow: BeamRGBA,
         shadowBlur: Double
     ) -> some View {
-        let shader = ShaderLibrary.bundle(.module).beamRotateLayer(
+        let shader = ShaderLibrary.bundle(BorderBeamResources.bundle).beamRotateLayer(
             .float2(size),
             .float(angle),
             .float(config.radius),

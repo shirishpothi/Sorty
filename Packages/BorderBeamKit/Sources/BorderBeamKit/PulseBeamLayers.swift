@@ -325,7 +325,7 @@ struct PulseBeamLayers: View {
             width: elementSize.width + boxPad * 2,
             height: elementSize.height + boxPad * 2
         )
-        let shader = ShaderLibrary.bundle(.module).beamBlobLayer(
+        let shader = ShaderLibrary.bundle(BorderBeamResources.bundle).beamBlobLayer(
             .float2(0, 0),
             .float2(boxSize),
             .float(radius),

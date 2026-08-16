@@ -1,4 +1,18 @@
+import Foundation
 import SwiftUI
+
+enum BorderBeamResources {
+    static let bundle: Bundle = {
+        if let resourceURL = Bundle.main.resourceURL,
+           let embeddedBundle = Bundle(
+               url: resourceURL.appendingPathComponent("BorderBeamKit_BorderBeamKit.bundle")
+           ) {
+            return embeddedBundle
+        }
+
+        return .module
+    }()
+}
 
 /// Animated border beam effect — SwiftUI port of the `border-beam` web library.
 ///
