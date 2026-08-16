@@ -825,16 +825,14 @@ private struct OnboardingIntroContentLayer: View {
                         Text("Welcome to")
                             .font(.system(size: 38, weight: .bold, design: .rounded))
 
-                        SortyHandwrittenShape()
-                            .trim(from: 0, to: titleDrawProgress)
-                            .stroke(
-                                style: StrokeStyle(
-                                    lineWidth: 4.5,
-                                    lineCap: .round,
-                                    lineJoin: .round
-                                )
-                            )
-                            .frame(width: 112, height: 48)
+                        Text("Sorty")
+                            .font(.custom("Snell Roundhand", fixedSize: 52))
+                            .fontWeight(.bold)
+                            .frame(width: 126, height: 54, alignment: .leading)
+                            .mask(alignment: .leading) {
+                                Rectangle()
+                                    .frame(width: 126 * titleDrawProgress)
+                            }
                             .accessibilityHidden(true)
                     }
                         .foregroundStyle(.primary.opacity(0.88))
@@ -899,109 +897,6 @@ private struct OnboardingIntroContentLayer: View {
             hoverExitTask?.cancel()
             hoverExitTask = nil
         }
-    }
-}
-
-/// A compact single-line rendering of the Sorty wordmark. Keeping the letters
-/// in one `Shape` lets `trim` reveal them in writing order, matching the
-/// reference handwriting animation without introducing a timer or display link.
-private struct SortyHandwrittenShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let width = rect.width
-        let height = rect.height
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: rect.minX + x * width, y: rect.minY + y * height)
-        }
-
-        var path = Path()
-
-        // S
-        path.move(to: point(0.19, 0.18))
-        path.addCurve(
-            to: point(0.03, 0.42),
-            control1: point(0.12, 0.02),
-            control2: point(0.01, 0.14)
-        )
-        path.addCurve(
-            to: point(0.18, 0.78),
-            control1: point(0.06, 0.57),
-            control2: point(0.20, 0.54)
-        )
-        path.addCurve(
-            to: point(0.02, 0.88),
-            control1: point(0.16, 0.98),
-            control2: point(0.04, 0.98)
-        )
-
-        // o
-        path.move(to: point(0.32, 0.46))
-        path.addCurve(
-            to: point(0.23, 0.79),
-            control1: point(0.22, 0.38),
-            control2: point(0.18, 0.67)
-        )
-        path.addCurve(
-            to: point(0.35, 0.48),
-            control1: point(0.34, 0.91),
-            control2: point(0.42, 0.60)
-        )
-
-        // r
-        path.move(to: point(0.39, 0.84))
-        path.addCurve(
-            to: point(0.43, 0.46),
-            control1: point(0.39, 0.67),
-            control2: point(0.40, 0.53)
-        )
-        path.addCurve(
-            to: point(0.54, 0.50),
-            control1: point(0.47, 0.38),
-            control2: point(0.52, 0.42)
-        )
-
-        // t
-        path.move(to: point(0.61, 0.20))
-        path.addCurve(
-            to: point(0.59, 0.80),
-            control1: point(0.60, 0.38),
-            control2: point(0.57, 0.66)
-        )
-        path.addCurve(
-            to: point(0.68, 0.75),
-            control1: point(0.62, 0.88),
-            control2: point(0.66, 0.82)
-        )
-        path.move(to: point(0.53, 0.45))
-        path.addCurve(
-            to: point(0.69, 0.42),
-            control1: point(0.58, 0.44),
-            control2: point(0.64, 0.43)
-        )
-
-        // y and its finishing flourish
-        path.move(to: point(0.72, 0.47))
-        path.addCurve(
-            to: point(0.79, 0.76),
-            control1: point(0.72, 0.66),
-            control2: point(0.74, 0.77)
-        )
-        path.addCurve(
-            to: point(0.88, 0.46),
-            control1: point(0.84, 0.73),
-            control2: point(0.86, 0.55)
-        )
-        path.addCurve(
-            to: point(0.78, 0.98),
-            control1: point(0.87, 0.70),
-            control2: point(0.85, 0.96)
-        )
-        path.addCurve(
-            to: point(0.99, 0.84),
-            control1: point(0.86, 1.00),
-            control2: point(0.94, 0.91)
-        )
-
-        return path
     }
 }
 
