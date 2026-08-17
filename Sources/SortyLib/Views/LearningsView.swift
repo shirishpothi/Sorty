@@ -209,6 +209,7 @@ struct LearningsView: View {
                     .font(.headline)
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .keyboardShortcut(.return)
             .onHover { hovering in
                 if hovering {

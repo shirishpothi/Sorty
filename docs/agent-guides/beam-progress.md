@@ -7,6 +7,10 @@ shape in `Sources/SortyLib/Views/WhatsNew/WhatsNewTourView.swift`.
 The folder-selection CTA applies that same button-sized treatment directly to
 the styled `Button` in `DirectorySelectionView.swift`, activating only after
 the control appears and while its window is active.
+Prominent onboarding and empty-state pill actions use the shared
+`onboardingBeamBorder(...)` wrapper. It deliberately maps every pill to Beam's
+README-recommended `.small` capsule variant; text fields continue to use a
+line-style or focused-border treatment instead of the button beam.
 
 Important implementation details:
 

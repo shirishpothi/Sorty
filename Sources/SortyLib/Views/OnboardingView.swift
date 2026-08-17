@@ -282,6 +282,9 @@ public struct OnboardingView: View {
                                     }
                                 }
                                 .buttonStyle(.onboardingPill)
+                                .onboardingBeamBorder(
+                                    active: validation.canAdvance && !isAdvancing
+                                )
                                 .keyboardShortcut(.rightArrow, modifiers: [])
                                 .disabled(!validation.canAdvance || isAdvancing)
                                 .opacity(
@@ -834,6 +837,7 @@ private struct OnboardingIntroContentLayer: View {
                         isGlassInteractive: false
                     )
                 )
+                .onboardingBeamBorder()
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .background {

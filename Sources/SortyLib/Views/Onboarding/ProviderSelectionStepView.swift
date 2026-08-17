@@ -1169,6 +1169,12 @@ private struct ProviderTestConnectionButton: View {
             }
         }
         .buttonStyle(.onboardingPill)
+        .onboardingBeamBorder(
+            variant: .featured,
+            active: isHovering && canTest,
+            isIntensified: isHovering,
+            includesInteriorGlow: isHovering
+        )
         .onHover { hovering in
             isHovering = hovering
         }

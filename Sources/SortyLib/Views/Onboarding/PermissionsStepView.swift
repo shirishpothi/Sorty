@@ -1113,6 +1113,7 @@ private struct PermissionActionButton: View {
                 .frame(minWidth: style == .primary ? 74 : 96)
         }
         .buttonStyle(buttonStyle)
+        .onboardingBeamBorder(variant: style == .primary ? .standard : .info)
         .contentShape(Capsule())
         .background(
             ScreenFrameReader(frameInScreen: $frameInScreen)

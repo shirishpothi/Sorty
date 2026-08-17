@@ -1811,6 +1811,7 @@ struct DuplicatesEmptyStateView: View {
     var isDefaultAction = false
     let action: () -> Void
     @State private var hasAppeared = false
+    @State private var beamHasAppeared = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -1847,6 +1848,7 @@ struct DuplicatesEmptyStateView: View {
                     .frame(minWidth: 120)
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .controlSize(.large)
             .modifier(DefaultActionShortcut(isEnabled: isDefaultAction))
             .accessibilityLabel(actionTitle)
@@ -1869,6 +1871,9 @@ struct DuplicatesEmptyStateView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 hasAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                beamHasAppeared = true
             }
         }
     }

@@ -8,6 +8,8 @@
 import AppKit
 import SwiftUI
 
+import Beam
+
 public enum SortyButtonIntent: Equatable {
     case primary
     case secondary
@@ -722,6 +724,85 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
     
     public static func onboardingPill(isSecondary: Bool, size: ControlSize = .regular) -> OnboardingPillButtonStyle {
         OnboardingPillButtonStyle(isSecondary: isSecondary, size: size)
+    }
+}
+
+public enum OnboardingBeamBorderVariant: Equatable {
+    case standard
+    case featured
+    case info
+    case success
+    case warning
+    case destructive
+
+    fileprivate var palette: BeamPalette {
+        switch self {
+        case .standard:
+            return .colorful
+        case .featured, .warning, .destructive:
+            return .sunset
+        case .info, .success:
+            return .ocean
+        }
+    }
+
+    fileprivate var strength: Double {
+        switch self {
+        case .standard:
+            return 0.86
+        case .featured, .destructive:
+            return 1
+        case .info:
+            return 0.9
+        case .success:
+            return 0.92
+        case .warning:
+            return 0.96
+        }
+    }
+}
+
+public extension View {
+    /// Applies Beam's button-sized capsule treatment to prominent pill controls.
+    func onboardingBeamBorder(
+        variant: OnboardingBeamBorderVariant = .standard,
+        active: Bool = true,
+        isIntensified: Bool = false,
+        includesInteriorGlow: Bool = false
+    ) -> some View {
+        overlay {
+            OnboardingBeamBorder(
+                variant: variant,
+                active: active,
+                isIntensified: isIntensified,
+                includesInteriorGlow: includesInteriorGlow
+            )
+        }
+    }
+}
+
+private struct OnboardingBeamBorder: View {
+    let variant: OnboardingBeamBorderVariant
+    let active: Bool
+    let isIntensified: Bool
+    let includesInteriorGlow: Bool
+
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    var body: some View {
+        Capsule()
+            .fill(.clear)
+            .beam(
+                .small,
+                palette: variant.palette,
+                theme: .dark,
+                active: active && controlActiveState != .inactive,
+                shape: .capsule,
+                strength: min(1, variant.strength * (isIntensified ? 1.12 : 1)),
+                lensStrength: includesInteriorGlow ? (isIntensified ? 3 : 2) : 0
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
