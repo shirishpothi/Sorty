@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+command -v node >/dev/null 2>&1 || {
+    echo "Node.js is unavailable; rerun .agents/setup." >&2
+    exit 1
+}
+
+[[ "$(pnpm --version 2>/dev/null || true)" == "10.6.5" ]] || {
+    echo "pnpm 10.6.5 is unavailable; rerun .agents/setup." >&2
+    exit 1
+}
+
+[[ -x website/node_modules/.bin/next ]] || {
+    echo "Website dependencies are unavailable; rerun .agents/setup." >&2
+    exit 1
+}
+
+echo "Sorty orb environment is ready."

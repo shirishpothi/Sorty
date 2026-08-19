@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+step() {
+    local label="$1"
+    shift
+    local started=$SECONDS
+    printf '==> %s\n' "$label"
+    "$@"
+    printf '    completed in %ss\n' "$((SECONDS - started))"
+}
+
+check_node() {
+    command -v node >/dev/null 2>&1 || {
+        echo "Node.js 20.9 or newer is required for the website." >&2
+        return 1
+    }
+
+    node -e '
+        const [major, minor] = process.versions.node.split(".").map(Number)
+        if (major < 20 || (major === 20 && minor < 9)) process.exit(1)
+    ' || {
+        echo "Node.js 20.9 or newer is required for the website; found $(node --version)." >&2
+        return 1
+    }
+}
+
+install_pnpm() {
+    local required_version="10.6.5"
+    local installed_version
+    installed_version="$(pnpm --version 2>/dev/null || true)"
+
+    if [[ "$installed_version" != "$required_version" ]]; then
+        npm install --global "pnpm@${required_version}"
+    fi
+
+    [[ "$(pnpm --version)" == "$required_version" ]]
+}
+
+install_website_dependencies() {
+    pnpm --dir website install --frozen-lockfile
+}
+
+step "Checking Node.js" check_node
+step "Provisioning pnpm 10.6.5" install_pnpm
+step "Installing locked website dependencies" install_website_dependencies
+
+if [[ ! -f website/.env.local ]]; then
+    cp -- website/.env.example website/.env.local
+fi
+
+printf '\nOrb setup complete.\n'
+printf '%s\n' \
+    'The website can be built and tested in this Linux orb.' \
+    'The native app requires macOS 15 and Xcode 16, so run its builds and tests on macOS.'
