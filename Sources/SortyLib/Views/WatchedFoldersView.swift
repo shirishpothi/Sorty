@@ -625,25 +625,42 @@ struct WatchedFolderCard: View {
         } else if let activity = watchedFoldersManager.activityByFolder[folder.id] {
             if case .awaitingReview(let count) = activity {
                 awaitingReviewLine(fileCount: count)
+            } else if case .parked(let count) = activity {
+                parkedBatchLine(fileCount: count)
             } else {
-                HStack(spacing: 8) {
-                    SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Label {
-                            let status = activityText(activity, now: context.date)
-                            Text(status)
-                                .numericTextTransition(animationValue: status)
-                        } icon: {
-                            Image(systemName: activityIcon(activity))
-                        }
-                    }
-
-                    if case .parked = activity {
-                        pendingBatchButton("Retry", notification: .retryWatchedFolderBatch)
-                        pendingBatchButton("Discard", notification: .discardWatchedFolderBatch)
+                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Label {
+                        let status = activityText(activity, now: context.date)
+                        Text(status)
+                            .numericTextTransition(animationValue: status)
+                    } icon: {
+                        Image(systemName: activityIcon(activity))
                     }
                 }
                 .foregroundStyle(activityColor(activity))
             }
+        }
+    }
+
+    private func parkedBatchLine(fileCount: Int) -> some View {
+        HStack(spacing: 8) {
+            Label(
+                "\(fileCount) file\(fileCount == 1 ? "" : "s") couldn’t be organized",
+                systemImage: "exclamationmark.circle.fill"
+            )
+            .foregroundStyle(.secondary)
+
+            Button {
+                postPendingBatchNotification(.retryWatchedFolderBatch)
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.sortyProminent(intent: .primary, size: .mini))
+
+            Button("Discard", role: .destructive) {
+                postPendingBatchNotification(.discardWatchedFolderBatch)
+            }
+            .buttonStyle(.sortyBordered(intent: .destructive, size: .mini))
         }
     }
 
@@ -782,7 +799,7 @@ struct WatchedFolderCard: View {
         case .retrying(let count, let attempt, let date):
             return "\(count) retrying (attempt \(attempt)) · \(countdown(to: date, from: now))"
         case .parked(let count):
-            return "\(count) parked after repeated failures"
+            return "\(count) file\(count == 1 ? "" : "s") couldn’t be organized"
         case .running(let count):
             return "Organizing \(count) file\(count == 1 ? "" : "s")"
         case .awaitingReview(let count):
@@ -834,13 +851,9 @@ struct WatchedFolderCard: View {
         }
     }
 
-    private func pendingBatchButton(_ title: String, notification: Notification.Name) -> some View {
-        Button(title) {
-            HapticFeedbackManager.shared.tap()
-            NotificationCenter.default.post(name: notification, object: folder.id)
-        }
-        .buttonStyle(.link)
-        .controlSize(.mini)
+    private func postPendingBatchNotification(_ notification: Notification.Name) {
+        HapticFeedbackManager.shared.tap()
+        NotificationCenter.default.post(name: notification, object: folder.id)
     }
 
     private var isEnabledBinding: Binding<Bool> {
