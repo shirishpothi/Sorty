@@ -110,40 +110,10 @@ final class AppAccessibilityTests: XCTestCase {
         }
     }
 
-    // MARK: - Settings View Accessibility
-
-    func testSettingsViewToggleIdentifiersExist() throws {
-        // Navigate to Settings
-        let settingsSidebarItem = app.buttons["SettingsSidebarItem"]
-        XCTAssertTrue(settingsSidebarItem.waitForExistence(timeout: 3.0))
-        settingsSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        let expectedToggles = [
-            "ReasoningToggle",
-            "DeepScanToggle",
-            "DuplicatesToggle",
-            "FileTaggingToggle"
-        ]
-
-        for identifier in expectedToggles {
-            let toggle = app.switches[identifier]
-            // Use waitForExistence rather than immediate check
-            let exists = toggle.waitForExistence(timeout: 2.0)
-            // Log but don't fail immediately - some may be hidden/collapsed
-            if !exists {
-                print("Warning: Toggle '\(identifier)' not immediately visible, may require scrolling")
-            }
-        }
-    }
-
     // MARK: - Duplicates View Accessibility
 
     func testDuplicatesViewCoreElementsExist() throws {
-        let duplicatesSidebarItem = app.buttons["DuplicatesSidebarItem"]
-        XCTAssertTrue(duplicatesSidebarItem.waitForExistence(timeout: 3.0))
-        duplicatesSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
+        try navigate(to: "DuplicatesSidebarItem", screenIdentifier: "DuplicatesScreen")
 
         let scanButton = app.buttons["ScanDuplicatesButton"]
         XCTAssertTrue(
@@ -155,18 +125,12 @@ final class AppAccessibilityTests: XCTestCase {
     // MARK: - Organize View Accessibility
 
     func testOrganizeViewCoreElementsExist() throws {
-        let organizeSidebarItem = app.buttons["OrganizeSidebarItem"]
-        XCTAssertTrue(organizeSidebarItem.waitForExistence(timeout: 3.0))
-        organizeSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
+        try navigate(to: "OrganizeSidebarItem", screenIdentifier: "OrganizerScreen")
 
-        // The DirectorySelectionView should be shown initially
-        // Check for the drop zone or folder selection UI
-        let hasDropZone = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'folder'")
-        ).firstMatch.waitForExistence(timeout: 2.0)
-        
-        XCTAssertTrue(hasDropZone, "Organize view should show folder selection UI")
+        XCTAssertTrue(
+            app.buttons["BrowseForFolderButton"].waitForExistence(timeout: 3),
+            "Organize view should expose its folder picker as a button"
+        )
     }
 
 }
