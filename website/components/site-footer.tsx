@@ -13,19 +13,19 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { label: 'Features', href: sitePath('/#features') },
-      { label: 'Mac folder organizer', href: sitePath('/mac-folder-organizer') },
-      { label: 'Compare organizers', href: sitePath('/compare') },
-      { label: 'Privacy', href: sitePath('/privacy-policy') },
+      { label: 'Mac folder organizer', href: sitePath('/mac-folder-organizer/') },
+      { label: 'Compare organizers', href: sitePath('/compare/') },
+      { label: 'Privacy', href: sitePath('/privacy-policy/') },
       { label: 'Pricing', href: sitePath('/#pricing') },
     ],
   },
   {
     title: 'Resources',
     links: [
-      { label: 'Organize Downloads', href: sitePath('/organize-downloads-folder') },
-      { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer') },
-      { label: 'Changelog', href: sitePath('/changelog') },
-      { label: 'Press kit', href: sitePath('/press') },
+      { label: 'Organize Downloads', href: sitePath('/organize-downloads-folder/') },
+      { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer/') },
+      { label: 'Changelog', href: sitePath('/changelog/') },
+      { label: 'Press kit', href: sitePath('/press/') },
       { label: 'FAQ', href: sitePath('/#faq') },
     ],
   },
@@ -41,8 +41,8 @@ const COLUMNS = [
     title: 'Legal',
     links: [
       { label: 'GPL v3 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
-      { label: 'Privacy Policy', href: sitePath('/privacy-policy') },
-      { label: 'Terms', href: sitePath('/terms') },
+      { label: 'Privacy Policy', href: sitePath('/privacy-policy/') },
+      { label: 'Terms', href: sitePath('/terms/') },
     ],
   },
 ]

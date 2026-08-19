@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title,
     description,
-    url: `${SITE_URL}/compare`,
+    url: `${SITE_URL}/compare/`,
     images: [
       {
         url: OG_IMAGE_PATH,

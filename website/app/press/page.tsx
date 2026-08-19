@@ -96,7 +96,7 @@ export const metadata: Metadata = {
     type: 'website',
     title: 'Sorty press kit — Logos, screenshots, and facts',
     description: PAGE_DESCRIPTION,
-    url: `${SITE_URL}/press`,
+    url: `${SITE_URL}/press/`,
     images: [
       {
         url: OG_IMAGE_PATH,

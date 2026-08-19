@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       siteName: SITE_NAME,
       title: page.title,
       description: page.description,
-      url: `${SITE_URL}/${page.slug}`,
+      url: `${SITE_URL}/${page.slug}/`,
       images: [{ url: OG_IMAGE_PATH, width: 1102, height: 754, alt: page.imageAlt }],
     },
     twitter: {

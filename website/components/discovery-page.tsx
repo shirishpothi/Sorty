@@ -35,22 +35,22 @@ const STEP_ICONS: Record<DiscoveryPageData['steps'][number]['icon'], ComponentTy
 
 const RELATED_LINKS = [
   {
-    href: '/mac-folder-organizer',
+    href: '/mac-folder-organizer/',
     icon: FolderOpen,
     label: 'Mac folder organizer',
   },
   {
-    href: '/organize-downloads-folder',
+    href: '/organize-downloads-folder/',
     icon: FolderDown,
     label: 'Organize Downloads',
   },
   {
-    href: '/local-ai-file-organizer',
+    href: '/local-ai-file-organizer/',
     icon: ShieldCheck,
     label: 'Local AI privacy',
   },
   {
-    href: '/compare',
+    href: '/compare/',
     icon: Scale,
     label: 'Compare Mac organizers',
   },
@@ -150,8 +150,8 @@ function HeroTitle({ slug, title }: { slug: string; title: string }) {
 }
 
 export function DiscoveryPage({ page }: { page: DiscoveryPageData }) {
-  const pageUrl = `${SITE_URL}/${page.slug}`
-  const relatedLinks = RELATED_LINKS.filter((link) => link.href !== `/${page.slug}`)
+  const pageUrl = `${SITE_URL}/${page.slug}/`
+  const relatedLinks = RELATED_LINKS.filter((link) => link.href !== `/${page.slug}/`)
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -170,7 +170,7 @@ export function DiscoveryPage({ page }: { page: DiscoveryPageData }) {
         '@type': 'BreadcrumbList',
         '@id': `${pageUrl}#breadcrumb`,
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Sorty', item: SITE_URL },
+          { '@type': 'ListItem', position: 1, name: 'Sorty', item: `${SITE_URL}/` },
           { '@type': 'ListItem', position: 2, name: page.eyebrow, item: pageUrl },
         ],
       },

@@ -83,7 +83,7 @@ function StatusIcon({ cell }: { cell: ComparisonCell }) {
 }
 
 export function ComparisonPage() {
-  const pageUrl = `${SITE_URL}/compare`
+  const pageUrl = `${SITE_URL}/compare/`
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -103,7 +103,7 @@ export function ComparisonPage() {
         '@type': 'BreadcrumbList',
         '@id': `${pageUrl}#breadcrumb`,
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Sorty', item: SITE_URL },
+          { '@type': 'ListItem', position: 1, name: 'Sorty', item: `${SITE_URL}/` },
           { '@type': 'ListItem', position: 2, name: 'Compare Mac file organizers', item: pageUrl },
         ],
       },
@@ -377,7 +377,7 @@ export function ComparisonPage() {
               Download Sorty free
             </a>
             <Link
-              href="/mac-folder-organizer"
+              href="/mac-folder-organizer/"
               className="group inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card/25 px-6 py-3 text-sm font-medium transition-[transform,background-color,border-color] duration-300 hover:-translate-y-0.5 hover:border-primary/45 hover:bg-secondary/70"
             >
               See the workflow

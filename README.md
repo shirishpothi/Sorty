@@ -6,7 +6,9 @@
 [![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)](https://www.apple.com/macos)
 [![Security Checks](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml)
 
-A native macOS SwiftUI application that helps organize directory contents into relevant, semantically-named folders.
+A native macOS SwiftUI app that uses AI to organize files into relevant, semantically named folders.
+
+[Visit the Sorty website](https://sorty-organizer.github.io/Sorty/) for the product overview, privacy details, comparisons, and latest release.
 
 | <img src="Assets/Screenshots/sorty-app.webp" alt="Sorty organization workspace" width="300" /> | <img src="Assets/Screenshots/sorty-apply.webp" alt="Sorty preview showing proposed file moves" width="300" /> | <img src="Assets/Screenshots/sorty-duplicates.webp" alt="Sorty duplicate file review" width="300" /> |
 | :---: | :---: | :---: |

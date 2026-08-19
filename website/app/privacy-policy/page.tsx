@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     title: 'Privacy Policy — Sorty',
     description:
       'Sorty has no servers and no accounts, so your files never reach us. File contents only leave your Mac when you explicitly enable Deep Scan.',
-    url: `${SITE_URL}/privacy-policy`,
+    url: `${SITE_URL}/privacy-policy/`,
     type: 'article',
     images: [
       {
@@ -479,7 +479,7 @@ export default function PrivacyPolicyPage() {
             Home
           </a>{' '}
           ·{' '}
-          <a href={sitePath('/terms')} className="underline-offset-4 hover:underline">
+          <a href={sitePath('/terms/')} className="underline-offset-4 hover:underline">
             Terms
           </a>{' '}
           ·{' '}

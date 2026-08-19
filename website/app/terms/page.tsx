@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     title: 'Terms of Service — Sorty',
     description:
       'Sorty is free, open-source software under the GNU GPL v3.0, provided "as is". You are responsible for reviewing suggested changes before applying them.',
-    url: `${SITE_URL}/terms`,
+    url: `${SITE_URL}/terms/`,
     type: 'article',
     images: [
       {
@@ -158,7 +158,7 @@ export default function TermsPage() {
           assume responsibility for reviewing suggested changes before applying
           them. See the{' '}
           <a
-            href={sitePath('/privacy-policy')}
+            href={sitePath('/privacy-policy/')}
             className="text-primary underline-offset-4 hover:underline"
           >
             Privacy Policy
@@ -344,7 +344,7 @@ export default function TermsPage() {
             Home
           </a>{' '}
           ·{' '}
-          <a href={sitePath('/privacy-policy')} className="underline-offset-4 hover:underline">
+          <a href={sitePath('/privacy-policy/')} className="underline-offset-4 hover:underline">
             Privacy
           </a>{' '}
           ·{' '}

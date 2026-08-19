@@ -10,8 +10,8 @@ import { DownloadButton } from '@/components/download-button'
 
 const LINKS = [
   { label: 'Features', href: '/#features' },
-  { label: 'Changelog', href: '/changelog' },
-  { label: 'Privacy', href: '/privacy-policy' },
+  { label: 'Changelog', href: '/changelog/' },
+  { label: 'Privacy', href: '/privacy-policy/' },
 ]
 
 const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'

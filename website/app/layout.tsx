@@ -66,7 +66,7 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title: `${SITE_NAME} — AI folder organization for your Mac`,
     description: SITE_DESCRIPTION,
-    url: SITE_URL,
+    url: `${SITE_URL}/`,
     locale: 'en_US',
     images: [
       {

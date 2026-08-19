@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: 'Sorty changelog — Latest releases and updates',
     description:
       'See what changed in Sorty across the latest update and previous stable releases.',
-    url: `${SITE_URL}/changelog`,
+    url: `${SITE_URL}/changelog/`,
     images: [
       {
         url: OG_IMAGE_PATH,

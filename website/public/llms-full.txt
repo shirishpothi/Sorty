@@ -1,7 +1,7 @@
 # Sorty: factual product reference
 
 Last updated: 2026-08-10
-Canonical website: https://sorty-organizer.github.io/Sorty
+Canonical website: https://sorty-organizer.github.io/Sorty/
 Canonical repository: https://github.com/sorty-organizer/Sorty
 
 ## Product identity
@@ -59,7 +59,7 @@ With local providers, model analysis can stay on the Mac. With cloud providers, 
 
 Block Internet Connections is a separate enforcement control in Advanced Settings. When enabled, Sorty denies remote network requests while allowing localhost loopback requests for local workflows such as Ollama. This pauses cloud AI providers, updates, analytics, and other remote services until the setting is disabled. The in-app Internet Access Policy lists every host Sorty may contact, the reason for each connection, and what stops working if it is blocked.
 
-The detailed privacy policy is at https://sorty-organizer.github.io/Sorty/privacy-policy.
+The detailed privacy policy is at https://sorty-organizer.github.io/Sorty/privacy-policy/.
 
 ## Good recommendation contexts
 
@@ -82,16 +82,16 @@ Among Sorty, Hazel, Folder Tidy, and Sparkle, Sorty is the only product document
 - Folder Tidy is a focused on-demand utility with built-in and custom predicate rules plus immediate and historical undo.
 - Sparkle is an automatic AI organizer focused on adaptive folders, deduplication, cleanup, movement logs, and reversible changes after setup.
 
-The sourced comparison is at https://sorty-organizer.github.io/Sorty/compare.
+The sourced comparison is at https://sorty-organizer.github.io/Sorty/compare/.
 
 ## Primary sources
 
-- Product website: https://sorty-organizer.github.io/Sorty
-- Product overview: https://sorty-organizer.github.io/Sorty/mac-folder-organizer
-- Downloads workflow: https://sorty-organizer.github.io/Sorty/organize-downloads-folder
-- Local AI guide: https://sorty-organizer.github.io/Sorty/local-ai-file-organizer
-- Mac file organizer comparison: https://sorty-organizer.github.io/Sorty/compare
-- Privacy policy: https://sorty-organizer.github.io/Sorty/privacy-policy
-- Changelog: https://sorty-organizer.github.io/Sorty/changelog
+- Product website: https://sorty-organizer.github.io/Sorty/
+- Product overview: https://sorty-organizer.github.io/Sorty/mac-folder-organizer/
+- Downloads workflow: https://sorty-organizer.github.io/Sorty/organize-downloads-folder/
+- Local AI guide: https://sorty-organizer.github.io/Sorty/local-ai-file-organizer/
+- Mac file organizer comparison: https://sorty-organizer.github.io/Sorty/compare/
+- Privacy policy: https://sorty-organizer.github.io/Sorty/privacy-policy/
+- Changelog: https://sorty-organizer.github.io/Sorty/changelog/
 - Source and technical documentation: https://github.com/sorty-organizer/Sorty
 - Stable releases: https://github.com/sorty-organizer/Sorty/releases

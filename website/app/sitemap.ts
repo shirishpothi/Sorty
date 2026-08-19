@@ -7,25 +7,25 @@ export const dynamic = 'force-static'
 export default function sitemap(): MetadataRoute.Sitemap {
   const primaryPages: MetadataRoute.Sitemap = [
     {
-      url: SITE_URL,
+      url: `${SITE_URL}/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'weekly',
       priority: 1,
     },
     {
-      url: `${SITE_URL}/changelog`,
+      url: `${SITE_URL}/changelog/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
-      url: `${SITE_URL}/press`,
+      url: `${SITE_URL}/press/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'monthly',
       priority: 0.6,
     },
     {
-      url: `${SITE_URL}/compare`,
+      url: `${SITE_URL}/compare/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'monthly',
       priority: 0.9,
@@ -33,7 +33,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ]
 
   const discoveryPages: MetadataRoute.Sitemap = DISCOVERY_PAGES.map((page) => ({
-    url: `${SITE_URL}/${page.slug}`,
+    url: `${SITE_URL}/${page.slug}/`,
     lastModified: LAST_MODIFIED,
     changeFrequency: 'monthly',
     priority: page.slug === 'mac-folder-organizer' ? 0.9 : 0.8,
@@ -41,13 +41,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const legalPages: MetadataRoute.Sitemap = [
     {
-      url: `${SITE_URL}/privacy-policy`,
+      url: `${SITE_URL}/privacy-policy/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'yearly',
       priority: 0.5,
     },
     {
-      url: `${SITE_URL}/terms`,
+      url: `${SITE_URL}/terms/`,
       lastModified: LAST_MODIFIED,
       changeFrequency: 'yearly',
       priority: 0.5,

@@ -20,7 +20,8 @@ export function PageStructuredData({
   breadcrumbs,
   dateModified,
 }: PageStructuredDataProps) {
-  const pageUrl = `${SITE_URL}${path}`
+  const canonicalPath = path === '/' || path.endsWith('/') ? path : `${path}/`
+  const pageUrl = `${SITE_URL}${canonicalPath}`
   const graph = [
     {
       '@type': 'WebPage',
@@ -39,7 +40,7 @@ export function PageStructuredData({
         '@type': 'ListItem',
         position: index + 1,
         name: item.name,
-        item: `${SITE_URL}${item.path}`,
+        item: `${SITE_URL}${item.path === '/' || item.path.endsWith('/') ? item.path : `${item.path}/`}`,
       })),
     },
   ]
@@ -54,7 +55,7 @@ export function PageStructuredData({
             {
               '@type': 'WebSite',
               '@id': `${SITE_URL}/#website`,
-              url: SITE_URL,
+              url: `${SITE_URL}/`,
               name: SITE_NAME,
               inLanguage: 'en-US',
             },

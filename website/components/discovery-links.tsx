@@ -4,25 +4,25 @@ import { Reveal } from '@/components/reveal'
 
 const LINKS = [
   {
-    href: '/mac-folder-organizer',
+    href: '/mac-folder-organizer/',
     icon: Laptop,
     title: 'Mac folder organizer',
     description: 'See how Sorty compares with fixed-rule automation and keeps you in control of every move.',
   },
   {
-    href: '/organize-downloads-folder',
+    href: '/organize-downloads-folder/',
     icon: FolderOpen,
     title: 'Organize Downloads',
     description: 'Clean up mixed downloads by meaning, then keep the folder organized with watched workflows.',
   },
   {
-    href: '/local-ai-file-organizer',
+    href: '/local-ai-file-organizer/',
     icon: Bot,
     title: 'Use local AI',
     description: 'Run organization with Ollama or supported Apple on-device models so analysis can stay local.',
   },
   {
-    href: '/compare',
+    href: '/compare/',
     icon: Scale,
     title: 'Compare Mac organizers',
     description: 'Compare Sorty with Hazel, Folder Tidy, and Sparkle using sourced workflow details.',
