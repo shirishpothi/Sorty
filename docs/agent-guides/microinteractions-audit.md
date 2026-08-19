@@ -4,6 +4,11 @@ Audit of the Sorty SwiftUI surface against the `swiftui-microinteractions` skill
 (spring physics, SF Symbol 7 draw animations, CoreHaptics haptic ladder, Liquid
 Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
 
+> Status, 2026-08-19: the original opportunity list below is retained for design
+> context. `CometLoader`, the status-aware liquid-glass toast, token-safe
+> dismissal, and shared Reduce Motion loader behavior are implemented. Current
+> engineering requirements live in `swiftui-quality-baseline.md`.
+
 ## Existing infrastructure (what's already strong — extend, don't rebuild)
 
 - **`HapticFeedbackManager`** (`Utilities/Constants.swift:36`) — `tap` / `success` /
@@ -57,10 +62,10 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
 - **Rule to honor:** "Loading Indicator → never spring" — drive from a `TimelineView`
   clock, not `withAnimation`.
 
-### 3. `ToastOverlay` → Liquid Glass status banner ★★★
-- **Current** (`ToastOverlay.swift`): plain `Text` + optional action, opacity fade
-  in/out, 4 s auto-dismiss, **no status kind, no spring slide, no token-based
-  dismissal (a newer toast can be cut short), does not respect `reduceMotion`**.
+### 3. `ToastOverlay` → Liquid Glass status banner ★★★ — implemented
+- **Current** (`ToastOverlay.swift`): status kind, icon well, spring entrance,
+  cancellable auto-dismissal, liquid-glass surface, independent action semantics,
+  and a static Reduce Motion presentation.
 - **Skill archetype:** Liquid Glass Toasts & Status Banners — neutral glass capsule
   (status color lives in the icon well, **not** the glass tint), `.move(edge: .top)`
   + `.opacity` transition inside `withAnimation`, token-guarded auto-dismiss
@@ -134,14 +139,14 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
   or `.pulse` symbol, not a static glyph. Add a single ambient `.breathe`/
   `.pulse.byLayer` symbol + a one-line "next step" CTA to each empty state.
 
-### 9. `reduceMotion` coverage is uneven
+### 9. `reduceMotion` coverage requires ongoing review
 - Honored in: `HUDNotificationOverlay`, `OnboardingView`, `OrganizeView`,
   `AnalysisView`, `DuplicatesView`, `WorkflowContainer`, `OrganizingMascotView`,
   `OrganizingFlightStageView`, several settings.
-- **Missing in:** `ToastOverlay` (Tier 1 #3), `OrganizationCompleteView`
-  (confetti + ring expand should collapse to a static checkmark), the new
-  `CometLoader` (should freeze on a static frame), and most `withAnimation`
-  call sites in `LearningsView` / `ExclusionRulesView` / `ScheduleEditorView`.
+- Shared shimmer, spinner, dots, ring, comet, watched-folder highlight, About
+  carousel, and toast schedules now stop or become static under Reduce Motion.
+- Continue reviewing feature-local animation in `LearningsView`,
+  `ExclusionRulesView`, and `ScheduleEditorView` when those surfaces change.
 - **Proposed:** add a single `@Environment(\.accessibilityReduceMotion)` read +
   branch in each animation-bearing component; or a `reduceMotion ? .none : …`
   helper in `Constants.swift` next to the existing `Animation` presets.
