@@ -9,7 +9,6 @@ import UniformTypeIdentifiers
 struct OrganizingMascotView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isAnimating = false
     @State private var orbitingURLs: [URL] = []
     @State private var cachedOrbitingURLs: [URL] = []
     @State private var isHovered = false
@@ -34,8 +33,6 @@ struct OrganizingMascotView: View {
     @State private var antennaGlow: Double = 0.3
     
     @State private var orbitGlowIntensity: Double = 0.5
-    @State private var sparklePhase: Double = 0
-    
     @State private var lastBlinkTime: TimeInterval = 0
     @State private var lastLookAroundTime: TimeInterval = 0
     @State private var lastEmotionTime: TimeInterval = 0
@@ -92,7 +89,7 @@ struct OrganizingMascotView: View {
             }
         }
         .onHover { hovering in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                 isHovered = hovering
                 if hovering {
                     currentEmotion = .happy
@@ -106,7 +103,10 @@ struct OrganizingMascotView: View {
         .onAppear {
             rebuildCachedURLs()
             orbitingURLs = cachedOrbitingURLs
-            startAnimations()
+            updateContinuousAnimations()
+        }
+        .onChange(of: reduceMotion) { _, _ in
+            updateContinuousAnimations()
         }
         .onChange(of: organizer.scannedFiles) { _, _ in
             rebuildCachedURLs()
@@ -457,6 +457,21 @@ struct OrganizingMascotView: View {
     }
     
     // MARK: - Animation Triggers
+
+    private func updateContinuousAnimations() {
+        guard !reduceMotion else {
+            withAnimation(nil) {
+                breathScale = 1
+                bounceOffset = 0
+                antennaWiggle = 0
+                orbitGlowIntensity = 0.5
+                antennaGlow = 0.3
+            }
+            return
+        }
+
+        startAnimations()
+    }
     
     private func startAnimations() {
         withAnimation(

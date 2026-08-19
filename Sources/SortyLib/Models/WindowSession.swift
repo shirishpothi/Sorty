@@ -9,6 +9,7 @@ public final class WindowSession: ObservableObject {
     @Published public var organizer: FolderOrganizer
 
     private var didConfigure = false
+    private var highlightDismissTask: Task<Void, Never>?
 
     public init(
         id: UUID = UUID(),
@@ -256,10 +257,12 @@ public final class WindowSession: ObservableObject {
 
     private func highlightWatchedFolder(_ folderID: UUID) {
         appState.highlightedWatchedFolderID = folderID
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if appState.highlightedWatchedFolderID == folderID {
-                appState.highlightedWatchedFolderID = nil
+        highlightDismissTask?.cancel()
+        highlightDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, let self else { return }
+            if self.appState.highlightedWatchedFolderID == folderID {
+                self.appState.highlightedWatchedFolderID = nil
             }
         }
     }

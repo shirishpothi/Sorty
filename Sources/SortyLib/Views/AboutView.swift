@@ -9,6 +9,8 @@ import AppKit
 import SwiftUI
 
 struct AboutView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
     private let docsURL = URL(string: "https://github.com/shirishpothi/Sorty#readme")!
     private let githubURL = URL(string: "https://github.com/shirishpothi/Sorty")!
@@ -163,6 +165,12 @@ struct AboutView: View {
         .frame(width: 420, height: 510)
         .modifier(AboutGlassBackground())
         .windowLinkHoverPillHost()
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
     }
 }
 
@@ -183,7 +191,7 @@ private struct AboutAppIconEasterEgg: View {
 
     var body: some View {
         Button {
-            carousel.handleTap()
+            carousel.handleTap(allowsBurst: !reduceMotion)
         } label: {
             ZStack {
                 if carousel.isBursting && !reduceMotion {
@@ -225,7 +233,10 @@ private struct AboutAppIconEasterEgg: View {
                 HapticFeedbackManager.shared.selection()
             }
         }
-        .onAppear { carousel.start() }
+        .onAppear { carousel.setAutoCycleEnabled(!reduceMotion) }
+        .onChange(of: reduceMotion) { _, newValue in
+            carousel.setAutoCycleEnabled(!newValue)
+        }
         .onDisappear { carousel.stop() }
     }
 
@@ -272,7 +283,13 @@ private final class AboutIconCarousel: ObservableObject {
         max(2, images.count)
     }
 
-    func start() {
+    func setAutoCycleEnabled(_ isEnabled: Bool) {
+        guard isEnabled else {
+            cycleTask?.cancel()
+            cycleTask = nil
+            return
+        }
+
         guard cycleTask == nil else { return }
         cycleTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -293,9 +310,14 @@ private final class AboutIconCarousel: ObservableObject {
         reset()
     }
 
-    func handleTap() {
+    func handleTap(allowsBurst: Bool) {
         guard !isBursting else { return }
         HapticFeedbackManager.shared.light()
+
+        guard allowsBurst else {
+            advance()
+            return
+        }
 
         manualTaps += 1
         lastManualTapDate = Date()

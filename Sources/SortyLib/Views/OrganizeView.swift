@@ -1957,6 +1957,8 @@ private struct PreviewHandoffView: View {
 
 private struct PreviewHandoffDot: ViewModifier {
     let delay: Double
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isOn = false
 
     func body(content: Content) -> some View {
@@ -1964,8 +1966,15 @@ private struct PreviewHandoffDot: ViewModifier {
             .scaleEffect(isOn ? 1.22 : 0.78)
             .opacity(isOn ? 0.88 : 0.35)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 0.58).repeatForever().delay(delay)) {
                     isOn = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                guard shouldReduceMotion else { return }
+                withAnimation(nil) {
+                    isOn = false
                 }
             }
     }

@@ -1611,6 +1611,8 @@ private struct RenameFileIcon: View {
 private struct RenameShiftIndicator: View {
     let isActive: Bool
     let isUnchanged: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
 
     var body: some View {
@@ -1631,13 +1633,13 @@ private struct RenameShiftIndicator: View {
         }
         .frame(width: 56)
         .onAppear {
-            guard isActive else { return }
+            guard isActive, !reduceMotion else { return }
             withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
                 pulse = true
             }
         }
         .onChange(of: isActive) { _, active in
-            if active {
+            if active, !reduceMotion {
                 withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
@@ -1647,11 +1649,19 @@ private struct RenameShiftIndicator: View {
                 }
             }
         }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            guard shouldReduceMotion else { return }
+            withAnimation(nil) {
+                pulse = false
+            }
+        }
     }
 }
 
 private struct RenameGenerationSkeletonRow: View {
     var delay: Double = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isOn = false
 
     var body: some View {
@@ -1670,8 +1680,15 @@ private struct RenameGenerationSkeletonRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
                 isOn = true
+            }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            guard shouldReduceMotion else { return }
+            withAnimation(nil) {
+                isOn = false
             }
         }
     }
@@ -2757,7 +2774,7 @@ struct InlineNotice: View {
                         .strokeBorder(severity.color.opacity(0.15), lineWidth: 1)
                 )
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .accessibilityHint(message ?? "")
     }
@@ -2973,6 +2990,7 @@ public struct FlowLayout: Layout {
 }
 
 private struct PingRingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ping = false
 
     var body: some View {
@@ -2982,8 +3000,15 @@ private struct PingRingView: View {
             .scaleEffect(ping ? 2.0 : 1.0)
             .drawingGroup(opaque: false)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
                     ping = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                guard shouldReduceMotion else { return }
+                withAnimation(nil) {
+                    ping = false
                 }
             }
     }

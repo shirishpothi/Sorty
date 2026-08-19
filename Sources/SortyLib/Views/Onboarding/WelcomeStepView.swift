@@ -5,14 +5,15 @@
 //  Welcome step of the onboarding flow
 //
 
-import SwiftUI
 import AppKit
 import AVFoundation
 import Combine
+import SwiftUI
 
 // MARK: - Animated Gradient Background
 
 struct AnimatedGradientBackground: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false
     var revealed: Bool = true
     var color1: Color = .purple
@@ -46,8 +47,15 @@ struct AnimatedGradientBackground: View {
                 .blur(radius: 70)
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
                 animate = true
+            }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            guard shouldReduceMotion else { return }
+            withAnimation(nil) {
+                animate = false
             }
         }
     }
@@ -59,6 +67,8 @@ struct AnimatedGradientBackground: View {
 private struct RevealGradientBlob: View {
     let scale: CGFloat
     let opacity: Double
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var colorPhase: Double = 0
 
     var body: some View {
@@ -119,8 +129,15 @@ private struct RevealGradientBlob: View {
         .scaleEffect(scale)
         .opacity(opacity)
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
                 colorPhase = .pi * 2
+            }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            guard shouldReduceMotion else { return }
+            withAnimation(nil) {
+                colorPhase = 0
             }
         }
     }
@@ -131,6 +148,8 @@ private struct RevealGradientBlob: View {
 /// A pulsing glow ring behind the app icon during reveal
 private struct GlowRing: View {
     let isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulseScale: CGFloat = 1.0
 
     var body: some View {
@@ -147,8 +166,15 @@ private struct GlowRing: View {
             .opacity(isActive ? 0.6 : 0)
             .blur(radius: 8)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                     pulseScale = 1.15
+                }
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                guard shouldReduceMotion else { return }
+                withAnimation(nil) {
+                    pulseScale = 1
                 }
             }
     }
@@ -157,6 +183,7 @@ private struct GlowRing: View {
 // MARK: - Floating Particle
 
 struct FloatingParticle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var yOffset: CGFloat = 0
     @State private var opacity: Double = 0
     let delay: Double
@@ -170,6 +197,7 @@ struct FloatingParticle: View {
             .offset(x: xPosition, y: yOffset)
             .opacity(opacity)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: Double.random(in: 3...6)).repeatForever(autoreverses: false).delay(delay)) {
                     yOffset = -300
                     opacity = 0
@@ -178,12 +206,21 @@ struct FloatingParticle: View {
                     opacity = 0.6
                 }
             }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                guard shouldReduceMotion else { return }
+                withAnimation(nil) {
+                    yOffset = 0
+                    opacity = 0
+                }
+            }
     }
 }
 
 // MARK: - Welcome Step View
 
 public struct WelcomeStepView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var revealScale: CGFloat = 0.05
     @State private var revealOpacity: Double = 0
     @State private var backgroundRevealed = false
@@ -342,14 +379,32 @@ public struct WelcomeStepView: View {
             revealAudio.stop()
             onboardingAudio.stopAll()
         }
+        .onChange(of: reduceMotion) { _, shouldReduceMotion in
+            if shouldReduceMotion {
+                settleRevealSequence()
+            }
+        }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome Step")
     }
 
     private func startRevealSequence() {
+        animationTask?.cancel()
+
         // Phase 1: Gradient blob reveal (0 - 0.8s)
         revealAudio.playRevealSwell()
         onboardingAudio.startBackgroundMelody()
+
+        guard !reduceMotion else {
+            settleRevealSequence()
+            return
+        }
 
         withAnimation(.easeOut(duration: 1.0)) {
             revealScale = 1.2
@@ -358,7 +413,7 @@ public struct WelcomeStepView: View {
 
         // Phase 2+: async sequence stored for cancellation on disappear
         animationTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
 
             withAnimation(.easeInOut(duration: 1.2)) {
@@ -368,7 +423,7 @@ public struct WelcomeStepView: View {
             }
 
             // Phase 3: Content appears (0.6s)
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
 
             withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
@@ -385,7 +440,7 @@ public struct WelcomeStepView: View {
                 hasPlayedSound = true
             }
 
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
 
             // Phase 4: Particles and features
@@ -396,6 +451,20 @@ public struct WelcomeStepView: View {
             withAnimation {
                 featuresAppeared = true
             }
+        }
+    }
+
+    private func settleRevealSequence() {
+        animationTask?.cancel()
+        animationTask = nil
+        withAnimation(nil) {
+            revealScale = 1.5
+            revealOpacity = 0.3
+            backgroundRevealed = true
+            hasAppeared = true
+            featuresAppeared = true
+            showGlowRing = true
+            showParticles = false
         }
     }
 }

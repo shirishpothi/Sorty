@@ -32,12 +32,15 @@ public struct WhatsNewTourView: View {
         .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: currentPage)
-        .onReceive(
-            Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
-        ) { _ in
+        .task(id: ImageRotationTaskID(page: currentPage, reduceMotion: reduceMotion)) {
             guard !reduceMotion, page.imageNames.count > 1 else { return }
-            withAnimation(imageTransitionAnimation) {
-                workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
+
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(3_800))
+                guard !Task.isCancelled else { return }
+                withAnimation(imageTransitionAnimation) {
+                    workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
+                }
             }
         }
         .onChange(of: currentPage) { _, _ in
@@ -663,8 +666,12 @@ public struct WhatsNewTourView: View {
     }
 }
 
-private struct WhatsNewPage: Identifiable, Hashable {
-    let id = UUID()
+private struct ImageRotationTaskID: Hashable {
+    let page: Int
+    let reduceMotion: Bool
+}
+
+private struct WhatsNewPage: Hashable {
     let imageNames: [String]
     let title: String
     let description: String

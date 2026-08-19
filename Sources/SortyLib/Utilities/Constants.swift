@@ -322,46 +322,42 @@ struct ModalBounceModifier: ViewModifier {
 /// Loading state animation modifier
 struct LoadingAnimationModifier: ViewModifier {
     let isLoading: Bool
-    @State private var rotation: Double = 0
-    @State private var scale: CGFloat = 1.0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(isLoading ? rotation : 0))
-            .scaleEffect(isLoading ? scale : 1.0)
-            .onChange(of: isLoading) { oldValue, newValue in
-                if newValue {
-                    withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
-                        rotation = 360
-                    }
-                    withAnimation(.loadingPulse) {
-                        scale = 1.1
-                    }
-                } else {
-                    rotation = 0
-                    scale = 1.0
-                }
+        if isLoading, !reduceMotion {
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                let rotation = elapsed.truncatingRemainder(dividingBy: 1) * 360
+                let scale = CGFloat(1 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.05)
+
+                content
+                    .rotationEffect(.degrees(rotation))
+                    .scaleEffect(scale)
             }
+        } else {
+            content
+        }
     }
 }
 
 /// Pulsing loading indicator modifier
 struct PulsingLoadingModifier: ViewModifier {
     let isLoading: Bool
-    @State private var opacity: Double = 1.0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .opacity(isLoading ? opacity : 1.0)
-            .onChange(of: isLoading) { oldValue, newValue in
-                if newValue {
-                    withAnimation(.loadingPulse) {
-                        opacity = 0.5
-                    }
-                } else {
-                    opacity = 1.0
-                }
+        if isLoading, !reduceMotion {
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+                let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                let opacity = 0.75 + sin(elapsed * .pi * 2 / 0.8) * 0.25
+                content.opacity(opacity)
             }
+        } else {
+            content
+        }
     }
 }
 
@@ -369,12 +365,14 @@ struct PulsingLoadingModifier: ViewModifier {
 struct ShimmerModifier: ViewModifier {
     let isLoading: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private let bandWidthRatio: CGFloat = 0.42
     private let shimmerAngle = Angle(degrees: 18)
     private let shimmerSpeed: Double = 1.15
 
     func body(content: Content) -> some View {
-        if isLoading {
+        if isLoading, !reduceMotion {
             content
                 .overlay {
                     GeometryReader { geometry in
@@ -657,7 +655,8 @@ public struct LoadingDotsView: View {
 
 /// Spinning loading indicator with bounce
 public struct BouncingSpinner: View {
-    @State private var isAnimating = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let size: CGFloat
     let color: Color
 
@@ -667,37 +666,47 @@ public struct BouncingSpinner: View {
     }
 
     public var body: some View {
+        if reduceMotion {
+            spinner(rotation: 0, scale: 1)
+        } else {
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                let elapsed = timeline.date.timeIntervalSinceReferenceDate
+                let rotation = elapsed.truncatingRemainder(dividingBy: 0.8) / 0.8 * 360
+                let scale = CGFloat(0.95 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.025)
+                spinner(rotation: rotation, scale: scale)
+            }
+        }
+    }
+
+    private func spinner(rotation: Double, scale: CGFloat) -> some View {
         Circle()
             .trim(from: 0, to: 0.7)
             .stroke(color, style: StrokeStyle(lineWidth: size * 0.15, lineCap: .round))
             .frame(width: size, height: size)
-            .rotationEffect(.degrees(isAnimating ? 360 : 0))
-            .scaleEffect(isAnimating ? 1.0 : 0.9)
-            .onAppear {
-                withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-                    isAnimating = true
-                }
-            }
+            .rotationEffect(.degrees(rotation))
+            .scaleEffect(scale)
+            .accessibilityHidden(true)
     }
 }
 
 /// Bouncing dots animation for AI reasoning indicator
 public struct BouncingDotsView: View {
-    @State private var animationPhase: Int = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     public init() {}
     
     public var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 0.15)) { timeline in
+        SwiftUI.TimelineView(.animation(minimumInterval: 0.15, paused: reduceMotion)) { timeline in
             bouncingDots(at: timeline.date.timeIntervalSinceReferenceDate)
         }
+        .accessibilityHidden(true)
     }
 
     private func bouncingDots(at time: TimeInterval) -> some View {
         HStack(spacing: 2) {
             ForEach(0..<3, id: \.self) { index in
                 let phase = time * 5 + Double(index) * 0.8
-                let offset = sin(phase) * 3
+                let offset = reduceMotion ? 0 : sin(phase) * 3
                 Circle()
                     .fill(Color.purple.opacity(0.6))
                     .frame(width: 4, height: 4)
@@ -709,8 +718,8 @@ public struct BouncingDotsView: View {
 
 /// Pulsing ring loading indicator
 public struct PulsingRingLoader: View {
-    @State private var scale: CGFloat = 0.5
-    @State private var opacity: Double = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let size: CGFloat
     let color: Color
 
@@ -720,6 +729,18 @@ public struct PulsingRingLoader: View {
     }
 
     public var body: some View {
+        if reduceMotion {
+            rings(scale: 1, opacity: 0.7)
+        } else {
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                let progress = timeline.date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: 1)
+                rings(scale: CGFloat(0.5 + progress), opacity: 1 - progress)
+            }
+        }
+    }
+
+    private func rings(scale: CGFloat, opacity: Double) -> some View {
         ZStack {
             Circle()
                 .stroke(color.opacity(0.3), lineWidth: 2)
@@ -730,12 +751,7 @@ public struct PulsingRingLoader: View {
                 .frame(width: size, height: size)
                 .scaleEffect(scale)
                 .opacity(opacity)
-                .onAppear {
-                    withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) {
-                        scale = 1.5
-                        opacity = 0
-                    }
-                }
         }
+        .accessibilityHidden(true)
     }
 }

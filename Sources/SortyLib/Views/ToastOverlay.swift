@@ -44,7 +44,7 @@ struct ToastOverlay: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isPresented = false
-    @State private var dismissalID = UUID()
+    @State private var dismissalTask: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -89,28 +89,38 @@ struct ToastOverlay: View {
         .opacity(isPresented ? 1 : 0)
         .offset(y: reduceMotion ? 0 : (isPresented ? 0 : 16))
         .onAppear {
-            let id = UUID()
-            dismissalID = id
-
             withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.82)) {
                 isPresented = true
             }
 
             playHaptic()
+            scheduleDismissal()
+        }
+        .onDisappear {
+            dismissalTask?.cancel()
+            dismissalTask = nil
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(message)
+    }
 
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
-                guard dismissalID == id else { return }
+    private func scheduleDismissal() {
+        dismissalTask?.cancel()
+        dismissalTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(4))
                 withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.9)) {
                     isPresented = false
                 }
-                try? await Task.sleep(nanoseconds: reduceMotion ? 0 : 250_000_000)
-                guard dismissalID == id else { return }
+                if !reduceMotion {
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+                guard !Task.isCancelled else { return }
                 onDismiss()
+            } catch {
+                return
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(message)
     }
 
     private func playHaptic() {
@@ -148,7 +158,7 @@ struct CometLoader<S: Shape>: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion)) { timeline in
             Canvas { context, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: lineWidth, dy: lineWidth)
                 let path = shape.path(in: rect)

@@ -9,6 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WatchedFoldersView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
@@ -89,6 +90,12 @@ struct WatchedFoldersView: View {
         }
         .siriDropZone(cornerRadius: 12, isTargeted: $isDropTargeted) { providers in
             handleFolderDrop(providers: providers)
+        }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
         }
         .navigationTitle("Watched Folders")
     }
@@ -933,6 +940,9 @@ struct WatchedFolderCard: View {
         .onChange(of: controlActiveState) { _, _ in
             updateHighlightAnimation(isHighlighted)
         }
+        .onChange(of: reduceMotion) { _, _ in
+            updateHighlightAnimation(isHighlighted)
+        }
         .contextMenu {
             Button("Reveal in Finder") {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
@@ -993,13 +1003,15 @@ struct WatchedFolderCard: View {
     }
 
     private func updateHighlightAnimation(_ isActive: Bool) {
-        if isActive, controlActiveState != .inactive {
+        if isActive, controlActiveState != .inactive, !reduceMotion {
             highlightPulse = false
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 highlightPulse = true
             }
         } else {
-            highlightPulse = false
+            withAnimation(nil) {
+                highlightPulse = isActive
+            }
         }
     }
 
