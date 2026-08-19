@@ -676,6 +676,13 @@ struct SortyApp: App {
         )
         defaults.removeObject(forKey: "uitestProviderHealthCheckFailedOnce")
 
+        if env["XCUITEST_FORCE_MAIN_APP"] == "1" {
+            defaults.set(true, forKey: "hasCompletedOnboarding")
+            defaults.set(BuildInfo.version, forKey: "completedOnboardingVersion")
+            defaults.set(false, forKey: "requiresSetupRepair")
+            defaults.set(AnalyticsConsent.denied.rawValue, forKey: AnalyticsManager.consentDefaultsKey)
+        }
+
         if let healthCheckMode = env["XCUITEST_PROVIDER_HEALTHCHECK"], !healthCheckMode.isEmpty {
             defaults.set(healthCheckMode, forKey: "uitestProviderHealthCheckMode")
         } else {

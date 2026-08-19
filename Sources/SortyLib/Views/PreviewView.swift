@@ -129,6 +129,7 @@ struct PreviewView: View {
             bottomToolbar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("OrganizationPreviewScreen")
         .alert("Apply \(mode.actionVerb)?", isPresented: $showApplyConfirmation) {
             Button("Cancel", role: .cancel) {
                 if let requestID = activeNotificationApplyRequestID {

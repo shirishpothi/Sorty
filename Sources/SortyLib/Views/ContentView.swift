@@ -10,6 +10,7 @@
 import SwiftUI
 
 public struct ContentView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var organizer: FolderOrganizer
@@ -74,7 +75,7 @@ public struct ContentView: View {
             guard newConsent == .granted, appState.hasCompletedOnboarding else { return }
             captureMainScreen(appState.currentView, source: "consent")
         }
-        .animation(.easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
             PersonaGeneratorView(
                 store: customPersonaStore,
@@ -122,6 +123,7 @@ public struct ContentView: View {
                 contentView(for: displayedView)
                     .id(displayedView)
                     .transition(.identity)
+                    .accessibilityIdentifier(contentAccessibilityIdentifier(for: displayedView))
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -162,7 +164,7 @@ public struct ContentView: View {
         .onChange(of: appState.showingSidebar) { _, isShowingSidebar in
             let nextVisibility: NavigationSplitViewVisibility = isShowingSidebar ? .all : .detailOnly
             guard columnVisibility != nextVisibility else { return }
-            withAnimation(.easeInOut(duration: 0.28)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
                 columnVisibility = nextVisibility
             }
         }
@@ -197,7 +199,7 @@ public struct ContentView: View {
             removeCommandKeyMonitor()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
                 showCommandNumbers = false
             }
         }
@@ -274,6 +276,18 @@ public struct ContentView: View {
         }
     }
 
+    private func contentAccessibilityIdentifier(for view: AppState.AppView) -> String {
+        switch view {
+        case .settings: return "SettingsScreen"
+        case .organize: return "OrganizerScreen"
+        case .history: return "HistoryScreen"
+        case .duplicates: return "DuplicatesScreen"
+        case .exclusions: return "ExclusionsScreen"
+        case .watchedFolders: return "WatchedFoldersScreen"
+        case .learnings: return "LearningsScreen"
+        }
+    }
+
     private func showPersonaGenerationHighlight() {
         personaHighlightDismissalTask?.cancel()
         appState.currentView = .settings
@@ -318,7 +332,7 @@ public struct ContentView: View {
                     .scaleEffect(showCommandNumbers ? 1 : 0.96)
             }
             .animation(
-                .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
+                reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
                 value: showCommandNumbers
             )
     }
@@ -329,7 +343,7 @@ public struct ContentView: View {
         commandFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let isCommandHeld = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
             if isCommandHeld != showCommandNumbers {
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08)) {
                     showCommandNumbers = isCommandHeld
                 }
             }

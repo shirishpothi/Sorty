@@ -309,6 +309,7 @@ private struct RenameActionGlassCluster: View {
             .buttonStyle(.plain)
             .disabled(isRegenerating)
             .help("Regenerate name with the selected AI model")
+            .accessibilityLabel("Regenerate suggested name")
 
             RenameGlassIconButton(systemImage: "xmark.circle", help: "Keep original name", action: onReject)
         }
@@ -331,5 +332,6 @@ private struct RenameGlassIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(Text(help))
     }
 }

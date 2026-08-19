@@ -55,6 +55,7 @@ struct EnhancedFlatFileRow: View {
                     }
                     .buttonStyle(.plain)
                     .help("Edit suggested name")
+                    .accessibilityLabel("Edit suggested name")
 
                     Button {
                         store.rejectRename(fileID: file.id, folderID: parentFolderID)
@@ -64,6 +65,7 @@ struct EnhancedFlatFileRow: View {
                     }
                     .buttonStyle(.plain)
                     .help("Keep original name")
+                    .accessibilityLabel("Keep original name")
                 }
 
                 if let unchangedReason {

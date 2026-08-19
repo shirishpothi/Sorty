@@ -408,14 +408,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var nextBatchIndex: Int
     }
 
-    nonisolated(unsafe) private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
+    private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
     @MainActor public static let runningActivity = RunningOrganizationActivity()
 
-    public nonisolated static var runningOrganizationCount: Int {
+    public static var runningOrganizationCount: Int {
         runningOrganizerIDs.count
     }
 
-    public nonisolated static var hasRunningOrganizations: Bool {
+    public static var hasRunningOrganizations: Bool {
         !runningOrganizerIDs.isEmpty
     }
 
@@ -681,8 +681,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     deinit {
         if isRegisteredAsRunningOrganizer {
-            Self.runningOrganizerIDs.remove(ObjectIdentifier(self))
+            let id = ObjectIdentifier(self)
             Task { @MainActor in
+                Self.runningOrganizerIDs.remove(id)
                 Self.runningActivity.count = Self.runningOrganizationCount
             }
         }
@@ -713,6 +714,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if client != nil {
             self.isAIConfigured = true
         }
+    }
+
+    func flushStreamingUpdatesForTesting() async {
+        scheduleDisplayUpdate(for: streamingContent, force: true)
+        extractInsightsIfNeeded(force: true)
+
+        let pendingDisplayUpdate = displayUpdateTask
+        let pendingInsightExtraction = insightExtractionTask
+        await pendingDisplayUpdate?.value
+        await pendingInsightExtraction?.value
     }
 
     func setRevertOperationHookForTesting(_ hook: (@Sendable () async -> Void)?) {

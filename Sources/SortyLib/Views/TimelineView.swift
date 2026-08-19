@@ -22,6 +22,8 @@ struct TimelineView: View {
     }
     
     var body: some View {
+        let timelineEntries = filteredEntries
+
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
@@ -39,29 +41,29 @@ struct TimelineView: View {
                 
                 Spacer()
                 
-                Text("\(filteredEntries.count) snapshots")
+                Text("\(timelineEntries.count) snapshots")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .numericTextTransition(animationValue: filteredEntries.count)
+                    .numericTextTransition(animationValue: timelineEntries.count)
             }
             
-            if filteredEntries.isEmpty {
+            if timelineEntries.isEmpty {
                 EmptyTimelineView()
             } else {
                 // Timeline slider
                 VStack(spacing: 12) {
                     // Visual timeline
                     TimelineSliderTrack(
-                        entries: filteredEntries,
+                        entries: timelineEntries,
                         selectedIndex: $selectedIndex,
                         hoverIndex: $hoverIndex
                     )
                     
                     // Selected entry details
-                    if selectedIndex < filteredEntries.count {
+                    if selectedIndex < timelineEntries.count {
                         SelectedEntryCard(
-                            entry: filteredEntries[selectedIndex],
-                            allEntries: filteredEntries,
+                            entry: timelineEntries[selectedIndex],
+                            allEntries: timelineEntries,
                             onRestore: onRestore
                         )
                     }
@@ -82,11 +84,15 @@ struct TimelineView: View {
 // MARK: - Timeline Slider Track
 
 struct TimelineSliderTrack: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let entries: [OrganizationHistoryEntry]
     @Binding var selectedIndex: Int
     @Binding var hoverIndex: Int?
     
     var body: some View {
+        let maxFiles = entries.lazy.map(\.filesOrganized).max() ?? 1
+
         GeometryReader { geo in
             let width = geo.size.width
             let nodeSpacing = entries.count > 1 ? width / CGFloat(entries.count - 1) : width / 2
@@ -109,36 +115,43 @@ struct TimelineSliderTrack: View {
                 // Timeline nodes
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     let xPosition = entries.count > 1 ? nodeSpacing * CGFloat(index) : width / 2
-                    let maxFiles = entries.map(\.filesOrganized).max() ?? 1
                     let magnitude = Double(entry.filesOrganized) / Double(max(1, maxFiles))
                     
-                    TimelineNode(
-                        entry: entry,
-                        isSelected: index == selectedIndex,
-                        isHovered: hoverIndex == index,
-                        magnitude: magnitude
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3)) {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.3)) {
                             selectedIndex = index
                         }
+                    } label: {
+                        TimelineNode(
+                            entry: entry,
+                            isSelected: index == selectedIndex,
+                            isHovered: hoverIndex == index,
+                            magnitude: magnitude
+                        )
                     }
+                    .buttonStyle(.plain)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
                     .onHover { hovering in
                         hoverIndex = hovering ? index : nil
                     }
+                    .accessibilityLabel(entry.timestamp.formatted(date: .long, time: .shortened))
+                    .accessibilityValue(index == selectedIndex ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
                     .position(x: xPosition, y: geo.size.height / 2)
                 }
             }
         }
-        .frame(height: 40)
-        .padding(.horizontal, 12)
+        .frame(height: 44)
+        .padding(.horizontal, 22)
     }
 }
 
 // MARK: - Timeline Node
 
 struct TimelineNode: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
     let isHovered: Bool
@@ -166,11 +179,11 @@ struct TimelineNode: View {
                     .frame(width: nodeSize, height: nodeSize)
             }
         }
-        .frame(width: 32, height: 40) // Consistent hit area for the node
+        .frame(width: 44, height: 44)
         .contentShape(Rectangle())
         .scaleEffect(isHovered ? 1.2 : 1.0)
-        .animation(.spring(response: 0.3), value: isHovered)
-        .animation(.spring(response: 0.3), value: isSelected)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isHovered)
+        .animation(reduceMotion ? nil : .spring(response: 0.3), value: isSelected)
     }
     
     private var nodeSize: CGFloat {

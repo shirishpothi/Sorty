@@ -667,6 +667,7 @@ struct DuplicatesHeaderNew: View {
                     }
                     .systemLiquidGlassButton()
                     .help("Detection Settings")
+                    .accessibilityLabel("Duplicate detection settings")
                     .disabled(manager.isScanning)
 
                     if manager.exactGroupCount > 0 && !manager.isScanning {
@@ -1206,6 +1207,7 @@ struct DuplicateFileDetailRow: View {
                 }
                 .buttonStyle(.sortyBordered)
                 .controlSize(.small)
+                .accessibilityLabel("Delete \(file.displayName)")
             } else {
                 Text("Original")
                     .font(.caption.bold())

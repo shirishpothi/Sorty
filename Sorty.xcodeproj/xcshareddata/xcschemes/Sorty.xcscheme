@@ -41,6 +41,17 @@
                ReferencedContainer = "container:Sorty.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "33A128782F01230200A86470"
+               BuildableName = "SortyUITests.xctest"
+               BlueprintName = "SortyUITests"
+               ReferencedContainer = "container:Sorty.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

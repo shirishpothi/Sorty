@@ -5,6 +5,7 @@ import SortyLib
 #endif
 
 struct MainWindowRootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
@@ -99,7 +100,7 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                withAnimation(.pageTransition) {
+                withAnimation(navigationAnimation) {
                     if windowSession.appState.selectedDirectory == nil,
                        let currentDirectory = windowSession.organizer.currentDirectory {
                         windowSession.appState.selectedDirectory = currentDirectory
@@ -127,7 +128,7 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .presentSteeringPromptsInMainWindow)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                withAnimation(.pageTransition) {
+                withAnimation(navigationAnimation) {
                     windowSession.appState.currentView = .organize
                 }
                 windowSession.appState.shouldPresentSteeringPrompts = true
@@ -148,7 +149,7 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                withAnimation(.pageTransition) {
+                withAnimation(navigationAnimation) {
                     windowSession.appState.currentView = .history
                 }
             }
@@ -182,7 +183,7 @@ struct MainWindowRootView: View {
                 } else {
                     didPresentReview = false
                 }
-                withAnimation(.pageTransition) {
+                withAnimation(navigationAnimation) {
                     if (didPresentReview || isCurrentManualPreview),
                        let currentDirectory = windowSession.organizer.currentDirectory {
                         windowSession.appState.selectedDirectory = currentDirectory
@@ -201,7 +202,7 @@ struct MainWindowRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showWatchedFolders)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
-                withAnimation(.pageTransition) {
+                withAnimation(navigationAnimation) {
                     windowSession.appState.currentView = .watchedFolders
                 }
             }
@@ -227,6 +228,7 @@ struct MainWindowRootView: View {
                     automationManager: automationManager,
                     calibrateAction: calibrate
                 )
+                configureUITestPreviewIfNeeded()
                 MainWindowRouter.shared.setBusy(
                     windowSession.organizer.state.isOperationInProgress,
                     for: windowSession.id
@@ -429,6 +431,16 @@ struct MainWindowRootView: View {
         }
     }
 
+    private func configureUITestPreviewIfNeeded() {
+        guard ProcessInfo.processInfo.environment["XCUITEST_SEED_PREVIEW"] == "1" else { return }
+
+        let directory = URL(fileURLWithPath: "/tmp/sorty-accessibility-preview", isDirectory: true)
+        windowSession.appState.selectedDirectory = directory
+        windowSession.organizer.currentDirectory = directory
+        windowSession.organizer.currentPlan = PreviewMocks.makeOrganizationPlan()
+        windowSession.organizer.state = .ready
+    }
+
     private func handleExternalDeeplink(_ url: URL) {
         guard ExternalDeeplinkDeduper.shouldHandle(url) else { return }
 
@@ -482,7 +494,7 @@ struct MainWindowRootView: View {
         let folderPath = notification.userInfo?["folderPath"] as? String
         let notificationType = notification.userInfo?["notificationType"] as? String
 
-        withAnimation(.pageTransition) {
+        withAnimation(navigationAnimation) {
             if let folderPath {
                 windowSession.appState.selectedDirectory = URL(fileURLWithPath: folderPath)
             } else if windowSession.appState.selectedDirectory == nil,
@@ -507,6 +519,10 @@ struct MainWindowRootView: View {
             folderPath: folderPath,
             notificationType: notificationType
         )
+    }
+
+    private var navigationAnimation: Animation? {
+        reduceMotion ? nil : .pageTransition
     }
 
     private var providerSetupContext: ProviderSetupContext {

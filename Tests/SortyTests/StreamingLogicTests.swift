@@ -20,14 +20,16 @@ final class StreamingLogicTests: XCTestCase {
     override func tearDown() async throws {
         organizer = nil
     }
+
+    private func settleStreamingUpdates() async {
+        await organizer.flushStreamingUpdatesForTesting()
+    }
     
     // MARK: - didReceiveChunk Basic Tests
     
     func testFirstChunkSetsStreamingState() async {
         organizer.didReceiveChunk("Hello streaming")
-        
-        // Allow MainActor task to execute
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await settleStreamingUpdates()
         
         XCTAssertTrue(organizer.isStreaming)
         XCTAssertEqual(organizer.streamingContent, "Hello streaming")
@@ -37,12 +39,9 @@ final class StreamingLogicTests: XCTestCase {
     
     func testMultipleChunksAccumulate() async {
         organizer.didReceiveChunk("chunk1 ")
-        try? await Task.sleep(nanoseconds: 50_000_000)
         organizer.didReceiveChunk("chunk2 ")
-        try? await Task.sleep(nanoseconds: 50_000_000)
         organizer.didReceiveChunk("chunk3")
-        
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await settleStreamingUpdates()
         
         XCTAssertEqual(organizer.streamingContent, "chunk1 chunk2 chunk3")
     }
@@ -50,7 +49,6 @@ final class StreamingLogicTests: XCTestCase {
     func testLiveInsightsToggleDisablesInsightAndPreviewUpdates() async {
         organizer.setLiveInsightsEnabled(false)
         organizer.didReceiveChunk("creating folder: 'Receipts' for report.pdf")
-        try? await Task.sleep(nanoseconds: 250_000_000)
 
         XCTAssertTrue(organizer.isStreaming)
         XCTAssertEqual(organizer.streamingContent, "creating folder: 'Receipts' for report.pdf")
@@ -62,10 +60,9 @@ final class StreamingLogicTests: XCTestCase {
     func testLiveInsightsToggleReEnablesBackfillFromCurrentStream() async {
         organizer.setLiveInsightsEnabled(false)
         organizer.didReceiveChunk("creating folder: 'Receipts' for report.pdf")
-        try? await Task.sleep(nanoseconds: 200_000_000)
 
         organizer.setLiveInsightsEnabled(true)
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await settleStreamingUpdates()
 
         XCTAssertFalse(organizer.truncatedDisplayStreamingContent.isEmpty)
     }
@@ -74,12 +71,12 @@ final class StreamingLogicTests: XCTestCase {
         organizer.scannedFileCount = 10
         
         organizer.didReceiveChunk("x")
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        await settleStreamingUpdates()
         let initialProgress = organizer.progress
         
         let longContent = String(repeating: "analyzing files and sorting them into folders. ", count: 50)
         organizer.didReceiveChunk(longContent)
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        await settleStreamingUpdates()
         let laterProgress = organizer.progress
         
         XCTAssertGreaterThanOrEqual(laterProgress, initialProgress)
@@ -90,17 +87,17 @@ final class StreamingLogicTests: XCTestCase {
         
         let hugeContent = String(repeating: "A", count: 50000)
         organizer.didReceiveChunk(hugeContent)
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        await settleStreamingUpdates()
         
         XCTAssertLessThanOrEqual(organizer.progress, 0.82)
     }
 
     func testStreamingProgressDoesNotAdvanceWithoutNewContent() async {
         organizer.didReceiveChunk("first chunk")
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        await settleStreamingUpdates()
         let progressAfterChunk = organizer.progress
 
-        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        await Task.yield()
 
         XCTAssertEqual(organizer.progress, progressAfterChunk)
     }
@@ -113,11 +110,10 @@ final class StreamingLogicTests: XCTestCase {
     
     func testDidCompleteSetsStreamingFalse() async {
         organizer.didReceiveChunk("some content")
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await settleStreamingUpdates()
         XCTAssertTrue(organizer.isStreaming)
         
         organizer.didComplete(content: "some content")
-        try? await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertFalse(organizer.isStreaming)
     }
 
@@ -140,15 +136,14 @@ final class StreamingLogicTests: XCTestCase {
 
     func testChunkAfterCompletedStreamStartsFreshSession() async {
         organizer.didReceiveChunk("first stream")
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await settleStreamingUpdates()
         organizer.didComplete(content: "first stream")
-        try? await Task.sleep(nanoseconds: 100_000_000)
 
         organizer.progress = 0.87
         organizer.organizationStage = "Too many folders, retrying..."
 
         organizer.didReceiveChunk("retry stream")
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        await settleStreamingUpdates()
 
         XCTAssertTrue(organizer.isStreaming)
         XCTAssertEqual(organizer.organizationStage, "Sorty is organizing your files...")
@@ -178,11 +173,8 @@ final class StreamingLogicTests: XCTestCase {
     func testFileInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "analyzing document: 'report.pdf' for organization"
         organizer.didReceiveChunk(content)
-        
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        
         organizer.didReceiveChunk(" more content here to trigger throttle window")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let hasFileInsight = organizer.insightHistory.contains { $0.category == .file }
         let currentMentionsFile = organizer.currentInsight.contains("report.pdf")
@@ -194,10 +186,8 @@ final class StreamingLogicTests: XCTestCase {
     func testFolderInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "creating folder: 'Documents' for PDFs"
         organizer.didReceiveChunk(content)
-        
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" additional content to pass throttle")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let hasFolderInsight = organizer.insightHistory.contains { $0.category == .folder }
         let currentMentionsFolder = organizer.currentInsight.contains("Documents")
@@ -209,10 +199,8 @@ final class StreamingLogicTests: XCTestCase {
     func testConstraintInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "considering: the user prefers flat structure for small projects"
         organizer.didReceiveChunk(content)
-        
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" more text to allow throttle window to pass")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let hasConstraintInsight = organizer.insightHistory.contains { $0.category == .constraint }
         let currentHasText = organizer.currentInsight.contains("flat structure")
@@ -224,10 +212,8 @@ final class StreamingLogicTests: XCTestCase {
     func testDecisionInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "will move these files into the Archives directory for safekeeping"
         organizer.didReceiveChunk(content)
-        
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" more text padding to get past throttle limit")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let hasDecisionInsight = organizer.insightHistory.contains { $0.category == .decision }
         let currentHasDecision = organizer.currentInsight.contains("Archives")
@@ -242,10 +228,8 @@ final class StreamingLogicTests: XCTestCase {
             {"folders": [{"name": "Images"}]}. This is pure JSON that should be skipped by general insight.
             """
         organizer.didReceiveChunk(jsonContent)
-        
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" extra padding for throttle")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let generalInsights = organizer.insightHistory.filter { $0.category == .general }
         for insight in generalInsights {
@@ -262,9 +246,8 @@ final class StreamingLogicTests: XCTestCase {
                 "creating folder: 'Folder\(i)' for files number \(i)"
             organizer.streamingContent = ""
             organizer.didReceiveChunk(content)
-            try? await Task.sleep(nanoseconds: 900_000_000)
             organizer.didReceiveChunk(" padding \(i)")
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            await settleStreamingUpdates()
         }
         
         XCTAssertLessThanOrEqual(organizer.insightHistory.count, 5,
@@ -276,9 +259,8 @@ final class StreamingLogicTests: XCTestCase {
     func testGetCachedInsightsReturnsData() async {
         let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
         organizer.didReceiveChunk(content)
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" more")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
         
         let cached = organizer.getCachedInsights()
         XCTAssertEqual(cached.current, organizer.currentInsight)
@@ -294,9 +276,8 @@ final class StreamingLogicTests: XCTestCase {
     func testProgressLineInvalidatesOlderExtractedInsightCache() async {
         let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
         organizer.didReceiveChunk(content)
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
         organizer.didReceiveChunk(" more")
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await settleStreamingUpdates()
 
         organizer.didReceiveChunk("\n>> decision: Grouping project documents together\n")
 
@@ -309,7 +290,6 @@ final class StreamingLogicTests: XCTestCase {
     
     func testOrganizationStageSetOnFirstChunk() async {
         organizer.didReceiveChunk("first chunk of streaming data")
-        try? await Task.sleep(nanoseconds: 100_000_000)
         
         XCTAssertEqual(organizer.organizationStage, "Sorty is organizing your files...")
     }
@@ -318,7 +298,6 @@ final class StreamingLogicTests: XCTestCase {
         try await organizer.configure(with: AIConfig(mode: .renameOnly))
 
         organizer.didReceiveChunk("first chunk of streaming data")
-        try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(organizer.organizationStage, "Sorty is preparing rename suggestions...")
     }
@@ -327,14 +306,12 @@ final class StreamingLogicTests: XCTestCase {
         try await organizer.configure(with: AIConfig(mode: .organizeAndRename))
 
         organizer.didReceiveChunk("first chunk of streaming data")
-        try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(organizer.organizationStage, "Sorty is organizing and renaming your files...")
     }
 
     func testReadyCueCapturedAsGeneralInsight() async {
         organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
-        try? await Task.sleep(nanoseconds: 250_000_000)
 
         XCTAssertTrue(
             organizer.insightHistory.contains {
@@ -345,7 +322,6 @@ final class StreamingLogicTests: XCTestCase {
 
     func testProgressLineSkipsLowSignalAssignmentFolderNames() async {
         organizer.didReceiveChunk(">> file: Assigning assets2.m4a to name\n")
-        try? await Task.sleep(nanoseconds: 160_000_000)
 
         XCTAssertFalse(
             organizer.insightHistory.contains { $0.text.contains("assets2.m4a") && $0.text.contains("to name") }
@@ -375,12 +351,7 @@ final class StreamingLogicTests: XCTestCase {
             try? await organizer.organize(directory: tempDirectory)
         }
 
-        for _ in 0..<40 {
-            if await mockClient.analyzeCallCount >= 1 {
-                break
-            }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
+        await mockClient.waitForAnalyzeCallCount(1)
 
         let initialAnalyzeCount = await mockClient.currentAnalyzeCallCount()
         XCTAssertEqual(initialAnalyzeCount, 1)
@@ -500,6 +471,8 @@ actor RestartableStreamingMockClient: AIClientProtocol {
     let config: AIConfig
     @MainActor weak var streamingDelegate: StreamingDelegate?
     private(set) var analyzeCallCount = 0
+    private let firstCallBlocker = AsyncStream<Void> { _ in }
+    private var analyzeCallCountWaiters: [(target: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     init(config: AIConfig) {
         self.config = config
@@ -507,6 +480,14 @@ actor RestartableStreamingMockClient: AIClientProtocol {
 
     func currentAnalyzeCallCount() -> Int {
         analyzeCallCount
+    }
+
+    func waitForAnalyzeCallCount(_ target: Int) async {
+        guard analyzeCallCount < target else { return }
+
+        await withCheckedContinuation { continuation in
+            analyzeCallCountWaiters.append((target, continuation))
+        }
     }
 
     func analyze(
@@ -517,9 +498,13 @@ actor RestartableStreamingMockClient: AIClientProtocol {
     ) async throws -> OrganizationPlan {
         analyzeCallCount += 1
         let callNumber = analyzeCallCount
+        let readyWaiters = analyzeCallCountWaiters.filter { $0.target <= analyzeCallCount }
+        analyzeCallCountWaiters.removeAll { $0.target <= analyzeCallCount }
+        readyWaiters.forEach { $0.continuation.resume() }
 
         if callNumber == 1 {
-            try await Task.sleep(nanoseconds: 5_000_000_000)
+            for await _ in firstCallBlocker { }
+            try Task.checkCancellation()
         }
 
         return OrganizationPlan(

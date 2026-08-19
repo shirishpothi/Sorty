@@ -362,6 +362,8 @@ struct DirectorySelectionView: View {
 }
 
 struct QuickTipItemCompact: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let icon: String
     let title: String
     let description: String
@@ -370,24 +372,37 @@ struct QuickTipItemCompact: View {
     @State private var isHovering = false
 
     var body: some View {
+        Group {
+            if let action {
+                Button(action: action) {
+                    content
+                }
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+            } else {
+                content
+            }
+        }
+        .scaleEffect(isHovering ? 1.03 : 1.0)
+        .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.7), value: isHovering)
+        .contentShape(Rectangle())
+        .onHover { isHovering = action != nil && $0 }
+    }
+
+    private var content: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(.body)
                 .foregroundStyle(isHovering ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(LocalizedStringKey(title))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.callout.bold())
                 Text(LocalizedStringKey(description))
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
-        .scaleEffect(isHovering ? 1.03 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovering)
-        .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
-        .onTapGesture { action?() }
     }
 }
 
