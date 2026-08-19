@@ -679,7 +679,7 @@ private struct HistoryUnorganizedFileRow: View {
                         : Color.clear
                 )
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Unorganized file: \(file.displayName)")
     }
 }

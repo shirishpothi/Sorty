@@ -2286,7 +2286,7 @@ struct OperationRowView: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(operationLabel) \(fileName)\(isUndone ? ", undone" : "")\(isFailed ? ", failed" : "")")
     }
 }
@@ -2491,56 +2491,58 @@ struct FolderHistoryDetailRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button(action: toggleExpanded) {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .symbolReplaceTransition(animationValue: isExpanded)
+            HStack(spacing: 8) {
+                Button(action: toggleExpanded) {
+                    HStack(spacing: 8) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .symbolReplaceTransition(animationValue: isExpanded)
+                            .accessibilityHidden(true)
+
+                        CompactFolderThumbnail(
+                            url: nil,
+                            folderName: suggestion.folderName,
+                            size: 18
+                        )
+                        .scaleEffect(isHovered ? 1.1 : 1.0)
+                        .animation(reduceMotion ? nil : .subtleBounce, value: isHovered)
                         .accessibilityHidden(true)
 
-                    CompactFolderThumbnail(
-                        url: nil,
-                        folderName: suggestion.folderName,
-                        size: 18
-                    )
-                    .scaleEffect(isHovered ? 1.1 : 1.0)
-                    .animation(reduceMotion ? nil : .subtleBounce, value: isHovered)
-                    .accessibilityHidden(true)
+                        PrivacySensitivePathText(path: suggestion.folderName)
+                            .fontWeight(.semibold)
 
-                    PrivacySensitivePathText(path: suggestion.folderName)
-                        .fontWeight(.semibold)
+                        Text("(\(suggestion.totalFileCount) files)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
 
-                    Text("(\(suggestion.totalFileCount) files)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if isStorageDestination {
-                        storageLocationDropdown
+                        Spacer(minLength: 0)
                     }
-
-                    if !suggestion.tags.isEmpty {
-                        TagDotsView(tags: suggestion.tags)
-                    }
-
-                    if let comment = suggestion.comment, !comment.isEmpty {
-                        CommentBubbleButton(comment: comment)
-                    }
-
-                    Spacer()
-
-                    LiquidGlassReasoningButton(suggestion: suggestion)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onHover { hovering in
+                    isHovered = hovering
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(suggestion.folderName), \(suggestion.totalFileCount) files")
+                .accessibilityHint(isExpanded ? "Collapses the folder" : "Expands the folder")
+
+                if isStorageDestination {
+                    storageLocationDropdown
+                }
+
+                if !suggestion.tags.isEmpty {
+                    TagDotsView(tags: suggestion.tags)
+                }
+
+                if let comment = suggestion.comment, !comment.isEmpty {
+                    CommentBubbleButton(comment: comment)
+                }
+
+                LiquidGlassReasoningButton(suggestion: suggestion)
             }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isHovered = hovering
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(suggestion.folderName), \(suggestion.totalFileCount) files")
-            .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
-            .accessibilityAddTraits(.isButton)
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
@@ -2708,7 +2710,7 @@ private struct FolderHistoryFileRow: View {
             },
             value: isExpanded
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(file.displayName), \(file.formattedSize)")
     }
 }

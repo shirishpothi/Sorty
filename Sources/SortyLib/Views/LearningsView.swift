@@ -1478,7 +1478,7 @@ private struct LearningInsightRow: View {
             withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
             if hovering { HapticFeedbackManager.shared.selection() }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(rule.explanation). \(rule.isEnabled ? "Enabled" : "Disabled")")
     }
 

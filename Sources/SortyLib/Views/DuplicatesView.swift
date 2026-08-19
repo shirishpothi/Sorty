@@ -1567,7 +1567,8 @@ struct UnifiedFileDetailRow: View {
                     lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(file.displayName)
     }
 
     private var verticalLayout: some View {
