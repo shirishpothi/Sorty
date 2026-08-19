@@ -23,15 +23,17 @@ struct FormattedReasoningText: View {
     }
 
     var body: some View {
-        if segments.count <= 1 {
+        let renderedSegments = segments
+
+        if renderedSegments.count <= 1 {
             attributedText(displayText, font: font)
                 .foregroundStyle(foregroundStyle)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(segments) { segment in
-                    segmentView(segment)
+                ForEach(renderedSegments.indices, id: \.self) { index in
+                    segmentView(renderedSegments[index])
                 }
             }
             .textSelection(.enabled)
@@ -94,8 +96,7 @@ struct FormattedReasoningText: View {
 
 // MARK: - Parsing
 
-private struct ReasoningSegment: Identifiable {
-    let id = UUID()
+private struct ReasoningSegment {
     let kind: Kind
     let text: String
     let icon: String?

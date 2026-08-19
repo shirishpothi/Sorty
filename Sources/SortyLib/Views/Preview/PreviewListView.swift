@@ -181,11 +181,14 @@ struct EmptyPreviewState: View {
 }
 
 struct EmptyAction: Identifiable {
-    let id = UUID()
     let title: String
     let icon: String
     var accessibilityID: String? = nil
     let action: () -> Void
+
+    var id: String {
+        accessibilityID ?? "\(title)|\(icon)"
+    }
 }
 
 // MARK: - Previews

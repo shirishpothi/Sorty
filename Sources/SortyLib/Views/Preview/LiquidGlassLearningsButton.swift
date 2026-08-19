@@ -1,7 +1,6 @@
 import SwiftUI
 
-private struct LearningsInsightRow: Identifiable {
-    let id = UUID()
+private struct LearningsInsightRow {
     let kind: LearningsAttributionKind
     let icon: String
     let title: String
@@ -39,14 +38,6 @@ struct LiquidGlassLearningsButton: View {
         )
     }
 
-    private var learningRows: [LearningsInsightRow] {
-        attribution.items.map(LearningsInsightRow.init(item:))
-    }
-
-    private var hasContent: Bool {
-        attribution.hasContent
-    }
-
     private var displayFileName: String {
         FeatureFlags.privacyModeEnabled
             ? PrivacyPathMasker.redactedText(file.displayName)
@@ -54,7 +45,10 @@ struct LiquidGlassLearningsButton: View {
     }
 
     var body: some View {
-        if hasContent {
+        let resolvedAttribution = attribution
+        let rows = resolvedAttribution.items.map(LearningsInsightRow.init(item:))
+
+        if resolvedAttribution.hasContent {
             Button {
                 showPopover.toggle()
             } label: {
@@ -86,10 +80,10 @@ struct LiquidGlassLearningsButton: View {
                             .numericTextTransition(animationValue: displayFileName)
                     }
 
-                    if !learningRows.isEmpty {
+                    if !rows.isEmpty {
                         sectionHeader("Learnings")
-                        ForEach(learningRows) { row in
-                            insightRow(row)
+                        ForEach(rows.indices, id: \.self) { index in
+                            insightRow(rows[index])
                         }
                     }
 
