@@ -1519,11 +1519,7 @@ struct ModelDirectoryRow: View {
                     directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange
                 )
                 .frame(width: 24)
-                .onTapGesture {
-                    guard directory.isAccessible else { return }
-                    HapticFeedbackManager.shared.tap()
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
-                }
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(directory.displayName)

@@ -116,6 +116,12 @@ struct DirectorySelectionView: View {
                 hasAppeared = true
             }
         }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Directory Selection Area")
         .accessibilityHint("Drag and drop a folder here or use the Browse button")
@@ -190,70 +196,76 @@ struct DirectorySelectionView: View {
         }
         .frame(width: 220, height: dropZoneHeight)
 
-        return Group {
-            if #available(macOS 26.0, *) {
-                dropZoneContent
-                    .systemLiquidGlassBackground(cornerRadius: dropZoneCornerRadius, clear: true)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .strokeBorder(
-                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    }
-            } else {
-                dropZoneContent
-                    .background {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(
-                                isTargeted
-                                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
-                                    : Color.secondary.opacity(0.05))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .strokeBorder(
-                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                lineWidth: 1
-                            )
-                    }
+        return Button {
+            HapticFeedbackManager.shared.tap()
+            selectDirectory()
+        } label: {
+            Group {
+                if #available(macOS 26.0, *) {
+                    dropZoneContent
+                        .systemLiquidGlassBackground(cornerRadius: dropZoneCornerRadius, clear: true)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                                .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                                .strokeBorder(
+                                    isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
+                                    lineWidth: 1
+                                )
+                        }
+                } else {
+                    dropZoneContent
+                        .background {
+                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                                .fill(
+                                    isTargeted
+                                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
+                                        : Color.secondary.opacity(0.05))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                                .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                                .strokeBorder(
+                                    isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
+                                    lineWidth: 1
+                                )
+                        }
+                }
             }
         }
+        .buttonStyle(.plain)
         .scaleEffect(isTargeted ? 1.05 : 1.0)
         .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.1),
+            value: hasAppeared
+        )
         .contentShape(RoundedRectangle(cornerRadius: 16))
         .onHover { hovering in
             isHovering = hovering
-            if hovering {
+            if hovering, !reduceMotion {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                     iconBounce = true
                 }
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 150_000_000)  // 0.15s
+                    try? await Task.sleep(for: .milliseconds(150))
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         iconBounce = false
                     }
                 }
             }
         }
-        .onTapGesture {
-            HapticFeedbackManager.shared.tap()
-            selectDirectory()
-        }
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Click to browse for a folder")
+        .accessibilityLabel("Browse for a folder")
+        .accessibilityInputLabels(["Browse for a folder", "Drop folder here"])
+        .accessibilityHint("Opens the folder picker")
     }
 
     private var quickTips: some View {

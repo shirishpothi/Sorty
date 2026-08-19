@@ -1047,6 +1047,11 @@ struct FlatFolderRowView: View {
             .padding(.vertical, 4)
             .contentShape(Rectangle())
             .onTapGesture(perform: toggleExpanded)
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(
+                named: isExpanded ? "Collapse \(suggestion.folderName)" : "Expand \(suggestion.folderName)",
+                toggleExpanded
+            )
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
@@ -1536,6 +1541,12 @@ struct FlatUnorganizedFileRowView: View {
         }
         .onTapGesture(count: 2) {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
+        .accessibilityAction(named: "Open \(file.displayName)") {
+            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
+        .accessibilityAction(named: "Reveal \(file.displayName) in Finder") {
+            NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
         }
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag {

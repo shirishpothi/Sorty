@@ -104,6 +104,12 @@ struct EnhancedFlatFileRow: View {
         .onTapGesture(count: 2) {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
         }
+        .accessibilityAction(named: "Open \(file.displayName)") {
+            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
+        .accessibilityAction(named: "Reveal \(file.displayName) in Finder") {
+            NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+        }
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag {
             isDragging = true

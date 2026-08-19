@@ -194,6 +194,7 @@ struct OrganizationCompleteView: View {
                             HapticFeedbackManager.shared.light()
                         }
                         .help("Click to intensify the glow")
+                        .accessibilityHidden(true)
                         
                         VStack(spacing: usesCompactVerticalLayout ? 5 : 8) {
                             Text(statusTitle)

@@ -12,6 +12,7 @@ struct PrivacySensitivePathText: View {
     var revealOnHover: Bool = true
     var revealOnClick: Bool = true
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHoveringUsername = false
     @State private var isClickRevealed = false
 
@@ -51,7 +52,7 @@ struct PrivacySensitivePathText: View {
                             isHoveringUsername = false
                         }
                     }
-                    .animation(revealAnimation, value: isRevealed)
+                    .animation(reduceMotion ? nil : revealAnimation, value: isRevealed)
                     .onHover { hovering in
                         guard revealOnHover else { return }
                         guard hovering != isHoveringUsername else { return }
@@ -65,6 +66,14 @@ struct PrivacySensitivePathText: View {
                 Text(segments.trailing)
             }
             .accessibilityLabel(PrivacyPathMasker.redactedPath(path))
+            .accessibilityValue(isRevealed ? "Username visible" : "Username hidden")
+            .accessibilityActions {
+                if revealOnClick {
+                    Button(isClickRevealed ? "Hide username" : "Reveal username") {
+                        isClickRevealed.toggle()
+                    }
+                }
+            }
         } else {
             Text(path)
         }
@@ -76,6 +85,7 @@ struct PrivacyBlurModifier: ViewModifier {
     var blurRadius: CGFloat = 10
     var revealOnHover: Bool = true
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
     private var shouldReveal: Bool {
@@ -96,7 +106,7 @@ struct PrivacyBlurModifier: ViewModifier {
                     isHovering = false
                 }
             }
-            .animation(revealAnimation, value: shouldReveal)
+            .animation(reduceMotion ? nil : revealAnimation, value: shouldReveal)
             .onHover { hovering in
                 guard enabled, revealOnHover else { return }
                 guard hovering != isHovering else { return }

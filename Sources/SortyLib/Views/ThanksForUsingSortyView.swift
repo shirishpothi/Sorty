@@ -2,7 +2,7 @@
 //  ThanksForUsingSortyView.swift
 //  Sorty
 //
-//  Appreciation window with interactive stats and liquid glass styling.
+//  Appreciation window with usage stats and liquid glass styling.
 //
 
 import AppKit
@@ -17,7 +17,6 @@ struct ThanksForUsingSortyView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var hoveredStatID: String?
-    @State private var selectedStatID: String?
     @State private var stats = UserStatsSnapshot.load()
     @State private var supportHovered = false
 
@@ -114,19 +113,19 @@ struct ThanksForUsingSortyView: View {
     }
 
     private func statsCell(item: StatItem) -> some View {
-        let isHighlighted = hoveredStatID == item.id || selectedStatID == item.id
+        let isHighlighted = hoveredStatID == item.id
 
         return VStack(alignment: .leading, spacing: 4) {
             Text(item.value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.title2.bold())
             Text(LocalizedStringKey(item.title))
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(isHighlighted ? Color.white.opacity(0.09) : Color.clear)
-        .animation(.easeInOut(duration: 0.16), value: isHighlighted)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHighlighted)
         .contentShape(Rectangle())
         .onHover { hovering in
             if hovering {
@@ -136,10 +135,8 @@ struct ThanksForUsingSortyView: View {
                 hoveredStatID = nil
             }
         }
-        .onTapGesture {
-            selectedStatID = (selectedStatID == item.id) ? nil : item.id
-            HapticFeedbackManager.shared.tap()
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.title), \(item.value)")
         .accessibilityIdentifier("thanksStat_\(item.id)")
     }
 

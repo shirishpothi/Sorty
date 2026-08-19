@@ -130,12 +130,7 @@ struct HUDNotificationCard: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture {
-            if let defaultAction = notification.defaultAction {
-                HapticFeedbackManager.shared.tap()
-                defaultAction()
-            } else if !notification.isPersistent {
-                onDismiss()
-            }
+            activateCard()
         }
         .onAppear {
             if !notification.isPersistent {
@@ -144,9 +139,25 @@ struct HUDNotificationCard: View {
                 }
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(notification.title): \(notification.message)")
         .accessibilityHint(accessibilityHint)
+        .accessibilityActions {
+            if notification.defaultAction != nil || !notification.isPersistent {
+                Button(notification.defaultAction != nil ? "Open notification" : "Dismiss notification") {
+                    activateCard()
+                }
+            }
+        }
+    }
+
+    private func activateCard() {
+        if let defaultAction = notification.defaultAction {
+            HapticFeedbackManager.shared.tap()
+            defaultAction()
+        } else if !notification.isPersistent {
+            onDismiss()
+        }
     }
 
     private var accessibilityHint: String {
@@ -154,9 +165,9 @@ struct HUDNotificationCard: View {
             return "\(queuedSummary) queued. Use the notification controls to show next or clear all."
         }
         if notification.defaultAction != nil {
-            return "Tap to open"
+            return "Opens the notification"
         }
-        return notification.isPersistent ? "" : "Tap to dismiss"
+        return notification.isPersistent ? "" : "Dismisses the notification"
     }
 }
 

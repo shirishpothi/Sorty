@@ -616,6 +616,30 @@ struct NodeView: View {
                     }
                 }
         )
+        .focusable()
+        .onKeyPress(.return) {
+            onSelect()
+            return .handled
+        }
+        .onKeyPress(.space) {
+            onSelect()
+            return .handled
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "Select \(accessibilityLabel)", onSelect)
+    }
+
+    private var accessibilityLabel: String {
+        switch node.type {
+        case .folder(let suggestion):
+            "Folder \(suggestion.folderName), \(suggestion.files.count) files"
+        case .file(let file, _):
+            "File \(file.displayName)"
+        case .unorganized:
+            "Unorganized files"
+        }
     }
 }
 

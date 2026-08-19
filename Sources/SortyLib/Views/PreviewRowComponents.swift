@@ -277,6 +277,8 @@ struct FlatFileRowSurface: View {
             )
         }
         .onTapGesture(count: 2, perform: onOpen)
+        .accessibilityAction(named: "Open file", onOpen)
+        .accessibilityAction(named: "Reveal file in Finder", onReveal)
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag(onBeginDrag)
         .onDrop(of: [.text], isTargeted: nil) { _ in

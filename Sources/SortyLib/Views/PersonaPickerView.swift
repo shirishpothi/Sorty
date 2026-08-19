@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PersonaPickerView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -126,6 +127,12 @@ struct PersonaPickerView: View {
                 dismissPersonaGenerationHighlight()
             }
         )
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .alert("Delete Persona?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 deletePendingPersona()
@@ -568,15 +575,28 @@ struct CustomPersonaButton: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: persona.icon)
-                .font(.system(size: 18))
-                .symbolRenderingMode(.hierarchical)
+        Button(action: onSelect) {
+            personaButtonLabel(name: persona.name, icon: persona.icon)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: "Delete \(persona.name)", onDelete)
+        .contextMenu {
+            Button("Delete", role: .destructive, action: onDelete)
+        }
+    }
 
-            Text(persona.name)
-                .font(.system(size: 10, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+    private func personaButtonLabel(name: String, icon: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.body)
+                .symbolRenderingMode(.hierarchical)
+                .accessibilityHidden(true)
+
+            Text(name)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 4)
         }
         .frame(maxWidth: .infinity)
@@ -584,24 +604,18 @@ struct CustomPersonaButton: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isSelected ? Color.purple.opacity(0.15) : Color.clear)
-                .overlay(
+                .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
                             isSelected
                                 ? Color.purple : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
                             lineWidth: isSelected ? 2 : 1
                         )
-                )
+                }
         )
-        .foregroundColor(isSelected ? .purple : .primary)
+        .foregroundStyle(isSelected ? .purple : .primary)
         .scaleEffect(isHovering && !isSelected ? 1.02 : 1.0)
         .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
-        }
-        .contextMenu {
-            Button("Delete", role: .destructive, action: onDelete)
-        }
     }
 }
 
@@ -612,41 +626,41 @@ struct PersonaButton: View {
     let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: persona.icon)
-                .font(.system(size: 18))
-                .symbolRenderingMode(.hierarchical)
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: persona.icon)
+                    .font(.body)
+                    .symbolRenderingMode(.hierarchical)
+                    .accessibilityHidden(true)
 
-            Text(persona.displayName)
-                .font(.system(size: 10, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 4)
+                Text(persona.displayName)
+                    .font(.caption)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                isSelected
+                                    ? SortyDesignSystem.Colors.resolvedAccent
+                                    : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
+                                lineWidth: isSelected ? 2 : 1
+                            )
+                    }
+            )
+            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+            .scaleEffect(isHovering && !isSelected ? 1.02 : 1.0)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(
-                            isSelected
-                                ? SortyDesignSystem.Colors.resolvedAccent
-                                : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
-                            lineWidth: isSelected ? 2 : 1
-                        )
-                )
-        )
-        .foregroundColor(isSelected ? .accentColor : .primary)
-        .scaleEffect(isHovering && !isSelected ? 1.02 : 1.0)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            action()
-        }
-        .accessibilityLabel("\(persona.displayName) organization style")
+        .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
