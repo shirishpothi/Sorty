@@ -21,12 +21,10 @@ public struct ContentView: View {
 
     @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var previousView: AppState.AppView?
-    @State private var displayedView: AppState.AppView = .organize
     @State private var showCommandNumbers = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var commandFlagsMonitor: Any?
     @State private var personaHighlightDismissalTask: Task<Void, Never>?
-    @State private var navigationPresentationTask: Task<Void, Never>?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
     public init() {}
@@ -69,7 +67,6 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
             personaHighlightDismissalTask?.cancel()
-            navigationPresentationTask?.cancel()
         }
         .onChange(of: analytics.consent) { _, newConsent in
             guard newConsent == .granted, appState.hasCompletedOnboarding else { return }
@@ -118,13 +115,9 @@ public struct ContentView: View {
             .frame(width: 220)
             .navigationSplitViewColumnWidth(220)
         } detail: {
-            ZStack {
-                // Keep the detail view lightweight during navigation: only render the active page.
-                contentView(for: displayedView)
-                    .id(displayedView)
-                    .transition(.identity)
-                    .accessibilityIdentifier(contentAccessibilityIdentifier(for: displayedView))
-            }
+            // Render the selected page in the same update as the sidebar selection.
+            contentView(for: appState.currentView)
+                .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Color.clear
@@ -152,7 +145,6 @@ public struct ContentView: View {
         .accessibilityLabel("Main Navigation")
         .frame(minWidth: 1000, minHeight: 700)
         .onAppear {
-            displayedView = appState.currentView
             columnVisibility = appState.showingSidebar ? .all : .detailOnly
             captureMainScreen(appState.currentView)
         }
@@ -174,7 +166,7 @@ public struct ContentView: View {
                     appState.showsFinderWorkflowPicker = false
                 }
                 previousView = oldValue
-                presentNavigationDestination(
+                captureMainScreen(
                     newValue,
                     previousScreen: analyticsScreenName(for: oldValue)
                 )
@@ -248,20 +240,6 @@ public struct ContentView: View {
             source: source,
             previousScreen: previousScreen
         )
-    }
-
-    private func presentNavigationDestination(
-        _ view: AppState.AppView,
-        previousScreen: String?
-    ) {
-        navigationPresentationTask?.cancel()
-        navigationPresentationTask = Task { @MainActor in
-            // Let the sidebar commit its selection before constructing the destination page.
-            await Task.yield()
-            guard !Task.isCancelled, appState.currentView == view else { return }
-            displayedView = view
-            captureMainScreen(view, previousScreen: previousScreen)
-        }
     }
 
     private func analyticsScreenName(for view: AppState.AppView) -> String? {

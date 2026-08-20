@@ -132,7 +132,6 @@ struct LearningsView: View {
             if settingsViewModel.availableModels.isEmpty {
                 settingsViewModel.updateAvailableModels()
             }
-            exclusionRules.removeLegacyLearningsLinkedRules()
         }
         .navigationTitle("Learnings")
     }
