@@ -315,7 +315,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAICompatible:
             return Color.blue
         case .openRouter:
-            return Color.purple
+            return Color(red: 0.4627, green: 0.1412, blue: 0.9569)
         case .gemini:
             return Color.cyan
         }

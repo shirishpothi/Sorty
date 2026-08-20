@@ -116,8 +116,7 @@ const PROVIDERS = [
   {
     src: '/provider-openrouter.png',
     name: 'OpenRouter',
-    accent: 'bg-sky-400/12',
-    filter: 'brightness(0) saturate(100%) invert(66%) sepia(62%) saturate(1681%) hue-rotate(176deg) brightness(100%) contrast(94%)',
+    accent: 'bg-violet-500/12',
   },
 ]
 
