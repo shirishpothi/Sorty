@@ -4,14 +4,16 @@ import Foundation
 import QuartzCore
 
 final class OverlayWindowController: NSWindowController {
-    private let windowSize = NSSize(width: 530, height: 109)
-    private let flightContentInset: CGFloat = 32
-    private let launchAnimationDuration: TimeInterval = 0.72
-    private let returnAnimationDuration: TimeInterval = 0.48
-    private let launchAnimationResponse: Double = 0.72
-    private let launchAnimationDampingFraction: Double = 0.72
+    private static let guideSize = NSSize(width: 530, height: 109)
+    private static let flightInset: CGFloat = 40
+    private static let initialWindowSize = NSSize(width: 610, height: 189)
+
+    private let windowSize = OverlayWindowController.guideSize
+    private let flightContentInset = OverlayWindowController.flightInset
+    private let launchAnimationDuration: TimeInterval = 0.78
+    private let returnAnimationDuration: TimeInterval = 0.6
     private let flightApexLift: CGFloat = 160
-    private let maximumFlightBlurRadius: CGFloat = 10
+    private let maximumFlightBlurRadius: CGFloat = 12
     private let initialAlpha: CGFloat = 0.9
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let flightContentView: OverlayFlightContentView
@@ -33,7 +35,7 @@ final class OverlayWindowController: NSWindowController {
         onDrop: @escaping () -> Void
     ) {
         let window = PassiveOverlayPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 594, height: 173),
+            contentRect: NSRect(origin: .zero, size: Self.initialWindowSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -213,17 +215,16 @@ final class OverlayWindowController: NSWindowController {
             return
         }
 
-        let motionProgress = springProgress(at: elapsed, duration: activeAnimationDuration)
-        let visualProgress = clampedUnit(motionProgress)
         let timeProgress = CGFloat(min(max(elapsed / activeAnimationDuration, 0), 1))
+        let motionProgress = easeInOutCubic(timeProgress)
         if isAnimatingReturn {
-            window.alphaValue = 1 - ((1 - initialAlpha) * visualProgress)
-            flightContentView.setFlightProgress(1 - visualProgress)
+            window.alphaValue = 1 - ((1 - initialAlpha) * motionProgress)
+            flightContentView.setFlightProgress(1 - motionProgress)
         } else {
-            window.alphaValue = initialAlpha + ((1 - initialAlpha) * visualProgress)
-            flightContentView.setFlightProgress(visualProgress)
+            window.alphaValue = initialAlpha + ((1 - initialAlpha) * motionProgress)
+            flightContentView.setFlightProgress(motionProgress)
         }
-        setFlightBlur(radius: gaussianBell(at: timeProgress) * maximumFlightBlurRadius)
+        setFlightBlur(radius: bellBlur(at: timeProgress) * maximumFlightBlurRadius)
         window.setFrame(
             windowFrame(
                 containing: curvedFrame(
@@ -241,34 +242,22 @@ final class OverlayWindowController: NSWindowController {
         launchAnimationTimer = nil
     }
 
-    private func springProgress(at elapsed: TimeInterval, duration: TimeInterval) -> CGFloat {
-        let normalizedTime = min(max(elapsed / max(duration, 0.001), 0), 1)
-        let easedTime = normalizedTime * normalizedTime * (3 - (2 * normalizedTime))
-        let omega = (2 * Double.pi) / launchAnimationResponse
-        let damping = min(max(launchAnimationDampingFraction, 0.01), 0.99)
-        let dampedFrequency = omega * sqrt(1 - (damping * damping))
-        let envelope = exp(-damping * omega * easedTime)
-        let progress =
-            1 - envelope
-            * (cos(dampedFrequency * easedTime)
-                + ((damping * omega) / dampedFrequency) * sin(dampedFrequency * easedTime))
-
-        return min(max(progress, 0), 1.08)
-    }
-
     private func clampedUnit(_ value: CGFloat) -> CGFloat {
         min(max(value, 0), 1)
     }
 
-    private func gaussianBell(at progress: CGFloat) -> CGFloat {
-        let easedProgress = clampedUnit(progress)
-        let velocitySmoothedProgress = easedProgress * easedProgress * (3 - (2 * easedProgress))
-        let sigma: CGFloat = 0.18
-        let edgeOffset = 0.5 / sigma
-        let edgeValue = CGFloat(exp(-0.5 * Double(edgeOffset * edgeOffset)))
-        let offset = (velocitySmoothedProgress - 0.5) / sigma
-        let value = CGFloat(exp(-0.5 * Double(offset * offset)))
-        return clampedUnit((value - edgeValue) / (1 - edgeValue))
+    private func bellBlur(at progress: CGFloat) -> CGFloat {
+        let clampedProgress = clampedUnit(progress)
+        return 4 * clampedProgress * (1 - clampedProgress)
+    }
+
+    private func easeInOutCubic(_ progress: CGFloat) -> CGFloat {
+        let clampedProgress = clampedUnit(progress)
+        if clampedProgress < 0.5 {
+            return 4 * clampedProgress * clampedProgress * clampedProgress
+        }
+
+        return 1 - pow(-2 * clampedProgress + 2, 3) / 2
     }
 
     private func setFlightBlur(radius: CGFloat) {
@@ -291,7 +280,7 @@ final class OverlayWindowController: NSWindowController {
 
     private func curvedFrame(from: NSRect, to: NSRect, progress: CGFloat) -> NSRect {
         let sizeProgress = clampedUnit(progress)
-        let pathProgress = min(max(progress, 0), 1.08)
+        let pathProgress = clampedUnit(progress)
         let size = NSSize(
             width: from.size.width + ((to.size.width - from.size.width) * sizeProgress),
             height: from.size.height + ((to.size.height - from.size.height) * sizeProgress)
