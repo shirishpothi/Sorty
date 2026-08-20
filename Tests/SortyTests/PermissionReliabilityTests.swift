@@ -28,6 +28,18 @@ final class PermissionReliabilityTests: XCTestCase {
         )
     }
 
+    func testDeniedAutomationDecisionIsResetBeforeAUserInitiatedRetry() {
+        XCTAssertTrue(
+            AutomationManager.shouldResetAutomationDecision(beforeRequest: .denied)
+        )
+        XCTAssertFalse(
+            AutomationManager.shouldResetAutomationDecision(beforeRequest: .unknown)
+        )
+        XCTAssertFalse(
+            AutomationManager.shouldResetAutomationDecision(beforeRequest: .granted)
+        )
+    }
+
     func testFullDiskAccessProbeReadsAnActualFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

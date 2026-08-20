@@ -41,6 +41,15 @@ public final class FinderAutomation {
         }.value
     }
 
+    /// Reads the current decision without presenting a consent alert.
+    public static func refreshAutomationPermission() async -> PermissionStatus {
+        guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
+
+        return await Task.detached(priority: .utility) {
+            determineAutomationPermission(prompt: false)
+        }.value
+    }
+
     nonisolated private static func determineAutomationPermission(
         prompt: Bool
     ) -> PermissionStatus {

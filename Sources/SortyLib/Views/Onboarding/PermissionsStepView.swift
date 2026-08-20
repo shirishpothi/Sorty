@@ -303,11 +303,6 @@ public struct PermissionsStepView: View {
         case .automation:
             guard let automationManager = taskController.automationManager else { return }
 
-            if automationManager.automationStatus == .denied {
-                openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
-                return
-            }
-
             permissionStates[.automation] = .pending
 
             taskController.automationPermissionTask?.cancel()
@@ -478,29 +473,6 @@ public struct PermissionsStepView: View {
         case .unknown:
             return .unknown
         }
-    }
-
-    private func openAutomationSettings(sourceFrameInScreen: CGRect?) {
-        if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
-            PermisoAssistant.shared.present(
-                panel: .automation,
-                sourceFrameInScreen: sourceFrameInScreen
-            )
-            return
-        }
-
-        let candidateURLs = [
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
-            "x-apple.systempreferences:com.apple.preference.security"
-        ]
-
-        for urlString in candidateURLs {
-            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
-                return
-            }
-        }
-
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
 
     private func notificationState(for status: UNAuthorizationStatus) -> PermissionState {
@@ -910,7 +882,7 @@ struct PermissionRow: View {
     private var deniedActionTitle: String {
         switch type {
         case .automation:
-            return "Enable in Settings"
+            return "Try Again"
         case .notifications:
             return "Enable in Settings"
         default:

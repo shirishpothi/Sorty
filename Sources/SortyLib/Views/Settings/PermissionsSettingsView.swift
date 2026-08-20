@@ -488,13 +488,8 @@ struct PermissionsSettingsView: View {
         )
     }
 
-    private func requestAutomationPermission(sourceFrameInScreen: CGRect?) {
+    private func requestAutomationPermission(sourceFrameInScreen _: CGRect?) {
         HapticFeedbackManager.shared.tap()
-
-        if automationManager.automationStatus == .denied {
-            automationManager.openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
-            return
-        }
 
         updatePermissionState(.pending, for: .automation)
 
@@ -997,8 +992,10 @@ private struct PermissionSettingsCard: View {
         guard state == .denied else { return type.compactActionTitle }
 
         switch type {
-        case .automation, .notifications:
+        case .notifications:
             return "Open Settings"
+        case .automation:
+            return "Try Again"
         default:
             return type.compactActionTitle
         }
@@ -1184,10 +1181,7 @@ private enum PermissionsSettingsAlert: Identifiable {
 }
 
 enum SystemPermissionRevoker {
-    struct Result: Sendable {
-        let succeeded: Bool
-        let message: String
-    }
+    typealias Result = TCCPermissionResetter.Result
 
     static func revoke(
         _ type: PermissionType,
@@ -1217,51 +1211,10 @@ enum SystemPermissionRevoker {
             )
         }
 
-        return await Task.detached(priority: .userInitiated) {
-            var failures: [String] = []
-
-            for service in services {
-                if let failure = reset(service: service, bundleIdentifier: bundleIdentifier) {
-                    failures.append(failure)
-                }
-            }
-
-            if failures.isEmpty {
-                return Result(succeeded: true, message: "")
-            }
-
-            return Result(
-                succeeded: false,
-                message: failures.joined(separator: "\n")
-            )
-        }.value
-    }
-
-    private static func reset(
-        service: String,
-        bundleIdentifier: String
-    ) -> String? {
-        let process = Process()
-        let errorPipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        process.arguments = ["reset", service, bundleIdentifier]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            guard process.terminationStatus != 0 else { return nil }
-            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let detail = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return detail?.isEmpty == false
-                ? detail!
-                : "macOS couldn’t reset \(service)."
-        } catch {
-            return "macOS couldn’t run the permission reset: \(error.localizedDescription)"
-        }
+        return await TCCPermissionResetter.reset(
+            services: services,
+            bundleIdentifier: bundleIdentifier
+        )
     }
 }
 

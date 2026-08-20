@@ -288,7 +288,8 @@ Permission status refreshes when Sorty becomes active and when you click
 bookmark, Full Disk Access opens a protected file, Automation asks macOS about
 Finder Apple Events, and Notifications reads Notification Center authorization.
 The first Automation request uses macOS's native Allow / Don't Allow alert.
-If it was previously denied, Sorty opens the Automation pane for manual recovery.
+If macOS has a stale denied decision, Sorty resets its own Apple Events record
+and retries the native alert instead of opening an empty Automation pane.
 Right-click a granted permission in onboarding or Settings to remove or disable
 it. Permissions that macOS does not let apps revoke directly open the matching
 System Settings pane.

@@ -143,6 +143,25 @@ public final class AutomationManager: ObservableObject {
     /// Explicitly trigger automation permission checks after user intent
     public func requestAutomationPermissionCheck() async {
         enableAutomationChecksIfNeeded()
+
+        let currentStatus = await FinderAutomation.refreshAutomationPermission()
+        if Self.shouldResetAutomationDecision(beforeRequest: currentStatus) {
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+            let resetResult = await TCCPermissionResetter.reset(
+                services: ["AppleEvents"],
+                bundleIdentifier: bundleIdentifier
+            )
+            guard resetResult.succeeded else {
+                automationStatus = .denied
+                statusMessage = "Finder automation couldn’t be reset"
+                lastPermissionError = resetResult.message
+                return
+            }
+
+            UserDefaults.standard.removeObject(forKey: previouslyGrantedKey)
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+
         automationStatus = await FinderAutomation.requestAutomationPermission()
         switch automationStatus {
         case .granted:
@@ -161,6 +180,12 @@ public final class AutomationManager: ObservableObject {
         if isStartedUp && enableSelectionMonitoring && automationStatus == .granted {
             startSelectionMonitoring()
         }
+    }
+
+    nonisolated static func shouldResetAutomationDecision(
+        beforeRequest status: PermissionStatus
+    ) -> Bool {
+        status == .denied
     }
     
     /// Open System Settings to Automation permissions
