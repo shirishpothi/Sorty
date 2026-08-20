@@ -1,17 +1,21 @@
 import AppKit
+import CoreImage
 import Foundation
 import QuartzCore
 
 final class OverlayWindowController: NSWindowController {
     private let windowSize = NSSize(width: 530, height: 109)
+    private let flightContentInset: CGFloat = 32
     private let launchAnimationDuration: TimeInterval = 0.72
     private let returnAnimationDuration: TimeInterval = 0.48
     private let launchAnimationResponse: Double = 0.72
     private let launchAnimationDampingFraction: Double = 0.72
     private let flightApexLift: CGFloat = 160
+    private let maximumFlightBlurRadius: CGFloat = 12
     private let initialAlpha: CGFloat = 0.9
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let flightContentView: OverlayFlightContentView
+    private let flightBlurFilter = CIFilter(name: "CIGaussianBlur")!
     private var launchAnimationTimer: Timer?
     private var launchStartTime: CFTimeInterval = 0
     private var launchFromFrame = NSRect.zero
@@ -29,7 +33,7 @@ final class OverlayWindowController: NSWindowController {
         onDrop: @escaping () -> Void
     ) {
         let window = PassiveOverlayPanel(
-            contentRect: NSRect(origin: .zero, size: windowSize),
+            contentRect: NSRect(x: 0, y: 0, width: 594, height: 173),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -37,6 +41,7 @@ final class OverlayWindowController: NSWindowController {
         flightContentView = OverlayFlightContentView(
             hostApp: hostApp,
             panel: panel,
+            contentInset: flightContentInset,
             onBack: onBack,
             onDrop: onDrop
         )
@@ -73,7 +78,8 @@ final class OverlayWindowController: NSWindowController {
             isAnimatingReturn = false
             window.alphaValue = 1
             flightContentView.setFlightProgress(1)
-            window.setFrame(targetFrame, display: false)
+            setFlightBlur(radius: 0)
+            window.setFrame(windowFrame(containing: targetFrame), display: false)
             window.orderFrontRegardless()
             return
         }
@@ -84,7 +90,8 @@ final class OverlayWindowController: NSWindowController {
             isAnimatingReturn = false
             window.alphaValue = 1
             flightContentView.setFlightProgress(1)
-            window.setFrame(targetFrame, display: false)
+            setFlightBlur(radius: 0)
+            window.setFrame(windowFrame(containing: targetFrame), display: false)
             window.orderFrontRegardless()
             return
         }
@@ -98,7 +105,8 @@ final class OverlayWindowController: NSWindowController {
         launchStartTime = CACurrentMediaTime()
 
         window.alphaValue = initialAlpha
-        window.setFrame(sourceFrameInScreen, display: false)
+        setFlightBlur(radius: 0)
+        window.setFrame(windowFrame(containing: sourceFrameInScreen), display: false)
         flightContentView.setFlightProgress(0)
         window.orderFrontRegardless()
         stepLaunchAnimation()
@@ -115,10 +123,13 @@ final class OverlayWindowController: NSWindowController {
 
     func updatePosition(with settingsFrame: CGRect, visibleFrame: CGRect) {
         guard let window else { return }
-        let origin = anchoredOrigin(for: settingsFrame, visibleFrame: visibleFrame)
-        launchToFrame.origin = origin
+        let contentFrame = NSRect(
+            origin: anchoredOrigin(for: settingsFrame, visibleFrame: visibleFrame),
+            size: windowSize
+        )
+        launchToFrame = contentFrame
         guard !isAnimatingLaunch else { return }
-        window.setFrameOrigin(origin)
+        window.setFrame(windowFrame(containing: contentFrame), display: false)
         window.orderFrontRegardless()
     }
 
@@ -126,6 +137,7 @@ final class OverlayWindowController: NSWindowController {
         isAnimatingLaunch = false
         isAnimatingReturn = false
         stopLaunchAnimation()
+        setFlightBlur(radius: 0)
         window?.orderOut(nil)
     }
 
@@ -145,11 +157,12 @@ final class OverlayWindowController: NSWindowController {
         isAnimatingReturn = true
         returnCompletion = completion
         activeAnimationDuration = returnAnimationDuration
-        launchFromFrame = window.frame
+        launchFromFrame = contentFrame(for: window.frame)
         launchToFrame = sourceFrame
         launchStartTime = CACurrentMediaTime()
         window.alphaValue = 1
         flightContentView.setFlightProgress(1)
+        setFlightBlur(radius: 0)
         window.orderFrontRegardless()
         stepLaunchAnimation()
 
@@ -191,7 +204,8 @@ final class OverlayWindowController: NSWindowController {
             stopLaunchAnimation()
             window.alphaValue = wasReturning ? initialAlpha : 1
             flightContentView.setFlightProgress(wasReturning ? 0 : 1)
-            window.setFrame(launchToFrame, display: true)
+            setFlightBlur(radius: 0)
+            window.setFrame(windowFrame(containing: launchToFrame), display: true)
             if wasReturning {
                 window.orderOut(nil)
                 completion?()
@@ -201,6 +215,7 @@ final class OverlayWindowController: NSWindowController {
 
         let motionProgress = springProgress(at: elapsed, duration: activeAnimationDuration)
         let visualProgress = clampedUnit(motionProgress)
+        let timeProgress = CGFloat(min(max(elapsed / activeAnimationDuration, 0), 1))
         if isAnimatingReturn {
             window.alphaValue = 1 - ((1 - initialAlpha) * visualProgress)
             flightContentView.setFlightProgress(1 - visualProgress)
@@ -208,8 +223,15 @@ final class OverlayWindowController: NSWindowController {
             window.alphaValue = initialAlpha + ((1 - initialAlpha) * visualProgress)
             flightContentView.setFlightProgress(visualProgress)
         }
+        setFlightBlur(radius: gaussianBell(at: timeProgress) * maximumFlightBlurRadius)
         window.setFrame(
-            curvedFrame(from: launchFromFrame, to: launchToFrame, progress: motionProgress),
+            windowFrame(
+                containing: curvedFrame(
+                    from: launchFromFrame,
+                    to: launchToFrame,
+                    progress: motionProgress
+                )
+            ),
             display: true
         )
     }
@@ -236,6 +258,29 @@ final class OverlayWindowController: NSWindowController {
 
     private func clampedUnit(_ value: CGFloat) -> CGFloat {
         min(max(value, 0), 1)
+    }
+
+    private func gaussianBell(at progress: CGFloat) -> CGFloat {
+        let clampedProgress = clampedUnit(progress)
+        return 4 * clampedProgress * (1 - clampedProgress)
+    }
+
+    private func setFlightBlur(radius: CGFloat) {
+        guard radius > 0 else {
+            flightContentView.layer?.filters = nil
+            return
+        }
+
+        flightBlurFilter.setValue(radius, forKey: kCIInputRadiusKey)
+        flightContentView.layer?.filters = [flightBlurFilter]
+    }
+
+    private func windowFrame(containing contentFrame: NSRect) -> NSRect {
+        contentFrame.insetBy(dx: -flightContentInset, dy: -flightContentInset)
+    }
+
+    private func contentFrame(for windowFrame: NSRect) -> NSRect {
+        windowFrame.insetBy(dx: flightContentInset, dy: flightContentInset)
     }
 
     private func curvedFrame(from: NSRect, to: NSRect, progress: CGFloat) -> NSRect {
@@ -296,13 +341,17 @@ private final class PassiveOverlayPanel: NSPanel {
 private final class OverlayFlightContentView: NSView {
     private let liveContentView: OverlayContentView
     private let sourceImageView = NSImageView()
+    private let contentContainer = NSView()
+    private let contentInset: CGFloat
 
     init(
         hostApp: PermisoHostApp,
         panel: PermisoPanel,
+        contentInset: CGFloat,
         onBack: @escaping () -> Void,
         onDrop: @escaping () -> Void
     ) {
+        self.contentInset = contentInset
         liveContentView = OverlayContentView(
             hostApp: hostApp,
             panel: panel,
@@ -347,23 +396,30 @@ private final class OverlayFlightContentView: NSView {
     private func setup() {
         wantsLayer = true
 
+        contentContainer.translatesAutoresizingMaskIntoConstraints = false
         sourceImageView.translatesAutoresizingMaskIntoConstraints = false
         sourceImageView.imageAlignment = .alignCenter
         sourceImageView.imageScaling = .scaleProportionallyDown
         sourceImageView.animates = false
-        addSubview(liveContentView)
-        addSubview(sourceImageView)
+        addSubview(contentContainer)
+        contentContainer.addSubview(liveContentView)
+        contentContainer.addSubview(sourceImageView)
 
         NSLayoutConstraint.activate([
-            liveContentView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            liveContentView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            liveContentView.topAnchor.constraint(equalTo: topAnchor),
-            liveContentView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            contentContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: contentInset),
+            contentContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -contentInset),
+            contentContainer.topAnchor.constraint(equalTo: topAnchor, constant: contentInset),
+            contentContainer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -contentInset),
 
-            sourceImageView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            sourceImageView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            sourceImageView.topAnchor.constraint(equalTo: topAnchor),
-            sourceImageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            liveContentView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            liveContentView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            liveContentView.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+            liveContentView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
+
+            sourceImageView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            sourceImageView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            sourceImageView.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+            sourceImageView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
         ])
     }
 
@@ -519,9 +575,6 @@ private final class OverlayContentView: NSView {
         }
 
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 530),
-            heightAnchor.constraint(equalToConstant: 109),
-
             tintView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor),
             tintView.trailingAnchor.constraint(equalTo: materialView.trailingAnchor),
             tintView.topAnchor.constraint(equalTo: materialView.topAnchor),
