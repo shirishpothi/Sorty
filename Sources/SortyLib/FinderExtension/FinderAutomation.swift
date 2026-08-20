@@ -16,6 +16,8 @@ import Permiso
 public final class FinderAutomation {
     
     private static var checksEnabled = false
+    nonisolated static let permissionEventClass = AEEventClass(kAECoreSuite)
+    nonisolated static let permissionEventID = AEEventID(kAEGetData)
     
     public static func enableAutomationChecks() {
         checksEnabled = true
@@ -24,14 +26,30 @@ public final class FinderAutomation {
     // MARK: - Permission Status
     
     /// Check if the app has Automation permission (can control Finder via AppleScript)
-    public static func checkAutomationPermission(prompt: Bool = false) -> PermissionStatus {
+    public static func checkAutomationPermission() -> PermissionStatus {
         guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
+
+        return determineAutomationPermission(prompt: false)
+    }
+
+    /// Requests Finder Automation with macOS's native Allow / Don't Allow alert.
+    public static func requestAutomationPermission() async -> PermissionStatus {
+        guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
+
+        return await Task.detached(priority: .userInitiated) {
+            determineAutomationPermission(prompt: true)
+        }.value
+    }
+
+    nonisolated private static func determineAutomationPermission(
+        prompt: Bool
+    ) -> PermissionStatus {
         let targetDesc = NSAppleEventDescriptor(bundleIdentifier: "com.apple.finder")
         
         let status = AEDeterminePermissionToAutomateTarget(
             targetDesc.aeDesc,
-            AEEventClass(kCoreEventClass),
-            AEEventID(kAEOpenApplication),
+            permissionEventClass,
+            permissionEventID,
             prompt
         )
         
@@ -289,7 +307,7 @@ public final class FinderAutomation {
 
 // MARK: - Supporting Types
 
-public enum PermissionStatus {
+public enum PermissionStatus: Sendable {
     case granted
     case denied
     case unknown

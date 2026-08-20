@@ -1,3 +1,4 @@
+import CoreServices
 import Foundation
 import XCTest
 
@@ -10,6 +11,21 @@ final class PermissionReliabilityTests: XCTestCase {
 
     func testAutomationCheckDoesNotRunBeforeUserIntent() {
         XCTAssertFalse(FinderAutomation.canCheckPermission(checksEnabled: false))
+    }
+
+    func testAutomationPermissionChecksFinderReadAccess() {
+        XCTAssertEqual(
+            FinderAutomation.permissionEventClass,
+            AEEventClass(kAECoreSuite)
+        )
+        XCTAssertEqual(
+            FinderAutomation.permissionEventID,
+            AEEventID(kAEGetData)
+        )
+        XCTAssertNotEqual(
+            FinderAutomation.permissionEventID,
+            AEEventID(kAEOpenApplication)
+        )
     }
 
     func testFullDiskAccessProbeReadsAnActualFile() throws {

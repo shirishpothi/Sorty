@@ -121,7 +121,7 @@ public final class AutomationManager: ObservableObject {
             enableAutomationChecksIfNeeded()
         }
 
-        automationStatus = FinderAutomation.checkAutomationPermission(prompt: false)
+        automationStatus = FinderAutomation.checkAutomationPermission()
         switch automationStatus {
         case .granted:
             statusMessage = "Finder automation permission granted"
@@ -141,9 +141,9 @@ public final class AutomationManager: ObservableObject {
     }
 
     /// Explicitly trigger automation permission checks after user intent
-    public func requestAutomationPermissionCheck() {
+    public func requestAutomationPermissionCheck() async {
         enableAutomationChecksIfNeeded()
-        automationStatus = FinderAutomation.checkAutomationPermission(prompt: true)
+        automationStatus = await FinderAutomation.requestAutomationPermission()
         switch automationStatus {
         case .granted:
             statusMessage = "Finder automation ready"
@@ -272,8 +272,14 @@ public final class AutomationManager: ObservableObject {
 
     /// Attempt recovery from stale/denied automation states without app restart.
     public func recoverAutomationState() {
-        // Explicit recovery action from Settings; this may trigger the system consent prompt.
-        requestAutomationPermissionCheck()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await recoverAutomationStateAfterPermissionRequest()
+        }
+    }
+
+    private func recoverAutomationStateAfterPermissionRequest() async {
+        await requestAutomationPermissionCheck()
 
         guard automationStatus == .granted else {
             if automationStatus == .denied {

@@ -29,6 +29,7 @@ struct PermissionsSettingsView: View {
     @State private var isOpeningPrivacySettings = false
     @State private var isShowingAccessInfo = false
     @State private var hoveredAccessInfoAction: AccessInfoAction?
+    @State private var automationPermissionTask: Task<Void, Never>?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -230,6 +231,10 @@ struct PermissionsSettingsView: View {
             Task {
                 await refreshPermissions()
             }
+        }
+        .onDisappear {
+            automationPermissionTask?.cancel()
+            automationPermissionTask = nil
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
@@ -485,15 +490,23 @@ struct PermissionsSettingsView: View {
 
     private func requestAutomationPermission(sourceFrameInScreen: CGRect?) {
         HapticFeedbackManager.shared.tap()
-        updatePermissionState(.pending, for: .automation)
-        automationManager.requestAutomationPermissionCheck()
-        updatePermissionState(
-            permissionState(for: automationManager.automationStatus),
-            for: .automation
-        )
 
         if automationManager.automationStatus == .denied {
             automationManager.openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
+            return
+        }
+
+        updatePermissionState(.pending, for: .automation)
+
+        automationPermissionTask?.cancel()
+        automationPermissionTask = Task { @MainActor in
+            await automationManager.requestAutomationPermissionCheck()
+            guard !Task.isCancelled else { return }
+            updatePermissionState(
+                permissionState(for: automationManager.automationStatus),
+                for: .automation
+            )
+            automationPermissionTask = nil
         }
     }
 

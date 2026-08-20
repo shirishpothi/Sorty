@@ -169,6 +169,8 @@ public struct PermissionsStepView: View {
         .onDisappear {
             taskController.permissionRefreshTask?.cancel()
             taskController.permissionRefreshTask = nil
+            taskController.automationPermissionTask?.cancel()
+            taskController.automationPermissionTask = nil
             taskController.isPermissionRefreshPending = false
         }
         .sheet(item: $selectedEducationPermission) { permission in
@@ -300,12 +302,22 @@ public struct PermissionsStepView: View {
 
         case .automation:
             guard let automationManager = taskController.automationManager else { return }
-            permissionStates[.automation] = .pending
-            automationManager.requestAutomationPermissionCheck()
-            permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
 
             if automationManager.automationStatus == .denied {
                 openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
+                return
+            }
+
+            permissionStates[.automation] = .pending
+
+            taskController.automationPermissionTask?.cancel()
+            taskController.automationPermissionTask = Task { @MainActor in
+                await automationManager.requestAutomationPermissionCheck()
+                guard !Task.isCancelled else { return }
+                permissionStates[.automation] = permissionState(
+                    for: automationManager.automationStatus
+                )
+                taskController.automationPermissionTask = nil
             }
 
         case .notifications:
@@ -560,6 +572,7 @@ private final class PermissionsTaskController {
     weak var automationManager: AutomationManager?
     weak var appState: AppState?
     var permissionRefreshTask: Task<Void, Never>?
+    var automationPermissionTask: Task<Void, Never>?
     var isPermissionRefreshPending = false
 }
 
