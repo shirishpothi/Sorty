@@ -283,6 +283,13 @@ button flies into a guide beside the matching System Settings pane. Full Disk
 Access also lets you drag the Sorty app into the system list. Automation and
 Notifications use step-specific guidance instead because those panes do not
 accept app drops. Reduce Motion removes the flight while keeping the guide.
+Permission status refreshes when Sorty becomes active and when you click
+**Refresh Status**. Files & Folders verifies a real read through the saved
+bookmark, Full Disk Access opens a protected file, Automation asks macOS about
+Finder Apple Events, and Notifications reads Notification Center authorization.
+Right-click a granted permission in onboarding or Settings to remove or disable
+it. Permissions that macOS does not let apps revoke directly open the matching
+System Settings pane.
 
 ### Data Processing
 

@@ -37,6 +37,7 @@ public final class AutomationManager: ObservableObject {
     private let enableSelectionMonitoringKey = "automation.enableSelectionMonitoring"
     private let autoSelectOrganizedFoldersKey = "automation.autoSelectOrganizedFolders"
     private let autoSelectOptInMigrationKey = "automation.autoSelectOrganizedFoldersMigratedToOptIn"
+    private let previouslyGrantedKey = "automation.previouslyGranted"
     
     // MARK: - Settings
     
@@ -68,6 +69,10 @@ public final class AutomationManager: ObservableObject {
         // Load settings from UserDefaults
         self.enableSelectionMonitoring = defaults.bool(forKey: enableSelectionMonitoringKey)
         self.autoSelectOrganizedFolders = defaults.object(forKey: autoSelectOrganizedFoldersKey) as? Bool ?? false
+        self.automationChecksEnabled = defaults.bool(forKey: previouslyGrantedKey)
+        if automationChecksEnabled {
+            FinderAutomation.enableAutomationChecks()
+        }
 
         // One-time migration: switch post-organization Finder reveal to opt-in.
         if !defaults.bool(forKey: autoSelectOptInMigrationKey) {
@@ -84,10 +89,9 @@ public final class AutomationManager: ObservableObject {
     
     // MARK: - Lifecycle
     
-    /// Called after app launch when UI is ready; automation checks are still gated by user intent
+    /// Called after app launch; automation checks remain gated by user intent.
     public func startUp() {
         isStartedUp = true
-        FinderAutomation.markAppReady()
 
         if automationChecksEnabled {
             checkPermissions()
@@ -132,7 +136,7 @@ public final class AutomationManager: ObservableObject {
             lastPermissionError = nil
         }
         if automationStatus == .granted {
-            UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
+            UserDefaults.standard.set(true, forKey: previouslyGrantedKey)
         }
     }
 
@@ -151,7 +155,7 @@ public final class AutomationManager: ObservableObject {
             statusMessage = "Waiting for automation decision"
         }
         if automationStatus == .granted {
-            UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
+            UserDefaults.standard.set(true, forKey: previouslyGrantedKey)
         }
 
         if isStartedUp && enableSelectionMonitoring && automationStatus == .granted {
@@ -292,7 +296,7 @@ public final class AutomationManager: ObservableObject {
         automationStatus = .unknown
         statusMessage = "Finder automation permission removed"
         lastPermissionError = nil
-        UserDefaults.standard.removeObject(forKey: "automation.previouslyGranted")
+        UserDefaults.standard.removeObject(forKey: previouslyGrantedKey)
     }
     
     // MARK: - Notification Handler

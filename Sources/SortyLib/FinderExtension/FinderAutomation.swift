@@ -16,21 +16,16 @@ import Permiso
 public final class FinderAutomation {
     
     private static var checksEnabled = false
-    private static var isAppReady = false
     
     public static func enableAutomationChecks() {
         checksEnabled = true
-    }
-    
-    public static func markAppReady() {
-        isAppReady = true
     }
     
     // MARK: - Permission Status
     
     /// Check if the app has Automation permission (can control Finder via AppleScript)
     public static func checkAutomationPermission(prompt: Bool = false) -> PermissionStatus {
-        guard checksEnabled, isAppReady else { return .unknown }
+        guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
         let targetDesc = NSAppleEventDescriptor(bundleIdentifier: "com.apple.finder")
         
         let status = AEDeterminePermissionToAutomateTarget(
@@ -56,6 +51,12 @@ public final class FinderAutomation {
             DebugLogger.log("Unexpected automation permission status: \(status)")
             return .unknown
         }
+    }
+
+    nonisolated static func canCheckPermission(
+        checksEnabled: Bool
+    ) -> Bool {
+        checksEnabled
     }
     
     /// Open System Settings to the Automation permission pane

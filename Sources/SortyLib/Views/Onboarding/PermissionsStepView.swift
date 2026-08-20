@@ -21,6 +21,8 @@ public struct PermissionsStepView: View {
     @State private var isFullDiskAccessConfirmationPresented = false
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
+    @State private var pendingRemovalPermission: PermissionType?
+    @State private var removalFailureMessage: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let notificationManager = NotificationManager.shared
     @State private var taskController = PermissionsTaskController()
@@ -97,7 +99,8 @@ public struct PermissionsStepView: View {
                     state: permissionStates[.filesAndFolders] ?? .unknown,
                     isRequired: true,
                     onExplain: { selectedEducationPermission = .filesAndFolders },
-                    onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
+                    onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) },
+                    onRemovePermission: { pendingRemovalPermission = .filesAndFolders }
                 )
 
                 Text("Optional")
@@ -111,7 +114,8 @@ public struct PermissionsStepView: View {
                         state: permissionStates[.fullDiskAccess] ?? .unknown,
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .fullDiskAccess },
-                        onRequest: { requestPermission(.fullDiskAccess, sourceFrameInScreen: $0) }
+                        onRequest: { requestPermission(.fullDiskAccess, sourceFrameInScreen: $0) },
+                        onRemovePermission: { pendingRemovalPermission = .fullDiskAccess }
                     )
 
                     PermissionRow(
@@ -119,7 +123,8 @@ public struct PermissionsStepView: View {
                         state: permissionStates[.automation] ?? .unknown,
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .automation },
-                        onRequest: { requestPermission(.automation, sourceFrameInScreen: $0) }
+                        onRequest: { requestPermission(.automation, sourceFrameInScreen: $0) },
+                        onRemovePermission: { pendingRemovalPermission = .automation }
                     )
 
                     PermissionRow(
@@ -127,7 +132,8 @@ public struct PermissionsStepView: View {
                         state: permissionStates[.notifications] ?? .unknown,
                         isRequired: false,
                         onExplain: { selectedEducationPermission = .notifications },
-                        onRequest: { requestPermission(.notifications, sourceFrameInScreen: $0) }
+                        onRequest: { requestPermission(.notifications, sourceFrameInScreen: $0) },
+                        onRemovePermission: { pendingRemovalPermission = .notifications }
                     )
                 }
 
@@ -183,12 +189,46 @@ public struct PermissionsStepView: View {
         } message: {
             Text("Full Disk Access is optional and only needed for protected folders. macOS may relaunch Sorty after you turn it on, so it is safe to finish onboarding first and enable this later in Settings.")
         }
+        .confirmationDialog(
+            removalTitle,
+            isPresented: removalConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            if let permission = pendingRemovalPermission {
+                Button(removalActionTitle(for: permission), role: .destructive) {
+                    removePermission(permission)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRemovalPermission = nil
+            }
+        } message: {
+            if let permission = pendingRemovalPermission {
+                Text(removalMessage(for: permission))
+            }
+        }
+        .alert(
+            "Permission Couldn’t Be Removed",
+            isPresented: Binding(
+                get: { removalFailureMessage != nil },
+                set: { if !$0 { removalFailureMessage = nil } }
+            )
+        ) {
+            Button("OK") {
+                removalFailureMessage = nil
+            }
+        } message: {
+            Text(removalFailureMessage ?? "Please try again.")
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Permissions Step")
     }
 
     private func checkPermissions() {
-        if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey),
+        let assumesFilesPermission = UserDefaults.standard.bool(
+            forKey: assumeFilesPermissionForUITestsKey
+        )
+        if assumesFilesPermission,
            !hasRequiredPermissions {
             hasRequiredPermissions = true
         }
@@ -197,13 +237,13 @@ public struct PermissionsStepView: View {
             taskController.isPermissionRefreshPending = true
             return
         }
-        let filesAndFoldersState: PermissionState = hasRequiredPermissions ? .granted : .unknown
         let didOpenFullDiskAccessSettings = didOpenFullDiskAccessSettings
         let automationManager = taskController.automationManager
+        let appState = taskController.appState
 
         taskController.permissionRefreshTask = Task { @MainActor in
             async let canReadProtectedLocation = Task.detached(priority: .utility) {
-                Self.canReadProtectedFullDiskAccessLocation()
+                FullDiskAccessProbe.isGranted()
             }.value
             await notificationManager.checkNotificationPermission()
             let hasProtectedLocationAccess = await canReadProtectedLocation
@@ -219,11 +259,14 @@ public struct PermissionsStepView: View {
             }
 
             automationManager?.checkPermissions(enableChecksIfNeeded: false)
+            let hasVerifiedFilesAccess = assumesFilesPermission
+                || appState?.hasFilesAndFoldersPermission() == true
+            hasRequiredPermissions = hasVerifiedFilesAccess
             let automationState = automationManager.map {
                 permissionState(for: $0.automationStatus)
             } ?? .unknown
             let refreshedStates: [PermissionType: PermissionState] = [
-                .filesAndFolders: filesAndFoldersState,
+                .filesAndFolders: hasVerifiedFilesAccess ? .granted : .unknown,
                 .fullDiskAccess: fullDiskAccessState(
                     canReadProtectedLocation: hasProtectedLocationAccess,
                     didOpenSettings: didOpenFullDiskAccessSettings
@@ -313,22 +356,104 @@ public struct PermissionsStepView: View {
             return didOpenSettings ? .restartRequired : .granted
         }
 
-        return didOpenSettings ? .pending : .unknown
+        return didOpenSettings ? .denied : .unknown
     }
 
-    nonisolated private static func canReadProtectedFullDiskAccessLocation() -> Bool {
-        let fileManager = FileManager.default
-        let protectedDirectories = [
-            "Library/Mail",
-            "Library/Messages",
-            "Library/Safari",
-            "Library/Calendars"
-        ]
+    private var removalConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRemovalPermission != nil },
+            set: { if !$0 { pendingRemovalPermission = nil } }
+        )
+    }
 
-        return protectedDirectories.contains { relativePath in
-            let url = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(relativePath)
-            guard fileManager.fileExists(atPath: url.path) else { return false }
-            return (try? fileManager.contentsOfDirectory(atPath: url.path)) != nil
+    private var removalTitle: String {
+        guard let permission = pendingRemovalPermission else {
+            return "Remove Permission?"
+        }
+
+        switch permission {
+        case .filesAndFolders:
+            return "Remove Current Folder Access?"
+        case .fullDiskAccess:
+            return "Remove Full Disk Access?"
+        case .automation:
+            return "Remove Finder Automation?"
+        case .notifications:
+            return "Disable System Notifications?"
+        }
+    }
+
+    private func removalActionTitle(for permission: PermissionType) -> String {
+        switch permission {
+        case .fullDiskAccess:
+            return "Open Full Disk Access"
+        case .notifications:
+            return "Disable & Open Settings"
+        case .filesAndFolders, .automation:
+            return "Remove Permission"
+        }
+    }
+
+    private func removalMessage(for permission: PermissionType) -> String {
+        switch permission {
+        case .filesAndFolders:
+            return "Sorty will forget the saved folder grant. Your files won’t be changed."
+        case .fullDiskAccess:
+            return "macOS only lets you remove Full Disk Access in Privacy & Security. Turn Sorty off there, then reopen Sorty."
+        case .automation:
+            return "Sorty will reset its permission to control Finder. macOS will ask again next time you enable it."
+        case .notifications:
+            return "Sorty will stop system notifications and open macOS Settings, where you can remove the authorization."
+        }
+    }
+
+    private func removePermission(_ permission: PermissionType) {
+        pendingRemovalPermission = nil
+
+        switch permission {
+        case .fullDiskAccess:
+            didOpenFullDiskAccessSettings = true
+            permissionStates[.fullDiskAccess] = .pending
+            if !NSWorkspace.shared.open(PermisoPanel.fullDiskAccess.settingsURL) {
+                NSWorkspace.shared.open(
+                    URL(fileURLWithPath: "/System/Applications/System Settings.app")
+                )
+            }
+
+        case .notifications:
+            NotificationSettingsManager.shared.settings.systemNotifications = false
+            let notificationCenter = UNUserNotificationCenter.current()
+            notificationCenter.removeAllPendingNotificationRequests()
+            notificationCenter.removeAllDeliveredNotifications()
+            notificationCenter.setNotificationCategories([])
+            openNotificationSettings()
+
+        case .filesAndFolders, .automation:
+            guard let appState = taskController.appState else { return }
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+            Task { @MainActor in
+                let result = await SystemPermissionRevoker.revoke(
+                    permission,
+                    bundleIdentifier: bundleIdentifier
+                )
+                guard result.succeeded else {
+                    HapticFeedbackManager.shared.error()
+                    removalFailureMessage = result.message
+                    return
+                }
+
+                if permission == .filesAndFolders {
+                    appState.selectedDirectory?.stopAccessingSecurityScopedResource()
+                    appState.revokeFilesAndFoldersPermission()
+                    appState.selectedDirectory = nil
+                    hasRequiredPermissions = false
+                    permissionStates[.filesAndFolders] = .unknown
+                } else {
+                    taskController.automationManager?.markAutomationPermissionReset()
+                    permissionStates[.automation] = .unknown
+                }
+                HapticFeedbackManager.shared.success()
+            }
         }
     }
 

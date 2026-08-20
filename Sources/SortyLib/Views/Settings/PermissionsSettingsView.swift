@@ -385,13 +385,17 @@ struct PermissionsSettingsView: View {
     }
 
     private func refreshPermissions(animateNewGrants: Bool = true) async {
+        async let hasFullDiskAccess = Task.detached(priority: .utility) {
+            FullDiskAccessProbe.isGranted()
+        }.value
+
         updatePermissionState(
             filesAndFoldersState,
             for: .filesAndFolders,
             animateGrant: animateNewGrants
         )
         updatePermissionState(
-            fullDiskAccessState(),
+            fullDiskAccessState(canReadProtectedLocation: await hasFullDiskAccess),
             for: .fullDiskAccess,
             animateGrant: animateNewGrants
         )
@@ -465,7 +469,15 @@ struct PermissionsSettingsView: View {
             panel: .fullDiskAccess,
             sourceFrameInScreen: fullDiskAccessSourceFrameInScreen,
             onCancel: {
-                updatePermissionState(fullDiskAccessState(), for: .fullDiskAccess)
+                Task { @MainActor in
+                    let isGranted = await Task.detached(priority: .utility) {
+                        FullDiskAccessProbe.isGranted()
+                    }.value
+                    updatePermissionState(
+                        fullDiskAccessState(canReadProtectedLocation: isGranted),
+                        for: .fullDiskAccess
+                    )
+                }
                 fullDiskAccessSourceFrameInScreen = nil
             }
         )
@@ -650,28 +662,12 @@ struct PermissionsSettingsView: View {
         }
     }
 
-    private func fullDiskAccessState() -> PermissionState {
-        if canReadProtectedFullDiskAccessLocation() {
+    private func fullDiskAccessState(canReadProtectedLocation: Bool) -> PermissionState {
+        if canReadProtectedLocation {
             return didOpenFullDiskAccessSettings ? .restartRequired : .granted
         }
 
-        return didOpenFullDiskAccessSettings ? .pending : .unknown
-    }
-
-    private func canReadProtectedFullDiskAccessLocation() -> Bool {
-        let fileManager = FileManager.default
-        let protectedDirectories = [
-            "Library/Mail",
-            "Library/Messages",
-            "Library/Safari",
-            "Library/Calendars"
-        ]
-
-        return protectedDirectories.contains { relativePath in
-            let url = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(relativePath)
-            guard fileManager.fileExists(atPath: url.path) else { return false }
-            return (try? fileManager.contentsOfDirectory(atPath: url.path)) != nil
-        }
+        return didOpenFullDiskAccessSettings ? .denied : .unknown
     }
 
     private func permissionState(for status: PermissionStatus) -> PermissionState {
@@ -821,6 +817,16 @@ private struct PermissionSettingsCard: View {
                 HapticFeedbackManager.shared.selection()
             }
             isHovering = hovering
+        }
+        .contextMenu {
+            if canRemovePermission, let onRemovePermission {
+                Button(role: .destructive) {
+                    HapticFeedbackManager.shared.tap()
+                    onRemovePermission()
+                } label: {
+                    Label(LocalizedStringKey(removePermissionTitle), systemImage: "minus.circle")
+                }
+            }
         }
         .accessibilityElement(children: .contain)
     }
@@ -1164,7 +1170,7 @@ private enum PermissionsSettingsAlert: Identifiable {
     }
 }
 
-private enum SystemPermissionRevoker {
+enum SystemPermissionRevoker {
     struct Result: Sendable {
         let succeeded: Bool
         let message: String
