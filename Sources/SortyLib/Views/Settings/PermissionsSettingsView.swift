@@ -100,7 +100,7 @@ struct PermissionsSettingsView: View {
                             isRequired: false,
                             grantAnimationTrigger: grantAnimationTriggers[.automation] ?? 0,
                             onExplain: { selectedEducationPermission = .automation },
-                            onRequest: { _ in requestAutomationPermission() },
+                            onRequest: { requestAutomationPermission(sourceFrameInScreen: $0) },
                             onRemovePermission: { activeAlert = .revoke(.automation) }
                         )
                         .settingsFocusable(
@@ -114,7 +114,7 @@ struct PermissionsSettingsView: View {
                             isRequired: false,
                             grantAnimationTrigger: grantAnimationTriggers[.notifications] ?? 0,
                             onExplain: { selectedEducationPermission = .notifications },
-                            onRequest: { _ in requestNotificationPermission() },
+                            onRequest: { requestNotificationPermission(sourceFrameInScreen: $0) },
                             removePermissionTitle: "Disable & Open Notification Settings…",
                             onRemovePermission: { activeAlert = .revoke(.notifications) }
                         )
@@ -471,7 +471,7 @@ struct PermissionsSettingsView: View {
         )
     }
 
-    private func requestAutomationPermission() {
+    private func requestAutomationPermission(sourceFrameInScreen: CGRect?) {
         HapticFeedbackManager.shared.tap()
         updatePermissionState(.pending, for: .automation)
         automationManager.requestAutomationPermissionCheck()
@@ -481,11 +481,11 @@ struct PermissionsSettingsView: View {
         )
 
         if automationManager.automationStatus == .denied {
-            automationManager.openAutomationSettings()
+            automationManager.openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
         }
     }
 
-    private func requestNotificationPermission() {
+    private func requestNotificationPermission(sourceFrameInScreen: CGRect?) {
         HapticFeedbackManager.shared.tap()
 
         Task { @MainActor in
@@ -493,7 +493,7 @@ struct PermissionsSettingsView: View {
 
             if notificationManager.notificationPermissionStatus == .denied {
                 updatePermissionState(.denied, for: .notifications)
-                openNotificationSettings()
+                openNotificationSettings(sourceFrameInScreen: sourceFrameInScreen)
                 return
             }
 
@@ -506,6 +506,7 @@ struct PermissionsSettingsView: View {
 
             if !granted {
                 HapticFeedbackManager.shared.error()
+                openNotificationSettings(sourceFrameInScreen: sourceFrameInScreen)
             }
         }
     }
@@ -697,7 +698,15 @@ struct PermissionsSettingsView: View {
         }
     }
 
-    private func openNotificationSettings() {
+    private func openNotificationSettings(sourceFrameInScreen: CGRect? = nil) {
+        if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
+            PermisoAssistant.shared.present(
+                panel: .notifications,
+                sourceFrameInScreen: sourceFrameInScreen
+            )
+            return
+        }
+
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         openFirstAvailableSettingsURL([
             "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleIdentifier)",

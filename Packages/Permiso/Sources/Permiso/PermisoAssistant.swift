@@ -27,9 +27,16 @@ public final class PermisoAssistant {
             InProcessScreenSnapshot.capture(screenRect: $0)
         }
         didPresentCurrentOverlay = false
-        overlayController = OverlayWindowController(hostApp: hostApp, panel: panel) { [weak self] in
-            self?.cancelAndReturnToApp(hostApp: hostApp, onCancel: onCancel)
-        }
+        overlayController = OverlayWindowController(
+            hostApp: hostApp,
+            panel: panel,
+            onBack: { [weak self] in
+                self?.cancelAndReturnToApp(hostApp: hostApp, onCancel: onCancel)
+            },
+            onDrop: { [weak self] in
+                self?.dismiss()
+            }
+        )
         NSWorkspace.shared.open(panel.settingsURL)
         startTracking()
     }

@@ -10,6 +10,7 @@ final class OverlayWindowController: NSWindowController {
     private let launchAnimationDampingFraction: Double = 0.72
     private let flightApexLift: CGFloat = 160
     private let initialAlpha: CGFloat = 0.9
+    private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let flightContentView: OverlayFlightContentView
     private var launchAnimationTimer: Timer?
     private var launchStartTime: CFTimeInterval = 0
@@ -21,14 +22,24 @@ final class OverlayWindowController: NSWindowController {
     private var isAnimatingReturn = false
     private var returnCompletion: (() -> Void)?
 
-    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
+    init(
+        hostApp: PermisoHostApp,
+        panel: PermisoPanel,
+        onBack: @escaping () -> Void,
+        onDrop: @escaping () -> Void
+    ) {
         let window = PassiveOverlayPanel(
             contentRect: NSRect(origin: .zero, size: windowSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        flightContentView = OverlayFlightContentView(hostApp: hostApp, panel: panel, onBack: onBack)
+        flightContentView = OverlayFlightContentView(
+            hostApp: hostApp,
+            panel: panel,
+            onBack: onBack,
+            onDrop: onDrop
+        )
         super.init(window: window)
         configureWindow(window)
         window.contentView = flightContentView
@@ -55,6 +66,17 @@ final class OverlayWindowController: NSWindowController {
         let targetFrame = NSRect(origin: targetOrigin, size: windowSize)
 
         flightContentView.setSourceSnapshot(sourceSnapshot)
+
+        if reduceMotion {
+            sourceFrame = sourceFrameInScreen ?? .zero
+            isAnimatingLaunch = false
+            isAnimatingReturn = false
+            window.alphaValue = 1
+            flightContentView.setFlightProgress(1)
+            window.setFrame(targetFrame, display: false)
+            window.orderFrontRegardless()
+            return
+        }
 
         guard let sourceFrameInScreen, !sourceFrameInScreen.isEmpty else {
             sourceFrame = .zero
@@ -109,6 +131,11 @@ final class OverlayWindowController: NSWindowController {
 
     func returnToSource(completion: @escaping () -> Void) {
         stopLaunchAnimation()
+        if reduceMotion {
+            window?.orderOut(nil)
+            completion()
+            return
+        }
         guard let window, !sourceFrame.isEmpty else {
             completion()
             return
@@ -270,8 +297,18 @@ private final class OverlayFlightContentView: NSView {
     private let liveContentView: OverlayContentView
     private let sourceImageView = NSImageView()
 
-    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
-        liveContentView = OverlayContentView(hostApp: hostApp, panel: panel, onBack: onBack)
+    init(
+        hostApp: PermisoHostApp,
+        panel: PermisoPanel,
+        onBack: @escaping () -> Void,
+        onDrop: @escaping () -> Void
+    ) {
+        liveContentView = OverlayContentView(
+            hostApp: hostApp,
+            panel: panel,
+            onBack: onBack,
+            onDrop: onDrop
+        )
         super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
         translatesAutoresizingMaskIntoConstraints = false
         setup()
@@ -346,11 +383,16 @@ private final class OverlayFlightContentView: NSView {
 private final class OverlayContentView: NSView {
     private let onBack: () -> Void
 
-    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
+    init(
+        hostApp: PermisoHostApp,
+        panel: PermisoPanel,
+        onBack: @escaping () -> Void,
+        onDrop: @escaping () -> Void
+    ) {
         self.onBack = onBack
         super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
         translatesAutoresizingMaskIntoConstraints = false
-        setup(hostApp: hostApp, panel: panel)
+        setup(hostApp: hostApp, panel: panel, onDrop: onDrop)
     }
 
     @available(*, unavailable)
@@ -358,7 +400,11 @@ private final class OverlayContentView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func setup(hostApp: PermisoHostApp, panel: PermisoPanel) {
+    private func setup(
+        hostApp: PermisoHostApp,
+        panel: PermisoPanel,
+        onDrop: @escaping () -> Void
+    ) {
         let materialView = NSVisualEffectView()
         materialView.translatesAutoresizingMaskIntoConstraints = false
         materialView.material = .popover
@@ -413,8 +459,19 @@ private final class OverlayContentView: NSView {
         titleLabel.lineBreakMode = .byTruncatingTail
         materialView.addSubview(titleLabel)
 
-        let dragSource = AppDragSourceView(hostApp: hostApp)
-        materialView.addSubview(dragSource)
+        let actionView: NSView
+        if panel.supportsAppDrop {
+            actionView = AppDragSourceView(hostApp: hostApp) { operation in
+                guard operation != [] else { return }
+                onDrop()
+            }
+        } else {
+            actionView = PermissionGuideView(
+                symbolName: panel.guideSymbol,
+                instruction: panel.guideInstruction(appName: hostApp.displayName)
+            )
+        }
+        materialView.addSubview(actionView)
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: 530),
@@ -450,17 +507,19 @@ private final class OverlayContentView: NSView {
             titleLabel.trailingAnchor.constraint(
                 equalTo: materialView.trailingAnchor, constant: -22),
 
-            dragSource.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 64),
-            dragSource.trailingAnchor.constraint(
+            actionView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 64),
+            actionView.trailingAnchor.constraint(
                 equalTo: materialView.trailingAnchor, constant: -21),
-            dragSource.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 47),
-            dragSource.heightAnchor.constraint(equalToConstant: 43),
+            actionView.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 47),
+            actionView.heightAnchor.constraint(equalToConstant: 43),
         ])
     }
 
     private func title(hostApp: PermisoHostApp, panel: PermisoPanel) -> NSAttributedString {
         NSAttributedString(
-            string: "Drag \(hostApp.displayName) to the list above to allow \(panel.title)",
+            string: panel.supportsAppDrop
+                ? "Drag \(hostApp.displayName) to the list above to allow \(panel.title)"
+                : "Finish allowing \(panel.title) in System Settings",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 14, weight: .medium),
                 .foregroundColor: NSColor.labelColor.withAlphaComponent(0.82),
@@ -471,5 +530,50 @@ private final class OverlayContentView: NSView {
     @objc
     private func backPressed() {
         onBack()
+    }
+}
+
+private final class PermissionGuideView: NSView {
+    init(symbolName: String, instruction: String) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.borderWidth = 1
+        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.72).cgColor
+        layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.22).cgColor
+
+        let symbol = NSImageView()
+        symbol.translatesAutoresizingMaskIntoConstraints = false
+        symbol.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        symbol.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
+        symbol.contentTintColor = .controlAccentColor
+        addSubview(symbol)
+
+        let label = NSTextField(labelWithString: instruction)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .labelColor
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel(instruction)
+
+        NSLayoutConstraint.activate([
+            symbol.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
+            symbol.widthAnchor.constraint(equalToConstant: 22),
+            symbol.heightAnchor.constraint(equalToConstant: 22),
+            label.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

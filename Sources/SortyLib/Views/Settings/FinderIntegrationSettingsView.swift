@@ -16,6 +16,7 @@ struct FinderIntegrationSettingsView: View {
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
     @State private var isShowingAutomationPermissionInfo = false
+    @State private var automationSettingsButtonFrameInScreen: CGRect = .zero
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
@@ -136,9 +137,17 @@ struct FinderIntegrationSettingsView: View {
                             HStack(spacing: 8) {
                                 Button("Open Automation Settings") {
                                     HapticFeedbackManager.shared.tap()
-                                    automationManager.openAutomationSettings()
+                                    automationManager.openAutomationSettings(
+                                        sourceFrameInScreen: automationSettingsButtonFrameInScreen.isEmpty
+                                            ? nil
+                                            : automationSettingsButtonFrameInScreen.integral
+                                    )
                                 }
                                 .buttonStyle(.sortySecondary(size: .regular))
+                                .background(
+                                    ScreenFrameReader(frameInScreen: $automationSettingsButtonFrameInScreen)
+                                        .allowsHitTesting(false)
+                                )
 
                                 Button("Recover Permission") {
                                     HapticFeedbackManager.shared.tap()

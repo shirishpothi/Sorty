@@ -262,7 +262,7 @@ public struct PermissionsStepView: View {
             permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
 
             if automationManager.automationStatus == .denied {
-                openAutomationSettings()
+                openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
             }
 
         case .notifications:
@@ -271,7 +271,7 @@ public struct PermissionsStepView: View {
 
                 if notificationManager.notificationPermissionStatus == .denied {
                     permissionStates[.notifications] = .denied
-                    openNotificationSettings()
+                    openNotificationSettings(sourceFrameInScreen: sourceFrameInScreen)
                     return
                 }
 
@@ -284,6 +284,9 @@ public struct PermissionsStepView: View {
 
                 if granted {
                     HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                    openNotificationSettings(sourceFrameInScreen: sourceFrameInScreen)
                 }
             }
         }
@@ -340,7 +343,15 @@ public struct PermissionsStepView: View {
         }
     }
 
-    private func openAutomationSettings() {
+    private func openAutomationSettings(sourceFrameInScreen: CGRect?) {
+        if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
+            PermisoAssistant.shared.present(
+                panel: .automation,
+                sourceFrameInScreen: sourceFrameInScreen
+            )
+            return
+        }
+
         let candidateURLs = [
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
             "x-apple.systempreferences:com.apple.preference.security"
@@ -368,7 +379,15 @@ public struct PermissionsStepView: View {
         }
     }
 
-    private func openNotificationSettings() {
+    private func openNotificationSettings(sourceFrameInScreen: CGRect? = nil) {
+        if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
+            PermisoAssistant.shared.present(
+                panel: .notifications,
+                sourceFrameInScreen: sourceFrameInScreen
+            )
+            return
+        }
+
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         let candidateURLs = [
             "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleIdentifier)",

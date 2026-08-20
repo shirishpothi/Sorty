@@ -4,17 +4,23 @@ import Foundation
 final class AppDragSourceView: NSView, NSPasteboardItemDataProvider, NSDraggingSource {
     private let hostApp: PermisoHostApp
     private let bundleURLDataRepresentation: Data
+    private let onDragEnd: (NSDragOperation) -> Void
     private let rowView = NSView()
     private let iconChrome = NSView()
     private let label = NSTextField(labelWithString: "")
 
-    init(hostApp: PermisoHostApp) {
+    init(hostApp: PermisoHostApp, onDragEnd: @escaping (NSDragOperation) -> Void = { _ in }) {
         self.hostApp = hostApp
         self.bundleURLDataRepresentation = hostApp.bundleURL.dataRepresentation
+        self.onDragEnd = onDragEnd
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         setup()
         updateAppearance()
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Drag \(hostApp.displayName) into the permission list")
+        setAccessibilityHelp("Drag this app into the list in System Settings to grant access.")
     }
 
     @available(*, unavailable)
@@ -37,6 +43,14 @@ final class AppDragSourceView: NSView, NSPasteboardItemDataProvider, NSDraggingS
         session.animatesToStartingPositionsOnCancelOrFail = true
     }
 
+    override func accessibilityPerformPress() -> Bool {
+        NSAccessibility.post(element: self, notification: .announcementRequested, userInfo: [
+            .announcement: "Drag \(hostApp.displayName) into the permission list in System Settings.",
+            .priority: NSAccessibilityPriorityLevel.high.rawValue,
+        ])
+        return true
+    }
+
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         updateAppearance()
@@ -57,6 +71,7 @@ final class AppDragSourceView: NSView, NSPasteboardItemDataProvider, NSDraggingS
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         rowView.isHidden = false
+        onDragEnd(operation)
     }
 
     private func setup() {

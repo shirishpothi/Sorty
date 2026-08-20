@@ -275,6 +275,15 @@ learnings-cli --clear
 
 ## Privacy & Security
 
+### Permission requests
+
+Sorty uses the native macOS request for Files & Folders, Finder Automation, and
+Notifications. If macOS requires a manual Settings change, the permission
+button flies into a guide beside the matching System Settings pane. Full Disk
+Access also lets you drag the Sorty app into the system list. Automation and
+Notifications use step-specific guidance instead because those panes do not
+accept app drops. Reduce Motion removes the flight while keeping the guide.
+
 ### Data Processing
 
 | Data Type | Local | Cloud |

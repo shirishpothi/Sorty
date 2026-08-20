@@ -5,9 +5,11 @@
 //  Notification permission status card component
 //
 
+import AppKit
 import SwiftUI
 import UserNotifications
-import AppKit
+
+import Permiso
 
 struct NotificationPermissionCard: View {
     @ObservedObject private var notificationManager = NotificationManager.shared
@@ -15,6 +17,7 @@ struct NotificationPermissionCard: View {
     @State private var isShowingPermissionInfo = false
     @State private var isHoveringMacOSSettings = false
     @State private var isOpeningMacOSSettings = false
+    @State private var settingsButtonFrameInScreen: CGRect = .zero
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -87,10 +90,18 @@ struct NotificationPermissionCard: View {
                         }
                         .buttonStyle(.sortyProminent)
                         .disabled(isRequestingPermission)
+                        .background(
+                            ScreenFrameReader(frameInScreen: $settingsButtonFrameInScreen)
+                                .allowsHitTesting(false)
+                        )
                         
                     case .denied:
                         Button {
-                            openSystemSettings()
+                            openSystemSettings(
+                                sourceFrameInScreen: settingsButtonFrameInScreen.isEmpty
+                                    ? nil
+                                    : settingsButtonFrameInScreen.integral
+                            )
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "gear")
@@ -98,6 +109,10 @@ struct NotificationPermissionCard: View {
                             }
                         }
                         .buttonStyle(.sortyBordered)
+                        .background(
+                            ScreenFrameReader(frameInScreen: $settingsButtonFrameInScreen)
+                                .allowsHitTesting(false)
+                        )
                         
                     case .authorized, .provisional:
                         Button {
@@ -185,13 +200,25 @@ struct NotificationPermissionCard: View {
                     HapticFeedbackManager.shared.success()
                 } else {
                     HapticFeedbackManager.shared.error()
-                    openSystemSettings()
+                    openSystemSettings(
+                        sourceFrameInScreen: settingsButtonFrameInScreen.isEmpty
+                            ? nil
+                            : settingsButtonFrameInScreen.integral
+                    )
                 }
             }
         }
     }
     
-    private func openSystemSettings() {
+    private func openSystemSettings(sourceFrameInScreen: CGRect? = nil) {
+        if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
+            PermisoAssistant.shared.present(
+                panel: .notifications,
+                sourceFrameInScreen: sourceFrameInScreen
+            )
+            return
+        }
+
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         let candidateURLs = [
             "x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleIdentifier)",
