@@ -2071,6 +2071,7 @@ private struct InsightHistorySection: View {
 
     @StateObject private var viewState = AnalysisInsightViewState()
     @State private var showPrivacyWarning = false
+    @AppStorage("analysis.hideLiveInsightsPrivacyWarning") private var hidePrivacyWarning = false
 
     private var displayedStreamPreview: String {
         FeatureFlags.privacyModeEnabled
@@ -2121,7 +2122,7 @@ private struct InsightHistorySection: View {
                             .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
                     }
 
-                    if FeatureFlags.privacyModeEnabled {
+                    if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning {
                         Button {
                             showPrivacyWarning.toggle()
                         } label: {
@@ -2139,6 +2140,20 @@ private struct InsightHistorySection: View {
                                         .foregroundStyle(.orange)
                                     Text("Privacy Warning")
                                         .font(.headline)
+
+                                    Spacer()
+
+                                    Button {
+                                        hidePrivacyWarning = true
+                                        showPrivacyWarning = false
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .frame(width: 24, height: 24)
+                                    .contentShape(Rectangle())
+                                    .accessibilityLabel("Dismiss privacy warning")
+                                    .accessibilityIdentifier("DismissLiveInsightsPrivacyWarningButton")
                                 }
 
                                 Text(
@@ -2147,6 +2162,12 @@ private struct InsightHistorySection: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+
+                                Button("Never show again") {
+                                    hidePrivacyWarning = true
+                                    showPrivacyWarning = false
+                                }
+                                .accessibilityIdentifier("HideLiveInsightsPrivacyWarningButton")
                             }
                             .padding(12)
                             .frame(width: 280)
