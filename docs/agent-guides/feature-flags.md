@@ -13,15 +13,30 @@ defaults write com.sorty.app <key> -bool false
 
 ## Available Flags
 
+Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys use the `com.sorty.app` defaults domain unless noted.
+
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|
-| GitHub Update Checker | `githubUpdateCheckerEnabled` | `false` | GitHub Releases-based in-app update dialog (Sparkle is always active) |
+| Finder Integration | `finderIntegrationEnabled` | `true` | Legacy preference for Finder Integration. Finder Integration is a core app feature; the key remains for migration and older installs, and new installs default to enabled. |
 | Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover; hides API keys with manual reveal |
+| Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Blocks all internet (network) connections from the app |
+| Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
 | File Tagging | `fileTaggingEnabled` | `true` | Finder file tagging during organization (may not work in sandboxed envs) |
-| Batch Organization | `batchOrganizationEnabled` | `false` | Multi-folder batch organization in the sidebar |
+| Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
-| Shaders | `shadersEnabled` | `false` | Recovered shader gallery in the Help menu |
+| Shaders | `shadersEnabled` (see note) | `false` | Recovered shader gallery in the Help menu |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
+
+### Harness Mode
+
+Harness mode is controlled by environment variables, not `defaults`:
+
+| Flag | Variable | Default | Description |
+|------|----------|---------|-------------|
+| Harness Mode | `SORTY_HARNESS_MODE` | unset | Boots the app with minimal dependencies and mock services |
+| Harness View | `SORTY_HARNESS_VIEW` | unset | Targets a specific view in harness mode (`settings`, `organize`, `learnings`, `history`, `health`) |
+
+Set via `make harness`, `make harness-settings`, or `make harness-organize`; see `docs/agent-guides/fast-loop.md`.
 
 ### Shaders
 Quit Sorty before changing the value, then reopen it so the Help menu is rebuilt.

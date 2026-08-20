@@ -30,6 +30,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `DesignSystem/` | Shared design tokens and reusable UI components |
 | `FileSystem/` | File system access and scanning |
 | `FinderExtension/` | Finder extension IPC helpers |
+| `Analytics/` | `AnalyticsManager` (PostHog), `ReliabilityManager` (Sentry), and consent UI |
 | `Services/` | App services |
 
 ## State Management
