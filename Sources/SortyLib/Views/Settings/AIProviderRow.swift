@@ -26,12 +26,17 @@ struct AIProviderRow: View {
                     )
                     .overlay(alignment: .bottomTrailing) {
                         if isSelected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.white, provider.brandColor)
-                                .background(Circle().fill(provider.brandColor))
-                                .offset(x: 3, y: 3)
-                                .accessibilityHidden(true)
+                            ZStack {
+                                Circle()
+                                    .fill(provider.brandColor)
+
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                            .frame(width: 18, height: 18)
+                            .offset(x: 3, y: 3)
+                            .accessibilityHidden(true)
                         }
                     }
 
