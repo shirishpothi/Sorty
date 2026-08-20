@@ -405,59 +405,23 @@ private final class OverlayContentView: NSView {
         panel: PermisoPanel,
         onDrop: @escaping () -> Void
     ) {
-        let materialView: NSView
-        let usesSystemGlass: Bool
-
-        if #available(macOS 26.0, *) {
-            let glassView = NSGlassEffectView()
-            glassView.translatesAutoresizingMaskIntoConstraints = false
-            glassView.cornerRadius = 22
-            glassView.style = .regular
-            glassView.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.12)
-
-            let contentView = NSView()
-            contentView.wantsLayer = true
-            glassView.contentView = contentView
-            addSubview(glassView)
-            materialView = contentView
-            usesSystemGlass = true
-
-            NSLayoutConstraint.activate([
-                glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
-                glassView.topAnchor.constraint(equalTo: topAnchor),
-                glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-        } else {
-            let effectView = NSVisualEffectView()
-            effectView.translatesAutoresizingMaskIntoConstraints = false
-            effectView.material = .popover
-            effectView.blendingMode = .behindWindow
-            effectView.state = .active
-            effectView.wantsLayer = true
-            effectView.layer?.cornerRadius = 18
-            effectView.layer?.masksToBounds = true
-            effectView.layer?.borderWidth = 0.5
-            effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.18).cgColor
-            addSubview(effectView)
-            materialView = effectView
-            usesSystemGlass = false
-
-            NSLayoutConstraint.activate([
-                effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
-                effectView.topAnchor.constraint(equalTo: topAnchor),
-                effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-        }
+        let materialView = NSVisualEffectView()
+        materialView.translatesAutoresizingMaskIntoConstraints = false
+        materialView.material = .popover
+        materialView.blendingMode = .behindWindow
+        materialView.state = .active
+        materialView.wantsLayer = true
+        materialView.layer?.cornerRadius = 18
+        materialView.layer?.masksToBounds = true
+        materialView.layer?.borderWidth = 0.5
+        materialView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.18).cgColor
+        addSubview(materialView)
 
         let tintView = NSView()
         tintView.translatesAutoresizingMaskIntoConstraints = false
         tintView.wantsLayer = true
         tintView.layer?.backgroundColor =
-            NSColor.windowBackgroundColor
-            .withAlphaComponent(usesSystemGlass ? 0.10 : 0.78)
-            .cgColor
+            NSColor.windowBackgroundColor.withAlphaComponent(0.78).cgColor
         materialView.addSubview(tintView)
 
         let backChrome = NSView()
@@ -521,6 +485,11 @@ private final class OverlayContentView: NSView {
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: 530),
             heightAnchor.constraint(equalToConstant: 109),
+
+            materialView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            materialView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            materialView.topAnchor.constraint(equalTo: topAnchor),
+            materialView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             tintView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor),
             tintView.trailingAnchor.constraint(equalTo: materialView.trailingAnchor),
