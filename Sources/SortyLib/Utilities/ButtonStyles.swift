@@ -21,7 +21,7 @@ public enum SortyButtonIntent: Equatable {
     var accent: Color {
         switch self {
         case .primary:
-            return SortyDesignSystem.Colors.resolvedAccent
+            return .accentColor
         case .secondary:
             return .secondary
         case .success:
@@ -170,11 +170,11 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
                             .fill(
                                 LinearGradient(
                                     stops: [
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 0),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.3),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.95), location: 0.5),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.7),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 1)
+                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
+                                        .init(color: Color.accentColor, location: 0.3),
+                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
+                                        .init(color: Color.accentColor, location: 0.7),
+                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -280,11 +280,11 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                             .fill(
                                 LinearGradient(
                                     stops: [
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 0),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.3),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.95), location: 0.5),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.7),
-                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 1)
+                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
+                                        .init(color: Color.accentColor, location: 0.3),
+                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
+                                        .init(color: Color.accentColor, location: 0.7),
+                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -328,7 +328,7 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
             .shadow(
                 color: isSecondary
                     ? Color.black.opacity(colorScheme == .dark ? 0.14 : 0.05)
-                    : SortyDesignSystem.Colors.resolvedAccent.opacity(0.3),
+                    : Color.accentColor.opacity(0.3),
                 radius: 8,
                 x: 0,
                 y: 4

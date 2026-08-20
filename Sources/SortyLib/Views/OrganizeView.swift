@@ -747,7 +747,7 @@ struct DirectoryHeader: View {
                 HStack(spacing: 7) {
                     Image(systemName: mode.iconName)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .foregroundStyle(Color.accentColor)
                         .symbolReplaceTransition(animationValue: mode)
                         .accessibilityHidden(true)
 
@@ -1164,7 +1164,7 @@ struct ReadyToOrganizeView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(
                                 selectedStorageLocationCount > 0
-                                    ? SortyDesignSystem.Colors.resolvedAccent
+                                    ? Color.accentColor
                                     : Color.secondary
                             )
                             .symbolReplaceTransition(
@@ -1173,7 +1173,7 @@ struct ReadyToOrganizeView: View {
                             .frame(width: 22, height: 22)
                             .background {
                                 Circle()
-                                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.32))
+                                    .fill(Color.accentColor.opacity(0.32))
                                     .frame(width: 18, height: 18)
                                     .blur(radius: 5)
                                     .opacity(selectedStorageLocationCount > 0 ? 1 : 0)
@@ -1574,7 +1574,7 @@ struct ReadyToOrganizeView: View {
                     HStack(spacing: 9) {
                         Image(systemName: "text.alignleft")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .foregroundStyle(Color.accentColor)
                             .frame(width: 18)
                             .accessibilityHidden(true)
 
@@ -1593,7 +1593,7 @@ struct ReadyToOrganizeView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(
-                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
+                                Color.accentColor.opacity(0.18),
                                 lineWidth: 1
                             )
                     }
@@ -2437,7 +2437,7 @@ private struct SavedPromptRowButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(
                         isProminent
-                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(configuration.isPressed ? 0.78 : 0.9)
+                            ? Color.accentColor.opacity(configuration.isPressed ? 0.78 : 0.9)
                             : Color(NSColor.controlBackgroundColor).opacity(configuration.isPressed ? 0.7 : 0.42)
                     )
             }

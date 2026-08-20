@@ -149,10 +149,10 @@ struct WorkflowGradientBackground: View {
             GeometryReader { proxy in
                 LinearGradient(
                     stops: [
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity), location: 0.00),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity), location: 0.38),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.36), location: 0.72),
-                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.08), location: 0.92),
+                        .init(color: Color.accentColor.opacity(topOpacity), location: 0.00),
+                        .init(color: Color.accentColor.opacity(midOpacity), location: 0.38),
+                        .init(color: Color.accentColor.opacity(midOpacity * 0.36), location: 0.72),
+                        .init(color: Color.accentColor.opacity(midOpacity * 0.08), location: 0.92),
                         .init(color: Color.clear, location: 1.00)
                     ],
                     startPoint: .bottom,
@@ -163,8 +163,8 @@ struct WorkflowGradientBackground: View {
 
                 RadialGradient(
                     colors: [
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(bloomOpacity),
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(bloomOpacity * 0.35),
+                        Color.accentColor.opacity(bloomOpacity),
+                        Color.accentColor.opacity(bloomOpacity * 0.35),
                         .clear
                     ],
                     center: UnitPoint(x: 0.5, y: 1.05),

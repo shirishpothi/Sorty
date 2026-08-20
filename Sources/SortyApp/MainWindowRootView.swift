@@ -35,6 +35,7 @@ struct MainWindowRootView: View {
     @State private var handledUITestDeepLink = false
     @State private var isShowingWhatsNew = false
     @State private var setupRepairTask: Task<Void, Never>?
+    @State private var hasOpenedAccentPrototypes = false
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
@@ -56,6 +57,7 @@ struct MainWindowRootView: View {
         contentWithNotificationRouting
             .onAppear {
                 recordLaunchSmokeSuccessIfRequested()
+                openAccentPrototypesIfRequested()
             }
             .deleteUsageDataConfirmationAlert(
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
@@ -78,6 +80,17 @@ struct MainWindowRootView: View {
             to: URL(fileURLWithPath: resultPath),
             options: .atomic
         )
+    }
+
+    private func openAccentPrototypesIfRequested() {
+        guard ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1",
+              !hasOpenedAccentPrototypes else {
+            return
+        }
+
+        hasOpenedAccentPrototypes = true
+        ["accent-rose", "accent-indigo", "accent-teal", "accent-emerald", "accent-amber", "accent-violet"]
+            .forEach { openWindow(id: $0) }
     }
 
 

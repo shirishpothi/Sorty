@@ -432,25 +432,8 @@ struct SortyApp: App {
 
     @SceneBuilder
     var body: some Scene {
-        WindowGroup("Sorty", id: "main") {
-            if ApplicationMover.shouldLaunchMainUI {
-                mainWindowContent(launchRequest: .constant(nil))
-            }
-        }
-        .windowStyle(.automatic)
-        .defaultSize(width: 1100, height: 750)
-        .defaultLaunchBehavior(.presented)
-
-        WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
-            if ApplicationMover.shouldLaunchMainUI {
-                mainWindowContent(launchRequest: launchRequest)
-            }
-        }
-        .windowStyle(.automatic)
-        .defaultSize(width: 1100, height: 750)
-        .commands {
-            SortyCommands()
-        }
+        productionScenes
+        accentPrototypeScenes
 
         MenuBarExtra(
             isInserted: Binding(
@@ -477,11 +460,58 @@ struct SortyApp: App {
         .menuBarExtraStyle(.window)
     }
 
+    @SceneBuilder
+    private var productionScenes: some Scene {
+        WindowGroup("Sorty", id: "main") {
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: .constant(nil))
+            }
+        }
+        .windowStyle(.automatic)
+        .defaultSize(width: 1100, height: 750)
+        .defaultLaunchBehavior(.presented)
+
+        WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: launchRequest)
+            }
+        }
+        .windowStyle(.automatic)
+        .defaultSize(width: 1100, height: 750)
+        .commands {
+            SortyCommands()
+        }
+    }
+
+    @SceneBuilder
+    private var accentPrototypeScenes: some Scene {
+        accentPrototypeWindow("Rose", id: "accent-rose", color: Color(red: 0.85, green: 0.235, blue: 0.353))
+        accentPrototypeWindow("Indigo", id: "accent-indigo", color: Color(red: 0.31, green: 0.35, blue: 0.80))
+        accentPrototypeWindow("Teal", id: "accent-teal", color: Color(red: 0.02, green: 0.50, blue: 0.54))
+        accentPrototypeWindow("Emerald", id: "accent-emerald", color: Color(red: 0.08, green: 0.52, blue: 0.35))
+        accentPrototypeWindow("Amber", id: "accent-amber", color: Color(red: 0.78, green: 0.40, blue: 0.04))
+        accentPrototypeWindow("Violet", id: "accent-violet", color: Color(red: 0.54, green: 0.26, blue: 0.73))
+    }
+
+    private func accentPrototypeWindow(_ name: String, id: String, color: Color) -> some Scene {
+        WindowGroup("Sorty · \(name)", id: id) {
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: .constant(nil), accent: color)
+            }
+        }
+        .windowStyle(.automatic)
+        .defaultSize(width: 900, height: 680)
+        .defaultLaunchBehavior(.suppressed)
+    }
+
     @ViewBuilder
-    private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
+    private func mainWindowContent(
+        launchRequest: Binding<WindowLaunchRequest?>,
+        accent: Color? = nil
+    ) -> some View {
         mainWindowIntegrationHandlers(
             mainWindowConfigurationHandlers(
-                mainWindowRootView(launchRequest: launchRequest)
+                mainWindowRootView(launchRequest: launchRequest, accent: accent)
             )
         )
     }
@@ -549,15 +579,18 @@ struct SortyApp: App {
             }
     }
 
-    private func mainWindowRootView(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
+    private func mainWindowRootView(
+        launchRequest: Binding<WindowLaunchRequest?>,
+        accent: Color?
+    ) -> some View {
         MainWindowRootView(
             launchRequest: launchRequest.wrappedValue,
             coordinator: coordinator,
             history: organizationHistory,
             updateManager: updateManager
         )
-        .tint(SortyDesignSystem.Colors.resolvedAccent)
-        .accentColor(SortyDesignSystem.Colors.resolvedAccent)
+        .tint(accent ?? SortyDesignSystem.Colors.resolvedAccent)
+        .accentColor(accent ?? SortyDesignSystem.Colors.resolvedAccent)
         .environmentObject(settingsViewModel)
         .environmentObject(personaManager)
         .environmentObject(customPersonaStore)
