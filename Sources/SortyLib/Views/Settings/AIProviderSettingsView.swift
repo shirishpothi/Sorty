@@ -198,6 +198,7 @@ struct AIProviderSettingsView: View {
                 .onAppear {
                     viewModel.updateAvailableModels()
                 }
+                .transition(.opacity)
             } else if let code = copilotAuth.deviceCodeResponse {
                 // Device code flow
                 VStack(alignment: .leading, spacing: 16) {
@@ -245,6 +246,7 @@ struct AIProviderSettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .transition(.opacity)
             } else {
                 // Sign in prompt
                 VStack(alignment: .leading, spacing: 12) {
@@ -277,8 +279,13 @@ struct AIProviderSettingsView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
+                .transition(.opacity)
             }
         }
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
+            value: copilotAuth.isAuthenticated
+        )
         .settingsFocusable(.providerConfiguration)
     }
 
