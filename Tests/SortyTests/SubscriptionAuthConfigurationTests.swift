@@ -61,6 +61,16 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(config.authMethod(for: .anthropic), .accountSignIn)
     }
 
+    func testSubscriptionAuthenticationUsesCodexClient() throws {
+        var config = AIConfig.default
+        config.provider = .openAI
+        config.setAuthMethod(.accountSignIn, for: .openAI)
+
+        let client = try AIClientFactory.createClient(config: config)
+
+        XCTAssertTrue(client is CodexSubscriptionClient)
+    }
+
     func testChangingProviderClearsInMemoryAPIKey() {
         var config = AIConfig(
             provider: .openRouter,
