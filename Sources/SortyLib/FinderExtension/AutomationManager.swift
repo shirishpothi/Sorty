@@ -151,15 +151,16 @@ public final class AutomationManager: ObservableObject {
                 services: ["AppleEvents"],
                 bundleIdentifier: bundleIdentifier
             )
-            guard resetResult.succeeded else {
-                automationStatus = .denied
-                statusMessage = "Finder automation couldn’t be reset"
-                lastPermissionError = resetResult.message
-                return
+            if resetResult.succeeded {
+                UserDefaults.standard.removeObject(forKey: previouslyGrantedKey)
+                try? await Task.sleep(for: .milliseconds(250))
+            } else {
+                LogManager.shared.log(
+                    "Finder automation reset failed: \(resetResult.message)",
+                    level: .warning,
+                    category: "Permissions"
+                )
             }
-
-            UserDefaults.standard.removeObject(forKey: previouslyGrantedKey)
-            try? await Task.sleep(for: .milliseconds(250))
         }
 
         automationStatus = await FinderAutomation.requestAutomationPermission()
@@ -185,7 +186,7 @@ public final class AutomationManager: ObservableObject {
     nonisolated static func shouldResetAutomationDecision(
         beforeRequest status: PermissionStatus
     ) -> Bool {
-        status == .denied
+        status != .granted
     }
     
     /// Open System Settings to Automation permissions

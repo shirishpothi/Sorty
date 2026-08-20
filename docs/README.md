@@ -287,9 +287,9 @@ Permission status refreshes when Sorty becomes active and when you click
 **Refresh Status**. Files & Folders verifies a real read through the saved
 bookmark, Full Disk Access opens a protected file, Automation asks macOS about
 Finder Apple Events, and Notifications reads Notification Center authorization.
-The first Automation request uses macOS's native Allow / Don't Allow alert.
-If macOS has a stale denied decision, Sorty resets its own Apple Events record
-and retries the native alert instead of opening an empty Automation pane.
+An Automation request clears any non-granted Sorty Apple Events decision before
+using macOS's native Allow / Don't Allow alert. This also repairs contradictory
+TCC states where a preflight says undecided but macOS silently denies the prompt.
 Right-click a granted permission in onboarding or Settings to remove or disable
 it. Permissions that macOS does not let apps revoke directly open the matching
 System Settings pane.

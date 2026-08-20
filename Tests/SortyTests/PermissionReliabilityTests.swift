@@ -28,11 +28,11 @@ final class PermissionReliabilityTests: XCTestCase {
         )
     }
 
-    func testDeniedAutomationDecisionIsResetBeforeAUserInitiatedRetry() {
+    func testNonGrantedAutomationDecisionIsResetBeforeAUserInitiatedRequest() {
         XCTAssertTrue(
             AutomationManager.shouldResetAutomationDecision(beforeRequest: .denied)
         )
-        XCTAssertFalse(
+        XCTAssertTrue(
             AutomationManager.shouldResetAutomationDecision(beforeRequest: .unknown)
         )
         XCTAssertFalse(
