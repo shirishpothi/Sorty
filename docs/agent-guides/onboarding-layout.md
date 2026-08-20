@@ -190,6 +190,9 @@ must not repeat state normalization the manager already performs.
 Use interactive Liquid Glass only for controls. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
+The small hand-and-"Drag" cue beside the onboarding Grant Access heading is
+decorative. Keep it non-interactive and hidden from accessibility so it does
+not imply a separate permission action.
 Permission action frame probes measure only during AppKit layout or actual
 window geometry notifications, coalesce same-runloop reports, and treat normal
 SwiftUI representable updates as bookkeeping rather than another measurement.
