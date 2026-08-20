@@ -85,8 +85,6 @@ public struct PermissionsStepView: View {
 
                     Spacer()
 
-                    PermissionDragCue()
-
                     Text("\(grantedPermissionCount) of \(PermissionType.allCases.count) granted")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(grantedPermissionCount == PermissionType.allCases.count ? .green : .secondary)
@@ -548,26 +546,6 @@ private final class PermissionsTaskController {
     var permissionRefreshTask: Task<Void, Never>?
     var automationPermissionTask: Task<Void, Never>?
     var isPermissionRefreshPending = false
-}
-
-private struct PermissionDragCue: View {
-    var body: some View {
-        VStack(spacing: 2) {
-            Image(systemName: "hand.draw")
-                .font(.title3.weight(.medium))
-
-            Text("Drag")
-                .font(.caption2.weight(.medium))
-        }
-        .foregroundStyle(.secondary)
-        .frame(width: 52, height: 52)
-        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.11), lineWidth: 1)
-        }
-        .accessibilityHidden(true)
-    }
 }
 
 enum PermissionType: String, CaseIterable, Identifiable, Sendable {
