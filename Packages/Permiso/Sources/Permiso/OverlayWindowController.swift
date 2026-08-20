@@ -405,23 +405,59 @@ private final class OverlayContentView: NSView {
         panel: PermisoPanel,
         onDrop: @escaping () -> Void
     ) {
-        let materialView = NSVisualEffectView()
-        materialView.translatesAutoresizingMaskIntoConstraints = false
-        materialView.material = .popover
-        materialView.blendingMode = .behindWindow
-        materialView.state = .active
-        materialView.wantsLayer = true
-        materialView.layer?.cornerRadius = 18
-        materialView.layer?.masksToBounds = true
-        materialView.layer?.borderWidth = 0.5
-        materialView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.18).cgColor
-        addSubview(materialView)
+        let materialView: NSView
+        let usesSystemGlass: Bool
+
+        if #available(macOS 26.0, *) {
+            let glassView = NSGlassEffectView()
+            glassView.translatesAutoresizingMaskIntoConstraints = false
+            glassView.cornerRadius = 22
+            glassView.style = .regular
+            glassView.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.12)
+
+            let contentView = NSView()
+            contentView.wantsLayer = true
+            glassView.contentView = contentView
+            addSubview(glassView)
+            materialView = contentView
+            usesSystemGlass = true
+
+            NSLayoutConstraint.activate([
+                glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                glassView.topAnchor.constraint(equalTo: topAnchor),
+                glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        } else {
+            let effectView = NSVisualEffectView()
+            effectView.translatesAutoresizingMaskIntoConstraints = false
+            effectView.material = .popover
+            effectView.blendingMode = .behindWindow
+            effectView.state = .active
+            effectView.wantsLayer = true
+            effectView.layer?.cornerRadius = 18
+            effectView.layer?.masksToBounds = true
+            effectView.layer?.borderWidth = 0.5
+            effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.18).cgColor
+            addSubview(effectView)
+            materialView = effectView
+            usesSystemGlass = false
+
+            NSLayoutConstraint.activate([
+                effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                effectView.topAnchor.constraint(equalTo: topAnchor),
+                effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
 
         let tintView = NSView()
         tintView.translatesAutoresizingMaskIntoConstraints = false
         tintView.wantsLayer = true
         tintView.layer?.backgroundColor =
-            NSColor.windowBackgroundColor.withAlphaComponent(0.78).cgColor
+            NSColor.windowBackgroundColor
+            .withAlphaComponent(usesSystemGlass ? 0.10 : 0.78)
+            .cgColor
         materialView.addSubview(tintView)
 
         let backChrome = NSView()
@@ -473,14 +509,18 @@ private final class OverlayContentView: NSView {
         }
         materialView.addSubview(actionView)
 
+        let dragCue: PermissionDragCueView?
+        if panel.supportsAppDrop {
+            let cue = PermissionDragCueView()
+            materialView.addSubview(cue)
+            dragCue = cue
+        } else {
+            dragCue = nil
+        }
+
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: 530),
             heightAnchor.constraint(equalToConstant: 109),
-
-            materialView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            materialView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            materialView.topAnchor.constraint(equalTo: topAnchor),
-            materialView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             tintView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor),
             tintView.trailingAnchor.constraint(equalTo: materialView.trailingAnchor),
@@ -508,11 +548,23 @@ private final class OverlayContentView: NSView {
                 equalTo: materialView.trailingAnchor, constant: -22),
 
             actionView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 64),
-            actionView.trailingAnchor.constraint(
-                equalTo: materialView.trailingAnchor, constant: -21),
             actionView.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 47),
             actionView.heightAnchor.constraint(equalToConstant: 43),
         ])
+
+        if let dragCue {
+            NSLayoutConstraint.activate([
+                dragCue.leadingAnchor.constraint(equalTo: actionView.trailingAnchor, constant: 12),
+                dragCue.trailingAnchor.constraint(equalTo: materialView.trailingAnchor, constant: -21),
+                dragCue.centerYAnchor.constraint(equalTo: actionView.centerYAnchor),
+                dragCue.widthAnchor.constraint(equalToConstant: 52),
+                dragCue.heightAnchor.constraint(equalToConstant: 52),
+            ])
+        } else {
+            actionView.trailingAnchor.constraint(
+                equalTo: materialView.trailingAnchor, constant: -21
+            ).isActive = true
+        }
     }
 
     private func title(hostApp: PermisoHostApp, panel: PermisoPanel) -> NSAttributedString {
@@ -530,6 +582,54 @@ private final class OverlayContentView: NSView {
     @objc
     private func backPressed() {
         onBack()
+    }
+}
+
+private final class PermissionDragCueView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 16
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+
+        let symbol = NSImageView()
+        symbol.translatesAutoresizingMaskIntoConstraints = false
+        symbol.image = NSImage(systemSymbolName: "hand.draw", accessibilityDescription: nil)
+        symbol.symbolConfiguration = .init(pointSize: 18, weight: .medium)
+        symbol.contentTintColor = NSColor.secondaryLabelColor
+        addSubview(symbol)
+
+        let label = NSTextField(labelWithString: "Drag")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = NSColor.secondaryLabelColor
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            symbol.centerXAnchor.constraint(equalTo: centerXAnchor),
+            symbol.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -7),
+            symbol.widthAnchor.constraint(equalToConstant: 22),
+            symbol.heightAnchor.constraint(equalToConstant: 22),
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.topAnchor.constraint(equalTo: symbol.bottomAnchor, constant: -1),
+        ])
+
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(isDark ? 0.08 : 0.42).cgColor
+        layer?.borderColor = NSColor.white.withAlphaComponent(isDark ? 0.12 : 0.30).cgColor
     }
 }
 
