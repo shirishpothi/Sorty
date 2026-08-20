@@ -183,7 +183,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return URL(string: "https://openrouter.ai/keys")
         case .ollama:
-            return URL(string: "https://ollama.com/library")
+            return URL(string: "https://ollama.com/search")
         case .anthropic:
             return URL(string: "https://console.anthropic.com/settings/keys")
         case .gemini:
@@ -207,7 +207,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return "openrouter.ai/keys"
         case .ollama:
-            return "ollama.com/library"
+            return "ollama.com/search"
         case .anthropic:
             return "console.anthropic.com"
         case .gemini:
@@ -231,7 +231,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return URL(string: "https://openrouter.ai/models")
         case .ollama:
-            return URL(string: "https://ollama.com/library")
+            return URL(string: "https://ollama.com/search")
         case .anthropic:
             return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
         case .gemini:
