@@ -11,7 +11,7 @@ final class OverlayWindowController: NSWindowController {
     private let launchAnimationResponse: Double = 0.72
     private let launchAnimationDampingFraction: Double = 0.72
     private let flightApexLift: CGFloat = 160
-    private let maximumFlightBlurRadius: CGFloat = 12
+    private let maximumFlightBlurRadius: CGFloat = 10
     private let initialAlpha: CGFloat = 0.9
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     private let flightContentView: OverlayFlightContentView
@@ -261,8 +261,14 @@ final class OverlayWindowController: NSWindowController {
     }
 
     private func gaussianBell(at progress: CGFloat) -> CGFloat {
-        let clampedProgress = clampedUnit(progress)
-        return 4 * clampedProgress * (1 - clampedProgress)
+        let easedProgress = clampedUnit(progress)
+        let velocitySmoothedProgress = easedProgress * easedProgress * (3 - (2 * easedProgress))
+        let sigma: CGFloat = 0.18
+        let edgeOffset = 0.5 / sigma
+        let edgeValue = CGFloat(exp(-0.5 * Double(edgeOffset * edgeOffset)))
+        let offset = (velocitySmoothedProgress - 0.5) / sigma
+        let value = CGFloat(exp(-0.5 * Double(offset * offset)))
+        return clampedUnit((value - edgeValue) / (1 - edgeValue))
     }
 
     private func setFlightBlur(radius: CGFloat) {
