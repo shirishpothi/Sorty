@@ -407,7 +407,7 @@ public struct PermissionsStepView: View {
         case .fullDiskAccess:
             return "Open Full Disk Access"
         case .notifications:
-            return "Disable & Open Settings"
+            return "Disable in Sorty"
         case .filesAndFolders, .automation:
             return "Remove Permission"
         }
@@ -422,7 +422,7 @@ public struct PermissionsStepView: View {
         case .automation:
             return "Sorty will reset its permission to control Finder. macOS will ask again next time you enable it."
         case .notifications:
-            return "Sorty will stop system notifications and open macOS Settings, where you can remove the authorization."
+            return "Sorty will stop system notifications and clear any queued or delivered alerts. You can turn them back on in Sorty whenever macOS still allows them."
         }
     }
 
@@ -444,8 +444,7 @@ public struct PermissionsStepView: View {
             let notificationCenter = UNUserNotificationCenter.current()
             notificationCenter.removeAllPendingNotificationRequests()
             notificationCenter.removeAllDeliveredNotifications()
-            notificationCenter.setNotificationCategories([])
-            openNotificationSettings()
+            HapticFeedbackManager.shared.success()
 
         case .filesAndFolders, .automation:
             guard let appState = taskController.appState else { return }

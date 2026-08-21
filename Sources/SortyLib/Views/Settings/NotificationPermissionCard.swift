@@ -28,7 +28,7 @@ struct NotificationPermissionCard: View {
     private var statusInfo: (icon: String, color: Color, title: String, description: String) {
         switch notificationManager.notificationPermissionStatus {
         case .authorized:
-            return ("checkmark.circle.fill", .green, "Authorized", "System notifications are enabled")
+            return ("checkmark.circle.fill", .green, "Authorized", "macOS allows Sorty to send notifications")
         case .denied:
             return ("xmark.circle.fill", .red, "Denied", "Open System Settings to enable notifications")
         case .provisional:

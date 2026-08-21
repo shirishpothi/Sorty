@@ -117,7 +117,7 @@ struct PermissionsSettingsView: View {
                             grantAnimationTrigger: grantAnimationTriggers[.notifications] ?? 0,
                             onExplain: { selectedEducationPermission = .notifications },
                             onRequest: { requestNotificationPermission(sourceFrameInScreen: $0) },
-                            removePermissionTitle: "Disable & Open Notification Settings…",
+                            removePermissionTitle: "Disable in Sorty",
                             onRemovePermission: { activeAlert = .revoke(.notifications) }
                         )
                         .settingsFocusable(
@@ -585,7 +585,7 @@ struct PermissionsSettingsView: View {
         case .automation:
             return "Remove Finder Automation?"
         case .notifications:
-            return "Disable System Notifications?"
+            return "Disable Notifications in Sorty?"
         }
     }
 
@@ -598,7 +598,7 @@ struct PermissionsSettingsView: View {
         case .automation:
             return "Sorty will no longer be able to read Finder selections. macOS will ask again the next time you enable Finder Automation."
         case .notifications:
-            return "Sorty will stop sending system notifications immediately, clear its pending and delivered notifications, and open macOS Settings so you can turn off the system authorization."
+            return "Sorty will stop sending system notifications and clear its pending and delivered alerts. You can turn them back on in Sorty whenever macOS still allows them."
         }
     }
 
@@ -607,7 +607,7 @@ struct PermissionsSettingsView: View {
         case .fullDiskAccess:
             return "Open Full Disk Access"
         case .notifications:
-            return "Disable & Open Settings"
+            return "Disable in Sorty"
         default:
             return "Remove Permission"
         }
@@ -668,10 +668,8 @@ struct PermissionsSettingsView: View {
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.removeAllPendingNotificationRequests()
         notificationCenter.removeAllDeliveredNotifications()
-        notificationCenter.setNotificationCategories([])
 
         HapticFeedbackManager.shared.success()
-        openNotificationSettings()
     }
 
     private func openFullDiskAccessRemovalSettings() {

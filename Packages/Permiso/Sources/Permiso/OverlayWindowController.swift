@@ -840,6 +840,7 @@ private final class NotificationToggleCueView: NSView {
 
         trackLayer.frame = bounds
         trackLayer.cornerRadius = bounds.height * 0.5
+        trackLayer.masksToBounds = true
         trackLayer.backgroundColor = offTrackColor
 
         let inset: CGFloat = 4
@@ -847,46 +848,42 @@ private final class NotificationToggleCueView: NSView {
         knobLayer.bounds = NSRect(x: 0, y: 0, width: knobDiameter, height: knobDiameter)
         knobLayer.cornerRadius = knobDiameter * 0.5
         knobLayer.backgroundColor = NSColor.white.cgColor
-        knobLayer.position = NSPoint(x: inset + (knobDiameter * 0.5), y: bounds.midY)
+        knobLayer.position = CGPoint(x: inset + (knobDiameter * 0.5), y: bounds.midY)
 
         if trackLayer.superlayer == nil {
             layer.addSublayer(trackLayer)
         }
         if knobLayer.superlayer == nil {
-            layer.addSublayer(knobLayer)
+            trackLayer.addSublayer(knobLayer)
         }
     }
 
     private func startAnimation() {
+        trackLayer.removeAllAnimations()
+        knobLayer.removeAllAnimations()
+
+        let offPositionX = 4 + (knobLayer.bounds.width * 0.5)
+        let onPositionX = bounds.width - 4 - (knobLayer.bounds.width * 0.5)
+
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             trackLayer.backgroundColor = onTrackColor
-            knobLayer.position.x = bounds.width - 4 - (knobLayer.bounds.width * 0.5)
+            knobLayer.position.x = onPositionX
             return
         }
 
-        let offPosition = NSPoint(x: 4 + (knobLayer.bounds.width * 0.5), y: bounds.midY)
-        let onPosition = NSPoint(
-            x: bounds.width - 4 - (knobLayer.bounds.width * 0.5),
-            y: bounds.midY
-        )
+        trackLayer.backgroundColor = onTrackColor
+        knobLayer.position.x = onPositionX
 
-        let trackAnimation = CAKeyframeAnimation(keyPath: "backgroundColor")
-        trackAnimation.values = [offTrackColor, offTrackColor, onTrackColor, onTrackColor]
-        trackAnimation.keyTimes = [0, 0.16, 0.34, 1]
-        trackAnimation.duration = 2.4
-        trackAnimation.repeatCount = .infinity
+        let trackAnimation = CABasicAnimation(keyPath: "backgroundColor")
+        trackAnimation.fromValue = offTrackColor
+        trackAnimation.toValue = onTrackColor
+        trackAnimation.duration = 0.24
         trackAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
 
-        let knobAnimation = CAKeyframeAnimation(keyPath: "position")
-        knobAnimation.values = [
-            NSValue(point: offPosition),
-            NSValue(point: offPosition),
-            NSValue(point: onPosition),
-            NSValue(point: onPosition),
-        ]
-        knobAnimation.keyTimes = [0, 0.16, 0.34, 1]
-        knobAnimation.duration = 2.4
-        knobAnimation.repeatCount = .infinity
+        let knobAnimation = CABasicAnimation(keyPath: "position.x")
+        knobAnimation.fromValue = offPositionX
+        knobAnimation.toValue = onPositionX
+        knobAnimation.duration = 0.24
         knobAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
 
         trackLayer.add(trackAnimation, forKey: "notificationToggleTrack")
