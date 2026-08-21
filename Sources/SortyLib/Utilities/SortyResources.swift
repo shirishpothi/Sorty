@@ -507,7 +507,6 @@ public enum SortyResources {
     }
 
     private static func menuBarPNGCandidateURLs() -> [URL] {
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let bundleRootCandidates = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
         let extensionResourceURL = Bundle.main.builtInPlugInsURL?
             .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
@@ -550,9 +549,6 @@ public enum SortyResources {
             candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Images/SortyMascotHead.icns"))
             candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Images/Sorty Mascot Head.icns"))
         }
-
-        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/Sorty Mascot Head.icns"))
-        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/SortyMascotHead.icns"))
 
         return uniqueURLs(candidates)
     }

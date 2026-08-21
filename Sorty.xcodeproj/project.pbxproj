@@ -206,6 +206,7 @@
 		CC220002000000000000C008 /* UserStatsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C008 /* UserStatsSnapshotTests.swift */; };
 		CC220002000000000000C009 /* SortyUninstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C009 /* SortyUninstallerTests.swift */; };
 		99999999AAAA000000000002 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 99999999AAAA000000000001 /* AppIcon.icns */; };
+		99999999AAAA000000000004 /* AppIcon-Debug.icns in Resources */ = {isa = PBXBuildFile; fileRef = 99999999AAAA000000000003 /* AppIcon-Debug.icns */; };
 		CC220002000000000000A001 /* MainWindowRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A001 /* MainWindowRootView.swift */; };
 		CC220002000000000000A002 /* AIInsightExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A002 /* AIInsightExtractor.swift */; };
 		CC220002000000000000A003 /* AIRequestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A003 /* AIRequestSupport.swift */; };
@@ -544,6 +545,7 @@
 		AABBCC110001000000000098 /* WelcomeStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeStepView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowSelectionStepView.swift; sourceTree = "<group>"; };
 		99999999AAAA000000000001 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = AppIcon.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		99999999AAAA000000000003 /* AppIcon-Debug.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = "AppIcon-Debug.icns"; path = "AppIcon-Debug.icns"; sourceTree = "<group>"; };
 		CC110001000000000000A001 /* MainWindowRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/MainWindowRootView.swift; sourceTree = "<group>"; };
 		CC110001000000000000A002 /* AIInsightExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInsightExtractor.swift; sourceTree = "<group>"; };
 		CC110001000000000000A003 /* AIRequestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRequestSupport.swift; sourceTree = "<group>"; };
@@ -929,6 +931,7 @@
 				1A2B3C4D5E6F700000000102 /* InfoPlist.xcstrings */,
 				1A2B3C4D5E6F700000000101 /* Localizable.xcstrings */,
 				99999999AAAA000000000001 /* AppIcon.icns */,
+				99999999AAAA000000000003 /* AppIcon-Debug.icns */,
 				CC110001000000000000A019 /* Assets.xcassets */,
 				CC110001000000000000A018 /* AppIcons */,
 				CC110001000000000000A017 /* InternetAccessPolicy.plist */,
@@ -1262,6 +1265,7 @@
 				1A2B3C4D5E6F700000000002 /* InfoPlist.xcstrings in Resources */,
 				1A2B3C4D5E6F700000000001 /* Localizable.xcstrings in Resources */,
 				99999999AAAA000000000002 /* AppIcon.icns in Resources */,
+				99999999AAAA000000000004 /* AppIcon-Debug.icns in Resources */,
 				CC220002000000000000A018 /* AppIcons in Resources */,
 				CC220002000000000000A016 /* Assets.xcassets in Resources */,
 				CC220002000000000000A017 /* InternetAccessPolicy.plist in Resources */,
@@ -1540,6 +1544,7 @@
 		33A128842F01230200A86470 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APP_ICON_FILE = "AppIcon-Debug";
 				CODE_SIGN_ENTITLEMENTS = Sorty.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGNING_ALLOWED = NO;
@@ -1571,6 +1576,7 @@
 		33A128852F01230200A86470 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APP_ICON_FILE = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sorty.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGNING_ALLOWED = NO;

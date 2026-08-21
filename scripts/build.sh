@@ -1503,7 +1503,6 @@ fi
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
 # APP_ICON_VARIANT accepts:
 # - release/prod/production -> AppIcon-Release.icns
-# - nightly/preview         -> AppIcon-Nightly.icns for nightly builds
 # - debug/dev/local/ci      -> AppIcon-Debug.icns for development and CI builds
 # - anything else           -> AppIcon-Debug.icns as a safe development fallback
 RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-ci}"
@@ -1513,10 +1512,6 @@ case "${APP_ICON_VARIANT_NORMALIZED}" in
     release|prod|production)
         APP_ICON_VARIANT_KEY="release"
         ICON_VARIANT_SUFFIX="Release"
-        ;;
-    nightly|preview)
-        APP_ICON_VARIANT_KEY="nightly"
-        ICON_VARIANT_SUFFIX="Nightly"
         ;;
     debug|dev|local|ci|blacksmith)
         APP_ICON_VARIANT_KEY="debug"
@@ -1563,7 +1558,7 @@ if [ -f "${ICON_SRC}" ]; then
     /usr/libexec/PlistBuddy -c "Delete :CFBundleIconFile" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string ${ICON_RESOURCE_BASENAME}" "${APP_PATH}/Contents/Info.plist"
     # NOTE: Do NOT remove Contents/Resources/AppIcons here. That directory ships the
-    # About-window easter-egg icon variants (AppIcon-Debug/Release/Nightly.png).
+    # About-window Release and Debug icon artwork.
     # CI is normalized to the debug variant in AboutView, and its source PNG is
     # byte-identical, so it has no distinct runtime use.
     rm -f "${APP_PATH}/Contents/Resources/AppIcons/AppIcon-CI.png"

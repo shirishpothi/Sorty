@@ -363,7 +363,6 @@ private final class AboutIconCarousel: ObservableObject {
 private enum AboutAppIconVariant: String, CaseIterable {
     case debug = "Debug"
     case release = "Release"
-    case nightly = "Nightly"
 
     /// Build channel recorded by scripts/build.sh in Info.plist (SortyBuildVariant).
     /// Nil for plain Xcode/SPM runs that don't go through the packaging script.
@@ -411,10 +410,8 @@ private enum AboutAppIconVariant: String, CaseIterable {
         return images
     }
 
-    /// The Nightly artwork has a little more visual breathing room inside its
-    /// outer shape, so it needs a slight optical correction in the carousel.
     private var opticalScale: CGFloat {
-        self == .nightly ? 1.04 : 1
+        1
     }
 
     private static func variant(from rawValue: String?) -> AboutAppIconVariant? {
@@ -431,8 +428,6 @@ private enum AboutAppIconVariant: String, CaseIterable {
             return .debug
         case "release", "prod", "production":
             return .release
-        case "nightly", "preview":
-            return .nightly
         default:
             return nil
         }

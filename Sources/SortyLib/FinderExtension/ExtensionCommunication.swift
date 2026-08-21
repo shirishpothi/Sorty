@@ -1558,7 +1558,6 @@ public struct ExtensionCommunication {
     }
 
     private static func quickActionMascotIconURLCandidates() -> [URL] {
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let finderSyncResources = Bundle.main.builtInPlugInsURL?
             .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
         let roots: [URL] = [
@@ -1576,9 +1575,6 @@ public struct ExtensionCommunication {
             candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/SortyMascotHead.icns"))
             candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/AppIcon.icns"))
         }
-
-        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/Sorty Mascot Head.icns"))
-        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/SortyMascotHead.icns"))
 
         var unique: [URL] = []
         for candidate in candidates where !unique.contains(where: { $0.path == candidate.path }) {
