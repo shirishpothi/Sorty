@@ -806,6 +806,8 @@ private final class NotificationToggleCueView: NSView {
     private let knobLayer = CALayer()
     private let offTrackColor = NSColor.white.withAlphaComponent(0.18).cgColor
     private let onTrackColor = NSColor.systemBlue.cgColor
+    private var isOn = false
+    private var hasAnimatedInCurrentWindow = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -822,6 +824,7 @@ private final class NotificationToggleCueView: NSView {
     override func layout() {
         super.layout()
         configureLayers()
+        startAnimationIfReady()
     }
 
     override func viewDidMoveToWindow() {
@@ -829,10 +832,12 @@ private final class NotificationToggleCueView: NSView {
         guard window != nil else {
             trackLayer.removeAllAnimations()
             knobLayer.removeAllAnimations()
+            isOn = false
+            hasAnimatedInCurrentWindow = false
             return
         }
         configureLayers()
-        startAnimation()
+        startAnimationIfReady()
     }
 
     private func configureLayers() {
@@ -841,14 +846,17 @@ private final class NotificationToggleCueView: NSView {
         trackLayer.frame = bounds
         trackLayer.cornerRadius = bounds.height * 0.5
         trackLayer.masksToBounds = true
-        trackLayer.backgroundColor = offTrackColor
+        trackLayer.backgroundColor = isOn ? onTrackColor : offTrackColor
 
         let inset: CGFloat = 4
         let knobDiameter = bounds.height - (inset * 2)
         knobLayer.bounds = NSRect(x: 0, y: 0, width: knobDiameter, height: knobDiameter)
         knobLayer.cornerRadius = knobDiameter * 0.5
         knobLayer.backgroundColor = NSColor.white.cgColor
-        knobLayer.position = CGPoint(x: inset + (knobDiameter * 0.5), y: bounds.midY)
+        let knobPositionX = isOn
+            ? bounds.width - inset - (knobDiameter * 0.5)
+            : inset + (knobDiameter * 0.5)
+        knobLayer.position = CGPoint(x: knobPositionX, y: bounds.midY)
 
         if trackLayer.superlayer == nil {
             layer.addSublayer(trackLayer)
@@ -856,6 +864,15 @@ private final class NotificationToggleCueView: NSView {
         if knobLayer.superlayer == nil {
             trackLayer.addSublayer(knobLayer)
         }
+    }
+
+    private func startAnimationIfReady() {
+        guard window != nil, !hasAnimatedInCurrentWindow, bounds.width > 0, bounds.height > 0 else {
+            return
+        }
+
+        hasAnimatedInCurrentWindow = true
+        startAnimation()
     }
 
     private func startAnimation() {
@@ -866,11 +883,13 @@ private final class NotificationToggleCueView: NSView {
         let onPositionX = bounds.width - 4 - (knobLayer.bounds.width * 0.5)
 
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            isOn = true
             trackLayer.backgroundColor = onTrackColor
             knobLayer.position.x = onPositionX
             return
         }
 
+        isOn = true
         trackLayer.backgroundColor = onTrackColor
         knobLayer.position.x = onPositionX
 
