@@ -507,6 +507,7 @@ public enum SortyResources {
     }
 
     private static func menuBarPNGCandidateURLs() -> [URL] {
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let bundleRootCandidates = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
         let extensionResourceURL = Bundle.main.builtInPlugInsURL?
             .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
@@ -529,7 +530,6 @@ public enum SortyResources {
     }
 
     private static func menuBarICNSCandidateURLs() -> [URL] {
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let bundleRootCandidates = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
         let extensionResourceURL = Bundle.main.builtInPlugInsURL?
             .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
