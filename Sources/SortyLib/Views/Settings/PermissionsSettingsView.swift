@@ -488,7 +488,7 @@ struct PermissionsSettingsView: View {
         )
     }
 
-    private func requestAutomationPermission(sourceFrameInScreen _: CGRect?) {
+    private func requestAutomationPermission(sourceFrameInScreen: CGRect?) {
         HapticFeedbackManager.shared.tap()
 
         updatePermissionState(.pending, for: .automation)
@@ -501,6 +501,11 @@ struct PermissionsSettingsView: View {
                 permissionState(for: automationManager.automationStatus),
                 for: .automation
             )
+            if automationManager.automationStatus == .denied {
+                automationManager.openAutomationSettings(
+                    sourceFrameInScreen: sourceFrameInScreen
+                )
+            }
             automationPermissionTask = nil
         }
     }

@@ -312,6 +312,11 @@ public struct PermissionsStepView: View {
                 permissionStates[.automation] = permissionState(
                     for: automationManager.automationStatus
                 )
+                if automationManager.automationStatus == .denied {
+                    automationManager.openAutomationSettings(
+                        sourceFrameInScreen: sourceFrameInScreen
+                    )
+                }
                 taskController.automationPermissionTask = nil
             }
 
