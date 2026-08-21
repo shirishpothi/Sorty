@@ -285,25 +285,34 @@ public struct ContentView: View {
     @ViewBuilder
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
         let shortcutLabel = item.view == .settings ? "," : "\(commandNumber)"
+        let isSelected = appState.currentView == item.view
 
         Label {
             Text(LocalizedStringKey(item.title))
         } icon: {
             Image(systemName: item.systemImage)
         }
+            // The stock .sidebar selection highlight renders from the system
+            // accent (NSColor.controlAccentColor) and ignores window-level
+            // .tint(), so the selected row carries its own accent background.
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, showCommandNumbers ? 38 : 0)
             .overlay(alignment: .trailing) {
                 Text(shortcutLabel)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
                     .frame(minWidth: 18)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.quaternary)
+                            .fill(
+                                isSelected
+                                    ? AnyShapeStyle(.white.opacity(0.22))
+                                    : AnyShapeStyle(.quaternary)
+                            )
                     }
                     .opacity(showCommandNumbers ? 1 : 0)
                     .offset(x: showCommandNumbers ? 0 : 14)
@@ -312,6 +321,11 @@ public struct ContentView: View {
             .animation(
                 reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
                 value: showCommandNumbers
+            )
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(SortyDesignSystem.Colors.resolvedAccent)
+                    .padding(.horizontal, 4)
             )
     }
 
