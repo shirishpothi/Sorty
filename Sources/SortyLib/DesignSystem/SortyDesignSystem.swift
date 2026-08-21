@@ -74,16 +74,10 @@ public enum SortyDesignSystem {
         public static let overlayLight = Color.black.opacity(0.05)
         public static let overlayMedium = Color.black.opacity(0.1)
 
-        /// The live accent color for the current context.
-        ///
-        /// Resolves through SwiftUI's accent pipeline: the asset catalog
-        /// provides Sorty's brand rose as the app-wide default, while any
-        /// window can override it with `.tint(_)` — which is how the accent
-        /// prototype harness windows recolor the whole UI. Keeping all accent
-        /// usage on this single dynamic value guarantees those overrides
-        /// propagate everywhere instead of leaving hardcoded rose patches.
+        /// Sorty's default accent. Prototype windows supply their own explicit
+        /// tint, so the production app never inherits the macOS accent color.
         public static var resolvedAccent: Color {
-            .accentColor
+            accent
         }
     }
     
