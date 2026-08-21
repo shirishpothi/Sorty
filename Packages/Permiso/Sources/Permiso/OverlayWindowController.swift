@@ -568,6 +568,7 @@ private final class OverlayContentView: NSView {
                 symbolName: panel.guideSymbol,
                 instruction: panel.guideInstruction(appName: hostApp.displayName),
                 showsMissingAppHelp: panel == .automation,
+                showsNotificationToggle: panel == .notifications,
                 onMissingApp: onMissingApp
             )
         }
@@ -701,6 +702,7 @@ private final class PermissionGuideView: NSView {
         symbolName: String,
         instruction: String,
         showsMissingAppHelp: Bool,
+        showsNotificationToggle: Bool,
         onMissingApp: @escaping () -> Void
     ) {
         self.onMissingApp = onMissingApp
@@ -741,6 +743,10 @@ private final class PermissionGuideView: NSView {
         )
         addSubview(missingAppButton)
 
+        let notificationToggle = NotificationToggleCueView()
+        notificationToggle.isHidden = !showsNotificationToggle
+        addSubview(notificationToggle)
+
         if showsMissingAppHelp {
             setAccessibilityElement(false)
         } else {
@@ -769,6 +775,19 @@ private final class PermissionGuideView: NSView {
                 ),
             ])
         }
+
+        if showsNotificationToggle {
+            NSLayoutConstraint.activate([
+                notificationToggle.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                notificationToggle.centerYAnchor.constraint(equalTo: centerYAnchor),
+                notificationToggle.widthAnchor.constraint(equalToConstant: 60),
+                notificationToggle.heightAnchor.constraint(equalToConstant: 36),
+                label.trailingAnchor.constraint(
+                    lessThanOrEqualTo: notificationToggle.leadingAnchor,
+                    constant: -12
+                ),
+            ])
+        }
     }
 
     @available(*, unavailable)
@@ -779,5 +798,98 @@ private final class PermissionGuideView: NSView {
     @objc
     private func missingAppPressed() {
         onMissingApp()
+    }
+}
+
+private final class NotificationToggleCueView: NSView {
+    private let trackLayer = CALayer()
+    private let knobLayer = CALayer()
+    private let offTrackColor = NSColor.white.withAlphaComponent(0.18).cgColor
+    private let onTrackColor = NSColor.systemBlue.cgColor
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        configureLayers()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else {
+            trackLayer.removeAllAnimations()
+            knobLayer.removeAllAnimations()
+            return
+        }
+        configureLayers()
+        startAnimation()
+    }
+
+    private func configureLayers() {
+        guard bounds.width > 0, bounds.height > 0, let layer else { return }
+
+        trackLayer.frame = bounds
+        trackLayer.cornerRadius = bounds.height * 0.5
+        trackLayer.backgroundColor = offTrackColor
+
+        let inset: CGFloat = 4
+        let knobDiameter = bounds.height - (inset * 2)
+        knobLayer.bounds = NSRect(x: 0, y: 0, width: knobDiameter, height: knobDiameter)
+        knobLayer.cornerRadius = knobDiameter * 0.5
+        knobLayer.backgroundColor = NSColor.white.cgColor
+        knobLayer.position = NSPoint(x: inset + (knobDiameter * 0.5), y: bounds.midY)
+
+        if trackLayer.superlayer == nil {
+            layer.addSublayer(trackLayer)
+        }
+        if knobLayer.superlayer == nil {
+            layer.addSublayer(knobLayer)
+        }
+    }
+
+    private func startAnimation() {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            trackLayer.backgroundColor = onTrackColor
+            knobLayer.position.x = bounds.width - 4 - (knobLayer.bounds.width * 0.5)
+            return
+        }
+
+        let offPosition = NSPoint(x: 4 + (knobLayer.bounds.width * 0.5), y: bounds.midY)
+        let onPosition = NSPoint(
+            x: bounds.width - 4 - (knobLayer.bounds.width * 0.5),
+            y: bounds.midY
+        )
+
+        let trackAnimation = CAKeyframeAnimation(keyPath: "backgroundColor")
+        trackAnimation.values = [offTrackColor, offTrackColor, onTrackColor, onTrackColor]
+        trackAnimation.keyTimes = [0, 0.16, 0.34, 1]
+        trackAnimation.duration = 2.4
+        trackAnimation.repeatCount = .infinity
+        trackAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        let knobAnimation = CAKeyframeAnimation(keyPath: "position")
+        knobAnimation.values = [
+            NSValue(point: offPosition),
+            NSValue(point: offPosition),
+            NSValue(point: onPosition),
+            NSValue(point: onPosition),
+        ]
+        knobAnimation.keyTimes = [0, 0.16, 0.34, 1]
+        knobAnimation.duration = 2.4
+        knobAnimation.repeatCount = .infinity
+        knobAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        trackLayer.add(trackAnimation, forKey: "notificationToggleTrack")
+        knobLayer.add(knobAnimation, forKey: "notificationToggleKnob")
     }
 }
