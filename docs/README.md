@@ -288,7 +288,8 @@ Permission status refreshes when Sorty becomes active and when you click
 bookmark, Full Disk Access opens a protected file, Automation asks macOS about
 Finder Apple Events, and Notifications reads Notification Center authorization.
 The signed app carries the Apple Events entitlement required to request Finder
-automation; its purpose string explains the request in macOS's consent alert.
+automation. Its consent alert explains that Sorty reads selected Finder files and
+reveals the folders it organizes.
 An Automation request uses macOS's native Allow / Don't Allow alert while the
 decision is undecided. Once denied, macOS does not allow Sorty to prompt again,
 so Sorty takes you directly to the matching Automation pane instead.

@@ -13,12 +13,12 @@
     },
     "NSAppleEventsUsageDescription" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty muss mit dem Finder kommunizieren, um Ihre Dateien und Ordner zu organisieren." } },
-        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty needs to communicate with Finder to organize your files and folders." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty necesita comunicarse con Finder para organizar tus archivos y carpetas." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty doit communiquer avec le Finder pour organiser vos fichiers et dossiers." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyは、ファイルとフォルダを整理するためにFinderと通信する必要があります。" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty 需要与访达通信，以整理你的文件和文件夹。" } }
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sorty benötigt die Erlaubnis, Ihre Auswahl im Finder zu lesen und die Ordner anzuzeigen, die es organisiert." } },
+        "en" : { "stringUnit" : { "state" : "new", "value" : "Sorty needs permission to read the files you select in Finder and reveal the folders it organizes." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sorty necesita permiso para leer los archivos que seleccionas en Finder y mostrar las carpetas que organiza." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sorty a besoin d'autorisation pour lire les fichiers que vous sélectionnez dans le Finder et afficher les dossiers qu'il organise." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Sortyは、Finderで選択したファイルを読み取り、整理したフォルダを表示するための許可を必要とします。" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Sorty 需要获得权限，才能读取你在访达中选择的文件并显示它整理的文件夹。" } }
       }
     },
     "NSFaceIDUsageDescription" : {

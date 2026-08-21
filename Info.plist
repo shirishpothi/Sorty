@@ -55,7 +55,7 @@
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Sorty needs to communicate with Finder to organize your files and folders.</string>
+	<string>Sorty needs permission to read the files you select in Finder and reveal the folders it organizes.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Sorty uses biometrics to protect your Learnings data.</string>
 	<key>NSHighResolutionCapable</key>
