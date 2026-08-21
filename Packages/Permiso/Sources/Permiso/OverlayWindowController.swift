@@ -808,6 +808,7 @@ private final class NotificationToggleCueView: NSView {
     private let onTrackColor = NSColor.systemBlue.cgColor
     private var isOn = false
     private var hasAnimatedInCurrentWindow = false
+    private var layoutGeneration = 0
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -824,7 +825,7 @@ private final class NotificationToggleCueView: NSView {
     override func layout() {
         super.layout()
         configureLayers()
-        startAnimationIfReady()
+        scheduleAnimationAfterLayout()
     }
 
     override func viewDidMoveToWindow() {
@@ -834,10 +835,11 @@ private final class NotificationToggleCueView: NSView {
             knobLayer.removeAllAnimations()
             isOn = false
             hasAnimatedInCurrentWindow = false
+            layoutGeneration += 1
             return
         }
         configureLayers()
-        startAnimationIfReady()
+        scheduleAnimationAfterLayout()
     }
 
     private func configureLayers() {
@@ -873,6 +875,18 @@ private final class NotificationToggleCueView: NSView {
 
         hasAnimatedInCurrentWindow = true
         startAnimation()
+    }
+
+    private func scheduleAnimationAfterLayout() {
+        guard window != nil, !hasAnimatedInCurrentWindow else { return }
+
+        layoutGeneration += 1
+        let generation = layoutGeneration
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self, self.layoutGeneration == generation else { return }
+            self.startAnimationIfReady()
+        }
     }
 
     private func startAnimation() {
