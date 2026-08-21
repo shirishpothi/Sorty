@@ -1074,6 +1074,8 @@ struct PermissionEducationView: View {
 struct AutomationPermissionRecoveryView: View {
     let onFinish: () -> Void
     private let resetCommand = "tccutil reset AppleEvents com.sorty.app"
+    @State private var hasCopiedResetCommand = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1089,23 +1091,47 @@ struct AutomationPermissionRecoveryView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("1. Quit Sorty.")
                 Text("2. Run this in Terminal:")
-                Text(resetCommand)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                HStack(spacing: 8) {
+                    Text(resetCommand)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(resetCommand, forType: .string)
+                        HapticFeedbackManager.shared.success()
+
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72)) {
+                            hasCopiedResetCommand = true
+                        }
+
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(1.5))
+                            guard !Task.isCancelled else { return }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                                hasCopiedResetCommand = false
+                            }
+                        }
+                    } label: {
+                        Image(systemName: hasCopiedResetCommand ? "checkmark" : "doc.on.doc")
+                            .symbolReplaceTransition(animationValue: hasCopiedResetCommand)
+                            .symbolEffect(.bounce, value: hasCopiedResetCommand)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy repair command")
+                    .accessibilityLabel("Copy repair command")
+                    .accessibilityHint("Copies the Terminal command to restore the Automation permission entry")
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text("3. Reopen Sorty and choose Enable again.")
             }
             .font(.body)
 
             HStack {
-                Button("Copy repair command", systemImage: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(resetCommand, forType: .string)
-                    HapticFeedbackManager.shared.success()
-                }
-
                 Spacer()
 
                 Button("Done") {
