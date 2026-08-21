@@ -433,9 +433,7 @@ struct SortyApp: App {
     @SceneBuilder
     var body: some Scene {
         productionScenes
-        if ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
-            accentPrototypeScenes
-        }
+        accentPrototypeScenes
 
         MenuBarExtra(
             isInserted: Binding(
@@ -497,7 +495,13 @@ struct SortyApp: App {
 
     private func accentPrototypeWindow(_ name: String, id: String, color: Color) -> some Scene {
         WindowGroup("Sorty · \(name)", id: id) {
-            if ApplicationMover.shouldLaunchMainUI {
+            // Gating the content (not the scenes) keeps the SceneBuilder
+            // body free of conditionals — wrapping six WindowGroups in
+            // _ConditionalContent crashes the type checker. Closed prototype
+            // windows stay invisible in production: suppressed at launch and
+            // never opened without SORTY_ACCENT_PROTOTYPE=1.
+            if ApplicationMover.shouldLaunchMainUI,
+               ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
                 mainWindowContent(launchRequest: .constant(nil), accent: color)
                     .environment(\.isAccentPrototypeWindow, true)
             }
