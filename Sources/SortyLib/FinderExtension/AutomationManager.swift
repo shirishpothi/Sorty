@@ -164,8 +164,14 @@ public final class AutomationManager: ObservableObject {
     }
 
     /// Open System Settings to Automation permissions
-    public func openAutomationSettings(sourceFrameInScreen: CGRect? = nil) {
-        FinderAutomation.openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
+    public func openAutomationSettings(
+        sourceFrameInScreen: CGRect? = nil,
+        onMissingApp: @escaping () -> Void = {}
+    ) {
+        FinderAutomation.openAutomationSettings(
+            sourceFrameInScreen: sourceFrameInScreen,
+            onMissingApp: onMissingApp
+        )
     }
     
     // MARK: - Finder Selection

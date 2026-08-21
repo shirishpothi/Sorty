@@ -21,6 +21,7 @@ public struct PermissionsStepView: View {
     @State private var isFullDiskAccessConfirmationPresented = false
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @State private var didOpenFullDiskAccessSettings = false
+    @State private var isShowingMissingAutomationRecovery = false
     @State private var pendingRemovalPermission: PermissionType?
     @State private var removalFailureMessage: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -178,6 +179,11 @@ public struct PermissionsStepView: View {
                 selectedEducationPermission = nil
             }
         }
+        .sheet(isPresented: $isShowingMissingAutomationRecovery) {
+            AutomationPermissionRecoveryView {
+                isShowingMissingAutomationRecovery = false
+            }
+        }
         .alert("Set up Full Disk Access?", isPresented: $isFullDiskAccessConfirmationPresented) {
             Button("Skip for Now", role: .cancel) {
                 permissionStates[.fullDiskAccess] = .unknown
@@ -314,7 +320,8 @@ public struct PermissionsStepView: View {
                 )
                 if automationManager.automationStatus == .denied {
                     automationManager.openAutomationSettings(
-                        sourceFrameInScreen: sourceFrameInScreen
+                        sourceFrameInScreen: sourceFrameInScreen,
+                        onMissingApp: { isShowingMissingAutomationRecovery = true }
                     )
                 }
                 taskController.automationPermissionTask = nil
@@ -1061,6 +1068,54 @@ struct PermissionEducationView: View {
             }
         }
         .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+    }
+}
+
+struct AutomationPermissionRecoveryView: View {
+    let onFinish: () -> Void
+    private let resetCommand = "tccutil reset AppleEvents com.sorty.app"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Sorty isn't listed", systemImage: "exclamationmark.triangle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text(
+                "macOS did not register Sorty's request to control Finder. The Automation pane cannot add it manually."
+            )
+            .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("1. Quit Sorty.")
+                Text("2. Run this in Terminal:")
+                Text(resetCommand)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text("3. Reopen Sorty and choose Enable again.")
+            }
+            .font(.body)
+
+            HStack {
+                Button("Copy repair command", systemImage: "doc.on.doc") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(resetCommand, forType: .string)
+                    HapticFeedbackManager.shared.success()
+                }
+
+                Spacer()
+
+                Button("Done") {
+                    onFinish()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
     }
 }
 

@@ -87,9 +87,16 @@ public final class FinderAutomation {
     }
     
     /// Open System Settings to the Automation permission pane
-    public static func openAutomationSettings(sourceFrameInScreen: CGRect? = nil) {
+    public static func openAutomationSettings(
+        sourceFrameInScreen: CGRect? = nil,
+        onMissingApp: @escaping () -> Void = {}
+    ) {
         Task { @MainActor in
-            PermisoAssistant.shared.present(panel: .automation, sourceFrameInScreen: sourceFrameInScreen)
+            PermisoAssistant.shared.present(
+                panel: .automation,
+                sourceFrameInScreen: sourceFrameInScreen,
+                onMissingApp: onMissingApp
+            )
         }
     }
     

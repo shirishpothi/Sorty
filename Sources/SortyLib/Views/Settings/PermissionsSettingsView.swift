@@ -30,6 +30,7 @@ struct PermissionsSettingsView: View {
     @State private var isShowingAccessInfo = false
     @State private var hoveredAccessInfoAction: AccessInfoAction?
     @State private var automationPermissionTask: Task<Void, Never>?
+    @State private var isShowingMissingAutomationRecovery = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -239,6 +240,11 @@ struct PermissionsSettingsView: View {
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
                 selectedEducationPermission = nil
+            }
+        }
+        .sheet(isPresented: $isShowingMissingAutomationRecovery) {
+            AutomationPermissionRecoveryView {
+                isShowingMissingAutomationRecovery = false
             }
         }
         .alert(item: $activeAlert) { alert in
@@ -503,7 +509,8 @@ struct PermissionsSettingsView: View {
             )
             if automationManager.automationStatus == .denied {
                 automationManager.openAutomationSettings(
-                    sourceFrameInScreen: sourceFrameInScreen
+                    sourceFrameInScreen: sourceFrameInScreen,
+                    onMissingApp: { isShowingMissingAutomationRecovery = true }
                 )
             }
             automationPermissionTask = nil

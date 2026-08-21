@@ -19,7 +19,8 @@ public final class PermisoAssistant {
         panel: PermisoPanel,
         hostApp: PermisoHostApp = .current(),
         sourceFrameInScreen: CGRect? = nil,
-        onCancel: @escaping () -> Void = {}
+        onCancel: @escaping () -> Void = {},
+        onMissingApp: @escaping () -> Void = {}
     ) {
         activePanel = panel
         pendingSourceFrameInScreen = sourceFrameInScreen
@@ -35,6 +36,9 @@ public final class PermisoAssistant {
             },
             onDrop: { [weak self] in
                 self?.dismiss()
+            },
+            onMissingApp: { [weak self] in
+                self?.cancelAndReturnToApp(hostApp: hostApp, onCancel: onMissingApp)
             }
         )
         NSWorkspace.shared.open(panel.settingsURL)

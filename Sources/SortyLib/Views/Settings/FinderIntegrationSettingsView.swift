@@ -16,6 +16,7 @@ struct FinderIntegrationSettingsView: View {
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
     @State private var isShowingAutomationPermissionInfo = false
+    @State private var isShowingMissingAutomationRecovery = false
     @State private var automationSettingsButtonFrameInScreen: CGRect = .zero
     @EnvironmentObject var automationManager: AutomationManager
     
@@ -140,7 +141,10 @@ struct FinderIntegrationSettingsView: View {
                                     automationManager.openAutomationSettings(
                                         sourceFrameInScreen: automationSettingsButtonFrameInScreen.isEmpty
                                             ? nil
-                                            : automationSettingsButtonFrameInScreen.integral
+                                            : automationSettingsButtonFrameInScreen.integral,
+                                        onMissingApp: {
+                                            isShowingMissingAutomationRecovery = true
+                                        }
                                     )
                                 }
                                 .buttonStyle(.sortySecondary(size: .regular))
@@ -195,6 +199,11 @@ struct FinderIntegrationSettingsView: View {
         .sheet(isPresented: $isShowingAutomationPermissionInfo) {
             PermissionEducationView(pages: [.automation]) {
                 isShowingAutomationPermissionInfo = false
+            }
+        }
+        .sheet(isPresented: $isShowingMissingAutomationRecovery) {
+            AutomationPermissionRecoveryView {
+                isShowingMissingAutomationRecovery = false
             }
         }
     }

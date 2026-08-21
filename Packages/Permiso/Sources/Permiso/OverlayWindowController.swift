@@ -32,7 +32,8 @@ final class OverlayWindowController: NSWindowController {
         hostApp: PermisoHostApp,
         panel: PermisoPanel,
         onBack: @escaping () -> Void,
-        onDrop: @escaping () -> Void
+        onDrop: @escaping () -> Void,
+        onMissingApp: @escaping () -> Void
     ) {
         let window = PassiveOverlayPanel(
             contentRect: NSRect(origin: .zero, size: Self.initialWindowSize),
@@ -45,7 +46,8 @@ final class OverlayWindowController: NSWindowController {
             panel: panel,
             contentInset: flightContentInset,
             onBack: onBack,
-            onDrop: onDrop
+            onDrop: onDrop,
+            onMissingApp: onMissingApp
         )
         super.init(window: window)
         configureWindow(window)
@@ -344,14 +346,16 @@ private final class OverlayFlightContentView: NSView {
         panel: PermisoPanel,
         contentInset: CGFloat,
         onBack: @escaping () -> Void,
-        onDrop: @escaping () -> Void
+        onDrop: @escaping () -> Void,
+        onMissingApp: @escaping () -> Void
     ) {
         self.contentInset = contentInset
         liveContentView = OverlayContentView(
             hostApp: hostApp,
             panel: panel,
             onBack: onBack,
-            onDrop: onDrop
+            onDrop: onDrop,
+            onMissingApp: onMissingApp
         )
         super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
         translatesAutoresizingMaskIntoConstraints = false
@@ -438,12 +442,18 @@ private final class OverlayContentView: NSView {
         hostApp: PermisoHostApp,
         panel: PermisoPanel,
         onBack: @escaping () -> Void,
-        onDrop: @escaping () -> Void
+        onDrop: @escaping () -> Void,
+        onMissingApp: @escaping () -> Void
     ) {
         self.onBack = onBack
         super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
         translatesAutoresizingMaskIntoConstraints = false
-        setup(hostApp: hostApp, panel: panel, onDrop: onDrop)
+        setup(
+            hostApp: hostApp,
+            panel: panel,
+            onDrop: onDrop,
+            onMissingApp: onMissingApp
+        )
     }
 
     @available(*, unavailable)
@@ -454,7 +464,8 @@ private final class OverlayContentView: NSView {
     private func setup(
         hostApp: PermisoHostApp,
         panel: PermisoPanel,
-        onDrop: @escaping () -> Void
+        onDrop: @escaping () -> Void,
+        onMissingApp: @escaping () -> Void
     ) {
         let materialView: NSView
         let usesSystemGlass: Bool
@@ -555,7 +566,9 @@ private final class OverlayContentView: NSView {
         } else {
             actionView = PermissionGuideView(
                 symbolName: panel.guideSymbol,
-                instruction: panel.guideInstruction(appName: hostApp.displayName)
+                instruction: panel.guideInstruction(appName: hostApp.displayName),
+                showsMissingAppHelp: panel == .automation,
+                onMissingApp: onMissingApp
             )
         }
         materialView.addSubview(actionView)
@@ -682,7 +695,15 @@ private final class PermissionDragCueView: NSView {
 }
 
 private final class PermissionGuideView: NSView {
-    init(symbolName: String, instruction: String) {
+    private let onMissingApp: () -> Void
+
+    init(
+        symbolName: String,
+        instruction: String,
+        showsMissingAppHelp: Bool,
+        onMissingApp: @escaping () -> Void
+    ) {
+        self.onMissingApp = onMissingApp
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -705,9 +726,28 @@ private final class PermissionGuideView: NSView {
         label.lineBreakMode = .byTruncatingTail
         addSubview(label)
 
-        setAccessibilityElement(true)
-        setAccessibilityRole(.staticText)
-        setAccessibilityLabel(instruction)
+        let missingAppButton = NSButton(
+            title: "Sorty isn't listed?",
+            target: self,
+            action: #selector(missingAppPressed)
+        )
+        missingAppButton.translatesAutoresizingMaskIntoConstraints = false
+        missingAppButton.bezelStyle = .inline
+        missingAppButton.font = .systemFont(ofSize: 12, weight: .medium)
+        missingAppButton.isHidden = !showsMissingAppHelp
+        missingAppButton.setAccessibilityLabel("Get help if Sorty is not listed")
+        missingAppButton.setAccessibilityHelp(
+            "Returns to Sorty with steps to restore the Automation permission entry."
+        )
+        addSubview(missingAppButton)
+
+        if showsMissingAppHelp {
+            setAccessibilityElement(false)
+        } else {
+            setAccessibilityElement(true)
+            setAccessibilityRole(.staticText)
+            setAccessibilityLabel(instruction)
+        }
 
         NSLayoutConstraint.activate([
             symbol.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -718,10 +758,26 @@ private final class PermissionGuideView: NSView {
             label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+
+        if showsMissingAppHelp {
+            NSLayoutConstraint.activate([
+                missingAppButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                missingAppButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.trailingAnchor.constraint(
+                    lessThanOrEqualTo: missingAppButton.leadingAnchor,
+                    constant: -8
+                ),
+            ])
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc
+    private func missingAppPressed() {
+        onMissingApp()
     }
 }

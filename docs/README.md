@@ -290,6 +290,9 @@ Finder Apple Events, and Notifications reads Notification Center authorization.
 An Automation request uses macOS's native Allow / Don't Allow alert while the
 decision is undecided. Once denied, macOS does not allow Sorty to prompt again,
 so Sorty takes you directly to the matching Automation pane instead.
+The guide includes **Sorty isn't listed?** for the rare case where macOS has not
+registered the app. It returns to Sorty with a copyable, user-run reset command
+and clear relaunch steps; the Automation pane itself cannot add an app manually.
 Right-click a granted permission in onboarding or Settings to remove or disable
 it. Permissions that macOS does not let apps revoke directly open the matching
 System Settings pane.
