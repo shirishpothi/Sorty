@@ -293,6 +293,8 @@ so Sorty takes you directly to the matching Automation pane instead.
 The guide includes **Sorty isn't listed?** for the rare case where macOS has not
 registered the app. It returns to Sorty with a copyable, user-run reset command
 and clear relaunch steps; the Automation pane itself cannot add an app manually.
+After reopening, choosing Enable sends a harmless Finder read request, which
+causes macOS to show its standard Allow / Don't Allow alert and register Sorty.
 Right-click a granted permission in onboarding or Settings to remove or disable
 it. Permissions that macOS does not let apps revoke directly open the matching
 System Settings pane.

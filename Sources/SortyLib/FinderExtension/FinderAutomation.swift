@@ -36,9 +36,30 @@ public final class FinderAutomation {
     public static func requestAutomationPermission() async -> PermissionStatus {
         guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
 
-        return await Task.detached(priority: .userInitiated) {
-            determineAutomationPermission(prompt: true)
-        }.value
+        let scriptSource = """
+        tell application "Finder"
+            return name of startup disk
+        end tell
+        """
+
+        guard let script = NSAppleScript(source: scriptSource) else {
+            return determineAutomationPermission(prompt: true)
+        }
+
+        var errorInfo: NSDictionary?
+        _ = script.executeAndReturnError(&errorInfo)
+
+        guard let errorInfo else { return .granted }
+        let errorCode = errorInfo[NSAppleScript.errorNumber] as? Int
+        switch errorCode {
+        case -1743:
+            return .denied
+        case -600:
+            return .unknown
+        default:
+            DebugLogger.log("Unexpected Finder automation request error: \(errorInfo)")
+            return determineAutomationPermission(prompt: false)
+        }
     }
 
     /// Reads the current decision without presenting a consent alert.
