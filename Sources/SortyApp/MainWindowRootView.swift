@@ -25,6 +25,7 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.isAccentPrototypeWindow) private var isAccentPrototypeWindow
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
     @AppStorage("lastSeenWhatsNewBuild") private var lastSeenWhatsNewBuild = ""
     @AppStorage("forceShowWhatsNewOnLaunch") private var forceShowWhatsNewOnLaunch = false
@@ -35,7 +36,6 @@ struct MainWindowRootView: View {
     @State private var handledUITestDeepLink = false
     @State private var isShowingWhatsNew = false
     @State private var setupRepairTask: Task<Void, Never>?
-    @State private var hasOpenedAccentPrototypes = false
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
@@ -84,11 +84,10 @@ struct MainWindowRootView: View {
 
     private func openAccentPrototypesIfRequested() {
         guard ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1",
-              !hasOpenedAccentPrototypes else {
+              !isAccentPrototypeWindow else {
             return
         }
 
-        hasOpenedAccentPrototypes = true
         ["accent-rose", "accent-indigo", "accent-teal", "accent-emerald", "accent-amber", "accent-violet"]
             .forEach { openWindow(id: $0) }
     }
@@ -591,6 +590,19 @@ struct MainWindowRootView: View {
         }
     }
 
+}
+
+extension EnvironmentValues {
+    /// Marks windows that already render a recolored accent prototype, so
+    /// they never spawn further prototype windows (which would cascade).
+    var isAccentPrototypeWindow: Bool {
+        get { self[AccentPrototypeWindowKey.self] }
+        set { self[AccentPrototypeWindowKey.self] = newValue }
+    }
+}
+
+private struct AccentPrototypeWindowKey: EnvironmentKey {
+    static let defaultValue = false
 }
 
 private extension URL {

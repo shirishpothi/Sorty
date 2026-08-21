@@ -74,32 +74,16 @@ public enum SortyDesignSystem {
         public static let overlayLight = Color.black.opacity(0.05)
         public static let overlayMedium = Color.black.opacity(0.1)
 
-        /// Returns the system accent color when the user has chosen a specific
-        /// accent in System Settings, or Sorty's custom brand accent when the
-        /// system is set to "Multicolor" (the default).
+        /// The live accent color for the current context.
         ///
-        /// macOS stores the user's choice in `AppleAccentColor` in the global
-        /// domain. The values are:
-        ///   • absent  — historical "Multicolor" representation
-        ///   • -1      — Graphite (older macOS used this for Multicolor too)
-        ///   • -2      — "Multicolor" on macOS Sonoma+ (the default)
-        ///   •  0..6   — a specific accent (Red, Orange, Yellow, Green, Blue,
-        ///              Purple, Pink)
-        ///
-        /// We treat any of the "Multicolor" representations as the trigger to
-        /// fall back to Sorty's brand accent. Any explicit color chosen by the
-        /// user is respected via the live system accent.
+        /// Resolves through SwiftUI's accent pipeline: the asset catalog
+        /// provides Sorty's brand rose as the app-wide default, while any
+        /// window can override it with `.tint(_)` — which is how the accent
+        /// prototype harness windows recolor the whole UI. Keeping all accent
+        /// usage on this single dynamic value guarantees those overrides
+        /// propagate everywhere instead of leaving hardcoded rose patches.
         public static var resolvedAccent: Color {
-            let raw = UserDefaults.standard.object(forKey: "AppleAccentColor")
-            if let value = raw as? Int, value >= 0 {
-                // User picked a specific accent (Red/Orange/Yellow/Green/Blue/
-                // Purple/Pink) — respect it via SwiftUI's live accent color.
-                // Avoid NSColor.controlAccentColor here; on macOS it can make
-                // SwiftUI ignore the app's asset-catalog accent in Multicolor.
-                return .accentColor
-            }
-            // Multicolor (absent / -1 / -2) — enforce Sorty's brand accent.
-            return accent
+            .accentColor
         }
     }
     

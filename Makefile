@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
+.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize harness-accent ci ci-report
 
 # Default target
 all: build
@@ -219,6 +219,11 @@ harness-organize:
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
 
+harness-accent:
+	@echo "🔬 Harness → Accent prototypes..."
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SORTY_HARNESS_MODE=1 SORTY_ACCENT_PROTOTYPE=1 open releases/Sorty.app
+
 help:
 	@echo "Sorty Build System (Optimized)"
 	@echo "=============================="
@@ -262,6 +267,7 @@ help:
 	@echo "  make harness          - Build and launch harness mode"
 	@echo "  make harness-settings - Harness targeting Settings view"
 	@echo "  make harness-organize - Harness targeting Organize view"
+	@echo "  make harness-accent   - Launch the six accent color prototypes"
 	@echo ""
 	@echo "Benchmarking:"
 	@echo "  make benchmark         - Measure all build times"

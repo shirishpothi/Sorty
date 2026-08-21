@@ -433,7 +433,9 @@ struct SortyApp: App {
     @SceneBuilder
     var body: some Scene {
         productionScenes
-        accentPrototypeScenes
+        if ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
+            accentPrototypeScenes
+        }
 
         MenuBarExtra(
             isInserted: Binding(
@@ -497,6 +499,7 @@ struct SortyApp: App {
         WindowGroup("Sorty · \(name)", id: id) {
             if ApplicationMover.shouldLaunchMainUI {
                 mainWindowContent(launchRequest: .constant(nil), accent: color)
+                    .environment(\.isAccentPrototypeWindow, true)
             }
         }
         .windowStyle(.automatic)
