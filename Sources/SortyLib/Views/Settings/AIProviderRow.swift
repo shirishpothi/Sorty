@@ -31,11 +31,11 @@ struct AIProviderRow: View {
                                     .fill(provider.brandColor)
 
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 7, weight: .bold))
                                     .foregroundStyle(.white)
                             }
-                            .frame(width: 18, height: 18)
-                            .offset(x: 3, y: 3)
+                            .frame(width: 13, height: 13)
+                            .offset(x: 2, y: 2)
                             .accessibilityHidden(true)
                         }
                     }
