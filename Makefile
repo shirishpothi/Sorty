@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize harness-accent ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-settings harness-organize harness-accent ci ci-report
 
 # Default target
 all: build
@@ -29,14 +29,6 @@ export SWIFTPM_DISABLE_INDEXING ?= 1
 build:
 	@chmod +x scripts/build.sh
 	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
-
-build-ci-arm64:
-	@echo "[deprecated] build-ci-arm64 now forwards to universal build"
-	@$(MAKE) build-ci-universal
-
-build-ci-x86_64:
-	@echo "[deprecated] build-ci-x86_64 now forwards to universal build"
-	@$(MAKE) build-ci-universal
 
 build-ci-universal:
 	@echo "CI-style xcodebuild (universal)..."
@@ -73,11 +65,7 @@ test-fast:
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
 	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
-	@echo "🖥️  UI tests are currently disabled (skipped)."
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
-
-test-ui:
-	@echo "🖥️  UI tests are currently disabled (skipped)."
 
 # Profile build times to identify slow-compiling files
 build-profile:
@@ -90,10 +78,8 @@ cache-status:
 cache-prune:
 	@$(BUILD_SCRIPT_ENV) BUILD_CACHE_FORCE_PRUNE=true ./scripts/build_cache.sh prune
 
-# runs basic syntax checks and builds (skips tests)
-quick:
-	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+# Alias kept for muscle memory; identical to dev
+quick: dev
 
 # skips all checks and builds/runs immediately
 now:
@@ -177,12 +163,6 @@ prerelease:
 	@chmod +x scripts/prerelease_check.sh
 	@./scripts/prerelease_check.sh
 
-# Pre-release validation (UI tests are disabled)
-prerelease-full:
-	@echo "🔍 Running full pre-release validation..."
-	@chmod +x scripts/prerelease_check.sh
-	@./scripts/prerelease_check.sh
-
 # Benchmark build times and save results
 benchmark:
 	@echo "📊 Running build benchmarks..."
@@ -235,8 +215,6 @@ help:
 	@echo "  make quick       - Compile immediately (skips tests, parallel)"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
-	@echo "  make build-ci-arm64     - Deprecated alias (forwards to build-ci-universal)"
-	@echo "  make build-ci-x86_64    - Deprecated alias (forwards to build-ci-universal)"
 	@echo ""
 	@echo ""
 	@echo "Local diagnostics:"
@@ -251,7 +229,6 @@ help:
 	@echo "Testing:"
 	@echo "  make test        - Run unit tests in parallel"
 	@echo "  make test-fast   - Run only fast unit tests (excludes slow UI tests)"
-	@echo "  make test-ui     - UI tests disabled (no-op)"
 	@echo "  make test-full   - Run unit tests with coverage (UI tests disabled)"
 	@echo ""
 	@echo "Release:"
@@ -261,7 +238,6 @@ help:
 	@echo "  make release         - Create local release zip for diagnostics"
 	@echo "  make friend-zip      - Build a friend-test ZIP in ~/Downloads"
 	@echo "  make prerelease      - Run local pre-release diagnostics"
-	@echo "  make prerelease-full - Full local pre-release diagnostics"
 	@echo ""
 	@echo "Preview Harness (fast iteration):"
 	@echo "  make harness          - Build and launch harness mode"

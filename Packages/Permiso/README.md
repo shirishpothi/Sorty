@@ -11,7 +11,8 @@ Sorty uses the drag target and a decorative Drag cue only for flat TCC lists
 such as Full Disk Access. Automation and Notifications show a non-draggable
 guide for the control macOS expects the user to change. Files & Folders stays
 on `NSOpenPanel`, which grants access through the folder picker rather than
-System Settings.
+System Settings. The Notifications switch cue starts only after the guide has
+finished its flight and reached its final size.
 
 On macOS 26 and later, the guide uses `NSGlassEffectView`. Earlier macOS
 versions retain the native popover material fallback.

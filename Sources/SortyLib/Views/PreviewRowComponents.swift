@@ -1,6 +1,91 @@
 import Foundation
 import SwiftUI
 
+struct RenameNameChangeView: View {
+    let suggestedName: String
+    let helpText: String
+    var isRegenerating = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var suggestedNameReveal = true
+    @State private var showRevealSweep = false
+
+    var body: some View {
+        Text(suggestedName)
+            .fontWeight(.medium)
+            .foregroundColor(.green)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .opacity(isRegenerating ? 0 : (suggestedNameReveal ? 1 : 0))
+            .blur(radius: reduceMotion ? 0 : (isRegenerating ? 6 : (suggestedNameReveal ? 0 : 4)))
+            .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -10))
+            .overlay(alignment: .leading) {
+                if showRevealSweep && suggestedNameReveal && !isRegenerating && !reduceMotion {
+                    RenameNameRevealSweep()
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeInOut(duration: 0.18), value: isRegenerating)
+            .animation(.spring(response: 0.42, dampingFraction: 0.82), value: suggestedNameReveal)
+            .help(helpText)
+            .onChange(of: suggestedName) { _, _ in
+                guard !reduceMotion else { return }
+                suggestedNameReveal = false
+                showRevealSweep = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                        suggestedNameReveal = true
+                        showRevealSweep = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        showRevealSweep = false
+                    }
+                }
+            }
+            .onChange(of: isRegenerating) { _, newValue in
+                guard !reduceMotion else { return }
+                if newValue {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        suggestedNameReveal = false
+                        showRevealSweep = false
+                    }
+                }
+            }
+    }
+}
+
+private struct RenameNameRevealSweep: View {
+    @State private var progress: CGFloat = -0.35
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = max(geometry.size.width, 1)
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .white.opacity(0.24),
+                    Color.green.opacity(0.18),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: max(width * 0.26, 22), height: geometry.size.height * 1.8)
+            .blur(radius: 2.2)
+            .offset(x: width * progress)
+            .blendMode(.plusLighter)
+            .onAppear {
+                progress = -0.35
+                withAnimation(.easeOut(duration: 0.58)) {
+                    progress = 1.12
+                }
+            }
+        }
+        .clipped()
+    }
+}
+
 struct FlatFolderRowHeaderContent: View {
     let folderName: String
     let fileCount: Int
@@ -166,11 +251,9 @@ struct FlatFileRowContent: View {
                         .foregroundStyle(.secondary)
 
                     RenameNameChangeView(
-                        originalName: file.displayName,
                         suggestedName: renameMapping.suggestedName ?? "",
                         helpText: renameHelpText ?? "",
-                        isRegenerating: isRegeneratingName,
-                        showsOriginalName: false
+                        isRegenerating: isRegeneratingName
                     )
 
                     Spacer(minLength: 12)

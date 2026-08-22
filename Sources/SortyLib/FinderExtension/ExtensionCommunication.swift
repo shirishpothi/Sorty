@@ -3994,6 +3994,16 @@ public struct ExtensionCommunication {
         )
     }
 
+    /// Whether the legacy "Organize with Sorty" toolbar app bundle exists.
+    private static func isToolbarAppInstalled() -> Bool {
+        let appPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Sorty")
+            .appendingPathComponent("Organize with Sorty.app")
+        guard let appPath else { return false }
+        return FileManager.default.fileExists(atPath: appPath.path)
+    }
+
     /// Get current integration status
     public static func getIntegrationStatus() -> FinderIntegrationStatus {
         let finderSyncEnabled = isFinderSyncExtensionActive()
@@ -4003,7 +4013,7 @@ public struct ExtensionCommunication {
             quickActionInstalled: isQuickActionInstalled(),
             quickWatchActionInstalled: isQuickWatchActionInstalled(),
             quickExcludeActionInstalled: isQuickExcludeActionInstalled(),
-            toolbarAppInstalled: FinderToolbarHelper.isToolbarAppInstalled(),
+            toolbarAppInstalled: isToolbarAppInstalled(),
             finderSyncEnabled: finderSyncEnabled,
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
         )
@@ -4017,7 +4027,7 @@ public struct ExtensionCommunication {
         let quickExcludeActionInstalled = await isQuickExcludeActionInstalledAsync()
         let toolbarAppInstalled = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: FinderToolbarHelper.isToolbarAppInstalled())
+                continuation.resume(returning: isToolbarAppInstalled())
             }
         }
 
