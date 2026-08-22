@@ -393,9 +393,13 @@ public class SettingsViewModel: ObservableObject {
             }
         }
 
+        // Client creation resolves credentials (sync Keychain reads) and health checks
+        // touch the network — keep both off the main actor so provider switches never hitch.
         let clientConfig = config
-        let client = try AIClientFactory.createClient(config: clientConfig)
-        try await client.checkHealth()
+        try await Task.detached(priority: .userInitiated) {
+            let client = try AIClientFactory.createClient(config: clientConfig)
+            try await client.checkHealth()
+        }.value
     }
     
     public func updateAvailableModels(force: Bool = false) {

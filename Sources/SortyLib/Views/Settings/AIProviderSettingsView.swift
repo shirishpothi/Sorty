@@ -53,7 +53,7 @@ struct AIProviderSettingsView: View {
                             provider: provider,
                             isSelected: viewModel.config.provider == provider,
                             action: {
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.8)) {
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
                                     viewModel.config.provider = provider
                                     if let defaultURL = provider.defaultAPIURL {
                                         viewModel.config.apiURL = defaultURL
