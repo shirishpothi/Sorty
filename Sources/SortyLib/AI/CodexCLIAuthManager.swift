@@ -101,7 +101,7 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     nonisolated static func readLoginStatus() -> LoginStatus {
-        readLoginStatus(codexExecutablePath: resolveCodexExecutablePath())
+        readLoginStatus(codexExecutablePath: CodexSubscriptionClient.resolveCodexExecutablePath())
     }
 
     private nonisolated static func readLoginStatus(
@@ -176,7 +176,7 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     private func performStatusRefresh() async {
         let probe = await Task.detached(priority: .userInitiated) {
-            let executablePath = Self.resolveCodexExecutablePath()
+            let executablePath = CodexSubscriptionClient.resolveCodexExecutablePath()
             let status = Self.readLoginStatus(codexExecutablePath: executablePath)
             let accountEmail: String?
             switch status {
@@ -245,7 +245,7 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     func signOut() {
-        if let codexExecutablePath = resolveCodexExecutablePath() {
+        if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: codexExecutablePath)
             process.arguments = ["logout"]
@@ -296,7 +296,7 @@ public final class CodexCLIAuthManager: ObservableObject {
             return
         }
 
-        guard let codexExecutablePath = resolveCodexExecutablePath() else {
+        guard let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() else {
             deviceAuthSession = CodexDeviceAuthSession(status: .failed("Codex CLI not found. Install with: npm i -g @openai/codex"))
             authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
             return
@@ -397,7 +397,7 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     private func prepareLoginScript() throws -> URL {
-        guard let codexExecutablePath = resolveCodexExecutablePath() else {
+        guard let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() else {
             throw NSError(
                 domain: "CodexCLIAuthManager",
                 code: 1,
@@ -414,50 +414,6 @@ public final class CodexCLIAuthManager: ObservableObject {
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
         return scriptURL
-    }
-
-    private nonisolated static func resolveCodexExecutablePath() -> String? {
-        let paths = [
-            "/usr/local/bin/codex",
-            "/opt/homebrew/bin/codex",
-            "/Applications/Codex.app/Contents/Resources/codex",
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm-global/bin/codex",
-        ]
-
-        for path in paths where FileManager.default.fileExists(atPath: path) {
-            return path
-        }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["which", "codex"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else {
-                return nil
-            }
-
-            let output = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let resolvedPath = String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !resolvedPath.isEmpty,
-                  FileManager.default.fileExists(atPath: resolvedPath) else {
-                return nil
-            }
-
-            return resolvedPath
-        } catch {
-            return nil
-        }
-    }
-
-    private func resolveCodexExecutablePath() -> String? {
-        Self.resolveCodexExecutablePath()
     }
 
     nonisolated static func shellQuoted(_ value: String) -> String {

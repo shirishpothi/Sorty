@@ -46,7 +46,7 @@ public struct FolderThumbnailView: View {
                 return
             }
             isLoading = true
-            thumbnail = await FolderThumbnailProvider.shared.thumbnail(for: url, size: size)
+            thumbnail = await FileThumbnailProvider.shared.thumbnail(for: url, size: size)
             isLoading = false
         }
     }
@@ -80,7 +80,7 @@ public struct CompactFolderThumbnail: View {
         .frame(width: size, height: size)
         .task(id: url) {
             guard let url = url else { return }
-            thumbnail = await FolderThumbnailProvider.shared.thumbnail(
+            thumbnail = await FileThumbnailProvider.shared.thumbnail(
                 for: url,
                 size: CGSize(width: size, height: size)
             )

@@ -736,7 +736,7 @@ struct ResponseParser {
     }
 
     private static func extractLikelyJSONObject(from text: String) -> String? {
-        let candidates = balancedJSONObjectCandidates(in: text)
+        let candidates = LLMJSONExtractor.objectCandidates(in: text)
         guard !candidates.isEmpty else { return nil }
 
         if let preferred = candidates.last(where: { candidate in
@@ -750,54 +750,6 @@ struct ResponseParser {
         }
 
         return candidates.max(by: { $0.count < $1.count })
-    }
-
-    private static func balancedJSONObjectCandidates(in text: String) -> [String] {
-        var candidates: [String] = []
-        var depth = 0
-        var objectStart: String.Index?
-        var inString = false
-        var isEscaping = false
-
-        for index in text.indices {
-            let character = text[index]
-
-            if inString {
-                if isEscaping {
-                    isEscaping = false
-                    continue
-                }
-                if character == "\\" {
-                    isEscaping = true
-                } else if character == "\"" {
-                    inString = false
-                }
-                continue
-            }
-
-            if character == "\"" {
-                inString = true
-                continue
-            }
-
-            if character == "{" {
-                if depth == 0 {
-                    objectStart = index
-                }
-                depth += 1
-                continue
-            }
-
-            if character == "}", depth > 0 {
-                depth -= 1
-                if depth == 0, let startIndex = objectStart {
-                    candidates.append(String(text[startIndex...index]))
-                    objectStart = nil
-                }
-            }
-        }
-
-        return candidates
     }
 
     private static func removeTrailingCommas(in json: String) -> String {

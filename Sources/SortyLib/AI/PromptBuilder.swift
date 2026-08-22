@@ -903,7 +903,7 @@ struct PromptBuilder {
             if let tags = values?.tagNames, !tags.isEmpty {
                 parts.append("tags \(tags.joined(separator: ", "))")
             }
-            if let comment = finderComment(at: url), !comment.isEmpty {
+            if let comment = url.finderComment, !comment.isEmpty {
                 parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
             }
             lines.append(parts.joined(separator: " | "))
@@ -932,19 +932,6 @@ struct PromptBuilder {
             context += "\n- ... and \(directoryCount - lines.count) more directories in scope"
         }
         return context
-    }
-
-    private static func finderComment(at url: URL) -> String? {
-        let key = "com.apple.metadata:kMDItemFinderComment"
-        let size = getxattr(url.path, key, nil, 0, 0, 0)
-        guard size > 0 else { return nil }
-
-        var data = Data(count: size)
-        let result = data.withUnsafeMutableBytes { buffer in
-            getxattr(url.path, key, buffer.baseAddress, size, 0, 0)
-        }
-        guard result > 0 else { return nil }
-        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
     }
 
     private static func directoryContextNames(for directoryURL: URL, maxAncestors: Int = 3) -> [String] {

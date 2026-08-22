@@ -250,47 +250,50 @@ private struct HistoryPrimaryStats: View {
     var body: some View {
         HStack(spacing: 0) {
             if entry.status == .duplicatesCleanup {
-                HistorySummaryStatItem(
+                IconStatItem(
+                    style: .detail,
+                    icon: "trash.fill",
                     value: "\(entry.duplicatesDeleted ?? 0)",
                     label: "Duplicates Deleted",
-                    icon: "trash.fill",
                     color: .red
                 )
 
                 if let recovered = entry.recoveredSpace {
-                    HistorySummaryStatDivider()
-                    HistorySummaryStatItem(
+                    IconStatDivider(height: 44)
+                    IconStatItem(
+                        style: .detail,
+                        icon: "externaldrive.fill",
                         value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
                         label: "Space Recovered",
-                        icon: "externaldrive.fill",
                         color: .green
                     )
                 }
             } else {
-                HistorySummaryStatItem(
+                IconStatItem(
+                    style: .detail,
+                    icon: "doc.on.doc.fill",
                     value: "\(entry.filesOrganized)",
                     label: "Files Organized",
-                    icon: "doc.on.doc.fill",
                     color: .blue
                 )
 
-                HistorySummaryStatDivider()
+                IconStatDivider(height: 44)
 
-                HistorySummaryStatItem(
+                IconStatItem(
+                    style: .detail,
+                    icon: "folder.fill.badge.plus",
                     value: "\(entry.foldersCreated)",
                     label: "Folders Created",
-                    icon: "folder.fill.badge.plus",
-                    color: .purple
-                )
+                    color: .purple)
 
                 if let plan = entry.plan, plan.version > 1 {
-                    HistorySummaryStatDivider()
-                    HistorySummaryStatItem(
+                    IconStatDivider(height: 44)
+                    IconStatItem(
+                        style: .detail,
+                        icon: "number",
                         value: "v\(plan.version)",
                         label: "Plan Version",
-                        icon: "number",
-                        color: .gray
-                    )
+                        color: .gray)
                 }
             }
         }
@@ -303,45 +306,6 @@ private struct HistoryPrimaryStats: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
-    }
-}
-
-private struct HistorySummaryStatItem: View {
-    let value: String
-    let label: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(color)
-                .accessibilityHidden(true)
-
-            VStack(spacing: 1) {
-                Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .numericTextTransition(animationValue: value)
-
-                Text(label)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
-    }
-}
-
-private struct HistorySummaryStatDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.09))
-            .frame(width: 1, height: 44)
-            .accessibilityHidden(true)
     }
 }
 

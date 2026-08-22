@@ -215,10 +215,10 @@ public struct DemoStepView: View {
                             .numericTextTransition(animationValue: leftPanelDescription)
 
                         VStack(alignment: .leading, spacing: 12) {
-                            DemoFeatureRow(icon: "lock.shield", activeIcon: "lock.shield.fill", text: "On-device privacy scanning", isActive: demoState == .simulatedDemo || demoState == .analyzing)
-                            DemoFeatureRow(icon: "person.crop.circle.badge.checkmark", activeIcon: "person.crop.circle.badge.checkmark.fill", text: "Persona-aware planning", isActive: demoState == .simulatedDemo || demoState == .organizing)
-                            DemoFeatureRow(icon: "folder.badge.gearshape", activeIcon: "folder.badge.gearshape.fill", text: "Smart folder structure", isActive: demoState == .complete)
-                            DemoFeatureRow(icon: "arrow.uturn.backward.circle", activeIcon: "arrow.uturn.backward.circle.fill", text: "One-click undo safety", isActive: demoState == .complete)
+                            OnboardingProgressRow(state: demoState == .simulatedDemo || demoState == .analyzing ? .active : .idle, circleSize: 26, activeFill: .green.opacity(0.15), title: "On-device privacy scanning", fillsWidth: true, style: .togglingSymbol(idle: "lock.shield", active: "lock.shield.fill", weight: .semibold))
+                            OnboardingProgressRow(state: demoState == .simulatedDemo || demoState == .organizing ? .active : .idle, circleSize: 26, activeFill: .green.opacity(0.15), title: "Persona-aware planning", fillsWidth: true, style: .togglingSymbol(idle: "person.crop.circle.badge.checkmark", active: "person.crop.circle.badge.checkmark.fill", weight: .semibold))
+                            OnboardingProgressRow(state: demoState == .complete ? .active : .idle, circleSize: 26, activeFill: .green.opacity(0.15), title: "Smart folder structure", fillsWidth: true, style: .togglingSymbol(idle: "folder.badge.gearshape", active: "folder.badge.gearshape.fill", weight: .semibold))
+                            OnboardingProgressRow(state: demoState == .complete ? .active : .idle, circleSize: 26, activeFill: .green.opacity(0.15), title: "One-click undo safety", fillsWidth: true, style: .togglingSymbol(idle: "arrow.uturn.backward.circle", active: "arrow.uturn.backward.circle.fill", weight: .semibold))
                         }
                         .padding(.top, 8)
                     }
@@ -509,26 +509,11 @@ public struct DemoStepView: View {
             
             // Progress steps
             VStack(alignment: .leading, spacing: 12) {
-                ProcessingStepRow(
-                    icon: "magnifyingglass",
-                    text: "Scanning files...",
-                    isComplete: demoState == .organizing || demoState == .complete,
-                    isActive: demoState == .analyzing
-                )
-                
-                ProcessingStepRow(
-                    icon: "brain.head.profile",
-                    text: "Sorty analyzing patterns...",
-                    isComplete: demoState == .complete,
-                    isActive: demoState == .organizing
-                )
-                
-                ProcessingStepRow(
-                    icon: "folder.badge.gearshape",
-                    text: "Creating structure...",
-                    isComplete: false,
-                    isActive: false
-                )
+                OnboardingProgressRow(state: demoState == .organizing || demoState == .complete ? .complete : (demoState == .analyzing ? .active : .idle), circleSize: 28, activeFill: SortyDesignSystem.Colors.resolvedAccent.opacity(0.1), title: "Scanning files...", style: .spinner(idleSymbol: "magnifyingglass", idleWeight: .regular))
+
+                OnboardingProgressRow(state: demoState == .complete ? .complete : (demoState == .organizing ? .active : .idle), circleSize: 28, activeFill: SortyDesignSystem.Colors.resolvedAccent.opacity(0.1), title: "Sorty analyzing patterns...", style: .spinner(idleSymbol: "brain.head.profile", idleWeight: .regular))
+
+                OnboardingProgressRow(state: .idle, circleSize: 28, activeFill: SortyDesignSystem.Colors.resolvedAccent.opacity(0.1), title: "Creating structure...", style: .spinner(idleSymbol: "folder.badge.gearshape", idleWeight: .regular))
             }
             .frame(maxWidth: 280)
         }
@@ -681,71 +666,6 @@ private struct DemoEnvironmentResolver: View {
 }
 
 // MARK: - Supporting Views
-
-struct DemoFeatureRow: View {
-    let icon: String
-    let activeIcon: String
-    let text: String
-    let isActive: Bool
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(isActive ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1))
-                    .frame(width: 26, height: 26)
-
-                Image(systemName: isActive ? activeIcon : icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isActive ? .green : .secondary)
-                    .symbolReplaceTransition(animationValue: isActive)
-            }
-            
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(isActive ? .primary : .secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-            
-            Spacer()
-        }
-    }
-}
-
-struct ProcessingStepRow: View {
-    let icon: String
-    let text: String
-    let isComplete: Bool
-    let isActive: Bool
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(isComplete ? Color.green.opacity(0.1) : isActive ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.secondary.opacity(0.1))
-                    .frame(width: 28, height: 28)
-                
-                if isComplete {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.green)
-                } else if isActive {
-                    BouncingSpinner(size: 12, color: .accentColor)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(isComplete ? .green : isActive ? .primary : .secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-    }
-}
 
 struct DemoStatCard: View {
     let icon: String

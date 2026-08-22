@@ -9,23 +9,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Liquid Glass Styles
-
-struct LiquidGlassModifier: ViewModifier {
-    var cornerRadius: CGFloat = 12
-    @Environment(\.colorScheme) var colorScheme
-
-    func body(content: Content) -> some View {
-        content.systemLiquidGlassBackground(cornerRadius: cornerRadius)
-    }
-}
-
-extension View {
-    func liquidGlassCard(cornerRadius: CGFloat = 12) -> some View {
-        self.modifier(LiquidGlassModifier(cornerRadius: cornerRadius))
-    }
-}
-
 // MARK: - Main View
 
 struct LearningsView: View {
@@ -1253,7 +1236,7 @@ struct LearningsView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 16)
+        .systemLiquidGlassBackground(cornerRadius: 16)
     }
 
     // MARK: - Helpers

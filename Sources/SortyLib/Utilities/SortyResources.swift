@@ -297,13 +297,8 @@ public enum SortyResources {
     }
 
     private static func cacheImage(_ image: NSImage, forKey key: NSString) -> NSImage {
-        imageCache.setObject(image, forKey: key, cost: imageCost(image))
+        imageCache.setObject(image, forKey: key, cost: image.thumbnailCost())
         return image
-    }
-
-    private static func imageCost(_ image: NSImage) -> Int {
-        let pixels = max(1, Int(image.size.width * 2 * image.size.height * 2))
-        return pixels * 4
     }
 
     private static func isUsableImage(_ image: NSImage) -> Bool {

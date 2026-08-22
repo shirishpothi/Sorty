@@ -733,22 +733,6 @@ public actor FileSystemManager {
         }
     }
 
-    private func getFinderComment(for url: URL) -> String? {
-        let path = url.path
-        let key = "com.apple.metadata:kMDItemFinderComment"
-
-        let size = getxattr(path, key, nil, 0, 0, 0)
-        guard size > 0 else { return nil }
-
-        var data = Data(count: size)
-        let result = data.withUnsafeMutableBytes { buf in
-            getxattr(path, key, buf.baseAddress, size, 0, 0)
-        }
-        guard result > 0 else { return nil }
-
-        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
-    }
-
     private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool) -> FileOperation? {
         let hasComment = comment != nil && !(comment ?? "").isEmpty
         guard !tags.isEmpty || hasComment else { return nil }
@@ -769,7 +753,7 @@ public actor FileSystemManager {
 
         let resourceValues = try? url.resourceValues(forKeys: [.tagNamesKey])
         let originalTags = resourceValues?.tagNames ?? []
-        let originalComment = getFinderComment(for: url)
+        let originalComment = url.finderComment
 
         var finalTags = originalTags
         if !tags.isEmpty {
@@ -2239,5 +2223,23 @@ public class DuplicateRestorationManager: ObservableObject {
                 return "A file already exists at the restoration location."
             }
         }
+    }
+}
+
+extension URL {
+    var finderComment: String? {
+        let path = path
+        let key = "com.apple.metadata:kMDItemFinderComment"
+
+        let size = getxattr(path, key, nil, 0, 0, 0)
+        guard size > 0 else { return nil }
+
+        var data = Data(count: size)
+        let result = data.withUnsafeMutableBytes { buf in
+            getxattr(path, key, buf.baseAddress, size, 0, 0)
+        }
+        guard result > 0 else { return nil }
+
+        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
     }
 }

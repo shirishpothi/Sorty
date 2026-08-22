@@ -435,33 +435,19 @@ public final class ReliabilitySpan {
 }
 
 struct ReliabilityCaptureRateLimiter {
-    private static let maximumEventsPerMinute = 30
-    private static let maximumEventsPerProcess = 500
-
-    private var windowStartedAt: TimeInterval = 0
-    private var windowCount = 0
-    private var processCount = 0
+    private var limiter = AnalyticsCaptureRateLimiter(
+        maximumEventsPerMinute: 30,
+        maximumEventsPerProcess: 500
+    )
 
     mutating func shouldCapture(
         now: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) -> Bool {
-        guard processCount < Self.maximumEventsPerProcess else { return false }
-
-        if windowStartedAt == 0 || now - windowStartedAt >= 60 {
-            windowStartedAt = now
-            windowCount = 0
-        }
-        guard windowCount < Self.maximumEventsPerMinute else { return false }
-
-        windowCount += 1
-        processCount += 1
-        return true
+        limiter.shouldCapture(now: now)
     }
 
     mutating func reset() {
-        windowStartedAt = 0
-        windowCount = 0
-        processCount = 0
+        limiter.reset()
     }
 }
 

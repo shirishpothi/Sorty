@@ -601,7 +601,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
     }
 
-    private nonisolated static func resolveCodexExecutablePath() -> String? {
+    nonisolated static func resolveCodexExecutablePath() -> String? {
         let paths = [
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",

@@ -1278,48 +1278,20 @@ public class LearningsManager: ObservableObject {
         }
 
         let cap = 100
-        if profile.additionalInstructionsHistory.count > cap {
-            profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
-        }
-        if profile.guidingInstructionsHistory.count > cap {
-            profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
-        }
-        if profile.steeringPrompts.count > cap {
-            profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
-        }
-        if profile.postOrganizationChanges.count > cap {
-            profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
-        }
-        if profile.renameFeedbackHistory.count > cap {
-            profile.renameFeedbackHistory = Array(profile.renameFeedbackHistory.suffix(cap))
-        }
-        if profile.historyReverts.count > cap {
-            profile.historyReverts = Array(profile.historyReverts.suffix(cap))
-        }
-        if profile.positiveExamples.count > cap {
-            profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
-        }
-        if profile.rejections.count > cap {
-            profile.rejections = Array(profile.rejections.suffix(cap))
-        }
-        if profile.corrections.count > cap {
-            profile.corrections = Array(profile.corrections.suffix(cap))
-        }
-        if profile.jobHistory.count > cap {
-            profile.jobHistory = Array(profile.jobHistory.suffix(cap))
-        }
-        if profile.cancelledOrganizations.count > cap {
-            profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
-        }
-        if profile.regeneratedOrganizations.count > cap {
-            profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
-        }
-        if profile.sessions.count > cap {
-            profile.sessions = Array(profile.sessions.prefix(cap))
-        }
-        if profile.inlineLearningMomentAnswers.count > cap {
-            profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
-        }
+        profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
+        profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
+        profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
+        profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
+        profile.renameFeedbackHistory = Array(profile.renameFeedbackHistory.suffix(cap))
+        profile.historyReverts = Array(profile.historyReverts.suffix(cap))
+        profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
+        profile.rejections = Array(profile.rejections.suffix(cap))
+        profile.corrections = Array(profile.corrections.suffix(cap))
+        profile.jobHistory = Array(profile.jobHistory.suffix(cap))
+        profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
+        profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
+        profile.sessions = Array(profile.sessions.prefix(cap))
+        profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
@@ -1641,7 +1613,7 @@ public class LearningsManager: ObservableObject {
         }
 
         let mergedRecordCount = LearningsProfileArchiveSummary(profile: mergedProfile).totalRecordCount
-        pruneImportedProfile(&mergedProfile)
+        pruneOldData(in: &mergedProfile)
         currentProfile = mergedProfile
         await saveProfile()
 
@@ -1768,51 +1740,6 @@ public class LearningsManager: ObservableObject {
             imported.inlineLearningMomentAnswers
         ).sorted { $0.timestamp < $1.timestamp }
         return mergedProfile
-    }
-
-    private func pruneImportedProfile(_ profile: inout LearningsProfile, now: Date = Date()) {
-        if dataRetentionDays > 0,
-           let cutoff = Calendar.current.date(byAdding: .day, value: -dataRetentionDays, to: now) {
-            profile.additionalInstructionsHistory.removeAll { $0.timestamp < cutoff }
-            profile.guidingInstructionsHistory.removeAll { $0.timestamp < cutoff }
-            profile.steeringPrompts.removeAll { $0.timestamp < cutoff }
-            profile.postOrganizationChanges.removeAll { $0.timestamp < cutoff }
-            profile.renameFeedbackHistory.removeAll { $0.timestamp < cutoff }
-            profile.historyReverts.removeAll { $0.timestamp < cutoff }
-            profile.positiveExamples.removeAll { $0.timestamp < cutoff }
-            profile.rejections.removeAll { $0.timestamp < cutoff }
-            profile.corrections.removeAll { $0.timestamp < cutoff }
-            profile.jobHistory.removeAll { $0.timestamp < cutoff }
-            profile.cancelledOrganizations.removeAll { $0.timestamp < cutoff }
-            profile.regeneratedOrganizations.removeAll { $0.timestamp < cutoff }
-            profile.sessions.removeAll { ($0.completedAt ?? $0.timestamp) < cutoff }
-            profile.inlineLearningMomentAnswers.removeAll { $0.timestamp < cutoff }
-
-            let retainedEvidenceIDs = Set(profile.positiveExamples.map(\.id))
-                .union(profile.rejections.map(\.id))
-                .union(profile.corrections.map(\.id))
-            profile.inferredRules.removeAll { rule in
-                let evidenceIDs = Set(rule.exampleIds).union(rule.evidenceIds)
-                return !evidenceIDs.isEmpty && evidenceIDs.isDisjoint(with: retainedEvidenceIDs)
-            }
-            profile.rejectedRuleCooldowns = profile.rejectedRuleCooldowns.filter { $0.value >= cutoff }
-        }
-
-        let cap = 100
-        profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
-        profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
-        profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
-        profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
-        profile.renameFeedbackHistory = Array(profile.renameFeedbackHistory.suffix(cap))
-        profile.historyReverts = Array(profile.historyReverts.suffix(cap))
-        profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
-        profile.rejections = Array(profile.rejections.suffix(cap))
-        profile.corrections = Array(profile.corrections.suffix(cap))
-        profile.jobHistory = Array(profile.jobHistory.suffix(cap))
-        profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
-        profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
-        profile.sessions = Array(profile.sessions.prefix(cap))
-        profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
     }
 
     private func mergedByID<Element: Identifiable>(

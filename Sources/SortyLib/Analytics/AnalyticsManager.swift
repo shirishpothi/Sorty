@@ -571,21 +571,29 @@ public final class AnalyticsManager: ObservableObject {
 }
 
 struct AnalyticsCaptureRateLimiter {
-    private static let maximumEventsPerMinute = 120
-    private static let maximumEventsPerProcess = 10_000
+    private let maximumEventsPerMinute: Int
+    private let maximumEventsPerProcess: Int
 
     private var windowStartedAt: TimeInterval = 0
     private var windowCount = 0
     private var processCount = 0
 
+    init(
+        maximumEventsPerMinute: Int = 120,
+        maximumEventsPerProcess: Int = 10_000
+    ) {
+        self.maximumEventsPerMinute = maximumEventsPerMinute
+        self.maximumEventsPerProcess = maximumEventsPerProcess
+    }
+
     mutating func shouldCapture(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
-        guard processCount < Self.maximumEventsPerProcess else { return false }
+        guard processCount < maximumEventsPerProcess else { return false }
 
         if windowStartedAt == 0 || now - windowStartedAt >= 60 {
             windowStartedAt = now
             windowCount = 0
         }
-        guard windowCount < Self.maximumEventsPerMinute else { return false }
+        guard windowCount < maximumEventsPerMinute else { return false }
 
         windowCount += 1
         processCount += 1

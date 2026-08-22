@@ -1137,7 +1137,7 @@ public struct CompletionStepView: View {
             fadeOutAndStopAudio(duration: 0.25)
         }
         .background {
-            CompletionEnvironmentResolver { settingsViewModel, appState in
+            OnboardingEnvironmentPairResolver { (settingsViewModel: SettingsViewModel, appState: AppState) in
                 runtimeController.settingsViewModel = settingsViewModel
                 runtimeController.appState = appState
             }
@@ -1309,22 +1309,6 @@ public struct CompletionStepView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + exitDuration) {
             onFinish()
         }
-    }
-}
-
-/// Resolves service references without making the animated completion tree an
-/// observer of their unrelated published state.
-private struct CompletionEnvironmentResolver: View {
-    @EnvironmentObject private var settingsViewModel: SettingsViewModel
-    @EnvironmentObject private var appState: AppState
-    let onResolve: (SettingsViewModel, AppState) -> Void
-
-    var body: some View {
-        Color.clear
-            .onAppear {
-                onResolve(settingsViewModel, appState)
-            }
-            .accessibilityHidden(true)
     }
 }
 

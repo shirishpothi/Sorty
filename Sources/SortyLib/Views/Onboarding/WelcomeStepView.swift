@@ -642,13 +642,8 @@ struct WelcomeFeatureRow: View {
                     Text(LocalizedStringKey(title))
                         .font(.headline)
 
-                    if let badge = badge {
-                        Text(badge.uppercased())
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.ultraThinMaterial, in: Capsule())
+                    if let badge {
+                        OnboardingCapsuleBadge(text: badge)
                     }
                 }
 

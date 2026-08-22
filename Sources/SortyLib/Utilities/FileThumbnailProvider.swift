@@ -40,7 +40,11 @@ public class FileThumbnailProvider: ObservableObject {
         
         processingKeys.insert(key)
         let image = await generateThumbnail(for: url, size: size)
-        cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
+        cache.setObject(
+            image,
+            forKey: key as NSString,
+            cost: image.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
+        )
 
         if let waitingContinuations = continuations.removeValue(forKey: key) {
             let sendableImage = SendableThumbnailImage(image: image)
@@ -54,6 +58,14 @@ public class FileThumbnailProvider: ObservableObject {
     }
     
     private func generateThumbnail(for url: URL, size: CGSize) async -> NSImage {
+        // Directories get the system's per-folder icon; QuickLook only yields a generic one
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+            let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+            icon.size = size
+            return icon
+        }
+
         // Handle audio files with custom waveform generator (only for larger sizes)
         if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
            type.conforms(to: .audio) {
@@ -63,7 +75,11 @@ public class FileThumbnailProvider: ObservableObject {
                     return cachedWaveform
                 }
                 if let waveform = await AudioWaveformGenerator.shared.generateWaveform(for: url, size: size) {
-                    waveformCache.setObject(waveform, forKey: waveformKey as NSString, cost: imageCost(waveform))
+                    waveformCache.setObject(
+                        waveform,
+                        forKey: waveformKey as NSString,
+                        cost: waveform.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
+                    )
                     return waveform
                 }
             }
@@ -131,10 +147,11 @@ public class FileThumbnailProvider: ObservableObject {
         }
         continuations.removeAll()
     }
+}
 
-    private func imageCost(_ image: NSImage) -> Int {
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
-        let pixels = max(1, Int(image.size.width * scale * image.size.height * scale))
+extension NSImage {
+    func thumbnailCost(scale: CGFloat = 2) -> Int {
+        let pixels = max(1, Int(size.width * scale * size.height * scale))
         return pixels * 4
     }
 }

@@ -355,7 +355,7 @@ struct TroubleshootingSettingsView: View {
         }
 
         FileThumbnailProvider.shared.clearCache()
-        FolderThumbnailProvider.shared.clearCache()
+        FileThumbnailProvider.shared.clearCache()
         calculateCacheSize()
 
         if let error = deletionErrors.first {

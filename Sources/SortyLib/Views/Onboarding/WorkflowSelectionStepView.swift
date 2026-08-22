@@ -124,11 +124,7 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
 
-                    CompactGeneratePersonaButton(
-                        title: "Generate Another",
-                        subtitle: "Try a different custom workflow idea",
-                        action: presentPersonaGenerator
-                    )
+                    GeneratePersonaButton(style: .compact, title: "Generate Another", subtitle: "Try a different custom workflow idea", action: presentPersonaGenerator)
                     .frame(maxWidth: 420)
                 } else {
                     GeneratePersonaButton(action: presentPersonaGenerator)
@@ -150,7 +146,7 @@ public struct WorkflowSelectionStepView: View {
             hasAppeared = true
         }
         .background {
-            WorkflowAppStateResolver { appState in
+            OnboardingEnvironmentResolver { (appState: AppState) in
                 runtimeController.appState = appState
             }
             .frame(width: 0, height: 0)
@@ -198,19 +194,6 @@ private final class WorkflowRuntimeController {
 }
 
 // MARK: - Supporting Views
-
-private struct WorkflowAppStateResolver: View {
-    @EnvironmentObject private var appState: AppState
-    let onResolve: (AppState) -> Void
-
-    var body: some View {
-        Color.clear
-            .onAppear {
-                onResolve(appState)
-            }
-            .accessibilityHidden(true)
-    }
-}
 
 struct OnboardingPersonaCard: View {
     let persona: PersonaType
@@ -527,135 +510,6 @@ struct OnboardingCustomPersonaCard: View {
                 endPoint: .bottomTrailing
             )
         )
-    }
-}
-
-struct GeneratePersonaButton: View {
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-    @State private var isHovered = false
-
-    init(
-        title: String = "Generate Your Own",
-        subtitle: String = "Describe your ideal organization style",
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.action = action
-    }
-    
-    var body: some View {
-        Button {
-            action()
-            HapticFeedbackManager.shared.selection()
-        } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 50, height: 50)
-                    
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.primary)
-                }
-                
-                VStack(spacing: 4) {
-                    Text(LocalizedStringKey(title))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    
-                    Text(LocalizedStringKey(subtitle))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .contentShape(RoundedRectangle(cornerRadius: 16))
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(isHovered ? 0.13 : 0.08))
-            )
-            .systemLiquidGlassBackground(cornerRadius: 16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.primary.opacity(isHovered ? 0.18 : 0.09), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .shadow(
-            color: Color.black.opacity(isHovered ? 0.06 : 0.025),
-            radius: isHovered ? 14 : 7,
-            x: 0,
-            y: isHovered ? 7 : 3
-        )
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
-    }
-}
-
-struct CompactGeneratePersonaButton: View {
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            action()
-            HapticFeedbackManager.shared.selection()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 38, height: 38)
-
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.primary)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(LocalizedStringKey(title))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(LocalizedStringKey(subtitle))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
-            .contentShape(RoundedRectangle(cornerRadius: 14))
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(isHovered ? 0.13 : 0.08))
-            )
-            .systemLiquidGlassBackground(cornerRadius: 14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.primary.opacity(isHovered ? 0.18 : 0.09), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .shadow(
-            color: Color.black.opacity(isHovered ? 0.05 : 0.02),
-            radius: isHovered ? 10 : 5,
-            x: 0,
-            y: isHovered ? 5 : 2
-        )
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 

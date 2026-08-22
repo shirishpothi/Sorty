@@ -341,48 +341,32 @@ The returned JSON object must satisfy all of the following:
             Do NOT create any folder structure. ALL files must be returned in a single root folder named '.'.
             Focus ONLY on suggesting better filenames. Do not move files to different folders.
 
-            ## Intelligent Renaming (when enabled)
-            Transform cryptic filenames into descriptive names:
-            - "Screenshot 2026-01-31 at 10.15.32 AM.png" → "Flight Confirmation Delta 2026-01-31.png"
-            - "IMG_1234.jpg" → "Golden Gate Sunset.jpg"
-            - "Document.pdf" → "Tax Return 2026.pdf"
-            - "DSC_0042.CR2" → "Portrait Session Studio.CR2"
-            - "scan0007.pdf" → "Acme Signed Service Agreement.pdf" only when content confirms the title/client
-
-            Rules:
-            - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
-            - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
-            - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions say not to rename a file/pattern.
-            - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
-            - Include "suggested_name" whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
-            - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
-            - Keep naming patterns consistent within the same folder (same date/subject/token style).
-            - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.
-            - Do NOT rename files already following a clear semantic version format (e.g., v1.2.3).
+            \(intelligentRenamingRules)
             """
         case .organizeAndRename:
-            return """
-            ## Intelligent Renaming (when enabled)
-            Transform cryptic filenames into descriptive names:
-            - "Screenshot 2026-01-31 at 10.15.32 AM.png" → "Flight Confirmation Delta 2026-01-31.png"
-            - "IMG_1234.jpg" → "Golden Gate Sunset.jpg"
-            - "Document.pdf" → "Tax Return 2026.pdf"
-            - "DSC_0042.CR2" → "Portrait Session Studio.CR2"
-            - "scan0007.pdf" → "Acme Signed Service Agreement.pdf" only when content confirms the title/client
-
-            Rules:
-            - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
-            - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
-            - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions say not to rename a file/pattern.
-            - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
-            - Include "suggested_name" whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
-            - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
-            - Keep naming patterns consistent within the same folder (same date/subject/token style).
-            - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.
-            - Do NOT rename files already following a clear semantic version format (e.g., v1.2.3).
-            """
+            return intelligentRenamingRules
         }
     }
+
+    private static let intelligentRenamingRules = """
+    ## Intelligent Renaming (when enabled)
+    Transform cryptic filenames into descriptive names:
+    - "Screenshot 2026-01-31 at 10.15.32 AM.png" → "Flight Confirmation Delta 2026-01-31.png"
+    - "IMG_1234.jpg" → "Golden Gate Sunset.jpg"
+    - "Document.pdf" → "Tax Return 2026.pdf"
+    - "DSC_0042.CR2" → "Portrait Session Studio.CR2"
+    - "scan0007.pdf" → "Acme Signed Service Agreement.pdf" only when content confirms the title/client
+
+    Rules:
+    - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
+    - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
+    - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
+    - Prefer renaming files in this workflow. Keep the original name only when it is already clear and specific, protected/stable, or user instructions say not to rename a file/pattern.
+    - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
+    - Include "suggested_name" whenever evidence supports a clearer name; for generic camera, screenshot, scan, download, or default app names, assume a rename is needed unless evidence is missing.
+    - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
+    - Keep naming patterns consistent within the same folder (same date/subject/token style).
+    - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.
+    - Do NOT rename files already following a clear semantic version format (e.g., v1.2.3).
+    """
 }

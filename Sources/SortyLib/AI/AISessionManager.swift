@@ -215,26 +215,22 @@ public class AISessionManager: ObservableObject {
 
         var urls: [URL] = []
 
-        // First try the specific models endpoint
-        var modelsURLString = urlString
+        let modelsPathSuffix: String
         switch provider {
-        case .openAI, .groq:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "v1/models" : urlString + "/v1/models"
-        case .anthropic:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "v1/models" : urlString + "/v1/models"
-        case .gemini:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "v1/models" : urlString + "/v1/models"
         case .openRouter:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "api/v1/models" : urlString + "/api/v1/models"
+            modelsPathSuffix = "api/v1/models"
         case .githubCopilot:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "models" : urlString + "/models"
+            modelsPathSuffix = "models"
         case .ollama:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "api/tags" : urlString + "/api/tags"
-        case .openAICompatible:
-            modelsURLString = urlString.hasSuffix("/") ? urlString + "v1/models" : urlString + "/v1/models"
+            modelsPathSuffix = "api/tags"
         case .appleFoundationModel:
             return [] // No prewarming needed
+        case .openAI, .groq, .anthropic, .gemini, .openAICompatible:
+            modelsPathSuffix = "v1/models"
         }
+
+        // First try the specific models endpoint
+        let modelsURLString = urlString.hasSuffix("/") ? urlString + modelsPathSuffix : urlString + "/" + modelsPathSuffix
 
         if let modelsURL = URL(string: modelsURLString), modelsURL.scheme != nil {
             urls.append(modelsURL)

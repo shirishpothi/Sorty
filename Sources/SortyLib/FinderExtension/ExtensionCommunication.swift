@@ -538,10 +538,10 @@ public struct ExtensionCommunication {
         return extensions
     }
 
-    private static func preferredRegisteredFinderSyncExtensionURL(from candidates: [URL]) -> URL? {
+    private static func preferredRegisteredFinderSyncExtensionURL(from candidates: [URL]) async -> URL? {
         guard !candidates.isEmpty else { return nil }
 
-        let entries = registeredFinderSyncExtensionEntries()
+        let entries = await registeredFinderSyncExtensionEntriesAsync()
 
         func candidateMatching(path: String) -> URL? {
             candidates.first(where: { extensionPathsMatch($0.path, path) })
@@ -660,7 +660,7 @@ public struct ExtensionCommunication {
         return (currentExtensionURL, nil)
     }
 
-    private static func preferredFinderSyncExtensionURLForRegistration() -> URL? {
+    private static func preferredFinderSyncExtensionURLForRegistration() async -> URL? {
         guard let currentExtensionURL = currentFinderSyncExtensionURL() else { return nil }
 
         let currentAppURL = hostAppBundleURL(forFinderSyncExtensionURL: currentExtensionURL)
@@ -670,7 +670,7 @@ public struct ExtensionCommunication {
 
         let candidates = candidateFinderSyncExtensionURLsInApplications()
 
-        if let registeredCandidate = preferredRegisteredFinderSyncExtensionURL(from: candidates) {
+        if let registeredCandidate = await preferredRegisteredFinderSyncExtensionURL(from: candidates) {
             return registeredCandidate
         }
 
@@ -758,19 +758,6 @@ public struct ExtensionCommunication {
         _ = entitlements
         _ = finderRepairRequiredAppGroup
         return []
-    }
-
-    private static func currentAppMissingFinderIntegrationEntitlements() -> [String] {
-        let result = runCommand(
-            executablePath: "/usr/bin/codesign",
-            arguments: ["-d", "--entitlements", ":-", Bundle.main.bundleURL.path]
-        )
-
-        let output = combinedCommandOutput(result)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let entitlements = parseEntitlementsPlist(from: output) else { return [] }
-        return missingFinderIntegrationAppEntitlements(in: entitlements)
     }
 
     private static func currentAppMissingFinderIntegrationEntitlementsAsync() async -> [String] {
@@ -863,53 +850,6 @@ public struct ExtensionCommunication {
         }
     }
 
-    private static func repairCurrentAppCodeSignatureIfNeeded() -> (success: Bool, message: String, didResign: Bool, scheduledDeferredRepair: Bool) {
-        let missingEntitlements = currentAppMissingFinderIntegrationEntitlements()
-        guard !missingEntitlements.isEmpty else {
-            return (true, "", false, false)
-        }
-
-        guard let entitlementsContents = repairEntitlementsFileContents(),
-              let entitlementsURL = temporaryEntitlementsFileURL(contents: entitlementsContents) else {
-            return (false, "Sorty could not load the bundled Finder repair entitlements.", false, false)
-        }
-
-        let result = runCommand(
-            executablePath: "/usr/bin/codesign",
-            arguments: ["--force", "--sign", "-", "--entitlements", entitlementsURL.path, Bundle.main.bundleURL.path]
-        )
-
-        guard result.exitCode == 0 else {
-            if shouldDeferCodeSignatureRepair(result),
-               scheduleDeferredAppCodeSignatureRepair(entitlementsURL: entitlementsURL, appURL: Bundle.main.bundleURL) {
-                requestAppTerminationForDeferredRepair()
-                return (
-                    true,
-                    "Sorty needs one relaunch to repair this build's code signature. Repair has been staged; Sorty will quit, re-sign itself out-of-process, and reopen automatically.",
-                    false,
-                    true
-                )
-            }
-
-            defer { try? FileManager.default.removeItem(at: entitlementsURL) }
-            let detail = commandFailureSummary(result) ?? "codesign failed"
-            return (false, "Sorty could not re-sign this build for Finder integration (\(detail)).", false, false)
-        }
-        defer { try? FileManager.default.removeItem(at: entitlementsURL) }
-
-        let remainingMissingEntitlements = currentAppMissingFinderIntegrationEntitlements()
-        guard remainingMissingEntitlements.isEmpty else {
-            return (
-                false,
-                "Sorty re-signed the app bundle, but macOS still reports missing Finder entitlements: \(remainingMissingEntitlements.joined(separator: ", ")).",
-                true,
-                false
-            )
-        }
-
-        return (true, "Re-signed this Sorty build with the Finder entitlements it was missing.", true, false)
-    }
-
     private static func repairCurrentAppCodeSignatureIfNeededAsync() async -> (success: Bool, message: String, didResign: Bool, scheduledDeferredRepair: Bool) {
         let missingEntitlements = await currentAppMissingFinderIntegrationEntitlementsAsync()
         guard !missingEntitlements.isEmpty else {
@@ -957,24 +897,6 @@ public struct ExtensionCommunication {
         return (true, "Re-signed this Sorty build with the Finder entitlements it was missing.", true, false)
     }
 
-    private static func registeredFinderSyncExtensionPaths() -> [String] {
-        let result = runCommand(
-            executablePath: "/usr/bin/pluginkit",
-            arguments: finderSyncPluginkitArguments()
-        )
-
-        guard result.exitCode == 0 else { return [] }
-
-        var paths: [String] = []
-        for line in result.stdout.split(separator: "\n").map(String.init) {
-            if let path = extractAppeXPath(from: line),
-               !paths.contains(where: { extensionPathsMatch($0, path) }) {
-                paths.append(path)
-            }
-        }
-        return paths
-    }
-
     private static func registeredFinderSyncExtensionPathsAsync() async -> [String] {
         let result = await runCommandAsync(
             executablePath: "/usr/bin/pluginkit",
@@ -993,16 +915,6 @@ public struct ExtensionCommunication {
         return paths
     }
 
-    private static func registeredFinderSyncExtensionEntries() -> [FinderSyncRegistrationEntry] {
-        let result = runCommand(
-            executablePath: "/usr/bin/pluginkit",
-            arguments: finderSyncPluginkitArguments()
-        )
-
-        guard result.exitCode == 0 else { return [] }
-        return parseFinderSyncRegistrationEntries(from: result.stdout)
-    }
-
     private static func registeredFinderSyncExtensionEntriesAsync() async -> [FinderSyncRegistrationEntry] {
         let result = await runCommandAsync(
             executablePath: "/usr/bin/pluginkit",
@@ -1011,23 +923,6 @@ public struct ExtensionCommunication {
 
         guard result.exitCode == 0 else { return [] }
         return parseFinderSyncRegistrationEntries(from: result.stdout)
-    }
-
-    private static func restartFinderIfPossible() {
-        _ = runCommand(executablePath: "/usr/bin/killall", arguments: ["Finder"])
-    }
-
-    private static func waitForFinderSyncDiagnosticsVerification(timeout: TimeInterval) -> FinderSyncDiagnostics {
-        let deadline = Date().addingTimeInterval(timeout)
-        var latest = getFinderSyncDiagnostics()
-        while Date() < deadline {
-            if latest.isVerifiedWorking {
-                return latest
-            }
-            Thread.sleep(forTimeInterval: finderRepairVerificationPollInterval)
-            latest = getFinderSyncDiagnostics()
-        }
-        return latest
     }
 
     private static func waitForFinderSyncDiagnosticsVerificationAsync(timeout: TimeInterval) async -> FinderSyncDiagnostics {
@@ -1156,132 +1051,20 @@ public struct ExtensionCommunication {
         }
     }
 
-    static func getFinderSyncDiagnostics() -> FinderSyncDiagnostics {
-        beginMonitoringFinderSyncRuntime()
-        return finderSyncDiagnostics(
-            entries: registeredFinderSyncExtensionEntries(),
-            preferredPath: preferredFinderSyncExtensionURLForRegistration()?.path,
-            heartbeat: cachedFinderSyncRuntimeHeartbeat(),
-            runningProcessPath: runningFinderSyncExtensionPath(),
-            appBundleMissingEntitlements: currentAppMissingFinderIntegrationEntitlements()
-        )
-    }
-
     static func getFinderSyncDiagnosticsAsync() async -> FinderSyncDiagnostics {
         beginMonitoringFinderSyncRuntime()
         let entries = await registeredFinderSyncExtensionEntriesAsync()
         return finderSyncDiagnostics(
             entries: entries,
-            preferredPath: preferredFinderSyncExtensionURLForRegistration()?.path,
+            preferredPath: await preferredFinderSyncExtensionURLForRegistration()?.path,
             heartbeat: cachedFinderSyncRuntimeHeartbeat(),
             runningProcessPath: runningFinderSyncExtensionPath(),
             appBundleMissingEntitlements: await currentAppMissingFinderIntegrationEntitlementsAsync()
         )
     }
 
-    public static func isFinderSyncExtensionActive() -> Bool {
-        getFinderSyncDiagnostics().isOperational
-    }
-
     public static func isFinderSyncExtensionActiveAsync() async -> Bool {
         (await getFinderSyncDiagnosticsAsync()).isOperational
-    }
-
-    public static func repairFinderSyncExtensionRegistration(restartFinder: Bool = true) -> (success: Bool, message: String) {
-        let registrationTarget = finderSyncExtensionURLForRepair()
-        guard let currentExtensionURL = registrationTarget.url else {
-            return (false, "Finder Sync extension (.appex) is missing from this app bundle. Rebuild with ENABLE_FINDER_EXTENSION=true.")
-        }
-
-        let currentPath = currentExtensionURL.path
-        let stagedAppPath = registrationTarget.stagedAppPath
-        let bundleIdentifier = finderSyncBundleIdentifier()
-
-        beginMonitoringFinderSyncRuntime()
-        clearCachedFinderSyncRuntimeHeartbeat()
-
-        let codeSignatureRepair = repairCurrentAppCodeSignatureIfNeeded()
-        guard codeSignatureRepair.success else {
-            return (false, codeSignatureRepair.message)
-        }
-        if codeSignatureRepair.scheduledDeferredRepair {
-            return (true, codeSignatureRepair.message)
-        }
-
-        // Kill any running instance of the extension so macOS loads the fresh one
-        _ = runCommand(executablePath: "/usr/bin/pkill", arguments: ["-f", "SortyFinderSync"])
-
-        let beforePaths = registeredFinderSyncExtensionPaths()
-        var removedStaleCount = 0
-        var removeFailures = 0
-
-        for path in beforePaths where !extensionPathsMatch(path, currentPath) {
-            let removeResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-r", path])
-            if removeResult.exitCode == 0 {
-                removedStaleCount += 1
-            } else {
-                removeFailures += 1
-            }
-        }
-
-        // Also remove any existing registration at the current path to force
-        // pluginkit to re-read the on-disk binary (picks up new builds).
-        _ = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-r", currentPath])
-
-        let addResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-a", currentPath])
-        let useResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-e", "use", "-i", bundleIdentifier])
-        if restartFinder {
-            restartFinderIfPossible()
-        }
-
-        let diagnostics = waitForFinderSyncDiagnosticsVerification(timeout: finderRepairVerificationTimeout)
-        let repairVerified = diagnostics.isVerifiedWorking || diagnostics.kind == .registered || diagnostics.kind == .needsCleanup
-        UserDefaults.standard.set(repairVerified, forKey: "enableFinderSyncExtension")
-
-        guard repairVerified else {
-            var details: [String] = []
-            if addResult.exitCode != 0 { details.append("register failed") }
-            if useResult.exitCode != 0 { details.append("enable failed") }
-            if diagnostics.problemPaths.isEmpty {
-                details.append(diagnostics.statusText.lowercased())
-            }
-            if diagnostics.kind == .registered {
-                details.append("Finder never loaded this build after restart")
-            }
-            if !isFinderSyncRegistrationHostEligible(appURL: hostAppBundleURL(forFinderSyncExtensionURL: currentExtensionURL)) {
-                details.append("registration path is outside /Applications")
-            }
-            if let detail = commandFailureSummary(addResult) {
-                details.append(detail)
-            }
-            if let detail = commandFailureSummary(useResult) {
-                details.append(detail)
-            }
-            if details.isEmpty {
-                details.append(diagnostics.statusText.lowercased())
-            }
-            return (false, "Finder Sync repair could not verify this build loaded into Finder (\(details.joined(separator: ", "))). The repair cleared stale registrations and restarted Finder, but macOS still did not activate this extension. Open System Settings → Privacy & Security → Extensions → Finder, confirm Sorty is enabled, then click Repair again.")
-        }
-
-        var messageParts: [String] = []
-        if codeSignatureRepair.didResign {
-            messageParts.append(codeSignatureRepair.message)
-        }
-        var message = diagnostics.detailMessage
-        if diagnostics.kind == .registered {
-            message += " Finder loads this extension lazily; right-click any folder once if the menu is not visible yet."
-        }
-        if removedStaleCount > 0 {
-            message += " Removed \(removedStaleCount) stale registration(s)."
-        }
-        if removeFailures > 0 {
-            message += " \(removeFailures) stale registration(s) could not be removed."
-        }
-        if let stagedAppPath {
-            message += " Registered this build at \(stagedAppPath) so Finder can activate the right-click menu."
-        }
-        messageParts.append(message)
-        return (true, messageParts.filter { !$0.isEmpty }.joined(separator: " "))
     }
 
     public static func repairFinderSyncExtensionRegistrationAsync(restartFinder: Bool = true) async -> (success: Bool, message: String) {
@@ -2376,15 +2159,6 @@ public struct ExtensionCommunication {
         }
     }
 
-    public static func installQuickActionAsync() async -> (success: Bool, message: String) {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = installQuickAction()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
     /// Ensure Organize, Watch, and Exclude service entries are installed and refreshed.
     public static func ensureQuickActionInstalled(forceRefreshServices: Bool = false) -> (installed: Bool, message: String) {
         var refreshedOrganizeWorkflow = false
@@ -2486,321 +2260,6 @@ public struct ExtensionCommunication {
         }
     }
 
-    // MARK: - Quick Scan Action Installation
-
-    /// Install a "Scan with Sorty" Quick Action workflow to ~/Library/Services
-    public static func installQuickScanAction() -> (success: Bool, message: String) {
-        let workflowName = scanQuickActionWorkflowName
-        guard let servicesDir = resolveServicesDirectoryForInstall() else {
-            return (
-                false,
-                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
-            )
-        }
-        let workflowDir = servicesDir.appendingPathComponent(workflowName)
-        let contentsDir = workflowDir.appendingPathComponent("Contents")
-
-        do {
-            try replaceWorkflowDirectoryIfNeeded(workflowDir)
-            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
-
-            let infoPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>CFBundleIdentifier</key>
-                <string>\(scanQuickActionBundleIdentifier)</string>
-                <key>CFBundleName</key>
-                <string>Scan with Sorty</string>
-                <key>CFBundlePackageType</key>
-                <string>BNDL</string>
-                <key>CFBundleIconFile</key>
-                <string>\(quickActionIconBaseName)</string>
-                <key>NSServices</key>
-                <array>
-                    <dict>
-                        <key>NSMenuItem</key>
-                        <dict>
-                            <key>default</key>
-                            <string>Scan with Sorty</string>
-                        </dict>
-                        <key>NSIconName</key>
-                        <string>\(quickActionServiceIconName)</string>
-                        <key>NSMessage</key>
-                        <string>runWorkflowAsService</string>
-                        <key>NSRequiredContext</key>
-                        <dict>
-                            <key>NSApplicationIdentifier</key>
-                            <string>com.apple.finder</string>
-                        </dict>
-                        <key>NSSendFileTypes</key>
-                        <array>
-                            <string>public.folder</string>
-                            <string>public.item</string>
-                        </array>
-                    </dict>
-                </array>
-            </dict>
-            </plist>
-            """
-            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
-
-            let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded"; done
-            """
-
-            let workflowPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>AMApplicationBuild</key>
-                <string>523</string>
-                <key>AMApplicationVersion</key>
-                <string>2.10</string>
-                <key>AMDocumentVersion</key>
-                <string>2</string>
-                <key>actions</key>
-                <array>
-                    <dict>
-                        <key>action</key>
-                        <dict>
-                            <key>AMAccepts</key>
-                            <dict>
-                                <key>Container</key>
-                                <string>List</string>
-                                <key>Optional</key>
-                                <true/>
-                                <key>Types</key>
-                                <array>
-                                    <string>com.apple.cocoa.path</string>
-                                    <string>com.apple.cocoa.url</string>
-                                    <string>public.item</string>
-                                    <string>public.folder</string>
-                                </array>
-                            </dict>
-                            <key>AMActionVersion</key>
-                            <string>1.0.2</string>
-                            <key>AMApplication</key>
-                            <array>
-                                <string>Automator</string>
-                            </array>
-                            <key>AMCategory</key>
-                            <string>AMCategoryUtilities</string>
-                            <key>AMIconName</key>
-                            <string>\(quickActionServiceIconName)</string>
-                            <key>AMName</key>
-                            <string>Run Shell Script</string>
-                            <key>AMParameters</key>
-                            <dict>
-                                <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
-                                <key>CheckedForUserDefaultShell</key>
-                                <true/>
-                                <key>inputMethod</key>
-                                <integer>1</integer>
-                                <key>shell</key>
-                                <string>/bin/zsh</string>
-                                <key>source</key>
-                                <string></string>
-                            </dict>
-                            <key>AMProvides</key>
-                            <dict>
-                                <key>Container</key>
-                                <string>List</string>
-                                <key>Types</key>
-                                <array>
-                                    <string>com.apple.cocoa.path</string>
-                                </array>
-                            </dict>
-                            <key>AMRequiredResources</key>
-                            <array/>
-                            <key>ActionBundlePath</key>
-                            <string>/System/Library/Automator/Run Shell Script.action</string>
-                            <key>ActionName</key>
-                            <string>Run Shell Script</string>
-                            <key>ActionParameters</key>
-                            <dict>
-                                <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
-                                <key>CheckedForUserDefaultShell</key>
-                                <true/>
-                                <key>inputMethod</key>
-                                <integer>1</integer>
-                                <key>shell</key>
-                                <string>/bin/zsh</string>
-                                <key>source</key>
-                                <string></string>
-                            </dict>
-                            <key>BundleIdentifier</key>
-                            <string>com.apple.RunShellScript</string>
-                            <key>CFBundleVersion</key>
-                            <string>1.0.2</string>
-                            <key>CanShowSelectedItemsWhenRun</key>
-                            <false/>
-                            <key>CanShowWhenRun</key>
-                            <true/>
-                            <key>Category</key>
-                            <array>
-                                <string>AMCategoryUtilities</string>
-                            </array>
-                            <key>Class Name</key>
-                            <string>RunShellScriptAction</string>
-                            <key>InputUUID</key>
-                            <string>6A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D</string>
-                            <key>Keywords</key>
-                            <array>
-                                <string>Shell</string>
-                                <string>Script</string>
-                                <string>Command</string>
-                                <string>Run</string>
-                                <string>Unix</string>
-                            </array>
-                            <key>OutputUUID</key>
-                            <string>7B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E</string>
-                            <key>UUID</key>
-                            <string>8C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F</string>
-                            <key>UnlocalizedApplications</key>
-                            <array>
-                                <string>Automator</string>
-                            </array>
-                            <key>arguments</key>
-                            <dict>
-                                <key>0</key>
-                                <dict>
-                                    <key>default value</key>
-                                    <integer>1</integer>
-                                    <key>name</key>
-                                    <string>inputMethod</string>
-                                    <key>required</key>
-                                    <string>0</string>
-                                    <key>type</key>
-                                    <string>0</string>
-                                    <key>uuid</key>
-                                    <string>0</string>
-                                </dict>
-                                <key>1</key>
-                                <dict>
-                                    <key>default value</key>
-                                    <string></string>
-                                    <key>name</key>
-                                    <string>source</string>
-                                    <key>required</key>
-                                    <string>0</string>
-                                    <key>type</key>
-                                    <string>0</string>
-                                    <key>uuid</key>
-                                    <string>1</string>
-                                </dict>
-                                <key>2</key>
-                                <dict>
-                                    <key>default value</key>
-                                    <false/>
-                                    <key>name</key>
-                                    <string>CheckedForUserDefaultShell</string>
-                                    <key>required</key>
-                                    <string>0</string>
-                                    <key>type</key>
-                                    <string>0</string>
-                                    <key>uuid</key>
-                                    <string>2</string>
-                                </dict>
-                                <key>3</key>
-                                <dict>
-                                    <key>default value</key>
-                                    <string></string>
-                                    <key>name</key>
-                                    <string>COMMAND_STRING</string>
-                                    <key>required</key>
-                                    <string>0</string>
-                                    <key>type</key>
-                                    <string>0</string>
-                                    <key>uuid</key>
-                                    <string>3</string>
-                                </dict>
-                                <key>4</key>
-                                <dict>
-                                    <key>default value</key>
-                                    <string>/bin/sh</string>
-                                    <key>name</key>
-                                    <string>shell</string>
-                                    <key>required</key>
-                                    <string>0</string>
-                                    <key>type</key>
-                                    <string>0</string>
-                                    <key>uuid</key>
-                                    <string>4</string>
-                                </dict>
-                            </dict>
-                            <key>isViewVisible</key>
-                            <integer>1</integer>
-                            <key>location</key>
-                            <string>309.000000:253.000000</string>
-                            <key>nibPath</key>
-                            <string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib</string>
-                        </dict>
-                        <key>isViewVisible</key>
-                        <integer>1</integer>
-                    </dict>
-                </array>
-                <key>connectors</key>
-                <dict/>
-                <key>workflowMetaData</key>
-                <dict>
-                    <key>serviceInputTypeIdentifier</key>
-                    <string>com.apple.Automator.fileSystemObject</string>
-                    <key>serviceApplicationPath</key>
-                    <string>/System/Library/CoreServices/Finder.app</string>
-                    <key>workflowTypeIdentifier</key>
-                    <string>com.apple.Automator.servicesMenu</string>
-                </dict>
-            </dict>
-            </plist>
-            """
-            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
-
-            refreshDynamicServicesRegistry()
-
-            return (true, "Quick Scan Action installed! Right-click any folder in Finder to use 'Scan with Sorty'.")
-
-        } catch {
-            return (false, "Installation failed: \(error.localizedDescription)")
-        }
-    }
-
-    /// Check if Quick Scan Action is installed
-    public static func isQuickScanActionInstalled() -> Bool {
-        return isWorkflowInstalledAndCompatible(
-            workflowName: scanQuickActionWorkflowName,
-            bundleIdentifier: scanQuickActionBundleIdentifier
-        )
-    }
-
-    /// Uninstall the Quick Scan Action
-    public static func uninstallQuickScanAction() -> Bool {
-        var removed = false
-
-        for servicesDir in candidateServicesDirectories() {
-            let workflowPath = servicesDir.appendingPathComponent(scanQuickActionWorkflowName)
-            if FileManager.default.fileExists(atPath: workflowPath.path) {
-                do {
-                    try FileManager.default.removeItem(at: workflowPath)
-                    removed = true
-                } catch {
-                    // Continue trying other candidate directories.
-                }
-            }
-        }
-
-        if removed {
-            refreshDynamicServicesRegistry()
-        }
-
-        return removed
-    }
-
     /// Uninstall the Quick Action
     public static func uninstallQuickAction() -> Bool {
         var removed = false
@@ -2822,15 +2281,6 @@ public struct ExtensionCommunication {
         }
 
         return removed
-    }
-
-    public static func uninstallQuickActionAsync() async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = uninstallQuickAction()
-                continuation.resume(returning: result)
-            }
-        }
     }
 
     // MARK: - Quick Watch Action Installation
@@ -3407,25 +2857,6 @@ public struct ExtensionCommunication {
         }
     }
 
-
-    public static func installQuickWatchActionAsync() async -> (success: Bool, message: String) {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = installQuickWatchAction()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    public static func installQuickExcludeActionAsync() async -> (success: Bool, message: String) {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = installQuickExcludeAction()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
     /// Check if Quick Watch Action is installed
     public static func isQuickWatchActionInstalled() -> Bool {
         return isWatchWorkflowInstalledAndCompatible()
@@ -3477,15 +2908,6 @@ public struct ExtensionCommunication {
         }
 
         return removed
-    }
-
-    public static func uninstallQuickWatchActionAsync() async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = uninstallQuickWatchAction()
-                continuation.resume(returning: result)
-            }
-        }
     }
 
     // MARK: - Quick Preview Action Installation
@@ -3840,46 +3262,6 @@ public struct ExtensionCommunication {
         return (removedCount > 0, removedCount)
     }
 
-    public static func uninstallAllQuickActionsAsync() async -> (success: Bool, removed: Int) {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = uninstallAllQuickActions()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    /// Uninstall legacy Quick Action workflows that are no longer active.
-    @discardableResult
-    public static func cleanupLegacyQuickActions() -> Int {
-        let workflows = [
-            scanQuickActionWorkflowName,
-            previewQuickActionWorkflowName
-        ]
-
-        var removedCount = 0
-        for servicesDir in candidateServicesDirectories() {
-            for workflow in workflows {
-                let workflowPath = servicesDir.appendingPathComponent(workflow)
-                if FileManager.default.fileExists(atPath: workflowPath.path) {
-                    do {
-                        try FileManager.default.removeItem(at: workflowPath)
-                        removedCount += 1
-                    } catch {
-                        // Continue trying other workflows.
-                    }
-                }
-            }
-        }
-
-        if removedCount > 0 {
-            removeLegacyServiceStatusEntries()
-            refreshDynamicServicesRegistry()
-        }
-
-        return removedCount
-    }
-
     // MARK: - AppleScript Integration
 
     /// Generate AppleScript for organizing a folder
@@ -4004,21 +3386,6 @@ public struct ExtensionCommunication {
         return FileManager.default.fileExists(atPath: appPath.path)
     }
 
-    /// Get current integration status
-    public static func getIntegrationStatus() -> FinderIntegrationStatus {
-        let finderSyncEnabled = isFinderSyncExtensionActive()
-        UserDefaults.standard.set(finderSyncEnabled, forKey: "enableFinderSyncExtension")
-
-        return FinderIntegrationStatus(
-            quickActionInstalled: isQuickActionInstalled(),
-            quickWatchActionInstalled: isQuickWatchActionInstalled(),
-            quickExcludeActionInstalled: isQuickExcludeActionInstalled(),
-            toolbarAppInstalled: isToolbarAppInstalled(),
-            finderSyncEnabled: finderSyncEnabled,
-            menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
-        )
-    }
-
     public static func getIntegrationStatusAsync() async -> FinderIntegrationStatus {
         let finderSyncEnabled = await isFinderSyncExtensionActiveAsync()
         UserDefaults.standard.set(finderSyncEnabled, forKey: "enableFinderSyncExtension")
@@ -4039,63 +3406,5 @@ public struct ExtensionCommunication {
             finderSyncEnabled: finderSyncEnabled,
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
         )
-    }
-
-    // MARK: - Complete Setup
-
-    /// Install all recommended Finder integrations
-    public static func installAllIntegrations() -> [(name: String, success: Bool, message: String)] {
-        var results: [(name: String, success: Bool, message: String)] = []
-
-        // 1. Finder Sync extension registration
-        let finderSyncResult = repairFinderSyncExtensionRegistration()
-        results.append(("Finder Sync Extension", finderSyncResult.success, finderSyncResult.message))
-
-        // 2. Quick Organize Action
-        let quickActionResult = installQuickAction()
-        results.append(("Quick Organize Action", quickActionResult.success, quickActionResult.message))
-
-        // 3. Quick Watch Action
-        let quickWatchResult = installQuickWatchAction()
-        results.append(("Quick Watch Action", quickWatchResult.success, quickWatchResult.message))
-
-        // 4. Quick Exclude Action
-        let quickExcludeResult = installQuickExcludeAction()
-        results.append(("Quick Exclude Action", quickExcludeResult.success, quickExcludeResult.message))
-
-        // 5. Cleanup legacy scan/preview workflows if present.
-        let removedLegacy = cleanupLegacyQuickActions()
-        if removedLegacy > 0 {
-            results.append(("Legacy Quick Actions Cleanup", true, "Removed \(removedLegacy) legacy Scan/Preview workflow(s)."))
-        }
-
-        // 4. Toolbar App - Removed due to dependency issues
-        // let toolbarResult = FinderToolbarHelper.createToolbarApp()
-        // results.append(("Toolbar Button", toolbarResult.success, toolbarResult.message))
-
-        return results
-    }
-
-    public static func installAllIntegrationsAsync() async -> [(name: String, success: Bool, message: String)] {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = installAllIntegrations()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    /// Get instructions for manual Finder toolbar setup
-    public static func getToolbarInstructions() -> String {
-        return """
-        To add Sorty to your Finder toolbar:
-
-        1. Click "Install Toolbar Button" below
-        2. A Finder window will open showing the helper app
-        3. Hold Command (⌘) and drag "Organize with Sorty" to your Finder toolbar
-        4. Click the button anytime to organize the current folder!
-
-        Alternative: Right-click on any folder and select "Organize with Sorty" from the context menu.
-        """
     }
 }

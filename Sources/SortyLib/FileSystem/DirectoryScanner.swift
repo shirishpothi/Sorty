@@ -593,7 +593,7 @@ actor DirectoryScanner {
         let cloudStatus = hasCloudSignals ? detectCloudStatus(at: url) : nil
 
         // Read Finder comment via extended attribute
-        let finderComment = Self.readFinderComment(at: url)
+        let finderComment = url.finderComment
 
         // Deep scan: extract content metadata
         var contentMetadata: ContentMetadata?
@@ -778,7 +778,7 @@ actor DirectoryScanner {
 
             // Finder comments are lightweight filesystem metadata and remain useful
             // even when content extraction is disabled.
-            let finderComment = Self.readFinderComment(at: fileURL)
+            let finderComment = fileURL.finderComment
 
             let extractedOCRText = contentMetadata?.ocrText
             let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
@@ -876,22 +876,6 @@ actor DirectoryScanner {
         }
 
         return (width, height)
-    }
-
-    private static func readFinderComment(at url: URL) -> String? {
-        let path = url.path
-        let key = "com.apple.metadata:kMDItemFinderComment"
-
-        let size = getxattr(path, key, nil, 0, 0, 0)
-        guard size > 0 else { return nil }
-
-        var data = Data(count: size)
-        let result = data.withUnsafeMutableBytes { buf in
-            getxattr(path, key, buf.baseAddress, size, 0, 0)
-        }
-        guard result > 0 else { return nil }
-
-        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
     }
 
     // MARK: - Cloud Storage Detection

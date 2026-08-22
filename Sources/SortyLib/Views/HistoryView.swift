@@ -2750,44 +2750,14 @@ struct HistoryLiquidGlassLearningsCard: View {
 
     var body: some View {
         if !fileContexts.isEmpty {
-            Button {
+            GlassPillButton(
+                icon: "brain.head.profile",
+                title: "Learnings Applied",
+                tint: .teal,
+                count: fileContexts.count
+            ) {
                 showPopover.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "brain.head.profile")
-                        .foregroundStyle(.teal)
-                    Text("Learnings Applied")
-                        .font(.headline)
-                    Text("\(fileContexts.count)")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .numericTextTransition(animationValue: fileContexts.count)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.teal))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .systemLiquidGlassBackground(cornerRadius: 999)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.3),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("Learnings applied to \(fileContexts.count) files")
             .accessibilityHint("Tap to view file-specific learnings")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
@@ -2799,31 +2769,13 @@ struct HistoryLiquidGlassLearningsCard: View {
 
     private var learningsPopover: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(Color.teal.opacity(0.12))
-                        .frame(width: 28, height: 28)
-
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.teal)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Learnings Applied")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                    Text("\(fileContexts.count) file\(fileContexts.count == 1 ? "" : "s") with learnings context")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .numericTextTransition(animationValue: fileContexts.count)
-                }
-
-                Spacer()
-            }
-            .padding(.bottom, 10)
+            GlassPopoverHeader(
+                icon: "brain.head.profile",
+                title: "Learnings Applied",
+                tint: .teal,
+                subtitle: "\(fileContexts.count) file\(fileContexts.count == 1 ? "" : "s") with learnings context",
+                subtitleAnimationValue: "\(fileContexts.count)"
+            )
 
             Divider()
                 .opacity(0.4)
@@ -2897,59 +2849,22 @@ struct HistoryLiquidGlassReasoningCard: View {
     @State private var showPopover = false
 
     var body: some View {
-        Button {
+        GlassPillButton(
+            icon: "brain",
+            title: "AI Reasoning",
+            tint: SortyDesignSystem.Colors.resolvedAccent
+        ) {
             showPopover.toggle()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "brain")
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                Text("AI Reasoning")
-                    .font(.headline)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .systemLiquidGlassBackground(cornerRadius: 999)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("AI Reasoning")
         .accessibilityHint("Tap to view AI reasoning details")
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
-                            .frame(width: 28, height: 28)
-
-                        Image(systemName: "brain")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    }
-
-                    Text("AI Reasoning")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-                }
-                .padding(.bottom, 10)
+                GlassPopoverHeader(
+                    icon: "brain",
+                    title: "AI Reasoning",
+                    tint: SortyDesignSystem.Colors.resolvedAccent
+                )
 
                 Divider()
                     .opacity(0.4)
@@ -3022,44 +2937,14 @@ struct HistoryLiquidGlassDuplicateCard: View {
 
     var body: some View {
         if !duplicateGroups.isEmpty {
-            Button {
+            GlassPillButton(
+                icon: "doc.on.doc",
+                title: "Duplicates",
+                tint: .red,
+                count: totalDuplicateCount
+            ) {
                 showPopover.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.on.doc")
-                        .foregroundStyle(.red)
-                    Text("Duplicates")
-                        .font(.headline)
-                    Text("\(totalDuplicateCount)")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .numericTextTransition(animationValue: totalDuplicateCount)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.red))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .systemLiquidGlassBackground(cornerRadius: 999)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.3),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("Duplicates found: \(totalDuplicateCount)")
             .accessibilityHint("Tap to view duplicate file groups")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
@@ -3071,32 +2956,13 @@ struct HistoryLiquidGlassDuplicateCard: View {
 
     private var historyDuplicatePopover: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(Color.red.opacity(0.12))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.red)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Duplicate Files")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                    Text("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s"), \(totalDuplicateCount) duplicate\(totalDuplicateCount == 1 ? "" : "s")")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .numericTextTransition(
-                            animationValue: "\(duplicateGroups.count)-\(totalDuplicateCount)"
-                        )
-                }
-
-                Spacer()
-            }
-            .padding(.bottom, 10)
+            GlassPopoverHeader(
+                icon: "doc.on.doc",
+                title: "Duplicate Files",
+                tint: .red,
+                subtitle: "\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s"), \(totalDuplicateCount) duplicate\(totalDuplicateCount == 1 ? "" : "s")",
+                subtitleAnimationValue: "\(duplicateGroups.count)-\(totalDuplicateCount)"
+            )
 
             Divider()
                 .opacity(0.4)

@@ -325,7 +325,7 @@ Allowed icons:
     nonisolated static func decodeGeneratedPersona(
         from response: String
     ) throws -> GeneratedPersona {
-        guard let json = extractJSONObject(from: response),
+        guard let json = LLMJSONExtractor.lastObject(in: response),
               let data = json.data(using: .utf8),
               let generated = try? JSONDecoder().decode(GeneratedPersona.self, from: data)
         else {
@@ -335,7 +335,7 @@ Allowed icons:
                 category: "PersonaGenerator",
                 data: [
                     "responseLength": response.count,
-                    "containsJSONObject": extractJSONObject(from: response) != nil
+                    "containsJSONObject": LLMJSONExtractor.lastObject(in: response) != nil
                 ]
             )
             throw PersonaGeneratorError.invalidPersonaResponse
@@ -344,7 +344,7 @@ Allowed icons:
     }
 
     nonisolated static func decodePolishedInstructions(from response: String) throws -> String {
-        guard let json = extractJSONObject(from: response),
+        guard let json = LLMJSONExtractor.lastObject(in: response),
               let data = json.data(using: .utf8),
               let generated = try? JSONDecoder().decode(GeneratedPolishedInstructions.self, from: data)
         else {
@@ -356,45 +356,6 @@ Allowed icons:
             throw PersonaGeneratorError.invalidPolishedInstructionsResponse
         }
         return prompt
-    }
-
-    nonisolated static func extractJSONObject(from text: String) -> String? {
-        var candidates: [String] = []
-        var depth = 0
-        var start: String.Index?
-        var isInsideString = false
-        var isEscaping = false
-
-        for index in text.indices {
-            let character = text[index]
-
-            if isInsideString {
-                if isEscaping {
-                    isEscaping = false
-                } else if character == "\\" {
-                    isEscaping = true
-                } else if character == "\"" {
-                    isInsideString = false
-                }
-                continue
-            }
-
-            if character == "\"" {
-                isInsideString = true
-            } else if character == "{" {
-                if depth == 0 {
-                    start = index
-                }
-                depth += 1
-            } else if character == "}", depth > 0 {
-                depth -= 1
-                if depth == 0, let start {
-                    candidates.append(String(text[start...index]))
-                }
-            }
-        }
-
-        return candidates.last
     }
 
     private nonisolated static func latestGenerationUpdate(from text: String) -> String? {

@@ -196,14 +196,8 @@ public final class WindowSession: ObservableObject {
                 highlightWatchedFolder(watchedFolder.id)
             }
 
-        case .rules(let action, _, let pattern):
-            appState.currentView = .exclusions
-            if action == "add", let pattern {
-                let rule = ExclusionRule(type: .pathContains, pattern: pattern)
-                exclusionRules.addRule(rule)
-            }
-
-        case .exclusions(let action, let pattern):
+        case .rules(let action, _, let pattern),
+             .exclusions(let action, let pattern):
             appState.currentView = .exclusions
             if action == "add", let pattern {
                 let rule = ExclusionRule(type: .pathContains, pattern: pattern)

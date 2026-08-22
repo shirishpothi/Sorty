@@ -245,31 +245,34 @@ struct OrganizationCompleteView: View {
                         }
 
                         HStack(spacing: 0) {
-                            SummaryStatItem(
+                            IconStatItem(
+                                style: .completion,
+                                icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
                                 value: primaryStatValue,
                                 label: primaryStatLabel,
-                                icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
                                 color: .blue
                             )
 
-                            SummaryStatDivider()
+                            IconStatDivider(height: 54)
 
-                            SummaryStatItem(
+                            IconStatItem(
+                                style: .completion,
+                                icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
                                 value: secondaryStatValue,
                                 label: secondaryStatLabel,
-                                icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
                                 color: .purple
                             )
 
                             if mode == .organizeAndRename,
                                undoState != .completed,
                                let combinedModeHighlight {
-                                SummaryStatDivider()
+                                IconStatDivider(height: 54)
 
-                                SummaryStatItem(
+                                IconStatItem(
+                                    style: .completion,
+                                    icon: combinedModeHighlight.icon,
                                     value: combinedModeHighlight.value,
                                     label: combinedModeHighlight.label,
-                                    icon: combinedModeHighlight.icon,
                                     color: combinedModeHighlight.color
                                 )
                             }
@@ -874,43 +877,6 @@ private struct ConfettiParticlesView: View {
                 }
             }
         }
-    }
-}
-
-private struct SummaryStatItem: View {
-    let value: String
-    let label: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-            
-            VStack(spacing: 2) {
-                Text(value)
-                    .font(.title2.bold())
-                    .monospacedDigit()
-                    .numericTextTransition(animationValue: value)
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
-    }
-}
-
-private struct SummaryStatDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.09))
-            .frame(width: 1, height: 54)
-            .accessibilityHidden(true)
     }
 }
 

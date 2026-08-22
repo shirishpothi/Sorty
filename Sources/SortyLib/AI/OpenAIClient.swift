@@ -423,7 +423,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             // Process SSE stream
             for try await line in bytes.lines {
-                guard let jsonString = Self.sseDataPayload(from: line) else { continue }
+                guard let jsonString = AIRequestSupport.sseDataPayload(from: line) else { continue }
 
                 // Check for stream end
                 if jsonString == "[DONE]" {
@@ -458,22 +458,17 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                     )
                 }
 
-                guard let parsedChunk = Self.parseStreamChunk(from: json) else { continue }
+                guard let completionChunk = AIRequestSupport.streamCompletionChunk(from: json),
+                      !completionChunk.isEmpty else { continue }
 
-                let hasVisibleChunk = parsedChunk.visibleChunk?.isEmpty == false
-                let hasCompletionChunk = parsedChunk.completionChunk?.isEmpty == false
-                if firstTokenTime == nil, hasVisibleChunk || hasCompletionChunk {
+                if firstTokenTime == nil {
                     firstTokenTime = Date()
                 }
 
-                if let completionChunk = parsedChunk.completionChunk, !completionChunk.isEmpty {
-                    accumulatedContent += completionChunk
-                }
+                accumulatedContent += completionChunk
 
-                if let visibleChunk = parsedChunk.visibleChunk, !visibleChunk.isEmpty {
-                    await MainActor.run {
-                        streamingDelegate?.didReceiveChunk(visibleChunk)
-                    }
+                await MainActor.run {
+                    streamingDelegate?.didReceiveChunk(completionChunk)
                 }
             }
             
@@ -528,11 +523,6 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             let clientError = AIClientError.networkError(error)
             throw clientError
         }
-    }
-
-    private struct StreamChunk {
-        let completionChunk: String?
-        let visibleChunk: String?
     }
 
     private struct StreamError {
@@ -639,29 +629,6 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let messageKeys = (firstChoice?["message"] as? [String: Any])?.keys.sorted().joined(separator: ", ") ?? "none"
         let finishReason = firstChoice?["finish_reason"] as? String ?? "missing"
         return "HTTP 200 contained no completion text (response keys: [\(responseKeys)]; choices: \(choices?.count ?? 0); choice keys: [\(choiceKeys)]; message keys: [\(messageKeys)]; finish reason: \(finishReason))."
-    }
-
-    private static func sseDataPayload(from line: String) -> String? {
-        guard line.hasPrefix("data:") else { return nil }
-        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-        return payload.isEmpty ? nil : payload
-    }
-
-    private static func parseStreamChunk(from json: [String: Any]) -> StreamChunk? {
-        guard let choices = json["choices"] as? [[String: Any]],
-              let firstChoice = choices.first else {
-            return nil
-        }
-
-        let completionChunk = AIRequestSupport.extractChatDeltaText(from: firstChoice)
-
-        let visibleChunk = completionChunk
-
-        if completionChunk == nil && visibleChunk == nil {
-            return nil
-        }
-
-        return StreamChunk(completionChunk: completionChunk, visibleChunk: visibleChunk)
     }
 
     private static func streamError(from json: [String: Any]) -> StreamError? {

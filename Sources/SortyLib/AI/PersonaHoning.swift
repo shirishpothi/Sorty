@@ -79,7 +79,7 @@ public class PersonaHoningEngine: ObservableObject {
             systemPrompt: metaQuestionPrompt,
             responseFormat: .jsonArray
         )
-        let jsonString = Self.extractJSONArray(from: response) ?? response
+        let jsonString = LLMJSONExtractor.firstArray(in: response) ?? response
         
         guard let questions = Self.validatedQuestions(from: jsonString) else {
             LogManager.shared.log(
@@ -109,43 +109,5 @@ public class PersonaHoningEngine: ObservableObject {
         }
 
         return questions
-    }
-
-    nonisolated static func extractJSONArray(from text: String) -> String? {
-        var depth = 0
-        var start: String.Index?
-        var isInsideString = false
-        var isEscaping = false
-
-        for index in text.indices {
-            let character = text[index]
-
-            if isInsideString {
-                if isEscaping {
-                    isEscaping = false
-                } else if character == "\\" {
-                    isEscaping = true
-                } else if character == "\"" {
-                    isInsideString = false
-                }
-                continue
-            }
-
-            if character == "\"" {
-                isInsideString = true
-            } else if character == "[" {
-                if depth == 0 {
-                    start = index
-                }
-                depth += 1
-            } else if character == "]", depth > 0 {
-                depth -= 1
-                if depth == 0, let start {
-                    return String(text[start...index])
-                }
-            }
-        }
-
-        return nil
     }
 }

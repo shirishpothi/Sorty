@@ -155,7 +155,7 @@ public struct PermissionsStepView: View {
             hasAppeared = true
         }
         .background {
-            PermissionsEnvironmentResolver { manager, appState in
+            OnboardingEnvironmentPairResolver { (manager: AutomationManager, appState: AppState) in
                 guard taskController.automationManager !== manager
                         || taskController.appState !== appState else { return }
                 taskController.automationManager = manager
@@ -1351,22 +1351,6 @@ private struct PermissionActionButton: View {
         case .bordered:
             return .init(isSecondary: true, size: .small)
         }
-    }
-}
-
-/// Resolves the app-owned manager without subscribing the entire permissions
-/// layout to its Finder-selection timer and unrelated published state.
-private struct PermissionsEnvironmentResolver: View {
-    @EnvironmentObject private var automationManager: AutomationManager
-    @EnvironmentObject private var appState: AppState
-    let onResolve: (AutomationManager, AppState) -> Void
-
-    var body: some View {
-        Color.clear
-            .onAppear {
-                onResolve(automationManager, appState)
-            }
-            .accessibilityHidden(true)
     }
 }
 

@@ -451,7 +451,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 }
 
                 for try await line in bytes.lines {
-                    guard let jsonString = Self.sseDataPayload(from: line) else { continue }
+                    guard let jsonString = AIRequestSupport.sseDataPayload(from: line) else { continue }
 
                     if jsonString == "[DONE]" {
                         break
@@ -536,12 +536,6 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     private struct StreamChunk {
         let completionChunk: String?
         let visibleChunk: String?
-    }
-
-    private static func sseDataPayload(from line: String) -> String? {
-        guard line.hasPrefix("data:") else { return nil }
-        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-        return payload.isEmpty ? nil : payload
     }
 
     private static func parseStreamChunk(from json: [String: Any]) -> StreamChunk? {
