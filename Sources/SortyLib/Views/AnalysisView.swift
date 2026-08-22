@@ -2659,29 +2659,6 @@ private struct InsightHistorySection: View {
 
 }
 
-// MARK: - Animated Progress Ring
-
-struct AnimatedProgressRing: View {
-    let progress: Double
-    let lineWidth: CGFloat
-    let color: Color
-
-    init(progress: Double, lineWidth: CGFloat = 8, color: Color = .blue) {
-        self.progress = progress
-        self.lineWidth = lineWidth
-        self.color = color
-    }
-
-    var body: some View {
-        SortyGradientCircularProgress(
-            progress: progress,
-            accent: color,
-            size: 120,
-            lineWidth: lineWidth
-        )
-    }
-}
-
 // MARK: - Inline Notice
 
 struct InlineNoticeAction {

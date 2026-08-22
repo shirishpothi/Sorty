@@ -2326,44 +2326,6 @@ struct ProcessingOverlay: View {
     }
 }
 
-// MARK: - Detail Stat View
-
-struct DetailStatView: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    @State private var isHovered = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .foregroundStyle(color)
-                    .accessibilityHidden(true)
-                Text(value)
-                    .font(.headline)
-                    .numericTextTransition(animationValue: value)
-            }
-            Text(LocalizedStringKey(title))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .frame(minWidth: 120, alignment: .leading)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(10)
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .animation(.subtleBounce, value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title): \(value)")
-    }
-}
-
 // MARK: - Status Badge
 
 struct StatusBadge: View {
@@ -2390,25 +2352,6 @@ struct StatusBadge: View {
             .foregroundColor(color)
             .cornerRadius(6)
             .accessibilityLabel("Status: \(status.displayName)")
-    }
-}
-
-// MARK: - Section View
-
-struct SectionView<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(title, systemImage: icon)
-                .font(.headline)
-                .foregroundColor(color)
-                .accessibilityAddTraits(.isHeader)
-            content()
-        }
     }
 }
 

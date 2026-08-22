@@ -709,26 +709,5 @@ struct FileIconView: View {
     }
 }
 
-// MARK: - Menu Bar Scene (for App)
-
-public struct MenuBarExtraScene: Scene {
-    @StateObject private var controller = MenuBarController()
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
-
-    public init() {}
-
-    public var body: some Scene {
-        MenuBarExtra {
-            MenuBarDropZoneView(controller: controller)
-                .onAppear {
-                    controller.configure(settings: settingsViewModel)
-                }
-        } label: {
-            MenuBarLabel(controller: controller)
-        }
-        .menuBarExtraStyle(.window)
-    }
-}
-
 // Required for notifications
 import UserNotifications

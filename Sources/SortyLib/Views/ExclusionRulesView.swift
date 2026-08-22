@@ -716,49 +716,6 @@ struct EmptyExclusionRulesView: View {
     }
 }
 
-struct RuleExamplePill: View {
-    let icon: String
-    let text: String
-    var useSystemFolderIcon: Bool = false
-    let action: () -> Void
-    @State private var isHovered = false
-
-    private static let folderIcon: NSImage = {
-        NSWorkspace.shared.icon(forFile: "/tmp")
-    }()
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if useSystemFolderIcon {
-                    AppKitImageView(image: Self.folderIcon, size: CGSize(width: 12, height: 12))
-                        .frame(width: 12, height: 12)
-                } else {
-                    Image(systemName: icon)
-                        .font(.caption2)
-                }
-                Text(text)
-                    .font(.caption)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(isHovered ? 0.18 : 0.1))
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
-        .onHover { hovered in
-            guard hovered != isHovered else { return }
-            if hovered {
-                HapticFeedbackManager.shared.selection()
-            }
-            isHovered = hovered
-        }
-        .help("Add \(text) exclusion rule")
-    }
-}
-
 // MARK: - Rule Group Card
 
 struct RuleGroupCard: View {

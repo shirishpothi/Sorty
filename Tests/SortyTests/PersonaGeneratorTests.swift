@@ -287,7 +287,7 @@ final class PersonaGeneratorTests: XCTestCase {
         {"name":"Photo Desk","prompt":"Keep related shoots together, including braces such as {RAW}.","icon":"camera.fill","suggestions":{"organize":[],"organizeAndRename":[],"renameOnly":[]}}
         """
 
-        let extracted = PersonaGenerator.extractJSONObject(from: response)
+        let extracted = LLMJSONExtractor.lastObject(in: response)
 
         XCTAssertNotNil(extracted)
         XCTAssertFalse(extracted?.contains("We need to decide") ?? true)
@@ -337,7 +337,7 @@ final class PersonaGeneratorTests: XCTestCase {
         """
 
         XCTAssertEqual(
-            PersonaHoningEngine.extractJSONArray(from: response),
+            LLMJSONExtractor.firstArray(in: response),
             #"[{"id":"q1","text":"One?","options":["A","B","C"]}]"#
         )
     }

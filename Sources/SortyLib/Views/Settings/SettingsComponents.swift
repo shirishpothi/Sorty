@@ -275,53 +275,6 @@ struct SettingsCard<Content: View>: View {
     }
 }
 
-struct SettingsNavigationCard: View {
-    let title: String
-    let description: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: {
-            HapticFeedbackManager.shared.tap()
-            action()
-        }) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(color)
-                    .frame(width: 32, height: 32)
-                    .background(color.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(LocalizedStringKey(title))
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    Text(LocalizedStringKey(description))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(14)
-            .background(isHovered ? Color.primary.opacity(0.05) : Color.clear)
-            .systemLiquidGlassBackground(cornerRadius: 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-    }
-}
-
 struct StepCard<Content: View>: View {
     let number: Int
     let title: String
@@ -485,58 +438,6 @@ struct SettingsToggle: View {
                 isEnabled: newValue
             )
         }
-    }
-}
-
-struct URLSchemeRow: View {
-    let scheme: String
-    let description: String
-    @State private var copied = false
-    @State private var copyResetTask: Task<Void, Never>?
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(scheme)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            
-            Spacer()
-            
-            Text(LocalizedStringKey(description))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            
-            Button {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(scheme, forType: .string)
-                HapticFeedbackManager.shared.tap()
-                withAnimation { copied = true }
-                copyResetTask?.cancel()
-                copyResetTask = Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(1.5))
-                    guard !Task.isCancelled else { return }
-                    withAnimation { copied = false }
-                }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(copied ? .green : .secondary)
-                    .symbolReplaceTransition(animationValue: copied)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Copy \(scheme)")
-            .accessibilityValue(copied ? "Copied" : "")
-        }
-        .padding(.horizontal, 10)
-        .onDisappear {
-            copyResetTask?.cancel()
-        }
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
