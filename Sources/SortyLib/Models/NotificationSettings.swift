@@ -8,19 +8,6 @@
 import Foundation
 import Combine
 
-/// Notification backend used for system notification analytics.
-public enum NotificationBackend: String, Codable, Sendable {
-    case native = "native"
-    
-    public var displayName: String {
-        "Native (macOS)"
-    }
-    
-    public var description: String {
-        "Standard macOS notifications via Notification Center"
-    }
-}
-
 /// Notification settings model for user preferences
 public struct NotificationSettings: Codable, Equatable, Sendable {
     // MARK: - Delivery Method

@@ -79,10 +79,6 @@ public final class CodexCLIAuthManager: ObservableObject {
         codexHomeURL.appendingPathComponent("auth.json")
     }
 
-    private nonisolated static var configFileURL: URL {
-        codexHomeURL.appendingPathComponent("config.toml")
-    }
-
     struct CodexAuth: Codable {
         let auth_mode: String?
         let tokens: CodexTokens?
@@ -150,13 +146,6 @@ public final class CodexCLIAuthManager: ObservableObject {
         }
 
         return .unavailable("Codex CLI not found. Install with: npm i -g @openai/codex")
-    }
-
-    nonisolated static func readConfiguredModel() -> String? {
-        guard let configContents = readConfigFile() else {
-            return nil
-        }
-        return readTomlStringValue(for: "model", in: configContents)
     }
 
     public func checkStatus() {
@@ -595,42 +584,5 @@ public final class CodexCLIAuthManager: ObservableObject {
             return nil
         }
         return auth
-    }
-
-    private nonisolated static func readConfigFile() -> String? {
-        guard let data = try? Data(contentsOf: configFileURL),
-              let text = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return text
-    }
-
-    private nonisolated static func readTomlStringValue(for key: String, in contents: String) -> String? {
-        let lines = contents.components(separatedBy: .newlines)
-        for rawLine in lines {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty || line.hasPrefix("#") {
-                continue
-            }
-
-            guard let equalsIndex = line.firstIndex(of: "=") else {
-                continue
-            }
-
-            let parsedKey = line[..<equalsIndex].trimmingCharacters(in: .whitespaces)
-            guard parsedKey == key else {
-                continue
-            }
-
-            let valuePortion = line[line.index(after: equalsIndex)...].trimmingCharacters(in: .whitespaces)
-            guard valuePortion.count >= 2,
-                  valuePortion.first == "\"",
-                  valuePortion.last == "\"" else {
-                continue
-            }
-
-            return String(valuePortion.dropFirst().dropLast())
-        }
-        return nil
     }
 }

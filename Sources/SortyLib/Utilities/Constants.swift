@@ -10,7 +10,6 @@ import Foundation
 enum Constants {
     static let appGroupIdentifier = "group.com.sorty.app"
     static let maxPreviewVersions = 5
-    static let largeOperationThreshold = 1000
 }
 
 extension Notification.Name {
@@ -149,44 +148,6 @@ public final class HapticSequenceManager {
     }
 }
 
-// MARK: - Page Transition Styles
-
-/// Custom page transition animation types
-public enum PageTransitionStyle {
-    case slide
-    case fade
-    case scale
-    case slideUp
-    case slideDown
-
-    var insertion: AnyTransition {
-        switch self {
-        case .slide:
-            return .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            )
-        case .fade:
-            return .opacity
-        case .scale:
-            return .asymmetric(
-                insertion: .scale(scale: 0.9).combined(with: .opacity),
-                removal: .scale(scale: 1.1).combined(with: .opacity)
-            )
-        case .slideUp:
-            return .asymmetric(
-                insertion: .move(edge: .bottom).combined(with: .opacity),
-                removal: .move(edge: .top).combined(with: .opacity)
-            )
-        case .slideDown:
-            return .asymmetric(
-                insertion: .move(edge: .top).combined(with: .opacity),
-                removal: .move(edge: .bottom).combined(with: .opacity)
-            )
-        }
-    }
-}
-
 // MARK: - Custom Animations
 
 extension Animation {
@@ -204,23 +165,7 @@ extension Animation {
     public static var subtleBounce: Animation {
         .spring(response: 0.24, dampingFraction: 0.78)
     }
-
-    /// Quick snap animation for selections
-    public static var quickSnap: Animation {
-        .spring(response: 0.18, dampingFraction: 0.86)
-    }
-
-    /// Loading pulse animation
-    public static var loadingPulse: Animation {
-        .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
-    }
-
-    /// Smooth ease for general transitions
-    public static var smoothEase: Animation {
-        .easeInOut(duration: 0.2)
-    }
 }
-
 // MARK: - View Modifiers
 
 /// Adds haptic feedback on tap
@@ -257,45 +202,6 @@ public struct HapticTapModifier: ViewModifier {
     }
 }
 
-/// Adds bounce animation on tap
-struct BounceTapModifier: ViewModifier {
-    @State private var isPressed = false
-    let scale: CGFloat
-
-    init(scale: CGFloat = 0.95) {
-        self.scale = scale
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPressed ? scale : 1.0)
-            .animation(.subtleBounce, value: isPressed)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !isPressed {
-                            isPressed = true
-                            HapticFeedbackManager.shared.tap()
-                        }
-                    }
-                    .onEnded { _ in
-                        isPressed = false
-                    }
-            )
-    }
-}
-
-/// Page transition modifier with animation
-struct PageTransitionModifier: ViewModifier {
-    let style: PageTransitionStyle
-
-    func body(content: Content) -> some View {
-        content
-            .transition(style.insertion)
-            .animation(.pageTransition, value: UUID())
-    }
-}
-
 /// Gives custom modal content a restrained scale-and-rise entrance.
 struct ModalBounceModifier: ViewModifier {
     @State private var appeared = false
@@ -316,48 +222,6 @@ struct ModalBounceModifier: ViewModifier {
                     appeared = true
                 }
             }
-    }
-}
-
-/// Loading state animation modifier
-struct LoadingAnimationModifier: ViewModifier {
-    let isLoading: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        if isLoading, !reduceMotion {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                let rotation = elapsed.truncatingRemainder(dividingBy: 1) * 360
-                let scale = CGFloat(1 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.05)
-
-                content
-                    .rotationEffect(.degrees(rotation))
-                    .scaleEffect(scale)
-            }
-        } else {
-            content
-        }
-    }
-}
-
-/// Pulsing loading indicator modifier
-struct PulsingLoadingModifier: ViewModifier {
-    let isLoading: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        if isLoading, !reduceMotion {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
-                let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                let opacity = 0.75 + sin(elapsed * .pi * 2 / 0.8) * 0.25
-                content.opacity(opacity)
-            }
-        } else {
-            content
-        }
     }
 }
 
@@ -525,29 +389,9 @@ extension View {
         modifier(HapticTapModifier(feedbackType: type))
     }
 
-    /// Adds bounce animation and haptic feedback on tap
-    public func bounceTap(scale: CGFloat = 0.95) -> some View {
-        modifier(BounceTapModifier(scale: scale))
-    }
-
-    /// Applies page transition animation
-    public func pageTransition(_ style: PageTransitionStyle = .slide) -> some View {
-        modifier(PageTransitionModifier(style: style))
-    }
-
     /// Applies modal bounce animation on appear
     public func modalBounce() -> some View {
         modifier(ModalBounceModifier())
-    }
-
-    /// Applies loading rotation animation
-    public func loadingAnimation(isLoading: Bool) -> some View {
-        modifier(LoadingAnimationModifier(isLoading: isLoading))
-    }
-
-    /// Applies pulsing loading animation
-    public func pulsingLoading(isLoading: Bool) -> some View {
-        modifier(PulsingLoadingModifier(isLoading: isLoading))
     }
 
     /// Applies shimmer loading effect
@@ -564,14 +408,6 @@ extension View {
     public func animatedAppearance(delay: Double = 0) -> some View {
         modifier(AnimatedAppearanceModifier(delay: delay))
     }
-
-    /// Performs action with haptic feedback
-    public func withHaptic(action: @escaping () -> Void) -> some View {
-        self.onTapGesture {
-            HapticFeedbackManager.shared.tap()
-            action()
-        }
-    }
 }
 
 // MARK: - Transition Helpers
@@ -585,25 +421,9 @@ public enum TransitionStyles {
         removal: .opacity.combined(with: .offset(x: -20))
     )
 
-    public static let slideFromLeft = AnyTransition.asymmetric(
-        insertion: .opacity.combined(with: .offset(x: -20)),
-        removal: .opacity.combined(with: .offset(x: 20))
-    )
-
-    public static let slideFromBottom = AnyTransition.asymmetric(
-        insertion: .opacity.combined(with: .offset(y: 15)),
-        removal: .opacity.combined(with: .offset(y: -15))
-    )
-
     public static let scaleAndFade = AnyTransition.asymmetric(
         insertion: .scale(scale: 0.97).combined(with: .opacity),
         removal: .scale(scale: 0.97).combined(with: .opacity)
-    )
-
-
-    public static let modalPresentation = AnyTransition.asymmetric(
-        insertion: .scale(scale: 0.95).combined(with: .opacity),
-        removal: .scale(scale: 0.98).combined(with: .opacity)
     )
 }
 
@@ -686,72 +506,5 @@ public struct BouncingSpinner: View {
             .rotationEffect(.degrees(rotation))
             .scaleEffect(scale)
             .accessibilityHidden(true)
-    }
-}
-
-/// Bouncing dots animation for AI reasoning indicator
-public struct BouncingDotsView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    
-    public init() {}
-    
-    public var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 0.15, paused: reduceMotion)) { timeline in
-            bouncingDots(at: timeline.date.timeIntervalSinceReferenceDate)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func bouncingDots(at time: TimeInterval) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0..<3, id: \.self) { index in
-                let phase = time * 5 + Double(index) * 0.8
-                let offset = reduceMotion ? 0 : sin(phase) * 3
-                Circle()
-                    .fill(Color.purple.opacity(0.6))
-                    .frame(width: 4, height: 4)
-                    .offset(y: offset)
-            }
-        }
-    }
-}
-
-/// Pulsing ring loading indicator
-public struct PulsingRingLoader: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    let size: CGFloat
-    let color: Color
-
-    public init(size: CGFloat = 40, color: Color = .accentColor) {
-        self.size = size
-        self.color = color
-    }
-
-    public var body: some View {
-        if reduceMotion {
-            rings(scale: 1, opacity: 0.7)
-        } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                let progress = timeline.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: 1)
-                rings(scale: CGFloat(0.5 + progress), opacity: 1 - progress)
-            }
-        }
-    }
-
-    private func rings(scale: CGFloat, opacity: Double) -> some View {
-        ZStack {
-            Circle()
-                .stroke(color.opacity(0.3), lineWidth: 2)
-                .frame(width: size, height: size)
-
-            Circle()
-                .stroke(color, lineWidth: 2)
-                .frame(width: size, height: size)
-                .scaleEffect(scale)
-                .opacity(opacity)
-        }
-        .accessibilityHidden(true)
     }
 }

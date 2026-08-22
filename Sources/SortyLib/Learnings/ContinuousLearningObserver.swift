@@ -63,11 +63,7 @@ public class ContinuousLearningObserver: ObservableObject {
         self.learningsManager = learningsManager
         self.historyFn = historyProvider
     }
-    
-    public convenience init(history: OrganizationHistory, learningsManager: LearningsManager) {
-        self.init(learningsManager: learningsManager, historyProvider: { history })
-    }
-    
+
     public func startObserving() {
         NotificationCenter.default.publisher(for: .organizationDidRevert)
             .receive(on: DispatchQueue.main)

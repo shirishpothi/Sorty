@@ -655,8 +655,8 @@ final class OCRKeywordsTests: XCTestCase {
             wordCount: 8
         )
 
-        XCTAssertTrue(result.detectedKeywords.contains("invoice"))
-        XCTAssertTrue(result.detectedKeywords.contains("payment"))
+        XCTAssertTrue(result.detectKeywords(using: []).contains("invoice"))
+        XCTAssertTrue(result.detectKeywords(using: []).contains("payment"))
     }
 
     func testCustomKeywordsDetection() {

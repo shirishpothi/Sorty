@@ -814,22 +814,16 @@ class ExclusionRulesExtendedTests: XCTestCase {
         XCTAssertFalse(caseSensitiveRule.matches(lowercaseMatch))
     }
 
-    func testPresetApplication() async {
+    func testDefaultRulesIncludeDeveloperExclusions() async {
         await MainActor.run {
-            let manager = ExclusionRulesManager()
-
-            // Find developer preset
-            let developerPreset = ExclusionRulePreset.presets.first { $0.name == "Developer" }
-            XCTAssertNotNil(developerPreset)
-
-            manager.applyPreset(developerPreset!)
-
-            // Check that node_modules rule is present
+            let suiteName = "default-rules-\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+            let manager = ExclusionRulesManager(userDefaults: defaults)
             let hasNodeModulesRule = manager.rules.contains {
                 $0.type == .folderName && $0.pattern == "node_modules"
             }
             XCTAssertTrue(hasNodeModulesRule)
-            XCTAssertEqual(manager.activePresetName, "Developer")
         }
     }
 }
@@ -860,5 +854,69 @@ class FileTypeCategoryTests: XCTestCase {
         XCTAssertTrue(codeCategory.extensions.contains("py"))
         XCTAssertTrue(codeCategory.extensions.contains("js"))
         XCTAssertFalse(codeCategory.extensions.contains("jpg"))
+    }
+}
+
+// MARK: - Test-only helpers (moved from VisionAnalyzer.swift)
+
+private extension OCRResult {
+    /// Preview of the text content (first 300 chars)
+    var preview: String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > 300 {
+            return String(trimmed.prefix(300)) + "..."
+        }
+        return trimmed
+    }
+
+    var detectedKeywords: [String] {
+        detectKeywords(using: [])
+    }
+}
+
+private extension String {
+    func hammingDistance(to other: String) -> Int? {
+        guard count == other.count else { return nil }
+        guard let selfBinary = hexToBinary(self),
+              let otherBinary = hexToBinary(other) else {
+            return nil
+        }
+
+        var distance = 0
+        for (a, b) in zip(selfBinary, otherBinary) where a != b {
+            distance += 1
+        }
+        return distance
+    }
+
+    private func hexToBinary(_ hex: String) -> String? {
+        var binary = ""
+        for char in hex {
+            guard let value = Int(String(char), radix: 16) else {
+                return nil
+            }
+            binary += String(value, radix: 2).padding(toLength: 4, withPad: "0", startingAt: 0)
+        }
+        return binary
+    }
+}
+
+private enum ImageSimilarity {
+    case identical
+    case nearIdentical
+    case similar
+    case different
+
+    static func from(hammingDistance: Int) -> ImageSimilarity {
+        switch hammingDistance {
+        case 0:
+            return .identical
+        case 1...5:
+            return .nearIdentical
+        case 6...10:
+            return .similar
+        default:
+            return .different
+        }
     }
 }

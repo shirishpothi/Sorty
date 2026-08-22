@@ -837,18 +837,6 @@ actor DirectoryScanner {
         }
     }
 
-    func getProgress() -> Int {
-        scannedCount
-    }
-
-    func getMemoryPressureState() -> MemoryPressureState {
-        memoryPressureState
-    }
-
-    func getCloudPlaceholderCount() -> Int {
-        cloudPlaceholdersSkipped
-    }
-
     func setDeepScanProgressCallback(
         _ callback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
     ) {
@@ -1235,7 +1223,6 @@ enum ScannerError: LocalizedError {
     case cloudPlaceholder
     case excluded
     case enumerationFailed
-    case memoryPressureTimeout
 
     var errorDescription: String? {
         switch self {
@@ -1255,8 +1242,6 @@ enum ScannerError: LocalizedError {
             return "The file is excluded by the current rules"
         case .enumerationFailed:
             return "Failed to enumerate directory contents"
-        case .memoryPressureTimeout:
-            return "Scan timed out waiting for memory pressure to decrease"
         }
     }
 }

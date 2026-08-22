@@ -94,7 +94,6 @@ public class NamingPresetManager: ObservableObject {
     }
 
     // MARK: - Mapping Helpers
-
     /// Returns the NamingStyle that corresponds to a built-in preset ID, if any.
     public func namingStyle(for presetId: UUID) -> NamingStyle? {
         for style in NamingStyle.allCases where style != .custom {

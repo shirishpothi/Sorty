@@ -82,15 +82,6 @@ extension String {
     }
 }
 
-extension Date {
-    /// Returns a human-readable timestamp suitable for filenames (e.g., "2024-05-24 14-30-05")
-    var filenameTimestamp: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
-        return formatter.string(from: self)
-    }
-}
-
 extension View {
     func minimumHitTarget(_ size: CGFloat = 40) -> some View {
         modifier(MinimumHitTargetModifier(size: size))

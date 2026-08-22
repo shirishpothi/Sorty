@@ -209,10 +209,6 @@ public final class ImageVisionAnalyzer: Sendable {
         return file.displayName
     }
 
-    public func clearVisionCache() {
-        Self.clearSharedCache()
-    }
-
     public static func clearSharedCache() {
         guard let directory = visionCacheDirectory else { return }
         cacheLock.lock()

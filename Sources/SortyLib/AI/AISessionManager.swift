@@ -95,26 +95,6 @@ public class AISessionManager: ObservableObject {
         return session
     }
     
-    /// Check if a provider has a valid API key configured
-    private func hasValidAPIKey(for provider: AIProvider) -> Bool {
-        switch provider {
-        case .openAI, .anthropic, .gemini, .groq, .openRouter, .openAICompatible:
-            guard let key = KeychainManager.get(key: provider.keychainKey), !key.isEmpty else {
-                return false
-            }
-            return true
-        case .githubCopilot:
-            // GitHub Copilot uses a different auth mechanism
-            return true
-        case .ollama:
-            // Local provider - always available if reachable
-            return true
-        case .appleFoundationModel:
-            // On-device model - always available
-            return true
-        }
-    }
-    
     /// Prewarm connection for a provider (call when user selects folder)
     public func prewarm(provider: AIProvider, config: AIConfig) async {
         guard !prewarmingProviders.contains(provider) else { return }
@@ -219,39 +199,6 @@ public class AISessionManager: ObservableObject {
             // Session is still created and may work when the actual request is made
             isPrewarmed = false
         }
-    }
-    
-    /// Prewarm all configured providers in parallel
-    public func prewarmAllConfigured() async {
-        let configuredProviders = AIProvider.allCases.filter { hasValidAPIKey(for: $0) }
-        
-        guard !configuredProviders.isEmpty else {
-            LogManager.shared.log("No configured providers to prewarm", category: "AISessionManager")
-            return
-        }
-        
-        // Load saved config to use its specific settings (timeouts, URLs)
-        // This prevents immediate session invalidation when the app finishes loading
-        let savedConfigData = UserDefaults.standard.data(forKey: "aiConfig")
-        let savedConfig = savedConfigData.flatMap { try? JSONDecoder().decode(AIConfig.self, from: $0) }
-        
-        LogManager.shared.log("Prewarming \(configuredProviders.count) configured providers in parallel...", category: "AISessionManager")
-        
-        await withTaskGroup(of: Void.self) { group in
-            for provider in configuredProviders {
-                group.addTask {
-                    // Use saved settings as template if they match the provider type, 
-                    // this ensures signatures match the eventual actual config
-                    var config = (savedConfig?.provider == provider) ? savedConfig! : AIConfig.default
-                    config.provider = provider
-                    config.apiKey = nil // Fetched from Keychain by session manager
-                    
-                    await self.prewarm(provider: provider, config: config)
-                }
-            }
-        }
-        
-        LogManager.shared.log("Parallel prewarm complete for all configured providers", category: "AISessionManager")
     }
     
     /// Get the appropriate URLs for prewarming (models endpoint and fallback to base URL)
@@ -364,20 +311,7 @@ public class AISessionManager: ObservableObject {
         
         return config
     }
-    
-    /// Update session timeout for streaming operations
-    public func configureForStreaming(for provider: AIProvider) {
-        // Sessions are already configured with appropriate timeouts
-        // This method exists for future streaming-specific optimizations
-        LogManager.shared.log("Session configured for streaming: \(provider.displayName)", category: "AISessionManager")
-    }
-    
-    private func getBaseURL(for provider: AIProvider, config: AIConfig) -> URL? {
-        let urlString = (config.apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : config.apiURL
-        guard let urlString = urlString else { return nil }
-        return URL(string: urlString)
-    }
-    
+
     private func addAuthHeaders(to request: inout URLRequest, provider: AIProvider, config: AIConfig) {
         if let header = ProviderAuthResolver.authHeader(for: provider, config: config) {
             request.setValue(header.value, forHTTPHeaderField: header.field)

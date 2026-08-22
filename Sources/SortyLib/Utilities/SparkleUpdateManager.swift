@@ -15,9 +15,7 @@ import Sparkle
 #endif
 
 public enum SparkleUpdateFeed {
-    public static let nightlyUpdatesEnabledKey = "nightlyUpdatesEnabled"
     public static let stableAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml"
-    public static let nightlyAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml"
 }
 
 enum SparkleVersionHistoryLink {
@@ -85,7 +83,7 @@ public class SparkleUpdateManager: ObservableObject {
         case nightly
 
         public static var current: UpdateChannel {
-            UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) ? .nightly : .stable
+            .stable
         }
 
         public var displayName: String {
@@ -128,9 +126,6 @@ public class SparkleUpdateManager: ObservableObject {
     private var hasRequestedLaunchCheck = false
 
     public init() {
-        // Nightly updates are retired, so migrate previous opt-ins back to the stable feed.
-        UserDefaults.standard.removeObject(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey)
-
         // Restore last check date
         if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
             self.lastCheckDate = savedDate
@@ -364,11 +359,6 @@ public class SparkleUpdateManager: ObservableObject {
         lastCheckDate = checkDate
         UserDefaults.standard.set(checkDate, forKey: Self.lastAutoCheckKey)
     }
-
-    /// Reset state to idle
-    public func resetState() {
-        updateState = .idle
-    }
 }
 
 #if canImport(Sparkle)
@@ -449,19 +439,11 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        if UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) {
-            return ["nightly"]
-        }
-
-        return []
+        []
     }
 
     nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
-        if UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) {
-            return SparkleUpdateFeed.nightlyAppcastURLString
-        }
-
-        return SparkleUpdateFeed.stableAppcastURLString
+        SparkleUpdateFeed.stableAppcastURLString
     }
 }
 

@@ -198,11 +198,6 @@ public class SecurityManager: ObservableObject {
         }
     }
 
-    /// Legacy authenticate method - uses biometrics only
-    public func authenticate() async {
-        _ = await authenticateForSensitiveAction(reason: "Authenticate to continue.")
-    }
-    
     /// Locks the secure features again
     public func lock() {
         isUnlocked = false

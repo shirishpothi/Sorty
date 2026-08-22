@@ -808,34 +808,6 @@ struct ResponseParser {
         )
     }
 
-    // MARK: - Validation
-
-    static func validateStructure(_ jsonString: String) -> Bool {
-        do {
-            var cleanedJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
-            if cleanedJSON.hasPrefix("```json") {
-                cleanedJSON = String(cleanedJSON.dropFirst(7))
-            }
-            if cleanedJSON.hasPrefix("```") {
-                cleanedJSON = String(cleanedJSON.dropFirst(3))
-            }
-            if cleanedJSON.hasSuffix("```") {
-                cleanedJSON = String(cleanedJSON.dropLast(3))
-            }
-            cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
-            cleanedJSON = sanitizeJSONPayload(cleanedJSON)
-
-            guard let jsonData = cleanedJSON.data(using: .utf8) else {
-                return false
-            }
-
-            let _ = try JSONDecoder().decode(AIResponse.self, from: jsonData)
-            return true
-        } catch {
-            return false
-        }
-    }
-
     /// Extract partial results even if parsing fails
     static func extractPartialResults(
         _ jsonString: String,

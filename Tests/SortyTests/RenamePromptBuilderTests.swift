@@ -152,19 +152,4 @@ final class RenamePromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Do not include `suggested_name`, `rename_reason`, or `rename_confidence` fields"))
         XCTAssertFalse(prompt.contains("Prefer renaming files in this workflow"))
     }
-
-    func testAppleProviderOrganizePromptDoesNotAppendRenameInstructionsWhenSmartRenameEnabled() {
-        let file = FileItem(path: "/tmp/random.pdf", name: "random", extension: "pdf", size: 1024, isDirectory: false)
-
-        let prompt = PromptBuilder.buildPromptForProvider(
-            .appleFoundationModel,
-            files: [file],
-            mode: .organize,
-            enableSmartRename: true
-        )
-
-        XCTAssertFalse(prompt.contains("Output language:"))
-        XCTAssertFalse(prompt.contains("suggested_name"))
-        XCTAssertFalse(prompt.contains("rename_reason"))
-    }
 }

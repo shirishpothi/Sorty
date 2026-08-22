@@ -108,7 +108,7 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         let first = await analyzer.prepareImageForVision(at: imageURL)
         XCTAssertNotNil(first)
 
-        analyzer.clearVisionCache()
+        ImageVisionAnalyzer.clearSharedCache()
 
         let second = await analyzer.prepareImageForVision(at: imageURL)
         XCTAssertNotNil(second)

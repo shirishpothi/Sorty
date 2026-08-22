@@ -41,15 +41,6 @@ final class NotificationSettingsTests: XCTestCase {
         let decoded = try decoder.decode(NotificationSettings.self, from: data)
         XCTAssertEqual(decoded, settings, "Decoded settings should match original")
     }
-    
-    
-    func testNotificationBackendDisplayNames() {
-        XCTAssertFalse(NotificationBackend.native.displayName.isEmpty)
-    }
-    
-    func testNotificationBackendDescriptions() {
-        XCTAssertFalse(NotificationBackend.native.description.isEmpty)
-    }
 }
 
 // MARK: - BatchSummaryStats Tests

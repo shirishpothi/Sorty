@@ -851,145 +851,6 @@ private final class CompiledExclusionRegex: @unchecked Sendable {
     }
 }
 
-// MARK: - Rule Presets
-
-public struct ExclusionRulePreset: Identifiable, Sendable {
-    public let id: UUID
-    public let name: String
-    public let description: String
-    public let icon: String
-    public let rules: [ExclusionRule]
-
-    public init(
-        id: UUID = UUID(),
-        name: String,
-        description: String,
-        icon: String,
-        rules: [ExclusionRule]
-    ) {
-        self.id = id
-        self.name = name
-        self.description = description
-        self.icon = icon
-        self.rules = rules
-    }
-
-    @MainActor
-    public static let presets: [ExclusionRulePreset] = [
-        // Development Preset
-        ExclusionRulePreset(
-            name: "Developer",
-            description: "Exclude common development folders and files",
-            icon: "hammer",
-            rules: [
-                ExclusionRule(type: .folderName, pattern: "node_modules", description: "Node.js modules", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".git", description: "Git repositories", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".svn", description: "SVN repositories", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".hg", description: "Mercurial repositories", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "build", description: "Build folders", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "dist", description: "Distribution folders", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "DerivedData", description: "Xcode derived data", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "__pycache__", description: "Python cache", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".venv", description: "Python virtual environments", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "Pods", description: "CocoaPods", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "Carthage", description: "Carthage dependencies", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "o", description: "Object files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "pyc", description: "Python bytecode", isBuiltIn: true),
-            ]
-        ),
-
-        // System Files Preset
-        ExclusionRulePreset(
-            name: "System Files",
-            description: "Exclude macOS system and hidden files",
-            icon: "gearshape.2",
-            rules: [
-                ExclusionRule(type: .hiddenFiles, pattern: "", description: "All hidden files", isBuiltIn: true),
-                ExclusionRule(type: .systemFiles, pattern: "", description: "System metadata files", isBuiltIn: true),
-                ExclusionRule(type: .fileName, pattern: ".DS_Store", description: "Finder metadata", isBuiltIn: true),
-                ExclusionRule(type: .fileName, pattern: ".localized", description: "Localization files", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".Spotlight-V100", description: "Spotlight index", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".Trashes", description: "Trash folder", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".fseventsd", description: "File system events", isBuiltIn: true),
-            ]
-        ),
-
-        // Large Files Preset
-        ExclusionRulePreset(
-            name: "Large Files",
-            description: "Exclude files larger than 100MB",
-            icon: "externaldrive",
-            rules: [
-                ExclusionRule(type: .fileSize, pattern: "", description: "Files > 100MB", isBuiltIn: true, numericValue: 100, comparisonGreater: true),
-            ]
-        ),
-
-        // Old Files Preset
-        ExclusionRulePreset(
-            name: "Old Files",
-            description: "Exclude files older than 1 year",
-            icon: "clock.arrow.circlepath",
-            rules: [
-                ExclusionRule(type: .creationDate, pattern: "", description: "Files > 365 days old", isBuiltIn: true, numericValue: 365, comparisonGreater: true),
-            ]
-        ),
-
-        // Applications Preset
-        ExclusionRulePreset(
-            name: "Applications",
-            description: "Exclude application bundles and installers",
-            icon: "app.badge",
-            rules: [
-                ExclusionRule(type: .fileExtension, pattern: "app", description: "Application bundles", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "dmg", description: "Disk images", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "pkg", description: "Installer packages", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "exe", description: "Windows executables", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "msi", description: "Windows installers", isBuiltIn: true),
-            ]
-        ),
-
-        // Media Preset
-        ExclusionRulePreset(
-            name: "Media Files",
-            description: "Exclude large media files",
-            icon: "play.rectangle",
-            rules: [
-                ExclusionRule(type: .fileType, pattern: "", description: "Video files", isBuiltIn: true, fileTypeCategory: .videos),
-                ExclusionRule(type: .fileType, pattern: "", description: "Audio files", isBuiltIn: true, fileTypeCategory: .audio),
-            ]
-        ),
-
-        // Temporary Files Preset
-        ExclusionRulePreset(
-            name: "Temporary Files",
-            description: "Exclude temporary and cache files",
-            icon: "trash",
-            rules: [
-                ExclusionRule(type: .fileExtension, pattern: "tmp", description: "Temporary files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "temp", description: "Temp files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "cache", description: "Cache files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "log", description: "Log files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "bak", description: "Backup files", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "swp", description: "Vim swap files", isBuiltIn: true),
-                ExclusionRule(type: .regex, pattern: "~$.*", description: "Office temp files", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "Caches", description: "Cache folders", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "tmp", description: "Temp folders", isBuiltIn: true),
-            ]
-        ),
-
-        // Minimal Preset
-        ExclusionRulePreset(
-            name: "Minimal",
-            description: "Basic exclusions only",
-            icon: "minus.circle",
-            rules: [
-                ExclusionRule(type: .folderName, pattern: ".git", description: "Git repositories", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "app", description: "Application bundles", isBuiltIn: true),
-            ]
-        ),
-    ]
-}
-
 // MARK: - Exclusion Rules Manager
 
 public struct NaturalLanguageException: Codable, Identifiable, Hashable, Sendable {
@@ -1059,13 +920,11 @@ public class ExclusionRulesManager: ObservableObject {
     public static let legacyLearningsLinkedDescription = "Added from Learnings exclusion"
 
     @Published public private(set) var rules: [ExclusionRule] = []
-    @Published public var activePresetName: String?
     @Published public private(set) var naturalLanguageExceptions: [NaturalLanguageException] = []
     @Published public private(set) var compiledMatcher = ExclusionMatcher.empty
 
     private let userDefaults: UserDefaults
     private let rulesKey = "exclusionRules"
-    private let presetKey = "activeExclusionPreset"
     private let nlExceptionsKey = "naturalLanguageExceptions"
 
     public convenience init() {
@@ -1107,10 +966,8 @@ public class ExclusionRulesManager: ObservableObject {
 
     public func clearEverything() {
         rules.removeAll()
-        activePresetName = nil
         naturalLanguageExceptions.removeAll()
         userDefaults.removeObject(forKey: rulesKey)
-        userDefaults.removeObject(forKey: presetKey)
         userDefaults.removeObject(forKey: nlExceptionsKey)
         setupDefaultRules()
     }
@@ -1146,32 +1003,9 @@ public class ExclusionRulesManager: ObservableObject {
         }
     }
 
-    public func moveRule(from source: IndexSet, to destination: Int) {
-        rules.move(fromOffsets: source, toOffset: destination)
-        saveRules()
-    }
-
-    // MARK: - Preset Management
-
-    public func applyPreset(_ preset: ExclusionRulePreset) {
-        // Remove existing non-custom rules
-        rules.removeAll { $0.isBuiltIn }
-
-        // Add preset rules
-        rules.append(contentsOf: preset.rules)
-        activePresetName = preset.name
-        saveRules()
-    }
-
     public func clearAllRules() {
         rules.removeAll()
-        activePresetName = nil
         saveRules()
-    }
-
-    public func resetToDefaults() {
-        rules.removeAll()
-        setupDefaultRules()
     }
 
     // MARK: - Matching
@@ -1182,12 +1016,6 @@ public class ExclusionRulesManager: ObservableObject {
 
     public func filterFiles(_ files: [FileItem]) -> [FileItem] {
         matcherSnapshot().filterFiles(files)
-    }
-
-    /// Returns which rules matched a file (for debugging)
-    public func matchingRules(for file: FileItem) -> [ExclusionRule] {
-        let matchingIDs = Set(matcherSnapshot().matchingRuleIDs(for: file))
-        return rules.filter { matchingIDs.contains($0.id) }
     }
 
     public func firstMatchingRule(for file: FileItem) -> ExclusionRule? {
@@ -1216,10 +1044,6 @@ public class ExclusionRulesManager: ObservableObject {
 
     public var enabledRulesCount: Int {
         rules.filter { $0.isEnabled }.count
-    }
-
-    public var rulesByType: [ExclusionRuleType: [ExclusionRule]] {
-        Dictionary(grouping: rules) { $0.type }
     }
 
     // MARK: - Natural Language Exceptions
@@ -1325,18 +1149,21 @@ public class ExclusionRulesManager: ObservableObject {
     // MARK: - Persistence
 
     private func setupDefaultRules() {
-        // Start with Developer preset for sensible defaults
-        if let devPreset = ExclusionRulePreset.presets.first(where: { $0.name == "Developer" }) {
-            rules = devPreset.rules
-            activePresetName = devPreset.name
-        } else {
-            // Fallback basic rules
-            rules = [
-                ExclusionRule(type: .folderName, pattern: ".git", description: "Git repositories", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "node_modules", description: "Node modules", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: "Library", description: "macOS Library folder", isBuiltIn: true),
-            ]
-        }
+        rules = [
+            ExclusionRule(type: .folderName, pattern: "node_modules", description: "Node.js modules", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: ".git", description: "Git repositories", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: ".svn", description: "SVN repositories", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: ".hg", description: "Mercurial repositories", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "build", description: "Build folders", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "dist", description: "Distribution folders", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "DerivedData", description: "Xcode derived data", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "__pycache__", description: "Python cache", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: ".venv", description: "Python virtual environments", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "Pods", description: "CocoaPods", isBuiltIn: true),
+            ExclusionRule(type: .folderName, pattern: "Carthage", description: "Carthage dependencies", isBuiltIn: true),
+            ExclusionRule(type: .fileExtension, pattern: "o", description: "Object files", isBuiltIn: true),
+            ExclusionRule(type: .fileExtension, pattern: "pyc", description: "Python bytecode", isBuiltIn: true),
+        ]
         saveRules()
     }
 
@@ -1345,7 +1172,6 @@ public class ExclusionRulesManager: ObservableObject {
            let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {
             rules = decoded
         }
-        activePresetName = userDefaults.string(forKey: presetKey)
         rebuildMatcher()
     }
 
@@ -1373,7 +1199,6 @@ public class ExclusionRulesManager: ObservableObject {
         if let encoded = try? JSONEncoder().encode(rules) {
             userDefaults.set(encoded, forKey: rulesKey)
         }
-        userDefaults.set(activePresetName, forKey: presetKey)
     }
 
     private func rebuildMatcher() {

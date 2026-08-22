@@ -21,7 +21,6 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var notificationSettings: NotificationSettingsManager
     @EnvironmentObject private var loginItemManager: LoginItemManager
     @EnvironmentObject private var namingPresetManager: NamingPresetManager
-    @EnvironmentObject private var globalShortcutManager: GlobalShortcutManager
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.openWindow) private var openWindow
@@ -354,7 +353,6 @@ struct MainWindowRootView: View {
             .environmentObject(notificationSettings)
             .environmentObject(loginItemManager)
             .environmentObject(namingPresetManager)
-            .environmentObject(globalShortcutManager)
             .environmentObject(steeringPromptManager)
             .environmentObject(windowSession.appState.duplicateManager)
             .environmentObject(windowSession.appState.duplicateSettings)

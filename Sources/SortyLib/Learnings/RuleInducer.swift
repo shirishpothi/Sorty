@@ -48,46 +48,7 @@ public actor RuleInducer {
         
         return rules
     }
-    
-    /// Update rules incrementally when new examples are added
-    public func updateRulesIncrementally(
-        existingRules: [InferredRule],
-        newExample: LabeledExample
-    ) -> [InferredRule] {
-        // Find rules that might be affected
-        let srcFilename = URL(fileURLWithPath: newExample.srcPath).lastPathComponent
-        let category = FileCategory.from(extension: URL(fileURLWithPath: newExample.srcPath).pathExtension)
-        
-        var updatedRules = existingRules
-        
-        // Check if new example strengthens existing rules
-        for (index, rule) in updatedRules.enumerated() {
-            if let regex = try? NSRegularExpression(pattern: rule.pattern),
-               regex.firstMatch(in: srcFilename, range: NSRange(srcFilename.startIndex..., in: srcFilename)) != nil {
-                // Example matches this rule - increase priority
-                let updated = rule
-                var newExampleIds = updated.exampleIds
-                newExampleIds.append(newExample.id)
-                updatedRules[index] = InferredRule(
-                    id: rule.id,
-                    pattern: rule.pattern,
-                    template: rule.template,
-                    metadataCues: rule.metadataCues,
-                    priority: rule.priority + 10,
-                    exampleIds: newExampleIds,
-                    explanation: rule.explanation
-                )
-                return updatedRules
-            }
-        }
-        
-        // No matching rule found - try to create a new one
-        let newRules = induceRulesFromCategory(category, examples: [newExample])
-        updatedRules.append(contentsOf: newRules)
-        
-        return updatedRules
-    }
-    
+
     // MARK: - Private Methods
     
     /// Analyze an example folder to infer rules

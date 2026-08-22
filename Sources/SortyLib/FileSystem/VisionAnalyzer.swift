@@ -29,15 +29,6 @@ public struct OCRResult: Sendable {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Preview of the text content (first 300 chars)
-    public var preview: String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count > 300 {
-            return String(trimmed.prefix(300)) + "..."
-        }
-        return trimmed
-    }
-
     /// Default keywords for document type detection
     public static let defaultKeywords: [String] = [
         "invoice", "receipt", "tax", "irs", "statement", "bill",
@@ -47,11 +38,6 @@ public struct OCRResult: Sendable {
         "medical", "insurance", "bank", "account", "payment",
         "internal", "revenue", "service"
     ]
-
-    /// Extract key phrases that might indicate document type
-    public var detectedKeywords: [String] {
-        return detectKeywords(using: [])
-    }
 
     /// Detect keywords using a combined list of default + custom keywords
     public func detectKeywords(using additionalKeywords: [String] = []) -> [String] {
@@ -129,15 +115,6 @@ public actor VisionAnalyzer {
 
     /// Perform OCR on CGImage data
     public func analyzeImage(_ cgImage: CGImage) async -> OCRResult? {
-        return await performOCR(on: cgImage)
-    }
-
-    /// Perform OCR on raw image data
-    public func analyzeImageData(_ data: Data) async -> OCRResult? {
-        guard let image = NSImage(data: data),
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return nil
-        }
         return await performOCR(on: cgImage)
     }
 
@@ -240,25 +217,6 @@ public actor VisionAnalyzer {
                 resumeOnce(nil)
             }
         }
-    }
-
-    /// Batch analyze multiple images
-    public func analyzeImages(at urls: [URL], progressHandler: ((Int, Int) -> Void)? = nil) async -> [URL: OCRResult] {
-        var results: [URL: OCRResult] = [:]
-
-        for (index, url) in urls.enumerated() {
-            if let result = await analyzeImage(at: url) {
-                results[url] = result
-            }
-            progressHandler?(index + 1, urls.count)
-
-            // Yield periodically to allow UI updates
-            if index % 5 == 0 {
-                await Task.yield()
-            }
-        }
-
-        return results
     }
 
     /// Extract image dimensions for duplicate comparison
@@ -423,77 +381,6 @@ public actor VisionAnalyzer {
             .map(\.key)
         for key in oldestKeys {
             ocrCache.removeValue(forKey: key)
-        }
-    }
-}
-
-// MARK: - Hamming Distance for Perceptual Hash Comparison
-
-public extension String {
-    /// Calculate Hamming distance between two hex hashes
-    /// Lower distance = more similar images
-    func hammingDistance(to other: String) -> Int? {
-        guard self.count == other.count else { return nil }
-
-        // Convert hex to binary for comparison
-        guard let selfBinary = hexToBinary(self),
-              let otherBinary = hexToBinary(other) else {
-            return nil
-        }
-
-        var distance = 0
-        for (a, b) in zip(selfBinary, otherBinary) {
-            if a != b {
-                distance += 1
-            }
-        }
-
-        return distance
-    }
-
-    private func hexToBinary(_ hex: String) -> String? {
-        var binary = ""
-        for char in hex {
-            guard let value = Int(String(char), radix: 16) else {
-                return nil
-            }
-            binary += String(value, radix: 2).padding(toLength: 4, withPad: "0", startingAt: 0)
-        }
-        return binary
-    }
-}
-
-// MARK: - Similarity Threshold
-
-public enum ImageSimilarity: Sendable {
-    case identical      // Hamming distance 0
-    case nearIdentical  // Hamming distance 1-5
-    case similar        // Hamming distance 6-10
-    case different      // Hamming distance > 10
-
-    public static func from(hammingDistance: Int) -> ImageSimilarity {
-        switch hammingDistance {
-        case 0:
-            return .identical
-        case 1...5:
-            return .nearIdentical
-        case 6...10:
-            return .similar
-        default:
-            return .different
-        }
-    }
-
-    public var description: String {
-        switch self {
-        case .identical:
-            return "Identical"
-        case .nearIdentical:
-            return "Near-Identical"
-        case .similar:
-            return "Similar"
-        case .different:
-            return "Different"
         }
     }
 }

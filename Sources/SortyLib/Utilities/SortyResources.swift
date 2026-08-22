@@ -180,21 +180,6 @@ public enum SortyResources {
         return nil
     }
 
-    /// Pre-flight check: verify the SPM resource bundle file actually exists on disk
-    /// before calling `Bundle.module` (whose generated accessor calls `fatalError` if missing).
-    private static func spmBundleExistsOnDisk() -> Bool {
-        let bundleName = "Sorty_SortyLib.bundle"
-        let candidates = [
-            Bundle.main.bundleURL.appendingPathComponent(bundleName),
-            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent(bundleName),
-            Bundle.main.resourceURL?.appendingPathComponent(bundleName),
-            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(bundleName)"),
-            Bundle(for: BundleLocator.self).resourceURL?.appendingPathComponent(bundleName),
-        ].compactMap { $0 }
-
-        return candidates.contains { FileManager.default.fileExists(atPath: $0.path) }
-    }
-
     /// Helper class for bundle location via class-based lookup
     private final class BundleLocator {}
 
@@ -301,10 +286,6 @@ public enum SortyResources {
 
         logger.warning("Failed to load image '\(name)' from any source")
         return nil
-    }
-
-    public static func clearImageCache() {
-        imageCache.removeAllObjects()
     }
 
     private static func imageCacheKey(name: String, ext: String) -> NSString {

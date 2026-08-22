@@ -415,7 +415,7 @@ public struct NotificationAnalyticsEvent: Identifiable, Sendable {
     public let id: UUID
     public let timestamp: Date
     public let eventType: EventType
-    public let backend: NotificationBackend
+    public let backend: String
     public let notificationType: String
     public let detail: String
 
@@ -423,7 +423,7 @@ public struct NotificationAnalyticsEvent: Identifiable, Sendable {
         id: UUID = UUID(),
         timestamp: Date = Date(),
         eventType: EventType,
-        backend: NotificationBackend,
+        backend: String,
         notificationType: String,
         detail: String
     ) {
@@ -558,20 +558,20 @@ public class NotificationManager: ObservableObject {
         switch type {
         case .watchedFolderStarted:
             guard settingsValue.watchedFolderStartNotificationsEnabled else {
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "watched folder started disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "watched folder started disabled")
                 return
             }
         case .processingComplete(_, _, _, _, let isAutomated),
              .batchSummary(_, let isAutomated):
             if isAutomated && !settingsValue.watchedFolderCompletionNotificationsEnabled {
                 print("NotificationManager: Automated organization notification suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "automated notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
                 return
             }
         case .processingError(_, _, _, _, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
                 print("NotificationManager: Automated organization error suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "automated notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
                 return
             }
         default:
@@ -583,13 +583,13 @@ public class NotificationManager: ObservableObject {
         case .processingComplete:
             guard settingsValue.processingComplete else {
                 print("NotificationManager: processingComplete notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "processing complete disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing complete disabled")
                 return
             }
         case .previewReady:
             guard settingsValue.previewReady else {
                 print("NotificationManager: previewReady notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "preview ready disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "preview ready disabled")
                 return
             }
         case .processingError(_, _, let isCritical, _, _):
@@ -597,13 +597,13 @@ public class NotificationManager: ObservableObject {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
                 print("NotificationManager: processingErrors notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "processing errors disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing errors disabled")
                 return
             }
         case .batchSummary:
             guard settingsValue.batchSummary else {
                 print("NotificationManager: batchSummary notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: .native, detail: "batch summary disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "batch summary disabled")
                 return
             }
         case .watchedFolderStarted:
@@ -651,7 +651,7 @@ public class NotificationManager: ObservableObject {
             }
         } else {
             print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
-            trackAnalytics(.shown, type: type, backend: .native, detail: "hud only")
+            trackAnalytics(.shown, type: type, backend: "native", detail: "hud only")
         }
     }
     
@@ -851,7 +851,7 @@ public class NotificationManager: ObservableObject {
         trackAnalytics(
             failed ? .failed : .action,
             type: .info(title: "action", message: action),
-            backend: .native,
+            backend: "native",
             detail: stageDetail
         )
     }
@@ -872,7 +872,7 @@ public class NotificationManager: ObservableObject {
         trackAnalytics(
             .shown,
             type: .info(title: "deliveryPreview", message: "inAppHUD"),
-            backend: .native,
+            backend: "native",
             detail: "manual HUD delivery preview"
         )
     }
@@ -913,7 +913,7 @@ public class NotificationManager: ObservableObject {
     private func trackAnalytics(
         _ eventType: NotificationAnalyticsEvent.EventType,
         type: NotificationType,
-        backend: NotificationBackend,
+        backend: String,
         detail: String
     ) {
         analyticsEvents.insert(
@@ -1116,7 +1116,7 @@ public class NotificationManager: ObservableObject {
                 await self.handleDefaultNotificationActivation(
                     for: type,
                     actionHandler: actionHandler,
-                    backend: .native
+                    backend: "native"
                 )
             }
         }
@@ -1197,7 +1197,7 @@ public class NotificationManager: ObservableObject {
         
         guard status == .authorized else {
             print("NotificationManager: System notifications not authorized (status: \(status.rawValue))")
-            trackAnalytics(.failed, type: type, backend: .native, detail: "authorization denied")
+            trackAnalytics(.failed, type: type, backend: "native", detail: "authorization denied")
             return
         }
         
@@ -1242,10 +1242,10 @@ public class NotificationManager: ObservableObject {
             try await UNUserNotificationCenter.current().add(request)
             let actionSummary = actions.isEmpty ? "no actions" : actions.map(\.label).joined(separator: ", ")
             print("NotificationManager: Native system notification sent successfully")
-            trackAnalytics(.shown, type: type, backend: .native, detail: "native notification sent [\(actionSummary)]")
+            trackAnalytics(.shown, type: type, backend: "native", detail: "native notification sent [\(actionSummary)]")
         } catch {
             print("NotificationManager: Failed to send system notification: \(error)")
-            trackAnalytics(.failed, type: type, backend: .native, detail: error.localizedDescription)
+            trackAnalytics(.failed, type: type, backend: "native", detail: error.localizedDescription)
         }
     }
 
@@ -1394,13 +1394,13 @@ public class NotificationManager: ObservableObject {
         case UNNotificationDefaultActionIdentifier:
             if let notificationType {
                 Task {
-                    await handleDefaultNotificationActivation(for: notificationType, actionHandler: actionHandler, backend: .native)
+                    await handleDefaultNotificationActivation(for: notificationType, actionHandler: actionHandler, backend: "native")
                 }
             }
 
         case UNNotificationDismissActionIdentifier:
             Task { await actionHandler?(.dismiss) }
-            trackAnalytics(.action, type: .info(title: "action", message: "dismiss"), backend: .native, detail: "dismiss")
+            trackAnalytics(.action, type: .info(title: "action", message: "dismiss"), backend: "native", detail: "dismiss")
 
         default:
             guard let notificationType,
@@ -1413,7 +1413,7 @@ public class NotificationManager: ObservableObject {
                     action,
                     type: notificationType,
                     actionHandler: actionHandler,
-                    backend: .native
+                    backend: "native"
                 )
             }
         }
@@ -1558,7 +1558,7 @@ public class NotificationManager: ObservableObject {
         _ curatedAction: CuratedNotificationAction,
         type: NotificationType,
         actionHandler: NotificationActionHandler?,
-        backend: NotificationBackend
+        backend: String
     ) async {
         switch curatedAction.role {
         case .safeImmediate:
@@ -1578,7 +1578,7 @@ public class NotificationManager: ObservableObject {
         _ action: NotificationAction,
         type: NotificationType,
         actionHandler: NotificationActionHandler?,
-        backend: NotificationBackend,
+        backend: String,
         label: String
     ) async {
         switch action {
@@ -1613,7 +1613,7 @@ public class NotificationManager: ObservableObject {
         _ curatedAction: CuratedNotificationAction,
         type: NotificationType,
         actionHandler: NotificationActionHandler?,
-        backend: NotificationBackend
+        backend: String
     ) async {
         activateAppForNotificationAction()
 
@@ -1632,7 +1632,7 @@ public class NotificationManager: ObservableObject {
     private func handleDefaultNotificationActivation(
         for type: NotificationType,
         actionHandler: NotificationActionHandler?,
-        backend: NotificationBackend
+        backend: String
     ) async {
         switch type {
         case .previewReady:

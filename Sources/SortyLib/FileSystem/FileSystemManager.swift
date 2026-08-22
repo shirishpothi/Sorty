@@ -11,7 +11,6 @@ import Combine
 import Darwin
 
 public actor FileSystemManager {
-    private var undoStack: [FileOperation] = []
     private let fileManager = FileManager.default
     private var activeBookmarks: [URL: URL] = [:]
 
@@ -671,73 +670,6 @@ public actor FileSystemManager {
         return operations
     }
 
-    // MARK: - Conflict Detection
-
-    public func detectConflicts(for plan: OrganizationPlan, at baseURL: URL) async -> [FileConflict] {
-        var conflicts: [FileConflict] = []
-
-        for suggestion in plan.suggestions {
-            let found = detectConflictsInSuggestion(suggestion, parentURL: baseURL)
-            conflicts.append(contentsOf: found)
-        }
-
-        return conflicts
-    }
-
-    private func detectConflictsInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) -> [FileConflict] {
-        var conflicts: [FileConflict] = []
-        let renameMappings = renameMappingsByFileID(in: suggestion)
-
-        guard let folderURL = try? resolveDestinationFolderURL(
-            folderName: suggestion.folderName,
-            parentURL: parentURL,
-            requestSecurityScope: false
-        ) else {
-            return conflicts
-        }
-
-        for file in suggestion.files {
-            guard let sourceURL = file.url else { continue }
-
-            let finalFilename = resolvedFinalFilename(
-                for: file,
-                mapping: renameMappings[file.id],
-                sourceURL: sourceURL,
-                destinationFolderURL: folderURL
-            ).name
-
-            let destinationURL = folderURL.appendingPathComponent(finalFilename)
-
-            if sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path {
-                continue
-            }
-
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                let sourceAttrs = try? fileManager.attributesOfItem(atPath: sourceURL.path)
-                let destAttrs = try? fileManager.attributesOfItem(atPath: destinationURL.path)
-
-                let conflict = FileConflict(
-                    sourceURL: sourceURL,
-                    destinationURL: destinationURL,
-                    sourceName: sourceURL.lastPathComponent,
-                    destinationName: destinationURL.lastPathComponent,
-                    sourceSize: (sourceAttrs?[.size] as? Int64) ?? file.size,
-                    destinationSize: (destAttrs?[.size] as? Int64) ?? 0,
-                    sourceDate: sourceAttrs?[.modificationDate] as? Date,
-                    destinationDate: destAttrs?[.modificationDate] as? Date
-                )
-                conflicts.append(conflict)
-            }
-        }
-
-        for subfolder in suggestion.subfolders {
-            let subConflicts = detectConflictsInSuggestion(subfolder, parentURL: folderURL)
-            conflicts.append(contentsOf: subConflicts)
-        }
-
-        return conflicts
-    }
-
     // MARK: - File Tagging
 
     func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
@@ -1085,7 +1017,6 @@ public actor FileSystemManager {
 
             if !dryRun {
                 progress?(0.9, "Cleaning up empty folders...")
-                undoStack = allOperations
 
                 let fileOps = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }
                 let sourceFolders = Set(fileOps.compactMap { URL(fileURLWithPath: $0.sourcePath).deletingLastPathComponent().path })
@@ -1124,7 +1055,6 @@ public actor FileSystemManager {
                 throw error
             }
 
-            undoStack = allOperations
             if !allFailures.isEmpty {
                 DebugLogger.log("Organization failed after \(allOperations.count) recorded operation(s) and \(allFailures.count) skipped file(s)")
                 for failure in allFailures {
@@ -1472,25 +1402,25 @@ public actor FileSystemManager {
     /// Recursively find and remove empty subdirectories, excluding newly created folders
     private func cleanupEmptySubdirectories(at baseURL: URL, excluding protectedPaths: Set<String>) throws {
         let contents = try fileManager.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: [.isDirectoryKey])
-        
+        let protected = Set(protectedPaths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
+
         for item in contents {
             // Skip hidden files/folders
             if item.lastPathComponent.hasPrefix(".") {
                 continue
             }
-            
-            // Skip if this is one of the newly created folders (we want to keep those)
-            if protectedPaths.contains(item.path) {
+
+            if protected.contains(item.resolvingSymlinksInPath().path) {
                 continue
             }
-            
+
             let resourceValues = try? item.resourceValues(forKeys: [.isDirectoryKey])
             let isDirectory = resourceValues?.isDirectory ?? false
-            
+
             if isDirectory {
                 // Recursively clean up subdirectories first
                 try? cleanupEmptySubdirectories(at: item, excluding: protectedPaths)
-                
+
                 // Then try to remove this folder if it's empty
                 try? removeEmptyFolder(at: item.path)
             }
@@ -2140,135 +2070,13 @@ public actor FileSystemManager {
 
         return newURL
     }
-
-    func undoLastOperation() async throws {
-        guard let lastOperation = undoStack.last else {
-            throw FileSystemError.noOperationToUndo
-        }
-
-        _ = try await reverseOperations([lastOperation])
-        undoStack.removeLast()
-    }
-
-    func clearUndoStack() {
-        undoStack.removeAll()
-    }
-
-    // MARK: - Utility Methods
-
-    /// Check if a file exists at path
-    func fileExists(at path: String) -> Bool {
-        return fileManager.fileExists(atPath: path)
-    }
-
-    /// Get contents of a directory
-    func contentsOfDirectory(at path: String) throws -> [String] {
-        return try fileManager.contentsOfDirectory(atPath: path)
-    }
-
-    /// Move a single file
-    func moveFile(from source: URL, to destination: URL) async throws -> FileOperation {
-        // Ensure destination directory exists
-        let destDir = destination.deletingLastPathComponent()
-        if !fileManager.fileExists(atPath: destDir.path) {
-            try fileManager.createDirectory(at: destDir, withIntermediateDirectories: true)
-        }
-
-        // Handle conflicts
-        var finalDestination = destination
-        if fileManager.fileExists(atPath: destination.path) {
-            finalDestination = generateUniqueURL(for: destination)
-        }
-
-        if isCrossVolume(from: source, to: finalDestination) {
-            DebugLogger.log("Cross-volume move detected: \(source.path) → \(finalDestination.path)")
-            let fileName = source.lastPathComponent
-            let handler = crossVolumeProgressHandler
-            try await copyWithProgress(from: source, to: finalDestination) { progress in
-                handler?(fileName, progress)
-            }
-        } else {
-            try fileManager.moveItem(at: source, to: finalDestination)
-        }
-
-        let operation = FileOperation(
-            id: UUID(),
-            type: .moveFile,
-            sourcePath: source.path,
-            destinationPath: finalDestination.path,
-            timestamp: Date()
-        )
-
-        undoStack.append(operation)
-        return operation
-    }
-
-    /// Rename a file
-    func renameFile(at url: URL, to newName: String) throws -> FileOperation {
-        var newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
-
-        // Handle conflicts by generating a unique filename instead of throwing an error
-        if fileManager.fileExists(atPath: newURL.path) {
-            newURL = generateUniqueURL(for: newURL)
-        }
-
-        try fileManager.moveItem(at: url, to: newURL)
-
-        let operation = FileOperation(
-            id: UUID(),
-            type: .renameFile,
-            sourcePath: url.path,
-            destinationPath: newURL.path,
-            timestamp: Date(),
-            metadata: FileOperation.OperationMetadata(
-                originalFilename: url.lastPathComponent,
-                newFilename: newURL.lastPathComponent
-            )
-        )
-
-        undoStack.append(operation)
-        return operation
-    }
-
-    /// Delete a file by moving it to Trash by default, or permanently deleting when requested.
-    func deleteFile(at url: URL, moveToTrash: Bool = true, workspaceURL: URL? = nil) throws -> FileOperation {
-        var deletedLocation: URL?
-        if moveToTrash {
-            var trashedURL: NSURL?
-            try fileManager.trashItem(at: url, resultingItemURL: &trashedURL)
-            deletedLocation = trashedURL as URL?
-        } else {
-            try fileManager.removeItem(at: url)
-        }
-        
-        let operation = FileOperation(
-            id: UUID(),
-            type: .deleteFile,
-            sourcePath: url.path,
-            destinationPath: deletedLocation?.path,
-            timestamp: Date(),
-            metadata: FileOperation.OperationMetadata(
-                originalFilename: url.lastPathComponent,
-                wasCreatedDuringOrganization: false,
-                parentFolderPath: url.deletingLastPathComponent().path
-            )
-        )
-        
-        undoStack.append(operation)
-        return operation
-    }
 }
 
 // MARK: - Errors
 
 enum FileSystemError: LocalizedError {
-    case noOperationToUndo
     case fileNotFound
     case permissionDenied
-    case invalidPath
-    case pathAlreadyExists(String)
-    case revertInProgress
-    case fileLocked(String)
     case partialFailure(successCount: Int, failures: [OperationFailure])
     case partialApplyFailure(operations: [FileSystemManager.FileOperation], underlyingDescription: String)
     case preValidationFailed([String])
@@ -2277,20 +2085,10 @@ enum FileSystemError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noOperationToUndo:
-            return "No operation to undo"
         case .fileNotFound:
             return "File not found"
         case .permissionDenied:
             return "Permission denied"
-        case .invalidPath:
-            return "Invalid path"
-        case .pathAlreadyExists(let path):
-            return "Path already exists: \(path). The file was skipped or renamed."
-        case .revertInProgress:
-            return "A revert operation is already in progress"
-        case .fileLocked(let path):
-            return "File is locked or in use: \(path)"
         case .partialFailure(let successCount, let failures):
             return "Partial failure: \(successCount) succeeded, \(failures.count) failed"
         case .partialApplyFailure(let operations, let underlyingDescription):

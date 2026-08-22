@@ -61,15 +61,6 @@ public final class FolderWatcher: @unchecked Sendable {
         let baseline: [String: FileFingerprint]?
     }
 
-    struct ScaleSnapshot: Equatable, Sendable {
-        let watchedFolderCount: Int
-        let monitoringRootCount: Int
-        let streamCount: Int
-        let pendingFileCount: Int
-        let activeScanCount: Int
-        let trackedFileMetadataCount: Int
-    }
-
     private static let maximumFilesPerBatch = 256
     private static let maximumPendingFiles = 4_096
     private static let eventCursorPersistenceDelay: TimeInterval = 5
@@ -341,19 +332,6 @@ public final class FolderWatcher: @unchecked Sendable {
         performOnQueueSyncIfNeeded {
             let path = resolvedURLs[folder.id]?.path ?? folder.path
             return isReadableDirectory(atPath: path)
-        }
-    }
-
-    func scaleSnapshot() -> ScaleSnapshot {
-        performOnQueueSyncIfNeeded {
-            ScaleSnapshot(
-                watchedFolderCount: watchedFolders.count,
-                monitoringRootCount: monitoringRoots.count,
-                streamCount: stream == nil ? 0 : 1,
-                pendingFileCount: pendingFileCount,
-                activeScanCount: activeScanCount,
-                trackedFileMetadataCount: folderSnapshots.values.reduce(0) { $0 + $1.count }
-            )
         }
     }
 
@@ -1243,7 +1221,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
 
         let prefix = path == "/" ? "/" : path + "/"
-        var index = sortedRootPaths.partitioningIndex { $0 >= prefix }
+        var index = sortedRootPaths.firstIndex { $0 >= prefix } ?? sortedRootPaths.count
         while index < sortedRootPaths.count {
             let root = sortedRootPaths[index]
             guard root.hasPrefix(prefix) else { break }
@@ -1573,21 +1551,5 @@ private func folderWatcherCallback(
         ) {
             break
         }
-    }
-}
-
-private extension Array where Element == String {
-    func partitioningIndex(where predicate: (String) -> Bool) -> Int {
-        var lowerBound = 0
-        var upperBound = count
-        while lowerBound < upperBound {
-            let midpoint = lowerBound + (upperBound - lowerBound) / 2
-            if predicate(self[midpoint]) {
-                upperBound = midpoint
-            } else {
-                lowerBound = midpoint + 1
-            }
-        }
-        return lowerBound
     }
 }

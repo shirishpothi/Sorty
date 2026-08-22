@@ -138,7 +138,7 @@ class ExclusionRulesTests: XCTestCase {
 
         let file = FileItem(path: "/Users/test/Documents/report.pdf", name: "report", extension: "pdf", size: 0, isDirectory: false)
         XCTAssertFalse(manager.shouldExclude(file))
-        XCTAssertTrue(manager.matchingRules(for: file).isEmpty)
+        XCTAssertTrue(manager.firstMatchingRule(for: file) == nil)
     }
 
     @MainActor

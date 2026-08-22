@@ -504,18 +504,6 @@ final class PatternMatcherAdvancedTests: XCTestCase {
         
         XCTAssertTrue(pattern == nil || !pattern!.isEmpty)
     }
-    
-    func testBuildTemplateFromExamples() {
-        let examples = [
-            (src: "/Downloads/IMG_001.jpg", dst: "/Photos/2024/IMG_001.jpg"),
-            (src: "/Downloads/IMG_002.jpg", dst: "/Photos/2024/IMG_002.jpg")
-        ]
-        
-        let template = PatternMatcher.buildTemplate(from: examples)
-        
-        XCTAssertNotNil(template)
-        XCTAssertTrue(template!.contains("{filename}"))
-    }
 }
 
 // MARK: - FolderStructureAnalysis Tests

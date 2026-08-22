@@ -34,8 +34,8 @@ class FileSystemManagerTests: XCTestCase {
             notes: ""
         )
         
-        let ops = try await fileSystemManager.createFolders(plan, at: tempDirectory)
-        
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+
         XCTAssertEqual(ops.count, 2)
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Folder1").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Folder1/Subfolder1").path))
@@ -61,9 +61,9 @@ class FileSystemManagerTests: XCTestCase {
             notes: ""
         )
         
-        let ops = try await fileSystemManager.moveFiles(plan, at: tempDirectory)
-        
-        XCTAssertEqual(ops.count, 1)
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+
+        XCTAssertEqual(ops.filter { $0.type == .moveFile }.count, 1)
         // Should have renamed the destination file to test_1.txt
         XCTAssertTrue(FileManager.default.fileExists(atPath: destFolder.appendingPathComponent("test_1.txt").path))
     }
@@ -91,29 +91,16 @@ class FileSystemManagerTests: XCTestCase {
         )
 
         do {
-            _ = try await fileSystemManager.moveFiles(plan, at: tempDirectory)
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
             XCTFail("Expected symlinked relative destination to be rejected")
-        } catch FileSystemError.destinationEscapesBaseDirectory(let path) {
-            XCTAssertEqual(path, symlink.path)
+        } catch FileSystemError.preValidationFailed(let issues) {
+            XCTAssertTrue(issues.contains { $0.contains("outside the selected directory") })
         }
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: outsideDirectory.appendingPathComponent("secret.txt").path))
     }
 
-    @MainActor
-    func testDeleteFileDirectDeleteDoesNotCreateHiddenDuplicatesFolder() async throws {
-        let file = tempDirectory.appendingPathComponent("delete-me.txt")
-        try "data".write(to: file, atomically: true, encoding: .utf8)
-
-        let operation = try await fileSystemManager.deleteFile(at: file, moveToTrash: false)
-
-        XCTAssertEqual(operation.type, .deleteFile)
-        XCTAssertNil(operation.destinationPath)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent(".duplicates").path))
-    }
-    
     @MainActor
     func testUndoOperations() async throws {
         let file = tempDirectory.appendingPathComponent("to_move.txt")
@@ -559,11 +546,11 @@ class FileSystemManagerTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
         
         // Test dry run - should not actually apply tags
-        let ops = try await fileSystemManager.tagFiles(plan, at: tempDirectory, dryRun: true)
-        
-        XCTAssertEqual(ops.count, 1)
-        XCTAssertEqual(ops.first?.type, .tagFile)
-        XCTAssertEqual(ops.first?.metadata?.newTags, ["Important", "Work"])
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: true)
+
+        let tagOps = ops.filter { $0.type == .tagFile }
+        XCTAssertEqual(tagOps.count, 1)
+        XCTAssertEqual(tagOps.first?.metadata?.newTags, ["Important", "Work"])
     }
     
     @MainActor
@@ -582,11 +569,12 @@ class FileSystemManagerTests: XCTestCase {
         
         let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
         
-        let ops = try await fileSystemManager.tagFiles(plan, at: tempDirectory, dryRun: false)
-        
-        XCTAssertEqual(ops.count, 1)
-        XCTAssertNotNil(ops.first?.metadata?.originalTags)
-        XCTAssertNotNil(ops.first?.metadata?.newTags)
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
+
+        let tagOps = ops.filter { $0.type == .tagFile }
+        XCTAssertEqual(tagOps.count, 1)
+        XCTAssertNotNil(tagOps.first?.metadata?.originalTags)
+        XCTAssertNotNil(tagOps.first?.metadata?.newTags)
     }
     
     @MainActor
@@ -645,10 +633,10 @@ class FileSystemManagerTests: XCTestCase {
         
         let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
         
-        let ops = try await fileSystemManager.tagFiles(plan, at: tempDirectory, dryRun: false)
-        
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
+
         // Reverse the tagging
-        _ = try await fileSystemManager.reverseOperations(ops)
+        _ = try await fileSystemManager.reverseOperations(ops.filter { $0.type == .tagFile })
         
         // Tags should be restored to original state
         let url = URL(fileURLWithPath: file.path)
@@ -678,10 +666,11 @@ class FileSystemManagerTests: XCTestCase {
         let parentSuggestion = FolderSuggestion(folderName: "Parent", files: [], subfolders: [childSuggestion])
         let plan = OrganizationPlan(suggestions: [parentSuggestion], unorganizedFiles: [], notes: "")
         
-        let ops = try await fileSystemManager.tagFiles(plan, at: tempDirectory, dryRun: false)
-        
-        XCTAssertEqual(ops.count, 1)
-        XCTAssertEqual(ops.first?.type, .tagFile)
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
+
+        let tagOps = ops.filter { $0.type == .tagFile }
+        XCTAssertEqual(tagOps.count, 1)
+        XCTAssertEqual(tagOps.first?.type, .tagFile)
     }
     
     @MainActor

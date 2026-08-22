@@ -38,19 +38,6 @@ final class RuleInducerTests: XCTestCase {
         XCTAssertEqual(calendar.component(.day, from: date!), 15)
     }
     
-    func testExtractYearFromFilename() {
-        XCTAssertEqual(PatternMatcher.extractYear(from: "Movie.2010.1080p.mkv"), 2010)
-        XCTAssertEqual(PatternMatcher.extractYear(from: "Report 2023.pdf"), 2023)
-        XCTAssertNil(PatternMatcher.extractYear(from: "RandomFile.txt"))
-    }
-    
-    func testTokenizeFilename() {
-        let tokens = PatternMatcher.tokenize("IMG_20240101_123456.jpg")
-        XCTAssertTrue(tokens.contains("IMG"))
-        XCTAssertTrue(tokens.contains("20240101"))
-        XCTAssertTrue(tokens.contains("123456"))
-    }
-    
     func testDetectIMGPattern() {
         let patterns = PatternMatcher.detectPatterns(in: "IMG_20240101_123456.jpg")
         XCTAssertTrue(patterns.contains(.imgDate))
@@ -122,29 +109,6 @@ final class RuleInducerTests: XCTestCase {
             XCTAssertTrue(photoRule.metadataCues.contains("exif:DateTimeOriginal"))
             XCTAssertGreaterThan(photoRule.priority, 0)
         }
-    }
-    
-    func testIncrementalRuleUpdate() async {
-        // Start with initial rules
-        let initialExamples = [
-            LabeledExample(srcPath: "/Downloads/IMG_20240101_120000.jpg", dstPath: "/Photos/2024/IMG_20240101_120000.jpg")
-        ]
-        
-        let initialRules = await ruleInducer.induceRules(from: initialExamples, exampleFolders: [])
-        
-        // Add new example
-        let newExample = LabeledExample(
-            srcPath: "/Downloads/IMG_20240201_150000.jpg",
-            dstPath: "/Photos/2024/IMG_20240201_150000.jpg"
-        )
-        
-        let updatedRules = await ruleInducer.updateRulesIncrementally(
-            existingRules: initialRules,
-            newExample: newExample
-        )
-        
-        // Rules should be updated (priority increased or new rule added)
-        XCTAssertFalse(updatedRules.isEmpty)
     }
     
     // MARK: - Confidence Level Tests

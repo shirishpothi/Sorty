@@ -147,12 +147,6 @@ struct KeychainManager {
         return success
     }
 
-    static func deleteAllAsync() async -> Bool {
-        await Task.detached(priority: .userInitiated) {
-            deleteAll()
-        }.value
-    }
-
     private static func readValue(key: String, service: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

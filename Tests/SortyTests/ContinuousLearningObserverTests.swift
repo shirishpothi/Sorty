@@ -19,8 +19,9 @@ final class ContinuousLearningObserverTests: XCTestCase {
         manager = LearningsManager(userDefaults: defaults)
         manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
-        history = OrganizationHistory(userDefaults: defaults, storageDirectory: historyStorageDirectory)
-        observer = ContinuousLearningObserver(history: history, learningsManager: manager)
+        let history = OrganizationHistory(userDefaults: defaults, storageDirectory: historyStorageDirectory)
+        self.history = history
+        observer = ContinuousLearningObserver(learningsManager: manager) { history }
     }
 
     override func tearDown() async throws {

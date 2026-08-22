@@ -142,14 +142,6 @@ public enum UnifiedDuplicateGroup: Identifiable, Hashable {
         case high = "Safe to Merge"
         case medium = "Review Suggested"
         case low = "Manual Review"
-        
-        public var color: String {
-            switch self {
-            case .high: return "green"
-            case .medium: return "yellow"
-            case .low: return "orange"
-            }
-        }
     }
     
     // Hashable conformance
@@ -436,30 +428,6 @@ public actor DuplicateDetector {
         )
     }
     
-    /// Find all duplicate files in a list of file items
-    /// Files must have sha256Hash already computed
-    public func findDuplicates(in files: [FileItem]) -> [DuplicateGroup] {
-        // Group by hash
-        var hashGroups: [String: [FileItem]] = [:]
-        
-        for file in files {
-            guard let hash = file.sha256Hash else { continue }
-            if hashGroups[hash] != nil {
-                hashGroups[hash]?.append(file)
-            } else {
-                hashGroups[hash] = [file]
-            }
-        }
-        
-        // Filter to only groups with more than one file
-        let duplicates = hashGroups
-            .filter { $0.value.count > 1 }
-            .map { DuplicateGroup(hash: $0.key, files: $0.value) }
-            .sorted { $0.potentialSavings > $1.potentialSavings }
-        
-        return duplicates
-    }
-    
     /// Compute hashes for files that don't have them
     public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
         for i in 0..<files.count {
@@ -479,17 +447,6 @@ public actor DuplicateDetector {
         }
     }
     
-    /// Get total potential savings from all duplicate groups
-    public func totalPotentialSavings(in groups: [DuplicateGroup]) -> Int64 {
-        groups.reduce(0) { $0 + $1.potentialSavings }
-    }
-    
-    /// Get formatted savings string
-    public func formattedSavings(in groups: [DuplicateGroup]) -> String {
-        let savings = totalPotentialSavings(in: groups)
-        return ByteCountFormatter.string(fromByteCount: savings, countStyle: .file)
-    }
-
     private static func cacheKey(for file: FileItem) -> HashCacheKey {
         HashCacheKey(
             path: file.path,

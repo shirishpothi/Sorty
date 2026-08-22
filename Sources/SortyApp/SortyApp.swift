@@ -388,7 +388,6 @@ struct SortyApp: App {
     @StateObject private var notificationSettings = NotificationSettingsManager.shared
     @StateObject private var loginItemManager = LoginItemManager.shared
     @StateObject private var namingPresetManager = NamingPresetManager.shared
-    @StateObject private var globalShortcutManager = GlobalShortcutManager.shared
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var updateManager = SparkleUpdateManager()
@@ -613,7 +612,6 @@ struct SortyApp: App {
         .environmentObject(notificationSettings)
         .environmentObject(loginItemManager)
         .environmentObject(namingPresetManager)
-        .environmentObject(globalShortcutManager)
         .environmentObject(steeringPromptManager)
         .environmentObject(menuBarController)
     }

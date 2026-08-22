@@ -41,7 +41,6 @@ public class LearningsManager: ObservableObject {
     @Published public var modelDirectories: [ReferenceModelDirectory] = []
     private var activeModelDirectoryURLs: [String: URL] = [:]
     @Published public private(set) var learningsModelSelection: LearningsModelSelection?
-    @Published public var behaviorPreferences: BehaviorPreferences?
 
     /// Suggestions for files that should be added to exceptions (e.g., related project files)
     @Published public var pendingExceptionSuggestions: [ExceptionSuggestion] = []
@@ -312,7 +311,6 @@ public class LearningsManager: ObservableObject {
 
             currentProfile = nil
             analysisResult = nil
-            behaviorPreferences = nil
             pendingExceptionSuggestions = []
             sessionLearningPaused = false
             showingImportPicker = false
@@ -2182,121 +2180,7 @@ public class LearningsManager: ObservableObject {
 
         return Array(patterns.orderedDeduplicated().prefix(8))
     }
-    
-    private struct LearningsSection {
-        let id: String
-        let title: String
-        let priority: String
-        let instruction: String
-        let items: [LearningsItem]
-    }
-    
-    private struct LearningsItem {
-        let content: String
-        var weight: Int = 50
-        var confidence: Int? = nil
-        var occurrences: Int? = nil
-        var recency: String? = nil
-        var ruleId: String? = nil
-    }
-    
-    private func recencyWeight(from date: Date, to now: Date) -> Double {
-        let daysSince = now.timeIntervalSince(date) / 86400
-        if daysSince < 1 { return 1.0 }
-        if daysSince < 7 { return 0.8 }
-        if daysSince < 30 { return 0.5 }
-        if daysSince < 90 { return 0.3 }
-        return 0.1
-    }
-    
-    private func recencyLabel(_ date: Date, now: Date) -> String {
-        let daysSince = Int(now.timeIntervalSince(date) / 86400)
-        if daysSince == 0 { return "today" }
-        if daysSince == 1 { return "yesterday" }
-        if daysSince < 7 { return "\(daysSince) days ago" }
-        if daysSince < 30 { return "\(daysSince / 7) weeks ago" }
-        if daysSince < 365 { return "\(daysSince / 30) months ago" }
-        return "over a year ago"
-    }
-    
-    private func formatAsXML(sections: [LearningsSection], folderPath: String?) -> String {
-        var xml = "<learnings_context>\n"
-        xml += "  <preamble>\n"
-        xml += "    <instruction>IMPORTANT: The following learnings represent this user's organization preferences, corrections, and patterns. "
-        xml += "Pay close attention to rejection patterns and corrections - these indicate what NOT to do. "
-        xml += "Items with higher weights (closer to 100) are more important. Recent items should be prioritized.</instruction>\n"
-        if let folder = folderPath {
-            let folderName = URL(fileURLWithPath: folder).lastPathComponent
-            xml += "    <context folder=\"\(escapeXML(folderName))\">\(escapeXML(folder))</context>\n"
-        }
-        xml += "  </preamble>\n\n"
-        
-        for section in sections {
-            xml += "  <section id=\"\(section.id)\" priority=\"\(section.priority)\">\n"
-            xml += "    <title>\(escapeXML(section.title))</title>\n"
-            xml += "    <instruction>\(escapeXML(section.instruction))</instruction>\n"
-            if !section.items.isEmpty {
-                xml += "    <items>\n"
-                for item in section.items {
-                    var attrs = "weight=\"\(item.weight)\""
-                    if let conf = item.confidence { attrs += " confidence=\"\(conf)%\"" }
-                    if let occ = item.occurrences { attrs += " occurrences=\"\(occ)\"" }
-                    if let rec = item.recency { attrs += " recency=\"\(rec)\"" }
-                    if let rid = item.ruleId { attrs += " rule_id=\"\(escapeXML(rid))\"" }
-                    xml += "      <item \(attrs)>\(escapeXML(item.content))</item>\n"
-                }
-                xml += "    </items>\n"
-            }
-            xml += "  </section>\n\n"
-        }
-        
-        xml += "</learnings_context>"
-        return xml
-    }
-    
-    private func escapeXML(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&apos;")
-    }
-    
-    // MARK: - Impact Metrics
-    
-    /// Compute a summary of how learnings have affected organization results
-    public func computeImpactSummary(lastNRuns: Int = 10) -> LearningsImpactSummary? {
-        guard let profile = currentProfile else { return nil }
-        
-        let totalRuns = profile.jobHistory.count
-        let completedRuns = profile.jobHistory.filter { $0.status == .completed }.count
-        
-        let filesRoutedByLearnings = profile.inferredRules.reduce(0) { $0 + $1.successCount }
-        let correctionsAfterAI = profile.postOrganizationChanges.filter { $0.wasAIOrganized }.count
-        
-        let reverts = profile.historyReverts.count
-        let cancelled = profile.cancelledOrganizations.count
-        let regenerated = profile.regeneratedOrganizations.count
 
-        let accepted = max(0, completedRuns - reverts)
-        let rejected = min(completedRuns, reverts)
-        
-        let runsWithLearnings = completedRuns
-        
-        return LearningsImpactSummary(
-            runsWithLearnings: runsWithLearnings,
-            totalRuns: totalRuns,
-            filesRoutedByLearnings: filesRoutedByLearnings,
-            correctionsAfterAI: correctionsAfterAI,
-            reverts: reverts,
-            acceptedOrganizations: accepted,
-            rejectedOrganizations: rejected,
-            cancelledOrganizations: cancelled,
-            regeneratedOrganizations: regenerated
-        )
-    }
-    
     // MARK: - Rule Management
     
     /// Enable or disable a specific inferred rule
@@ -3071,19 +2955,13 @@ public class LearningsManager: ObservableObject {
 public enum LearningsError: LocalizedError {
     case noProject
     case noAnalysisResult
-    case emptyRootPaths
-    case saveFailed(String)
-    
+
     public var errorDescription: String? {
         switch self {
         case .noProject:
             return "No project is currently loaded"
         case .noAnalysisResult:
             return "No analysis result available. Run analysis first."
-        case .emptyRootPaths:
-            return "No root paths provided for analysis"
-        case .saveFailed(let reason):
-            return "Failed to save: \(reason)"
         }
     }
 }

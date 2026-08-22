@@ -102,10 +102,6 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         }
     }
 
-    private static func prompts(for level: PromptBuilder.CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
-        return PromptBuilder.promptPair(for: level, config: config, files: files)
-    }
-
     private static func isContextLimitError(_ error: AIClientError) -> Bool {
         if case .apiError(let statusCode, let message) = error {
             if statusCode == 413 { return true }
@@ -135,7 +131,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
 
         for (index, strategy) in strategies.enumerated() {
             let isLastAttempt = index == strategies.count - 1
-            var prompts = Self.prompts(
+            var prompts = PromptBuilder.promptPair(
                 for: strategy,
                 config: config,
                 files: files
@@ -358,16 +354,4 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         }
     }
 }
-
-#if canImport(FoundationModels) && os(macOS)
-@available(macOS 26.0, *)
-extension AIClientError {
-    static var appleModelUnavailable: AIClientError {
-        return AIClientError.apiError(
-            statusCode: 503,
-            message: AppleFoundationModelClient.unavailabilityReason
-        )
-    }
-}
-#endif
 #endif

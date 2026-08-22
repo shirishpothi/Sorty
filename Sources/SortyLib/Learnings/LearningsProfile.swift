@@ -534,30 +534,7 @@ public struct SteeringPrompt: Codable, Sendable, Identifiable {
     }
 }
 
-// MARK: - Options
-
-/// Options for learnings analysis
-public struct LearningsOptions: Codable, Sendable {
-    public var dryRun: Bool
-    public var stagedApply: Bool
-    public var sampleSize: Int
-    public var backupMode: BackupMode
-    public var confidenceThreshold: Double
-    
-    public init(
-        dryRun: Bool = true,
-        stagedApply: Bool = true,
-        sampleSize: Int = 50,
-        backupMode: BackupMode = .copyToBackupDir,
-        confidenceThreshold: Double = 0.7
-    ) {
-        self.dryRun = dryRun
-        self.stagedApply = stagedApply
-        self.sampleSize = sampleSize
-        self.backupMode = backupMode
-        self.confidenceThreshold = confidenceThreshold
-    }
-}
+// MARK: - Backup Mode
 
 public enum BackupMode: String, Codable, Sendable, CaseIterable {
     case none
@@ -597,14 +574,6 @@ public struct JobManifest: Codable, Identifiable, Sendable {
         self.entries = entries
         self.backupMode = backupMode
         self.status = status
-    }
-    
-    /// Total files in this job
-    public var fileCount: Int { entries.count }
-    
-    /// Files that were successfully moved
-    public var successCount: Int {
-        entries.filter { $0.status == .success }.count
     }
 }
 

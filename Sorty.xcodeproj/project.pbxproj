@@ -135,7 +135,6 @@
 		AABBCC220002000000000062 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000062 /* AutomationSettingsView.swift */; };
 		AABBCC220002000000000066 /* CommentPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000066 /* CommentPopoverView.swift */; };
 		AABBCC220002000000000067 /* CompletionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000067 /* CompletionStepView.swift */; };
-		AABBCC220002000000000068 /* ConflictResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000068 /* ConflictResolution.swift */; };
 		AABBCC22000200000000006A /* CopyButtonWithAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */; };
 		AABBCC22000200000000006B /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006B /* CostCalculator.swift */; };
 		AABBCC22000200000000006C /* DemoStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006C /* DemoStepView.swift */; };
@@ -143,7 +142,6 @@
 		AABBCC220002000000000070 /* FolderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000070 /* FolderScheduler.swift */; };
 		AABBCC220002000000000071 /* FormattedReasoningText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000071 /* FormattedReasoningText.swift */; };
 		AABBCC220002000000000072 /* GlassyBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000072 /* GlassyBackButton.swift */; };
-		AABBCC220002000000000073 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000073 /* GlobalShortcutManager.swift */; };
 		AABBCC220002000000000074 /* HelpSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000074 /* HelpSettingsView.swift */; };
 		AABBCC220002000000000075 /* LiquidGlassReasoningPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000075 /* LiquidGlassReasoningPopover.swift */; };
 		AABBCC220002000000000076 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000076 /* LoginItemManager.swift */; };
@@ -468,7 +466,6 @@
 		AABBCC110001000000000062 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000066 /* CommentPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentPopoverView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000067 /* CompletionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionStepView.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000068 /* ConflictResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictResolution.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyButtonWithAnimation.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006B /* CostCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostCalculator.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006C /* DemoStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStepView.swift; sourceTree = "<group>"; };
@@ -476,7 +473,6 @@
 		AABBCC110001000000000070 /* FolderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderScheduler.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000071 /* FormattedReasoningText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattedReasoningText.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000072 /* GlassyBackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassyBackButton.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000073 /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000074 /* HelpSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000075 /* LiquidGlassReasoningPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassReasoningPopover.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000076 /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
@@ -705,7 +701,6 @@
 				AABBCC11000100000000000C /* NotificationSettings.swift */,
 				AABBCC11000100000000000D /* FeatureFlags.swift */,
 				AABBCC11000100000000000E /* ExclusionEnforcer.swift */,
-				AABBCC110001000000000068 /* ConflictResolution.swift */,
 				AABBCC110001000000000079 /* NamingPreset.swift */,
 				CC110001000000000000A006 /* WindowLaunchRequest.swift */,
 				CC110001000000000000A007 /* WindowSession.swift */,
@@ -745,7 +740,6 @@
 				AABBCC110001000000000015 /* FileThumbnailProvider.swift */,
 				AABBCC110001000000000016 /* HashUtility.swift */,
 				AABBCC11000100000000006B /* CostCalculator.swift */,
-				AABBCC110001000000000073 /* GlobalShortcutManager.swift */,
 				AABBCC110001000000000076 /* LoginItemManager.swift */,
 				AABBCC1100010000000000B0 /* SortyUninstaller.swift */,
 				AABBCC11000100000000007A /* NamingPresetManager.swift */,

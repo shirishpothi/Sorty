@@ -62,15 +62,6 @@ public final class FinderAutomation {
         }
     }
 
-    /// Reads the current decision without presenting a consent alert.
-    public static func refreshAutomationPermission() async -> PermissionStatus {
-        guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
-
-        return await Task.detached(priority: .utility) {
-            determineAutomationPermission(prompt: false)
-        }.value
-    }
-
     nonisolated private static func determineAutomationPermission(
         prompt: Bool
     ) -> PermissionStatus {
@@ -207,18 +198,7 @@ public final class FinderAutomation {
         
         return URL(fileURLWithPath: path)
     }
-    
-    /// Get the frontmost Finder window's folder path for organizing
-    public static func organizeCurrentFinderFolder() -> URL? {
-        return getFrontmostFinderWindowPath()
-    }
-    
-    /// Check if there's a valid Finder selection we can use for organization
-    public static func canOrganizeSelection() -> Bool {
-        guard let selection = getSelectedFiles() else { return false }
-        return !selection.isEmpty
-    }
-    
+
     // MARK: - Finder Selection Control
     
     /// Select items in the frontmost Finder window

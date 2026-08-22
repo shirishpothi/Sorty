@@ -116,12 +116,6 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertEqual(Set(roots), Set((0..<10).map { "/Volumes/Archive-\($0)" }))
     }
 
-    func testWatcherDoesNotAllocatePerFileMetadataAtRest() {
-        let watcher = FolderWatcher()
-
-        XCTAssertEqual(watcher.scaleSnapshot().trackedFileMetadataCount, 0)
-    }
-
     @MainActor
     func testWatchedFolderJournalRoundTripsIndexedConfiguration() {
         let firstManager = WatchedFoldersManager()

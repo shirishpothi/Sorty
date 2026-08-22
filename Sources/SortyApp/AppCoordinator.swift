@@ -174,8 +174,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         self.watchedFoldersManager = watchedFoldersManager
         self.learningsManager = learningsManager
         self.continuousLearningObserver = ContinuousLearningObserver(
-            history: organizer.history,
-            learningsManager: learningsManager
+            learningsManager: learningsManager,
+            historyProvider: { organizer.history }
         )
         self.learningsFSMonitor = LearningsFSMonitor()
         self.folderWatcher.delegate = self

@@ -378,16 +378,6 @@ struct PromptBuilder {
         return .micro
     }
 
-    static func selectCompactionLevel(files: [FileItem], maxTokens: Int = 1500) -> CompactionLevel {
-        let samplePrompt = buildCompactPrompt(files: files)
-        let estimated = estimateTokens(samplePrompt)
-
-        if estimated < Int(Double(maxTokens) * 0.45) { return .standard }
-        if estimated < Int(Double(maxTokens) * 0.7) { return .ultra }
-        if estimated < maxTokens { return .summary }
-        return .micro
-    }
-
     private static func mergePromptBudgetStrings(system: String, user: String, customInstructions: String?) -> String {
         var merged = system + "\n" + user
         if let customInstructions, !customInstructions.isEmpty {
@@ -666,53 +656,6 @@ struct PromptBuilder {
         }
     }
     
-    static func buildPromptForProvider(
-        _ provider: AIProvider,
-        files: [FileItem],
-        mode: OrganizationMode = .organize,
-        namingStyle: NamingStyle = .descriptive,
-        renameNamingOptions: RenameNamingOptions = .default,
-        customNamingInstructions: String? = nil,
-        renameRules: [RenameRule] = [],
-        renameRuleMode: RenameRuleApplicationMode = .beforeAI,
-        enableReasoning: Bool = false,
-        enableSmartRename: Bool = false,
-        customInstructions: String? = nil,
-        storageLocationsContext: String? = nil,
-        existingFoldersContext: String? = nil
-    ) -> String {
-        switch provider {
-        case .appleFoundationModel:
-            // Append instructions
-            var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
-            if mode == .renameOnly || mode == .organizeAndRename {
-                prompt += " (\(namingStyle.displayName))"
-                prompt += " \(renameNamingOptions.promptInstructions)"
-                if let customNaming = customNamingInstructions, !customNaming.isEmpty {
-                    prompt += " Custom style: \(customNaming)"
-                }
-            }
-            if let instructions = customInstructions, !instructions.isEmpty {
-                let heading = instructions.contains("<user_instructions>")
-                    ? "TASK INSTRUCTIONS AND SUPPORTING CONTEXT: Follow <user_instructions> before persona and labeled supporting context."
-                    : "MANDATORY USER INSTRUCTIONS (override all defaults):"
-                prompt = "\(heading) \(instructions)\n\n" + prompt
-            }
-            if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
-                prompt = "\(storageContext)\n\n" + prompt
-            }
-            if mode != .renameOnly, let existingContext = existingFoldersContext, !existingContext.isEmpty {
-                prompt = "\(existingContext)\n\n" + prompt
-            }
-            return prompt
-        case .anthropic:
-            // Anthropic handles system prompts separately but we ensure the user prompt is robust
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, renameNamingOptions: renameNamingOptions, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, renameNamingOptions: renameNamingOptions, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
-        }
-    }
-
     private static func expandedCustomNamingInstructions(
         _ instructions: String,
         files: [FileItem],

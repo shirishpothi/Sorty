@@ -88,30 +88,8 @@ public struct PatternMatcher {
         return nil
     }
     
-    /// Extract year from filename
-    public static func extractYear(from filename: String) -> Int? {
-        let name = (filename as NSString).deletingPathExtension
-        
-        // Look for 4-digit year (19xx or 20xx)
-        if let match = name.range(of: "(19|20)\\d{2}", options: .regularExpression) {
-            return Int(name[match])
-        }
-        return nil
-    }
-    
     // MARK: - Name Components
-    
-    /// Tokenize filename into components
-    public static func tokenize(_ filename: String) -> [String] {
-        let name = (filename as NSString).deletingPathExtension
-        
-        // Split on common delimiters
-        let components = name.components(separatedBy: CharacterSet(charactersIn: "_ -.,"))
-            .filter { !$0.isEmpty }
-        
-        return components
-    }
-    
+
     /// Check if filename matches a known pattern
     public static func matchesPattern(_ filename: String, pattern: KnownPattern) -> Bool {
         let name = (filename as NSString).deletingPathExtension
@@ -172,35 +150,8 @@ public struct PatternMatcher {
         return result
     }
     
-    // MARK: - Template Building
-    
-    /// Build a template string from example mappings
-    public static func buildTemplate(from examples: [(src: String, dst: String)]) -> String? {
-        guard !examples.isEmpty else { return nil }
-        
-        // Analyze destination paths
-        let dstPaths = examples.map { $0.dst }
-        let structure = analyzeFolderStructure(from: dstPaths)
-        
-        var templateParts: [String] = []
-        
-        // Build folder template
-        if structure.usesDateFolders {
-            templateParts.append("{year}/{date}")
-        } else if structure.usesYearFolders && structure.usesMonthFolders {
-            templateParts.append("{year}/{month}")
-        } else if structure.usesYearFolders {
-            templateParts.append("{year}")
-        } else if structure.usesCategoryFolders {
-            templateParts.append("{category}")
-        }
-        
-        // Add filename template
-        templateParts.append("{filename}")
-        
-        return templateParts.joined(separator: "/")
-    }
-    
+    // MARK: - Pattern Building
+
     /// Build a regex pattern from example filenames
     public static func buildPattern(from filenames: [String]) -> String? {
         guard !filenames.isEmpty else { return nil }
@@ -213,10 +164,7 @@ public struct PatternMatcher {
         if let mostCommon = patternCounts.max(by: { $0.value < $1.value })?.key {
             return mostCommon.regex
         }
-        
-        // Fallback: try to build a simple pattern
-        let _ = filenames.flatMap { tokenize($0) }
-        
+
         // If filenames share a common prefix, use it
         if let prefix = findCommonPrefix(filenames) {
             return "^\(NSRegularExpression.escapedPattern(for: prefix)).*"
