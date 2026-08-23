@@ -89,24 +89,6 @@ public struct CompactFolderThumbnail: View {
 }
 
 /// Actual macOS folder icon for new folders (using cached system icon)
-private struct SortyFolderIcon: View {
-    let size: CGFloat
-
-    var body: some View {
-        if let nsImage = SortyResources.image(named: "SortyFolder") {
-            Image(nsImage: nsImage)
-                .renderingMode(.original)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: size, height: size)
-        } else {
-            Image(systemName: "folder.fill")
-                .font(.system(size: size * 0.8))
-                .foregroundStyle(.blue)
-                .frame(width: size, height: size)
-        }
-    }
-}
 
 // MARK: - Preview
 

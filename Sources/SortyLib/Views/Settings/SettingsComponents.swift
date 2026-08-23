@@ -511,20 +511,3 @@ extension View {
         }
     }
 }
-
-private struct FeatureRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}

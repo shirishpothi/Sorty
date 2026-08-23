@@ -104,31 +104,6 @@ enum ShaderDispatch {
     }
   }
 
-  /// Builds the glyph-fill shader used by `.beamFill(...)`. Unlike the
-  /// border shaders this one fills the whole bounding box — the receiver
-  /// view's own silhouette provides the mask.
-  static func glyphFillShader(
-    pixelSize: CGSize,
-    time: TimeInterval,
-    duration: Double,
-    strength: Double,
-    brightness: Double,
-    saturation: Double,
-    variant: Float,
-    hueCos: Double,
-    hueSin: Double
-  ) -> Shader {
-    let function = ShaderFunction(library: .bundle(libraryBundle), name: "beamGlyphFill")
-    let args: [Shader.Argument] = [
-      .float4(Float(pixelSize.width), Float(pixelSize.height), 0, 0),
-      .float4(Float(time), Float(duration), Float(brightness), Float(saturation)),
-      .float4(0, 0, 0, Float(strength)),
-      .float4(variant, 0, 0, 0),
-      .float4(Float(hueCos), Float(hueSin), 0, 0),
-    ]
-    return Shader(function: function, arguments: args)
-  }
-
   /// Builds the distortion shader used by `.beamLens` / `lensStrength:`.
   /// Uses its own tiny uniform bundle — the lens doesn't need palette,
   /// theme, or opacity inputs, so we don't force it to share the main

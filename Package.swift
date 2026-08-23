@@ -66,9 +66,9 @@ let package = Package(
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug)),
                 // Debug: Fast incremental build (SPM manages incremental builds internally)
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
                 // Release: Full optimization with whole-module
-                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
+                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
                 // Batched builds otherwise repeat the same diagnostics for many
                 // primary files, producing megabytes of low-value output.
                 .unsafeFlags(["-suppress-warnings"]),
@@ -86,8 +86,8 @@ let package = Package(
             path: "Sources/SortyApp",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug)),
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
-                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
+                .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
             ],
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
@@ -98,9 +98,7 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Tests/SortyTests",
             swiftSettings: [
-                // Tests: Fast build with debug info
-                .unsafeFlags(["-Onone", "-enable-batch-mode"]),
-                .unsafeFlags(["-g"]), // Debug symbols for test debugging
+                .unsafeFlags(["-enable-batch-mode"]),
             ]
         )
     ]

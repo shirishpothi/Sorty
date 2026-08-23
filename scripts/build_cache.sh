@@ -86,7 +86,6 @@ build_cache_input_hash() {
     build_cache_hash_files \
         "Package.swift" \
         "Package.resolved" \
-        "BuildConfig.xcconfig" \
         "Sorty.xcodeproj/project.pbxproj" \
         "Info.plist" \
         "Sorty.entitlements" \

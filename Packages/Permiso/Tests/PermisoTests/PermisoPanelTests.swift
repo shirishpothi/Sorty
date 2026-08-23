@@ -5,8 +5,6 @@ import XCTest
 final class PermisoPanelTests: XCTestCase {
     func testOnlyFlatTCCListsSupportAppDrop() {
         XCTAssertTrue(PermisoPanel.fullDiskAccess.supportsAppDrop)
-        XCTAssertTrue(PermisoPanel.accessibility.supportsAppDrop)
-        XCTAssertTrue(PermisoPanel.screenRecording.supportsAppDrop)
         XCTAssertFalse(PermisoPanel.automation.supportsAppDrop)
         XCTAssertFalse(PermisoPanel.notifications.supportsAppDrop)
     }

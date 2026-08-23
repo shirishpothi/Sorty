@@ -1,30 +1,24 @@
 import Foundation
 
 public enum PermisoPanel: String, CaseIterable, Sendable {
-    case accessibility = "Privacy_Accessibility"
     case fullDiskAccess = "Privacy_AllFiles"
     case automation = "Privacy_Automation"
     case notifications = "Notifications"
-    case screenRecording = "Privacy_ScreenCapture"
 
     public var title: String {
         switch self {
-        case .accessibility:
-            "Accessibility"
         case .fullDiskAccess:
             "Full Disk Access"
         case .automation:
             "Automation"
         case .notifications:
             "Notifications"
-        case .screenRecording:
-            "Screen Recording"
         }
     }
 
     public var supportsAppDrop: Bool {
         switch self {
-        case .accessibility, .fullDiskAccess, .screenRecording:
+        case .fullDiskAccess:
             true
         case .automation, .notifications:
             false
@@ -33,16 +27,12 @@ public enum PermisoPanel: String, CaseIterable, Sendable {
 
     var guideSymbol: String {
         switch self {
-        case .accessibility:
-            "accessibility"
         case .fullDiskAccess:
             "externaldrive.fill.badge.checkmark"
         case .automation:
             "gearshape.2.fill"
         case .notifications:
             "bell.badge.fill"
-        case .screenRecording:
-            "rectangle.inset.filled.and.person.filled"
         }
     }
 
@@ -52,7 +42,7 @@ public enum PermisoPanel: String, CaseIterable, Sendable {
             return "Find \(appName), then turn on Finder"
         case .notifications:
             return "Turn on Allow notifications for \(appName)"
-        case .accessibility, .fullDiskAccess, .screenRecording:
+        case .fullDiskAccess:
             return "Drag \(appName) to the list above"
         }
     }

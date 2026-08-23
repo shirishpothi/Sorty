@@ -586,7 +586,7 @@ enum OnboardingStep: Int, CaseIterable {
     }
 }
 
-extension OnboardingStep: OnboardingStepValidating {
+extension OnboardingStep {
     func synchronousValidation(in context: OnboardingStepValidationContext)
         -> OnboardingStepValidationResult
     {
@@ -604,6 +604,12 @@ extension OnboardingStep: OnboardingStepValidating {
         case .workflow, .demo, .completion:
             return .valid
         }
+    }
+
+    func validateAdvance(in context: OnboardingStepValidationContext) async
+        -> OnboardingStepValidationResult
+    {
+        synchronousValidation(in: context)
     }
 }
 
@@ -2738,15 +2744,6 @@ private struct OnboardingNavigationBackdrop: View {
             endPoint: .bottom
         )
         .ignoresSafeArea(edges: .bottom)
-    }
-}
-
-private struct OnboardingTopBar: View {
-    var body: some View {
-        Color.clear
-        .frame(maxWidth: .infinity)
-        .frame(height: 24)
-        .allowsHitTesting(false)
     }
 }
 

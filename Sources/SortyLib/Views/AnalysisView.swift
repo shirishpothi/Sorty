@@ -1658,42 +1658,6 @@ private struct RenameShiftIndicator: View {
     }
 }
 
-private struct RenameGenerationSkeletonRow: View {
-    var delay: Double = 0
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isOn = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.secondary.opacity(0.18))
-                .frame(width: 18, height: 18)
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.secondary.opacity(isOn ? 0.2 : 0.08))
-                .frame(width: 150, height: 8)
-            RenameShiftIndicator(isActive: true, isUnchanged: false)
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color.purple.opacity(isOn ? 0.2 : 0.08))
-                .frame(width: 170, height: 8)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
-                isOn = true
-            }
-        }
-        .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            guard shouldReduceMotion else { return }
-            withAnimation(nil) {
-                isOn = false
-            }
-        }
-    }
-}
-
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
     let measuredProgress: MeasuredWorkProgress?
@@ -2984,31 +2948,6 @@ public struct FlowLayout: Layout {
         }
 
         return (positions, y + rowHeight)
-    }
-}
-
-private struct PingRingView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var ping = false
-
-    var body: some View {
-        Circle()
-            .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(ping ? 0 : 0.3), lineWidth: 2)
-            .frame(width: 32, height: 32)
-            .scaleEffect(ping ? 2.0 : 1.0)
-            .drawingGroup(opaque: false)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
-                    ping = true
-                }
-            }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                guard shouldReduceMotion else { return }
-                withAnimation(nil) {
-                    ping = false
-                }
-            }
     }
 }
 

@@ -19,7 +19,6 @@ let package = Package(
         .process("Shaders/Line.metal"),
         .process("Shaders/Comet.metal"),
         .process("Shaders/Lens.metal"),
-        .process("Shaders/GlyphFill.metal"),
       ]
     ),
   ]

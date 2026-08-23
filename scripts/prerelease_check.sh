@@ -630,7 +630,6 @@ phase_permissions() {
         "scripts/build.sh"
         "scripts/release.sh"
         "scripts/package.sh"
-        "scripts/run_tests.sh"
         "scripts/validate_sparkle.sh"
     )
     

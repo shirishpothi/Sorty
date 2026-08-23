@@ -35,14 +35,3 @@ public struct OnboardingStepValidationContext: Equatable, Sendable {
         self.hasRequiredPermissions = hasRequiredPermissions
     }
 }
-
-public protocol OnboardingStepValidating {
-    func synchronousValidation(in context: OnboardingStepValidationContext) -> OnboardingStepValidationResult
-    func validateAdvance(in context: OnboardingStepValidationContext) async -> OnboardingStepValidationResult
-}
-
-public extension OnboardingStepValidating {
-    func validateAdvance(in context: OnboardingStepValidationContext) async -> OnboardingStepValidationResult {
-        synchronousValidation(in: context)
-    }
-}

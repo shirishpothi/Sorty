@@ -1275,57 +1275,6 @@ private struct OnboardingCodexActionButton: View {
     }
 }
 
-private struct ProviderReadinessStatusView: View {
-    let status: ProviderSetupStatus
-
-    private var statusColor: Color {
-        status.isReady ? .green : .orange
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: status.isReady ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(statusColor)
-                .font(.body)
-                .symbolReplaceTransition(animationValue: status.isReady)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(LocalizedStringKey(status.title))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .numericTextTransition(animationValue: status.title)
-
-                Text(status.message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .numericTextTransition(animationValue: status.message)
-
-                if let recoverySuggestion = status.recoverySuggestion {
-                    Text(recoverySuggestion)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(statusColor.opacity(status.isReady ? 0.08 : 0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(statusColor.opacity(0.18), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
-    }
-}
-
 // MARK: - Supporting Views
 
 /// The provider grid is visually independent from credential drafts and

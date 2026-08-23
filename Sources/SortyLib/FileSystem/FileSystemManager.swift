@@ -904,16 +904,6 @@ public actor FileSystemManager {
         }
     }
     
-    public struct ApplyOrganizationResult: Sendable {
-        public let operations: [FileOperation]
-        public let failures: [OperationFailure]
-        public let totalAttempted: Int
-        
-        public var successCount: Int { operations.filter { $0.type == .moveFile || $0.type == .renameFile }.count }
-        public var failureCount: Int { failures.count }
-        public var hasFailures: Bool { !failures.isEmpty }
-    }
-
     func applyOrganization(
         _ plan: OrganizationPlan, 
         at baseURL: URL, 
