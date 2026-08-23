@@ -370,7 +370,6 @@ struct SortyApp: App {
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = true
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @StateObject private var settingsViewModel: SettingsViewModel
@@ -421,10 +420,16 @@ struct SortyApp: App {
             "hideDockIcon": false,
             "launchAtLogin": false,
             "confirmQuitWhileOrganizing": true,
-            "finderIntegrationEnabled": true,
+            "finderIntegrationEnabled": false,
         ])
 
         SortyUninstaller.discardLegacyRequest()
+
+        UserDefaults.standard.removeObject(forKey: "finderIntegrationEnabled")
+        UserDefaults.standard.set(false, forKey: "enableFinderSyncExtension")
+        Task.detached(priority: .utility) {
+            await ExtensionCommunication.retireFinderSyncExtensionIfNeeded()
+        }
 
         configureUITestStateIfNeeded()
     }
@@ -554,21 +559,10 @@ struct SortyApp: App {
 
     private func mainWindowIntegrationHandlers<Content: View>(_ content: Content) -> some View {
         content
-            .onChange(of: finderIntegrationEnabled) { _, newValue in
-                if newValue, hasCompletedOnboarding {
-                    ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-                    Task {
-                        _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                        await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
-                    }
-                }
-            }
             .onChange(of: hasCompletedOnboarding) { _, isComplete in
-                guard isComplete, finderIntegrationEnabled else { return }
-                ExtensionCommunication.beginMonitoringFinderSyncRuntime()
+                guard isComplete else { return }
                 Task {
                     _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                    await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                 }
             }
             .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
@@ -639,11 +633,9 @@ struct SortyApp: App {
             storageLocationsManager: storageLocationsManager
         )
 
-        if hasCompletedOnboarding, finderIntegrationEnabled {
-            ExtensionCommunication.beginMonitoringFinderSyncRuntime()
+        if hasCompletedOnboarding {
             Task {
                 _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
             }
         }
 

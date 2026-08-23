@@ -17,7 +17,7 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|
-| Finder Integration | `finderIntegrationEnabled` | `true` | Legacy preference for Finder Integration. Finder Integration is a core app feature; the key remains for migration and older installs, and new installs default to enabled. |
+| Finder Sync | `finderIntegrationEnabled` | `false` | Retired legacy preference. Existing installs migrate to Quick Actions and the extension stays disabled. |
 | Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover; hides API keys with manual reveal |
 | Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Blocks all internet (network) connections from the app |
 | Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
@@ -69,11 +69,9 @@ defaults -container com.sorty.app read com.sorty.app supportDeveloperEnabled
 
 ## Finder Integration Repair
 
-Finder Integration is a core app feature. Quick Action and Finder Sync repair should be done from the app UI:
+Finder Integration uses macOS Quick Actions:
 
 1. Open Settings -> Finder Integration
-2. Use `Install`/`Reinstall` for Quick Action
-3. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`
-4. Use `Open Extensions` to confirm Sorty is enabled in macOS Extensions settings
+2. Use `Repair Menu Actions` if any action is missing
 
-Do not require users to run external terminal commands for normal Quick Action/Finder Sync repair.
+Do not re-enable the retired Finder Sync extension.

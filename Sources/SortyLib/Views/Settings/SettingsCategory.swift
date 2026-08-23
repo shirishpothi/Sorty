@@ -397,7 +397,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Check Finder Status", "Refresh Finder Integration status and permission checks.", keywords: ["check now", "refresh finder"], target: .finderCheckStatus),
                 feature("Watch with Sorty", "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"], target: .finderWatch),
                 feature("Exclude from Sorty", "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"], target: .finderExclude),
-                feature("Finder Extension", "Activate or repair the Finder Sync extension and jump to macOS Extensions settings.", keywords: ["finder sync", "extensions"], target: .finderExtension),
                 feature("Automation Permission", "Grant and recover Finder automation permission required for workflow controls.", keywords: ["apple events", "recover permission"], target: .finderAutomationPermission)
             ]
         case .notifications:

@@ -172,7 +172,7 @@ struct TroubleshootingSettingsView: View {
         )
 
         Task { @MainActor in
-            let finderDiagnostics = await ExtensionCommunication.getFinderSyncDiagnosticsAsync()
+            let finderStatus = await ExtensionCommunication.getIntegrationStatusAsync()
             let config = viewModel.config
             var checks: [SupportHealthCheck] = []
 
@@ -234,10 +234,18 @@ struct TroubleshootingSettingsView: View {
                 SupportHealthCheck(
                     id: "finder",
                     title: "Finder Integration",
-                    detail: finderDiagnostics.detailMessage,
-                    status: finderDiagnostics.isOperational ? .healthy : .needsAttention,
-                    actionTitle: finderDiagnostics.isOperational ? nil : "Open Repair",
-                    destination: finderDiagnostics.isOperational ? nil : .finderExtension
+                    detail: finderStatus.quickActionInstalled
+                        && finderStatus.quickWatchActionInstalled
+                        && finderStatus.quickExcludeActionInstalled
+                        ? "Finder menu actions are installed."
+                        : "One or more Finder menu actions need repair.",
+                    status: finderStatus.quickActionInstalled
+                        && finderStatus.quickWatchActionInstalled
+                        && finderStatus.quickExcludeActionInstalled
+                        ? .healthy
+                        : .needsAttention,
+                    actionTitle: "Open Finder Integration",
+                    destination: .finderIntegration
                 )
             )
 
