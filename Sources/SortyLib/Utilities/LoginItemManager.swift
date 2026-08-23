@@ -60,28 +60,22 @@ public class LoginItemManager: ObservableObject {
         // Observe UserDefaults for background and login item settings
         // This ensures system registration stays in sync even when main window is closed
         
-        Publishers.Merge3(
-            UserDefaults.standard.publisher(for: \.keepInBackground),
-            UserDefaults.standard.publisher(for: \.launchAtLogin),
-            UserDefaults.standard.publisher(for: \.showMenuBarExtra)
-        )
+        UserDefaults.standard.publisher(for: \.launchAtLogin)
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                // Let the control that changed this setting render its new state
-                // before ServiceManagement performs potentially blocking work.
-                await Task.yield()
-                let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
-                let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-                let showMenuBarExtra = UserDefaults.standard.bool(forKey: "showMenuBarExtra")
-                
-                self.syncServiceRegistration(
-                    launchAtLogin: launchAtLogin,
-                    keepInBackground: keepInBackground,
-                    showMenuBarExtra: showMenuBarExtra
-                )
-            }
+            self?.syncLaunchAtLoginRegistration()
+        }
+        .store(in: &cancellables)
+
+        UserDefaults.standard.publisher(for: \.keepInBackground)
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _ in
+            let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
+            let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
+            self?.syncServiceRegistration(
+                launchAtLogin: launchAtLogin,
+                keepInBackground: keepInBackground
+            )
         }
         .store(in: &cancellables)
     }
@@ -125,6 +119,42 @@ public class LoginItemManager: ObservableObject {
         } else {
             registerService()
         }
+    }
+
+    private func syncLaunchAtLoginRegistration() {
+        let shouldLaunchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
+
+        Task.detached { [weak self] in
+            let status = Self.updateMainAppRegistration(enabled: shouldLaunchAtLogin)
+            await MainActor.run {
+                guard let self else { return }
+                self.isLaunchAtLoginEnabled = (status == .enabled)
+                self.registrationStatus = self.describe(status)
+            }
+        }
+    }
+
+    private nonisolated static func updateMainAppRegistration(enabled: Bool) -> SMAppService.Status {
+        let service = SMAppService.mainApp
+        let currentStatus = service.status
+
+        if enabled && (currentStatus == .notRegistered || currentStatus == .notFound) {
+            do {
+                try service.register()
+                DebugLogger.log("Registered main app service (Login Item)")
+            } catch {
+                DebugLogger.log("Failed to register login item: \(error.localizedDescription)")
+            }
+        } else if !enabled && (currentStatus == .enabled || currentStatus == .requiresApproval) {
+            do {
+                try service.unregister()
+                DebugLogger.log("Unregistered main app service (Login Item)")
+            } catch {
+                DebugLogger.log("Failed to unregister login item: \(error.localizedDescription)")
+            }
+        }
+
+        return service.status
     }
 
     /// Synchronizes the SMAppService registration based on current settings.
