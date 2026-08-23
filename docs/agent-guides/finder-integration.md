@@ -29,7 +29,14 @@
 
 ## Toolbar integration
 
-Sorty does not provide a Finder toolbar item. `menu(for:)` must return `nil` immediately for `.toolbarItemMenu`. Supplying a toolbar menu without implementing a toolbar item can trigger repeated `NSToolbarView` layout invalidation in Finder on affected macOS versions.
+Sorty provides a Finder toolbar item. Keep the complete Finder Sync toolbar contract together:
+
+- `toolbarItemName`
+- `toolbarItemImage`
+- `toolbarItemToolTip`
+- a non-empty menu for `.toolbarItemMenu`
+
+Implementing only `menu(for:)` leaves Finder with an incomplete extension toolbar item. On affected macOS versions, Finder can repeatedly add and remove its `NSPopUpButton`, driving an `NSToolbarView` layout loop. Returning `nil` from `.toolbarItemMenu` does not fix construction because Finder reads the toolbar properties before the user clicks the item.
 
 Mount and unmount notifications may recalculate monitored roots, but assign `directoryURLs` only when the set changed. Reassigning an identical set needlessly rebuilds Finder extension state.
 

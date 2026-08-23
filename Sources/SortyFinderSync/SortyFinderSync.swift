@@ -48,12 +48,19 @@ final class SortyFinderSync: FIFinderSync {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
-    override func menu(for menuKind: FIMenuKind) -> NSMenu? {
-        // Sorty does not provide a Finder toolbar item. Returning a menu for this
-        // kind makes Finder treat the extension as a toolbar-menu participant and
-        // can repeatedly invalidate NSToolbarView layout on affected macOS builds.
-        guard menuKind != .toolbarItemMenu else { return nil }
+    override var toolbarItemName: String {
+        String(localized: "Sorty")
+    }
 
+    override var toolbarItemImage: NSImage {
+        Self.cachedOrganizeImage
+    }
+
+    override var toolbarItemToolTip: String {
+        String(localized: "Organize with Sorty")
+    }
+
+    override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.cachedOrganizeImage
@@ -89,7 +96,23 @@ final class SortyFinderSync: FIFinderSync {
             excludeItem.target = self
             menu.addItem(excludeItem)
         case .toolbarItemMenu:
-            return nil
+            let organizeItem = NSMenuItem(
+                title: String(localized: "Organize Folder"),
+                action: #selector(organizeAction(_:)),
+                keyEquivalent: ""
+            )
+            organizeItem.image = organizeImage
+            organizeItem.target = self
+            menu.addItem(organizeItem)
+
+            let watchItem = NSMenuItem(
+                title: String(localized: "Watch Folder"),
+                action: #selector(watchAction(_:)),
+                keyEquivalent: ""
+            )
+            watchItem.image = watchImage
+            watchItem.target = self
+            menu.addItem(watchItem)
         @unknown default:
             return nil
         }
