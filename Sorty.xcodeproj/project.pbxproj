@@ -138,7 +138,6 @@
 		AABBCC22000200000000006B /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006B /* CostCalculator.swift */; };
 		AABBCC22000200000000006C /* DemoStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006C /* DemoStepView.swift */; };
 		AABBCC22000200000000006F /* FinderIntegrationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */; };
-		AABBCC220002000000000070 /* FolderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000070 /* FolderScheduler.swift */; };
 		AABBCC220002000000000071 /* FormattedReasoningText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000071 /* FormattedReasoningText.swift */; };
 		AABBCC220002000000000072 /* GlassyBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000072 /* GlassyBackButton.swift */; };
 		AABBCC220002000000000074 /* HelpSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000074 /* HelpSettingsView.swift */; };
@@ -467,7 +466,6 @@
 		AABBCC11000100000000006B /* CostCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostCalculator.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006C /* DemoStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStepView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderIntegrationSettingsView.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000070 /* FolderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderScheduler.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000071 /* FormattedReasoningText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattedReasoningText.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000072 /* GlassyBackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassyBackButton.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000074 /* HelpSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSettingsView.swift; sourceTree = "<group>"; };
@@ -665,7 +663,6 @@
 				3353FCB42F0124320097CD23 /* SemanticDuplicateDetector.swift */,
 				3353FCB52F0124320097CD23 /* VisionAnalyzer.swift */,
 				AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */,
-				AABBCC110001000000000070 /* FolderScheduler.swift */,
 			);
 			path = Sources/SortyLib/FileSystem;
 			sourceTree = "<group>";

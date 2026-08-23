@@ -100,6 +100,47 @@ final class UndoReliabilityTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: createdEntry.sources[1].path))
     }
 
+    func testUndoRecordsEarlierSuccessWhenALaterFilesystemRestoreFails() async throws {
+        let destinationDirectory = workspaceDirectory.appendingPathComponent("Organized", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+
+        let blockedParent = workspaceDirectory.appendingPathComponent("blocked")
+        try "not a directory".write(to: blockedParent, atomically: true, encoding: .utf8)
+        let failedDestination = destinationDirectory.appendingPathComponent("failed.txt")
+        let restoredDestination = destinationDirectory.appendingPathComponent("restored.txt")
+        try "failed".write(to: failedDestination, atomically: true, encoding: .utf8)
+        try "restored".write(to: restoredDestination, atomically: true, encoding: .utf8)
+
+        let failedOperation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: blockedParent.appendingPathComponent("failed.txt").path,
+            destinationPath: failedDestination.path
+        )
+        let restoredOperation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: workspaceDirectory.appendingPathComponent("restored.txt").path,
+            destinationPath: restoredDestination.path
+        )
+        let entry = OrganizationHistoryEntry(
+            directoryPath: workspaceDirectory.path,
+            filesOrganized: 2,
+            foldersCreated: 1,
+            status: .completed,
+            operations: [failedOperation, restoredOperation]
+        )
+        history.addEntry(entry)
+
+        let result = try await organizer.undoHistoryEntry(entry)
+
+        XCTAssertEqual(result.successfulOperations, 1)
+        XCTAssertEqual(result.retryableFailedOperationIDs, [failedOperation.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workspaceDirectory.appendingPathComponent("restored.txt").path))
+
+        let partiallyUndone = try XCTUnwrap(history.entries.first)
+        XCTAssertEqual(partiallyUndone.operations?.map(\.id), [failedOperation.id])
+        XCTAssertEqual(partiallyUndone.undoRestoredCount, 1)
+    }
+
     func testFailedSingleOperationUndoRemainsRetryable() async throws {
         let createdEntry = try makeMovedEntry(fileNames: ["single.txt"])
         history.addEntry(createdEntry.entry)

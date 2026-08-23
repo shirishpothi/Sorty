@@ -66,24 +66,6 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: "sensitiveActionAuthenticationEnabled")
     }
 
-    /// Controls whether Finder file tagging is enabled during organization.
-    /// Tags may not apply correctly in all macOS sandboxed environments.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app fileTaggingEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app fileTaggingEnabled -bool false
-    /// ```
-    public static var fileTaggingEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "fileTaggingEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "fileTaggingEnabled")
-    }
-
     /// Controls whether the interactive demo is shown during onboarding.
     ///
     /// Disabled by default. Enable via Terminal:
@@ -161,18 +143,7 @@ public enum FeatureFlags {
     /// ```
     /// SORTY_HARNESS_MODE=1 open Sorty.app
     /// ```
-    ///
-    /// Target a specific view:
-    /// ```
-    /// SORTY_HARNESS_VIEW=settings SORTY_HARNESS_MODE=1 open Sorty.app
-    /// ```
     public static var harnessMode: Bool {
         ProcessInfo.processInfo.environment["SORTY_HARNESS_MODE"] == "1"
-    }
-
-    /// The target view to show in harness mode.
-    /// Supported values: "settings", "organize", "learnings", "history", "health"
-    public static var harnessView: String? {
-        ProcessInfo.processInfo.environment["SORTY_HARNESS_VIEW"]
     }
 }

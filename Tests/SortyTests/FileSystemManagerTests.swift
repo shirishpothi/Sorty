@@ -821,6 +821,22 @@ final class DuplicateRestorationManagerTests: XCTestCase {
             XCTAssertFalse(FileManager.default.fileExists(atPath: dup.path))
         }
     }
+
+    func testMoveToTrashPersistsItemsMovedBeforeALaterFailure() throws {
+        let movedFile = tempDirectory.appendingPathComponent("moved.txt")
+        try "Content".write(to: movedFile, atomically: true, encoding: .utf8)
+        let missingFile = tempDirectory.appendingPathComponent("missing.txt")
+
+        XCTAssertThrowsError(
+            try manager.moveToTrash(files: [
+                FileItem(path: movedFile.path, name: "moved", extension: "txt", size: 7, isDirectory: false),
+                FileItem(path: missingFile.path, name: "missing", extension: "txt", size: 0, isDirectory: false),
+            ])
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: movedFile.path))
+        XCTAssertEqual(manager.restoredItems.map(\.originalPath), [movedFile.path])
+    }
     
     func testRestoreDuplicate() throws {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")

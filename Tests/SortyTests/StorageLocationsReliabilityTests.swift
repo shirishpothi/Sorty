@@ -50,6 +50,38 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         )
     }
 
+    func testValidatorRejectsAbsoluteStorageDestinationThatEscapesThroughSymlink() throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        let outsideDir = tempRoot.appendingPathComponent("Outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+
+        let link = storageDir.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideDir)
+        let fileURL = sourceDir.appendingPathComponent("secret.txt")
+        try "secret".write(to: fileURL, atomically: true, encoding: .utf8)
+        let file = FileItem(path: fileURL.path, name: "secret", extension: "txt", size: 6, isDirectory: false)
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: link.path, files: [file])],
+            unorganizedFiles: [],
+            notes: "symlink escape"
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validate(
+                plan,
+                at: sourceDir,
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
+            )
+        ) { error in
+            guard case ValidationError.invalidStorageLocation = error else {
+                return XCTFail("Expected an invalid storage location error, got \(error)")
+            }
+        }
+    }
+
     func testGoogleDriveProfileSeparatesFilesystemAndNativeActions() {
         let location = StorageLocation(
             path: "/Users/test/Library/CloudStorage/GoogleDrive-user@example.com/My Drive"

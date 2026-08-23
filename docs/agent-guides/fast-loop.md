@@ -35,24 +35,13 @@ These routes only replace the workflow content with the existing `ErrorView`. Th
 ```bash
 # Launch harness (default view)
 make harness
-
-# Target a specific view
-make harness-settings
-make harness-organize
 ```
 
 ### How It Works
 
 - Sets `SORTY_HARNESS_MODE=1` environment variable
 - `FeatureFlags.harnessMode` gates heavy startup (folder watchers, AI prewarm, notification setup)
-- `FeatureFlags.harnessView` controls which view appears on launch
 - Skips tests automatically for maximum speed
-
-### Adding Harness Support for New Views
-
-1. Add a case to `FeatureFlags.harnessView` handling
-2. Add a `make harness-<view>` target in the Makefile
-3. Ensure the view doesn't crash without full manager initialization
 
 ## Build Speed Optimizations
 

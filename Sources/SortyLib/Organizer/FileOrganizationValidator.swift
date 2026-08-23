@@ -36,12 +36,13 @@ struct FileOrganizationValidator {
     }
 
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
-        let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })
+        let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.resolvedPath($0.path) })
 
         func checkSuggestion(_ suggestion: FolderSuggestion) throws {
             // Check if this destination is an absolute storage location
             if let absolutePath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName) {
-                if !isAllowedStorageDestination(absolutePath, allowedRoots: allowedPaths) {
+                let resolvedPath = StorageLocationPathResolver.resolvedPath(absolutePath)
+                if !isAllowedStorageDestination(resolvedPath, allowedRoots: allowedPaths) {
                     throw ValidationError.invalidStorageLocation(absolutePath)
                 }
             }

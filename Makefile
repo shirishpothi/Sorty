@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-settings harness-organize harness-accent ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent ci ci-report
 
 # Default target
 all: build
@@ -183,21 +183,11 @@ benchmark-save:
 	@cp .build/benchmark-results.json .build/benchmark-baseline.json
 	@echo "✅ Baseline saved to .build/benchmark-baseline.json"
 
-# Preview harness — launches a targeted view for rapid iteration
+# Preview harness for rapid iteration
 harness:
 	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
-
-harness-settings:
-	@echo "🔬 Harness → Settings..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
-	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=settings open releases/Sorty.app
-
-harness-organize:
-	@echo "🔬 Harness → Organize..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
-	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
 
 harness-accent:
 	@echo "🔬 Harness → Accent prototypes..."
@@ -241,8 +231,6 @@ help:
 	@echo ""
 	@echo "Preview Harness (fast iteration):"
 	@echo "  make harness          - Build and launch harness mode"
-	@echo "  make harness-settings - Harness targeting Settings view"
-	@echo "  make harness-organize - Harness targeting Organize view"
 	@echo "  make harness-accent   - Launch the six accent color prototypes"
 	@echo ""
 	@echo "Benchmarking:"

@@ -49,6 +49,13 @@ enum StorageLocationPathResolver {
         return child.hasPrefix(parentPrefix)
     }
 
+    /// Resolves existing symbolic links before comparing or using filesystem paths.
+    static func resolvedPath(_ rawPath: String) -> String {
+        let canonical = canonicalPath(rawPath)
+        guard !canonical.isEmpty else { return canonical }
+        return URL(fileURLWithPath: canonical).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
     private static func normalizeAbsolutePath(_ rawAbsolutePath: String) -> String {
         let expanded = (rawAbsolutePath as NSString).expandingTildeInPath
         let standardized = URL(fileURLWithPath: expanded).standardizedFileURL.path

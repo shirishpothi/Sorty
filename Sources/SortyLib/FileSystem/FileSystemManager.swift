@@ -201,10 +201,11 @@ public actor FileSystemManager {
         requestSecurityScope: Bool = true
     ) throws -> URL {
         if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: folderName) {
+            let resolvedURL = URL(fileURLWithPath: StorageLocationPathResolver.resolvedPath(absoluteURL.path), isDirectory: true)
             if requestSecurityScope {
-                _ = startAccessing(absoluteURL)
+                _ = startAccessing(resolvedURL)
             }
-            return absoluteURL
+            return resolvedURL
         }
 
         let sanitizedName = folderName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1487,7 +1488,8 @@ public actor FileSystemManager {
 
         // First pass: move files back
         for operation in reversedOps {
-            switch operation.type {
+            do {
+                switch operation.type {
             case .moveFile, .renameFile:
                 if let destinationPath = operation.destinationPath {
                     // Check if the moved file still exists at destination
@@ -1579,6 +1581,12 @@ public actor FileSystemManager {
                         retryableFailedOperationIDs.append(operation.id)
                     }
                 }
+                }
+            } catch {
+                let failedPath = operation.destinationPath ?? operation.sourcePath
+                missingFiles.append(URL(fileURLWithPath: failedPath).lastPathComponent)
+                retryableFailedOperationIDs.append(operation.id)
+                DebugLogger.log("Cannot restore \(failedPath): \(error.localizedDescription)")
             }
         }
 
@@ -2146,10 +2154,9 @@ public class DuplicateRestorationManager: ObservableObject {
                 metadata: metadata
             )
             deletedItems.append(item)
+            restoredItems.append(item)
+            saveHistory()
         }
-        
-        restoredItems.append(contentsOf: deletedItems)
-        saveHistory()
         
         return deletedItems
     }

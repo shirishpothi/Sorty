@@ -2,6 +2,14 @@ import XCTest
 @testable import SortyLib
 
 final class NetworkPrivacyPolicyTests: XCTestCase {
+    func testGeminiOpenAIEndpointDoesNotAddAnExtraV1PathComponent() throws {
+        let url = try AIRequestSupport.openAIChatCompletionsURL(
+            from: AIProvider.gemini.defaultAPIURL!
+        )
+
+        XCTAssertEqual(url.absoluteString, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+    }
+
     private var testDefaultsSuiteName = ""
     private var testDefaults: UserDefaults!
 

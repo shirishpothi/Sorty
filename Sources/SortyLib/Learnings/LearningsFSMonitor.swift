@@ -65,9 +65,12 @@ private final class FSEventStreamManager: @unchecked Sendable {
             
             var context = FSEventStreamContext(
                 version: 0,
-                info: Unmanaged.passUnretained(self).toOpaque(),
+                info: Unmanaged.passRetained(self).toOpaque(),
                 retain: nil,
-                release: nil,
+                release: { info in
+                    guard let info else { return }
+                    Unmanaged<FSEventStreamManager>.fromOpaque(info).release()
+                },
                 copyDescription: nil
             )
             
@@ -167,7 +170,7 @@ public class LearningsFSMonitor: ObservableObject {
     }
     
     deinit {
-        // Stream cleanup is handled by FSEventStreamManager
+        streamManager.stopStream()
     }
     
     // MARK: - Public API

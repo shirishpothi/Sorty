@@ -46,14 +46,14 @@ struct PreviewView: View {
     }
     
     private var renameCount: Int {
-        editablePlan.suggestions.reduce(0) { $0 + $1.renameCount }
+        displayedPlan.suggestions.reduce(0) { $0 + $1.renameCount }
     }
     private var shouldDisableButtons: Bool { isApplying || organizer.state == .scanning || organizer.state == .organizing }
     private var isOrganizing: Bool { isApplying || organizer.state == .applying }
     private var mode: OrganizationMode { settingsViewModel.config.mode }
     private var emptyStateType: PreviewListView.EmptyStateType {
-        if editablePlan.totalFiles == 0 { return .emptyDirectory }
-        if editablePlan.suggestions.isEmpty && !editablePlan.unorganizedFiles.isEmpty { return .allUnorganized(editablePlan.unorganizedFiles.count) }
+        if displayedPlan.totalFiles == 0 { return .emptyDirectory }
+        if displayedPlan.suggestions.isEmpty && !displayedPlan.unorganizedFiles.isEmpty { return .allUnorganized(displayedPlan.unorganizedFiles.count) }
         return .none
     }
     
@@ -105,7 +105,7 @@ struct PreviewView: View {
                 }
             )
             if settingsViewModel.config.showStatsForNerds {
-                PreviewStatsView(stats: editablePlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(editablePlan.totalFiles)), totalFiles: editablePlan.totalFiles, stage: organizer.organizationStage)
+                PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(displayedPlan.totalFiles)), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
             PreviewListView(
@@ -233,11 +233,11 @@ struct PreviewView: View {
     private var applyConfirmationMessage: String {
         switch mode {
         case .renameOnly:
-            return "\(renameCount) suggested name changes will be applied in place. \(editablePlan.unorganizedFiles.count) files will be left unchanged."
+            return "\(renameCount) suggested name changes will be applied in place. \(displayedPlan.unorganizedFiles.count) files will be left unchanged."
         case .organizeAndRename:
-            return "\(editablePlan.totalFiles) files will be organized, with \(renameCount) name changes. \(editablePlan.unorganizedFiles.count) files will remain in place."
+            return "\(displayedPlan.totalFiles) files will be organized, with \(renameCount) name changes. \(displayedPlan.unorganizedFiles.count) files will remain in place."
         case .organize:
-            return "\(editablePlan.totalFiles) files will be organized. \(editablePlan.unorganizedFiles.count) files will remain in place."
+            return "\(displayedPlan.totalFiles) files will be organized. \(displayedPlan.unorganizedFiles.count) files will remain in place."
         }
     }
     
@@ -279,7 +279,8 @@ struct PreviewView: View {
     }
     
     private func applyOrganization() {
-        isApplying = true; if hasEdits { organizer.currentPlan = editablePlan }
+        isApplying = true
+        organizer.currentPlan = displayedPlan
         onApplyStarted?()
         if activeNotificationApplyRequestID != nil {
             NotificationManager.shared.recordActionLifecycle("apply", stage: "executing", detail: baseURL.path)
