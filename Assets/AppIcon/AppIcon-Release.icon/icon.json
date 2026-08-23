@@ -18,7 +18,17 @@
   "groups" : [
     {
       "layers" : [
-
+        {
+          "image-name" : "Image.png",
+          "name" : "Image",
+          "position" : {
+            "scale" : 0.89,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
       ],
       "shadow" : {
         "kind" : "neutral",
@@ -30,6 +40,7 @@
       }
     },
     {
+      "hidden" : true,
       "layers" : [
         {
           "image-name" : "Image 6.png",
