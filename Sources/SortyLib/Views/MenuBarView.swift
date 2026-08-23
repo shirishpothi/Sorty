@@ -144,7 +144,6 @@ public struct MenuBarView: View {
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @State private var isAllPaused: Bool = false
-    @State private var isDropTargeted: Bool = false
 
     public init() {}
 
@@ -176,16 +175,6 @@ public struct MenuBarView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 280)
-        .siriDropZone(cornerRadius: 10, isTargeted: $isDropTargeted) { providers in
-            Task {
-                await menuBarController.handleDrop(providers: providers)
-            }
-            return true
-        }
-        .popover(isPresented: $menuBarController.showPopover) {
-            LiquidGlassPopover(controller: menuBarController)
-                .systemLiquidGlassPopover(cornerRadius: 12)
-        }
     }
 
     // MARK: - Status Header
