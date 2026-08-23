@@ -129,7 +129,7 @@ struct SortyAppShortcutsProvider: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .teal
 
     static var appShortcuts: [AppShortcut] {
-        [
+        let shortcuts = [
             AppShortcut(
                 intent: OpenSortyDestinationIntent(destination: .organize),
                 phrases: [
@@ -160,5 +160,7 @@ struct SortyAppShortcutsProvider: AppShortcutsProvider {
                 systemImageName: "folder.badge.gearshape"
             )
         ]
+
+        return shortcuts
     }
 }
