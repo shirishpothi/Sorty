@@ -91,6 +91,18 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertFalse(FolderWatcher.shouldIgnoreCloudPlaceholder(at: googleDocument))
     }
 
+    func testAcceptedDeliveryOnlyRemovesFilesStillPending() {
+        var pending: Set<String> = ["later.txt"]
+
+        let removedCount = FolderWatcher.removeAcceptedBatch(
+            ["already-cleared.txt"],
+            from: &pending
+        )
+
+        XCTAssertEqual(removedCount, 0)
+        XCTAssertEqual(pending, ["later.txt"])
+    }
+
     func testCoalescesNestedMonitoringRootsWithoutCollapsingSiblingPrefixes() {
         let roots = FolderWatcher.minimalMonitoringRoots(from: [
             "/Users/example/Documents",

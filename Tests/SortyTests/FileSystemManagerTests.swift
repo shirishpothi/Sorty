@@ -69,6 +69,38 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testCollisionMetadataTargetsMovedFile() async throws {
+        let sourceFile = tempDirectory.appendingPathComponent("test.txt")
+        try "Moved content".write(to: sourceFile, atomically: true, encoding: .utf8)
+
+        let destFolder = tempDirectory.appendingPathComponent("Dest")
+        try FileManager.default.createDirectory(at: destFolder, withIntermediateDirectories: true)
+        try "Existing content".write(
+            to: destFolder.appendingPathComponent("test.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let fileItem = FileItem(
+            path: sourceFile.path,
+            name: "test",
+            extension: "txt",
+            size: 13,
+            isDirectory: false
+        )
+        var suggestion = FolderSuggestion(folderName: "Dest", files: [fileItem])
+        suggestion.fileTagMappings.append(
+            FileTagMapping(originalFile: fileItem, tags: ["CollisionTarget"], comment: "Moved file")
+        )
+
+        let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory)
+
+        let tagOperation = try XCTUnwrap(operations.first { $0.type == .tagFile })
+        XCTAssertEqual(tagOperation.sourcePath, destFolder.appendingPathComponent("test_1.txt").path)
+    }
+
+    @MainActor
     func testMoveFilesRejectsSymlinkedDestinationOutsideBaseDirectory() async throws {
         let outsideDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
@@ -697,6 +729,28 @@ class FileSystemManagerTests: XCTestCase {
         // We can't assert it's removed because the implementation tries but doesn't guarantee
         // Just verify the file was moved
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Dest/move_me.txt").path))
+    }
+
+    @MainActor
+    func testEmptyFolderCleanupKeepsSelectedRootAndItsParent() async throws {
+        let selectedRoot = tempDirectory.appendingPathComponent("Selected", isDirectory: true)
+        let destinationFolder = selectedRoot.appendingPathComponent("Dest", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+        try Data().write(to: selectedRoot.appendingPathComponent(".DS_Store"))
+        let destinationFile = destinationFolder.appendingPathComponent("move_me.txt")
+        try "Content".write(to: destinationFile, atomically: true, encoding: .utf8)
+        let restoredFile = tempDirectory.appendingPathComponent("move_me.txt")
+        let operation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: restoredFile.path,
+            destinationPath: destinationFile.path
+        )
+
+        _ = try await fileSystemManager.reverseOperations([operation])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: selectedRoot.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restoredFile.path))
     }
 }
 

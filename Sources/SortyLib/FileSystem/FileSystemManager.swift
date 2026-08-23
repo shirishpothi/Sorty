@@ -12,7 +12,7 @@ import Darwin
 
 public actor FileSystemManager {
     private let fileManager = FileManager.default
-    private var activeBookmarks: [URL: URL] = [:]
+    private var activeBookmarks: [URL: Int] = [:]
 
     // Track files that are currently being reverted to prevent re-organization
     private var revertingPaths: Set<String> = []
@@ -188,7 +188,7 @@ public actor FileSystemManager {
     /// Start accessing a security-scoped resource and track it
     private func startAccessing(_ url: URL) -> Bool {
         if url.startAccessingSecurityScopedResource() {
-            activeBookmarks[url] = url
+            activeBookmarks[url, default: 0] += 1
             return true
         }
         return false
@@ -262,8 +262,10 @@ public actor FileSystemManager {
 
     /// Stop accessing all tracked security-scoped resources
     private func stopAccessingAll() {
-        for url in activeBookmarks.keys {
-            url.stopAccessingSecurityScopedResource()
+        for (url, accessCount) in activeBookmarks {
+            for _ in 0..<accessCount {
+                url.stopAccessingSecurityScopedResource()
+            }
         }
         activeBookmarks.removeAll()
     }
@@ -986,11 +988,19 @@ public actor FileSystemManager {
 
             if enableTagging {
                 progress?(0.8, "Applying tags...")
+                let movedDestinations = allOperations.reduce(into: [String: URL]()) { destinations, operation in
+                    guard operation.type == .moveFile || operation.type == .renameFile,
+                          let destinationPath = operation.destinationPath else {
+                        return
+                    }
+                    destinations[normalizedPath(operation.sourcePath)] = URL(fileURLWithPath: destinationPath)
+                }
 
                 for suggestion in plan.suggestions {
                     let result = try await tagFilesWithProgress(
                         suggestion,
                         currentURL: baseURL,
+                        movedDestinations: movedDestinations,
                         dryRun: dryRun,
                         exclusionManager: exclusionManager,
                         operationProgress: &operationProgress
@@ -1303,6 +1313,7 @@ public actor FileSystemManager {
     private func tagFilesWithProgress(
         _ suggestion: FolderSuggestion,
         currentURL: URL,
+        movedDestinations: [String: URL],
         dryRun: Bool,
         exclusionManager: ExclusionRulesManager? = nil,
         operationProgress: inout OrganizationProgress
@@ -1331,7 +1342,9 @@ public actor FileSystemManager {
             }
             
             let finalFilename = finalFilenames[mapping.originalFile.id] ?? mapping.originalFile.displayName
-            let fileURL = folderURL.appendingPathComponent(finalFilename)
+            let sourcePath = mapping.originalFile.url.map { normalizedPath($0.path) }
+            let fileURL = sourcePath.flatMap { movedDestinations[$0] }
+                ?? folderURL.appendingPathComponent(finalFilename)
             
             if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
                 operations.append(op)
@@ -1344,6 +1357,7 @@ public actor FileSystemManager {
             let subResult = try await tagFilesWithProgress(
                 subfolder,
                 currentURL: folderURL,
+                movedDestinations: movedDestinations,
                 dryRun: dryRun,
                 exclusionManager: exclusionManager,
                 operationProgress: &operationProgress
@@ -1710,7 +1724,7 @@ public actor FileSystemManager {
         )
     }
 
-    /// Remove a folder only if it's empty (including cleaning up parent folders)
+    /// Remove only the requested folder when it contains no significant files.
     @discardableResult
     private func removeEmptyFolder(at path: String) throws -> Bool {
         removeEmptyFolderIfEmpty(at: path)
@@ -1743,11 +1757,6 @@ public actor FileSystemManager {
                 if let remaining = try? fileManager.contentsOfDirectory(atPath: path), remaining.isEmpty {
                      try fileManager.removeItem(atPath: path)
                 }
-                
-                // Try to clean up parent folder too
-                let parentPath = (path as NSString).deletingLastPathComponent
-                _ = removeEmptyFolderIfEmpty(at: parentPath)
-                
                 return !fileManager.fileExists(atPath: path)
             }
 

@@ -764,10 +764,13 @@ public final class FolderWatcher: @unchecked Sendable {
                 return
             }
 
-            self.pendingFiles[folderID]?.subtract(batch)
-            self.pendingFileCount -= batch.count
+            if var pending = self.pendingFiles[folderID] {
+                let removedCount = Self.removeAcceptedBatch(batch, from: &pending)
+                self.pendingFileCount -= removedCount
+                self.pendingFiles[folderID] = pending
+            }
             self.recordAcceptedFiles(batch, for: folderID)
-            if self.pendingFiles[folderID]?.isEmpty == true {
+            if self.pendingFiles[folderID]?.isEmpty != false {
                 self.pendingFiles.removeValue(forKey: folderID)
                 self.debounceWorkItems.removeValue(forKey: folderID)
                 self.persistSnapshot(for: folderID)
@@ -1458,6 +1461,12 @@ public final class FolderWatcher: @unchecked Sendable {
         if let files = pendingFiles.removeValue(forKey: folderID) {
             pendingFileCount -= files.count
         }
+    }
+
+    static func removeAcceptedBatch(_ batch: Set<String>, from pending: inout Set<String>) -> Int {
+        let removedCount = pending.intersection(batch).count
+        pending.subtract(batch)
+        return removedCount
     }
 
     private func clearAllPendingFiles() {
