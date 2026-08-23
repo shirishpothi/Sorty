@@ -541,15 +541,6 @@ struct SortyApp: App {
             .onChange(of: hideDockIcon) { _, newValue in
                 appDelegate.updateActivationPolicy(hideDockIcon: newValue)
             }
-            .onChange(of: launchAtLogin) { _, _ in
-                syncLoginItemState()
-            }
-            .onChange(of: keepInBackground) { _, _ in
-                syncLoginItemState()
-            }
-            .onChange(of: showMenuBarExtra) { _, _ in
-                syncLoginItemState()
-            }
     }
 
     private func mainWindowIntegrationHandlers<Content: View>(_ content: Content) -> some View {

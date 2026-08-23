@@ -69,6 +69,9 @@ public class LoginItemManager: ObservableObject {
         .sink { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+                // Let the control that changed this setting render its new state
+                // before ServiceManagement performs potentially blocking work.
+                await Task.yield()
                 let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
                 let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
                 let showMenuBarExtra = UserDefaults.standard.bool(forKey: "showMenuBarExtra")
