@@ -13,6 +13,8 @@ struct FinderIntegrationSettingsView: View {
     @State private var isWatchActionInstalled = false
     @State private var isExcludeActionInstalled = false
     @State private var watchActionMessage: String?
+    @State private var finderSyncActive = false
+    @State private var finderSyncMessage: String?
     @State private var isShowingAutomationPermissionInfo = false
     @State private var isShowingMissingAutomationRecovery = false
     @State private var automationSettingsButtonFrameInScreen: CGRect = .zero
@@ -82,6 +84,12 @@ struct FinderIntegrationSettingsView: View {
                         )
 
                         compactStatusRow(
+                            label: "Finder extension",
+                            isHealthy: finderSyncActive,
+                            focusTarget: .finderExtension
+                        )
+
+                        compactStatusRow(
                             label: "Automation permission",
                             isHealthy: automationManager.automationStatus.isGranted,
                             focusTarget: .finderAutomationPermission
@@ -95,13 +103,16 @@ struct FinderIntegrationSettingsView: View {
             if shouldShowTroubleshooting {
                 SettingsCard(title: "Troubleshooting", icon: "wrench.and.screwdriver", color: .purple) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Sorty uses macOS Quick Actions for Finder commands. Repair the menu actions if Finder does not show them.")
+                        Text("Sorty repairs the Finder menu action automatically where macOS allows it. Use these only if Finder still does not show Sorty actions.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         ViewThatFits(in: .horizontal) {
                             HStack(spacing: 8) {
+                                finderExtensionButton()
+                                openExtensionsButton()
+
                                 if !areFinderMenuActionsInstalled {
                                     repairMenuActionsButton()
                                 }
@@ -110,7 +121,10 @@ struct FinderIntegrationSettingsView: View {
                             }
 
                             VStack(spacing: 8) {
+                                finderExtensionButton(expands: true)
+
                                 HStack(spacing: 8) {
+                                    openExtensionsButton(expands: true)
                                     runFullCheckButton(expands: true)
                                 }
 
@@ -157,7 +171,7 @@ struct FinderIntegrationSettingsView: View {
                             }
                         }
 
-                        if let message = watchActionMessage {
+                        if let message = finderSyncMessage ?? watchActionMessage {
                             HStack(alignment: .top, spacing: 6) {
                                 Image(systemName: "info.circle")
                                     .foregroundStyle(.secondary)
@@ -219,6 +233,40 @@ struct FinderIntegrationSettingsView: View {
         automationManager.checkPermissions(enableChecksIfNeeded: true)
     }
 
+    private func finderExtensionButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
+                finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
+                finderSyncMessage = repair.message
+                if repair.success {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        } label: {
+            Text(finderSyncActive ? "Repair Extension" : "Activate Extension")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+                .numericTextTransition(animationValue: finderSyncActive)
+        }
+        .buttonStyle(.sortyPrimary(size: .regular))
+    }
+
+    private func openExtensionsButton(expands: Bool = false) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            ExtensionCommunication.openFinderExtensionSettings()
+        } label: {
+            Text("Open macOS Extensions")
+                .fixedSize(horizontal: !expands, vertical: false)
+                .frame(maxWidth: expands ? .infinity : nil)
+        }
+        .buttonStyle(.sortySecondary(size: .regular))
+    }
+
     private func repairMenuActionsButton(expands: Bool = false) -> some View {
         Button {
             HapticFeedbackManager.shared.tap()
@@ -256,11 +304,11 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var shouldShowTroubleshooting: Bool {
-        !areFinderMenuActionsInstalled || !automationManager.automationStatus.isGranted || watchActionMessage != nil
+        !areFinderMenuActionsInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
     }
 
     private var isFullyReady: Bool {
-        areFinderMenuActionsInstalled && automationManager.automationStatus.isGranted
+        areFinderMenuActionsInstalled && finderSyncActive && automationManager.automationStatus.isGranted
     }
 
     private var areFinderMenuActionsInstalled: Bool {
@@ -287,14 +335,14 @@ struct FinderIntegrationSettingsView: View {
 
     private var overallStatusSubtitle: String {
         if isFullyReady {
-            return "Use Finder's right-click menu to organize folders, add watched folders, or exclude paths."
+            return "Use Finder's right-click menu to organize folders, add watched folders, or exclude paths. Sorty will keep checking this setup in the background."
         }
 
         if automationManager.automationStatus == .denied {
             return "macOS Automation permission is blocking Finder selection. Sorty can repair the rest automatically, but this permission must be re-enabled in System Settings."
         }
 
-        return "Sorty installs and repairs its macOS Quick Actions automatically."
+        return "Sorty installs and repairs the Finder menu actions automatically. If macOS needs confirmation, the repair options below will take you to the right place."
     }
 
     private var automationStatusSummary: String {
@@ -314,6 +362,7 @@ struct FinderIntegrationSettingsView: View {
         isOrganizeActionInstalled = status.quickActionInstalled
         isWatchActionInstalled = status.quickWatchActionInstalled
         isExcludeActionInstalled = status.quickExcludeActionInstalled
+        finderSyncActive = status.finderSyncEnabled
     }
 }
 

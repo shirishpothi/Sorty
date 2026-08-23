@@ -84,8 +84,11 @@ make run
 ### 2. Finder Integration
 Sorty includes Finder Integration as a core app feature:
 1. Open **Settings -> Finder Integration**.
-2. Sorty installs macOS Quick Actions for organizing, watching, and excluding folders.
-3. Use **Repair Menu Actions** if Finder does not show them.
+2. Use **Activate** or **Repair** if the Finder extension needs attention.
+3. Use **Open Extensions** and confirm **SortyFinderSync** is enabled in macOS Extensions settings.
+
+> [!IMPORTANT]
+> The Finder extension requires **App Groups** to be configured in both the main app and extension targets using the identifier `group.com.sorty.app`.
 
 ### 3. Watched Folders
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
@@ -143,7 +146,7 @@ New installations use the version-independent [`Sorty.zip`](https://github.com/s
 
 - `Sources/SortyLib/`: Shared product logic, services, models, and SwiftUI views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
-- `Sources/SortyFinderSync/`: Inert migration shell for the retired Finder Sync extension.
+- `Sources/SortyFinderSync/`: Finder Sync extension entry point.
 - `Sources/SortyWidgets/`: WidgetKit extension and shared widget surfaces.
 - `Tests/SortyTests/`: Unit and integration tests.
 - `Tests/SortyUITests/`: macOS UI and accessibility tests.
@@ -156,7 +159,7 @@ New installations use the version-independent [`Sorty.zip`](https://github.com/s
 flowchart LR
     subgraph EntryPoints["Entry Points"]
         User["User"]
-        Finder["Finder right-click<br/>macOS Quick Actions"]
+        Finder["Finder right-click<br/>SortyFinderSync"]
         Shortcuts["Shortcuts and App Intents<br/>sorty:// deeplinks"]
         WatchEvents["Watched folders<br/>FSEvents and schedules"]
         MenuBar["Menu bar extra<br/>global shortcuts"]
@@ -350,7 +353,7 @@ Tests are located in `Tests/SortyTests/` and cover the following areas:
 Key test files include:
 - `SortyTests.swift` - Core organization logic
 - `LearningsManagerTests.swift` - Passive learning system
-- `FinderIntegrationStatusTests.swift` - Legacy Finder Sync diagnostics and migration behavior
+- `FinderIntegrationStatusTests.swift` - Finder Sync diagnostics, registration parsing, and auto-repair
 - `StorageDestinationNormalizerTests.swift` - Storage location path resolution and normalization
 - `StorageLocationsReliabilityTests.swift` - Storage validation and reliability
 - `PrivacyPathMaskerTests.swift` - Privacy-sensitive path redaction

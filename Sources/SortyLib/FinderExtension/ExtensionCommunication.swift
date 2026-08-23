@@ -25,7 +25,6 @@ private actor FinderSyncAutoRepairGate {
 }
 
 public struct ExtensionCommunication {
-    private static let finderSyncRetirementMigrationKey = "finderSyncRetirementMigrationV1"
     private static let appGroupIdentifier = "group.com.sorty.app"
     private static let directoryKey = "selectedDirectory"
     private static let organizeQuickActionWorkflowName = "Organize with Sorty.workflow"
@@ -1186,43 +1185,6 @@ public struct ExtensionCommunication {
             }
 
             _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: true)
-        }
-    }
-
-    /// Disables the retired Finder Sync extension once for existing installs.
-    /// Sorty's Finder commands continue to work through installed Quick Actions.
-    public static func retireFinderSyncExtensionIfNeeded() async {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: finderSyncRetirementMigrationKey) else { return }
-
-        defaults.removeObject(forKey: "finderIntegrationEnabled")
-        defaults.set(false, forKey: "enableFinderSyncExtension")
-
-        let identifiers = Set([
-            finderSyncBundleIdentifier(),
-            "com.sorty.app.SortyFinderSync",
-            "com.shirishpothi.Sorty.SortyFinderSync",
-            "shirishpothi.Sorty.SortyFinderSync",
-        ])
-
-        var didDisableAll = true
-        for identifier in identifiers {
-            let result = await runCommandAsync(
-                executablePath: "/usr/bin/pluginkit",
-                arguments: ["-e", "ignore", "-i", identifier]
-            )
-            didDisableAll = didDisableAll && [0, 1].contains(result.exitCode)
-        }
-
-        let stopResult = await runCommandAsync(
-            executablePath: "/usr/bin/pkill",
-            arguments: ["-x", "SortyFinderSync"]
-        )
-        let didStop = [0, 1].contains(stopResult.exitCode)
-
-        if didDisableAll && didStop {
-            defaults.set(true, forKey: finderSyncRetirementMigrationKey)
-            clearCachedFinderSyncRuntimeHeartbeat()
         }
     }
 
@@ -3427,6 +3389,9 @@ public struct ExtensionCommunication {
     }
 
     public static func getIntegrationStatusAsync() async -> FinderIntegrationStatus {
+        let finderSyncEnabled = await isFinderSyncExtensionActiveAsync()
+        UserDefaults.standard.set(finderSyncEnabled, forKey: "enableFinderSyncExtension")
+
         let quickWatchActionInstalled = await isQuickWatchActionInstalledAsync()
         let quickExcludeActionInstalled = await isQuickExcludeActionInstalledAsync()
         let toolbarAppInstalled = await withCheckedContinuation { continuation in
@@ -3440,7 +3405,7 @@ public struct ExtensionCommunication {
             quickWatchActionInstalled: quickWatchActionInstalled,
             quickExcludeActionInstalled: quickExcludeActionInstalled,
             toolbarAppInstalled: toolbarAppInstalled,
-            finderSyncEnabled: false,
+            finderSyncEnabled: finderSyncEnabled,
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
         )
     }

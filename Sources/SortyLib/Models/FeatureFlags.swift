@@ -11,10 +11,13 @@ import Foundation
 public enum FeatureFlags {
     /// Legacy preference for Finder Integration.
     ///
-    /// The legacy Finder Sync extension is retired. This key remains only so old
-    /// installs can be migrated to Quick Actions without re-enabling the extension.
+    /// Finder Integration is a core app feature. The key remains for migration and
+    /// older installs that may have written it, but new installs default to enabled.
     public static var finderSyncEnabled: Bool {
-        false
+        if UserDefaults.standard.object(forKey: "finderIntegrationEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
     }
 
     /// Controls privacy features like blurring sensitive handles and hiding API keys by default.

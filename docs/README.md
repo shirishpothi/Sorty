@@ -189,12 +189,14 @@ entire list after every trigger or setting change.
 
 Sorty can expose Finder actions without needing terminal commands.
 
-### Quick Action repair
+### Quick Action and Finder Sync Repair (In-App)
 
 1. Open **Settings -> Finder Integration**
-2. Click **Repair Menu Actions** to reinstall Sorty's macOS Quick Actions
+2. In **Quick Action**, click **Install** (or **Uninstall/Install** to reinstall)
+3. Click **Repair Finder Sync** (or **Activate Extension**) to refresh the `.appex` registration
+4. Click **Open Extensions** and confirm Sorty is enabled under Finder extensions
 
-The legacy Finder Sync extension is retired because its filesystem-wide registration could trigger a Finder toolbar layout loop. Existing installations disable it during migration.
+If Finder still shows stale state, run the in-app repair buttons again and then re-open Finder.
 
 ---
 
@@ -322,7 +324,7 @@ System Settings pane.
 
 Choose **Help -> Uninstall Sorty...** and confirm. Sorty removes its saved settings, history, app support data, caches, logs, Keychain credentials, Finder actions and extension state, login/background item registrations, notifications, and privacy permissions. It then closes and deletes the app and any temporary copy it staged in `~/Applications`. Files and folders organized with Sorty are not touched.
 
-If macOS still shows the retired Finder extension after uninstalling, restart Finder:
+If macOS still shows stale Finder extension state, restart Finder:
 
 ```bash
 killall Finder
