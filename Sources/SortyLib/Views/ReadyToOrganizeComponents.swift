@@ -20,6 +20,10 @@ struct ReadyToOrganizeTitle: View {
                             .font(.title2.weight(.semibold))
                             .foregroundStyle(.primary)
                             .numericTextTransition(animationValue: mode)
+                            .workflowNameSliver(
+                                mode: mode,
+                                isActive: showsWorkflowPicker
+                            )
                             .overlay(alignment: .bottom) {
                                 WorkflowDottedUnderline()
                                     .offset(y: 2)
@@ -69,6 +73,75 @@ struct ReadyToOrganizeTitle: View {
         }
         .padding(6)
         .frame(minWidth: 190)
+    }
+}
+
+private struct WorkflowNameSliverModifier: ViewModifier {
+    let mode: OrganizationMode
+    let isActive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepProgress: CGFloat = 1
+    @State private var sweepTask: Task<Void, Never>?
+
+    private let sweepDuration: TimeInterval = 0.9
+
+    private var colors: [Color] {
+        switch mode {
+        case .organize:
+            return [.clear, .cyan.opacity(0.85), .blue, .clear]
+        case .organizeAndRename:
+            return [.clear, .pink.opacity(0.85), .purple, .clear]
+        case .renameOnly:
+            return [.clear, .yellow.opacity(0.9), .orange, .clear]
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: colors,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 16)
+                    .offset(x: -16 + sweepProgress * (geometry.size.width + 32))
+                    .blur(radius: 0.4)
+                }
+                .mask(content)
+            }
+            .onAppear {
+                runSweep()
+            }
+            .onChange(of: mode) { _, _ in
+                runSweep()
+            }
+            .onDisappear {
+                sweepTask?.cancel()
+            }
+    }
+
+    private func runSweep() {
+        guard isActive, !reduceMotion else { return }
+
+        sweepTask?.cancel()
+        sweepProgress = 0
+        sweepTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.easeInOut(duration: sweepDuration)) {
+                sweepProgress = 1
+            }
+        }
+    }
+}
+
+private extension View {
+    func workflowNameSliver(mode: OrganizationMode, isActive: Bool) -> some View {
+        modifier(WorkflowNameSliverModifier(mode: mode, isActive: isActive))
     }
 }
 
