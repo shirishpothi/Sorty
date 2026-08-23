@@ -282,9 +282,9 @@ public struct ExtensionCommunication {
         }
 
         switch diagnostics.kind {
-        case .missing, .signatureInvalid, .notRegistered, .disabled, .indeterminate, .activeElsewhere, .needsCleanup:
+        case .missing, .signatureInvalid, .notRegistered, .indeterminate, .activeElsewhere, .needsCleanup:
             return true
-        case .registered, .verified:
+        case .disabled, .registered, .verified:
             return false
         }
     }

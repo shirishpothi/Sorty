@@ -262,6 +262,21 @@ final class FinderIntegrationStatusTests: XCTestCase {
         )
     }
 
+    func testAutoRepairRespectsDisabledExtension() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: false)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        XCTAssertFalse(
+            ExtensionCommunication.shouldAutoRepairFinderSync(
+                diagnostics: diagnostics,
+                currentPath: preferredExtensionPath
+            )
+        )
+    }
+
     func testAutoRepairTriggersWhenCurrentBuildPathDiffersFromPreferredRegistration() {
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [.init(path: preferredExtensionPath, isEnabled: true)],

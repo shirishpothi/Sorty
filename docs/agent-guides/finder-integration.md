@@ -25,6 +25,13 @@
 - A `verified` status requires either a recent `FinderSyncRuntimeHeartbeat` from the extension or a matching running process path.
 - The Finder Sync extension posts distributed notifications (`SortyFinderSyncHeartbeat`) on launch and periodically, cached via `UserDefaults` with a 180-second staleness threshold.
 - `parseFinderSyncRegistrationEntries(from:)` parses `pluginkit` output to determine registration state; `+` = enabled, `-` = disabled, no marker = indeterminate.
+- Auto-repair must not re-enable a `.disabled` extension. That state represents the user's macOS Extensions choice.
+
+## Toolbar integration
+
+Sorty does not provide a Finder toolbar item. `menu(for:)` must return `nil` immediately for `.toolbarItemMenu`. Supplying a toolbar menu without implementing a toolbar item can trigger repeated `NSToolbarView` layout invalidation in Finder on affected macOS versions.
+
+Mount and unmount notifications may recalculate monitored roots, but assign `directoryURLs` only when the set changed. Reassigning an identical set needlessly rebuilds Finder extension state.
 
 ## Menu Icon Rendering (CRITICAL — do not regress)
 

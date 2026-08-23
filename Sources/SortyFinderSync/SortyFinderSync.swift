@@ -49,6 +49,11 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        // Sorty does not provide a Finder toolbar item. Returning a menu for this
+        // kind makes Finder treat the extension as a toolbar-menu participant and
+        // can repeatedly invalidate NSToolbarView layout on affected macOS builds.
+        guard menuKind != .toolbarItemMenu else { return nil }
+
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.cachedOrganizeImage
@@ -84,23 +89,7 @@ final class SortyFinderSync: FIFinderSync {
             excludeItem.target = self
             menu.addItem(excludeItem)
         case .toolbarItemMenu:
-            let organizeItem = NSMenuItem(
-                title: String(localized: "Organize Folder"),
-                action: #selector(organizeAction(_:)),
-                keyEquivalent: ""
-            )
-            organizeItem.image = organizeImage
-            organizeItem.target = self
-            menu.addItem(organizeItem)
-
-            let watchItem = NSMenuItem(
-                title: String(localized: "Watch Folder"),
-                action: #selector(watchAction(_:)),
-                keyEquivalent: ""
-            )
-            watchItem.image = watchImage
-            watchItem.target = self
-            menu.addItem(watchItem)
+            return nil
         @unknown default:
             return nil
         }
@@ -185,7 +174,9 @@ final class SortyFinderSync: FIFinderSync {
             ) ?? []
         )
         directoryURLs.insert(FileManager.default.homeDirectoryForCurrentUser)
-        FIFinderSyncController.default().directoryURLs = directoryURLs
+        let controller = FIFinderSyncController.default()
+        guard controller.directoryURLs != directoryURLs else { return }
+        controller.directoryURLs = directoryURLs
     }
 
     private static func open(_ actionURL: URL, directoryURL: URL, event: String) {
