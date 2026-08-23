@@ -89,7 +89,6 @@
 		3353FCCE2F0124320097CD23 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCBA2F0124320097CD23 /* AppCommands.swift */; };
 		3353FCD02F0124320097CD23 /* DuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCBC2F0124320097CD23 /* DuplicatesView.swift */; };
 		3353FCD12F0124320097CD23 /* FileDropDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCBD2F0124320097CD23 /* FileDropDelegate.swift */; };
-		3353FCD32F0124320097CD23 /* MenuBarDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCBF2F0124320097CD23 /* MenuBarDropZone.swift */; };
 		3353FCD42F0124320097CD23 /* PersonaPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC02F0124320097CD23 /* PersonaPickerView.swift */; };
 		3353FCD52F0124320097CD23 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC12F0124320097CD23 /* TimelineView.swift */; };
 		3353FCD62F0124320097CD23 /* WatchedFoldersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */; };
@@ -400,7 +399,6 @@
 		3353FCBA2F0124320097CD23 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
 		3353FCBC2F0124320097CD23 /* DuplicatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatesView.swift; sourceTree = "<group>"; };
 		3353FCBD2F0124320097CD23 /* FileDropDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDropDelegate.swift; sourceTree = "<group>"; };
-		3353FCBF2F0124320097CD23 /* MenuBarDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarDropZone.swift; sourceTree = "<group>"; };
 		3353FCC02F0124320097CD23 /* PersonaPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaPickerView.swift; sourceTree = "<group>"; };
 		3353FCC12F0124320097CD23 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedFoldersView.swift; sourceTree = "<group>"; };
@@ -780,7 +778,6 @@
 				B17D51000000000000000001 /* HistoryDetailSections.swift */,
 				B17D51000000000000000002 /* PreviewRowComponents.swift */,
 				B17D51000000000000000003 /* ReadyToOrganizeComponents.swift */,
-				3353FCBF2F0124320097CD23 /* MenuBarDropZone.swift */,
 				3353FC402F0124320097CD23 /* OrganizationResultView.swift */,
 				3353FC412F0124320097CD23 /* OrganizeView.swift */,
 				3353FCC02F0124320097CD23 /* PersonaPickerView.swift */,

@@ -23,7 +23,7 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
   Most already do press `scaleEffect` + haptic on `onChange(isPressed)`.
 - **Custom `Animation` presets** (`Constants.swift:185`) — `pageTransition`,
   `modalBounce`, `subtleBounce`, `quickSnap`, `loadingPulse`, `smoothEase`.
-- **`HapticTapModifier` / `BounceTapModifier`** (`Constants.swift:220, 254`).
+- **`BounceTapModifier`** (`Constants.swift`).
 - **SF Symbol animations** present: `.pulse`, `.bounce`, `.variableColor.iterative`,
   `contentTransition(.symbolEffect(.replace))`, `.numericText()`, `.interpolate`.
 - **Completion celebration** (`OrganizationCompleteView.swift:120`) — ring expand,

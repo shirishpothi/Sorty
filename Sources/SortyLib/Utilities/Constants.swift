@@ -166,42 +166,6 @@ extension Animation {
         .spring(response: 0.24, dampingFraction: 0.78)
     }
 }
-// MARK: - View Modifiers
-
-/// Adds haptic feedback on tap
-public struct HapticTapModifier: ViewModifier {
-    let feedbackType: HapticFeedbackType
-
-    public enum HapticFeedbackType {
-        case tap
-        case success
-        case error
-        case selection
-        case light
-    }
-
-    public func body(content: Content) -> some View {
-        content
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded { _ in
-                        switch feedbackType {
-                        case .tap:
-                            HapticFeedbackManager.shared.tap()
-                        case .success:
-                            HapticFeedbackManager.shared.success()
-                        case .error:
-                            HapticFeedbackManager.shared.error()
-                        case .selection:
-                            HapticFeedbackManager.shared.selection()
-                        case .light:
-                            HapticFeedbackManager.shared.light()
-                        }
-                    }
-            )
-    }
-}
-
 /// Gives custom modal content a restrained scale-and-rise entrance.
 struct ModalBounceModifier: ViewModifier {
     @State private var appeared = false
@@ -384,11 +348,6 @@ struct AnimatedAppearanceModifier: ViewModifier {
 // MARK: - View Extensions
 
 extension View {
-    /// Adds haptic feedback on tap
-    public func hapticFeedback(_ type: HapticTapModifier.HapticFeedbackType = .tap) -> some View {
-        modifier(HapticTapModifier(feedbackType: type))
-    }
-
     /// Applies modal bounce animation on appear
     public func modalBounce() -> some View {
         modifier(ModalBounceModifier())
