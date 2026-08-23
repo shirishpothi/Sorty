@@ -84,16 +84,37 @@ private struct WorkflowNameSliverModifier: ViewModifier {
     @State private var sweepProgress: CGFloat = 1
     @State private var sweepTask: Task<Void, Never>?
 
-    private let sweepDuration: TimeInterval = 0.9
+    private let sweepDuration: TimeInterval = 1.1
 
     private var colors: [Color] {
         switch mode {
         case .organize:
-            return [.clear, .cyan.opacity(0.85), .blue, .clear]
+            return [
+                .clear,
+                .cyan.opacity(0.72),
+                .blue.opacity(0.95),
+                .white.opacity(0.92),
+                .cyan.opacity(0.72),
+                .clear
+            ]
         case .organizeAndRename:
-            return [.clear, .pink.opacity(0.85), .purple, .clear]
+            return [
+                .clear,
+                .pink.opacity(0.72),
+                .purple.opacity(0.95),
+                .white.opacity(0.92),
+                .pink.opacity(0.72),
+                .clear
+            ]
         case .renameOnly:
-            return [.clear, .yellow.opacity(0.9), .orange, .clear]
+            return [
+                .clear,
+                .yellow.opacity(0.78),
+                .orange.opacity(0.95),
+                .white.opacity(0.92),
+                .yellow.opacity(0.78),
+                .clear
+            ]
         }
     }
 
@@ -106,9 +127,10 @@ private struct WorkflowNameSliverModifier: ViewModifier {
                         startPoint: .leading,
                         endPoint: .trailing
                     )
-                    .frame(width: 16)
-                    .offset(x: -16 + sweepProgress * (geometry.size.width + 32))
-                    .blur(radius: 0.4)
+                    .frame(width: 30, height: geometry.size.height * 2.4)
+                    .rotationEffect(.degrees(-20))
+                    .offset(x: -30 + sweepProgress * (geometry.size.width + 60))
+                    .blur(radius: 0.8)
                 }
                 .mask(content)
             }
@@ -132,7 +154,7 @@ private struct WorkflowNameSliverModifier: ViewModifier {
             await Task.yield()
             guard !Task.isCancelled else { return }
 
-            withAnimation(.easeInOut(duration: sweepDuration)) {
+            withAnimation(.smooth(duration: sweepDuration)) {
                 sweepProgress = 1
             }
         }
