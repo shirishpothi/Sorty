@@ -33,6 +33,11 @@ struct FlattenedRow: Identifiable, Equatable {
     }
 }
 
+struct PreviewMoveDestination: Identifiable {
+    let id: UUID
+    let name: String
+}
+
 // MARK: - Preview Store
 
 @MainActor
@@ -496,6 +501,17 @@ class PreviewStore: ObservableObject {
         }
         return nil
     }
+
+    var moveDestinations: [PreviewMoveDestination] {
+        func collect(_ folders: [FolderSuggestion], parentPath: String) -> [PreviewMoveDestination] {
+            folders.flatMap { folder in
+                let path = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
+                return [PreviewMoveDestination(id: folder.id, name: path)]
+                    + collect(folder.subfolders, parentPath: path)
+            }
+        }
+        return collect(plan.suggestions, parentPath: "")
+    }
     
     func moveFileToUnorganized(fileID: UUID) {
         guard let file = findFile(by: fileID) else { return }
@@ -921,7 +937,8 @@ struct FlattenedRowView: View {
             FlatUnorganizedFileRowView(
                 file: file,
                 dragDropManager: dragDropManager,
-                store: store
+                store: store,
+                onPlanChanged: onPlanChanged
             )
         case .remainingFiles(let count):
             HStack(spacing: 8) {
@@ -1047,6 +1064,15 @@ struct FlatFolderRowView: View {
             .padding(.vertical, 4)
             .contentShape(Rectangle())
             .onTapGesture(perform: toggleExpanded)
+            .focusable()
+            .onKeyPress(.space) {
+                toggleExpanded()
+                return .handled
+            }
+            .onKeyPress(.return) {
+                toggleExpanded()
+                return .handled
+            }
             .accessibilityElement(children: .contain)
             .accessibilityAction(
                 named: isExpanded ? "Collapse \(suggestion.folderName)" : "Expand \(suggestion.folderName)",
@@ -1481,6 +1507,7 @@ struct FlatUnorganizedFileRowView: View {
     let file: FileItem
     @ObservedObject var dragDropManager: DragDropManager
     @ObservedObject var store: PreviewStore
+    let onPlanChanged: () -> Void
     @EnvironmentObject var appState: AppState
 
     @State private var isDragging = false
@@ -1538,15 +1565,39 @@ struct FlatUnorganizedFileRowView: View {
             } label: {
                 Label("Reveal in Finder", systemImage: "folder")
             }
+
+            if !store.moveDestinations.isEmpty {
+                Menu("Move to Folder") {
+                    ForEach(store.moveDestinations) { destination in
+                        Button(destination.name) {
+                            store.moveFile(fileID: file.id, toFolderID: destination.id)
+                            onPlanChanged()
+                        }
+                    }
+                }
+            }
         }
         .onTapGesture(count: 2) {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
+        .focusable()
+        .onKeyPress(.return) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+            return .handled
         }
         .accessibilityAction(named: "Open \(file.displayName)") {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
         }
         .accessibilityAction(named: "Reveal \(file.displayName) in Finder") {
             NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+        }
+        .accessibilityActions {
+            ForEach(store.moveDestinations) { destination in
+                Button("Move to \(destination.name)") {
+                    store.moveFile(fileID: file.id, toFolderID: destination.id)
+                    onPlanChanged()
+                }
+            }
         }
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag {

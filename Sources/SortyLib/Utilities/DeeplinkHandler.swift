@@ -79,11 +79,11 @@ public class DeeplinkHandler: ObservableObject {
         }
         
         switch normalizedHost {
-        case "organize":
+        case "organize", "scan":
             let path = queryValue(for: "path")
             let persona = queryValue(for: "persona")
             let mode = queryValue(for: "mode").flatMap { OrganizationMode(rawValue: $0) }
-            let autostart = queryValue(for: "autostart") == "true"
+            let autostart = normalizedHost == "scan" || queryValue(for: "autostart") == "true"
             pendingDestination = .organize(path: path, persona: persona, mode: mode, autostart: autostart)
             
         case "duplicates":

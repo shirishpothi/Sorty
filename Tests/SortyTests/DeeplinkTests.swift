@@ -413,6 +413,19 @@ final class DeeplinkTests: XCTestCase {
     }
 
     @MainActor
+    func testScanDeeplinkRoutesToAutostartOrganization() {
+        let handler = DeeplinkHandler.shared
+
+        handler.handle(url: URL(string: "sorty://scan?path=/tmp/Inbox")!)
+
+        XCTAssertEqual(
+            handler.pendingDestination,
+            .organize(path: "/tmp/Inbox", persona: nil, mode: nil, autostart: true)
+        )
+        handler.clearPending()
+    }
+
+    @MainActor
     func testGenerateOrganizeURLWithMode() {
         let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, mode: .renameOnly, autostart: true))
         XCTAssertEqual(url?.absoluteString, "sorty://organize?path=/test/path&mode=renameOnly&autostart=true")

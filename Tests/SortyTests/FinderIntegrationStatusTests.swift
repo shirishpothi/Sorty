@@ -5,6 +5,19 @@ final class FinderIntegrationStatusTests: XCTestCase {
     private let preferredExtensionPath = "/Users/test/Applications/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"
     private let staleExtensionPath = "/Applications/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"
 
+    override func tearDown() {
+        UserDefaults(suiteName: "group.com.sorty.app")?.removeObject(forKey: "selectedDirectory")
+        super.tearDown()
+    }
+
+    func testFinderRequestIsConsumedOnlyOnce() {
+        let defaults = UserDefaults(suiteName: "group.com.sorty.app")!
+        defaults.set("/tmp/Incoming", forKey: "selectedDirectory")
+
+        XCTAssertEqual(ExtensionCommunication.receiveFromExtension()?.path, "/tmp/Incoming")
+        XCTAssertNil(ExtensionCommunication.receiveFromExtension())
+    }
+
     func testIntegrationCountUsesActiveIntegrationsOnly() {
         let status = ExtensionCommunication.FinderIntegrationStatus(
             quickActionInstalled: true,

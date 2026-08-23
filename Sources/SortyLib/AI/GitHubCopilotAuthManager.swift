@@ -107,6 +107,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<String, Error>?
     private var authenticationCheckTask: Task<Void, Never>?
+    private var signOutTask: Task<Void, Never>?
     private let defaults = UserDefaults.standard
     private let persistedAuthStateKey = "github_copilot_persisted_auth_state"
     private let persistedUsernameKey = "github_copilot_persisted_username"
@@ -218,6 +219,7 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     func startDeviceFlow() async throws {
+        await signOutTask?.value
         if authError != nil {
             authError = nil
         }
@@ -397,23 +399,21 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
     
     func signOut() {
-        Task {
+        pollTask?.cancel()
+        authenticationCheckTask?.cancel()
+        refreshTask?.cancel()
+        signOutTask?.cancel()
+        signOutTask = Task { [weak self] in
             _ = await KeychainManager.deleteAsync(key: "github_access_token")
-        }
-        invalidateCachedCopilotToken()
-        if isAuthenticated {
-            isAuthenticated = false
-        }
-        if username != nil {
-            username = nil
-        }
-        persistAuthState(authenticated: false)
-        self.pollTask?.cancel()
-        if isPolling {
-            isPolling = false
-        }
-        if deviceCodeResponse != nil {
-            deviceCodeResponse = nil
+            _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
+            guard !Task.isCancelled, let self else { return }
+            UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
+            self.isAuthenticated = false
+            self.username = nil
+            self.persistAuthState(authenticated: false)
+            self.isPolling = false
+            self.deviceCodeResponse = nil
+            self.signOutTask = nil
         }
     }
 

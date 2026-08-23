@@ -586,6 +586,8 @@ struct OrganizeView: View {
                 var config = settingsViewModel.config
                 config.enableStreaming = true
                 try await organizer.configure(with: config)
+            } catch is CancellationError {
+                return
             } catch {
                 organizer.state = .error(error)
             }
@@ -619,6 +621,8 @@ struct OrganizeView: View {
             do {
                 await appState.prepareForManualOrganization(at: directory)
                 try await organizer.organize(directory: directory)
+            } catch is CancellationError {
+                return
             } catch {
                 organizer.state = .error(error)
             }
@@ -661,6 +665,8 @@ struct OrganizeView: View {
                 settingsViewModel.config.model = model
                 try await organizer.configure(with: settingsViewModel.config)
                 try await organizer.regenerateWithModel(provider: provider, model: model)
+            } catch is CancellationError {
+                return
             } catch {
                 await MainActor.run {
                     organizer.state = .error(error)

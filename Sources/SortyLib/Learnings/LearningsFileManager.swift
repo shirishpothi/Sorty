@@ -87,15 +87,12 @@ public struct LearningsFileManager {
         fileManager: FileManager = .default,
         directory: URL? = nil
     ) throws {
-        // Destroy the key first. On copy-on-write storage, overwriting a file is
-        // not a reliable secure erase, while deleting the key immediately makes
-        // the encrypted profile unreadable.
+        let targetDirectory = directory ?? learningsDirectory
+        try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
+
         guard KeychainManager.delete(key: "learnings_encryption_key") else {
             throw LearningsFileError.keychainDeleteFailed
         }
-
-        let targetDirectory = directory ?? learningsDirectory
-        try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
 
         LogManager.shared.log("Deleted all Learnings data", category: "LearningsFile")
     }

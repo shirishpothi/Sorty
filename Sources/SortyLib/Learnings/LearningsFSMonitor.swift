@@ -133,6 +133,7 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Directories being monitored with their snapshots
     private var monitoredDirectories: [URL: FSSnapshot] = [:]
+    private var monitoringGenerations: [URL: UUID] = [:]
     
     /// Cleanup timers for auto-removing monitoring after correlation window
     private var cleanupTasks: [URL: Task<Void, Never>] = [:]
@@ -170,6 +171,12 @@ public class LearningsFSMonitor: ObservableObject {
     }
     
     deinit {
+        for task in cleanupTasks.values {
+            task.cancel()
+        }
+        for task in pendingSnapshotUpdates.values {
+            task.cancel()
+        }
         streamManager.stopStream()
     }
     
@@ -185,6 +192,7 @@ public class LearningsFSMonitor: ObservableObject {
         // Take initial snapshot
         let snapshot = FSSnapshot(at: directory)
         monitoredDirectories[directory] = snapshot
+        monitoringGenerations[directory] = UUID()
         
         LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
         
@@ -201,6 +209,7 @@ public class LearningsFSMonitor: ObservableObject {
         guard monitoredDirectories.keys.contains(directory) else { return }
         
         monitoredDirectories.removeValue(forKey: directory)
+        monitoringGenerations.removeValue(forKey: directory)
         cleanupTasks[directory]?.cancel()
         cleanupTasks.removeValue(forKey: directory)
         pendingSnapshotUpdates[directory]?.cancel()
@@ -229,6 +238,7 @@ public class LearningsFSMonitor: ObservableObject {
             task.cancel()
         }
         monitoredDirectories.removeAll()
+        monitoringGenerations.removeAll()
         cleanupTasks.removeAll()
         pendingSnapshotUpdates.removeAll()
     }
@@ -266,12 +276,17 @@ public class LearningsFSMonitor: ObservableObject {
     }
     
     private func updateSnapshotAndDetectMoves(for directory: URL) async {
-        guard let oldSnapshot = monitoredDirectories[directory] else { return }
+        guard let oldSnapshot = monitoredDirectories[directory],
+              let generation = monitoringGenerations[directory] else { return }
         
         // Take new snapshot on background thread
         let newSnapshot = await Task.detached(priority: .utility) {
             FSSnapshot(at: directory)
         }.value
+
+        guard !Task.isCancelled,
+              monitoredDirectories[directory] != nil,
+              monitoringGenerations[directory] == generation else { return }
         
         // Detect moves by comparing snapshots
         let detection = detectFileMoves(from: oldSnapshot, to: newSnapshot, in: directory)

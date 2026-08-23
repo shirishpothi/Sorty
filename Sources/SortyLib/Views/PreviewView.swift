@@ -31,10 +31,22 @@ struct PreviewView: View {
     @FocusState private var instructionsFocused: Bool
 
     private var displayedPlan: OrganizationPlan {
-        if let idx = viewingHistoryIndex, idx < organizer.planHistory.count {
-            return organizer.planHistory[idx]
+        Self.planForApply(
+            editablePlan: editablePlan,
+            history: organizer.planHistory,
+            viewingHistoryIndex: viewingHistoryIndex
+        )
+    }
+
+    static func planForApply(
+        editablePlan: OrganizationPlan,
+        history: [OrganizationPlan],
+        viewingHistoryIndex: Int?
+    ) -> OrganizationPlan {
+        guard let viewingHistoryIndex, history.indices.contains(viewingHistoryIndex) else {
+            return editablePlan
         }
-        return editablePlan
+        return history[viewingHistoryIndex]
     }
 
     private var isViewingHistory: Bool {
@@ -243,7 +255,15 @@ struct PreviewView: View {
     
     private func regeneratePreview() {
         if !organizer.customInstructions.isEmpty && learningsManager.consentManager.canCollectData { learningsManager.recordGuidingInstruction(organizer.customInstructions) }
-        Task { do { try await organizer.regeneratePreview() } catch { organizer.state = .error(error) } }
+        Task {
+            do {
+                try await organizer.regeneratePreview()
+            } catch is CancellationError {
+                return
+            } catch {
+                organizer.state = .error(error)
+            }
+        }
     }
     
     private func redoWithProviderAndModel(_ provider: AIProvider, _ model: String) {
@@ -264,7 +284,9 @@ struct PreviewView: View {
                     }
                 }
             }
-            catch {
+            catch is CancellationError {
+                isRedoingWithModel = false
+            } catch {
                 await MainActor.run {
                     HapticFeedbackManager.shared.error()
                     isRedoingWithModel = false
@@ -279,8 +301,9 @@ struct PreviewView: View {
     }
     
     private func applyOrganization() {
+        let planToApply = displayedPlan
         isApplying = true
-        organizer.currentPlan = displayedPlan
+        organizer.currentPlan = planToApply
         onApplyStarted?()
         if activeNotificationApplyRequestID != nil {
             NotificationManager.shared.recordActionLifecycle("apply", stage: "executing", detail: baseURL.path)
@@ -292,10 +315,15 @@ struct PreviewView: View {
                 if case .completed = organizer.state {
                     // Record accepted placements only after the apply actually completed,
                     // so failed or cancelled applies don't write false positive examples.
-                    recordAcceptedPlacements()
+                    recordAcceptedPlacements(from: planToApply)
                     isApplying = false
                 }
-            } catch { organizer.state = .error(error); isApplying = false }
+            } catch is CancellationError {
+                isApplying = false
+            } catch {
+                organizer.state = .error(error)
+                isApplying = false
+            }
         }
     }
 
@@ -322,7 +350,7 @@ struct PreviewView: View {
     }
     
     /// Record accepted file placements and rename decisions after a successful apply
-    private func recordAcceptedPlacements() {
+    private func recordAcceptedPlacements(from appliedPlan: OrganizationPlan) {
         guard learningsManager.consentManager.canCollectData else { return }
         var remainingLearningExamples = 2_000
         
@@ -353,7 +381,7 @@ struct PreviewView: View {
             }
         }
         
-        for suggestion in editablePlan.suggestions {
+        for suggestion in appliedPlan.suggestions {
             guard remainingLearningExamples > 0 else { break }
             processFolder(suggestion, parentPath: "")
         }

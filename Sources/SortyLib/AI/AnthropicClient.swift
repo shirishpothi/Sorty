@@ -203,6 +203,12 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
                     let type = json["type"] as? String
                     var chunkText: String?
 
+                    if type == "error" {
+                        let errorObject = json["error"] as? [String: Any]
+                        let message = errorObject?["message"] as? String ?? "Anthropic streaming request failed"
+                        throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: message)
+                    }
+
                     if type == "content_block_delta",
                     let delta = json["delta"] as? [String: Any] {
                         chunkText =

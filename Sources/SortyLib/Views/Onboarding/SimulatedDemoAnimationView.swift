@@ -59,6 +59,10 @@ struct SimulatedDemoAnimationView: View {
         case organizing
         case complete
     }
+
+    static func shouldRunAnimatedDemo(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
     
     private let sampleFiles: [DemoFileNode] = [
         DemoFileNode(name: "IMG_2024.jpg", icon: "photo.fill", color: .blue, targetFolder: "Photos"),
@@ -150,6 +154,12 @@ struct SimulatedDemoAnimationView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
         } // ZStack
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .onAppear {
             files = sampleFiles
             folders = sampleFolders
@@ -554,6 +564,12 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private func startAnimation() {
+        if !Self.shouldRunAnimatedDemo(reduceMotion: reduceMotion) {
+            fileBobbing = false
+            transitionParticles = false
+            phase = .complete
+            return
+        }
         taskController.animationTask = Task { @MainActor in
             // Phase 1: Messy (let the user absorb the initial state)
             try? await Task.sleep(nanoseconds: 1_000_000_000)

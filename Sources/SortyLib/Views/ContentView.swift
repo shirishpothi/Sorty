@@ -360,6 +360,7 @@ public struct ContentView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             appState.selectedDirectory = url
+            appState.currentView = .organize
             HapticFeedbackManager.shared.success()
         }
 

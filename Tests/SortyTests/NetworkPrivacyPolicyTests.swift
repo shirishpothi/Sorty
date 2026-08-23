@@ -1,6 +1,19 @@
 import XCTest
 @testable import SortyLib
 
+private final class SuspendedNetworkPrivacyURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var onStart: (() -> Void)?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.onStart?()
+    }
+
+    override func stopLoading() {}
+}
+
 final class NetworkPrivacyPolicyTests: XCTestCase {
     func testGeminiOpenAIEndpointDoesNotAddAnExtraV1PathComponent() throws {
         let url = try AIRequestSupport.openAIChatCompletionsURL(
@@ -24,6 +37,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
     }
 
     override func tearDown() {
+        SuspendedNetworkPrivacyURLProtocol.onStart = nil
         NetworkPrivacyPolicy.setTestDefaultsSuiteName(nil)
         testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
         testDefaults = nil
@@ -89,6 +103,17 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         XCTAssertNoThrow(try AIRequestSupport.makeJSONRequest(url: local, method: "GET"))
     }
 
+    func testGeminiOpenAICompatibleChatEndpointDoesNotDuplicateVersionPath() throws {
+        let url = try AIRequestSupport.openAIChatCompletionsURL(
+            from: "https://generativelanguage.googleapis.com/v1beta/openai"
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        )
+    }
+
     func testSessionDelegateBlocksRedirectFromLoopbackToRemoteHost() throws {
         testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
@@ -115,6 +140,32 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         }
 
         XCTAssertNil(redirectedRequest)
+    }
+
+    func testEnablingPrivacyModeCancelsAnInFlightRemoteRequest() async throws {
+        testDefaults.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        let requestStarted = expectation(description: "Request started")
+        SuspendedNetworkPrivacyURLProtocol.onStart = {
+            requestStarted.fulfill()
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SuspendedNetworkPrivacyURLProtocol.self]
+        let session = NetworkPrivacyPolicy.makeSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let requestTask = Task {
+            try await session.data(from: URL(string: "https://example.com/private-upload")!)
+        }
+        await fulfillment(of: [requestStarted], timeout: 1)
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: testDefaults)
+
+        do {
+            _ = try await requestTask.value
+            XCTFail("Expected the in-flight request to be cancelled")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .cancelled)
+        }
     }
 
     func testCodexSubscriptionHealthCheckIsBlockedBeforeLaunchingCLI() async {

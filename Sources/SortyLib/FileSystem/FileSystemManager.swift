@@ -1572,6 +1572,8 @@ public actor FileSystemManager {
                     }
                 }
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 let failedPath = operation.destinationPath ?? operation.sourcePath
                 missingFiles.append(URL(fileURLWithPath: failedPath).lastPathComponent)
@@ -2107,6 +2109,8 @@ public struct OperationFailure: Sendable {
 @MainActor
 public class DuplicateRestorationManager: ObservableObject {
     @Published public private(set) var restoredItems: [RestorableDuplicate] = []
+
+    static var trashItemForTesting: ((URL) throws -> URL?)?
     
     private let fileManager = FileManager.default
     private let persistenceKey = "DuplicateRestorationHistory"
@@ -2131,16 +2135,20 @@ public class DuplicateRestorationManager: ObservableObject {
                 groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
             )
 
-            var trashURL: NSURL?
-            try fileManager.trashItem(
-                at: URL(fileURLWithPath: file.path),
-                resultingItemURL: &trashURL
-            )
+            let sourceURL = URL(fileURLWithPath: file.path)
+            let resultingTrashURL: URL?
+            if let trashItemForTesting = Self.trashItemForTesting {
+                resultingTrashURL = try trashItemForTesting(sourceURL)
+            } else {
+                var trashURL: NSURL?
+                try fileManager.trashItem(at: sourceURL, resultingItemURL: &trashURL)
+                resultingTrashURL = trashURL as URL?
+            }
 
             let item = RestorableDuplicate(
                 originalPath: file.path,
                 deletedPath: file.path,
-                trashPath: (trashURL as? URL)?.path,
+                trashPath: resultingTrashURL?.path,
                 metadata: metadata
             )
             deletedItems.append(item)

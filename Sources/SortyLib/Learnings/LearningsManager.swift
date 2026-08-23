@@ -1230,6 +1230,17 @@ public class LearningsManager: ObservableObject {
         pruneOldData()
         await saveProfile()
     }
+
+    public func forceSaveSynchronously() {
+        saveTask?.cancel()
+        pruneOldData()
+        guard let profile = currentProfile else { return }
+        do {
+            try LearningsFileManager.save(profile: profile)
+        } catch {
+            self.error = "Failed to save profile: \(error.localizedDescription)"
+        }
+    }
     
     /// Caps history arrays at 100 items to prevent bloat
     private func pruneOldData() {
@@ -2534,6 +2545,21 @@ public class LearningsManager: ObservableObject {
                     continue
                 }
                 activeModelDirectoryURLs[modelDirectories[i].id] = resolvedURL
+
+                let resolvedPath = resolvedURL.standardizedFileURL.path
+                if modelDirectories[i].path != resolvedPath {
+                    let directory = modelDirectories[i]
+                    modelDirectories[i] = ReferenceModelDirectory(
+                        id: directory.id,
+                        path: resolvedPath,
+                        displayName: directory.displayName,
+                        isEnabled: directory.isEnabled,
+                        bookmarkData: directory.bookmarkData,
+                        lastScannedAt: directory.lastScannedAt,
+                        scanSnapshot: directory.scanSnapshot
+                    )
+                    didUpdate = true
+                }
                 
                 if isStale {
                     do {
@@ -2564,9 +2590,10 @@ public class LearningsManager: ObservableObject {
         guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
         
         let directory = modelDirectories[index]
-        let directoryURL = URL(fileURLWithPath: directory.path)
-        
-        guard directory.isAccessible else {
+        let directoryURL = activeModelDirectoryURLs[id] ?? URL(fileURLWithPath: directory.path)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
             DebugLogger.log("Cannot scan inaccessible directory: \(directory.displayName)")
             return
         }

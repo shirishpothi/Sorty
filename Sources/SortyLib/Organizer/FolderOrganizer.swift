@@ -4457,6 +4457,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "success",
                 properties: ["variant": "model"]
             )
+        } catch is CancellationError {
+            stopTimeoutTimer()
+            await MainActor.run {
+                isStreaming = false
+                if !suppressCancellationReset {
+                    resetToIdle()
+                }
+            }
+            throw CancellationError()
         } catch {
             stopTimeoutTimer()
             await MainActor.run {
@@ -4634,6 +4643,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 properties: ["variant": "same_configuration"]
             )
 
+        } catch is CancellationError {
+            stopTimeoutTimer()
+            await MainActor.run {
+                isStreaming = false
+                if !suppressCancellationReset {
+                    resetToIdle()
+                }
+            }
+            throw CancellationError()
         } catch {
             stopTimeoutTimer()
 

@@ -41,6 +41,7 @@ public final class ModelCatalog: ObservableObject {
     private let session: URLSession
     private var searchTask: Task<Void, Never>?
     private var codexModelsTimestamp: Date?
+    private var refreshIDs: [AIProvider: UUID] = [:]
     
     private static let cloudTTL: TimeInterval = 24 * 60 * 60
     private static let ollamaTTL: TimeInterval = 10 * 60
@@ -104,8 +105,15 @@ public final class ModelCatalog: ObservableObject {
             }
         }
         
+        let refreshID = UUID()
+        refreshIDs[provider] = refreshID
         isFetching[provider] = true
         lastError[provider] = nil
+        defer {
+            if refreshIDs[provider] == refreshID {
+                isFetching[provider] = false
+            }
+        }
         
         do {
             let result = try await fetchModels(for: provider)
@@ -113,6 +121,7 @@ public final class ModelCatalog: ObservableObject {
                 result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
                 for: provider
             )
+            guard refreshIDs[provider] == refreshID, !Task.isCancelled else { return }
             modelsByProvider[provider] = sortedModels
             usingFallback[provider] = result.isFallback
             
@@ -122,17 +131,14 @@ public final class ModelCatalog: ObservableObject {
                 saveCacheToDisk(provider: provider, models: sortedModels)
             }
         } catch {
-            await MainActor.run {
-                lastError[provider] = error
-                ReliabilityManager.shared.capture(
-                    error: error,
-                    feature: "model_catalog",
-                    operation: "refresh_provider"
-                )
-            }
+            guard refreshIDs[provider] == refreshID, !Task.isCancelled else { return }
+            lastError[provider] = error
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "model_catalog",
+                operation: "refresh_provider"
+            )
         }
-        
-        isFetching[provider] = false
     }
     
     public func refreshAllAvailable(force: Bool = false) async {

@@ -159,6 +159,7 @@ public struct ExtensionCommunication {
     public static func receiveFromExtension() -> URL? {
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
            let path = sharedDefaults.string(forKey: directoryKey) {
+            sharedDefaults.removeObject(forKey: directoryKey)
             return URL(fileURLWithPath: path)
         }
         return nil
@@ -174,6 +175,7 @@ public struct ExtensionCommunication {
         ) { notification in
             if let userInfo = notification.userInfo,
                let path = userInfo["path"] as? String {
+                UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
                 let url = URL(fileURLWithPath: path)
                 Task { @MainActor in
                     handler(url)

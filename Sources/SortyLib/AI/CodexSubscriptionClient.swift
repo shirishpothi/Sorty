@@ -356,12 +356,35 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
 
         do {
-            try process.run()
-            if let promptData = prompt.data(using: .utf8) {
-                try inputPipe.fileHandleForWriting.write(contentsOf: promptData)
+            try Task.checkCancellation()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    process.terminationHandler = { _ in
+                        continuation.resume()
+                    }
+                    do {
+                        try process.run()
+                        if let promptData = prompt.data(using: .utf8) {
+                            try inputPipe.fileHandleForWriting.write(contentsOf: promptData)
+                        }
+                        try inputPipe.fileHandleForWriting.close()
+                    } catch {
+                        process.terminationHandler = nil
+                        continuation.resume(throwing: error)
+                    }
+                }
+            } onCancel: {
+                if process.isRunning {
+                    process.terminate()
+                }
             }
-            try inputPipe.fileHandleForWriting.close()
-            process.waitUntilExit()
+            try Task.checkCancellation()
+        } catch is CancellationError {
+            process.terminate()
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            try? diagnosticsHandle.close()
+            throw CancellationError()
         } catch {
             process.terminate()
             outputPipe.fileHandleForReading.readabilityHandler = nil

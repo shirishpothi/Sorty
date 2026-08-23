@@ -1065,6 +1065,7 @@ public struct CompletionStepView: View {
 
     // Exit animation states
     @State private var exitTriggered = false
+    @State private var finishTask: Task<Void, Never>?
     @State private var contentDismissed = false
 
     private enum ReadinessState: Equatable {
@@ -1132,6 +1133,8 @@ public struct CompletionStepView: View {
         }
         .onAppear(perform: startRevealSequence)
         .onDisappear {
+            finishTask?.cancel()
+            finishTask = nil
             runtimeController.animationTask?.cancel()
             runtimeController.animationTask = nil
             fadeOutAndStopAudio(duration: 0.25)
@@ -1306,7 +1309,10 @@ public struct CompletionStepView: View {
             revealOpacity = 0
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + exitDuration) {
+        finishTask?.cancel()
+        finishTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(exitDuration))
+            guard !Task.isCancelled, exitTriggered else { return }
             onFinish()
         }
     }

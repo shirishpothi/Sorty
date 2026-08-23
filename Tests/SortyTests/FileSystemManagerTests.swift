@@ -17,6 +17,7 @@ class FileSystemManagerTests: XCTestCase {
     
     @MainActor
     override func tearDown() async throws {
+        DuplicateRestorationManager.trashItemForTesting = nil
         try? FileManager.default.removeItem(at: tempDirectory)
         fileSystemManager = nil
         
@@ -368,6 +369,39 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertFalse(archiveContents.contains { $0.hasPrefix(".sorty-transfer-") })
 
         await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
+    }
+
+    @MainActor
+    func testReverseOperationsReportsEarlierSuccessWhenLaterRestoreFails() async throws {
+        let restoredSource = tempDirectory.appendingPathComponent("restored.txt")
+        let successfulDestination = tempDirectory.appendingPathComponent("successful-destination.txt")
+        try "success".write(to: successfulDestination, atomically: true, encoding: .utf8)
+
+        let blockingFile = tempDirectory.appendingPathComponent("not-a-directory")
+        try "block".write(to: blockingFile, atomically: true, encoding: .utf8)
+        let failingDestination = tempDirectory.appendingPathComponent("failing-destination.txt")
+        try "failure".write(to: failingDestination, atomically: true, encoding: .utf8)
+
+        let failingOperation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: blockingFile.appendingPathComponent("child.txt").path,
+            destinationPath: failingDestination.path
+        )
+        let successfulOperation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: restoredSource.path,
+            destinationPath: successfulDestination.path
+        )
+
+        let result = try await fileSystemManager.reverseOperations([
+            failingOperation,
+            successfulOperation,
+        ])
+
+        XCTAssertEqual(result.successfulOperations, 1)
+        XCTAssertEqual(result.retryableFailedOperationIDs, [failingOperation.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restoredSource.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: failingDestination.path))
     }
 
     @MainActor
@@ -773,6 +807,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
     
     @MainActor
     override func tearDown() async throws {
+        DuplicateRestorationManager.trashItemForTesting = nil
         try? FileManager.default.removeItem(at: tempDirectory)
         manager.clearAllData()
         manager = nil
@@ -836,6 +871,38 @@ final class DuplicateRestorationManagerTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: movedFile.path))
         XCTAssertEqual(manager.restoredItems.map(\.originalPath), [movedFile.path])
+    }
+
+    func testPartialTrashFailureImmediatelyPreservesCompletedRestorationHistory() throws {
+        let firstURL = tempDirectory.appendingPathComponent("first.txt")
+        let secondURL = tempDirectory.appendingPathComponent("second.txt")
+        try "first".write(to: firstURL, atomically: true, encoding: .utf8)
+        try "second".write(to: secondURL, atomically: true, encoding: .utf8)
+        let files = [firstURL, secondURL].map {
+            FileItem(
+                path: $0.path,
+                name: $0.deletingPathExtension().lastPathComponent,
+                extension: $0.pathExtension,
+                size: 5,
+                isDirectory: false
+            )
+        }
+        var callCount = 0
+        DuplicateRestorationManager.trashItemForTesting = { url in
+            callCount += 1
+            guard callCount == 1 else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            var trashURL: NSURL?
+            try FileManager.default.trashItem(at: url, resultingItemURL: &trashURL)
+            return trashURL as URL?
+        }
+
+        XCTAssertThrowsError(try manager.moveToTrash(files: files))
+        XCTAssertEqual(manager.restoredItems.count, 1)
+        XCTAssertEqual(manager.restoredItems.first?.deletedPath, firstURL.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: firstURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondURL.path))
     }
     
     func testRestoreDuplicate() throws {

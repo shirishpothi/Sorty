@@ -71,6 +71,7 @@ public struct SortyCommands: Commands {
             .disabled(appState == nil)
 
             Button("Open Directory...", systemImage: "folder") {
+                appState?.currentView = .organize
                 appState?.showDirectoryPicker = true
             }
             .keyboardShortcut("o", modifiers: .command)

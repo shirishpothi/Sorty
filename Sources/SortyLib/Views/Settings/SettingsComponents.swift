@@ -62,20 +62,20 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                             : Color.clear,
                             lineWidth: 3
                         )
-                        .scaleEffect(isBreathing ? 1.012 : 1)
-                        .blur(radius: isBreathing ? 4 : 2)
+                        .scaleEffect(!reduceMotion && isBreathing ? 1.012 : 1)
+                        .blur(radius: reduceMotion ? 0 : (isBreathing ? 4 : 2))
                 }
                 .padding(.horizontal, -horizontalRingPadding)
                 .padding(.vertical, -verticalRingPadding)
                 .allowsHitTesting(false)
             )
             .shadow(
-                color: isFocused
+                color: isFocused && !reduceMotion
                     ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
                     : .clear,
-                radius: isBreathing ? 14 : 7
+                radius: reduceMotion ? 0 : (isBreathing ? 14 : 7)
             )
-            .animation(.easeInOut(duration: 0.2), value: isFocused)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isFocused)
             .onAppear {
                 updateBreathingAnimation(isFocused)
             }
@@ -95,9 +95,7 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
 
     private func updateBreathingAnimation(_ shouldBreathe: Bool) {
         guard shouldBreathe, !reduceMotion else {
-            withAnimation(.easeOut(duration: 0.2)) {
-                isBreathing = false
-            }
+            isBreathing = false
             return
         }
 

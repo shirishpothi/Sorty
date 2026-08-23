@@ -96,6 +96,56 @@ public enum NetworkPrivacyPolicy {
 }
 
 final class NetworkPrivacyURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var tasks: [Int: URLSessionTask] = [:]
+    private var defaultsObserver: NSObjectProtocol?
+
+    override init() {
+        super.init()
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.cancelBlockedTasksIfNeeded()
+        }
+    }
+
+    deinit {
+        if let defaultsObserver {
+            NotificationCenter.default.removeObserver(defaultsObserver)
+        }
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        lock.lock()
+        tasks[task.taskIdentifier] = task
+        lock.unlock()
+        cancelBlockedTasksIfNeeded()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        lock.lock()
+        tasks.removeValue(forKey: task.taskIdentifier)
+        lock.unlock()
+    }
+
+    private func cancelBlockedTasksIfNeeded() {
+        guard NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else { return }
+        lock.lock()
+        let activeTasks = Array(tasks.values)
+        lock.unlock()
+        for task in activeTasks {
+            guard let url = task.currentRequest?.url ?? task.originalRequest?.url,
+                  !NetworkPrivacyPolicy.isRequestAllowed(url: url) else { continue }
+            task.cancel()
+        }
+    }
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
