@@ -152,6 +152,7 @@ final class OverlayWindowController: NSWindowController {
 
     func returnToSource(completion: @escaping () -> Void) {
         stopLaunchAnimation()
+        flightContentView.prepareForPresentation()
         if reduceMotion {
             window?.orderOut(nil)
             completion()
@@ -852,6 +853,7 @@ private final class NotificationToggleCueView: NSView {
     private var isOn = false
     private var hasAnimatedInCurrentWindow = false
     private var pendingAnimation: DispatchWorkItem?
+    private var presentationGeneration = 0
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -934,8 +936,16 @@ private final class NotificationToggleCueView: NSView {
             return
         }
 
+        let generation = presentationGeneration
         let workItem = DispatchWorkItem { [weak self] in
-            self?.startAnimation()
+            guard let self,
+                  generation == presentationGeneration,
+                  window?.isVisible == true else {
+                return
+            }
+
+            pendingAnimation = nil
+            startAnimation()
         }
         pendingAnimation = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + animationDelay, execute: workItem)
@@ -944,6 +954,7 @@ private final class NotificationToggleCueView: NSView {
     private func resetAnimation() {
         pendingAnimation?.cancel()
         pendingAnimation = nil
+        presentationGeneration &+= 1
         trackLayer.removeAllAnimations()
         knobLayer.removeAllAnimations()
         isOn = false

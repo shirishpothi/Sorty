@@ -19,7 +19,7 @@ import Combine
 @MainActor
 public class ContinuousLearningObserver: ObservableObject {
     private var learningsManager: LearningsManager
-    private var historyFn: () -> OrganizationHistory // Closure to access history to avoid retain cycles/init order issues
+    private let history: OrganizationHistory
 
     private var cancellables = Set<AnyCancellable>()
     private var recentlyMovedFiles: [String: Date] = [:] // Path -> Time
@@ -59,9 +59,9 @@ public class ContinuousLearningObserver: ObservableObject {
         learningsManager.consentManager.canCollectData && !learningsManager.sessionLearningPaused
     }
     
-    public init(learningsManager: LearningsManager, historyProvider: @escaping () -> OrganizationHistory) {
+    public init(learningsManager: LearningsManager, history: OrganizationHistory) {
         self.learningsManager = learningsManager
-        self.historyFn = historyProvider
+        self.history = history
     }
 
     public func startObserving() {
@@ -330,7 +330,6 @@ public class ContinuousLearningObserver: ObservableObject {
         
         // 1. Check if this file was recently organized by AI
         // Look back 24 hours (or configurable window)
-        let history = historyFn()
         let recentEntries = history.entries.prefix(50) // Check last 50 sessions
         
         var foundMatch = false
@@ -440,7 +439,6 @@ public class ContinuousLearningObserver: ObservableObject {
             return
         }
         
-        let history = historyFn()
         let recentEntries = history.entries.prefix(50)
         
         var matchedSession = findRelevantSession(for: path)
