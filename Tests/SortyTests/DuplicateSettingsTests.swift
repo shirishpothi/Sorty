@@ -105,6 +105,28 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertTrue(allCases.contains(.shortestPath))
     }
 
+    func testUsefulCleanupStrategiesExcludeMeaninglessSizeChoices() {
+        XCTAssertEqual(KeepStrategy.usefulCleanupCases, [.newest, .oldest, .shortestPath])
+        XCTAssertFalse(KeepStrategy.usefulCleanupCases.contains(.largest))
+        XCTAssertFalse(KeepStrategy.usefulCleanupCases.contains(.smallest))
+    }
+
+    func testSimilarFileMatchRangesUseSupportedThresholds() {
+        XCTAssertEqual(SimilarFileMatchRange.closest.threshold, 0.95)
+        XCTAssertEqual(
+            SimilarFileMatchRange.balanced.threshold,
+            DuplicateSettings.defaultSemanticSimilarityThreshold
+        )
+        XCTAssertEqual(SimilarFileMatchRange.broader.threshold, 0.80)
+
+        for range in SimilarFileMatchRange.allCases {
+            XCTAssertEqual(
+                DuplicateSettings.clampedSemanticSimilarityThreshold(range.threshold),
+                range.threshold
+            )
+        }
+    }
+
     func testCleanupPreferenceSelectsLargestFile() {
         let lowerResolutionOriginal = FileItem(
             path: "/Photos/Originals/photo.jpg",

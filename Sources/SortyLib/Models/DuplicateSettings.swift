@@ -160,6 +160,39 @@ public enum KeepStrategy: String, Codable, CaseIterable, Sendable {
     }
 }
 
+extension KeepStrategy {
+    /// Strategies that produce a meaningful choice for byte-identical files.
+    /// Size-based strategies remain decodable for existing preferences, but
+    /// identical files are necessarily the same size.
+    public static let usefulCleanupCases: [KeepStrategy] = [
+        .newest,
+        .oldest,
+        .shortestPath,
+    ]
+}
+
+public enum SimilarFileMatchRange: String, CaseIterable, Sendable {
+    case closest
+    case balanced
+    case broader
+
+    public var displayName: String {
+        switch self {
+        case .closest: return "Only very close matches"
+        case .balanced: return "Balanced"
+        case .broader: return "Include more variations"
+        }
+    }
+
+    public var threshold: Double {
+        switch self {
+        case .closest: return 0.95
+        case .balanced: return DuplicateSettings.defaultSemanticSimilarityThreshold
+        case .broader: return 0.80
+        }
+    }
+}
+
 enum CleanupPreferenceResolver {
     static func preferredFileID(in files: [FileItem], strategy: KeepStrategy) -> UUID? {
         switch strategy {
@@ -232,6 +265,9 @@ public class DuplicateSettingsManager: ObservableObject {
     private static func normalize(_ settings: DuplicateSettings) -> DuplicateSettings {
         var normalized = settings
         normalized.semanticSimilarityThreshold = settings.normalizedSemanticSimilarityThreshold
+        if !KeepStrategy.usefulCleanupCases.contains(settings.defaultKeepStrategy) {
+            normalized.defaultKeepStrategy = .newest
+        }
         return normalized
     }
 

@@ -127,7 +127,7 @@ struct DuplicatesView: View {
             Button("Cancel", role: .cancel) {
                 HapticFeedbackManager.shared.tap()
             }
-            Button("Delete", role: .destructive) {
+            Button("Move to Trash", role: .destructive) {
                 HapticFeedbackManager.shared.error()
                 AnalyticsManager.shared.captureImportantButton(
                     "confirm_duplicate_cleanup",
@@ -137,9 +137,7 @@ struct DuplicatesView: View {
                 deleteFiles(filesToDelete)
             }
         } message: {
-            Text(
-                "\(filesToDelete.count) file(s) will be moved to Trash. History can restore them until Trash is emptied."
-            )
+            Text(bulkCleanupConfirmationMessage)
         }
         .onAppear {
             consumePendingHandoffIfNeeded()
@@ -555,17 +553,21 @@ struct DuplicatesView: View {
         }
     }
 
-    private func prepareBulkDelete(strategyOverride: KeepStrategy?) {
+    private var bulkCleanupConfirmationMessage: String {
+        let strategy = settingsManager.settings.defaultKeepStrategy.description.lowercased()
+        let fileLabel = filesToDelete.count == 1 ? "file" : "files"
+        return "Sorty will \(strategy) in each exact-match group and move \(filesToDelete.count) other \(fileLabel) to Trash. Similar files are not included. History can restore these files until Trash is emptied."
+    }
+
+    private func prepareBulkDelete() {
         var filesToDelete: [FileItem] = []
 
         // Bulk cleanup is intentionally limited to byte-identical files.
         for group in detectionManager.allGroups where group.isExact {
-            let keepFileID = strategyOverride
-                .flatMap { CleanupPreferenceResolver.preferredFileID(in: group.files, strategy: $0) }
-                ?? CleanupPreferenceResolver.preferredFileID(
-                    in: group.files,
-                    strategy: settingsManager.settings.defaultKeepStrategy
-                )
+            let keepFileID = CleanupPreferenceResolver.preferredFileID(
+                in: group.files,
+                strategy: settingsManager.settings.defaultKeepStrategy
+            )
 
             filesToDelete.append(contentsOf: group.files.filter { $0.id != keepFileID })
         }
@@ -584,7 +586,7 @@ struct DuplicatesHeaderNew: View {
     let onSelectDirectory: () -> Void
     let onScan: () -> Void
     let onCancel: () -> Void
-    let onBulkDelete: (KeepStrategy?) -> Void
+    let onBulkDelete: () -> Void
     let onSettings: () -> Void
 
     var body: some View {
@@ -671,26 +673,17 @@ struct DuplicatesHeaderNew: View {
                     .disabled(manager.isScanning)
 
                     if manager.exactGroupCount > 0 && !manager.isScanning {
-                        Menu {
-                            Button {
-                                onBulkDelete(.newest)
-                            } label: {
-                                Label("Keep Newest", systemImage: "clock")
-                            }
-                            Button {
-                                onBulkDelete(.oldest)
-                            } label: {
-                                Label("Keep Oldest", systemImage: "clock.arrow.circlepath")
-                            }
-                            Divider()
-                            Text("Similar matches always require individual review")
-                                .font(.caption)
+                        Button {
+                            onBulkDelete()
                         } label: {
                             Label(
-                                showsFullControls ? "Cleanup All" : "Cleanup", systemImage: "trash")
+                                showsFullControls ? "Clean Up Exact Copies" : "Clean Up",
+                                systemImage: "trash"
+                            )
                         }
                         .buttonStyle(.sortyPrimary(size: .small))
                         .tint(.red)
+                        .help("Keep one preferred copy from every exact-match group and move the rest to Trash")
                     }
 
                     if manager.isScanning {

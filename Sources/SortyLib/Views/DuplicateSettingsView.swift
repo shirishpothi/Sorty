@@ -15,100 +15,107 @@ struct DuplicateSettingsView: View {
         VStack(spacing: 0) {
             HStack(spacing: SortyDesignSystem.Spacing.lg) {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxs) {
-                    Text("Duplicate Detection")
+                    Text("Duplicate Preferences")
                         .font(SortyDesignSystem.Typography.title3())
-                    Text("Reliable defaults, with only the cleanup choice exposed.")
+                    Text("Control what scans include and how bulk cleanup keeps a copy.")
                         .font(SortyDesignSystem.Typography.subheadline())
                         .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                 }
-                
+
                 Spacer()
-                
+
                 HStack(spacing: SortyDesignSystem.Spacing.md) {
-                    Button(action: {
+                    Button("Restore Defaults", systemImage: "arrow.counterclockwise") {
                         HapticFeedbackManager.shared.tap()
                         settingsManager.reset()
-                    }) {
-                        Image(systemName: "arrow.counterclockwise")
                     }
+                    .labelStyle(.iconOnly)
                     .systemLiquidGlassButton()
-                    .help("Reset to Defaults")
-                    .accessibilityLabel("Reset to Defaults")
-                    
-                    Button("Done") {
-                        saveAndDismiss()
-                    }
-                    .buttonStyle(.sortyPrimary(size: .small))
-                    .systemLiquidGlassBackground(cornerRadius: 999)
-                    .keyboardShortcut(.return)
+                    .help("Restore Defaults")
+
+                    Button("Done", action: saveAndDismiss)
+                        .buttonStyle(.sortyPrimary(size: .small))
+                        .systemLiquidGlassBackground(cornerRadius: 999)
+                        .keyboardShortcut(.return)
                 }
             }
             .padding(.horizontal, SortyDesignSystem.Spacing.xl)
             .padding(.vertical, SortyDesignSystem.Spacing.lg)
-            
+
             Divider()
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
                     SettingsCard(
-                        title: "Cleanup Preference",
-                        icon: "checkmark.circle",
+                        title: "Scan Results",
+                        icon: "magnifyingglass",
                         color: SortyDesignSystem.Colors.primary
                     ) {
                         VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
-                            Text("When cleaning a duplicate group, keep:")
+                            Toggle(
+                                "Find similar files",
+                                isOn: $settingsManager.settings.includeSemanticDuplicates
+                            )
+
+                            Text("Similar files may be versions or variants. Sorty keeps them out of bulk cleanup so you can review them individually.")
                                 .font(SortyDesignSystem.Typography.subheadline())
                                 .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-                            
-                            ForEach(KeepStrategy.allCases, id: \.self) { strategy in
-                                let isSelected = settingsManager.settings.defaultKeepStrategy == strategy
+                                .fixedSize(horizontal: false, vertical: true)
 
-                                Button {
-                                    guard settingsManager.settings.defaultKeepStrategy != strategy else { return }
-                                    HapticFeedbackManager.shared.selection()
-                                    settingsManager.settings.defaultKeepStrategy = strategy
-                                } label: {
-                                    HStack(alignment: .center, spacing: SortyDesignSystem.Spacing.md) {
-                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(isSelected ? SortyDesignSystem.Colors.primary : SortyDesignSystem.Colors.textTertiary)
-                                            .symbolReplaceTransition(animationValue: isSelected)
-
-                                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxs) {
-                                            Text(strategy.displayName)
-                                                .font(SortyDesignSystem.Typography.body(weight: .medium))
-                                                .foregroundStyle(SortyDesignSystem.Colors.textPrimary)
-                                            Text(LocalizedStringKey(strategy.description))
-                                                .font(SortyDesignSystem.Typography.caption2())
-                                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-                                        }
-
-                                        Spacer(minLength: 0)
+                            if settingsManager.settings.includeSemanticDuplicates {
+                                Picker(
+                                    "Match range",
+                                    selection: $settingsManager.settings.semanticSimilarityThreshold
+                                ) {
+                                    ForEach(SimilarFileMatchRange.allCases, id: \.self) { range in
+                                        Text(range.displayName).tag(range.threshold)
                                     }
-                                    .padding(.horizontal, SortyDesignSystem.Spacing.md)
-                                    .padding(.vertical, SortyDesignSystem.Spacing.sm)
-                                    .systemLiquidGlassBackground(
-                                        cornerRadius: SortyDesignSystem.Radius.medium
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
-                                            .stroke(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.35) : SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
-                                    )
+                                    if !presetThresholds.contains(
+                                        settingsManager.settings.semanticSimilarityThreshold
+                                    ) {
+                                        Text("Custom").tag(
+                                            settingsManager.settings.semanticSimilarityThreshold
+                                        )
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel(strategy.displayName)
-                                .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                                .pickerStyle(.menu)
                             }
-
                         }
                     }
 
+                    SettingsCard(
+                        title: "Bulk Cleanup",
+                        icon: "checkmark.shield",
+                        color: SortyDesignSystem.Colors.primary
+                    ) {
+                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.md) {
+                            Picker(
+                                "Copy to keep",
+                                selection: $settingsManager.settings.defaultKeepStrategy
+                            ) {
+                                ForEach(KeepStrategy.usefulCleanupCases, id: \.self) { strategy in
+                                    Text(strategy.displayName).tag(strategy)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Text(settingsManager.settings.defaultKeepStrategy.description)
+                                .font(SortyDesignSystem.Typography.subheadline())
+                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .padding(SortyDesignSystem.Spacing.xl)
             }
         }
-        .frame(width: 620, height: 520)
+        .frame(width: 560, height: 460)
         .background(SortyDesignSystem.Colors.backgroundPrimary)
+        .onDisappear(perform: settingsManager.save)
+    }
+
+    private var presetThresholds: [Double] {
+        SimilarFileMatchRange.allCases.map(\.threshold)
     }
     
     private func saveAndDismiss() {

@@ -133,8 +133,11 @@ When enabled (default), "deleted" duplicates aren't immediately removed:
 
 ### Bulk Operations
 
-- **Delete All (Keep Newest)**: Removes duplicates, keeping most recently modified
-- **Delete All (Keep Oldest)**: Removes duplicates, keeping the original version
+- **Clean Up Exact Copies**: Keeps one copy from each byte-identical group using
+  the saved Bulk Cleanup preference, then moves the rest to Trash
+- Similar-file matches are always excluded from bulk cleanup and require review
+- Duplicate Preferences controls similar-file matching and the saved cleanup rule;
+  the cleanup action does not ask for the same choice again
 
 ---
 
