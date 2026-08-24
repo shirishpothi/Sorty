@@ -223,7 +223,7 @@ struct DuplicatesView: View {
             Button("Choose...") {
                 selectDirectory()
             }
-            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
             .accessibilityIdentifier("DuplicatesBaseChooseDirectory")
         }
         .padding()
@@ -689,7 +689,7 @@ struct DuplicatesHeaderNew: View {
                             Label(
                                 showsFullControls ? "Cleanup All" : "Cleanup", systemImage: "trash")
                         }
-                        .buttonStyle(.onboardingPill(size: .small))
+                        .buttonStyle(.sortyPrimary(size: .small))
                         .tint(.red)
                     }
 
@@ -697,14 +697,14 @@ struct DuplicatesHeaderNew: View {
                         Button(action: onCancel) {
                             Label("Cancel", systemImage: "xmark")
                         }
-                        .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
                         .tint(.red)
                     } else if manager.lastScanDate == nil {
                         Button(action: onScan) {
                             Label(
                                 showsFullControls ? "Start Scan" : "Scan", systemImage: "play.fill")
                         }
-                        .buttonStyle(.onboardingPill(size: .small))
+                        .buttonStyle(.sortyPrimary(size: .small))
                         .disabled(currentDirectory == nil)
                     }
                 }
@@ -840,7 +840,7 @@ private struct UnavailableDuplicateFilesPopover: View {
                 Spacer()
                 Button("Scan Again", action: onScanAgain)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.onboardingPill(size: .small))
+                    .buttonStyle(.sortyPrimary(size: .small))
             }
             .padding(12)
         }
@@ -1190,7 +1190,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             } label: {
                 Text(compactButtonTitle(for: recommendation))
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .tint(.blue)
             .controlSize(.regular)
             .help(recommendation.description)
@@ -1200,7 +1200,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             } label: {
                 Text("Clean Up Selected")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .tint(.red)
             .controlSize(.regular)
             .help("Keep the first file and clean up the rest.")
@@ -1575,7 +1575,7 @@ struct DuplicatesEmptyStateView: View {
                 Text(actionTitle)
                     .frame(minWidth: 120)
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .controlSize(.large)
             .modifier(DefaultActionShortcut(isEnabled: isDefaultAction))

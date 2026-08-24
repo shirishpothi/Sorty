@@ -184,7 +184,7 @@ struct PreviewActionsView: View {
                     }
                 }
             }
-            .buttonStyle(.onboardingPill(size: .small))
+            .buttonStyle(.sortyPrimary(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .help("Regenerate \(mode.gerund) plan with current instructions")

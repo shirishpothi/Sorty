@@ -69,7 +69,7 @@ struct DirectorySelectionView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 .beam(
                     .small,
                     palette: .ocean,

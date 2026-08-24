@@ -190,7 +190,7 @@ struct LearningsView: View {
                 Label("Enable Learning", systemImage: "checkmark.circle.fill")
                     .font(.headline)
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured)
             .keyboardShortcut(.return)
             .onHover { hovering in
@@ -1164,7 +1164,7 @@ struct LearningsView: View {
                         Label("Add Folder", systemImage: "plus")
                             .font(.caption.bold())
                     }
-                    .buttonStyle(.onboardingPill(size: .small))
+                    .buttonStyle(.sortyPrimary(size: .small))
                     .accessibilityIdentifier("AddModelDirectoryButton")
                 }
             }
@@ -1203,7 +1203,7 @@ struct LearningsView: View {
                         Label("Add Folder", systemImage: "plus")
                             .font(.caption.bold())
                     }
-                    .buttonStyle(.onboardingPill(size: .small))
+                    .buttonStyle(.sortyPrimary(size: .small))
                     .accessibilityIdentifier("EmptyStateAddModelDirectoryButton")
                     .opacity(emptyExampleFoldersHasAppeared ? 1 : 0)
                     .offset(y: emptyExampleFoldersHasAppeared ? 0 : 10)
@@ -1630,7 +1630,7 @@ struct LearningExclusionRow: View {
                 Label("Open", systemImage: "arrow.up.right.square")
                     .font(.caption.bold())
             }
-            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
 
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -1643,7 +1643,7 @@ struct LearningExclusionRow: View {
                 Label("Remove", systemImage: "xmark")
                     .font(.caption.bold())
             }
-            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
             .accessibilityLabel("Remove learnings exclusion for \(displayName)")
         }
         .padding(10)

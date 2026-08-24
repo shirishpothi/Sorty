@@ -1391,7 +1391,7 @@ struct HistoryEmptyStateView: View {
             } label: {
                 Text("Start Organizing")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(
                 variant: .featured,
                 active: hasAppeared,

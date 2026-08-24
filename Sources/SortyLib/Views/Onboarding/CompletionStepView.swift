@@ -831,7 +831,7 @@ private struct CompletionPrimaryAction: View {
                     .font(.system(size: 13, weight: .semibold))
             }
         }
-        .buttonStyle(.onboardingPill(size: .large))
+        .buttonStyle(.sortyPrimary(size: .large))
         .onboardingBeamBorder(variant: .featured, active: !isChecking)
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
@@ -1039,12 +1039,12 @@ enum OnboardingCompletionAudio {
 
 @MainActor
 private final class CompletionRuntimeController {
-    weak var settingsViewModel: SettingsViewModel?
-    weak var appState: AppState?
     var animationTask: Task<Void, Never>?
 }
 
 public struct CompletionStepView: View {
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var runtimeController = CompletionRuntimeController()
 
@@ -1138,13 +1138,6 @@ public struct CompletionStepView: View {
             runtimeController.animationTask?.cancel()
             runtimeController.animationTask = nil
             fadeOutAndStopAudio(duration: 0.25)
-        }
-        .background {
-            OnboardingEnvironmentPairResolver { (settingsViewModel: SettingsViewModel, appState: AppState) in
-                runtimeController.settingsViewModel = settingsViewModel
-                runtimeController.appState = appState
-            }
-            .frame(width: 0, height: 0)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Completion Step")
@@ -1262,11 +1255,8 @@ public struct CompletionStepView: View {
         readinessState = .idle
         startTransition()
 
-        guard let viewModel = runtimeController.settingsViewModel,
-              let state = runtimeController.appState else {
-            readinessState = .failed("Sorty is still preparing your setup. Try again in a moment.")
-            return
-        }
+        let viewModel = settingsViewModel
+        let state = appState
         Task { @MainActor in
             do {
                 try await viewModel.testConnection()
@@ -1282,8 +1272,6 @@ public struct CompletionStepView: View {
     }
 
     private func skipVerificationAndFinish() {
-        guard let settingsViewModel = runtimeController.settingsViewModel,
-              let appState = runtimeController.appState else { return }
         appState.startSetupRepair(
             message: "Sorty could not verify \(settingsViewModel.config.provider.displayName) during onboarding. Finish provider setup in Settings before organizing files.",
             navigateToSettings: true

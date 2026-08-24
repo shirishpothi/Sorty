@@ -27,7 +27,7 @@ extension View {
                 .buttonStyle(.glass)
                 .tint(nil)
         } else {
-            self.buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            self.buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
         }
     }
 

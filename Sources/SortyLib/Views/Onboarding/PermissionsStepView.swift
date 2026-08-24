@@ -13,6 +13,8 @@ import UserNotifications
 import Permiso
 
 public struct PermissionsStepView: View {
+    @EnvironmentObject private var automationManager: AutomationManager
+    @EnvironmentObject private var appState: AppState
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
@@ -154,15 +156,8 @@ public struct PermissionsStepView: View {
         .onAppear {
             hasAppeared = true
         }
-        .background {
-            OnboardingEnvironmentPairResolver { (manager: AutomationManager, appState: AppState) in
-                guard taskController.automationManager !== manager
-                        || taskController.appState !== appState else { return }
-                taskController.automationManager = manager
-                taskController.appState = appState
-                checkPermissions()
-            }
-            .frame(width: 0, height: 0)
+        .task {
+            checkPermissions()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             checkPermissions()
@@ -246,9 +241,6 @@ public struct PermissionsStepView: View {
             return
         }
         let didOpenFullDiskAccessSettings = didOpenFullDiskAccessSettings
-        let automationManager = taskController.automationManager
-        let appState = taskController.appState
-
         taskController.permissionRefreshTask = Task { @MainActor in
             async let canReadProtectedLocation = Task.detached(priority: .utility) {
                 FullDiskAccessProbe.isGranted()
@@ -266,13 +258,11 @@ public struct PermissionsStepView: View {
                 return
             }
 
-            automationManager?.checkPermissions(enableChecksIfNeeded: false)
+            automationManager.checkPermissions(enableChecksIfNeeded: false)
             let hasVerifiedFilesAccess = assumesFilesPermission
-                || appState?.hasFilesAndFoldersPermission() == true
+                || appState.hasFilesAndFoldersPermission()
             hasRequiredPermissions = hasVerifiedFilesAccess
-            let automationState = automationManager.map {
-                permissionState(for: $0.automationStatus)
-            } ?? .unknown
+            let automationState = permissionState(for: automationManager.automationStatus)
             let refreshedStates: [PermissionType: PermissionState] = [
                 .filesAndFolders: hasVerifiedFilesAccess ? .granted : .unknown,
                 .fullDiskAccess: fullDiskAccessState(
@@ -307,8 +297,6 @@ public struct PermissionsStepView: View {
             isFullDiskAccessConfirmationPresented = true
 
         case .automation:
-            guard let automationManager = taskController.automationManager else { return }
-
             permissionStates[.automation] = .pending
 
             taskController.automationPermissionTask?.cancel()
@@ -447,7 +435,6 @@ public struct PermissionsStepView: View {
             HapticFeedbackManager.shared.success()
 
         case .filesAndFolders, .automation:
-            guard let appState = taskController.appState else { return }
             let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.sorty.app"
             Task { @MainActor in
                 let result = await SystemPermissionRevoker.revoke(
@@ -467,7 +454,7 @@ public struct PermissionsStepView: View {
                     hasRequiredPermissions = false
                     permissionStates[.filesAndFolders] = .unknown
                 } else {
-                    taskController.automationManager?.markAutomationPermissionReset()
+                    automationManager.markAutomationPermissionReset()
                     permissionStates[.automation] = .unknown
                 }
                 HapticFeedbackManager.shared.success()
@@ -537,7 +524,7 @@ public struct PermissionsStepView: View {
 
         if panel.runModal() == .OK,
            let url = panel.url,
-           taskController.appState?.grantFilesAndFoldersPermission(for: url) == true {
+           appState.grantFilesAndFoldersPermission(for: url) {
             hasRequiredPermissions = true
             permissionStates[.filesAndFolders] = .granted
             HapticFeedbackManager.shared.success()
@@ -552,8 +539,6 @@ public struct PermissionsStepView: View {
 
 @MainActor
 private final class PermissionsTaskController {
-    weak var automationManager: AutomationManager?
-    weak var appState: AppState?
     var permissionRefreshTask: Task<Void, Never>?
     var automationPermissionTask: Task<Void, Never>?
     var isPermissionRefreshPending = false
@@ -1344,7 +1329,7 @@ private struct PermissionActionButton: View {
         .accessibilityLabel(title)
     }
 
-    private var buttonStyle: OnboardingPillButtonStyle {
+    private var buttonStyle: SortyPrimaryButtonStyle {
         switch style {
         case .primary:
             return .init(size: .small)

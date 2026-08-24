@@ -486,7 +486,7 @@ struct HistoryDetailActionsSection: View {
                         Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
                             .frame(minWidth: 150)
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.sortyPrimary)
                     .controlSize(.large)
                     .accessibilityLabel("Restore deleted files")
                     .accessibilityIdentifier("RestoreDuplicatesButton")
@@ -496,7 +496,7 @@ struct HistoryDetailActionsSection: View {
                     Label("Apply Generated Plan", systemImage: "checkmark.circle")
                         .frame(minWidth: 170)
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 .controlSize(.large)
                 .accessibilityLabel("Apply this generated organization plan")
                 .accessibilityIdentifier("ApplyGeneratedPlanButton")
@@ -505,7 +505,7 @@ struct HistoryDetailActionsSection: View {
                     Label("Re-Apply Organization", systemImage: "arrow.clockwise")
                         .frame(minWidth: 150)
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 .controlSize(.large)
                 .accessibilityLabel("Re-apply this organization")
                 .accessibilityIdentifier("RedoSessionButton")
@@ -514,7 +514,7 @@ struct HistoryDetailActionsSection: View {
                     Label("Restore to State", systemImage: "clock.arrow.circlepath")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 .controlSize(.large)
                 .accessibilityLabel("Restore folder to this state")
                 .accessibilityIdentifier("RestoreStateButton")

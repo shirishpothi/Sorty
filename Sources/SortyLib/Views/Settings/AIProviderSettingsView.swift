@@ -264,7 +264,7 @@ struct AIProviderSettingsView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.sortyPrimary)
                     .tint(.black)
 
                     if let error = copilotAuth.authError {

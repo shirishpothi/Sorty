@@ -503,7 +503,7 @@ public struct WhatsNewTourView: View {
                 .frame(width: 156, height: 24)
                 .numericTextTransition(animationValue: currentPage)
         }
-        .buttonStyle(.onboardingPill)
+        .buttonStyle(.sortyPrimary)
         .beam(
             .small,
             palette: .ocean,

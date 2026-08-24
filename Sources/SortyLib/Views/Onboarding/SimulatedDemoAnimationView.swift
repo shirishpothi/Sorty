@@ -147,7 +147,7 @@ struct SimulatedDemoAnimationView: View {
                             Image(systemName: "arrow.right")
                         }
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.sortyPrimary)
                     .transition(.scale.combined(with: .opacity))
                 }
             }

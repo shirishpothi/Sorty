@@ -194,7 +194,7 @@ struct WatchedFoldersView: View {
             } label: {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .success)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
@@ -274,7 +274,7 @@ struct EmptyWatchedFoldersView: View {
             } label: {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
@@ -1107,7 +1107,7 @@ struct WatchedFolderConfigView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    ConfigSection(title: "Action", icon: "slider.horizontal.3", color: .blue) {
+                    SettingsCard(title: "Action", icon: "slider.horizontal.3", color: .blue) {
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(spacing: 4) {
                                 ForEach(OrganizationMode.allCases, id: \.self) { mode in
@@ -1134,7 +1134,7 @@ struct WatchedFolderConfigView: View {
                         }
                     }
 
-                    ConfigSection(title: "When a Plan Is Ready", icon: "checkmark.shield", color: .green) {
+                    SettingsCard(title: "When a Plan Is Ready", icon: "checkmark.shield", color: .green) {
                         VStack(alignment: .leading, spacing: 8) {
                             Picker("Apply policy", selection: $selectedApplyPolicy) {
                                 ForEach(WatchedFolderApplyPolicy.allCases, id: \.self) { policy in
@@ -1154,7 +1154,7 @@ struct WatchedFolderConfigView: View {
                     }
 
                     // Actions Section
-                    ConfigSection(title: "Actions", icon: "play", color: .blue) {
+                    SettingsCard(title: "Actions", icon: "play", color: .blue) {
                         Button(action: openFullOrganization) {
                             HStack {
                                 Image(systemName: selectedMode.iconName)
@@ -1180,7 +1180,7 @@ struct WatchedFolderConfigView: View {
                     }
 
                     // Custom Instructions Section
-                    ConfigSection(title: "Custom Instructions", icon: "text.bubble", color: .purple)
+                    SettingsCard(title: "Custom Instructions", icon: "text.bubble", color: .purple)
                     {
                         VStack(alignment: .leading, spacing: 8) {
                             ZStack(alignment: .topLeading) {
@@ -1265,7 +1265,7 @@ struct WatchedFolderConfigView: View {
                     }
 
                     // AI Model Section
-                    ConfigSection(title: "AI Model", icon: "cpu", color: .purple) {
+                    SettingsCard(title: "AI Model", icon: "cpu", color: .purple) {
                         VStack(spacing: 12) {
                             Toggle(isOn: $useCustomModel) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1355,7 +1355,7 @@ struct WatchedFolderConfigView: View {
                         )
                     }
 
-                    ConfigSection(title: "Recent AI Actions", icon: "sparkles", color: .purple) {
+                    SettingsCard(title: "Recent AI Actions", icon: "sparkles", color: .purple) {
                         WatchedFolderRecentActions(
                             folder: folder,
                             history: organizer.history
@@ -1833,36 +1833,6 @@ private struct WatchedFolderRecentActions: View {
 }
 
 // MARK: - Config Section
-
-struct ConfigSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(color)
-                Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.secondary)
-            }
-
-            content
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-}
 
 #Preview {
     WatchedFoldersView()

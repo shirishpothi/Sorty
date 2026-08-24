@@ -221,32 +221,3 @@ struct OnboardingCapsuleBadge: View {
             .background(.ultraThinMaterial, in: Capsule())
     }
 }
-
-// MARK: - Environment Resolvers
-
-struct OnboardingEnvironmentResolver<Dependency: ObservableObject>: View {
-    @EnvironmentObject private var dependency: Dependency
-    let onResolve: (Dependency) -> Void
-
-    var body: some View {
-        Color.clear
-            .onAppear {
-                onResolve(dependency)
-            }
-            .accessibilityHidden(true)
-    }
-}
-
-struct OnboardingEnvironmentPairResolver<First: ObservableObject, Second: ObservableObject>: View {
-    @EnvironmentObject private var first: First
-    @EnvironmentObject private var second: Second
-    let onResolve: (First, Second) -> Void
-
-    var body: some View {
-        Color.clear
-            .onAppear {
-                onResolve(first, second)
-            }
-            .accessibilityHidden(true)
-    }
-}

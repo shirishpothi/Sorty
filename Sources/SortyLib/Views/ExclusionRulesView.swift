@@ -292,7 +292,7 @@ struct ExclusionRulesView: View {
             } label: {
                 Label("Add Manual Exclusion", systemImage: "slider.horizontal.3")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddExclusionRuleButton")
         }
@@ -359,7 +359,7 @@ struct ExclusionRulesView: View {
                             Label("Add Folder", systemImage: "plus")
                                 .font(.caption.bold())
                         }
-                        .buttonStyle(.onboardingPill(size: .small))
+                        .buttonStyle(.sortyPrimary(size: .small))
                         .accessibilityIdentifier("AddLearningExclusionFolderButton")
                     }
                 }
@@ -399,7 +399,7 @@ struct ExclusionRulesView: View {
                             Label("Exclude Folder", systemImage: "plus")
                                 .font(.caption.bold())
                         }
-                        .buttonStyle(.onboardingPill(size: .small))
+                        .buttonStyle(.sortyPrimary(size: .small))
                         .accessibilityIdentifier("EmptyStateAddLearningExclusionFolderButton")
                     }
                     .padding(20)
@@ -528,7 +528,7 @@ struct ExclusionRulesView: View {
                                 Label("Create Rules", systemImage: "sparkles")
                             }
                         }
-                        .buttonStyle(.onboardingPill(size: .small))
+                        .buttonStyle(.sortyPrimary(size: .small))
                         .onboardingBeamBorder(
                             variant: .featured,
                             active: hasNaturalLanguageExceptionText
@@ -698,7 +698,7 @@ struct EmptyExclusionRulesView: View {
             } label: {
                 Label("Add Exclusion", systemImage: "plus")
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
@@ -1291,7 +1291,7 @@ struct AddExclusionRuleView: View {
                     HapticFeedbackManager.shared.success()
                     addRule()
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 .onboardingBeamBorder(variant: .warning, active: isValidInput)
                 .disabled(!isValidInput)
                 .keyboardShortcut(.return, modifiers: [.command])
@@ -1449,7 +1449,7 @@ struct AddExclusionRuleView: View {
                     } label: {
                         Label("Choose Folder", systemImage: "folder.badge.minus")
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.sortyPrimary)
                     .accessibilityIdentifier("ChooseExclusionFolderButton")
                 }
             }

@@ -38,7 +38,7 @@ struct DuplicateSettingsView: View {
                     Button("Done") {
                         saveAndDismiss()
                     }
-                    .buttonStyle(.onboardingPill(size: .small))
+                    .buttonStyle(.sortyPrimary(size: .small))
                     .systemLiquidGlassBackground(cornerRadius: 999)
                     .keyboardShortcut(.return)
                 }
@@ -50,7 +50,11 @@ struct DuplicateSettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
-                    SettingsSection(title: "Cleanup Preference", icon: "checkmark.circle") {
+                    SettingsCard(
+                        title: "Cleanup Preference",
+                        icon: "checkmark.circle",
+                        color: SortyDesignSystem.Colors.primary
+                    ) {
                         VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                             Text("When cleaning a duplicate group, keep:")
                                 .font(SortyDesignSystem.Typography.subheadline())
@@ -111,38 +115,6 @@ struct DuplicateSettingsView: View {
         HapticFeedbackManager.shared.light()
         settingsManager.save()
         dismiss()
-    }
-}
-
-struct SettingsSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let content: Content
-    
-    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
-            HStack(spacing: SortyDesignSystem.Spacing.sm) {
-                Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundStyle(SortyDesignSystem.Colors.primary)
-                    .frame(width: 24, height: 24)
-                    .background(SortyDesignSystem.Colors.primary.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                
-                Text(LocalizedStringKey(title))
-                    .font(SortyDesignSystem.Typography.headline())
-            }
-            
-            content
-                .padding(SortyDesignSystem.Spacing.md)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.large)
-        }
     }
 }
 

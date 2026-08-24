@@ -272,7 +272,7 @@ struct OrganizationStrategySettingsView: View {
                             } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
-                            .buttonStyle(.onboardingPill(size: .small))
+                            .buttonStyle(.sortyPrimary(size: .small))
 
                             Button(role: .destructive) {
                                 presetManager.deletePreset(id: selectedId)
@@ -283,7 +283,7 @@ struct OrganizationStrategySettingsView: View {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
-                            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
 
                             Spacer()
                         }
@@ -369,7 +369,7 @@ struct OrganizationStrategySettingsView: View {
                                             }
                                         }
                                     }
-                                    .buttonStyle(.onboardingPill(size: .small))
+                                    .buttonStyle(.sortyPrimary(size: .small))
                                     .disabled(namingPreferenceInput.isEmpty || namingGenerator.isGenerating)
 
                                     if namingGenerator.isGenerating {
@@ -383,7 +383,7 @@ struct OrganizationStrategySettingsView: View {
                                         showNamingInput = false
                                         namingPreferenceInput = ""
                                     }
-                                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                                    .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
                                 }
 
                                 if let error = namingGenerator.error {
@@ -399,7 +399,7 @@ struct OrganizationStrategySettingsView: View {
                             } label: {
                                 Label("Generate Naming Template", systemImage: "wand.and.stars")
                             }
-                            .buttonStyle(.onboardingPill(size: .small))
+                            .buttonStyle(.sortyPrimary(size: .small))
                             .padding(.top, 4)
                         }
                     }
@@ -508,7 +508,7 @@ private struct EditPresetSheet: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
 
                 Button("Save") {
                     var updated = preset
@@ -521,7 +521,7 @@ private struct EditPresetSheet: View {
                     }
                     isPresented = false
                 }
-                .buttonStyle(.onboardingPill(size: .small))
+                .buttonStyle(.sortyPrimary(size: .small))
                 .disabled(editName.isEmpty)
             }
         }

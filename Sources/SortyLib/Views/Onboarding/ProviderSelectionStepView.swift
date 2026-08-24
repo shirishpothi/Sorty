@@ -433,7 +433,7 @@ public struct ProviderSelectionStepView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.sortyPrimary)
 
                     if let error = copilotAuth.authError {
                         Text(error)
@@ -1168,7 +1168,7 @@ private struct ProviderTestConnectionButton: View {
                 Text("Test Connection")
             }
         }
-        .buttonStyle(.onboardingPill)
+        .buttonStyle(.sortyPrimary)
         .onboardingBeamBorder(
             variant: .featured,
             active: isHovering && canTest,

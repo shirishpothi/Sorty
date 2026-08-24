@@ -34,7 +34,7 @@ private struct DemoCompletionView: View {
                     Image(systemName: "arrow.right")
                 }
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.sortyPrimary)
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.5).delay(0.3)) {
@@ -350,7 +350,7 @@ public struct DemoStepView: View {
                         Text("Watch Demo")
                     }
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.sortyPrimary)
                 
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -438,7 +438,7 @@ public struct DemoStepView: View {
                                 Text("Organize Now")
                             }
                         }
-                        .buttonStyle(.onboardingPill)
+                        .buttonStyle(.sortyPrimary)
                     }
                 }
             } else {

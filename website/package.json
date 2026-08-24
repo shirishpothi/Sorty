@@ -19,10 +19,8 @@
     "Safari >= 17"
   ],
   "dependencies": {
-    "@base-ui/react": "^1.5.0",
     "@highlighters/core": "^1.2.0",
     "@sentry/nextjs": "10.68.0",
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "next": "16.2.11",

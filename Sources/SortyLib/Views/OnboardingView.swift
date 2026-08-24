@@ -281,7 +281,7 @@ public struct OnboardingView: View {
                                             .font(.system(size: 12, weight: .semibold))
                                     }
                                 }
-                                .buttonStyle(.onboardingPill)
+                                .buttonStyle(.sortyPrimary)
                                 .onboardingBeamBorder(
                                     active: validation.canAdvance && !isAdvancing
                                 )
@@ -838,7 +838,7 @@ private struct OnboardingIntroContentLayer: View {
                     }
                 }
                 .buttonStyle(
-                    .onboardingPill(
+                    .sortyPrimary(
                         size: .large,
                         isGlassInteractive: false
                     )

@@ -9,10 +9,10 @@ import AppKit
 import SwiftUI
 
 public struct WorkflowSelectionStepView: View {
+    @EnvironmentObject private var appState: AppState
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var runtimeController = WorkflowRuntimeController()
     @State private var hasAppeared = false
     
     public init() {}
@@ -76,7 +76,7 @@ public struct WorkflowSelectionStepView: View {
                         ) {
                             HapticFeedbackManager.shared.selection()
                             personaManager.selectPersona(persona)
-                            runtimeController.appState?.personaGeneratorPresentationContext = nil
+                            appState.personaGeneratorPresentationContext = nil
                         }
                     }
                 }
@@ -145,18 +145,12 @@ public struct WorkflowSelectionStepView: View {
         .onAppear {
             hasAppeared = true
         }
-        .background {
-            OnboardingEnvironmentResolver { (appState: AppState) in
-                runtimeController.appState = appState
-            }
-            .frame(width: 0, height: 0)
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workflow Selection Step")
     }
 
     private func presentPersonaGenerator() {
-        runtimeController.appState?.personaGeneratorPresentationContext = .onboarding
+        appState.personaGeneratorPresentationContext = .onboarding
     }
 
     private var customPersonaGrid: some View {
@@ -180,17 +174,12 @@ public struct WorkflowSelectionStepView: View {
                     }
                 ) {
                     personaManager.selectCustomPersona(persona.id)
-                    runtimeController.appState?.personaGeneratorPresentationContext = nil
+                    appState.personaGeneratorPresentationContext = nil
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
     }
-}
-
-@MainActor
-private final class WorkflowRuntimeController {
-    weak var appState: AppState?
 }
 
 // MARK: - Supporting Views

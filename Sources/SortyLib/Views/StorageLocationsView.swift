@@ -61,7 +61,7 @@ struct StorageLocationConfigView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Basic Info Section
-                    ConfigSection(title: "Display Name", icon: "textformat", color: .blue) {
+                    SettingsCard(title: "Display Name", icon: "textformat", color: .blue) {
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Location name", text: $name)
                                 .textFieldStyle(.roundedBorder)
@@ -73,7 +73,7 @@ struct StorageLocationConfigView: View {
                     }
                     
                     // Description Section
-                    ConfigSection(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
+                    SettingsCard(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
                         VStack(alignment: .leading, spacing: 8) {
                             TextEditor(text: $description)
                                 .font(.system(.body, design: .default))
