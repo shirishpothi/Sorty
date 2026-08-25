@@ -175,6 +175,7 @@ struct FlatFileRowContent: View {
     let onStartEditing: (String) -> Void
     let onRegenerate: () -> Void
     let onReject: () -> Void
+    let onSetRenameSelected: (Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -245,30 +246,63 @@ struct FlatFileRowContent: View {
             }
 
             if let renameMapping, renameMapping.hasRename, !isEditingName {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.caption2.weight(.semibold))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+
+                        Toggle(
+                            "Use",
+                            isOn: Binding(
+                                get: { renameMapping.shouldApplyRename },
+                                set: onSetRenameSelected
+                            )
+                        )
+                        .toggleStyle(.checkbox)
+                        .accessibilityIdentifier("RenameSelection-\(file.id.uuidString)")
+                        .help(
+                            renameMapping.shouldApplyRename
+                                ? "This suggested name will be applied"
+                                : "Keep the original name unless you select this suggestion"
+                        )
+                        .accessibilityHint(
+                            renameMapping.shouldApplyRename
+                                ? "Deselect to keep the original filename"
+                                : "Select to apply the suggested filename"
+                        )
+
+                        RenameNameChangeView(
+                            suggestedName: renameMapping.suggestedName ?? "",
+                            helpText: renameHelpText ?? "",
+                            isRegenerating: isRegeneratingName
+                        )
+
+                        Text(renameMapping.confidenceBand.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Spacer(minLength: 12)
+
+                        RenameActionGlassCluster(
+                            isRegenerating: isRegeneratingName,
+                            onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
+                            onRegenerate: onRegenerate,
+                            onReject: onReject
+                        )
+                    }
+
+                    if renameMapping.confidenceBand != .high {
+                        Label(
+                            renameMapping.renameReason ?? "No source cue was provided. Check the file before using this name.",
+                            systemImage: "text.magnifyingglass"
+                        )
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
-
-                    RenameNameChangeView(
-                        suggestedName: renameMapping.suggestedName ?? "",
-                        helpText: renameHelpText ?? "",
-                        isRegenerating: isRegeneratingName
-                    )
-
-                    Spacer(minLength: 12)
-
-                    Image(systemName: "wand.and.stars")
-                        .font(.caption)
-                        .foregroundColor(.purple)
-                        .help(renameMapping.renameReason ?? "Sorty suggested rename")
-
-                    RenameActionGlassCluster(
-                        isRegenerating: isRegeneratingName,
-                        onEdit: { onStartEditing(renameMapping.suggestedName ?? "") },
-                        onRegenerate: onRegenerate,
-                        onReject: onReject
-                    )
+                        .lineLimit(2)
+                        .padding(.leading, 44)
+                    }
                 }
                 .padding(.leading, 28)
                 .transition(.opacity.combined(with: .move(edge: .top)))

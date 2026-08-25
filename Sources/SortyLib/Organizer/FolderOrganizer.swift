@@ -2916,6 +2916,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             if let index = mappingIndices[file.id] {
                 updated.fileRenameMappings[index].suggestedName = finalName
+                updated.fileRenameMappings[index].isSelected = finalName != nil
                 if let reason {
                     updated.fileRenameMappings[index].renameReason = reason
                 }

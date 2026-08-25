@@ -89,7 +89,7 @@ final class PreviewStoreRenameTests: XCTestCase {
         let file = makeFile("image", ext: "jpg")
         let mapping = FileRenameMapping(
             originalFile: file,
-            suggestedName: nil,
+            suggestedName: "Possible Sunset.jpg",
             renameReason: "AI unsure",
             renameConfidence: 0.2
         )
@@ -99,7 +99,59 @@ final class PreviewStoreRenameTests: XCTestCase {
 
         let persistedMapping = store.plan.suggestions[0].renameMapping(for: file)
         XCTAssertTrue(persistedMapping?.isAutoSkippedForLowConfidence ?? false)
+        XCTAssertTrue(persistedMapping?.hasRename ?? false)
         XCTAssertEqual(persistedMapping?.finalFilename, file.displayName)
+    }
+
+    func testConfidenceBandsControlDefaultSelection() {
+        let file = makeFile("invoice", ext: "pdf")
+        let low = FileRenameMapping(
+            originalFile: file,
+            suggestedName: "2026-05 Vendor Invoice.pdf",
+            renameReason: "Possible date and vendor",
+            renameConfidence: 0.2
+        )
+        let medium = FileRenameMapping(
+            originalFile: file,
+            suggestedName: "2026-05 Vendor Invoice.pdf",
+            renameReason: "Title contains invoice",
+            renameConfidence: 0.6
+        )
+        let high = FileRenameMapping(
+            originalFile: file,
+            suggestedName: "2026-05 Vendor Invoice.pdf",
+            renameReason: "Title and body match",
+            renameConfidence: 0.9
+        )
+
+        XCTAssertEqual(low.confidenceBand, .low)
+        XCTAssertFalse(low.shouldApplyRename)
+        XCTAssertEqual(medium.confidenceBand, .medium)
+        XCTAssertFalse(medium.shouldApplyRename)
+        XCTAssertEqual(high.confidenceBand, .high)
+        XCTAssertTrue(high.shouldApplyRename)
+    }
+
+    func testUserCanOptInToMediumConfidenceRename() {
+        let file = makeFile("invoice", ext: "pdf")
+        let mapping = FileRenameMapping(
+            originalFile: file,
+            suggestedName: "2026-05 Vendor Invoice.pdf",
+            renameReason: "Title contains invoice",
+            renameConfidence: 0.6
+        )
+        let folder = FolderSuggestion(
+            folderName: "Invoices",
+            files: [file],
+            fileRenameMappings: [mapping]
+        )
+        let store = PreviewStore(plan: OrganizationPlan(suggestions: [folder]))
+
+        store.setRenameSelected(fileID: file.id, folderID: folder.id, isSelected: true)
+
+        let selected = store.plan.suggestions[0].renameMapping(for: file)
+        XCTAssertTrue(selected?.shouldApplyRename ?? false)
+        XCTAssertEqual(selected?.finalFilename, "2026-05 Vendor Invoice.pdf")
     }
 
     func testLargePlanStartsCollapsedAndBoundsExpandedRows() {

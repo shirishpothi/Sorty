@@ -278,6 +278,66 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testApplyHonorsRenameConfidenceSelectionPolicy() async throws {
+        let mediumSource = tempDirectory.appendingPathComponent("scan.pdf")
+        let lowSource = tempDirectory.appendingPathComponent("export.pdf")
+        try "medium".write(to: mediumSource, atomically: true, encoding: .utf8)
+        try "low".write(to: lowSource, atomically: true, encoding: .utf8)
+
+        let mediumFile = FileItem(
+            path: mediumSource.path,
+            name: "scan",
+            extension: "pdf",
+            size: 6,
+            isDirectory: false
+        )
+        let lowFile = FileItem(
+            path: lowSource.path,
+            name: "export",
+            extension: "pdf",
+            size: 3,
+            isDirectory: false
+        )
+        let mappings = [
+            FileRenameMapping(
+                originalFile: mediumFile,
+                suggestedName: "Possible Invoice.pdf",
+                renameReason: "Title may say invoice",
+                renameConfidence: 0.6
+            ),
+            FileRenameMapping(
+                originalFile: lowFile,
+                suggestedName: "Possible Client Export.pdf",
+                renameReason: "Client name is uncertain",
+                renameConfidence: 0.2,
+                isSelected: true
+            )
+        ]
+        let folder = FolderSuggestion(
+            folderName: "Documents",
+            files: [mediumFile, lowFile],
+            fileRenameMappings: mappings
+        )
+
+        let operations = try await fileSystemManager.applyOrganization(
+            OrganizationPlan(suggestions: [folder]),
+            at: tempDirectory,
+            dryRun: false
+        )
+
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: tempDirectory.appendingPathComponent("Documents/scan.pdf").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: tempDirectory.appendingPathComponent("Documents/Possible Invoice.pdf").path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: tempDirectory.appendingPathComponent("Documents/Possible Client Export.pdf").path
+        ))
+        XCTAssertEqual(operations.filter { $0.type == .renameFile }.count, 1)
+    }
+
+    @MainActor
     func testCrossVolumeRenamePathWithNameChange() async throws {
         final class ProgressRecorder: @unchecked Sendable {
             private let lock = NSLock()

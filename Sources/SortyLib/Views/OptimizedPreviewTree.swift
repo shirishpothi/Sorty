@@ -582,6 +582,22 @@ class PreviewStore: ObservableObject {
         }
     }
 
+    func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
+        var updatedPlan = plan
+        for index in updatedPlan.suggestions.indices {
+            if let updated = setRenameSelectionInFolder(
+                updatedPlan.suggestions[index],
+                targetID: folderID,
+                fileID: fileID,
+                isSelected: isSelected
+            ) {
+                updatedPlan.suggestions[index] = updated
+                updateInternalPlan(updatedPlan)
+                return
+            }
+        }
+    }
+
     func regenerateRename(fileID: UUID, folderID: UUID) {
         guard let file = findFile(by: fileID) else { return }
         let candidate = localRenameCandidate(for: file)
@@ -681,6 +697,32 @@ class PreviewStore: ObservableObject {
         for i in 0..<updatedFolder.subfolders.count {
             if let updated = rejectRenameInFolder(updatedFolder.subfolders[i], targetID: targetID, fileID: fileID) {
                 updatedFolder.subfolders[i] = updated
+                return updatedFolder
+            }
+        }
+        return nil
+    }
+
+    private func setRenameSelectionInFolder(
+        _ folder: FolderSuggestion,
+        targetID: UUID,
+        fileID: UUID,
+        isSelected: Bool
+    ) -> FolderSuggestion? {
+        var updatedFolder = folder
+        if folder.id == targetID {
+            updatedFolder.setRenameSelected(for: fileID, isSelected: isSelected)
+            return updatedFolder
+        }
+
+        for index in updatedFolder.subfolders.indices {
+            if let updated = setRenameSelectionInFolder(
+                updatedFolder.subfolders[index],
+                targetID: targetID,
+                fileID: fileID,
+                isSelected: isSelected
+            ) {
+                updatedFolder.subfolders[index] = updated
                 return updatedFolder
             }
         }
@@ -1267,7 +1309,8 @@ struct FlatFileRowView: View {
             onCancel: cancelRename,
             onStartEditing: startEditing,
             onRegenerate: regenerateSuggestedName,
-            onReject: rejectRename
+            onReject: rejectRename,
+            onSetRenameSelected: setRenameSelected
         )
     }
 
@@ -1319,6 +1362,16 @@ struct FlatFileRowView: View {
 
     private func rejectRename() {
         store.rejectRename(fileID: file.id, folderID: parentFolderID)
+        onPlanChanged()
+    }
+
+    private func setRenameSelected(_ isSelected: Bool) {
+        HapticFeedbackManager.shared.selection()
+        store.setRenameSelected(
+            fileID: file.id,
+            folderID: parentFolderID,
+            isSelected: isSelected
+        )
         onPlanChanged()
     }
 

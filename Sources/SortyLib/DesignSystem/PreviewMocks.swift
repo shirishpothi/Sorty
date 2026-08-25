@@ -13,7 +13,7 @@ public enum PreviewMocks {
     
     /// Creates a mock OrganizationPlan for previews
     public static func makeOrganizationPlan() -> OrganizationPlan {
-        OrganizationPlan(
+        var plan = OrganizationPlan(
             id: UUID(),
             suggestions: [
                 FolderSuggestion(
@@ -106,6 +106,33 @@ public enum PreviewMocks {
             version: 1,
             generationStats: makeGenerationStats()
         )
+
+        let documentFiles = plan.suggestions[0].files
+        plan.suggestions[0].fileRenameMappings = [
+            FileRenameMapping(
+                originalFile: documentFiles[0],
+                suggestedName: "2026-05 Product Brief.pdf",
+                renameReason: "PDF title says \"Product Brief\" and the metadata date is May 2026.",
+                renameConfidence: 0.92
+            ),
+            FileRenameMapping(
+                originalFile: documentFiles[1],
+                suggestedName: "Q2 Status Report.docx",
+                renameReason: "Document title says \"Status Report\"; the quarter appears only once in body text.",
+                renameConfidence: 0.58
+            )
+        ]
+
+        let imageFile = plan.suggestions[1].files[0]
+        plan.suggestions[1].fileRenameMappings = [
+            FileRenameMapping(
+                originalFile: imageFile,
+                suggestedName: "Client Launch Photo.jpg",
+                renameReason: "OCR may contain a client label, but the text is incomplete.",
+                renameConfidence: 0.22
+            )
+        ]
+        return plan
     }
     
     /// Creates mock generation stats

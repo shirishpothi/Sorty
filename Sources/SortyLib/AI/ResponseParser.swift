@@ -663,16 +663,6 @@ struct ResponseParser {
         renameConfidence: Double?
     ) -> FileRenameMapping? {
         let clampedConfidence = renameConfidence.map { min(max($0, 0.0), 1.0) }
-        if let confidence = clampedConfidence,
-           confidence < FileRenameMapping.lowConfidenceThreshold {
-            return FileRenameMapping(
-                originalFile: file,
-                suggestedName: nil,
-                renameReason: "AI unsure (confidence: \(String(format: "%.2f", confidence)))",
-                renameConfidence: confidence
-            )
-        }
-
         let cleanedName = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let cleanedReason = renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !cleanedName.isEmpty || !cleanedReason.isEmpty || clampedConfidence != nil else {

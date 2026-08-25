@@ -10,19 +10,22 @@ import Foundation
 /// Represents a file with its suggested rename
 public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
     public static let lowConfidenceThreshold = 0.3
+    public static let highConfidenceThreshold = 0.75
 
     public var id: UUID
     public var originalFile: FileItem
     public var suggestedName: String?
     public var renameReason: String?
     public var renameConfidence: Double?
+    public var isSelected: Bool?
 
     public init(
         id: UUID = UUID(),
         originalFile: FileItem,
         suggestedName: String? = nil,
         renameReason: String? = nil,
-        renameConfidence: Double? = nil
+        renameConfidence: Double? = nil,
+        isSelected: Bool? = nil
     ) {
         self.id = id
         self.originalFile = originalFile
@@ -42,11 +45,12 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
         } else {
             self.renameConfidence = nil
         }
+        self.isSelected = isSelected
     }
 
     /// Returns the final filename (suggested or original)
     public var finalFilename: String {
-        if let suggested = suggestedName, !suggested.isEmpty {
+        if shouldApplyRename, let suggested = suggestedName, !suggested.isEmpty {
             return suggested
         }
         return originalFile.displayName
@@ -64,12 +68,36 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
     }
 
     public var isLowConfidence: Bool {
-        guard let renameConfidence else { return false }
-        return renameConfidence < Self.lowConfidenceThreshold
+        confidenceBand == .low
     }
 
     public var isAutoSkippedForLowConfidence: Bool {
-        isLowConfidence && !hasRename
+        isLowConfidence && hasRename && !shouldApplyRename
+    }
+
+    public var confidenceBand: RenameConfidenceBand {
+        guard let renameConfidence else { return .high }
+        if renameConfidence < Self.lowConfidenceThreshold { return .low }
+        if renameConfidence < Self.highConfidenceThreshold { return .medium }
+        return .high
+    }
+
+    public var shouldApplyRename: Bool {
+        hasRename && (isSelected ?? (confidenceBand == .high))
+    }
+}
+
+public enum RenameConfidenceBand: String, Codable, CaseIterable, Sendable {
+    case high
+    case medium
+    case low
+
+    public var displayName: String {
+        switch self {
+        case .high: return "High confidence"
+        case .medium: return "Review suggested"
+        case .low: return "Low confidence"
+        }
     }
 }
 
@@ -134,7 +162,7 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
 
     /// Number of files with rename suggestions in this folder
     public var renameCount: Int {
-        let directRenames = fileRenameMappings.filter { $0.hasRename }.count
+        let directRenames = fileRenameMappings.filter(\.shouldApplyRename).count
         let subfolderRenames = subfolders.reduce(0) { $0 + $1.renameCount }
         return directRenames + subfolderRenames
     }
@@ -253,6 +281,7 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         if let index = fileRenameMappings.firstIndex(where: { $0.originalFile.id == file.id }) {
             fileRenameMappings[index].suggestedName = sanitizedName
             fileRenameMappings[index].renameReason = reason ?? fileRenameMappings[index].renameReason
+            fileRenameMappings[index].isSelected = sanitizedName != nil
             if let confidence {
                 fileRenameMappings[index].renameConfidence = min(max(confidence, 0.0), 1.0)
             }
@@ -261,10 +290,18 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
                 originalFile: file,
                 suggestedName: sanitizedName,
                 renameReason: reason,
-                renameConfidence: confidence
+                renameConfidence: confidence,
+                isSelected: true
             )
             fileRenameMappings.append(mapping)
         }
+    }
+
+    public mutating func setRenameSelected(for fileID: UUID, isSelected: Bool) {
+        guard let index = fileRenameMappings.firstIndex(where: { $0.originalFile.id == fileID }) else {
+            return
+        }
+        fileRenameMappings[index].isSelected = isSelected
     }
 }
 

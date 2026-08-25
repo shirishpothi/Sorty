@@ -32,7 +32,7 @@ Welcome to Sorty! This app uses AI to intelligently sort your files into logical
 
 3. **Preview the Organization**: Click "Organize" to see a preview of the proposed changes. The AI will analyze your files and suggest a folder structure.
 
-4. **Review and Customize**: Expand each suggested folder to see which files will be moved. You can remove files from suggestions if needed.
+4. **Review and Customize**: Expand each suggested folder to see which files will be moved. You can remove files from suggestions if needed. Rename suggestions show a confidence label and the source evidence. High-confidence names are selected. Medium- and low-confidence names keep the original filename until you check "Use".
 
 5. **Apply Changes**: If you're happy with the preview, click "Apply Changes". You can always undo with ⌘Z.
 

@@ -364,7 +364,7 @@ struct PreviewView: View {
                 learningsManager.addPositiveExample(srcPath: file.path, dstPath: destPath)
                 
                 // Record accepted renames
-                if let mapping = previewStore.renameMappings[file.id], mapping.hasRename {
+                if let mapping = previewStore.renameMappings[file.id], mapping.shouldApplyRename {
                     learningsManager.recordRenameFeedback(
                         originalName: file.displayName,
                         suggestedName: mapping.suggestedName,

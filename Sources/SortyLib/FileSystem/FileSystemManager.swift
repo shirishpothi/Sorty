@@ -532,7 +532,7 @@ public actor FileSystemManager {
         destinationFolderURL: URL
     ) -> (name: String, metadata: FileOperation.OperationMetadata?) {
         guard let mapping,
-              mapping.hasRename,
+              mapping.shouldApplyRename,
               let proposedName = mapping.suggestedName else {
             return (sourceURL.lastPathComponent, nil)
         }

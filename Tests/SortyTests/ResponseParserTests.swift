@@ -333,9 +333,12 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions[0].fileRenameMappings.count, 1)
 
         let mapping = try XCTUnwrap(plan.suggestions[0].fileRenameMappings.first)
-        XCTAssertFalse(mapping.hasRename)
+        XCTAssertTrue(mapping.hasRename)
         XCTAssertTrue(mapping.isAutoSkippedForLowConfidence)
         XCTAssertEqual(mapping.renameConfidence, 0.2)
+        XCTAssertEqual(mapping.confidenceBand, .low)
+        XCTAssertFalse(mapping.shouldApplyRename)
+        XCTAssertEqual(mapping.finalFilename, "old_name.pdf")
     }
     
     func testParsingWithMultipleTagsPerFile() throws {

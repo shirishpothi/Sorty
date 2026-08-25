@@ -331,13 +331,15 @@ final class FolderSuggestionTests: XCTestCase {
     func testFileRenameMappingConfidenceClampsAndFlagsLowConfidence() {
         let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
 
-        let low = FileRenameMapping(originalFile: file, suggestedName: nil, renameConfidence: 0.1)
+        let low = FileRenameMapping(originalFile: file, suggestedName: "uncertain.txt", renameConfidence: 0.1)
         XCTAssertTrue(low.isLowConfidence)
         XCTAssertTrue(low.isAutoSkippedForLowConfidence)
+        XCTAssertEqual(low.finalFilename, file.displayName)
 
         let high = FileRenameMapping(originalFile: file, suggestedName: "renamed.txt", renameConfidence: 1.4)
         XCTAssertEqual(high.renameConfidence, 1.0)
         XCTAssertFalse(high.isLowConfidence)
+        XCTAssertTrue(high.shouldApplyRename)
     }
 
     func testOrganizeModePlanEnforcerStripsAllRenameIntent() {
