@@ -3592,31 +3592,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             try checkCancellation()
 
-            // Get existing folders to use as context
-            let contents = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
-            let existingFolders = contents.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false }
-                .map { $0.lastPathComponent }
-                .filter { !$0.hasPrefix(".") }
-
-            let existingFolderList = existingFolders.joined(separator: ", ")
+            let existingFolderContext = PromptBuilder.buildExistingFoldersContext(at: directory)
+                ?? "No descendant folders currently exist."
             let contextPrompt: String
             switch mode {
             case .organize:
                 contextPrompt = """
-                The following folders already exist: \(existingFolderList).
+                \(existingFolderContext)
 
                 RULES for Organization:
-                1. You MUST prioritize placing files into these existing folders if they are relevant.
+                1. You MUST prioritize placing files into these existing descendant paths if they are relevant, regardless of path depth.
                 2. Do NOT create new folders unless the file is completely unrelated to any existing folder.
                 3. If a file does not fit well into any existing folder, you may leave it in the root (do not move it).
                 4. This is a "Smart Drop" operation: maintain the existing structure and keep every original filename.
                 """
             case .organizeAndRename:
                 contextPrompt = """
-                The following folders already exist: \(existingFolderList).
+                \(existingFolderContext)
 
                 RULES for Organization and Renaming:
-                1. Prioritize placing files into these existing folders when they are relevant.
+                1. Prioritize placing files into these existing descendant paths when they are relevant, regardless of path depth.
                 2. Do not create new folders unless a file is unrelated to the existing structure.
                 3. Improve unclear filenames when the available evidence supports a better name.
                 4. Preserve clear filenames and maintain the existing structure instead of reinventing it.

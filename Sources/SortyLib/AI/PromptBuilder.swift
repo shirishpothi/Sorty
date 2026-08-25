@@ -807,47 +807,50 @@ struct PromptBuilder {
         return String(normalized.prefix(maxLength)) + "..."
     }
     
-    /// Scan a directory for existing folders (1-2 levels deep) to include in the prompt
-    static func buildExistingFoldersContext(at directoryURL: URL, maxDepth: Int = 2) -> String? {
+    /// Lists exact descendant folder paths so the planner can reuse deeply nested destinations.
+    static func buildExistingFoldersContext(at directoryURL: URL, maxFolders: Int = 1_000) -> String? {
+        guard maxFolders > 0 else { return nil }
+
         let fileManager = FileManager.default
         var existingFolders: [String] = []
-        
-        func scanDirectory(_ url: URL, depth: Int, prefix: String = "") {
-            guard depth <= maxDepth else { return }
-            
-            guard let contents = try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
-                return
+
+        guard let enumerator = fileManager.enumerator(
+            at: directoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return nil
+        }
+
+        for case let item as URL in enumerator {
+            guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+                  values.isDirectory == true else {
+                continue
             }
-            
-            for item in contents {
-                guard let isDirectory = try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory, isDirectory == true else {
-                    continue
-                }
-                
-                let folderName = prefix.isEmpty ? item.lastPathComponent : "\(prefix)/\(item.lastPathComponent)"
-                existingFolders.append(folderName)
-                
-                // Recurse for subfolders
-                if depth < maxDepth {
-                    scanDirectory(item, depth: depth + 1, prefix: folderName)
-                }
+
+            if values.isSymbolicLink == true {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            let path = relativePath(for: item, baseDirectoryURL: directoryURL)
+            if path != "." {
+                existingFolders.append(path)
             }
         }
-        
-        scanDirectory(directoryURL, depth: 1)
         
         guard !existingFolders.isEmpty else { return nil }
-        
-        // Limit to first 30 folders to keep prompt size reasonable
-        let foldersToShow = existingFolders.prefix(30)
-        let truncated = existingFolders.count > 30
-        
-        var context = "## EXISTING FOLDERS (prefer reusing these when semantically appropriate):\n"
-        context += foldersToShow.joined(separator: ", ")
+
+        existingFolders.sort { $0.localizedStandardCompare($1) == .orderedAscending }
+        let foldersToShow = existingFolders.prefix(maxFolders)
+        let truncated = existingFolders.count > maxFolders
+
+        var context = "## EXISTING DESCENDANT FOLDERS (exact paths; prefer reusing these when semantically appropriate):\n"
+        context += foldersToShow.map { "- \($0)" }.joined(separator: "\n")
         if truncated {
-            context += ", ... and \(existingFolders.count - 30) more"
+            context += "\n- ... and \(existingFolders.count - maxFolders) more"
         }
-        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable."
+        context += "\n\nIMPORTANT: A listed path is one complete destination relative to the watched folder. Copy the full path exactly when it fits. Prefer an existing descendant folder over creating a duplicate hierarchy."
         
         return context
     }

@@ -131,6 +131,37 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("MUST NOT override direct user or persona instructions"))
     }
 
+    func testExistingFoldersContextIncludesExactPathAtDepthThirty() throws {
+        let components = (1...30).map { "Level-\($0)" }
+        let deepFolder = components.reduce(tempDir!) { partialPath, component in
+            partialPath.appendingPathComponent(component, isDirectory: true)
+        }
+        try FileManager.default.createDirectory(at: deepFolder, withIntermediateDirectories: true)
+
+        let context = try XCTUnwrap(PromptBuilder.buildExistingFoldersContext(at: tempDir))
+        let deepRelativePath = components.joined(separator: "/")
+
+        XCTAssertTrue(context.contains("- \(deepRelativePath)"))
+        XCTAssertTrue(context.contains("one complete destination relative to the watched folder"))
+    }
+
+    func testExistingFoldersContextDoesNotDescendIntoSymlinkedFolder() throws {
+        let externalFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PromptBuilderExternal-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: externalFolder.appendingPathComponent("Outside", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: externalFolder) }
+
+        let link = tempDir.appendingPathComponent("Linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: externalFolder)
+
+        let context = PromptBuilder.buildExistingFoldersContext(at: tempDir)
+
+        XCTAssertFalse(context?.contains("Linked/Outside") == true)
+    }
+
     func testEveryCompactionLevelPreservesPerFileEvidence() {
         let metadata = ContentMetadata(
             textPreview: "Vendor appears in the extracted invoice text.",
