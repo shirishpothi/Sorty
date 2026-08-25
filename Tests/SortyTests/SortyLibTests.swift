@@ -6,7 +6,9 @@ import Combine
 actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     let config: AIConfig
     var analyzeHandler: (([FileItem]) async throws -> OrganizationPlan)?
+    var indexedAnalyzeHandler: (([FileItem], Int) async throws -> OrganizationPlan)?
     private(set) var analyzedBatchSizes: [Int] = []
+    private(set) var analyzedInstructions: [String?] = []
     @MainActor weak var streamingDelegate: StreamingDelegate?
 
     init(config: AIConfig) {
@@ -15,6 +17,10 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
 
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
         analyzedBatchSizes.append(files.count)
+        analyzedInstructions.append(customInstructions)
+        if let indexedAnalyzeHandler {
+            return try await indexedAnalyzeHandler(files, analyzedBatchSizes.count)
+        }
         if let handler = analyzeHandler {
             return try await handler(files)
         }
@@ -25,8 +31,16 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
         self.analyzeHandler = handler
     }
 
+    func setIndexedHandler(_ handler: @escaping @Sendable ([FileItem], Int) async throws -> OrganizationPlan) {
+        indexedAnalyzeHandler = handler
+    }
+
     func currentAnalyzedBatchSizes() -> [Int] {
         analyzedBatchSizes
+    }
+
+    func currentAnalyzedInstructions() -> [String?] {
+        analyzedInstructions
     }
 
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
@@ -101,6 +115,35 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(folderOrganizer.state, .ready)
         XCTAssertNotNil(folderOrganizer.currentPlan)
         XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.first?.folderName, "Docs")
+    }
+
+    @MainActor
+    func testLowQualityPlanRetriesOnceWithConcreteDeficiencies() async throws {
+        for name in ["one.pdf", "two.jpg", "three.mov", "four.csv", "five.txt"] {
+            try Data().write(to: tempDirectory.appendingPathComponent(name))
+        }
+        folderOrganizer.setAIClientForTesting(mockClient)
+        await mockClient.setIndexedHandler { files, requestIndex in
+            if requestIndex == 1 {
+                return OrganizationPlan(suggestions: [
+                    FolderSuggestion(folderName: "Misc", files: Array(files.prefix(4))),
+                    FolderSuggestion(folderName: "Other", files: Array(files.suffix(1)))
+                ])
+            }
+            return OrganizationPlan(suggestions: [
+                FolderSuggestion(folderName: "Reference Material", files: files)
+            ])
+        }
+
+        try await folderOrganizer.organize(directory: tempDirectory)
+
+        let instructions = await mockClient.currentAnalyzedInstructions()
+        XCTAssertEqual(instructions.count, 2)
+        XCTAssertTrue(instructions[1]?.contains("PLAN QUALITY CORRECTION") == true)
+        XCTAssertTrue(instructions[1]?.contains("\"Misc\"") == true)
+        XCTAssertTrue(instructions[1]?.contains("vague name") == true)
+        XCTAssertEqual(folderOrganizer.currentPlan?.qualityAssessment?.didRetry, true)
+        XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.map(\.folderName), ["Reference Material"])
     }
 
     @MainActor
@@ -390,6 +433,88 @@ private actor ResumeTimeoutTracker {
             suggestions: [
                 FolderSuggestion(folderName: "", files: files)
             ]
+        )
+    }
+}
+
+final class PlanQualityEvaluatorTests: XCTestCase {
+    func testScoresNamedStructuralDeficiencies() {
+        let files = [
+            file("a.pdf"), file("b.jpg"), file("c.mov"), file("d.csv")
+        ]
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(folderName: "Misc", files: files),
+            FolderSuggestion(folderName: "Miscs", files: [file("e.txt")])
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(
+            plan,
+            existingFolderPaths: ["Archive/Miscellaneous"]
+        )
+
+        XCTAssertFalse(assessment.passes)
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .duplicateFolderNames })
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .vagueOrSingleFileFolder })
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .mixedFileTypes })
+    }
+
+    func testFlagsUnnecessaryNestingAndExistingConventionMismatch() {
+        let report = file("report.pdf")
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Projects",
+                subfolders: [
+                    FolderSuggestion(
+                        folderName: "Invoices",
+                        subfolders: [FolderSuggestion(folderName: "Reportz", files: [report])]
+                    )
+                ]
+            )
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(
+            plan,
+            existingFolderPaths: ["Projects/Invoices/Reports"]
+        )
+
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .unnecessaryNesting })
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .existingConventionMismatch })
+    }
+
+    func testLowScoreKeepsCoherentPlacementsAndDemotesOnlyUncertainFiles() {
+        let certain = file("statement.pdf")
+        let uncertain = file("download.bin")
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(folderName: "Bank Statements", files: [certain, file("statement-2.pdf")]),
+            FolderSuggestion(folderName: "Other", files: [uncertain])
+        ])
+        let assessment = PlanQualityAssessment(
+            score: 60,
+            issues: [
+                PlanQualityIssue(
+                    kind: .vagueOrSingleFileFolder,
+                    message: "Other is vague.",
+                    folderPaths: ["Other"],
+                    fileIDs: [uncertain.id],
+                    deduction: 40
+                )
+            ],
+            didRetry: true
+        )
+
+        let reviewed = PlanQualityEvaluator.keepingCertainItems(in: plan, assessment: assessment)
+
+        XCTAssertEqual(reviewed.suggestions.map(\.folderName), ["Bank Statements"])
+        XCTAssertEqual(reviewed.unorganizedFiles.map(\.id), [uncertain.id])
+        XCTAssertEqual(reviewed.qualityAssessment?.didRetry, true)
+    }
+
+    private func file(_ name: String) -> FileItem {
+        let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
+        return FileItem(
+            path: url.path,
+            name: url.deletingPathExtension().lastPathComponent,
+            extension: url.pathExtension
         )
     }
 }

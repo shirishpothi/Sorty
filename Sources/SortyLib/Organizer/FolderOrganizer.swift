@@ -2722,7 +2722,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
-            try validator.validate(normalizedInputPlan, at: directory, allowedStorageLocations: allowedLocations)
+            try validator.validate(
+                normalizedInputPlan,
+                at: directory,
+                allowedStorageLocations: allowedLocations,
+                mode: aiConfig?.mode ?? .organize
+            )
         } catch let validationError as ValidationError {
             if let retryPlan = await retryWithValidationEnhancement(
                 files: files,
@@ -2741,7 +2746,46 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
-        let planAfterValidation = validatedPlanFromRetry ?? normalizedInputPlan
+        var planAfterValidation = validatedPlanFromRetry ?? normalizedInputPlan
+
+        if aiConfig?.mode != .renameOnly {
+            let existingFolderPaths = PlanQualityEvaluator.existingFolderPaths(at: directory)
+            let initialAssessment = PlanQualityEvaluator.assess(
+                planAfterValidation,
+                existingFolderPaths: existingFolderPaths
+            )
+            if !initialAssessment.passes {
+                if let retryPlan = await retryForPlanQuality(
+                    files: files,
+                    client: client,
+                    assessment: initialAssessment,
+                    directory: directory,
+                    instructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: imagePayload,
+                    allowedStorageLocations: allowedLocations
+                ) {
+                    planAfterValidation = retryPlan
+                }
+
+                let rescoredPlan = PlanQualityEvaluator.assess(
+                    planAfterValidation,
+                    existingFolderPaths: existingFolderPaths
+                )
+                let retryAssessment = PlanQualityAssessment(
+                    score: rescoredPlan.score,
+                    issues: rescoredPlan.issues,
+                    didRetry: true
+                )
+                planAfterValidation = PlanQualityEvaluator.keepingCertainItems(
+                    in: planAfterValidation,
+                    assessment: retryAssessment
+                )
+            } else {
+                planAfterValidation.qualityAssessment = initialAssessment
+            }
+        }
 
         try checkCancellation()
 
@@ -3251,12 +3295,72 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try validator.validate(
                 normalizedRetryPlan,
                 at: directory,
-                allowedStorageLocations: allowedStorageLocations
+                allowedStorageLocations: allowedStorageLocations,
+                mode: aiConfig?.mode ?? .organize
             )
             LogManager.shared.log("Validation retry succeeded", category: "FolderOrganizer")
             return normalizedRetryPlan
         } catch {
             LogManager.shared.log("Validation retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
+            return nil
+        }
+    }
+
+    private func retryForPlanQuality(
+        files: [FileItem],
+        client: AIClientProtocol,
+        assessment: PlanQualityAssessment,
+        directory: URL,
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        imagePayload: [String: Data],
+        allowedStorageLocations: [StorageLocation]
+    ) async -> OrganizationPlan? {
+        let deficiencies = PlanQualityEvaluator.retryInstructions(for: assessment)
+        let enhancedPrompt = instructions + """
+
+
+        PLAN QUALITY CORRECTION
+        The first plan scored \(assessment.score)/100. Fix every problem below before returning a replacement plan:
+        \(deficiencies)
+
+        Keep coherent placements unchanged. Do not force an ambiguous file into a weak category. Leave it unorganized instead.
+        """
+
+        restartPlanGenerationForRetry()
+        do {
+            defer { stopTimeoutTimer() }
+            let retryPlan = try await analyzeInBoundedBatches(
+                files: files,
+                client: client,
+                imagePayload: imagePayload,
+                instructions: enhancedPrompt,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+            let hierarchyNormalized = Self.normalizingDestinationHierarchy(in: retryPlan)
+            let storageNormalized = await normalizeStorageDestinations(
+                in: hierarchyNormalized,
+                allowedLocations: allowedStorageLocations,
+                sourceDirectoryURL: directory
+            )
+            try validator.validate(
+                storageNormalized,
+                at: directory,
+                allowedStorageLocations: allowedStorageLocations,
+                mode: aiConfig?.mode ?? .organize
+            )
+            LogManager.shared.log(
+                "Retried a plan that scored \(assessment.score)/100 with \(assessment.issues.count) structural issues",
+                category: "FolderOrganizer"
+            )
+            return storageNormalized
+        } catch {
+            LogManager.shared.log(
+                "Plan quality retry failed: \(error.localizedDescription)",
+                category: "FolderOrganizer"
+            )
             return nil
         }
     }

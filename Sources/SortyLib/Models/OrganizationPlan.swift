@@ -22,6 +22,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var timestamp: Date
     public var version: Int
     public var generationStats: GenerationStats?
+    public var qualityAssessment: PlanQualityAssessment?
     
     public init(
         id: UUID = UUID(),
@@ -31,7 +32,8 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         notes: String = "",
         timestamp: Date = Date(),
         version: Int = 1,
-        generationStats: GenerationStats? = nil
+        generationStats: GenerationStats? = nil,
+        qualityAssessment: PlanQualityAssessment? = nil
     ) {
         self.id = id
         self.suggestions = suggestions
@@ -41,6 +43,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         self.timestamp = timestamp
         self.version = version
         self.generationStats = generationStats
+        self.qualityAssessment = qualityAssessment
     }
     
     public var totalFiles: Int {
@@ -52,6 +55,58 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
             folders.count + folders.reduce(0) { $0 + countFolders($1.subfolders) }
         }
         return countFolders(suggestions)
+    }
+}
+
+public struct PlanQualityAssessment: Codable, Hashable, Sendable {
+    public static let passingScore = 75
+
+    public let score: Int
+    public let issues: [PlanQualityIssue]
+    public let didRetry: Bool
+
+    public init(score: Int, issues: [PlanQualityIssue], didRetry: Bool = false) {
+        self.score = min(max(score, 0), 100)
+        self.issues = issues
+        self.didRetry = didRetry
+    }
+
+    public var passes: Bool { score >= Self.passingScore }
+    public var uncertainFileIDs: Set<UUID> {
+        Set(issues.flatMap(\.fileIDs))
+    }
+}
+
+public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
+    public enum Kind: String, Codable, Sendable {
+        case duplicateFolderNames
+        case vagueOrSingleFileFolder
+        case mixedFileTypes
+        case unnecessaryNesting
+        case existingConventionMismatch
+    }
+
+    public let id: UUID
+    public let kind: Kind
+    public let message: String
+    public let folderPaths: [String]
+    public let fileIDs: [UUID]
+    public let deduction: Int
+
+    public init(
+        id: UUID = UUID(),
+        kind: Kind,
+        message: String,
+        folderPaths: [String],
+        fileIDs: [UUID],
+        deduction: Int
+    ) {
+        self.id = id
+        self.kind = kind
+        self.message = message
+        self.folderPaths = folderPaths
+        self.fileIDs = fileIDs
+        self.deduction = deduction
     }
 }
 
