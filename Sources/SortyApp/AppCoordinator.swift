@@ -1021,9 +1021,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
     private func discardPendingWatchBatch(folderID: UUID) {
         pendingFiles.removeValue(forKey: folderID)
-        if let folder = watchedFoldersManager.folder(withID: folderID) {
-            folderWatcher.refreshSnapshot(for: folder)
-        }
         persistOutstandingWatchWork()
     }
 
