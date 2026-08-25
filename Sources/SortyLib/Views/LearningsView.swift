@@ -1317,7 +1317,6 @@ struct LearningsView: View {
                     icon: "checkmark.circle.fill",
                     iconColor: .green
                 )
-                NSWorkspace.shared.open(url)
             } catch {
                 DebugLogger.log("Failed to export profile: \(error)")
                 HapticFeedbackManager.shared.error()
