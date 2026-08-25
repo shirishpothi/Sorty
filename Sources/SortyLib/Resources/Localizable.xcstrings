@@ -17283,36 +17283,36 @@
         }
       }
     },
-    "Manual Sessions": {
+    "Sessions You Started": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Manuelle Sitzungen"
+            "value": "Von dir gestartete Sitzungen"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sesiones manuales"
+            "value": "Sesiones iniciadas por ti"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Séances manuelles"
+            "value": "Sessions que vous avez lancées"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "手動セッション"
+            "value": "開始したセッション"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "手动会话"
+            "value": "你发起的会话"
           }
         }
       }
