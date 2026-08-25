@@ -51,6 +51,12 @@ New AI providers must:
 
 A score below 75 triggers one new AI request. The correction prompt lists every measured problem and asks the model to preserve sound placements. Sorty scores the replacement too. If it still fails, `keepingCertainItems` keeps placements that were not implicated and moves affected files to the unorganized review section. It never applies a low-quality placement by default.
 
+### Apple Foundation Model prompt compaction
+
+Apple Foundation Model requests progressively compact file evidence before splitting a large request into smaller batches. Every compaction level retains a bounded record for each file: filename, relative path, extension, byte size, available dates, extracted title, and a short content or OCR cue. Even the smallest fallback must not degrade files to opaque IDs and extensions.
+
+The active persona, direct user instructions, scoped `<learnings_context>`, and rename naming policy are fixed request context. They are included when choosing a compaction level and carried unchanged into every retry and adaptive batch. Reduce per-file evidence lengths or split the batch before removing those instructions.
+
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
 ## Deeplinks

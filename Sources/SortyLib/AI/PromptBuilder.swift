@@ -357,6 +357,7 @@ struct PromptBuilder {
         files: [FileItem],
         config: AIConfig,
         customInstructions: String? = nil,
+        personaPrompt: String? = nil,
         maxTokens: Int = 1200,
         safetyMargin: Double = 0.65
     ) -> CompactionLevel {
@@ -368,7 +369,10 @@ struct PromptBuilder {
             let fullPrompt = mergePromptBudgetStrings(
                 system: prompts.system,
                 user: prompts.user,
-                customInstructions: customInstructions
+                customInstructions: preservedContext(
+                    customInstructions: customInstructions,
+                    personaPrompt: personaPrompt
+                )
             )
             if estimateTokens(fullPrompt) <= effectiveBudget {
                 return level
@@ -376,6 +380,17 @@ struct PromptBuilder {
         }
 
         return .micro
+    }
+
+    static func preservedContext(customInstructions: String?, personaPrompt: String?) -> String {
+        var sections: [String] = []
+        if let personaPrompt, !personaPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sections.append("<active_persona>\n\(personaPrompt)\n</active_persona>")
+        }
+        if let customInstructions, !customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sections.append(customInstructions)
+        }
+        return sections.joined(separator: "\n\n")
     }
 
     private static func mergePromptBudgetStrings(system: String, user: String, customInstructions: String?) -> String {
@@ -386,11 +401,20 @@ struct PromptBuilder {
         return merged
     }
 
-    private static func compactFileLine(id: Int, file: FileItem, maxNameLength: Int) -> String {
+    private static func compactFileLine(
+        id: Int,
+        file: FileItem,
+        maxNameLength: Int,
+        maxPathLength: Int,
+        maxTitleLength: Int,
+        maxHintLength: Int
+    ) -> String {
         let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
-        let displayPath = file.relativePath ?? (file.displayName.isEmpty ? file.name : file.displayName)
-        let clippedName = String(displayPath.prefix(maxNameLength))
-        var line = "\(id)|\(ext)|\(clippedName)"
+        let filename = file.displayName.isEmpty ? file.name : file.displayName
+        let relativePath = file.relativePath ?? filename
+        let clippedName = truncateForPrompt(filename, maxLength: maxNameLength)
+        let clippedPath = truncateForPrompt(relativePath, maxLength: maxPathLength)
+        var line = "\(id)|name:\(clippedName)|path:\(clippedPath)|ext:\(ext)"
         
         // Append Finder metadata compactly when present
         var extras = ["bytes:\(file.size)"]
@@ -417,11 +441,11 @@ struct PromptBuilder {
         if let comment = file.finderComment, !comment.isEmpty {
             extras.append("comment:\(String(comment.prefix(40)))")
         }
-        if let metadata = file.contentMetadata, !metadata.isEmpty {
-            let metadataSummary = contentMetadataDescription(metadata)
-            if !metadataSummary.isEmpty {
-                extras.append("content:\(truncateForPrompt(metadataSummary, maxLength: 160))")
-            }
+        if let title = file.contentMetadata?.documentTitle, !title.isEmpty {
+            extras.append("title:\(truncateForPrompt(title, maxLength: maxTitleLength))")
+        }
+        if let hint = compactEvidenceHint(for: file), !hint.isEmpty {
+            extras.append("hint:\(truncateForPrompt(hint, maxLength: maxHintLength))")
         }
         if !extras.isEmpty {
             line += "|\(extras.joined(separator: "|"))"
@@ -429,11 +453,53 @@ struct PromptBuilder {
         return line
     }
 
-    private static func compactFileIdTable(files: [FileItem], maxNameLength: Int) -> String {
+    private static func compactFileIdTable(
+        files: [FileItem],
+        maxNameLength: Int,
+        maxPathLength: Int,
+        maxTitleLength: Int,
+        maxHintLength: Int
+    ) -> String {
         var lines: [String] = []
         lines.reserveCapacity(files.count)
         for (index, file) in files.enumerated() {
-            lines.append(compactFileLine(id: index + 1, file: file, maxNameLength: maxNameLength))
+            lines.append(compactFileLine(
+                id: index + 1,
+                file: file,
+                maxNameLength: maxNameLength,
+                maxPathLength: maxPathLength,
+                maxTitleLength: maxTitleLength,
+                maxHintLength: maxHintLength
+            ))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func compactEvidenceHint(for file: FileItem) -> String? {
+        let candidates = [
+            file.contentMetadata?.textPreview,
+            file.contentMetadata?.ocrText,
+            file.ocrText
+        ]
+        return candidates.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty })
+    }
+
+    private static func compactNamingPolicy(config: AIConfig) -> String {
+        guard config.mode == .renameOnly || config.mode == .organizeAndRename else { return "" }
+        var lines = [
+            "NAMING POLICY (preserve through prompt compaction):",
+            "- Style: \(config.namingStyle.promptInstructions)",
+            config.renameNamingOptions.promptInstructions
+        ]
+        if let custom = config.customNamingInstructions?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
+            lines.append("- Custom naming instructions: \(custom)")
+        }
+        if !config.renameRules.isEmpty {
+            lines.append("- Rule mode: \(config.renameRuleMode.displayName)")
+            lines.append(contentsOf: config.renameRules.map {
+                "- Rename rule (\($0.isRegex ? "regex" : "literal")): \($0.pattern) -> \($0.replacement)"
+            })
         }
         return lines.joined(separator: "\n")
     }
@@ -503,10 +569,10 @@ struct PromptBuilder {
             mode: mode,
             enableReasoning: enableReasoning
         )
-        let table = compactFileIdTable(files: files, maxNameLength: 24)
+        let table = compactFileIdTable(files: files, maxNameLength: 48, maxPathLength: 64, maxTitleLength: 48, maxHintLength: 96)
         let user = """
         \(compactFileSummary(files: files))
-        Files (id|ext|name):
+        Files (id|name|relative path|extension|size/date|title|content or OCR hint):
         \(table)
 
         \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
@@ -523,10 +589,10 @@ struct PromptBuilder {
             mode: mode,
             enableReasoning: enableReasoning
         )
-        let table = compactFileIdTable(files: files, maxNameLength: 14)
+        let table = compactFileIdTable(files: files, maxNameLength: 40, maxPathLength: 48, maxTitleLength: 40, maxHintLength: 72)
         let user = """
         \(compactFileSummary(files: files, maxExtensions: 8))
-        IDs (id|ext|name):
+        Files (id|name|relative path|extension|size/date|title|content or OCR hint):
         \(table)
 
         \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
@@ -543,16 +609,11 @@ struct PromptBuilder {
             mode: mode,
             enableReasoning: false
         )
-        var lines: [String] = []
-        lines.reserveCapacity(files.count)
-        for (index, file) in files.enumerated() {
-            let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
-            lines.append("\(index + 1)|\(ext)")
-        }
+        let table = compactFileIdTable(files: files, maxNameLength: 32, maxPathLength: 40, maxTitleLength: 32, maxHintLength: 56)
         let user = """
         \(compactFileSummary(files: files, maxExtensions: 6))
-        IDs (id|ext):
-        \(lines.joined(separator: "\n"))
+        Files (id|name|relative path|extension|size/date|title|content or OCR hint):
+        \(table)
 
         \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
         """
@@ -569,8 +630,8 @@ struct PromptBuilder {
         }
         prompt += "\(compactFileSummary(files: files, maxExtensions: 12))\n"
         prompt += "Use file IDs for mapping. Every file is listed once.\n"
-        prompt += "Files (id|ext|name):\n"
-        prompt += compactFileIdTable(files: files, maxNameLength: 32)
+        prompt += "Files (id|name|relative path|extension|size/date|title|content or OCR hint):\n"
+        prompt += compactFileIdTable(files: files, maxNameLength: 64, maxPathLength: 96, maxTitleLength: 64, maxHintLength: 128)
         prompt += "\n\n"
         prompt += compactResponseContract(mode: mode, enableReasoning: enableReasoning)
         
@@ -624,6 +685,7 @@ struct PromptBuilder {
     }
 
     static func promptPair(for level: CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
+        let pair: (system: String, user: String)
         switch level {
         case .standard:
             let system = config.systemPromptOverride
@@ -634,26 +696,29 @@ struct PromptBuilder {
                     enableTagging: config.enableFileTagging
                 )
             let user = buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
-            return (system, user)
+            pair = (system, user)
         case .ultra:
-            return buildUltraCompactPrompt(
+            pair = buildUltraCompactPrompt(
                 files: files,
                 mode: config.mode,
                 enableReasoning: config.enableReasoning
             )
         case .summary:
-            return buildSummaryPrompt(
+            pair = buildSummaryPrompt(
                 files: files,
                 mode: config.mode,
                 enableReasoning: config.enableReasoning
             )
         case .micro:
-            return buildMicroPrompt(
+            pair = buildMicroPrompt(
                 files: files,
                 mode: config.mode,
                 enableReasoning: config.enableReasoning
             )
         }
+        let namingPolicy = compactNamingPolicy(config: config)
+        guard !namingPolicy.isEmpty else { return pair }
+        return (pair.system, namingPolicy + "\n\n" + pair.user)
     }
     
     private static func expandedCustomNamingInstructions(

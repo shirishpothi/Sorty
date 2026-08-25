@@ -1996,7 +1996,8 @@ public class LearningsManager: ObservableObject {
             output.append(contentsOf: items.prefix(5).map { "- \($0)" })
         }
 
-        return output.count > 2 ? output.joined(separator: "\n") : ""
+        guard output.count > 2 else { return "" }
+        return "<learnings_context>\n\(output.joined(separator: "\n"))\n</learnings_context>"
     }
     
     // MARK: - Prompt Context Helpers

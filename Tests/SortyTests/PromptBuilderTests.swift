@@ -130,6 +130,80 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("MUST NOT override direct user or persona instructions"))
     }
 
+    func testEveryCompactionLevelPreservesPerFileEvidence() {
+        let metadata = ContentMetadata(
+            textPreview: "Vendor appears in the extracted invoice text.",
+            documentTitle: "May 2026 Invoice",
+            ocrText: "OCR fallback cue"
+        )
+        let file = FileItem(
+            path: "/tmp/Clients/Acme/scan.pdf",
+            relativePath: "Clients/Acme/scan.pdf",
+            name: "scan",
+            extension: "pdf",
+            size: 4_096,
+            modificationDate: Date(timeIntervalSince1970: 1_715_558_400),
+            contentMetadata: metadata
+        )
+        let config = AIConfig(mode: .organizeAndRename)
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompt = PromptBuilder.promptPair(for: level, config: config, files: [file]).user
+            XCTAssertTrue(prompt.contains("name:scan.pdf"), "Missing filename in \(level)")
+            XCTAssertTrue(prompt.contains("path:Clients/Acme/scan.pdf"), "Missing relative path in \(level)")
+            XCTAssertTrue(prompt.contains("ext:pdf"), "Missing extension in \(level)")
+            XCTAssertTrue(prompt.contains("bytes:4096"), "Missing size in \(level)")
+            XCTAssertTrue(prompt.contains("modified:"), "Missing date in \(level)")
+            XCTAssertTrue(prompt.contains("title:May 2026 Invoice"), "Missing title in \(level)")
+            XCTAssertTrue(prompt.contains("hint:Vendor appears in the extracted invoice text."), "Missing content hint in \(level)")
+        }
+    }
+
+    func testCompactionPreservesPersonaLearningsAndNamingPolicy() {
+        var config = AIConfig(mode: .renameOnly)
+        config.namingStyle = .datePrefix
+        config.customNamingInstructions = "Put the verified vendor before the document type."
+        config.renameRules = [RenameRule(pattern: "^IMG_", replacement: "Photo-")]
+        let supportingContext = """
+        <user_instructions>
+        Never invent client names.
+        </user_instructions>
+        <learnings_context>
+        Learned rule [rule_id: invoice-date]: Invoices use YYYY-MM-DD Vendor Invoice.ext.
+        </learnings_context>
+        """
+        let preserved = PromptBuilder.preservedContext(
+            customInstructions: supportingContext,
+            personaPrompt: "Prefer client-first names when the source names a client."
+        )
+
+        XCTAssertTrue(preserved.contains("<active_persona>"))
+        XCTAssertTrue(preserved.contains("Prefer client-first names"))
+        XCTAssertTrue(preserved.contains("<user_instructions>"))
+        XCTAssertTrue(preserved.contains("rule_id: invoice-date"))
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompt = PromptBuilder.promptPair(
+                for: level,
+                config: config,
+                files: [FileItem(path: "/tmp/IMG_0042.jpg", name: "IMG_0042", extension: "jpg")]
+            ).user
+            XCTAssertTrue(prompt.contains(config.namingStyle.promptInstructions))
+            XCTAssertTrue(prompt.contains("Put the verified vendor before the document type."))
+            XCTAssertTrue(prompt.contains("^IMG_ -> Photo-"))
+        }
+    }
+
     func testFastModePromptIncludesFileMetadataButOmitsContent() {
         let file = FileItem(
             path: "/tmp/Reports/quarterly.pdf",

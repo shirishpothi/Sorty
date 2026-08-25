@@ -34,6 +34,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             return try await analyzeSingleRequest(
                 files: files,
                 customInstructions: customInstructions,
+                personaPrompt: personaPrompt,
                 startTime: startTime
             )
         } catch let error as AIClientError where Self.isContextLimitError(error) {
@@ -42,6 +43,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
                 return try await analyzeInAdaptiveBatches(
                     files: files,
                     customInstructions: customInstructions,
+                    personaPrompt: personaPrompt,
                     overallStartTime: startTime
                 )
             }
@@ -114,6 +116,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
     private func analyzeSingleRequest(
         files: [FileItem],
         customInstructions: String?,
+        personaPrompt: String?,
         startTime: Date
     ) async throws -> OrganizationPlan {
         // Apple Foundation Models have a small on-device context window.
@@ -122,6 +125,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             files: files,
             config: config,
             customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
             maxTokens: 600
         )
 
@@ -137,11 +141,15 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
                 files: files
             )
 
-            if let instructions = customInstructions, !instructions.isEmpty {
-                let heading = instructions.contains("<user_instructions>")
+            let preservedContext = PromptBuilder.preservedContext(
+                customInstructions: customInstructions,
+                personaPrompt: personaPrompt
+            )
+            if !preservedContext.isEmpty {
+                let heading = preservedContext.contains("<user_instructions>")
                     ? "TASK INSTRUCTIONS AND SUPPORTING CONTEXT: Follow <user_instructions> before persona and labeled supporting context."
                     : "USER INSTRUCTIONS:"
-                prompts.user = "\(heading) \(instructions)\n\n" + prompts.user
+                prompts.user = "\(heading) \(preservedContext)\n\n" + prompts.user
             }
 
             DebugLogger.log("AFM Strategy: \(strategy) compaction for \(files.count) files")
@@ -195,6 +203,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
     private func analyzeInAdaptiveBatches(
         files: [FileItem],
         customInstructions: String?,
+        personaPrompt: String?,
         overallStartTime: Date
     ) async throws -> OrganizationPlan {
         var pendingChunks: [[FileItem]] = [files]
@@ -209,6 +218,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
                 let chunkPlan = try await analyzeSingleRequest(
                     files: chunk,
                     customInstructions: customInstructions,
+                    personaPrompt: personaPrompt,
                     startTime: chunkStart
                 )
                 completedPlans.append(chunkPlan)
