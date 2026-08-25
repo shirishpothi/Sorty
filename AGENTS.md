@@ -29,5 +29,6 @@
 Lots of apps have gotten bogged down with bad tech decisions and "slop". We have not, and we're proud of the performance of Sorty. We regularly audit for performance regressions. Make sure all changes are considerate of performance impact.
 - Comments should describe how code is used, especially for functions, and should move with the code they explain. Do not annotate every line of behavior.
 - Users run Sorty all day and notice dropped frames, misleading spinners, and stale labels. Avoid animations that repaint continuously without a clear purpose, since they can keep the GPU busy on high-refresh displays. Use motion deliberately for feedback and state changes, and make sure loading and displayed state stay accurate.
+- If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 - Liquid-glass UI must use `systemLiquidGlassBackground(...)` and `.systemLiquidGlassPopover(cornerRadius: 12)` only; never fake it with materials, blur, gradients, or clear-popover hacks.
 - Feature flags: `defaults write com.sorty.app <key> -bool true`; detailed guides live in `docs/agent-guides/`.
