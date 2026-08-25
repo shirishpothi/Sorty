@@ -30,6 +30,7 @@ struct LearningsView: View {
     @State private var emptyLearningsHasAppeared = false
     @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
+    @State private var selectedLearningRecordsCategory: LearningRecordsCategory?
 
     private enum StatusPopoverAction {
         case pauseResume
@@ -95,6 +96,53 @@ struct LearningsView: View {
             case .learningsProfile: return false
             }
         }
+    }
+
+    private enum LearningRecordsCategory: String, Identifiable {
+        case patterns
+        case sessions
+        case feedback
+        case instructions
+        case supportingData
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .patterns: return "Patterns"
+            case .sessions: return "Sessions"
+            case .feedback: return "Feedback"
+            case .instructions: return "Instructions"
+            case .supportingData: return "Supporting Data"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .patterns: return "sparkles"
+            case .sessions: return "clock.arrow.circlepath"
+            case .feedback: return "arrow.triangle.2.circlepath"
+            case .instructions: return "text.bubble"
+            case .supportingData: return "archivebox"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .patterns: return .purple
+            case .sessions: return .blue
+            case .feedback: return .orange
+            case .instructions: return .teal
+            case .supportingData: return .secondary
+            }
+        }
+    }
+
+    private struct LearningDataMetric: Identifiable {
+        let category: LearningRecordsCategory
+        let count: Int
+
+        var id: String { category.id }
     }
 
     var body: some View {
@@ -275,6 +323,11 @@ struct LearningsView: View {
                 }
             }
         )
+        .sheet(item: $selectedLearningRecordsCategory) { category in
+            if let profile = manager.currentProfile {
+                learningRecordsDetailSheet(category: category, profile: profile)
+            }
+        }
         .alert("Delete All Learning Data?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) {
                 cancelPendingControlAction()
@@ -1040,16 +1093,33 @@ struct LearningsView: View {
                     .filter { $0.isEnabled }
                     .sorted { $0.priority > $1.priority }
                     .prefix(5)
+                let profileSummary = LearningsProfileArchiveSummary(profile: profile)
+                let metrics = learningDataMetrics(for: profileSummary)
+                let totalRecordCount = profileSummary.totalRecordCount
 
-                if topRules.isEmpty {
+                if totalRecordCount == 0 {
                     emptyLearningsPlaceholder
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(topRules.enumerated()), id: \.element.id) { index, rule in
-                            LearningInsightRow(rule: rule, manager: manager)
-                                .animatedAppearance(delay: Double(index) * 0.05)
-                            if index < topRules.count - 1 {
-                                Divider().padding(.leading, 36)
+                    learningDataSummary(
+                        metrics: metrics,
+                        totalRecordCount: totalRecordCount,
+                        hasActivePatterns: !topRules.isEmpty
+                    )
+
+                    if !topRules.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Active Patterns")
+                                .font(.subheadline.bold())
+                                .accessibilityAddTraits(.isHeader)
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(topRules.enumerated()), id: \.element.id) { index, rule in
+                                    LearningInsightRow(rule: rule, manager: manager)
+                                        .animatedAppearance(delay: Double(index) * 0.05)
+                                    if index < topRules.count - 1 {
+                                        Divider().padding(.leading, 36)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1058,6 +1128,382 @@ struct LearningsView: View {
                 emptyLearningsPlaceholder
             }
         }
+    }
+
+    private func learningDataMetrics(
+        for summary: LearningsProfileArchiveSummary
+    ) -> [LearningDataMetric] {
+        return [
+            LearningDataMetric(
+                category: .patterns,
+                count: summary.inferredRules
+            ),
+            LearningDataMetric(
+                category: .sessions,
+                count: summary.sessions
+            ),
+            LearningDataMetric(
+                category: .feedback,
+                count: summary.feedbackCount
+            ),
+            LearningDataMetric(
+                category: .instructions,
+                count: summary.instructionCount
+            ),
+            LearningDataMetric(
+                category: .supportingData,
+                count: summary.supportingDataCount
+            ),
+        ].filter { $0.count > 0 }
+    }
+
+    private func learningDataSummary(
+        metrics: [LearningDataMetric],
+        totalRecordCount: Int,
+        hasActivePatterns: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(totalRecordCount) stored learning record\(totalRecordCount == 1 ? "" : "s")")
+                    .font(.subheadline.bold())
+                Text(
+                    hasActivePatterns
+                        ? "Sorty uses the active patterns below when organizing."
+                        : "Sorty has learning evidence saved, but has not formed an active pattern from it yet."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 125), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(metrics) { metric in
+                    Button {
+                        HapticFeedbackManager.shared.light()
+                        selectedLearningRecordsCategory = metric.category
+                    } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: metric.category.systemImage)
+                                .foregroundStyle(metric.category.color)
+                                .frame(width: 18)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("\(metric.count)")
+                                    .font(.subheadline.bold())
+                                Text(metric.category.title)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .systemLiquidGlassBackground(cornerRadius: 9)
+                    .accessibilityHint("Shows the stored \(metric.category.title.lowercased()) records")
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+    }
+
+    private func learningRecordsDetailSheet(
+        category: LearningRecordsCategory,
+        profile: LearningsProfile
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: category.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(category.color)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.title)
+                        .font(.title2.bold())
+                    Text("Stored locally in your Learnings profile")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") {
+                    selectedLearningRecordsCategory = nil
+                }
+                .buttonStyle(.sortyPrimary(size: .small))
+            }
+            .padding(20)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    learningRecordsList(category: category, profile: profile)
+                }
+                .padding(20)
+            }
+        }
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 560)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(category.title) learning records")
+    }
+
+    @ViewBuilder
+    private func learningRecordsList(
+        category: LearningRecordsCategory,
+        profile: LearningsProfile
+    ) -> some View {
+        switch category {
+        case .patterns:
+            learningRecordSection(title: "Inferred Patterns", count: profile.inferredRules.count) {
+                ForEach(profile.inferredRules.sorted { $0.priority > $1.priority }) { rule in
+                    LearningInsightRow(rule: rule, manager: manager)
+                }
+            }
+
+        case .sessions:
+            learningRecordSection(title: "Organization Sessions", count: profile.sessions.count) {
+                ForEach(profile.sessions.sorted { $0.timestamp > $1.timestamp }) { session in
+                    learningRecordRow(
+                        title: URL(fileURLWithPath: session.folderPath).lastPathComponent,
+                        detail: sessionDetail(session),
+                        date: session.completedAt ?? session.timestamp,
+                        systemImage: session.wasReverted ? "arrow.uturn.backward" : "folder"
+                    )
+                }
+            }
+
+        case .feedback:
+            feedbackRecordSections(profile: profile)
+
+        case .instructions:
+            instructionRecordSections(profile: profile)
+
+        case .supportingData:
+            supportingDataRecordSections(profile: profile)
+        }
+    }
+
+    @ViewBuilder
+    private func feedbackRecordSections(profile: LearningsProfile) -> some View {
+        learningRecordSection(title: "Observed Changes", count: profile.postOrganizationChanges.count) {
+            ForEach(profile.postOrganizationChanges.sorted { $0.timestamp > $1.timestamp }) { change in
+                learningRecordRow(
+                    title: "Moved after organization",
+                    detail: "\(safeFileName(change.originalPath)) → \(safeFileName(change.newPath))",
+                    date: change.timestamp,
+                    systemImage: "arrow.right"
+                )
+            }
+        }
+        learningRecordSection(title: "Cancelled Plans", count: profile.cancelledOrganizations.count) {
+            ForEach(profile.cancelledOrganizations.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: safeFileName(item.folderPath),
+                    detail: "Cancelled during \(item.cancelledAtStage) · \(item.fileCount) files",
+                    date: item.timestamp,
+                    systemImage: "xmark.circle"
+                )
+            }
+        }
+        learningRecordSection(title: "Regenerated Plans", count: profile.regeneratedOrganizations.count) {
+            ForEach(profile.regeneratedOrganizations.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: safeFileName(item.folderPath),
+                    detail: item.guidingInstruction ?? "Regenerated \(item.regenerationCount) time\(item.regenerationCount == 1 ? "" : "s")",
+                    date: item.timestamp,
+                    systemImage: "arrow.clockwise"
+                )
+            }
+        }
+        learningRecordSection(title: "Rename Feedback", count: profile.renameFeedbackHistory.count) {
+            ForEach(profile.renameFeedbackHistory.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: item.originalName,
+                    detail: "\(item.action.rawValue.capitalized): \(item.finalName ?? item.suggestedName ?? item.originalName)",
+                    date: item.timestamp,
+                    systemImage: "text.cursor"
+                )
+            }
+        }
+        learningRecordSection(title: "History Reverts", count: profile.historyReverts.count) {
+            ForEach(profile.historyReverts.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: item.folderPath.map(safeFileName) ?? "Reverted organization",
+                    detail: item.reason ?? "Reverted \(item.operationCount) operation\(item.operationCount == 1 ? "" : "s")",
+                    date: item.timestamp,
+                    systemImage: "arrow.uturn.backward"
+                )
+            }
+        }
+        labeledExampleSection(title: "Corrections", items: profile.corrections)
+        labeledExampleSection(title: "Rejections", items: profile.rejections)
+        labeledExampleSection(title: "Positive Examples", items: profile.positiveExamples)
+        learningRecordSection(title: "Inline Answers", count: profile.inlineLearningMomentAnswers.count) {
+            ForEach(profile.inlineLearningMomentAnswers.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: item.selectedOption,
+                    detail: "Answer to an inline learning question",
+                    date: item.timestamp,
+                    systemImage: "checkmark.bubble"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func instructionRecordSections(profile: LearningsProfile) -> some View {
+        userInstructionSection(title: "Additional Instructions", items: profile.additionalInstructionsHistory)
+        userInstructionSection(title: "Guiding Instructions", items: profile.guidingInstructionsHistory)
+        learningRecordSection(title: "Steering Prompts", count: profile.steeringPrompts.count) {
+            ForEach(profile.steeringPrompts.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: item.prompt,
+                    detail: item.folderPath.map { "Folder: \(safeFileName($0))" },
+                    date: item.timestamp,
+                    systemImage: "arrow.triangle.turn.up.right.diamond"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func supportingDataRecordSections(profile: LearningsProfile) -> some View {
+        learningRecordSection(title: "Applied Jobs", count: profile.jobHistory.count) {
+            ForEach(profile.jobHistory.sorted { $0.timestamp > $1.timestamp }) { job in
+                learningRecordRow(
+                    title: job.projectName,
+                    detail: "\(job.entries.count) operation\(job.entries.count == 1 ? "" : "s") · \(String(describing: job.status))",
+                    date: job.timestamp,
+                    systemImage: "tray.full"
+                )
+            }
+        }
+        learningRecordSection(title: "Learning Exclusions", count: profile.learningExclusionPatterns.count) {
+            ForEach(profile.learningExclusionPatterns, id: \.self) { pattern in
+                learningRecordRow(
+                    title: safeFileName(pattern),
+                    detail: "Excluded from learning",
+                    date: nil,
+                    systemImage: "eye.slash"
+                )
+            }
+        }
+        learningRecordSection(title: "Rejected Pattern Cooldowns", count: profile.rejectedRuleCooldowns.count) {
+            ForEach(profile.rejectedRuleCooldowns.sorted { $0.value > $1.value }, id: \.key) { ruleID, date in
+                learningRecordRow(
+                    title: "Pattern \(ruleID.prefix(8))",
+                    detail: "Ignored until \(date.formatted(date: .abbreviated, time: .shortened))",
+                    date: nil,
+                    systemImage: "timer"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func labeledExampleSection(title: String, items: [LabeledExample]) -> some View {
+        learningRecordSection(title: title, count: items.count) {
+            ForEach(items.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: safeFileName(item.srcPath),
+                    detail: "\(item.action.rawValue.capitalized): \(safeFileName(item.dstPath))",
+                    date: item.timestamp,
+                    systemImage: "arrow.right.circle"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func userInstructionSection(title: String, items: [UserInstruction]) -> some View {
+        learningRecordSection(title: title, count: items.count) {
+            ForEach(items.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: item.instruction,
+                    detail: item.folderPath.map { "Folder: \(safeFileName($0))" } ?? item.context,
+                    date: item.timestamp,
+                    systemImage: "text.bubble"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func learningRecordSection<Content: View>(
+        title: String,
+        count: Int,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if count > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(title) · \(count)")
+                    .font(.subheadline.bold())
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 0) {
+                    content()
+                }
+                .systemLiquidGlassBackground(cornerRadius: 12)
+            }
+        }
+    }
+
+    private func learningRecordRow(
+        title: String,
+        detail: String?,
+        date: Date?,
+        systemImage: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 12)
+            if let date {
+                Text(date, format: .dateTime.month(.abbreviated).day().year().hour().minute())
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .padding(12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func sessionDetail(_ session: OrganizationSession) -> String {
+        let reaction = session.reaction.rawValue.capitalized
+        let fileSummary = "\(session.filesMoved.count) file\(session.filesMoved.count == 1 ? "" : "s")"
+        let feedbackSummary = "\(session.events.count) event\(session.events.count == 1 ? "" : "s")"
+        return "\(reaction) · \(fileSummary) · \(feedbackSummary)"
+    }
+
+    private func safeFileName(_ path: String) -> String {
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        return name.isEmpty ? "Folder" : name
     }
 
     private var emptyLearningsPlaceholder: some View {

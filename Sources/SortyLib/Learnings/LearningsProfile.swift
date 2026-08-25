@@ -282,6 +282,26 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
             + sessions
             + inlineLearningMomentAnswers
     }
+
+    var instructionCount: Int {
+        additionalInstructions + guidingInstructions + steeringPrompts
+    }
+
+    var feedbackCount: Int {
+        postOrganizationChanges
+            + renameFeedbackEvents
+            + historyReverts
+            + cancelledOrganizations
+            + regeneratedOrganizations
+            + corrections
+            + rejections
+            + positiveExamples
+            + inlineLearningMomentAnswers
+    }
+
+    var supportingDataCount: Int {
+        jobHistory + rejectedRuleCooldowns + learningExclusionPatterns
+    }
 }
 
 public struct LearningsProfileImportResult: Equatable, Sendable {
