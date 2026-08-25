@@ -183,10 +183,17 @@ struct HistoryView: View {
         case failed = "Failed"
         case skipped = "Skipped"
         case cancelled = "Cancelled"
-        case manual = "You Started"
+        case manual = "Manual"
         case watched = "Watched"
 
         var id: String { rawValue }
+
+        var detailedLabel: String {
+            switch self {
+            case .manual: "Sessions You Started"
+            default: rawValue
+            }
+        }
 
         var systemImage: String {
             switch self {
@@ -779,7 +786,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
         let images = filters.map { filter in
             let symbol = NSImage(
                 systemSymbolName: filter.systemImage,
-                accessibilityDescription: filter.rawValue
+                accessibilityDescription: filter.detailedLabel
             ) ?? NSImage()
             let image = symbol.withSymbolConfiguration(symbolConfiguration) ?? symbol
             image.isTemplate = true
@@ -818,7 +825,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
             control.setWidth(Self.segmentWidth(for: filter), forSegment: index)
             control.setLabel(filter.rawValue, forSegment: index)
             control.setImageScaling(.scaleNone, forSegment: index)
-            control.setToolTip(filter.rawValue, forSegment: index)
+            control.setToolTip(filter.detailedLabel, forSegment: index)
         }
 
         return control
