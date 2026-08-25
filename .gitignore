@@ -64,3 +64,7 @@ build_output.txt
 build_result.log
 build.pid
 temp_sparkle/
+
+# Local quality corpus may contain private filenames and extracted evidence.
+QualityCorpus/private/
+QualityCorpus/reports/

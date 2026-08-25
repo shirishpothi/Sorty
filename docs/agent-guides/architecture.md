@@ -67,6 +67,12 @@ Placement and filename feedback stay separate. Two matching placement correction
 
 Repeated accepted or edited filenames produce a scoped naming convention such as `YYYY-MM-DD {name} Invoice.pdf`. A rejection subtracts support only when the rejected suggestion matches that convention. Unattributed rejections never create broad `AVOID` rules. Repeated rejected renames of exported `.app` bundles produce a narrow protected-name rule instead.
 
+### Organization quality corpus
+
+Real regression cases live in the git-ignored `QualityCorpus/private/` directory. Keep one JSON file per representative folder and record expected moves, non-moves, renames, protected names, uncertain items, final decisions, confidence, preview edits, and reverts. The synthetic case under `QualityCorpus/sample/` documents the format without exposing user data.
+
+Run `make quality-report` before prompt tuning. The report includes placement acceptance, expected-placement matches, rename acceptance/edit/rejection rates, protected-name preservation, ambiguous review handling, reverts, edits per 100 files, and confidence calibration. Use the executable's `--json` option when comparing reports between commits.
+
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
 ## Deeplinks

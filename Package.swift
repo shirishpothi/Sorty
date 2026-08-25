@@ -12,7 +12,10 @@ let package = Package(
             targets: ["SortyLib"]),
         .executable(
             name: "SortyApp",
-            targets: ["SortyApp"])
+            targets: ["SortyApp"]),
+        .executable(
+            name: "SortyQuality",
+            targets: ["SortyQuality"])
     ],
     dependencies: [
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
@@ -92,6 +95,11 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
             ]
+        ),
+        .executableTarget(
+            name: "SortyQuality",
+            dependencies: ["SortyLib"],
+            path: "Sources/SortyQuality"
         ),
         .testTarget(
             name: "SortyTests",

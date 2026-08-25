@@ -1,0 +1,54 @@
+{
+  "id": "synthetic-representative-folder",
+  "description": "Synthetic invoices, media, protected names, and one ambiguous download",
+  "manualPreviewEdits": 1,
+  "wasReverted": false,
+  "decisions": [
+    {
+      "sourcePath": "Inbox/scan-001.pdf",
+      "expectedDestination": "Finance/Invoices",
+      "expectedRename": "2026-05-01 Acme Invoice.pdf",
+      "mustKeepOriginalName": false,
+      "shouldRemainUncertain": false,
+      "observedDestination": "Finance/Invoices",
+      "placementOutcome": "accepted",
+      "observedRename": "2026-05-01 Acme Invoice.pdf",
+      "renameOutcome": "accepted",
+      "renameConfidence": 0.9,
+      "wasSurfacedForReview": false,
+      "isObserved": true
+    },
+    {
+      "sourcePath": "Media/clip-001.mov",
+      "expectedDestination": "Footage",
+      "mustKeepOriginalName": true,
+      "shouldRemainUncertain": false,
+      "observedDestination": "Footage",
+      "placementOutcome": "edited",
+      "wasSurfacedForReview": false,
+      "isObserved": true
+    },
+    {
+      "sourcePath": "Exports/Demo.app",
+      "mustKeepOriginalName": true,
+      "shouldRemainUncertain": false,
+      "observedRename": "Demo.app",
+      "wasSurfacedForReview": false,
+      "isObserved": true
+    },
+    {
+      "sourcePath": "Project/.gitignore",
+      "mustKeepOriginalName": true,
+      "shouldRemainUncertain": false,
+      "wasSurfacedForReview": false,
+      "isObserved": true
+    },
+    {
+      "sourcePath": "Downloads/document.bin",
+      "mustKeepOriginalName": true,
+      "shouldRemainUncertain": true,
+      "wasSurfacedForReview": true,
+      "isObserved": true
+    }
+  ]
+}

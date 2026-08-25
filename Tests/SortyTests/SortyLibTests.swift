@@ -529,3 +529,77 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         )
     }
 }
+
+final class OrganizationQualityEvaluatorTests: XCTestCase {
+    func testReportsOutcomesExpectationsAndCalibration() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "case-a",
+                description: "Representative folder",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "scan.pdf",
+                        expectedDestination: "Finance/Invoices",
+                        expectedRename: "2026-05-01 Acme Invoice.pdf",
+                        observedDestination: "Finance/Invoices",
+                        placementOutcome: .accepted,
+                        observedRename: "2026-05-01 Acme Invoice.pdf",
+                        renameOutcome: .accepted,
+                        renameConfidence: 0.9
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "clip.mov",
+                        expectedDestination: "Footage",
+                        observedDestination: "Media",
+                        placementOutcome: .edited
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Demo.app",
+                        mustKeepOriginalName: true,
+                        observedRename: "Demo.app"
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "unknown.bin",
+                        mustKeepOriginalName: true,
+                        shouldRemainUncertain: true,
+                        wasSurfacedForReview: true
+                    )
+                ],
+                manualPreviewEdits: 2,
+                wasReverted: true
+            )
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementAcceptanceRate, 0.5)
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 2.0 / 3.0, accuracy: 0.0001)
+        XCTAssertEqual(report.renameAcceptanceRate, 1)
+        XCTAssertEqual(report.renameEditRate, 0)
+        XCTAssertEqual(report.renameRejectionRate, 0)
+        XCTAssertEqual(report.renameExpectationMatchRate, 1)
+        XCTAssertEqual(report.protectedNamePreservationRate, 1)
+        XCTAssertEqual(report.ambiguousReviewRate, 1)
+        XCTAssertEqual(report.revertRate, 1)
+        XCTAssertEqual(report.manualPreviewEditsPer100Files, 50)
+        XCTAssertEqual(report.calibrationBins.first?.sampleCount, 1)
+        XCTAssertEqual(report.calibrationBins.first?.meanConfidence, 0.9)
+        XCTAssertEqual(report.calibrationBins.first?.acceptanceRate, 1)
+        XCTAssertEqual(report.calibrationError ?? -1, 0.1, accuracy: 0.0001)
+    }
+
+    func testEmptyCorpusReportsNoInventedRates() {
+        let report = OrganizationQualityEvaluator.evaluate([])
+
+        XCTAssertEqual(report.caseCount, 0)
+        XCTAssertEqual(report.fileCount, 0)
+        XCTAssertEqual(report.observedCaseCount, 0)
+        XCTAssertEqual(report.observedFileCount, 0)
+        XCTAssertNil(report.placementAcceptanceRate)
+        XCTAssertNil(report.renameAcceptanceRate)
+        XCTAssertNil(report.revertRate)
+        XCTAssertNil(report.manualPreviewEditsPer100Files)
+        XCTAssertNil(report.calibrationError)
+        XCTAssertTrue(report.calibrationBins.isEmpty)
+    }
+}

@@ -232,8 +232,8 @@ class FileSystemManagerTests: XCTestCase {
             {
               "name": "Invoices",
               "files": [
-                {"filename": "doc1.pdf", "suggested_name": "2026-01_Invoice_Acme.pdf", "rename_reason": "Descriptive"},
-                {"filename": "doc2.pdf", "suggested_name": "2026-01_Invoice_Beta.pdf", "rename_reason": "Descriptive"}
+                {"filename": "doc1.pdf", "suggested_name": "2026-01_Invoice_Acme.pdf", "rename_reason": "PDF title identifies a January 2026 Acme invoice"},
+                {"filename": "doc2.pdf", "suggested_name": "2026-01_Invoice_Beta.pdf", "rename_reason": "PDF title identifies a January 2026 Beta invoice"}
               ]
             }
           ],

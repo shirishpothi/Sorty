@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
 
 # Default target
 all: build
@@ -194,6 +194,11 @@ harness-accent:
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_ACCENT_PROTOTYPE=1 open releases/Sorty.app
 
+QUALITY_CORPUS ?= QualityCorpus/private
+
+quality-report:
+	@swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox SortyQuality --corpus "$(QUALITY_CORPUS)"
+
 help:
 	@echo "Sorty Build System (Optimized)"
 	@echo "=============================="
@@ -220,6 +225,7 @@ help:
 	@echo "  make test        - Run unit tests in parallel"
 	@echo "  make test-fast   - Run only fast unit tests (excludes slow UI tests)"
 	@echo "  make test-full   - Run unit tests with coverage (UI tests disabled)"
+	@echo "  make quality-report - Score the private organization quality corpus"
 	@echo ""
 	@echo "Release:"
 	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
