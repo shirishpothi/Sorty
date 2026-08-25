@@ -340,6 +340,34 @@ class ResponseParserTests: XCTestCase {
         XCTAssertFalse(mapping.shouldApplyRename)
         XCTAssertEqual(mapping.finalFilename, "old_name.pdf")
     }
+
+    func testRenameWithoutConcreteEvidenceIsDowngradedToLowConfidence() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": ".",
+              "files": [
+                {
+                  "filename": "scan.pdf",
+                  "suggested_name": "Acme Invoice.pdf",
+                  "rename_reason": "More descriptive",
+                  "rename_confidence": 0.96
+                }
+              ]
+            }
+          ]
+        }
+        """
+        let file = FileItem(path: "/path/scan.pdf", name: "scan", extension: "pdf")
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: [file], mode: .renameOnly)
+        let mapping = try XCTUnwrap(plan.suggestions[0].fileRenameMappings.first)
+
+        XCTAssertEqual(mapping.confidenceBand, .low)
+        XCTAssertFalse(mapping.shouldApplyRename)
+        XCTAssertEqual(mapping.renameConfidence, 0.29)
+    }
     
     func testParsingWithMultipleTagsPerFile() throws {
         let json = """

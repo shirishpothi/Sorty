@@ -84,6 +84,7 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
         case mixedFileTypes
         case unnecessaryNesting
         case existingConventionMismatch
+        case missingExplanation
     }
 
     public let id: UUID

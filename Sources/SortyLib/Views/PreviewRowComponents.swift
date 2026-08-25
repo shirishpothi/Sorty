@@ -293,16 +293,16 @@ struct FlatFileRowContent: View {
                         )
                     }
 
-                    if renameMapping.confidenceBand != .high {
-                        Label(
-                            renameMapping.renameReason ?? "No source cue was provided. Check the file before using this name.",
-                            systemImage: "text.magnifyingglass"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.leading, 44)
-                    }
+                    Label(
+                        renameMapping.renameReason ?? "No source cue was provided. Check the file before using this name.",
+                        systemImage: "text.magnifyingglass"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.leading, 44)
+                    .accessibilityLabel("Rename evidence")
+                    .accessibilityValue(renameMapping.renameReason ?? "No source cue provided")
                 }
                 .padding(.leading, 28)
                 .transition(.opacity.combined(with: .move(edge: .top)))

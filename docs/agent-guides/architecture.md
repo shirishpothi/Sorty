@@ -57,6 +57,10 @@ Apple Foundation Model requests progressively compact file evidence before split
 
 The active persona, direct user instructions, scoped `<learnings_context>`, and rename naming policy are fixed request context. They are included when choosing a compaction level and carried unchanged into every retry and adaptive batch. Reduce per-file evidence lengths or split the batch before removing those instructions.
 
+### Review evidence
+
+AI plans must provide one concise, concrete grouping cue for every folder and a source cue for every proposed rename. The preview shows folder evidence inline and rename evidence beneath every suggestion, including high-confidence renames. Generic explanations such as “more descriptive” or “these files belong together” do not satisfy the prompt contract.
+
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
 ## Deeplinks

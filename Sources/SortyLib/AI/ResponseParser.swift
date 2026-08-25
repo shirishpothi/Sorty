@@ -662,9 +662,12 @@ struct ResponseParser {
         renameReason: String?,
         renameConfidence: Double?
     ) -> FileRenameMapping? {
-        let clampedConfidence = renameConfidence.map { min(max($0, 0.0), 1.0) }
+        var clampedConfidence = renameConfidence.map { min(max($0, 0.0), 1.0) }
         let cleanedName = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let cleanedReason = renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !cleanedName.isEmpty && !hasConcreteRenameEvidence(cleanedReason) {
+            clampedConfidence = min(clampedConfidence ?? FileRenameMapping.lowConfidenceThreshold, 0.29)
+        }
         guard !cleanedName.isEmpty || !cleanedReason.isEmpty || clampedConfidence != nil else {
             return nil
         }
@@ -675,6 +678,19 @@ struct ResponseParser {
             renameReason: cleanedReason.isEmpty ? nil : cleanedReason,
             renameConfidence: clampedConfidence
         )
+    }
+
+    private static func hasConcreteRenameEvidence(_ reason: String) -> Bool {
+        let normalized = reason.lowercased()
+        guard normalized.count >= 12 else { return false }
+        let vagueReasons = [
+            "more descriptive",
+            "clearer name",
+            "better name",
+            "improved filename",
+            "easier to understand"
+        ]
+        return !vagueReasons.contains { normalized == $0 || normalized.hasPrefix("\($0).") }
     }
 
     private static func normalizedFilenameCandidates(from raw: String) -> [String] {

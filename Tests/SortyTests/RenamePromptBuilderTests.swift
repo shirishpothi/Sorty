@@ -102,6 +102,7 @@ final class RenamePromptBuilderTests: XCTestCase {
 
         XCTAssertTrue(prompt.contains("\"rename_suggestions\""))
         XCTAssertTrue(prompt.contains("\"file_id\":1"))
+        XCTAssertTrue(prompt.contains("Concrete shared cue for this grouping"))
         XCTAssertTrue(prompt.contains("Do not omit rename_suggestions merely because you used file_ids"))
     }
 

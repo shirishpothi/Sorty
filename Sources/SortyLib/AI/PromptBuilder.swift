@@ -517,7 +517,7 @@ struct PromptBuilder {
     }
 
     private static func compactResponseContract(mode: OrganizationMode, enableReasoning: Bool) -> String {
-        let reasoning = enableReasoning ? ",\"reasoning\":\"\"" : ""
+        let reasoning = ",\"reasoning\":\"Concrete shared cue for this grouping\""
         let filePayload: String
         let preferredPayload: String
         if mode == .renameOnly || mode == .organizeAndRename {
@@ -553,9 +553,7 @@ struct PromptBuilder {
             base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
         base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
-        if enableReasoning {
-            base += " Add concise reasoning for each folder."
-        }
+        base += " For every folder, add one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles. Never say only that files belong together."
         base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
     }
@@ -667,6 +665,8 @@ struct PromptBuilder {
         - Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists.
         - If a file is ambiguous, place it in the best broad folder instead of leaving it unorganized.
         - Prefer using file_ids in compact responses when IDs are provided.
+        - Every folder must include one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles.
+        - Never use vague folder reasoning such as "these files belong together".
         - Group by type: Documents, Media, Code, Archives
         - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Prefer better filenames; keep originals only when they are already clear, stable/protected, or user-excluded." : "")
@@ -676,7 +676,7 @@ struct PromptBuilder {
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
-        {"folder_assignments":[{\(compactFolderPayload)\(enableReasoning ? ",\"reasoning\":\"\"" : "")}],"notes":""}
+        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping"}],"notes":""}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """

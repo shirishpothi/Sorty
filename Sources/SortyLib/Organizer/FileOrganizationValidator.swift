@@ -186,6 +186,7 @@ struct PlanQualityEvaluator {
         issues.append(contentsOf: mixedTypeIssues(in: folders))
         issues.append(contentsOf: nestingIssues(in: folders))
         issues.append(contentsOf: conventionIssues(in: folders, existingFolderPaths: existingFolderPaths))
+        issues.append(contentsOf: explanationIssues(in: folders))
 
         let score = max(0, 100 - issues.reduce(0) { $0 + $1.deduction })
         return PlanQualityAssessment(score: score, issues: issues)
@@ -335,6 +336,20 @@ struct PlanQualityEvaluator {
             return PlanQualityIssue(
                 kind: .unnecessaryNesting,
                 message: "Folder \"\(folder.path)\" adds a level without improving retrieval. Flatten this branch unless the existing structure requires it.",
+                folderPaths: [folder.path],
+                fileIDs: folder.files.map(\.id),
+                deduction: 10
+            )
+        }
+    }
+
+    private static func explanationIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
+        folders.compactMap { folder in
+            let evidence = folder.suggestion.reasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard evidence.isEmpty else { return nil }
+            return PlanQualityIssue(
+                kind: .missingExplanation,
+                message: "Folder \"\(folder.path)\" has no concrete grouping evidence. Name the shared subject, project, source, date pattern, or compatible file roles.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
                 deduction: 10

@@ -65,6 +65,7 @@ final class PromptBuilderTests: XCTestCase {
         ] {
             let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
             XCTAssertTrue(prompt.contains("exactly one JSON object"))
+            XCTAssertTrue(prompt.contains("exact shared subject, project, source, date pattern, or compatible file roles"))
             XCTAssertFalse(prompt.contains(">>"))
             XCTAssertFalse(prompt.contains("Before JSON"))
         }

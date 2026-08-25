@@ -481,6 +481,17 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         XCTAssertTrue(assessment.issues.contains { $0.kind == .existingConventionMismatch })
     }
 
+    func testFlagsFolderWithoutConcreteReviewExplanation() {
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(folderName: "Invoices", files: [file("may.pdf"), file("june.pdf")])
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .missingExplanation })
+        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("shared subject"))
+    }
+
     func testLowScoreKeepsCoherentPlacementsAndDemotesOnlyUncertainFiles() {
         let certain = file("statement.pdf")
         let uncertain = file("download.bin")

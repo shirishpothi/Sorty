@@ -82,6 +82,7 @@ If a persona-specific system prompt is active, follow its organizational philoso
 - Return exactly one valid JSON object. Do not output markdown fences, progress lines, prose, analysis, or a chain-of-thought preamble.
 - Put user-facing explanations only in the documented JSON fields such as "description", "reasoning", "rename_reason", and "notes".
 - Keep "description", "reasoning", and "notes" values short: one concise sentence of at most ~12 words each. Never write paragraphs — long text slows the response down without helping the user.
+- Every folder must include a concrete "reasoning" sentence naming the shared file cue: subject, project, source, date pattern, or compatible file roles. Avoid generic claims such as "these files belong together".
 - Begin emitting the JSON object immediately so Sorty can derive live insights from its streamed fields.
 \(Self.streamingOutputSection(for: mode))
 

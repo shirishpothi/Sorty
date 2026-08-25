@@ -1061,6 +1061,12 @@ struct FlatFolderRowView: View {
         store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
     }
 
+    private var folderEvidence: String {
+        let reasoning = suggestion.reasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !reasoning.isEmpty { return reasoning }
+        return suggestion.description.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var storageLocationPickerErrorIsPresented: Binding<Bool> {
         Binding(
             get: { storageLocationPickerErrorMessage != nil },
@@ -1083,6 +1089,15 @@ struct FlatFolderRowView: View {
                     reduceMotion: reduceMotion
                 )
 
+                if !folderEvidence.isEmpty {
+                    Text(folderEvidence)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .accessibilityLabel("Folder evidence")
+                        .accessibilityValue(folderEvidence)
+                }
+
                 if isStorageDestination {
                     storageLocationDropdown
                 }
@@ -1102,6 +1117,7 @@ struct FlatFolderRowView: View {
                     learningsManager: learningsManager
                 )
             }
+
             .padding(.leading, CGFloat(depth * 16))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
