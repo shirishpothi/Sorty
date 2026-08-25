@@ -246,7 +246,7 @@ final class AppUITests: XCTestCase {
             ("Failed", 1),
             ("Skipped", 1),
             ("Cancelled", 1),
-            ("Manual", 4),
+            ("You Started", 4),
             ("Watched", 1),
         ]
 

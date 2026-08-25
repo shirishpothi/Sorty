@@ -135,7 +135,7 @@ struct HistoryView: View {
 
         var title: String {
             switch self {
-            case .manual: "Manual Sessions"
+            case .manual: "Sessions You Started"
             case .watched: "Watched Folder Automations"
             }
         }
@@ -183,7 +183,7 @@ struct HistoryView: View {
         case failed = "Failed"
         case skipped = "Skipped"
         case cancelled = "Cancelled"
-        case manual = "Manual"
+        case manual = "You Started"
         case watched = "Watched"
 
         var id: String { rawValue }
