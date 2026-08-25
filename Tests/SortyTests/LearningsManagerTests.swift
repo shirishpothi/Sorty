@@ -99,6 +99,126 @@ final class LearningsManagerTests: XCTestCase {
         XCTAssertEqual(manager.currentProfile?.corrections.first?.action, .edit)
         XCTAssertEqual(manager.currentProfile?.corrections.first?.dstPath, "/custom/location/file.txt")
     }
+
+    func testRepeatedRenameFeedbackProducesScopedFilenameConvention() {
+        manager.recordRenameFeedback(
+            originalName: "scan-1.pdf",
+            suggestedName: "2026-05-01 Acme Invoice.pdf",
+            finalName: "2026-05-01 Acme Invoice.pdf",
+            folderPath: "/Clients/Acme",
+            action: .accept,
+            confidence: 0.92
+        )
+        manager.recordRenameFeedback(
+            originalName: "scan-2.pdf",
+            suggestedName: "2026-06-02 Beta Invoice.pdf",
+            finalName: "2026-06-02 Beta Invoice.pdf",
+            folderPath: "/Clients/Acme",
+            action: .edit,
+            confidence: 0.81
+        )
+
+        let scopedContext = manager.generatePromptContext(forFolder: "/Clients/Acme")
+        let otherContext = manager.generatePromptContext(forFolder: "/Personal")
+
+        XCTAssertTrue(scopedContext.contains("YYYY-MM-DD {name} Invoice.pdf"))
+        XCTAssertFalse(otherContext.contains("YYYY-MM-DD {name} Invoice.pdf"))
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 0)
+        XCTAssertEqual(manager.currentProfile?.corrections.count, 0)
+    }
+
+    func testMatchingRenameRejectionWeakensOnlyThatConvention() {
+        for name in ["2026-05-01 Acme Invoice.pdf", "2026-06-02 Beta Invoice.pdf"] {
+            manager.recordRenameFeedback(
+                originalName: UUID().uuidString + ".pdf",
+                suggestedName: name,
+                finalName: name,
+                folderPath: "/Clients/Acme",
+                action: .accept,
+                confidence: 0.9
+            )
+        }
+        manager.recordRenameFeedback(
+            originalName: "scan-3.pdf",
+            suggestedName: "2026-07-03 Gamma Invoice.pdf",
+            finalName: nil,
+            folderPath: "/Clients/Acme",
+            action: .reject,
+            confidence: 0.9
+        )
+
+        let context = manager.generatePromptContext(forFolder: "/Clients/Acme")
+
+        XCTAssertFalse(context.contains("YYYY-MM-DD {name} Invoice.pdf"))
+        XCTAssertFalse(context.contains("AVOID"))
+    }
+
+    func testRepeatedAppBundleRenameRejectionsCreateProtectedNamingRule() {
+        for name in ["Export One.app", "Export Two.app"] {
+            manager.recordRenameFeedback(
+                originalName: name,
+                suggestedName: "Renamed \(name)",
+                finalName: nil,
+                folderPath: "/Builds/Exports",
+                action: .reject,
+                confidence: 0.8
+            )
+        }
+
+        let context = manager.generatePromptContext(forFolder: "/Builds/Exports")
+
+        XCTAssertTrue(context.contains("Never rename exported .app bundles in this folder"))
+    }
+
+    func testCorrectionInferenceCreatesNarrowFolderScopedExtensionRule() async throws {
+        let changes = ["clip-a.mov", "clip-b.mov"].map { name in
+            DirectoryChange(
+                originalPath: "/Projects/Media/\(name)",
+                newPath: "/Projects/Footage/\(name)",
+                wasAIOrganized: true
+            )
+        }
+        let profile = LearningsProfile(postOrganizationChanges: changes)
+
+        let rules = await LocalRuleInferenceEngine().inferRules(from: profile)
+        let rule = try XCTUnwrap(rules.first { $0.pattern == ".*\\.mov$" })
+
+        XCTAssertEqual(rule.scope, .folder("/Projects"))
+        XCTAssertTrue(rule.explanation.contains(".mov files belong in 'Footage', not 'Media'"))
+    }
+
+    func testRepeatedPreviewPlacementEditsCreateScopedRule() async throws {
+        for name in ["clip-a.mov", "clip-b.mov"] {
+            manager.recordCorrection(
+                originalPath: "/Projects/Media/\(name)",
+                newPath: "/Projects/Footage/\(name)",
+                folderPath: "/Projects"
+            )
+        }
+        let profile = try XCTUnwrap(manager.currentProfile)
+
+        let rules = await LocalRuleInferenceEngine().inferRules(from: profile)
+        let rule = try XCTUnwrap(rules.first { $0.pattern == ".*\\.mov$" })
+
+        XCTAssertEqual(rule.scope, .folder("/Projects"))
+        XCTAssertTrue(rule.explanation.contains("Footage"))
+        XCTAssertTrue(rule.explanation.contains("not 'Media'"))
+    }
+
+    func testUnattributedRejectionsDoNotCreateBroadAvoidRules() async {
+        let rejections = ["one.mov", "two.mov"].map { name in
+            LabeledExample(
+                srcPath: "/Projects/Media/\(name)",
+                dstPath: "/Projects/Media/\(name)",
+                action: .reject
+            )
+        }
+        let profile = LearningsProfile(rejections: rejections)
+
+        let rules = await LocalRuleInferenceEngine().inferRules(from: profile)
+
+        XCTAssertFalse(rules.contains(where: \.isAvoidRule))
+    }
     
     // MARK: - Analysis Tests
     

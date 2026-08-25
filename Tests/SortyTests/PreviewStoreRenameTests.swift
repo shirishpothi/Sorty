@@ -154,6 +154,36 @@ final class PreviewStoreRenameTests: XCTestCase {
         XCTAssertEqual(selected?.finalFilename, "2026-05 Vendor Invoice.pdf")
     }
 
+    func testPlacementRejectionWeakensAttributedRuleOnly() async {
+        let suiteName = "PreviewStoreRenameTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let manager = LearningsManager(userDefaults: defaults)
+        await manager.grantConsent()
+        let usedRule = InferredRule(
+            id: "footage-rule",
+            pattern: ".*\\.mov$",
+            template: "Footage/{filename}",
+            explanation: "MOV files belong in Footage"
+        )
+        let unrelatedRule = InferredRule(
+            id: "pdf-rule",
+            pattern: ".*\\.pdf$",
+            template: "Documents/{filename}",
+            explanation: "PDF files belong in Documents"
+        )
+        manager.currentProfile?.inferredRules = [usedRule, unrelatedRule]
+        let file = makeFile("clip", ext: "mov")
+        let folder = FolderSuggestion(folderName: "Footage", files: [file], ruleId: usedRule.id)
+        let store = PreviewStore(plan: OrganizationPlan(suggestions: [folder]))
+        store.learningsManager = manager
+
+        store.moveFileToUnorganized(fileID: file.id)
+
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first { $0.id == usedRule.id }?.failureCount, 1)
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first { $0.id == unrelatedRule.id }?.failureCount, 0)
+    }
+
     func testLargePlanStartsCollapsedAndBoundsExpandedRows() {
         let files = (0..<3_000).map { index in
             makeFile("file-\(index)")

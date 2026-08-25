@@ -61,6 +61,12 @@ The active persona, direct user instructions, scoped `<learnings_context>`, and 
 
 AI plans must provide one concise, concrete grouping cue for every folder and a source cue for every proposed rename. The preview shows folder evidence inline and rename evidence beneath every suggestion, including high-confidence renames. Generic explanations such as “more descriptive” or “these files belong together” do not satisfy the prompt contract.
 
+### Semantic learning rules
+
+Placement and filename feedback stay separate. Two matching placement corrections can produce a rule scoped to the selected folder, for example `.mov` files moving from `Media` to `Footage`. Preview edits and explicit rejections also increment the failure count of the exact attributed rule.
+
+Repeated accepted or edited filenames produce a scoped naming convention such as `YYYY-MM-DD {name} Invoice.pdf`. A rejection subtracts support only when the rejected suggestion matches that convention. Unattributed rejections never create broad `AVOID` rules. Repeated rejected renames of exported `.app` bundles produce a narrow protected-name rule instead.
+
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
 ## Deeplinks

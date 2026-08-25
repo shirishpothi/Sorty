@@ -31,23 +31,25 @@ public actor LocalRuleInferenceEngine {
         // 1. Infer rules from corrections (highest signal - user explicitly moved files)
         let correctionRules = inferRulesFromCorrections(profile.postOrganizationChanges)
         rules.append(contentsOf: correctionRules)
+
+        let previewCorrectionRules = inferRulesFromExamples(profile.corrections, action: .edit)
+        rules.append(contentsOf: previewCorrectionRules)
         
         // 2. Infer rules from positive examples (user-accepted organization)
         let positiveRules = inferRulesFromExamples(profile.positiveExamples, action: .accept)
         rules.append(contentsOf: positiveRules)
         
-        // 3. Infer rules from rejections (what NOT to do - creates inverse patterns)
-        let rejectionRules = inferRulesFromRejections(profile.rejections)
-        rules.append(contentsOf: rejectionRules)
-        
-        // 4. Infer rules from steering prompts (explicit user instructions)
+        // Rejections weaken the attributed rule at feedback time. Do not turn an
+        // unattributed rejection into a broad negative rule.
+
+        // 3. Infer rules from steering prompts (explicit user instructions)
         let steeringRules = inferRulesFromSteeringPrompts(profile.steeringPrompts)
         rules.append(contentsOf: steeringRules)
         
-        // 5. Merge similar rules and boost confidence
+        // 4. Merge similar rules and boost confidence
         rules = mergeAndDeduplicateRules(rules)
         
-        // 6. Sort by priority (existing rules come first, then by confidence)
+        // 5. Sort by priority (existing rules come first, then by confidence)
         rules.sort { $0.priority > $1.priority }
         
         return rules
@@ -88,7 +90,8 @@ public actor LocalRuleInferenceEngine {
                     failureCount: 0,
                     isEnabled: true,
                     lastAppliedAt: nil,
-                    supportCount: changes.count
+                    supportCount: changes.count,
+                    scope: .folder(scopePath(forDestinationFolder: destFolder))
                 )
                 rules.append(rule)
             }
@@ -115,6 +118,12 @@ public actor LocalRuleInferenceEngine {
         
         for (ext, extChanges) in byExtension where extChanges.count >= minExamplesForRule {
             let destFolderName = URL(fileURLWithPath: destFolder).lastPathComponent
+            let sourceFolderNames = Set(extChanges.map {
+                URL(fileURLWithPath: $0.originalPath).deletingLastPathComponent().lastPathComponent
+            }).filter { !$0.isEmpty && $0 != destFolderName }
+            let sourceClause = sourceFolderNames.count == 1
+                ? ", not '\(sourceFolderNames.first!)'"
+                : ""
             let confidence = calculateConfidence(exampleCount: extChanges.count, isRecent: areRecent(extChanges.map { $0.timestamp }))
             
             let escapedExt = NSRegularExpression.escapedPattern(for: ext)
@@ -125,12 +134,13 @@ public actor LocalRuleInferenceEngine {
                 metadataCues: [],
                 priority: Int(confidence * 80), // Slightly lower priority than pattern-based
                 exampleIds: extChanges.map { $0.id },
-                explanation: ".\(ext.uppercased()) files should go to '\(destFolderName)/' (learned from \(extChanges.count) examples)",
+                explanation: "In this folder, .\(ext.lowercased()) files belong in '\(destFolderName)'\(sourceClause).",
                 successCount: 0,
                 failureCount: 0,
                 isEnabled: true,
                 lastAppliedAt: nil,
-                supportCount: extChanges.count
+                supportCount: extChanges.count,
+                scope: .folder(scopePath(forDestinationFolder: destFolder))
             )
             rules.append(rule)
         }
@@ -155,6 +165,12 @@ public actor LocalRuleInferenceEngine {
             
             if let pattern = findCommonPattern(in: srcFilenames) {
                 let destFolderName = URL(fileURLWithPath: destFolder).lastPathComponent
+                let sourceFolders = Set(folderExamples.map {
+                    URL(fileURLWithPath: $0.srcPath).deletingLastPathComponent().lastPathComponent
+                }).filter { !$0.isEmpty && $0 != destFolderName }
+                let sourceClause = action == .edit && sourceFolders.count == 1
+                    ? ", not '\(sourceFolders.first!)'"
+                    : ""
                 let confidence = calculateConfidence(exampleCount: folderExamples.count, isRecent: areRecent(folderExamples.map { $0.timestamp }))
                 
                 let rule = InferredRule(
@@ -162,75 +178,59 @@ public actor LocalRuleInferenceEngine {
                     pattern: pattern.regex,
                     template: "\(destFolder)/{filename}",
                     metadataCues: [],
-                    priority: Int(confidence * 70), // Lower priority than corrections
+                    priority: Int(confidence * (action == .edit ? 90 : 70)),
                     exampleIds: folderExamples.map { $0.id },
-                    explanation: "Files matching '\(pattern.description)' go to '\(destFolderName)/' (learned from \(folderExamples.count) accepted examples)",
+                    explanation: action == .edit
+                        ? "In this folder, files matching '\(pattern.description)' belong in '\(destFolderName)'\(sourceClause)."
+                        : "Files matching '\(pattern.description)' go to '\(destFolderName)' (learned from \(folderExamples.count) accepted examples).",
                     successCount: 0,
                     failureCount: 0,
                     isEnabled: true,
                     lastAppliedAt: nil,
-                    supportCount: folderExamples.count
+                    supportCount: folderExamples.count,
+                    scope: .folder(
+                        folderExamples.compactMap { $0.metadata?["folder_scope"] }.first
+                            ?? scopePath(forDestinationFolder: destFolder)
+                    )
                 )
                 rules.append(rule)
+            }
+
+            if action == .edit {
+                let byExtension = Dictionary(grouping: folderExamples) {
+                    URL(fileURLWithPath: $0.srcPath).pathExtension.lowercased()
+                }
+                for (ext, examples) in byExtension where !ext.isEmpty && examples.count >= minExamplesForRule {
+                    let destination = URL(fileURLWithPath: destFolder).lastPathComponent
+                    let sourceFolders = Set(examples.map {
+                        URL(fileURLWithPath: $0.srcPath).deletingLastPathComponent().lastPathComponent
+                    }).filter { !$0.isEmpty && $0 != destination }
+                    let sourceClause = sourceFolders.count == 1 ? ", not '\(sourceFolders.first!)'" : ""
+                    let escapedExtension = NSRegularExpression.escapedPattern(for: ext)
+                    rules.append(InferredRule(
+                        id: "local-preview-ext-\(ext)-\(UUID().uuidString.prefix(8))",
+                        pattern: ".*\\.\(escapedExtension)$",
+                        template: "\(destFolder)/{filename}",
+                        priority: 85,
+                        exampleIds: examples.map(\.id),
+                        explanation: "In this folder, .\(ext) files belong in '\(destination)'\(sourceClause).",
+                        supportCount: examples.count,
+                        initialConfidence: .medium,
+                        scope: .folder(
+                            examples.compactMap { $0.metadata?["folder_scope"] }.first
+                                ?? scopePath(forDestinationFolder: destFolder)
+                        )
+                    ))
+                }
             }
         }
         
         return rules
     }
-    
-    // MARK: - Rejection-based Inference
-    
-    private func inferRulesFromRejections(_ rejections: [LabeledExample]) -> [InferredRule] {
-        // For rejections, we create "avoid" rules with negative patterns
-        // These help the AI understand what NOT to do
-        var rules: [InferredRule] = []
-        
-        // Group rejections by the folder they were rejected from
-        var byRejectedFolder: [String: [LabeledExample]] = [:]
-        for rejection in rejections {
-            let folder = URL(fileURLWithPath: rejection.dstPath).deletingLastPathComponent().lastPathComponent
-            if !folder.isEmpty {
-                byRejectedFolder[folder, default: []].append(rejection)
-            }
-        }
-        
-        // Create avoidance rules for patterns with multiple rejections
-        for (folder, folderRejections) in byRejectedFolder where folderRejections.count >= minExamplesForRule {
-            // Group by file extension
-            var byExtension: [String: Int] = [:]
-            for rejection in folderRejections {
-                let ext = URL(fileURLWithPath: rejection.srcPath).pathExtension.lowercased()
-                if !ext.isEmpty {
-                    byExtension[ext, default: 0] += 1
-                }
-            }
-            
-            // Create rules for extensions with multiple rejections
-            for (ext, count) in byExtension where count >= minExamplesForRule {
-                let confidence = min(0.7, calculateConfidence(exampleCount: count, isRecent: areRecent(folderRejections.map { $0.timestamp })))
-                let escapedExt = NSRegularExpression.escapedPattern(for: ext)
-                
-                // Create a rule with negative priority to indicate avoidance
-                let rule = InferredRule(
-                    id: "local-avoid-\(ext)-\(folder)-\(UUID().uuidString.prefix(8))",
-                    pattern: ".*\\.\(escapedExt)$",
-                    template: "AVOID:\(folder)/{filename}", // Special AVOID prefix for downstream handling
-                    metadataCues: [],
-                    priority: -Int(confidence * 50), // Negative priority indicates avoidance
-                    exampleIds: folderRejections.map { $0.id },
-                    explanation: "AVOID placing .\(ext.uppercased()) files in '\(folder)/' (rejected \(count)x)",
-                    successCount: 0,
-                    failureCount: 0,
-                    isEnabled: true,
-                    lastAppliedAt: nil,
-                    supportCount: count,
-                    initialConfidence: .medium
-                )
-                rules.append(rule)
-            }
-        }
-        
-        return rules
+
+    private func scopePath(forDestinationFolder destinationFolder: String) -> String {
+        let parent = URL(fileURLWithPath: destinationFolder).deletingLastPathComponent().path
+        return parent.isEmpty ? destinationFolder : parent
     }
     
     // MARK: - Steering Prompt Inference
@@ -501,7 +501,14 @@ public actor LocalRuleInferenceEngine {
                     failureCount: existing.failureCount + rule.failureCount,
                     isEnabled: existing.isEnabled,
                     lastAppliedAt: existing.lastAppliedAt ?? rule.lastAppliedAt,
-                    supportCount: newSupport
+                    supportCount: newSupport,
+                    initialConfidence: existing.initialConfidence ?? rule.initialConfidence,
+                    scope: existing.scope,
+                    status: existing.status,
+                    evidenceIds: Array(Set(existing.evidenceIds + rule.evidenceIds)),
+                    evidenceDescription: existing.evidenceDescription ?? rule.evidenceDescription,
+                    rejectedAt: existing.rejectedAt,
+                    cooldownUntil: existing.cooldownUntil
                 )
             } else {
                 merged[key] = rule
@@ -520,6 +527,7 @@ extension LearningsManager {
     public func runLocalRuleInference() async {
         guard let profile = currentProfile else { return }
         var workingProfile = filteredLearningProfile(from: profile)
+        workingProfile.inferredRules.removeAll { $0.id.hasPrefix("local-avoid-") }
         
         let engine = LocalRuleInferenceEngine()
         let inferredRules = await engine.inferRules(from: workingProfile)

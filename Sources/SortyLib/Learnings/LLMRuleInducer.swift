@@ -99,6 +99,8 @@ public actor LLMRuleInducer {
         You are an expert File Organization Architect. Your goal is to analyze a set of file moves (source -> destination), user feedback, and preferences to infer strict logical rules that govern the user's organization style.
         
         CRITICAL: Weight recent examples and feedback MORE HEAVILY than older ones. The user's most recent behavior is the strongest signal of their preferences.
+
+        A rejection is counter-evidence for the exact matching pattern that proposed it. Use it to lower that pattern's confidence. Never infer a standalone global or extension-wide negative rule from rejected examples alone. Require repeated positive corrections or explicit steering text before creating a replacement rule.
         
         Output RULES in JSON format. Each rule should have:
         - "pattern": A regex to match source filenames.

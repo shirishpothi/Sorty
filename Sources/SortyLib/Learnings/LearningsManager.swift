@@ -1007,12 +1007,10 @@ public class LearningsManager: ObservableObject {
         }
         currentProfile = profile
 
-        // Feed rename outcomes into the existing example pipeline.
-        let folder = folderPath ?? ""
-        let src = folder.isEmpty ? originalName : "\(folder)/\(originalName)"
-        let destinationName = finalName ?? originalName
-        let dst = folder.isEmpty ? destinationName : "\(folder)/\(destinationName)"
-        addLabeledExample(srcPath: src, dstPath: dst, action: action)
+        // Rename feedback has different semantics from placement examples. Keeping it
+        // in its own history prevents filename edits and rejections from inducing
+        // folder-move or broad avoidance rules.
+        debouncedSave()
     }
     
     /// Record a history revert event
@@ -1308,7 +1306,7 @@ public class LearningsManager: ObservableObject {
     // MARK: - Feedback Loop (Continuous Learning)
     
     /// Record a manual correction (File moved manually after AI organization)
-    public func recordCorrection(originalPath: String, newPath: String) {
+    public func recordCorrection(originalPath: String, newPath: String, folderPath: String? = nil) {
         guard consentManager.canCollectData else { return }
         guard !shouldExcludeLearning(paths: [originalPath, newPath]) else { return }
         loadProfileIfNeededForCollection()
@@ -1317,6 +1315,7 @@ public class LearningsManager: ObservableObject {
         let example = LabeledExample(
             srcPath: originalPath,
             dstPath: newPath,
+            metadata: folderPath.map { ["folder_scope": $0] },
             action: .edit
         )
         profile.corrections.append(example)
@@ -2106,18 +2105,116 @@ public class LearningsManager: ObservableObject {
             }
         patterns.append(contentsOf: positiveExamples)
 
-        let renameExamples = profile.renameFeedbackHistory
-            .filter { $0.action == .edit || $0.action == .accept }
-            .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(4)
-            .compactMap { event -> String? in
-                let learnedName = event.finalName ?? event.suggestedName
-                guard let learnedName, learnedName != event.originalName else { return nil }
-                return "Filename convention: \(event.originalName) -> \(learnedName) was \(event.action == .edit ? "user-edited" : "accepted"). Use similar naming for matching files."
+        let scopedRenameFeedback = profile.renameFeedbackHistory.filter { event in
+            guard let folderPath else { return true }
+            guard let eventFolder = event.folderPath else { return false }
+            return eventFolder.hasPrefix(folderPath) || folderPath.hasPrefix(eventFolder)
+        }
+        let renameGroups = Dictionary(grouping: scopedRenameFeedback) { event in
+            let folder = event.folderPath ?? ""
+            let ext = URL(fileURLWithPath: event.originalName).pathExtension.lowercased()
+            return "\(folder)|\(ext)"
+        }
+        let renameConventions = renameGroups.values.compactMap { events -> (Date, String)? in
+            let positive = events.filter { $0.action == .accept || $0.action == .edit }
+            guard let convention = inferRenameConvention(from: positive) else { return nil }
+            let matchingRejections = events.filter { event in
+                event.action == .reject
+                    && event.suggestedName.map(convention.matches) == true
+            }.count
+            let netSupport = positive.count - matchingRejections
+            guard netSupport >= 2 else { return nil }
+            let newest = positive.map(\.timestamp).max() ?? .distantPast
+            let scope = events.compactMap(\.folderPath).first.map { _ in
+                "In this folder, "
+            } ?? ""
+            let rejectionNote = matchingRejections > 0
+                ? " One matching suggestion was rejected, so apply it conservatively."
+                : ""
+            return (newest, "Filename rule: \(scope)use `\(convention.displayPattern)`.\(rejectionNote)")
+        }
+        patterns.insert(contentsOf: renameConventions.sorted { $0.0 > $1.0 }.prefix(3).map { $0.1 }, at: 0)
+
+        let protectedBundleRules = renameGroups.values.compactMap { events -> (Date, String)? in
+            let rejectedBundles = events.filter { event in
+                event.action == .reject
+                    && URL(fileURLWithPath: event.originalName).pathExtension.lowercased() == "app"
+                    && event.suggestedName != nil
             }
-        patterns.append(contentsOf: renameExamples)
+            guard rejectedBundles.count >= 2 else { return nil }
+            let newest = rejectedBundles.map(\.timestamp).max() ?? .distantPast
+            return (newest, "Protected naming rule: Never rename exported .app bundles in this folder.")
+        }
+        patterns.insert(contentsOf: protectedBundleRules.sorted { $0.0 > $1.0 }.prefix(2).map { $0.1 }, at: 0)
 
         return Array(patterns.orderedDeduplicated().prefix(8))
+    }
+
+    private struct RenameConventionPattern {
+        let extensionName: String
+        let hasDatePrefix: Bool
+        let suffixTokens: [String]
+
+        var displayPattern: String {
+            var parts: [String] = []
+            if hasDatePrefix { parts.append("YYYY-MM-DD") }
+            parts.append("{name}")
+            parts.append(contentsOf: suffixTokens)
+            let base = parts.joined(separator: " ")
+            return extensionName.isEmpty ? base : "\(base).\(extensionName)"
+        }
+
+        func matches(_ filename: String) -> Bool {
+            let url = URL(fileURLWithPath: filename)
+            guard url.pathExtension.lowercased() == extensionName else { return false }
+            let base = url.deletingPathExtension().lastPathComponent
+            if hasDatePrefix && base.range(of: #"^\d{4}-\d{2}-\d{2}(?:\s|[-_])"#, options: .regularExpression) == nil {
+                return false
+            }
+            let normalized = base.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            let suffix = suffixTokens.map { $0.lowercased() }
+            return normalized.count >= suffix.count
+                && Array(normalized.suffix(suffix.count)) == suffix
+        }
+    }
+
+    private func inferRenameConvention(from events: [RenameFeedbackEvent]) -> RenameConventionPattern? {
+        let names = events.compactMap { event -> String? in
+            let name = event.finalName ?? event.suggestedName
+            guard let name, name != event.originalName else { return nil }
+            return name
+        }
+        guard names.count >= 2 else { return nil }
+
+        let extensions = Set(names.map { URL(fileURLWithPath: $0).pathExtension.lowercased() })
+        guard extensions.count == 1, let extensionName = extensions.first else { return nil }
+        let bases = names.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+        let datePrefixPattern = #"^\d{4}-\d{2}-\d{2}(?:\s|[-_])"#
+        let hasDatePrefix = bases.allSatisfy {
+            $0.range(of: datePrefixPattern, options: .regularExpression) != nil
+        }
+        let tokenLists = bases.map { base -> [String] in
+            let withoutDate = hasDatePrefix
+                ? base.replacingOccurrences(of: datePrefixPattern, with: "", options: .regularExpression)
+                : base
+            return withoutDate.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        }
+        guard let firstTokens = tokenLists.first else { return nil }
+        var suffix: [String] = []
+        for offset in 1...firstTokens.count {
+            let candidate = firstTokens[firstTokens.count - offset]
+            guard tokenLists.allSatisfy({ tokens in
+                tokens.count >= offset
+                    && tokens[tokens.count - offset].caseInsensitiveCompare(candidate) == .orderedSame
+            }) else { break }
+            suffix.insert(candidate, at: 0)
+        }
+        guard hasDatePrefix || !suffix.isEmpty else { return nil }
+        return RenameConventionPattern(
+            extensionName: extensionName,
+            hasDatePrefix: hasDatePrefix,
+            suffixTokens: suffix
+        )
     }
 
     // MARK: - Rule Management

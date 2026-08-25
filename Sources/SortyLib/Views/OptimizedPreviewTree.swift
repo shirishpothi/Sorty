@@ -518,6 +518,9 @@ class PreviewStore: ObservableObject {
         
         // Record rejection before mutating the plan
         learningsManager?.recordRejection(originalPath: file.path)
+        if let ruleID = attributedRuleID(for: fileID) {
+            learningsManager?.recordRuleFailure(ruleId: ruleID)
+        }
         recordEditCaptured()
         
         var updatedPlan = plan
@@ -606,10 +609,10 @@ class PreviewStore: ObservableObject {
     
     func revertFolderOrganization(folderID: UUID) {
         var updatedPlan = plan
-        var filesToMove: [FileItem] = []
+        var filesToMove: [(file: FileItem, ruleID: String?)] = []
         
         func collectFilesFromFolder(_ folder: FolderSuggestion) {
-            filesToMove.append(contentsOf: folder.files)
+            filesToMove.append(contentsOf: folder.files.map { ($0, folder.ruleId) })
             for subfolder in folder.subfolders {
                 collectFilesFromFolder(subfolder)
             }
@@ -624,13 +627,17 @@ class PreviewStore: ObservableObject {
         }
         
         // Record rejections for all files being reverted from this folder
-        for file in filesToMove {
-            learningsManager?.recordRejection(originalPath: file.path)
+        for item in filesToMove {
+            learningsManager?.recordRejection(originalPath: item.file.path)
+            if let ruleID = item.ruleID {
+                learningsManager?.recordRuleFailure(ruleId: ruleID)
+            }
         }
         
         updatedPlan.suggestions.removeAll { $0.files.isEmpty && $0.subfolders.isEmpty && $0.id == folderID }
         
-        for file in filesToMove {
+        for item in filesToMove {
+            let file = item.file
             if !updatedPlan.unorganizedFiles.contains(where: { $0.id == file.id }) {
                 updatedPlan.unorganizedFiles.append(file)
             }
@@ -794,8 +801,18 @@ class PreviewStore: ObservableObject {
         
         // Record the manual correction (user moved file to a different folder)
         let destFolderPath = folderIDToPath[toFolderID] ?? ""
-        let destPath = destFolderPath.isEmpty ? file.displayName : "\(destFolderPath)/\(file.displayName)"
-        learningsManager?.recordCorrection(originalPath: file.path, newPath: destPath)
+        let scopePath = organizationScope(for: file)
+        let destinationURL = URL(fileURLWithPath: scopePath, isDirectory: true)
+            .appendingPathComponent(destFolderPath, isDirectory: true)
+            .appendingPathComponent(file.displayName)
+        learningsManager?.recordCorrection(
+            originalPath: file.path,
+            newPath: destinationURL.path,
+            folderPath: scopePath
+        )
+        if let ruleID = attributedRuleID(for: fileID) {
+            learningsManager?.recordRuleFailure(ruleId: ruleID)
+        }
         recordEditCaptured()
         
         var updatedPlan = plan
@@ -821,6 +838,34 @@ class PreviewStore: ObservableObject {
             }
         }
         return plan.unorganizedFiles.first { $0.id == id }
+    }
+
+    private func attributedRuleID(for fileID: UUID) -> String? {
+        func find(in folder: FolderSuggestion) -> String? {
+            if folder.files.contains(where: { $0.id == fileID }) {
+                return folder.ruleId
+            }
+            for subfolder in folder.subfolders {
+                if let ruleID = find(in: subfolder) { return ruleID }
+            }
+            return nil
+        }
+        for suggestion in plan.suggestions {
+            if let ruleID = find(in: suggestion) { return ruleID }
+        }
+        return nil
+    }
+
+    private func organizationScope(for file: FileItem) -> String {
+        guard let relativePath = file.relativePath, !relativePath.isEmpty else {
+            return URL(fileURLWithPath: file.path).deletingLastPathComponent().path
+        }
+        var scopeURL = URL(fileURLWithPath: file.path)
+        let componentCount = URL(fileURLWithPath: relativePath).pathComponents.filter { $0 != "/" }.count
+        for _ in 0..<componentCount {
+            scopeURL.deleteLastPathComponent()
+        }
+        return scopeURL.path
     }
     
     private func findFileInFolder(_ id: UUID, in folder: FolderSuggestion) -> FileItem? {

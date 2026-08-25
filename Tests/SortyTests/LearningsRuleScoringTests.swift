@@ -223,4 +223,28 @@ final class LearningsRuleScoringTests: XCTestCase {
         XCTAssertGreaterThan(merged.supportCount, firstRule.supportCount, "New evidence must strengthen the existing rule")
         XCTAssertFalse(merged.isEnabled, "User-disabled state must survive re-inference")
     }
+
+    @MainActor
+    func testLocalInferenceRemovesLegacyBroadRejectionRules() async {
+        let suiteName = "LearningsRuleScoringTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let manager = LearningsManager(userDefaults: defaults)
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(
+                id: "local-avoid-mov-Media-old",
+                pattern: ".*\\.mov$",
+                template: "AVOID:Media/{filename}",
+                explanation: "Legacy broad rejection rule"
+            )
+        ]
+        manager.currentProfile = profile
+
+        await manager.runLocalRuleInference()
+
+        XCTAssertFalse(manager.currentProfile?.inferredRules.contains { $0.id.hasPrefix("local-avoid-") } ?? true)
+    }
 }
