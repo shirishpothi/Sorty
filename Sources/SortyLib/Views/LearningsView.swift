@@ -23,6 +23,7 @@ struct LearningsView: View {
     @State private var activeFileImporter: ActiveFileImporter?
     @State private var isShowingFileImporter = false
     @State private var showLearningsModelPicker = false
+    @State private var showingLearningsControls = false
     @State private var isQuickRefreshingLearnings = false
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
@@ -392,61 +393,9 @@ struct LearningsView: View {
                         }
                     }
 
-                    Menu {
-                        Section("Learnings Controls") {
-                            Button {
-                                restoreLearningsDefaults()
-                            } label: {
-                                Label(
-                                    "Reset Learnings Defaults", systemImage: "arrow.uturn.backward")
-                            }
-
-                            Button {
-                                presentLearningsModelPicker()
-                            } label: {
-                                Label("Model Settings…", systemImage: "gearshape")
-                            }
-
-                            Button {
-                                refreshLearningsInsights()
-                            } label: {
-                                Label(
-                                    isQuickRefreshingLearnings
-                                        ? "Refreshing…" : "Refresh Learnings",
-                                    systemImage: "arrow.clockwise")
-                            }
-                            .disabled(isQuickRefreshingLearnings)
-                        }
-
-                        Divider()
-
-                        Button {
-                            requestSensitiveAction(
-                                reason: "Authenticate to export your learnings profile."
-                            ) {
-                                exportProfile()
-                            }
-                        } label: {
-                            Label("Export Profile…", systemImage: "square.and.arrow.up")
-                        }
-
-                        Button {
-                            requestSensitiveAction(
-                                reason: "Authenticate to import a learnings profile."
-                            ) {
-                                presentFileImporter(.learningsProfile)
-                            }
-                        } label: {
-                            Label("Import Profile…", systemImage: "square.and.arrow.down")
-                        }
-
-                        Divider()
-
-                        Button(role: .destructive) {
-                            confirmDeleteAllLearningData()
-                        } label: {
-                            Label("Delete All Data…", systemImage: "trash")
-                        }
+                    Button {
+                        HapticFeedbackManager.shared.light()
+                        showingLearningsControls.toggle()
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "gearshape")
@@ -456,14 +405,13 @@ struct LearningsView: View {
                         }
                         .foregroundStyle(.secondary)
                     }
-                    .menuStyle(.borderlessButton)
-                    .simultaneousGesture(
-                        TapGesture().onEnded {
-                            HapticFeedbackManager.shared.light()
-                        }
-                    )
+                    .buttonStyle(.plain)
                     .frame(width: 34)
                     .accessibilityLabel("Learnings settings")
+                    .accessibilityHint("Opens learning, model, import, and export controls")
+                    .popover(isPresented: $showingLearningsControls, arrowEdge: .top) {
+                        learningsControlsPopover
+                    }
                     .onHover { hovering in
                         if hovering {
                             HapticFeedbackManager.shared.selection()
@@ -491,16 +439,145 @@ struct LearningsView: View {
         .accessibilityLabel("Learnings header")
     }
 
+    private var learningsControlsPopover: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Learnings Controls")
+                .font(.headline)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 2)
+
+            learningsControlButton(
+                title: "Reset Learnings Defaults",
+                detail: "Resume learning and use the organization model",
+                systemImage: "arrow.uturn.backward"
+            ) {
+                restoreLearningsDefaults()
+            }
+
+            learningsControlButton(
+                title: "Model Settings…",
+                detail: "Choose the model used to refresh learnings",
+                systemImage: "gearshape"
+            ) {
+                presentLearningsModelPicker()
+            }
+
+            learningsControlButton(
+                title: isQuickRefreshingLearnings ? "Refreshing Learnings…" : "Refresh Learnings",
+                detail: isQuickRefreshingLearnings
+                    ? "Analyzing saved signals and reference folders"
+                    : "Rebuild insights from saved learning data",
+                systemImage: "arrow.clockwise",
+                isLoading: isQuickRefreshingLearnings
+            ) {
+                refreshLearningsInsights()
+            }
+            .disabled(isQuickRefreshingLearnings)
+
+            Divider()
+
+            learningsControlButton(
+                title: "Export Profile…",
+                detail: "Save a portable copy of your learning data",
+                systemImage: "square.and.arrow.up"
+            ) {
+                showingLearningsControls = false
+                requestSensitiveAction(reason: "Authenticate to export your learnings profile.") {
+                    exportProfile()
+                }
+            }
+
+            learningsControlButton(
+                title: "Import Profile…",
+                detail: "Merge learning data from an exported profile",
+                systemImage: "square.and.arrow.down"
+            ) {
+                showingLearningsControls = false
+                requestSensitiveAction(reason: "Authenticate to import a learnings profile.") {
+                    presentFileImporter(.learningsProfile)
+                }
+            }
+
+            Divider()
+
+            learningsControlButton(
+                title: "Delete All Data…",
+                detail: "Permanently remove learning data and settings",
+                systemImage: "trash",
+                role: .destructive
+            ) {
+                showingLearningsControls = false
+                confirmDeleteAllLearningData()
+            }
+        }
+        .padding(8)
+        .frame(width: 310)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Learnings controls")
+        .systemLiquidGlassPopover(cornerRadius: 12)
+    }
+
+    private func learningsControlButton(
+        title: String,
+        detail: String,
+        systemImage: String,
+        isLoading: Bool = false,
+        role: ButtonRole? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(role: role, action: action) {
+            HStack(spacing: 10) {
+                Group {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: systemImage)
+                    }
+                }
+                .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline)
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func restoreLearningsDefaults() {
         HapticFeedbackManager.shared.tap()
         manager.sessionLearningPaused = false
+        manager.learningStrength = 0.5
+        manager.dataRetentionDays = 0
         manager.clearLearningsModelOverride()
         HapticFeedbackManager.shared.success()
+        NotificationManager.shared.showHUDInfo(
+            title: "Learnings Defaults Restored",
+            message: "Learning is active at balanced strength, keeps data until you delete it, and uses your organization model.",
+            icon: "checkmark.circle.fill",
+            iconColor: .green,
+            identifier: "learnings-quick-control"
+        )
     }
 
     private func presentLearningsModelPicker() {
         HapticFeedbackManager.shared.tap()
-        showLearningsModelPicker = true
+        showingLearningsControls = false
+        Task { @MainActor in
+            await Task.yield()
+            showLearningsModelPicker = true
+        }
     }
 
     private func refreshLearningsInsights() {
@@ -508,6 +585,14 @@ struct LearningsView: View {
 
         HapticFeedbackManager.shared.tap()
         isQuickRefreshingLearnings = true
+        NotificationManager.shared.showHUDInfo(
+            title: "Refreshing Learnings",
+            message: "Analyzing saved signals and reference folders…",
+            icon: "arrow.clockwise",
+            iconColor: .blue,
+            identifier: "learnings-quick-control",
+            isPersistent: true
+        )
 
         Task {
             manager.configure(with: settingsViewModel.config)
@@ -518,8 +603,22 @@ struct LearningsView: View {
 
                 if let error = manager.error, !error.isEmpty {
                     HapticFeedbackManager.shared.error()
+                    NotificationManager.shared.showHUDInfo(
+                        title: "Refresh Failed",
+                        message: error,
+                        icon: "exclamationmark.triangle.fill",
+                        iconColor: .red,
+                        identifier: "learnings-quick-control"
+                    )
                 } else {
                     HapticFeedbackManager.shared.success()
+                    NotificationManager.shared.showHUDInfo(
+                        title: "Learnings Refreshed",
+                        message: "Sorty rebuilt your insights from the latest saved signals.",
+                        icon: "checkmark.circle.fill",
+                        iconColor: .green,
+                        identifier: "learnings-quick-control"
+                    )
                 }
             }
         }
