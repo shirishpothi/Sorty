@@ -169,6 +169,7 @@ struct FlatFileRowContent: View {
     @Binding var editedName: String
     @Binding var isRegeneratingName: Bool
     @Binding var highlightedFileID: UUID?
+    @State private var showRenameEvidence = false
     let isFocused: FocusState<Bool>.Binding
     let onSave: () -> Void
     let onCancel: () -> Void
@@ -201,6 +202,25 @@ struct FlatFileRowContent: View {
                             renameMapping?.hasRename == true,
                             color: .red.opacity(0.72)
                         )
+
+                    if let renameMapping, renameMapping.hasRename {
+                        Image(systemName: "arrow.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+
+                        RenameNameChangeView(
+                            suggestedName: renameMapping.suggestedName ?? "",
+                            helpText: renameHelpText ?? "",
+                            isRegenerating: isRegeneratingName
+                        )
+
+                        Text(renameMapping.confidenceBand.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        renameEvidenceButton(for: renameMapping)
+                    }
                 }
 
                 Spacer(minLength: 12)
@@ -242,48 +262,9 @@ struct FlatFileRowContent: View {
                         .foregroundColor(.secondary.opacity(0.6))
                         .frame(width: Column.dragHandleWidth)
                         .accessibilityHidden(true)
-                }
-            }
 
-            if let renameMapping, renameMapping.hasRename, !isEditingName {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.turn.down.right")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-
-                        Toggle(
-                            "Use",
-                            isOn: Binding(
-                                get: { renameMapping.shouldApplyRename },
-                                set: onSetRenameSelected
-                            )
-                        )
-                        .toggleStyle(.checkbox)
-                        .accessibilityIdentifier("RenameSelection-\(file.id.uuidString)")
-                        .help(
-                            renameMapping.shouldApplyRename
-                                ? "This suggested name will be applied"
-                                : "Keep the original name unless you select this suggestion"
-                        )
-                        .accessibilityHint(
-                            renameMapping.shouldApplyRename
-                                ? "Deselect to keep the original filename"
-                                : "Select to apply the suggested filename"
-                        )
-
-                        RenameNameChangeView(
-                            suggestedName: renameMapping.suggestedName ?? "",
-                            helpText: renameHelpText ?? "",
-                            isRegenerating: isRegeneratingName
-                        )
-
-                        Text(renameMapping.confidenceBand.displayName)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        Spacer(minLength: 12)
+                    if let renameMapping, renameMapping.hasRename, !isEditingName {
+                        renameSelectionButton(for: renameMapping)
 
                         RenameActionGlassCluster(
                             isRegenerating: isRegeneratingName,
@@ -292,22 +273,79 @@ struct FlatFileRowContent: View {
                             onReject: onReject
                         )
                     }
-
-                    Label(
-                        renameMapping.renameReason ?? "No source cue was provided. Check the file before using this name.",
-                        systemImage: "text.magnifyingglass"
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(.leading, 44)
-                    .accessibilityLabel("Rename evidence")
-                    .accessibilityValue(renameMapping.renameReason ?? "No source cue provided")
                 }
-                .padding(.leading, 28)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+    }
+
+    private func renameEvidenceButton(for renameMapping: FileRenameMapping) -> some View {
+        Button {
+            showRenameEvidence.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Why Sorty suggested this name")
+        .accessibilityLabel("Rename justification")
+        .accessibilityHint("Shows the evidence used for this suggested filename")
+        .popover(isPresented: $showRenameEvidence, arrowEdge: .bottom) {
+            RenameEvidencePopover(
+                suggestedName: renameMapping.suggestedName ?? "",
+                evidence: renameMapping.renameReason
+                    ?? "No source cue was provided. Check the file before using this name."
+            )
+            .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+    }
+
+    private func renameSelectionButton(for renameMapping: FileRenameMapping) -> some View {
+        Button {
+            onSetRenameSelected(!renameMapping.shouldApplyRename)
+        } label: {
+            Label(
+                renameMapping.shouldApplyRename ? "Selected" : "Use",
+                systemImage: renameMapping.shouldApplyRename ? "checkmark.circle.fill" : "circle"
+            )
+            .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(renameMapping.shouldApplyRename ? .green : .secondary)
+        .accessibilityIdentifier("RenameSelection-\(file.id.uuidString)")
+        .accessibilityLabel("Suggested filename")
+        .accessibilityValue(renameMapping.shouldApplyRename ? "Selected" : "Not selected")
+        .accessibilityHint(
+            renameMapping.shouldApplyRename
+                ? "Keeps the original filename instead"
+                : "Uses the suggested filename instead"
+        )
+    }
+}
+
+private struct RenameEvidencePopover: View {
+    let suggestedName: String
+    let evidence: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Why this name", systemImage: "info.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(suggestedName)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .truncationMode(.middle)
+
+            Text(evidence)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(12)
+        .frame(minWidth: 240, maxWidth: 340)
     }
 }
 
