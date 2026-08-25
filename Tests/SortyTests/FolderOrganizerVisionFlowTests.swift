@@ -171,6 +171,99 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
         XCTAssertEqual(organizer.visionAnalysisSummary?.skippedCount, 0)
     }
 
+    func testRenameOnlyInjectsConsentedLearningsForCurrentFolder() async throws {
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o",
+            mode: .renameOnly
+        )
+        try await organizer.configure(with: config)
+
+        let suiteName = "FolderOrganizerVisionFlowTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let learningsManager = LearningsManager(userDefaults: defaults)
+        await learningsManager.grantConsent()
+        var profile = LearningsProfile(consentGranted: true)
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.pdf$",
+                template: "{date} {vendor} Invoice.pdf",
+                priority: 90,
+                explanation: "Use dated vendor invoice names",
+                scope: .folder(tempDirectory.path),
+                status: .active
+            ),
+            InferredRule(
+                pattern: ".*\\.mov$",
+                template: "Unrelated/{filename}",
+                priority: 100,
+                explanation: "Rule from another folder",
+                scope: .folder("/Users/example/Elsewhere"),
+                status: .active
+            )
+        ]
+        learningsManager.currentProfile = profile
+        organizer.learningsManager = learningsManager
+
+        let mockClient = VisionFlowMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+        try "invoice".write(
+            to: tempDirectory.appendingPathComponent("scan.pdf"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        try await organizer.organize(directory: tempDirectory)
+
+        let instructions = await mockClient.lastCustomInstructions
+        XCTAssertTrue(instructions?.contains("Use dated vendor invoice names") == true)
+        XCTAssertFalse(instructions?.contains("Rule from another folder") == true)
+    }
+
+    func testRenameOnlyDoesNotInjectLearningsWithoutConsent() async throws {
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o",
+            mode: .renameOnly
+        )
+        try await organizer.configure(with: config)
+
+        let suiteName = "FolderOrganizerVisionFlowTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let learningsManager = LearningsManager(userDefaults: defaults)
+        var profile = LearningsProfile(consentGranted: false)
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*",
+                template: "Private/{filename}",
+                priority: 100,
+                explanation: "Private rename convention",
+                status: .active
+            )
+        ]
+        learningsManager.currentProfile = profile
+        organizer.learningsManager = learningsManager
+
+        let mockClient = VisionFlowMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+        try "notes".write(
+            to: tempDirectory.appendingPathComponent("notes.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        try await organizer.organize(directory: tempDirectory)
+
+        let instructions = await mockClient.lastCustomInstructions
+        XCTAssertFalse(instructions?.contains("Private rename convention") == true)
+    }
+
     private func createPNG(at url: URL) throws {
         let size = NSSize(width: 80, height: 80)
         guard let rep = NSBitmapImageRep(
@@ -217,6 +310,7 @@ actor VisionFlowMockClient: AIClientProtocol {
 
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
         analyzeCalls += 1
+        lastCustomInstructions = customInstructions
         return OrganizationPlan(
             suggestions: [FolderSuggestion(folderName: "Grouped", files: files)],
             unorganizedFiles: [],
