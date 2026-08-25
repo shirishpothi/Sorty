@@ -20,9 +20,7 @@ struct LiquidGlassReasoningButton: View {
     }
 
     private var hasContent: Bool {
-        matchedRule != nil
-            || !suggestion.reasoning.isEmpty
-            || !suggestion.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        matchedRule != nil || !suggestion.reasoning.isEmpty
     }
 
     private var isRule: Bool {
@@ -34,7 +32,7 @@ struct LiquidGlassReasoningButton: View {
             Button {
                 showPopover.toggle()
             } label: {
-                Image(systemName: isRule ? "sparkles" : "info.circle")
+                Image(systemName: isRule ? "sparkles" : "brain")
                     .font(.caption2)
                     .symbolReplaceTransition(animationValue: isRule)
                     .foregroundStyle(
@@ -44,9 +42,7 @@ struct LiquidGlassReasoningButton: View {
                     )
             }
             .buttonStyle(.plain)
-            .help(isRule ? "View learned rule" : "Why these files belong together")
-            .accessibilityLabel(isRule ? "Learned folder rule" : "Folder justification")
-            .accessibilityHint("Shows why Sorty grouped these files")
+            .help(isRule ? "View learned rule" : "View AI reasoning")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 LiquidGlassReasoningPopover(
                     suggestion: suggestion,
@@ -73,12 +69,12 @@ struct LiquidGlassReasoningPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: isRule ? "sparkles" : "info.circle.fill")
+                Image(systemName: isRule ? "sparkles" : "brain")
                     .font(.caption)
                     .foregroundStyle(accentColor)
                     .symbolReplaceTransition(animationValue: isRule)
 
-                Text(isRule ? "Learned Rule" : "Why these files belong together")
+                Text(isRule ? "Learned Rule" : "AI Reasoning")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
@@ -112,7 +108,7 @@ struct LiquidGlassReasoningPopover: View {
                 }
             } else {
                 FormattedReasoningText(
-                    text: suggestion.reasoning.isEmpty ? suggestion.description : suggestion.reasoning,
+                    text: suggestion.reasoning,
                     font: .callout,
                     secondaryFont: .caption,
                     foregroundStyle: .primary

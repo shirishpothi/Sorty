@@ -518,9 +518,6 @@ class PreviewStore: ObservableObject {
         
         // Record rejection before mutating the plan
         learningsManager?.recordRejection(originalPath: file.path)
-        if let ruleID = attributedRuleID(for: fileID) {
-            learningsManager?.recordRuleFailure(ruleId: ruleID)
-        }
         recordEditCaptured()
         
         var updatedPlan = plan
@@ -585,22 +582,6 @@ class PreviewStore: ObservableObject {
         }
     }
 
-    func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
-        var updatedPlan = plan
-        for index in updatedPlan.suggestions.indices {
-            if let updated = setRenameSelectionInFolder(
-                updatedPlan.suggestions[index],
-                targetID: folderID,
-                fileID: fileID,
-                isSelected: isSelected
-            ) {
-                updatedPlan.suggestions[index] = updated
-                updateInternalPlan(updatedPlan)
-                return
-            }
-        }
-    }
-
     func regenerateRename(fileID: UUID, folderID: UUID) {
         guard let file = findFile(by: fileID) else { return }
         let candidate = localRenameCandidate(for: file)
@@ -609,10 +590,10 @@ class PreviewStore: ObservableObject {
     
     func revertFolderOrganization(folderID: UUID) {
         var updatedPlan = plan
-        var filesToMove: [(file: FileItem, ruleID: String?)] = []
+        var filesToMove: [FileItem] = []
         
         func collectFilesFromFolder(_ folder: FolderSuggestion) {
-            filesToMove.append(contentsOf: folder.files.map { ($0, folder.ruleId) })
+            filesToMove.append(contentsOf: folder.files)
             for subfolder in folder.subfolders {
                 collectFilesFromFolder(subfolder)
             }
@@ -627,17 +608,13 @@ class PreviewStore: ObservableObject {
         }
         
         // Record rejections for all files being reverted from this folder
-        for item in filesToMove {
-            learningsManager?.recordRejection(originalPath: item.file.path)
-            if let ruleID = item.ruleID {
-                learningsManager?.recordRuleFailure(ruleId: ruleID)
-            }
+        for file in filesToMove {
+            learningsManager?.recordRejection(originalPath: file.path)
         }
         
         updatedPlan.suggestions.removeAll { $0.files.isEmpty && $0.subfolders.isEmpty && $0.id == folderID }
         
-        for item in filesToMove {
-            let file = item.file
+        for file in filesToMove {
             if !updatedPlan.unorganizedFiles.contains(where: { $0.id == file.id }) {
                 updatedPlan.unorganizedFiles.append(file)
             }
@@ -710,32 +687,6 @@ class PreviewStore: ObservableObject {
         return nil
     }
 
-    private func setRenameSelectionInFolder(
-        _ folder: FolderSuggestion,
-        targetID: UUID,
-        fileID: UUID,
-        isSelected: Bool
-    ) -> FolderSuggestion? {
-        var updatedFolder = folder
-        if folder.id == targetID {
-            updatedFolder.setRenameSelected(for: fileID, isSelected: isSelected)
-            return updatedFolder
-        }
-
-        for index in updatedFolder.subfolders.indices {
-            if let updated = setRenameSelectionInFolder(
-                updatedFolder.subfolders[index],
-                targetID: targetID,
-                fileID: fileID,
-                isSelected: isSelected
-            ) {
-                updatedFolder.subfolders[index] = updated
-                return updatedFolder
-            }
-        }
-        return nil
-    }
-
     private func localRenameCandidate(for file: FileItem) -> String {
         let ext = file.extension
         let baseCandidate: String
@@ -801,18 +752,8 @@ class PreviewStore: ObservableObject {
         
         // Record the manual correction (user moved file to a different folder)
         let destFolderPath = folderIDToPath[toFolderID] ?? ""
-        let scopePath = organizationScope(for: file)
-        let destinationURL = URL(fileURLWithPath: scopePath, isDirectory: true)
-            .appendingPathComponent(destFolderPath, isDirectory: true)
-            .appendingPathComponent(file.displayName)
-        learningsManager?.recordCorrection(
-            originalPath: file.path,
-            newPath: destinationURL.path,
-            folderPath: scopePath
-        )
-        if let ruleID = attributedRuleID(for: fileID) {
-            learningsManager?.recordRuleFailure(ruleId: ruleID)
-        }
+        let destPath = destFolderPath.isEmpty ? file.displayName : "\(destFolderPath)/\(file.displayName)"
+        learningsManager?.recordCorrection(originalPath: file.path, newPath: destPath)
         recordEditCaptured()
         
         var updatedPlan = plan
@@ -838,34 +779,6 @@ class PreviewStore: ObservableObject {
             }
         }
         return plan.unorganizedFiles.first { $0.id == id }
-    }
-
-    private func attributedRuleID(for fileID: UUID) -> String? {
-        func find(in folder: FolderSuggestion) -> String? {
-            if folder.files.contains(where: { $0.id == fileID }) {
-                return folder.ruleId
-            }
-            for subfolder in folder.subfolders {
-                if let ruleID = find(in: subfolder) { return ruleID }
-            }
-            return nil
-        }
-        for suggestion in plan.suggestions {
-            if let ruleID = find(in: suggestion) { return ruleID }
-        }
-        return nil
-    }
-
-    private func organizationScope(for file: FileItem) -> String {
-        guard let relativePath = file.relativePath, !relativePath.isEmpty else {
-            return URL(fileURLWithPath: file.path).deletingLastPathComponent().path
-        }
-        var scopeURL = URL(fileURLWithPath: file.path)
-        let componentCount = URL(fileURLWithPath: relativePath).pathComponents.filter { $0 != "/" }.count
-        for _ in 0..<componentCount {
-            scopeURL.deleteLastPathComponent()
-        }
-        return scopeURL.path
     }
     
     private func findFileInFolder(_ id: UUID, in folder: FolderSuggestion) -> FileItem? {
@@ -1147,7 +1060,6 @@ struct FlatFolderRowView: View {
                     learningsManager: learningsManager
                 )
             }
-
             .padding(.leading, CGFloat(depth * 16))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
@@ -1355,8 +1267,7 @@ struct FlatFileRowView: View {
             onCancel: cancelRename,
             onStartEditing: startEditing,
             onRegenerate: regenerateSuggestedName,
-            onReject: rejectRename,
-            onSetRenameSelected: setRenameSelected
+            onReject: rejectRename
         )
     }
 
@@ -1408,16 +1319,6 @@ struct FlatFileRowView: View {
 
     private func rejectRename() {
         store.rejectRename(fileID: file.id, folderID: parentFolderID)
-        onPlanChanged()
-    }
-
-    private func setRenameSelected(_ isSelected: Bool) {
-        HapticFeedbackManager.shared.selection()
-        store.setRenameSelected(
-            fileID: file.id,
-            folderID: parentFolderID,
-            isSelected: isSelected
-        )
         onPlanChanged()
     }
 
