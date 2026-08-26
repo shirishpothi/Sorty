@@ -1181,7 +1181,7 @@ struct LearningsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(totalRecordCount) stored learning record\(totalRecordCount == 1 ? "" : "s")")
+                Text("\(totalRecordCount.formatted()) stored learning record\(totalRecordCount == 1 ? "" : "s")")
                     .font(.subheadline.bold())
                 Text(
                     hasActivePatterns
@@ -1203,21 +1203,22 @@ struct LearningsView: View {
                         HapticFeedbackManager.shared.light()
                         selectedLearningRecordsCategory = metric.category
                     } label: {
-                        HStack(spacing: 9) {
+                        HStack(spacing: 6) {
                             Image(systemName: metric.category.systemImage)
                                 .foregroundStyle(metric.category.color)
-                                .frame(width: 18)
+                                .frame(width: 16)
                                 .accessibilityHidden(true)
-                            Text("\(metric.count) \(metric.category.title(for: metric.count))")
-                                .font(.subheadline.bold())
+                            Text("\(metric.count.formatted()) \(metric.category.title(for: metric.count))")
+                                .font(.caption.bold())
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.tertiary)
                                 .accessibilityHidden(true)
                         }
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 9)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
