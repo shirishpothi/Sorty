@@ -17,6 +17,15 @@ struct StorageLocationConfigView: View {
     
     @State private var name: String
     @State private var description: String
+    @State private var isDescriptionFocused = false
+    @State private var descriptionSelection = NSRange(location: 0, length: 0)
+    @State private var descriptionSuggestionIndex = 0
+
+    private let descriptionSuggestions = [
+        "Archive for completed projects older than 6 months",
+        "Storage for large media files and raw footage",
+        "Backup location for important documents",
+    ]
 
     init(location: StorageLocation) {
         self.location = location
@@ -75,41 +84,84 @@ struct StorageLocationConfigView: View {
                     // Description Section
                     SettingsCard(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
                         VStack(alignment: .leading, spacing: 8) {
-                            TextEditor(text: $description)
-                                .font(.system(.body, design: .default))
+                            ZStack(alignment: .topLeading) {
+                                SubmittableTextEditor(
+                                    text: $description,
+                                    isFocused: $isDescriptionFocused,
+                                    selectedRange: $descriptionSelection,
+                                    onAcceptSuggestion: acceptCurrentDescriptionSuggestion,
+                                    onSubmit: save
+                                )
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+
+                                if description.isEmpty {
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Text(currentDescriptionSuggestion)
+                                            .font(.body)
+                                            .foregroundStyle(.tertiary)
+                                            .lineLimit(2)
+                                            .numericTextTransition(
+                                                animationValue: descriptionSuggestionIndex
+                                            )
+
+                                        Spacer(minLength: 0)
+
+                                        Text("Tab")
+                                            .font(
+                                                .system(
+                                                    size: 10,
+                                                    weight: .semibold,
+                                                    design: .rounded
+                                                )
+                                            )
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                Color.secondary.opacity(0.10),
+                                                in: RoundedRectangle(cornerRadius: 5)
+                                            )
+                                            .accessibilityHidden(true)
+                                    }
+                                    .padding(.leading, 18)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 9)
+                                    .allowsHitTesting(false)
+                                    .task {
+                                        while !Task.isCancelled {
+                                            try? await Task.sleep(for: .seconds(3.5))
+                                            guard !Task.isCancelled else { return }
+                                            descriptionSuggestionIndex =
+                                                (descriptionSuggestionIndex + 1)
+                                                % descriptionSuggestions.count
+                                        }
+                                    }
+                                }
+                            }
                                 .frame(height: 80)
-                                .scrollContentBackground(.hidden)
-                                .padding(10)
-                                .background(Color(NSColor.textBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(NSColor.textBackgroundColor))
+                                )
+                                .overlay {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+
+                                    FocusedInstructionBeamBorder(active: isDescriptionFocused)
+                                }
+                                .accessibilityIdentifier("StorageLocationDescriptionTextField")
+                                .accessibilityLabel("Description for Sorty")
+                                .accessibilityHint(
+                                    description.isEmpty
+                                        ? "Press Tab to use the suggested description, Command+Enter to save, or Enter for a new line"
+                                        : "Press Command+Enter to save, or Enter for a new line"
                                 )
                             
                             Text("Describe what types of files belong here. Sorty uses this to decide which files to move to this location.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            
-                            // Example suggestions
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Examples:")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.secondary)
-                                DescriptionExampleButton(
-                                    text: "Archive for completed projects older than 6 months",
-                                    description: $description
-                                )
-                                DescriptionExampleButton(
-                                    text: "Storage for large media files and raw footage",
-                                    description: $description
-                                )
-                                DescriptionExampleButton(
-                                    text: "Backup location for important documents",
-                                    description: $description
-                                )
-                            }
-                            .padding(.top, 4)
                         }
                     }
                 }
@@ -118,6 +170,22 @@ struct StorageLocationConfigView: View {
         }
         .frame(width: 450, height: 460)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private var currentDescriptionSuggestion: String {
+        descriptionSuggestions[descriptionSuggestionIndex % descriptionSuggestions.count]
+    }
+
+    private func acceptCurrentDescriptionSuggestion() -> Bool {
+        guard description.isEmpty else { return false }
+
+        description = currentDescriptionSuggestion
+        descriptionSelection = NSRange(
+            location: (currentDescriptionSuggestion as NSString).length,
+            length: 0
+        )
+        HapticFeedbackManager.shared.selection()
+        return true
     }
 
     private func save() {
@@ -129,35 +197,6 @@ struct StorageLocationConfigView: View {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()
-    }
-}
-
-private struct DescriptionExampleButton: View {
-    let text: String
-    @Binding var description: String
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            HapticFeedbackManager.shared.selection()
-            description = text
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.turn.down.right")
-                    .accessibilityHidden(true)
-                Text("\"\(text)\"")
-            }
-            .font(.caption2)
-            .foregroundStyle(isHovered ? Color.accentColor : Color.secondary.opacity(0.65))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(isHovered ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 5))
-            .contentShape(RoundedRectangle(cornerRadius: 5))
-        }
-        .buttonStyle(.plain)
-        .help("Use this description")
-        .accessibilityLabel("Use example description: \(text)")
-        .onHover { isHovered = $0 }
     }
 }
 
