@@ -106,7 +106,6 @@ struct HistoryView: View {
     @State private var filteredManualEntries: [HistorySessionRow] = []
     @State private var filteredWatchedEntries: [HistorySessionRow] = []
     @State private var collapsedSections: Set<HistorySectionKind> = []
-    @State private var revealingSections: Set<HistorySectionKind> = []
     @State private var impactSummary = HistoryImpactSummary()
     @State private var displayedEntryCount = 50
     private let pageSize = 50
@@ -413,20 +412,12 @@ struct HistoryView: View {
         if !entries.isEmpty {
             Button {
                 HapticFeedbackManager.shared.selection()
-                if isCollapsed {
-                    if !reduceMotion {
-                        revealingSections.insert(kind)
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                    if isCollapsed {
+                        collapsedSections.remove(kind)
+                    } else {
+                        collapsedSections.insert(kind)
                     }
-                    collapsedSections.remove(kind)
-                    guard !reduceMotion else { return }
-                    Task { @MainActor in
-                        await Task.yield()
-                        guard !collapsedSections.contains(kind) else { return }
-                        revealingSections.remove(kind)
-                    }
-                } else {
-                    collapsedSections.insert(kind)
-                    revealingSections.remove(kind)
                 }
             } label: {
                 HStack {
@@ -452,33 +443,25 @@ struct HistoryView: View {
                         .symbolReplaceTransition(animationValue: isCollapsed)
                         .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 32)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(.isHeader)
             .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
             .accessibilityHint(isCollapsed ? "Expands this category" : "Collapses this category")
-            .listRowInsets(EdgeInsets(top: 8, leading: 28, bottom: 4, trailing: 28))
+            .listRowInsets(EdgeInsets(top: 2, leading: 28, bottom: 0, trailing: 28))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
             if !isCollapsed {
-                historySessionRows(
-                    entries,
-                    isRevealed: !revealingSections.contains(kind)
-                )
+                historySessionRows(entries)
             }
         }
     }
 
-    private func historySessionRows(
-        _ entries: ArraySlice<HistorySessionRow>,
-        isRevealed: Bool = true
-    ) -> some View {
-        ForEach(entries.indices, id: \.self) { index in
-            let entry = entries[index]
-            let revealIndex = entries.distance(from: entries.startIndex, to: index)
+    private func historySessionRows(_ entries: ArraySlice<HistorySessionRow>) -> some View {
+        ForEach(entries) { entry in
             HistorySessionCard(
                 entry: entry,
                 isSelected: selectedEntry?.id == entry.id,
@@ -486,15 +469,6 @@ struct HistoryView: View {
                     HapticFeedbackManager.shared.selection()
                     selectEntry(id: entry.id)
                 }
-            )
-            .opacity(isRevealed ? 1 : 0)
-            .offset(y: isRevealed ? 0 : -8)
-            .animation(
-                reduceMotion
-                    ? nil
-                    : .easeOut(duration: 0.22)
-                        .delay(Double(min(revealIndex, 8)) * 0.025),
-                value: isRevealed
             )
             .transition(historyCardTransition)
             .scrollTransition(
@@ -512,7 +486,7 @@ struct HistoryView: View {
                         anchor: .top
                     )
             }
-            .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
+            .listRowInsets(EdgeInsets(top: 8, leading: 28, bottom: 8, trailing: 28))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
