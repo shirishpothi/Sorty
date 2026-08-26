@@ -20,6 +20,8 @@ struct StorageLocationConfigView: View {
     @State private var isDescriptionFocused = false
     @State private var descriptionSelection = NSRange(location: 0, length: 0)
     @State private var descriptionSuggestionIndex = 0
+    @State private var isHoveringPath = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let descriptionSuggestions = [
         "Archive for completed projects older than 6 months",
@@ -45,21 +47,44 @@ struct StorageLocationConfigView: View {
                             Text(location.name)
                                 .font(.headline)
 
-                            StorageProviderBadge(
-                                provider: location.capabilityProfile.provider,
-                                locationName: location.name
-                            ) {
-                                HapticFeedbackManager.shared.tap()
-                                NSWorkspace.shared.selectFile(
-                                    nil,
-                                    inFileViewerRootedAtPath: location.path
-                                )
-                            }
+                            StorageProviderBadge(provider: location.capabilityProfile.provider)
                         }
-                        PrivacySensitivePathText(path: location.path)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            NSWorkspace.shared.selectFile(
+                                nil,
+                                inFileViewerRootedAtPath: location.path
+                            )
+                        } label: {
+                            HStack(spacing: 5) {
+                                PrivacySensitivePathText(path: location.path)
+                                    .lineLimit(1)
+
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .frame(width: 10)
+                                    .opacity(isHoveringPath ? 1 : 0)
+                                    .offset(
+                                        x: reduceMotion || isHoveringPath ? 0 : -3,
+                                        y: reduceMotion || isHoveringPath ? 0 : 3
+                                    )
+                                    .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
+                                    .foregroundStyle(Color.accentColor)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(minHeight: 20)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                            value: isHoveringPath
+                        )
+                        .onHover { isHoveringPath = $0 }
+                        .help("Reveal \(location.name) in Finder")
+                        .accessibilityLabel("Reveal \(location.name) in Finder") // [VERIFY] confirm label matches intent
                     }
                 }
                 
@@ -211,46 +236,24 @@ struct StorageLocationConfigView: View {
 
 private struct StorageProviderBadge: View {
     let provider: StorageProviderKind
-    let locationName: String
-    let onReveal: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
 
     var body: some View {
-        Button(action: onReveal) {
-            HStack(spacing: 5) {
-                Label(label, systemImage: symbolName)
+        HStack(spacing: 5) {
+            Image(systemName: symbolName)
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
 
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .frame(width: 10)
-                    .opacity(isHovered ? 1 : 0)
-                    .offset(
-                        x: reduceMotion || isHovered ? 0 : -3,
-                        y: reduceMotion || isHovered ? 0 : 3
-                    )
-                    .scaleEffect(reduceMotion || isHovered ? 1 : 0.75)
-                    .accessibilityHidden(true)
-            }
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .systemLiquidGlassBackground(cornerRadius: 999)
-            .fixedSize()
+            Text(label)
+                .foregroundStyle(.primary)
         }
-        .buttonStyle(.plain)
-        .frame(minHeight: 44)
-        .contentShape(Rectangle())
-        .animation(
-            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
-            value: isHovered
-        )
-        .onHover { isHovered = $0 }
-        .help("Reveal \(locationName) in Finder")
-        .accessibilityLabel("Reveal \(locationName) in Finder") // [VERIFY] confirm label matches intent
-        .accessibilityHint(accessibilityDescription)
+        .font(.caption2.weight(.semibold))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
+        .fixedSize()
+        .help(accessibilityDescription)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
     }
 
     private var label: String {
