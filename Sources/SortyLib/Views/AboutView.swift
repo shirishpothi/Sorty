@@ -14,11 +14,15 @@ struct AboutView: View {
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
     private let docsURL = URL(string: "https://github.com/shirishpothi/Sorty#readme")!
     private let githubURL = URL(string: "https://github.com/shirishpothi/Sorty")!
+    private var versionHistoryURL: URL {
+        SparkleVersionHistoryLink.url(for: BuildInfo.version)
+    }
 
     @State private var supportHovered = false
     @State private var docsHovered = false
     @State private var githubHovered = false
     @State private var accreditationsHovered = false
+    @State private var versionHovered = false
     @State private var commitHovered = false
     let openAccreditations: (() -> Void)?
 
@@ -45,9 +49,22 @@ struct AboutView: View {
             
             // Version Info - Centered
             VStack(spacing: 4) {
-                Text("Version \(BuildInfo.version)")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    NSWorkspace.shared.open(versionHistoryURL)
+                } label: {
+                    Text("Version \(BuildInfo.version)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("AboutVersionHistoryButton")
+                .trackHoveredURL(versionHistoryURL)
+                .scaleEffect(versionHovered ? 1.02 : 1.0)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) { versionHovered = hovering }
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
                 
                 Text("Build \(BuildInfo.build)")
                     .font(.system(.caption, design: .monospaced))
