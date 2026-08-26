@@ -136,11 +136,28 @@ public struct WhatsNewTourView: View {
             .padding(.bottom, 16)
         }
         .frame(width: 640, height: 576, alignment: .top)
-        .background(Color(white: 0.10))
+        .background {
+            if isReleaseSummary {
+                LinearGradient(
+                    stops: [
+                        .init(
+                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
+                            location: 0
+                        ),
+                        .init(color: Color.purple.opacity(0.06), location: 0.34),
+                        .init(color: Color(white: 0.10), location: 0.82),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                Color(white: 0.10)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
         }
     }
 
@@ -217,17 +234,6 @@ public struct WhatsNewTourView: View {
         }
         .padding(24)
         .frame(width: 640, height: 448, alignment: .topLeading)
-        .background {
-            LinearGradient(
-                colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
-                    Color.purple.opacity(0.06),
-                    Color(white: 0.10),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
     }
 
     private func releaseSection(
@@ -279,10 +285,16 @@ public struct WhatsNewTourView: View {
                 endPoint: .bottomTrailing
             )
         }
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: SortyDesignSystem.Radius.xLarge,
+                style: .continuous
+            )
+        )
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xLarge, interactive: false)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xLarge, style: .continuous)
-                .stroke(color.opacity(0.28), lineWidth: 1)
+                .strokeBorder(color.opacity(0.28), lineWidth: 1)
         }
         .shadow(color: color.opacity(0.07), radius: 12, y: 6)
         .accessibilityElement(children: .contain)
