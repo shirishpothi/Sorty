@@ -20,6 +20,8 @@ struct OrganizationStrategySettingsView: View {
     @State private var editingPreset: NamingPreset? = nil
     @State private var showEditSheet: Bool = false
     @State private var showingRenamingInfo: Bool = false
+    @State private var isRenamingInfoHovered: Bool = false
+    @State private var isRenamingInfoPinned: Bool = false
     @State private var showingNamingInstructionsInfo: Bool = false
 
     var body: some View {
@@ -94,7 +96,8 @@ struct OrganizationStrategySettingsView: View {
             ) {
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    showingRenamingInfo.toggle()
+                    isRenamingInfoPinned.toggle()
+                    showingRenamingInfo = isRenamingInfoHovered || isRenamingInfoPinned
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.caption)
@@ -102,13 +105,26 @@ struct OrganizationStrategySettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showingRenamingInfo, arrowEdge: .bottom) {
-                    Text("Controls how Sorty names files. Spaces are allowed and often preferred.")
+                    Text("Controls how Sorty names files.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(width: 300, alignment: .leading)
                         .systemLiquidGlassPopover(cornerRadius: 12)
+                }
+                .onHover { hovering in
+                    isRenamingInfoHovered = hovering
+                    if hovering {
+                        showingRenamingInfo = true
+                    } else if !isRenamingInfoPinned {
+                        showingRenamingInfo = false
+                    }
+                }
+                .onChange(of: showingRenamingInfo) { _, isShowing in
+                    if !isShowing {
+                        isRenamingInfoPinned = false
+                    }
                 }
                 .help("About renaming files")
                 .accessibilityLabel("Renaming information")

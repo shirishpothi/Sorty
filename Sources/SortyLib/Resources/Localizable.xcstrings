@@ -7807,36 +7807,36 @@
         }
       }
     },
-    "Controls how Sorty names files. Spaces are allowed and often preferred.": {
+    "Controls how Sorty names files.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bestimmt, wie Sorty Dateien benennt. Leerzeichen sind erlaubt und oft bevorzugt."
+            "value": "Bestimmt, wie Sorty Dateien benennt."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controla cómo Sorty nombra los archivos. Los espacios son permitidos y a menudo preferidos."
+            "value": "Controla cómo Sorty nombra los archivos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controle la manière dont Sorty nomme les fichiers. Les espaces sont autorisés et sont souvent préférés."
+            "value": "Controle la manière dont Sorty nomme les fichiers."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sortyがファイルをどのように名前付けますか。スペースは許可されており、しばしば好まれます。"
+            "value": "Sortyがファイルをどのように名前付けますか。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "控制Sorty如何命名文件。允许空格且通常更受欢迎。"
+            "value": "控制Sorty如何命名文件。"
           }
         }
       }
