@@ -24,6 +24,7 @@ struct LearningsView: View {
     @State private var isShowingFileImporter = false
     @State private var showLearningsModelPicker = false
     @State private var showingLearningsControls = false
+    @State private var hoveredLearningsControl: String?
     @State private var isQuickRefreshingLearnings = false
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
@@ -595,7 +596,12 @@ struct LearningsView: View {
         role: ButtonRole? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        Button(role: role, action: action) {
+        let isHovered = hoveredLearningsControl == title
+
+        return Button(role: role) {
+            HapticFeedbackManager.shared.tap()
+            action()
+        } label: {
             HStack(spacing: 10) {
                 Group {
                     if isLoading {
@@ -606,6 +612,7 @@ struct LearningsView: View {
                     }
                 }
                 .frame(width: 18)
+                .scaleEffect(isHovered && !reduceMotion ? 1.08 : 1)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -620,13 +627,24 @@ struct LearningsView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
+            )
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {
+                hoveredLearningsControl = hovering ? title : nil
+            }
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
     }
 
     private func restoreLearningsDefaults() {
-        HapticFeedbackManager.shared.tap()
         manager.sessionLearningPaused = false
         manager.learningStrength = 0.5
         manager.dataRetentionDays = 0
@@ -642,7 +660,6 @@ struct LearningsView: View {
     }
 
     private func presentLearningsModelPicker() {
-        HapticFeedbackManager.shared.tap()
         showingLearningsControls = false
         Task { @MainActor in
             await Task.yield()
@@ -653,7 +670,6 @@ struct LearningsView: View {
     private func refreshLearningsInsights() {
         guard !isQuickRefreshingLearnings else { return }
 
-        HapticFeedbackManager.shared.tap()
         isQuickRefreshingLearnings = true
         NotificationManager.shared.showHUDInfo(
             title: "Refreshing Learnings",
