@@ -145,6 +145,13 @@ struct LearningsView: View {
         var id: String { category.id }
     }
 
+    private struct LearningRecordField: Identifiable {
+        let label: String
+        let value: String
+
+        var id: String { label }
+    }
+
     var body: some View {
         ZStack {
             if !manager.consentManager.hasConsented {
@@ -1224,35 +1231,38 @@ struct LearningsView: View {
         category: LearningRecordsCategory,
         profile: LearningsProfile
     ) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: category.systemImage)
-                    .font(.title2)
-                    .foregroundStyle(category.color)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.title)
-                        .font(.title2.bold())
-                    Text("Stored locally in your Learnings profile")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Done") {
-                    selectedLearningRecordsCategory = nil
-                }
-                .buttonStyle(.sortyPrimary(size: .small))
-            }
-            .padding(20)
-
-            Divider()
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    learningRecordsList(category: category, profile: profile)
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: category.systemImage)
+                        .font(.title2)
+                        .foregroundStyle(category.color)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(category.title)
+                            .font(.title2.bold())
+                        Text("Stored locally in your Learnings profile")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Done") {
+                        selectedLearningRecordsCategory = nil
+                    }
+                    .buttonStyle(.sortyPrimary(size: .small))
                 }
                 .padding(20)
+
+                Divider()
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        learningRecordsList(category: category, profile: profile)
+                    }
+                    .padding(20)
+                }
             }
+            .navigationTitle(category.title)
         }
         .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 560)
         .accessibilityElement(children: .contain)
@@ -1268,7 +1278,7 @@ struct LearningsView: View {
         case .patterns:
             learningRecordSection(title: "Inferred Patterns", count: profile.inferredRules.count) {
                 ForEach(profile.inferredRules.sorted { $0.priority > $1.priority }) { rule in
-                    LearningInsightRow(rule: rule, manager: manager)
+                    learningPatternRecordRow(rule)
                 }
             }
 
@@ -1279,7 +1289,8 @@ struct LearningsView: View {
                         title: URL(fileURLWithPath: session.folderPath).lastPathComponent,
                         detail: sessionDetail(session),
                         date: session.completedAt ?? session.timestamp,
-                        systemImage: session.wasReverted ? "arrow.uturn.backward" : "folder"
+                        systemImage: session.wasReverted ? "arrow.uturn.backward" : "folder",
+                        fields: sessionRecordFields(session)
                     )
                 }
             }
@@ -1303,7 +1314,12 @@ struct LearningsView: View {
                     title: "Moved after organization",
                     detail: "\(safeFileName(change.originalPath)) → \(safeFileName(change.newPath))",
                     date: change.timestamp,
-                    systemImage: "arrow.right"
+                    systemImage: "arrow.right",
+                    fields: [
+                        LearningRecordField(label: "Original Item", value: safeFileName(change.originalPath)),
+                        LearningRecordField(label: "New Location", value: safeFileName(change.newPath)),
+                        LearningRecordField(label: "Originally Organized by Sorty", value: change.wasAIOrganized ? "Yes" : "No"),
+                    ]
                 )
             }
         }
@@ -1313,7 +1329,8 @@ struct LearningsView: View {
                     title: safeFileName(item.folderPath),
                     detail: "Cancelled during \(item.cancelledAtStage) · \(item.fileCount) files",
                     date: item.timestamp,
-                    systemImage: "xmark.circle"
+                    systemImage: "xmark.circle",
+                    fields: cancelledOrganizationFields(item)
                 )
             }
         }
@@ -1323,7 +1340,8 @@ struct LearningsView: View {
                     title: safeFileName(item.folderPath),
                     detail: item.guidingInstruction ?? "Regenerated \(item.regenerationCount) time\(item.regenerationCount == 1 ? "" : "s")",
                     date: item.timestamp,
-                    systemImage: "arrow.clockwise"
+                    systemImage: "arrow.clockwise",
+                    fields: regeneratedOrganizationFields(item)
                 )
             }
         }
@@ -1333,7 +1351,8 @@ struct LearningsView: View {
                     title: item.originalName,
                     detail: "\(item.action.rawValue.capitalized): \(item.finalName ?? item.suggestedName ?? item.originalName)",
                     date: item.timestamp,
-                    systemImage: "text.cursor"
+                    systemImage: "text.cursor",
+                    fields: renameFeedbackFields(item)
                 )
             }
         }
@@ -1343,7 +1362,11 @@ struct LearningsView: View {
                     title: item.folderPath.map(safeFileName) ?? "Reverted organization",
                     detail: item.reason ?? "Reverted \(item.operationCount) operation\(item.operationCount == 1 ? "" : "s")",
                     date: item.timestamp,
-                    systemImage: "arrow.uturn.backward"
+                    systemImage: "arrow.uturn.backward",
+                    fields: [
+                        LearningRecordField(label: "Operations Reverted", value: "\(item.operationCount)"),
+                        LearningRecordField(label: "Reason", value: item.reason ?? "No reason recorded"),
+                    ]
                 )
             }
         }
@@ -1356,7 +1379,11 @@ struct LearningsView: View {
                     title: item.selectedOption,
                     detail: "Answer to an inline learning question",
                     date: item.timestamp,
-                    systemImage: "checkmark.bubble"
+                    systemImage: "checkmark.bubble",
+                    fields: [
+                        LearningRecordField(label: "Selected Answer", value: item.selectedOption),
+                        LearningRecordField(label: "Question Record", value: item.momentId),
+                    ]
                 )
             }
         }
@@ -1372,7 +1399,11 @@ struct LearningsView: View {
                     title: item.prompt,
                     detail: item.folderPath.map { "Folder: \(safeFileName($0))" },
                     date: item.timestamp,
-                    systemImage: "arrow.triangle.turn.up.right.diamond"
+                    systemImage: "arrow.triangle.turn.up.right.diamond",
+                    fields: [
+                        LearningRecordField(label: "Instruction", value: item.prompt),
+                        LearningRecordField(label: "Folder", value: item.folderPath.map(safeFileName) ?? "All folders"),
+                    ]
                 )
             }
         }
@@ -1386,7 +1417,12 @@ struct LearningsView: View {
                     title: job.projectName,
                     detail: "\(job.entries.count) operation\(job.entries.count == 1 ? "" : "s") · \(String(describing: job.status))",
                     date: job.timestamp,
-                    systemImage: "tray.full"
+                    systemImage: "tray.full",
+                    fields: [
+                        LearningRecordField(label: "Operations", value: "\(job.entries.count)"),
+                        LearningRecordField(label: "Status", value: String(describing: job.status).capitalized),
+                        LearningRecordField(label: "Backup", value: job.backupMode.displayName),
+                    ]
                 )
             }
         }
@@ -1396,7 +1432,11 @@ struct LearningsView: View {
                     title: safeFileName(pattern),
                     detail: "Excluded from learning",
                     date: nil,
-                    systemImage: "eye.slash"
+                    systemImage: "eye.slash",
+                    fields: [
+                        LearningRecordField(label: "Folder", value: safeFileName(pattern)),
+                        LearningRecordField(label: "Effect", value: "Sorty does not collect learning signals from this location."),
+                    ]
                 )
             }
         }
@@ -1406,7 +1446,11 @@ struct LearningsView: View {
                     title: "Pattern \(ruleID.prefix(8))",
                     detail: "Ignored until \(date.formatted(date: .abbreviated, time: .shortened))",
                     date: nil,
-                    systemImage: "timer"
+                    systemImage: "timer",
+                    fields: [
+                        LearningRecordField(label: "Pattern ID", value: ruleID),
+                        LearningRecordField(label: "Ignored Until", value: date.formatted(date: .long, time: .standard)),
+                    ]
                 )
             }
         }
@@ -1420,7 +1464,12 @@ struct LearningsView: View {
                     title: safeFileName(item.srcPath),
                     detail: "\(item.action.rawValue.capitalized): \(safeFileName(item.dstPath))",
                     date: item.timestamp,
-                    systemImage: "arrow.right.circle"
+                    systemImage: "arrow.right.circle",
+                    fields: [
+                        LearningRecordField(label: "Source", value: safeFileName(item.srcPath)),
+                        LearningRecordField(label: "Destination", value: safeFileName(item.dstPath)),
+                        LearningRecordField(label: "Outcome", value: item.action.rawValue.capitalized),
+                    ]
                 )
             }
         }
@@ -1434,7 +1483,8 @@ struct LearningsView: View {
                     title: item.instruction,
                     detail: item.folderPath.map { "Folder: \(safeFileName($0))" } ?? item.context,
                     date: item.timestamp,
-                    systemImage: "text.bubble"
+                    systemImage: "text.bubble",
+                    fields: instructionRecordFields(item)
                 )
             }
         }
@@ -1463,35 +1513,268 @@ struct LearningsView: View {
         title: String,
         detail: String?,
         date: Date?,
-        systemImage: String
+        systemImage: String,
+        fields: [LearningRecordField] = []
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(width: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let detail, !detail.isEmpty {
-                    Text(detail)
+        NavigationLink {
+            learningRecordDetailView(
+                title: title,
+                systemImage: systemImage,
+                fields: recordDetailFields(summary: detail, date: date, additionalFields: fields)
+            )
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail, !detail.isEmpty {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 12)
+                if let date {
+                    Text(date, format: .dateTime.month(.abbreviated).day().year().hour().minute())
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.trailing)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows this record's details")
+    }
+
+    private func learningPatternRecordRow(_ rule: InferredRule) -> some View {
+        NavigationLink {
+            learningRecordDetailView(
+                title: rule.explanation,
+                systemImage: "sparkles",
+                fields: patternRecordFields(rule)
+            )
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(rule.isEnabled ? .green : .secondary)
+                    .frame(width: 22)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(rule.explanation)
+                        .font(.subheadline)
+                    Text(rule.isEnabled ? "Enabled · \(rule.scope.displayName)" : "Disabled · \(rule.scope.displayName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the pattern, evidence, and usage details")
+    }
+
+    private func learningRecordDetailView(
+        title: String,
+        systemImage: String,
+        fields: [LearningRecordField]
+    ) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: systemImage)
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text(title)
+                        .font(.title2.bold())
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                VStack(spacing: 0) {
+                    ForEach(Array(fields.enumerated()), id: \.element.id) { index, field in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(field.label)
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Text(field.value)
+                                .font(.body)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .accessibilityElement(children: .combine)
+                        if index < fields.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+                .systemLiquidGlassBackground(cornerRadius: 12)
             }
-            Spacer(minLength: 12)
-            if let date {
-                Text(date, format: .dateTime.month(.abbreviated).day().year().hour().minute())
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.trailing)
-            }
+            .padding(20)
         }
-        .padding(12)
-        .accessibilityElement(children: .combine)
+        .navigationTitle("Record Details")
+    }
+
+    private func recordDetailFields(
+        summary: String?,
+        date: Date?,
+        additionalFields: [LearningRecordField]
+    ) -> [LearningRecordField] {
+        var fields = additionalFields
+        if let summary, !summary.isEmpty, !fields.contains(where: { $0.value == summary }) {
+            fields.insert(LearningRecordField(label: "Summary", value: summary), at: 0)
+        }
+        if let date {
+            fields.append(
+                LearningRecordField(
+                    label: "Recorded",
+                    value: date.formatted(date: .long, time: .standard)
+                ))
+        }
+        return fields
+    }
+
+    private func sessionRecordFields(_ session: OrganizationSession) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Outcome", value: session.reaction.rawValue.capitalized),
+            LearningRecordField(label: "Files Moved", value: "\(session.filesMoved.count)"),
+            LearningRecordField(label: "Recorded Events", value: "\(session.events.count)"),
+            LearningRecordField(label: "Corrections", value: "\(session.userCorrections.count)"),
+            LearningRecordField(label: "Rename Feedback", value: "\(session.renameFeedback.count)"),
+            LearningRecordField(label: "Patterns Used", value: "\(session.usedRuleIds.count)"),
+            LearningRecordField(label: "Patterns That Failed", value: "\(session.failedRuleIds.count)"),
+            LearningRecordField(label: "Reverted", value: session.wasReverted ? "Yes" : "No"),
+        ]
+        if let planSummary = session.planSummary, !planSummary.isEmpty {
+            fields.insert(LearningRecordField(label: "Plan", value: planSummary), at: 1)
+        }
+        return fields
+    }
+
+    private func patternRecordFields(_ rule: InferredRule) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Status", value: rule.isEnabled ? "Enabled" : "Disabled"),
+            LearningRecordField(label: "Approval", value: rule.status.rawValue.capitalized),
+            LearningRecordField(label: "Scope", value: rule.scope.displayName),
+            LearningRecordField(label: "Pattern", value: rule.pattern),
+            LearningRecordField(label: "Destination Template", value: rule.template),
+            LearningRecordField(label: "Priority", value: "\(rule.priority)"),
+            LearningRecordField(label: "Supporting Examples", value: "\(rule.exampleIds.count)"),
+            LearningRecordField(label: "Evidence Records", value: "\(rule.evidenceIds.count)"),
+            LearningRecordField(label: "Applied Successfully", value: "\(rule.successCount)"),
+            LearningRecordField(label: "Corrected After Use", value: "\(rule.failureCount)"),
+        ]
+        if let evidence = rule.evidenceDescription, !evidence.isEmpty {
+            fields.insert(LearningRecordField(label: "Evidence", value: evidence), at: 5)
+        }
+        if let lastAppliedAt = rule.lastAppliedAt {
+            fields.append(
+                LearningRecordField(
+                    label: "Last Applied",
+                    value: lastAppliedAt.formatted(date: .long, time: .standard)
+                ))
+        }
+        return fields
+    }
+
+    private func cancelledOrganizationFields(
+        _ item: CancelledOrganization
+    ) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Cancelled During", value: item.cancelledAtStage),
+            LearningRecordField(label: "Files", value: "\(item.fileCount)"),
+            LearningRecordField(label: "Proposed Folders", value: "\(item.proposedFolderCount)"),
+            LearningRecordField(label: "Regenerations", value: "\(item.regenerationCount)"),
+        ]
+        if let instructions = item.instructions, !instructions.isEmpty {
+            fields.append(LearningRecordField(label: "Instructions", value: instructions))
+        }
+        if let summary = item.proposedStructureSummary, !summary.isEmpty {
+            fields.append(LearningRecordField(label: "Proposed Structure", value: summary))
+        }
+        if let model = item.aiModel, !model.isEmpty {
+            fields.append(LearningRecordField(label: "Model", value: model))
+        }
+        return fields
+    }
+
+    private func regeneratedOrganizationFields(
+        _ item: RegeneratedOrganization
+    ) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Regeneration Count", value: "\(item.regenerationCount)"),
+            LearningRecordField(label: "Folder", value: safeFileName(item.folderPath)),
+        ]
+        if let instruction = item.guidingInstruction, !instruction.isEmpty {
+            fields.append(LearningRecordField(label: "Guiding Instruction", value: instruction))
+        }
+        if let summary = item.previousPlanSummary, !summary.isEmpty {
+            fields.append(LearningRecordField(label: "Previous Plan", value: summary))
+        }
+        return fields
+    }
+
+    private func renameFeedbackFields(
+        _ item: RenameFeedbackEvent
+    ) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Original Name", value: item.originalName),
+            LearningRecordField(label: "Outcome", value: item.action.rawValue.capitalized),
+        ]
+        if let suggestedName = item.suggestedName, !suggestedName.isEmpty {
+            fields.append(LearningRecordField(label: "Suggested Name", value: suggestedName))
+        }
+        if let finalName = item.finalName, !finalName.isEmpty {
+            fields.append(LearningRecordField(label: "Final Name", value: finalName))
+        }
+        if let confidence = item.confidence {
+            fields.append(
+                LearningRecordField(
+                    label: "Model Confidence",
+                    value: confidence.formatted(.percent.precision(.fractionLength(0)))
+                ))
+        }
+        return fields
+    }
+
+    private func instructionRecordFields(_ item: UserInstruction) -> [LearningRecordField] {
+        var fields = [
+            LearningRecordField(label: "Instruction", value: item.instruction),
+            LearningRecordField(
+                label: "Folder",
+                value: item.folderPath.map(safeFileName) ?? "All folders"
+            ),
+        ]
+        if let context = item.context, !context.isEmpty {
+            fields.append(LearningRecordField(label: "Context", value: context))
+        }
+        if let fileCount = item.fileCount {
+            fields.append(LearningRecordField(label: "Files", value: "\(fileCount)"))
+        }
+        if item.isRegeneration == true {
+            fields.append(LearningRecordField(label: "Used for Regeneration", value: "Yes"))
+        }
+        return fields
     }
 
     private func sessionDetail(_ session: OrganizationSession) -> String {
