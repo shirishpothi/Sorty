@@ -106,6 +106,7 @@ struct HistoryView: View {
     @State private var filteredManualEntries: [HistorySessionRow] = []
     @State private var filteredWatchedEntries: [HistorySessionRow] = []
     @State private var collapsedSections: Set<HistorySectionKind> = []
+    @State private var revealingSections: Set<HistorySectionKind> = []
     @State private var impactSummary = HistoryImpactSummary()
     @State private var displayedEntryCount = 50
     private let pageSize = 50
@@ -413,9 +414,19 @@ struct HistoryView: View {
             Button {
                 HapticFeedbackManager.shared.selection()
                 if isCollapsed {
+                    if !reduceMotion {
+                        revealingSections.insert(kind)
+                    }
                     collapsedSections.remove(kind)
+                    guard !reduceMotion else { return }
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard !collapsedSections.contains(kind) else { return }
+                        revealingSections.remove(kind)
+                    }
                 } else {
                     collapsedSections.insert(kind)
+                    revealingSections.remove(kind)
                 }
             } label: {
                 HStack {
@@ -453,13 +464,21 @@ struct HistoryView: View {
             .listRowBackground(Color.clear)
 
             if !isCollapsed {
-                historySessionRows(entries)
+                historySessionRows(
+                    entries,
+                    isRevealed: !revealingSections.contains(kind)
+                )
             }
         }
     }
 
-    private func historySessionRows(_ entries: ArraySlice<HistorySessionRow>) -> some View {
-        ForEach(entries) { entry in
+    private func historySessionRows(
+        _ entries: ArraySlice<HistorySessionRow>,
+        isRevealed: Bool = true
+    ) -> some View {
+        ForEach(entries.indices, id: \.self) { index in
+            let entry = entries[index]
+            let revealIndex = entries.distance(from: entries.startIndex, to: index)
             HistorySessionCard(
                 entry: entry,
                 isSelected: selectedEntry?.id == entry.id,
@@ -467,6 +486,15 @@ struct HistoryView: View {
                     HapticFeedbackManager.shared.selection()
                     selectEntry(id: entry.id)
                 }
+            )
+            .opacity(isRevealed ? 1 : 0)
+            .offset(y: isRevealed ? 0 : -8)
+            .animation(
+                reduceMotion
+                    ? nil
+                    : .easeOut(duration: 0.22)
+                        .delay(Double(min(revealIndex, 8)) * 0.025),
+                value: isRevealed
             )
             .transition(historyCardTransition)
             .scrollTransition(
