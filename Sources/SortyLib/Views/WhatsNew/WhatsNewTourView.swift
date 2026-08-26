@@ -151,7 +151,7 @@ public struct WhatsNewTourView: View {
                     Text("WHAT'S NEW")
                         .font(.system(.caption2, design: .rounded, weight: .semibold))
                         .tracking(1.5)
-                        .foregroundStyle(Color.cyan.opacity(0.88))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
 
                     Text("Sorty 1.2.0")
                         .font(.system(.title, design: .rounded, weight: .bold))
@@ -175,7 +175,7 @@ public struct WhatsNewTourView: View {
                     releaseSection(
                         title: "New",
                         symbol: "sparkles",
-                        color: .cyan,
+                        color: SortyDesignSystem.Colors.resolvedAccent,
                         items: [
                             "Cloud and external storage organization",
                             "AI clarification before Improve",
@@ -220,7 +220,8 @@ public struct WhatsNewTourView: View {
         .background {
             LinearGradient(
                 colors: [
-                    Color.cyan.opacity(0.08),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
+                    Color.purple.opacity(0.06),
                     Color(white: 0.10),
                 ],
                 startPoint: .topLeading,
@@ -266,14 +267,24 @@ public struct WhatsNewTourView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(SortyDesignSystem.Spacing.lg)
         .frame(maxWidth: .infinity, minHeight: 284, alignment: .topLeading)
-        .background(Color.white.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(color.opacity(0.18), lineWidth: 1)
+        .background {
+            LinearGradient(
+                colors: [
+                    color.opacity(0.10),
+                    Color.white.opacity(0.035),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xLarge, interactive: false)
+        .overlay {
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xLarge, style: .continuous)
+                .stroke(color.opacity(0.28), lineWidth: 1)
+        }
+        .shadow(color: color.opacity(0.07), radius: 12, y: 6)
         .accessibilityElement(children: .contain)
     }
 
@@ -481,7 +492,11 @@ public struct WhatsNewTourView: View {
         HStack(spacing: 7) {
             ForEach(pages.indices, id: \.self) { index in
                 Capsule(style: .continuous)
-                    .fill(index == currentPage ? Color.white.opacity(0.95) : Color.white.opacity(0.32))
+                    .fill(
+                        index == currentPage
+                            ? SortyDesignSystem.Colors.resolvedAccent
+                            : Color.white.opacity(0.32)
+                    )
                     .frame(width: index == currentPage ? 22 : 7, height: 7)
             }
         }
@@ -506,7 +521,7 @@ public struct WhatsNewTourView: View {
         .buttonStyle(.sortyPrimary)
         .beam(
             .small,
-            palette: .ocean,
+            palette: .colorful,
             theme: .dark,
             active: !reduceMotion,
             shape: .capsule,
