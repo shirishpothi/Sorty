@@ -105,6 +105,7 @@ struct HistoryView: View {
     @State private var filteredChronologicalEntries: [HistorySessionRow] = []
     @State private var filteredManualEntries: [HistorySessionRow] = []
     @State private var filteredWatchedEntries: [HistorySessionRow] = []
+    @State private var collapsedSections: Set<HistorySectionKind> = []
     @State private var impactSummary = HistoryImpactSummary()
     @State private var displayedEntryCount = 50
     private let pageSize = 50
@@ -137,7 +138,7 @@ struct HistoryView: View {
             watchedEntries.count < filteredWatchedEntries.count
     }
 
-    private enum HistorySectionKind: Equatable {
+    private enum HistorySectionKind: Hashable {
         case manual
         case watched
 
@@ -406,29 +407,56 @@ struct HistoryView: View {
     private func historySessionsSection(_ kind: HistorySectionKind) -> some View {
         let entries = kind == .manual ? manualEntries : watchedEntries
         let totalCount = kind == .manual ? filteredManualEntries.count : filteredWatchedEntries.count
+        let isCollapsed = collapsedSections.contains(kind)
 
         if !entries.isEmpty {
-            HStack {
-                Label {
-                    Text(kind.title)
-                        .numericTextTransition(animationValue: kind.title)
-                } icon: {
-                    Image(systemName: kind.systemImage)
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 18, height: 18)
+            Button {
+                HapticFeedbackManager.shared.selection()
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                    if isCollapsed {
+                        collapsedSections.remove(kind)
+                    } else {
+                        collapsedSections.insert(kind)
+                    }
                 }
-                    .font(.headline)
-                Spacer()
-                Text("\(totalCount)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .numericTextTransition(animationValue: totalCount)
+            } label: {
+                HStack {
+                    Label {
+                        Text(kind.title)
+                            .numericTextTransition(animationValue: kind.title)
+                    } icon: {
+                        Image(systemName: kind.systemImage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 18, height: 18)
+                            .accessibilityHidden(true)
+                    }
+                        .font(.headline)
+                    Spacer()
+                    Text("\(totalCount)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: totalCount)
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 14)
+                        .symbolReplaceTransition(animationValue: isCollapsed)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
+            .accessibilityHint(isCollapsed ? "Expands this category" : "Collapses this category")
             .listRowInsets(EdgeInsets(top: 8, leading: 28, bottom: 4, trailing: 28))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            historySessionRows(entries)
+            if !isCollapsed {
+                historySessionRows(entries)
+            }
 
             if kind == .manual && showsSecondaryWatchedSection {
                 Color.clear
