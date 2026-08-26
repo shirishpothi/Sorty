@@ -45,7 +45,16 @@ struct StorageLocationConfigView: View {
                             Text(location.name)
                                 .font(.headline)
 
-                            StorageProviderBadge(provider: location.capabilityProfile.provider)
+                            StorageProviderBadge(
+                                provider: location.capabilityProfile.provider,
+                                locationName: location.name
+                            ) {
+                                HapticFeedbackManager.shared.tap()
+                                NSWorkspace.shared.selectFile(
+                                    nil,
+                                    inFileViewerRootedAtPath: location.path
+                                )
+                            }
                         }
                         PrivacySensitivePathText(path: location.path)
                             .font(.caption)
@@ -202,17 +211,46 @@ struct StorageLocationConfigView: View {
 
 private struct StorageProviderBadge: View {
     let provider: StorageProviderKind
+    let locationName: String
+    let onReveal: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
 
     var body: some View {
-        Label(label, systemImage: symbolName)
+        Button(action: onReveal) {
+            HStack(spacing: 5) {
+                Label(label, systemImage: symbolName)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 10)
+                    .opacity(isHovered ? 1 : 0)
+                    .offset(
+                        x: reduceMotion || isHovered ? 0 : -3,
+                        y: reduceMotion || isHovered ? 0 : 3
+                    )
+                    .scaleEffect(reduceMotion || isHovered ? 1 : 0.75)
+                    .accessibilityHidden(true)
+            }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .systemLiquidGlassBackground(cornerRadius: 999)
             .fixedSize()
-            .help(accessibilityDescription)
-            .accessibilityLabel(accessibilityDescription)
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+            value: isHovered
+        )
+        .onHover { isHovered = $0 }
+        .help("Reveal \(locationName) in Finder")
+        .accessibilityLabel("Reveal \(locationName) in Finder") // [VERIFY] confirm label matches intent
+        .accessibilityHint(accessibilityDescription)
     }
 
     private var label: String {
