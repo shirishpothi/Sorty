@@ -121,6 +121,7 @@ struct BeamModifier: ViewModifier {
   // Respect the system's Reduce Motion preference: freeze the TimelineView at
   // a single frame and snap fade transitions instead of easing them.
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.controlActiveState) private var controlActiveState
 
   // Lifecycle state — drives the 0.6 s / 0.5 s fade in/out.
   @State private var visualOpacity: Double = 0
@@ -231,7 +232,12 @@ struct BeamModifier: ViewModifier {
   /// static frame.
   @ViewBuilder
   private var beamOverlay: some View {
-    TimelineView(.animation(paused: reduceMotion)) { timeline in
+    TimelineView(
+      .animation(
+        minimumInterval: 1.0 / 60.0,
+        paused: reduceMotion || controlActiveState == .inactive
+      )
+    ) { timeline in
       // `timeIntervalSinceReferenceDate` is ~2.5e9 s, which loses ~1 ms of
       // precision when downcast to Float. Wrap into a 1000 s window so the
       // shader sees a high-precision time value.
@@ -251,7 +257,12 @@ struct BeamModifier: ViewModifier {
   @ViewBuilder
   private func lensApplied(_ content: Content) -> some View {
     if lensStrength > 0 && !reduceMotion && visualOpacity > 0.001 {
-      TimelineView(.animation) { timeline in
+      TimelineView(
+        .animation(
+          minimumInterval: 1.0 / 60.0,
+          paused: controlActiveState == .inactive
+        )
+      ) { timeline in
         let t = timeline.date.timeIntervalSinceReferenceDate
           .truncatingRemainder(dividingBy: 1000)
         content

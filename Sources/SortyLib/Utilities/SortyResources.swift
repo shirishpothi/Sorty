@@ -30,6 +30,13 @@ public enum SortyResources {
         return detectedBundle
     }()
 
+    /// Releases decoded resource images when the app moves to the background.
+    /// Visible views retain the images they are displaying and missing entries
+    /// are decoded again on demand when another screen needs them.
+    public static func clearImageCache() {
+        imageCache.removeAllObjects()
+    }
+
     /// Whether the bundle was resolved via the asset catalog (compiled .car file)
     /// This is true when running from an Xcode-built app with proper asset catalog compilation
     public static var usesCompiledAssetCatalog: Bool {

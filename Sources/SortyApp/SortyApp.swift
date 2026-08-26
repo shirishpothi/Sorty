@@ -19,6 +19,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
     private let launchStartedAt = Date()
+    private var applicationObservers: [NSObjectProtocol] = []
 
     var launchDuration: TimeInterval {
         Date().timeIntervalSince(launchStartedAt)
@@ -34,7 +35,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         super.init()
-        NotificationCenter.default.addObserver(
+        applicationObservers.append(NotificationCenter.default.addObserver(
             forName: .forceQuitSorty,
             object: nil,
             queue: .main
@@ -42,7 +43,17 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 SortyAppDelegate.forceQuit = true
             }
-        }
+        })
+        applicationObservers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                FileThumbnailProvider.shared.clearCache()
+                SortyResources.clearImageCache()
+            }
+        })
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

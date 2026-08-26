@@ -270,7 +270,13 @@ public final class ReliabilityManager {
     }
 
     private static var tracesSampleRate: NSNumber {
+        #if DEBUG
         return 1
+        #else
+        // Keep full local diagnostics while limiting the retained and uploaded
+        // transaction volume for an app that commonly runs all day.
+        return 0.1
+        #endif
     }
 
     private static func configuredDSN(
