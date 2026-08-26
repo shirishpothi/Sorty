@@ -412,12 +412,10 @@ struct HistoryView: View {
         if !entries.isEmpty {
             Button {
                 HapticFeedbackManager.shared.selection()
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                    if isCollapsed {
-                        collapsedSections.remove(kind)
-                    } else {
-                        collapsedSections.insert(kind)
-                    }
+                if isCollapsed {
+                    collapsedSections.remove(kind)
+                } else {
+                    collapsedSections.insert(kind)
                 }
             } label: {
                 HStack {
@@ -456,14 +454,6 @@ struct HistoryView: View {
 
             if !isCollapsed {
                 historySessionRows(entries)
-            }
-
-            if kind == .manual && showsSecondaryWatchedSection {
-                Color.clear
-                    .frame(height: 4)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
             }
         }
     }
