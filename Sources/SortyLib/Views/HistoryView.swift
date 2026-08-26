@@ -102,6 +102,7 @@ struct HistoryView: View {
     @State private var activeNotificationRedoRequestID: UUID?
     @State private var cachedEntries: [OrganizationHistoryEntry] = []
     @State private var cachedSessionRecords: [HistorySessionRecord] = []
+    @State private var filteredChronologicalEntries: [HistorySessionRow] = []
     @State private var filteredManualEntries: [HistorySessionRow] = []
     @State private var filteredWatchedEntries: [HistorySessionRow] = []
     @State private var impactSummary = HistoryImpactSummary()
@@ -109,11 +110,15 @@ struct HistoryView: View {
     private let pageSize = 50
 
     private var hasFilteredEntries: Bool {
-        !filteredManualEntries.isEmpty || !filteredWatchedEntries.isEmpty
+        !filteredChronologicalEntries.isEmpty
     }
 
     private var matchingSessionCount: Int {
-        filteredManualEntries.count + filteredWatchedEntries.count
+        filteredChronologicalEntries.count
+    }
+
+    private var chronologicalEntries: ArraySlice<HistorySessionRow> {
+        filteredChronologicalEntries.prefix(displayedEntryCount)
     }
 
     private var manualEntries: ArraySlice<HistorySessionRow> {
@@ -125,7 +130,10 @@ struct HistoryView: View {
     }
 
     private var hasMoreEntries: Bool {
-        manualEntries.count < filteredManualEntries.count ||
+        if selectedFilter == .all {
+            return chronologicalEntries.count < filteredChronologicalEntries.count
+        }
+        return manualEntries.count < filteredManualEntries.count ||
             watchedEntries.count < filteredWatchedEntries.count
     }
 
@@ -365,10 +373,14 @@ struct HistoryView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
-            historySessionsSection(primarySectionKind)
+            if selectedFilter == .all {
+                historySessionRows(chronologicalEntries)
+            } else {
+                historySessionsSection(primarySectionKind)
 
-            if showsSecondaryWatchedSection {
-                historySessionsSection(.watched)
+                if showsSecondaryWatchedSection {
+                    historySessionsSection(.watched)
+                }
             }
 
             if hasMoreEntries {
@@ -416,35 +428,7 @@ struct HistoryView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            ForEach(entries) { entry in
-                HistorySessionCard(
-                    entry: entry,
-                    isSelected: selectedEntry?.id == entry.id,
-                    onSelect: {
-                        HapticFeedbackManager.shared.selection()
-                        selectEntry(id: entry.id)
-                    }
-                )
-                .transition(historyCardTransition)
-                .scrollTransition(
-                    topLeading: .identity,
-                    bottomTrailing: reduceMotion
-                        ? .identity
-                        : .interactive(timingCurve: .easeOut)
-                            .threshold(.visible(0.12)),
-                    axis: .vertical
-                ) { content, phase in
-                    content
-                        .opacity(!reduceMotion && phase == .bottomTrailing ? 0.86 : 1)
-                        .scaleEffect(
-                            !reduceMotion && phase == .bottomTrailing ? 0.988 : 1,
-                            anchor: .top
-                        )
-                }
-                .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-            }
+            historySessionRows(entries)
 
             if kind == .manual && showsSecondaryWatchedSection {
                 Color.clear
@@ -453,6 +437,38 @@ struct HistoryView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
             }
+        }
+    }
+
+    private func historySessionRows(_ entries: ArraySlice<HistorySessionRow>) -> some View {
+        ForEach(entries) { entry in
+            HistorySessionCard(
+                entry: entry,
+                isSelected: selectedEntry?.id == entry.id,
+                onSelect: {
+                    HapticFeedbackManager.shared.selection()
+                    selectEntry(id: entry.id)
+                }
+            )
+            .transition(historyCardTransition)
+            .scrollTransition(
+                topLeading: .identity,
+                bottomTrailing: reduceMotion
+                    ? .identity
+                    : .interactive(timingCurve: .easeOut)
+                        .threshold(.visible(0.12)),
+                axis: .vertical
+            ) { content, phase in
+                content
+                    .opacity(!reduceMotion && phase == .bottomTrailing ? 0.86 : 1)
+                    .scaleEffect(
+                        !reduceMotion && phase == .bottomTrailing ? 0.988 : 1,
+                        anchor: .top
+                    )
+            }
+            .listRowInsets(EdgeInsets(top: 6, leading: 28, bottom: 6, trailing: 28))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
     }
 
@@ -478,6 +494,8 @@ struct HistoryView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         var manual: [HistorySessionRow] = []
         var watched: [HistorySessionRow] = []
+        var chronological: [HistorySessionRow] = []
+        chronological.reserveCapacity(records.count)
         manual.reserveCapacity(records.count)
         watched.reserveCapacity(records.count / 4)
 
@@ -494,6 +512,7 @@ struct HistoryView: View {
                 continue
             }
 
+            chronological.append(record.row)
             switch record.source {
             case .manual:
                 manual.append(record.row)
@@ -502,6 +521,7 @@ struct HistoryView: View {
             }
         }
 
+        filteredChronologicalEntries = chronological.sorted { $0.timestamp > $1.timestamp }
         filteredManualEntries = manual
         filteredWatchedEntries = watched
     }
