@@ -64,6 +64,7 @@ struct NotificationPermissionCard: View {
 
                     if notificationManager.notificationPermissionStatus != .authorized {
                         Button {
+                            HapticFeedbackManager.shared.tap()
                             isShowingPermissionInfo = true
                         } label: {
                             Image(systemName: "info.circle")
@@ -71,6 +72,11 @@ struct NotificationPermissionCard: View {
                         .buttonStyle(.plain)
                         .help("Show what Sorty asks for")
                         .accessibilityLabel("Notification permission information")
+                        .onHover { hovering in
+                            if hovering {
+                                HapticFeedbackManager.shared.selection()
+                            }
+                        }
                     }
                     
                     // Action button based on status

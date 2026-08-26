@@ -58,6 +58,9 @@ struct AdvancedSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .onHover { isHovering in
+                        if isHovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
                         isShowingFinderRecommendation = isHovering
                     }
                     .popover(isPresented: $isShowingFinderRecommendation, arrowEdge: .trailing) {

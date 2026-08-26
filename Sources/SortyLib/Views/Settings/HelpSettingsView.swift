@@ -337,6 +337,11 @@ struct DeeplinkSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
                     .popover(isPresented: $isShowingEncodingInfo, arrowEdge: .bottom) {
                         Text("If you build a link yourself, URL-encode the folder path and prompt so spaces and special characters work correctly.")
                             .font(.caption)

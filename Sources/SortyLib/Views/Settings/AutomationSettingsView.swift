@@ -59,6 +59,11 @@ struct AutomationSettingsView: View {
                             .foregroundStyle(.secondary)
                             .help("About using a separate automation model")
                             .accessibilityLabel("Separate automation model information")
+                            .onHover { hovering in
+                                if hovering {
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
                             .popover(isPresented: $showAutomationModelInfo, arrowEdge: .trailing) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Separate Automation Model")
@@ -175,6 +180,7 @@ struct AutomationSettingsView: View {
                                     .font(.subheadline)
 
                                 Button {
+                                    HapticFeedbackManager.shared.tap()
                                     showBackgroundInfo.toggle()
                                 } label: {
                                     Image(systemName: "info.circle")
@@ -183,6 +189,11 @@ struct AutomationSettingsView: View {
                                 .buttonStyle(.plain)
                                 .foregroundStyle(.secondary)
                                 .accessibilityLabel("Keep in Background information")
+                                .onHover { hovering in
+                                    if hovering {
+                                        HapticFeedbackManager.shared.selection()
+                                    }
+                                }
                                 .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
                                     VStack(alignment: .leading, spacing: 12) {
                                         HStack(alignment: .firstTextBaseline) {

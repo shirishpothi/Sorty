@@ -412,6 +412,11 @@ struct PersonaPickerView: View {
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
         .popover(isPresented: $showingInstructionsInfo, arrowEdge: .bottom) {
             Text(text)
                 .font(.caption)

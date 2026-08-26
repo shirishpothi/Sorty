@@ -853,6 +853,7 @@ struct PermissionRow: View {
         case .unknown:
             HStack(spacing: 8) {
                 Button {
+                    HapticFeedbackManager.shared.tap()
                     onExplain()
                 } label: {
                     Image(systemName: "info.circle")
@@ -862,6 +863,11 @@ struct PermissionRow: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
                 .help("Show what Sorty asks for")
                 .accessibilityLabel("Learn about \(type.rawValue)")
 

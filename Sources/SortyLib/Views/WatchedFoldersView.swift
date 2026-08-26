@@ -1299,7 +1299,12 @@ struct WatchedFolderConfigView: View {
                                             .accessibilityLabel(
                                                 "Separate watched folder model information"
                                             )
-                                            .onHover { showFolderModelInfo = $0 }
+                                            .onHover { hovering in
+                                                if hovering {
+                                                    HapticFeedbackManager.shared.selection()
+                                                }
+                                                showFolderModelInfo = hovering
+                                            }
                                             .popover(
                                                 isPresented: $showFolderModelInfo,
                                                 arrowEdge: .trailing

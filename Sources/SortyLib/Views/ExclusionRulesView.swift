@@ -329,7 +329,12 @@ struct ExclusionRulesView: View {
                 Image(systemName: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .onHover { isShowingLearningExclusionsInfo = $0 }
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                        isShowingLearningExclusionsInfo = hovering
+                    }
                     .popover(
                         isPresented: $isShowingLearningExclusionsInfo,
                         arrowEdge: .trailing
@@ -421,7 +426,12 @@ struct ExclusionRulesView: View {
                 Image(systemName: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .onHover { isShowingNaturalLanguageExceptionsInfo = $0 }
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                        isShowingNaturalLanguageExceptionsInfo = hovering
+                    }
                     .popover(
                         isPresented: $isShowingNaturalLanguageExceptionsInfo,
                         arrowEdge: .trailing
@@ -756,6 +766,7 @@ struct RuleGroupCard: View {
 
                 if let infoText {
                     Button {
+                        HapticFeedbackManager.shared.tap()
                         isShowingInfo.toggle()
                     } label: {
                         Image(systemName: "info.circle")
@@ -763,6 +774,11 @@ struct RuleGroupCard: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
                     .popover(isPresented: $isShowingInfo, arrowEdge: .trailing) {
                         Text(infoText)
                             .font(.caption)

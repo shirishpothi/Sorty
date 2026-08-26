@@ -116,6 +116,7 @@ struct OrganizationStrategySettingsView: View {
                 .onHover { hovering in
                     isRenamingInfoHovered = hovering
                     if hovering {
+                        HapticFeedbackManager.shared.selection()
                         showingRenamingInfo = true
                     } else if !isRenamingInfoPinned {
                         showingRenamingInfo = false
@@ -324,6 +325,11 @@ struct OrganizationStrategySettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
+                            .onHover { hovering in
+                                if hovering {
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
                             .popover(isPresented: $showingNamingInstructionsInfo, arrowEdge: .bottom) {
                                 Text(
                                     viewModel.config.namingStyle == .custom

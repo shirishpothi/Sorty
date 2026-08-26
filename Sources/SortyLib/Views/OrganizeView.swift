@@ -1234,6 +1234,11 @@ struct ReadyToOrganizeView: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
                 .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
                     StorageLocationsInfoPopover()
                         .systemLiquidGlassPopover(cornerRadius: 12)

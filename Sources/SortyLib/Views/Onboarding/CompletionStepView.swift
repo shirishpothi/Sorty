@@ -869,6 +869,11 @@ private struct CompletionAnalyticsPreference: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
             .help("What anonymous analytics includes")
             .accessibilityLabel("About anonymous analytics")
             .accessibilityIdentifier("OnboardingAnalyticsInfoButton")
