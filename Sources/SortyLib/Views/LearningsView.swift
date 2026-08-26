@@ -117,6 +117,16 @@ struct LearningsView: View {
             }
         }
 
+        func title(for count: Int) -> String {
+            switch self {
+            case .patterns: return count == 1 ? "Pattern" : "Patterns"
+            case .sessions: return count == 1 ? "Session" : "Sessions"
+            case .feedback: return "Feedback"
+            case .instructions: return count == 1 ? "Instruction" : "Instructions"
+            case .supportingData: return "Supporting Data"
+            }
+        }
+
         var systemImage: String {
             switch self {
             case .patterns: return "sparkles"
@@ -1198,13 +1208,9 @@ struct LearningsView: View {
                                 .foregroundStyle(metric.category.color)
                                 .frame(width: 18)
                                 .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("\(metric.count)")
-                                    .font(.subheadline.bold())
-                                Text(metric.category.title)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("\(metric.count) \(metric.category.title(for: metric.count))")
+                                .font(.subheadline.bold())
+                                .lineLimit(1)
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right")
                                 .font(.caption2.bold())
@@ -1560,36 +1566,56 @@ struct LearningsView: View {
     }
 
     private func learningPatternRecordRow(_ rule: InferredRule) -> some View {
-        NavigationLink {
-            learningRecordDetailView(
-                title: rule.explanation,
-                systemImage: "sparkles",
-                fields: patternRecordFields(rule)
-            )
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(rule.isEnabled ? .green : .secondary)
-                    .frame(width: 22)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(rule.explanation)
-                        .font(.subheadline)
-                    Text(rule.isEnabled ? "Enabled · \(rule.scope.displayName)" : "Disabled · \(rule.scope.displayName)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            NavigationLink {
+                learningRecordDetailView(
+                    title: rule.explanation,
+                    systemImage: "sparkles",
+                    fields: patternRecordFields(rule)
+                )
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(rule.isEnabled ? .green : .secondary)
+                        .frame(width: 22)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(rule.explanation)
+                            .font(.subheadline)
+                        Text(rule.isEnabled ? "Enabled · \(rule.scope.displayName)" : "Disabled · \(rule.scope.displayName)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
+                .contentShape(Rectangle())
             }
-            .padding(12)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows the pattern, evidence, and usage details")
+
+            Toggle(
+                "Enable \(rule.explanation)",
+                isOn: Binding(
+                    get: { rule.isEnabled },
+                    set: { newValue in
+                        Task {
+                            HapticFeedbackManager.shared.selection()
+                            await manager.setRuleEnabled(ruleId: rule.id, enabled: newValue)
+                        }
+                    }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .scaleEffect(0.7)
+            .accessibilityLabel("Enable pattern")
+            .accessibilityValue(rule.isEnabled ? "On" : "Off")
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("Shows the pattern, evidence, and usage details")
+        .padding(12)
     }
 
     private func learningRecordDetailView(
