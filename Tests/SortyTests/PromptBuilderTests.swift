@@ -100,6 +100,33 @@ final class PromptBuilderTests: XCTestCase {
         }
     }
 
+    func testEveryOrganizationPromptTreatsUnorganizedAsLastResort() {
+        let config = AIConfig(mode: .organize)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        let fullPrompt = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            mode: .organize,
+            enableTagging: true
+        )
+        XCTAssertTrue(fullPrompt.contains("a suitable existing folder, a meaningful shared folder, a broad reusable category, and a justified standalone folder"))
+        XCTAssertTrue(fullPrompt.contains("Uncertainty alone is not a reason to leave a file unorganized"))
+
+        let userPrompt = PromptBuilder.buildOrganizationPrompt(files: files)
+        XCTAssertTrue(userPrompt.contains("Use `unorganized` only when all four options fail"))
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
+            XCTAssertTrue(prompt.contains("a suitable existing folder, a meaningful shared folder, a broad reusable category"), "Missing destination checks in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("uncertainty alone is not enough"), "Missing last-resort threshold in \(level)")
+        }
+    }
+
     func testCustomHierarchyInstructionsArePreservedAsMandatoryRequirements() {
         let instructions = "Create exactly 24 top-level folders and keep the hierarchy flat."
         let prompt = PromptBuilder.buildOrganizationPrompt(

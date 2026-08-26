@@ -51,7 +51,8 @@ If a persona-specific system prompt is active, follow its organizational philoso
 - A single top-level folder, many top-level folders, or deeper nesting can all be correct when supported by the user's preferences and the material being organized.
 
 ## Semantic Grouping
-- Prefer organizing every file into a logical folder. Use "unorganized" only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder, which should be rare.
+- Organizing into folders is the default. Before using "unorganized", try these destinations in order: a suitable existing folder, a meaningful shared folder based on the file evidence, then a broad reusable category such as Documents, Media, Archives, or Reference.
+- Use "unorganized" only when none of those destinations is defensible and the file does not justify a clear standalone project or reusable category of its own. Uncertainty alone is not a reason to leave a file unorganized.
 - Treat filenames as one clue, not the source of truth. Prefer reliable content metadata, document titles, extracted text, Finder comments/tags, timestamps, file type, and folder context when they disagree with vague or camera/generated filenames.
 - Use parent and ancestor folder names as context about project, client, event, course, department, or time period. Do not blindly recreate the existing folder structure, but preserve meaningful context when deciding categories.
 - Look beyond file extensions. Files named "proposal_v1.docx", "proposal_budget.xlsx", and "proposal_mockup.png" belong in a single "Proposal" project folder despite different types.
@@ -96,7 +97,7 @@ Return only valid JSON matching this shape:
 ## Hierarchy
 - Choose folder count and depth from the decision priority and context-sensitive hierarchy rules above.
 - Consolidate small categories when that improves findability, but keep them distinct when user preferences, project boundaries, examples, learnings, or existing structure support the distinction.
-- Don't create a folder for a single file unless the context supports a clear standalone category.
+- A single file may have its own folder when it is clearly a standalone project or starts a reusable category. Do not create a one-file folder merely to avoid using "unorganized".
 
 ## Naming
 - Folder names: Clear, 2-4 words, Title Case with spaces preferred (e.g., "Cloud Invoices", "Project Alpha").
@@ -130,9 +131,9 @@ Return only valid JSON matching this shape:
 \(Self.renamingSection(for: mode))
 
 ## Edge Cases
-- Flag a file in "unorganized" only when it genuinely cannot fit any logical existing or newly created folder. This is a last resort, not a catch-all for uncertainty.
+- Before flagging a file as "unorganized", test a suitable existing folder, a meaningful shared folder, a broad reusable category, and a justified standalone folder. Use "unorganized" only when all four fail.
 - If a file is merely ambiguous, place it in the best broad folder such as Documents, Media, Archives, Reference, or a nearby project/category folder and explain the grouping through the folder description.
-- Don't create folders for single files unless they represent a clear standalone category.
+- A single file may have its own folder when it is clearly a standalone project or reusable category. Do not create a one-file folder with no likely future use.
 - Skip system files (.DS_Store, Thumbs.db, desktop.ini) and app bundles (.app).
 - Keep frequently-accessed files shallow (not deeply nested).
 - Handle duplicates: if two files appear identical (same name, same size), note it in the "notes" field.

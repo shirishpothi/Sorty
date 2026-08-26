@@ -97,8 +97,8 @@ struct PromptBuilder {
             prompt += """
             ## ORGANIZATION COMPLETENESS
             Actively assign files to practical destination folders whenever a move would materially improve findability. Do not default to a no-op merely because the current layout is passable, filenames are ambiguous, or several structures could work.
-            Prefer placing every file into a logical folder. Use `unorganized` only as a last resort when a file genuinely has no defensible relationship to any existing or newly created folder.
-            If a file is merely ambiguous, choose the best broad folder such as Documents, Media, Archives, Reference, or a nearby project/category folder instead of leaving it unorganized.
+            Organizing into folders is the default. Before using `unorganized`, try a suitable existing folder, a meaningful shared folder based on the file evidence, a broad reusable category, then a justified standalone project or category folder.
+            Use `unorganized` only when all four options fail. Uncertainty alone is not a reason to leave a file unorganized, and a single file may have its own folder when it clearly represents a standalone project or reusable category.
             Return a no-op plan only when the files are already sensibly organized, no move would materially improve the structure, or moving them would violate user instructions, exclusions, or filesystem safety. Never use a no-op to avoid making a reasonable organization decision.
 
             """
@@ -534,7 +534,7 @@ struct PromptBuilder {
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
-        Prefer assigning every file to a folder. Use unorganized only as a rare last resort when no logical destination exists.
+        Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough.
         """
     }
 
@@ -552,7 +552,7 @@ struct PromptBuilder {
         if mode != .renameOnly {
             base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
-        base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists."
+        base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough."
         base += " For every folder, add one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles. Never say only that files belong together."
         base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
@@ -662,8 +662,8 @@ struct PromptBuilder {
         - Use clear folder names
         \(mode == .renameOnly ? "" : "- Actively create folder assignments when moving files would materially improve findability; do not default to leaving files in place because the current layout is merely passable or categorization is uncertain.")
         \(mode == .renameOnly ? "" : "- Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
-        - Prefer assigning every file to a folder; use unorganized only as a rare last resort when no logical destination exists.
-        - If a file is ambiguous, place it in the best broad folder instead of leaving it unorganized.
+        - Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder.
+        - Use unorganized only when all four options fail. Uncertainty alone is not enough.
         - Prefer using file_ids in compact responses when IDs are provided.
         - Every folder must include one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles.
         - Never use vague folder reasoning such as "these files belong together".
