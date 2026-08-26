@@ -179,6 +179,7 @@ struct LearningsView: View {
         .accessibilityLabel("Learnings Dashboard")
         .onAppear {
             manager.isLocked = false
+            manager.loadProfileIfNeededForCollection()
             if settingsViewModel.availableModels.isEmpty {
                 settingsViewModel.updateAvailableModels()
             }
