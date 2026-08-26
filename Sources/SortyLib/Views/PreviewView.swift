@@ -141,6 +141,7 @@ struct PreviewView: View {
             bottomToolbar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .numericTextTransition(animationValue: plan)
         .accessibilityIdentifier("OrganizationPreviewScreen")
         .alert("Apply \(mode.actionVerb)?", isPresented: $showApplyConfirmation) {
             Button("Cancel", role: .cancel) {
