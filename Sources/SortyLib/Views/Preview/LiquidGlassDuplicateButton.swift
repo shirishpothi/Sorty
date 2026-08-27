@@ -12,20 +12,32 @@ import SwiftUI
 public struct DuplicateInfo: Identifiable, Hashable, Sendable {
     public let id: UUID
     public let file: FileItem
-    public let duplicates: [FileItem]
+    private let groupFiles: [FileItem]
     public let isExactMatch: Bool
     public let similarity: Double
 
     public init(file: FileItem, duplicates: [FileItem], isExactMatch: Bool = true, similarity: Double = 1.0) {
         self.id = file.id
         self.file = file
-        self.duplicates = duplicates
+        self.groupFiles = [file] + duplicates
         self.isExactMatch = isExactMatch
         self.similarity = similarity
     }
 
+    init(file: FileItem, sharedGroup: [FileItem], isExactMatch: Bool = true, similarity: Double = 1.0) {
+        self.id = file.id
+        self.file = file
+        self.groupFiles = sharedGroup
+        self.isExactMatch = isExactMatch
+        self.similarity = similarity
+    }
+
+    public var duplicates: [FileItem] {
+        groupFiles.filter { $0.id != file.id }
+    }
+
     public var duplicateCount: Int {
-        duplicates.count
+        max(0, groupFiles.count - 1)
     }
 
     public var formattedSimilarity: String {

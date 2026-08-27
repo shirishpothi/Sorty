@@ -33,9 +33,35 @@ struct FlattenedRow: Identifiable, Equatable {
     }
 }
 
-struct PreviewMoveDestination: Identifiable {
+struct PreviewMoveDestination: Identifiable, Equatable {
     let id: UUID
     let name: String
+}
+
+enum PreviewRowPresentation: Equatable {
+    case folder(
+        row: FlattenedRow,
+        tags: [String],
+        comment: String?,
+        fileCount: Int
+    )
+    case file(
+        row: FlattenedRow,
+        renameMapping: FileRenameMapping?,
+        tags: [String],
+        comment: String?,
+        duplicateInfo: DuplicateInfo?,
+        parentSuggestion: FolderSuggestion?,
+        isHighlighted: Bool
+    )
+    case unorganizedHeader(row: FlattenedRow, fileCount: Int)
+    case unorganizedFile(
+        row: FlattenedRow,
+        duplicateInfo: DuplicateInfo?,
+        isHighlighted: Bool,
+        moveDestinations: [PreviewMoveDestination]
+    )
+    case remaining(row: FlattenedRow, count: Int)
 }
 
 // MARK: - Preview Store
@@ -354,10 +380,9 @@ class PreviewStore: ObservableObject {
         var duplicateInfo: [UUID: DuplicateInfo] = [:]
         for (_, files) in hashGroups where files.count > 1 {
             for file in files {
-                let others = files.filter { $0.id != file.id }
                 duplicateInfo[file.id] = DuplicateInfo(
                     file: file,
-                    duplicates: others,
+                    sharedGroup: files,
                     isExactMatch: true,
                     similarity: 1.0
                 )
@@ -365,6 +390,42 @@ class PreviewStore: ObservableObject {
         }
 
         return duplicateInfo
+    }
+
+    func presentation(for row: FlattenedRow) -> PreviewRowPresentation {
+        switch row.type {
+        case .folder(let suggestion):
+            return .folder(
+                row: row,
+                tags: folderTagMappings[suggestion.id] ?? [],
+                comment: folderCommentMappings[suggestion.id],
+                fileCount: getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
+            )
+        case .file(let file, let parentFolderID):
+            let visibleTags = (tagMappings[file.id] ?? []).filter {
+                $0.lowercased() != "duplicate"
+            }
+            return .file(
+                row: row,
+                renameMapping: renameMappings[file.id],
+                tags: visibleTags,
+                comment: fileCommentMappings[file.id],
+                duplicateInfo: duplicateMappings[file.id],
+                parentSuggestion: folderSuggestion(for: parentFolderID),
+                isHighlighted: highlightedFileID == file.id
+            )
+        case .unorganizedHeader:
+            return .unorganizedHeader(row: row, fileCount: plan.unorganizedFiles.count)
+        case .unorganizedFile(let file):
+            return .unorganizedFile(
+                row: row,
+                duplicateInfo: duplicateMappings[file.id],
+                isHighlighted: highlightedFileID == file.id,
+                moveDestinations: moveDestinations
+            )
+        case .remainingFiles(let count):
+            return .remaining(row: row, count: count)
+        }
     }
 
     private func buildChildRows(for folder: FolderSuggestion, depth: Int) -> [FlattenedRow] {
@@ -868,11 +929,12 @@ struct OptimizedPreviewTree: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(store.flattenedRows, id: \.id) { row in
                         FlattenedRowView(
-                            row: row,
+                            presentation: store.presentation(for: row),
                             store: store,
                             dragDropManager: dragDropManager,
                             onPlanChanged: onPlanChanged
                         )
+                        .equatable()
                     }
                 }
                 .padding(.horizontal, 12)
@@ -899,48 +961,78 @@ struct OptimizedPreviewTree: View {
 
 // MARK: - Flattened Row View
 
-struct FlattenedRowView: View {
-    let row: FlattenedRow
-    @ObservedObject var store: PreviewStore
+struct FlattenedRowView: View, @MainActor Equatable {
+    let presentation: PreviewRowPresentation
+    let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+
+    static func == (lhs: FlattenedRowView, rhs: FlattenedRowView) -> Bool {
+        lhs.presentation == rhs.presentation
+    }
     
     var body: some View {
-        switch row.type {
-        case .folder(let suggestion):
-            FlatFolderRowView(
-                suggestion: suggestion,
-                depth: row.depth,
-                isExpanded: row.isExpanded,
-                rowID: row.id,
-                store: store,
-                dragDropManager: dragDropManager,
-                onPlanChanged: onPlanChanged
-            )
-        case .file(let file, let parentFolderID):
-            FlatFileRowView(
-                file: file,
-                depth: row.depth,
-                parentFolderID: parentFolderID,
-                store: store,
-                dragDropManager: dragDropManager,
-                onPlanChanged: onPlanChanged
-            )
-        case .unorganizedHeader:
+        switch presentation {
+        case .folder(let row, let tags, let comment, let fileCount):
+            if case .folder(let suggestion) = row.type {
+                FlatFolderRowView(
+                    suggestion: suggestion,
+                    depth: row.depth,
+                    isExpanded: row.isExpanded,
+                    rowID: row.id,
+                    folderTags: tags,
+                    folderComment: comment,
+                    fileCount: fileCount,
+                    store: store,
+                    dragDropManager: dragDropManager,
+                    onPlanChanged: onPlanChanged
+                )
+            }
+        case .file(
+            let row,
+            let renameMapping,
+            let tags,
+            let comment,
+            let duplicateInfo,
+            let parentSuggestion,
+            let isHighlighted
+        ):
+            if case .file(let file, let parentFolderID) = row.type {
+                FlatFileRowView(
+                    file: file,
+                    depth: row.depth,
+                    parentFolderID: parentFolderID,
+                    renameMapping: renameMapping,
+                    fileTags: tags,
+                    fileComment: comment,
+                    duplicateInfo: duplicateInfo,
+                    parentSuggestion: parentSuggestion,
+                    isHighlighted: isHighlighted,
+                    store: store,
+                    dragDropManager: dragDropManager,
+                    onPlanChanged: onPlanChanged
+                )
+            }
+        case .unorganizedHeader(_, let fileCount):
             FlatUnorganizedHeaderView(
-                fileCount: store.plan.unorganizedFiles.count,
+                fileCount: fileCount,
                 store: store,
                 dragDropManager: dragDropManager,
                 onPlanChanged: onPlanChanged
             )
-        case .unorganizedFile(let file):
-            FlatUnorganizedFileRowView(
-                file: file,
-                dragDropManager: dragDropManager,
-                store: store,
-                onPlanChanged: onPlanChanged
-            )
-        case .remainingFiles(let count):
+        case .unorganizedFile(let row, let duplicateInfo, let isHighlighted, let moveDestinations):
+            if case .unorganizedFile(let file) = row.type {
+                FlatUnorganizedFileRowView(
+                    file: file,
+                    dragDropManager: dragDropManager,
+                    store: store,
+                    duplicateInfo: duplicateInfo,
+                    isHighlighted: isHighlighted,
+                    moveDestinations: moveDestinations,
+                    onPlanChanged: onPlanChanged
+                )
+            }
+        case .remaining(let row, let count):
             HStack(spacing: 8) {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
@@ -962,7 +1054,10 @@ struct FlatFolderRowView: View {
     let depth: Int
     let isExpanded: Bool
     let rowID: String
-    @ObservedObject var store: PreviewStore
+    let folderTags: [String]
+    let folderComment: String?
+    let fileCount: Int
+    let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     @EnvironmentObject var learningsManager: LearningsManager
@@ -974,24 +1069,15 @@ struct FlatFolderRowView: View {
     @State private var showStoragePopover = false
     @State private var storageLocationPickerErrorMessage: String?
 
-    private var folderTags: [String] {
-        store.folderTagMappings[suggestion.id] ?? []
-    }
-
-    private var folderComment: String? {
-        store.folderCommentMappings[suggestion.id]
-    }
-
     private var isStorageDestination: Bool {
         suggestion.folderName.hasPrefix("/")
     }
 
     private var matchedStorageLocation: StorageLocation? {
         guard isStorageDestination else { return nil }
-        return storageLocationsManager.locations
+        return storageLocationsManager.locations.lazy
             .filter { StorageLocationPathResolver.isPath(suggestion.folderName, within: $0.path) }
-            .sorted { $0.path.count > $1.path.count }
-            .first
+            .max { $0.path.count < $1.path.count }
     }
 
     private var usedStorageURL: URL? {
@@ -1013,10 +1099,6 @@ struct FlatFolderRowView: View {
             return matchedStorageLocation.path
         }
         return usedStorageURL?.path ?? suggestion.folderName
-    }
-
-    private var fileCount: Int {
-        store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
     }
 
     private var storageLocationPickerErrorIsPresented: Binding<Bool> {
@@ -1208,7 +1290,13 @@ struct FlatFileRowView: View {
     let file: FileItem
     let depth: Int
     let parentFolderID: UUID
-    @ObservedObject var store: PreviewStore
+    let renameMapping: FileRenameMapping?
+    let fileTags: [String]
+    let fileComment: String?
+    let duplicateInfo: DuplicateInfo?
+    let parentSuggestion: FolderSuggestion?
+    let isHighlighted: Bool
+    let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     @EnvironmentObject var appState: AppState
@@ -1221,32 +1309,6 @@ struct FlatFileRowView: View {
     @State private var isRegeneratingName = false
     @FocusState private var isFocused: Bool
     
-    private var renameMapping: FileRenameMapping? {
-        store.renameMappings[file.id]
-    }
-
-    private var fileTags: [String] {
-        // Filter out "Duplicate" tag since we show it via LiquidGlassDuplicateButton
-        let tags = store.tagMappings[file.id] ?? []
-        return tags.filter { $0.lowercased() != "duplicate" }
-    }
-
-    private var fileComment: String? {
-        store.fileCommentMappings[file.id]
-    }
-
-    private var duplicateInfo: DuplicateInfo? {
-        store.duplicateMappings[file.id]
-    }
-
-    private var parentSuggestion: FolderSuggestion? {
-        store.folderSuggestion(for: parentFolderID)
-    }
-    
-    private var isHighlighted: Bool {
-        store.highlightedFileID == file.id
-    }
-
     private var rowContent: FlatFileRowContent {
         FlatFileRowContent(
             file: file,
@@ -1261,7 +1323,10 @@ struct FlatFileRowView: View {
             isEditingName: $isEditingName,
             editedName: $editedName,
             isRegeneratingName: $isRegeneratingName,
-            highlightedFileID: $store.highlightedFileID,
+            highlightedFileID: Binding(
+                get: { store.highlightedFileID },
+                set: { store.highlightedFileID = $0 }
+            ),
             isFocused: $isFocused,
             onSave: saveRename,
             onCancel: cancelRename,
@@ -1462,7 +1527,7 @@ struct FlatFileRowView: View {
 
 struct FlatUnorganizedHeaderView: View {
     let fileCount: Int
-    @ObservedObject var store: PreviewStore
+    let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     
@@ -1506,19 +1571,14 @@ struct FlatUnorganizedHeaderView: View {
 struct FlatUnorganizedFileRowView: View {
     let file: FileItem
     @ObservedObject var dragDropManager: DragDropManager
-    @ObservedObject var store: PreviewStore
+    let store: PreviewStore
+    let duplicateInfo: DuplicateInfo?
+    let isHighlighted: Bool
+    let moveDestinations: [PreviewMoveDestination]
     let onPlanChanged: () -> Void
     @EnvironmentObject var appState: AppState
 
     @State private var isDragging = false
-
-    private var duplicateInfo: DuplicateInfo? {
-        store.duplicateMappings[file.id]
-    }
-
-    private var isHighlighted: Bool {
-        store.highlightedFileID == file.id
-    }
 
     var body: some View {
         HStack {
@@ -1530,7 +1590,10 @@ struct FlatUnorganizedFileRowView: View {
                 LiquidGlassDuplicateButton(
                     duplicateInfo: dupInfo,
                     handoffDirectory: appState.selectedDirectory,
-                    highlightedFileID: $store.highlightedFileID
+                    highlightedFileID: Binding(
+                        get: { store.highlightedFileID },
+                        set: { store.highlightedFileID = $0 }
+                    )
                 )
             }
 
@@ -1566,9 +1629,9 @@ struct FlatUnorganizedFileRowView: View {
                 Label("Reveal in Finder", systemImage: "folder")
             }
 
-            if !store.moveDestinations.isEmpty {
+            if !moveDestinations.isEmpty {
                 Menu("Move to Folder") {
-                    ForEach(store.moveDestinations) { destination in
+                    ForEach(moveDestinations) { destination in
                         Button(destination.name) {
                             store.moveFile(fileID: file.id, toFolderID: destination.id)
                             onPlanChanged()
@@ -1592,7 +1655,7 @@ struct FlatUnorganizedFileRowView: View {
             NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
         }
         .accessibilityActions {
-            ForEach(store.moveDestinations) { destination in
+            ForEach(moveDestinations) { destination in
                 Button("Move to \(destination.name)") {
                     store.moveFile(fileID: file.id, toFolderID: destination.id)
                     onPlanChanged()
@@ -1612,7 +1675,7 @@ struct FlatUnorganizedFileRowView: View {
 
 struct OptimizedFileDropDelegate: DropDelegate {
     let targetFolderID: UUID
-    @ObservedObject var store: PreviewStore
+    let store: PreviewStore
     @Binding var draggedFile: FileItem?
     @Binding var isTargeted: Bool
     let onPlanChanged: () -> Void
@@ -1643,7 +1706,7 @@ struct OptimizedFileDropDelegate: DropDelegate {
 }
 
 struct OptimizedUnorganizedDropDelegate: DropDelegate {
-    @ObservedObject var store: PreviewStore
+    let store: PreviewStore
     @Binding var draggedFile: FileItem?
     @Binding var isTargeted: Bool
     let onPlanChanged: () -> Void
