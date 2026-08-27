@@ -60,7 +60,7 @@ public final class MenuBarController: ObservableObject {
     ) {
         if let automationOrganizer {
             automationActivitySubscription = Publishers.CombineLatest(
-                automationOrganizer.$state,
+                automationOrganizer.statePublisher,
                 settings.$config
             )
             .sink { [weak self] state, config in

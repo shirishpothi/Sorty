@@ -5,6 +5,7 @@
 //  Tests for FolderOrganizer streaming logic, insight extraction, and progress estimation
 //
 
+import Combine
 import XCTest
 @testable import SortyLib
 
@@ -23,6 +24,34 @@ final class StreamingLogicTests: XCTestCase {
 
     private func settleStreamingUpdates() async {
         await organizer.flushStreamingUpdatesForTesting()
+    }
+
+    func testBatchUpdatesPublishOnce() {
+        var updateCount = 0
+        let subscription = organizer.objectWillChange.sink {
+            updateCount += 1
+        }
+
+        organizer.withBatchUpdates {
+            organizer.progress = 0.4
+            organizer.organizationStage = "Analyzing files"
+            organizer.currentInsight = "Reading filenames"
+        }
+
+        XCTAssertEqual(updateCount, 1)
+        withExtendedLifetime(subscription) {}
+    }
+
+    func testStateTransitionPublishesOnce() {
+        var updateCount = 0
+        let subscription = organizer.objectWillChange.sink {
+            updateCount += 1
+        }
+
+        XCTAssertTrue(organizer.transition(to: .scanning))
+
+        XCTAssertEqual(updateCount, 1)
+        withExtendedLifetime(subscription) {}
     }
     
     // MARK: - didReceiveChunk Basic Tests

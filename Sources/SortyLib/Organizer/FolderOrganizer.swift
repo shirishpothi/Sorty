@@ -430,32 +430,87 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private var isRegisteredAsRunningOrganizer = false
 
-    @Published public var state: OrganizationState = .idle {
-        didSet {
-            // Request user attention for any error state
-            if case .error = state {
-                NotificationManager.shared.requestAttention()
-            }
+    private struct PresentationState {
+        var state: OrganizationState = .idle
+        var progress: Double = 0
+        var currentPlan: OrganizationPlan?
+        var planHistory: [OrganizationPlan] = []
+        var errorMessage: String?
+        var pinsCompletionView = false
+        var displayStreamingContent = ""
+        var truncatedDisplayStreamingContent = ""
+        var streamFileIDTable: [Int: FileItem] = [:]
+        var organizationStage = ""
+        var isStreaming = false
+        var measuredWorkProgress: MeasuredWorkProgress?
+        var visionAnalysisSummary: VisionAnalysisSummary?
+        var aiAnalysisActivity: AIAnalysisActivity = .none
+        var currentInsight = ""
+        var insightHistory: [AIInsight] = []
+        var elapsedTime: TimeInterval = 0
+        var showTimeoutMessage = false
+        var currentDirectory: URL?
+        var blockingExclusionRule: ExclusionRule?
+        var detectedDuplicates: [DuplicateGroup] = []
+        var scannedFiles: [FileItem] = []
+    }
 
-            if state != .organizing {
-                aiAnalysisActivity = .none
-            }
+    private var presentationState = PresentationState()
+    private var batchUpdateDepth = 0
+    private let stateSubject = CurrentValueSubject<OrganizationState, Never>(.idle)
 
-            syncRunningOrganizationRegistrationIfNeeded(from: oldValue, to: state)
+    public var statePublisher: AnyPublisher<OrganizationState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    public var state: OrganizationState {
+        get { presentationState.state }
+        set {
+            withBatchUpdates {
+                let oldValue = presentationState.state
+                updatePresentation { $0.state = newValue }
+
+                // Request user attention for any error state
+                if case .error = state {
+                    NotificationManager.shared.requestAttention()
+                }
+
+                if state != .organizing {
+                    aiAnalysisActivity = .none
+                }
+
+                syncRunningOrganizationRegistrationIfNeeded(from: oldValue, to: state)
+                stateSubject.send(state)
+            }
         }
     }
     public var windowSessionID: UUID?
-    @Published public var progress: Double = 0.0
-    @Published public var currentPlan: OrganizationPlan?
+    public var progress: Double {
+        get { presentationState.progress }
+        set { updatePresentation { $0.progress = newValue } }
+    }
+    public var currentPlan: OrganizationPlan? {
+        get { presentationState.currentPlan }
+        set { updatePresentation { $0.currentPlan = newValue } }
+    }
     private var preparedPlanModeOverride: OrganizationMode?
-    @Published public var planHistory: [OrganizationPlan] = []
-    @Published public var errorMessage: String?
+    public var planHistory: [OrganizationPlan] {
+        get { presentationState.planHistory }
+        set { updatePresentation { $0.planHistory = newValue } }
+    }
+    public var errorMessage: String? {
+        get { presentationState.errorMessage }
+        set { updatePresentation { $0.errorMessage = newValue } }
+    }
     @Published public var customInstructions: String = ""
 
     /// When true, callers (such as OrganizeView) should keep showing the OrganizationCompleteView
     /// even if `state` momentarily transitions through `.applying`/`.idle` during an in-place
     /// undo or redo action performed from that screen.
-    @Published public var pinsCompletionView: Bool = false
+    public var pinsCompletionView: Bool {
+        get { presentationState.pinsCompletionView }
+        set { updatePresentation { $0.pinsCompletionView = newValue } }
+    }
     
     // Proactive AI Validation
     @Published public var isAIConfigured: Bool = false
@@ -463,21 +518,45 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Streaming support
     /// Internal backing storage for streaming content (not @Published to avoid high-frequency redraws)
     public var streamingContent: String = ""
-    @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
-    @Published public var truncatedDisplayStreamingContent: String = "" // UI-ready preview text (pre-computed off render path)
+    public var displayStreamingContent: String {
+        get { presentationState.displayStreamingContent }
+        set { updatePresentation { $0.displayStreamingContent = newValue } }
+    }
+    public var truncatedDisplayStreamingContent: String {
+        get { presentationState.truncatedDisplayStreamingContent }
+        set { updatePresentation { $0.truncatedDisplayStreamingContent = newValue } }
+    }
     /// ID -> file mapping for the AI request currently streaming. Compact prompts
     /// number files per request batch (1-based), so live-stream consumers must
     /// resolve `file_ids` through this table rather than indexing `scannedFiles`.
-    @Published public private(set) var streamFileIDTable: [Int: FileItem] = [:]
-    @Published public var organizationStage: String = ""
-    @Published public var isStreaming: Bool = false
+    public private(set) var streamFileIDTable: [Int: FileItem] {
+        get { presentationState.streamFileIDTable }
+        set { updatePresentation { $0.streamFileIDTable = newValue } }
+    }
+    public var organizationStage: String {
+        get { presentationState.organizationStage }
+        set { updatePresentation { $0.organizationStage = newValue } }
+    }
+    public var isStreaming: Bool {
+        get { presentationState.isStreaming }
+        set { updatePresentation { $0.isStreaming = newValue } }
+    }
     @Published public var liveInsightsEnabled: Bool = true
     @Published public var deepScanProgress: (current: Int, total: Int)?
-    @Published public private(set) var measuredWorkProgress: MeasuredWorkProgress?
-    @Published public var visionAnalysisSummary: VisionAnalysisSummary?
+    public private(set) var measuredWorkProgress: MeasuredWorkProgress? {
+        get { presentationState.measuredWorkProgress }
+        set { updatePresentation { $0.measuredWorkProgress = newValue } }
+    }
+    public var visionAnalysisSummary: VisionAnalysisSummary? {
+        get { presentationState.visionAnalysisSummary }
+        set { updatePresentation { $0.visionAnalysisSummary = newValue } }
+    }
     /// What the AI analysis phase is actually doing right now, so the UI can
     /// label the wait accurately. Reset whenever `state` leaves `.organizing`.
-    @Published public private(set) var aiAnalysisActivity: AIAnalysisActivity = .none
+    public private(set) var aiAnalysisActivity: AIAnalysisActivity {
+        get { presentationState.aiAnalysisActivity }
+        set { updatePresentation { $0.aiAnalysisActivity = newValue } }
+    }
     
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
@@ -517,8 +596,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
     
     // AI reasoning insights - extracted from streaming content
-    @Published public var currentInsight: String = ""
-    @Published public var insightHistory: [AIInsight] = []
+    public var currentInsight: String {
+        get { presentationState.currentInsight }
+        set { updatePresentation { $0.currentInsight = newValue } }
+    }
+    public var insightHistory: [AIInsight] {
+        get { presentationState.insightHistory }
+        set { updatePresentation { $0.insightHistory = newValue } }
+    }
     private var lastInsightExtraction: Date = .distantPast
     private let insightExtractionInterval: TimeInterval = 0.9 // Lower extraction frequency to cut parser pressure while streaming
     private let insightExtractor = AIInsightExtractor()
@@ -549,8 +634,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     // Timeout messaging
-    @Published public var elapsedTime: TimeInterval = 0
-    @Published public var showTimeoutMessage: Bool = false
+    public var elapsedTime: TimeInterval {
+        get { presentationState.elapsedTime }
+        set { updatePresentation { $0.elapsedTime = newValue } }
+    }
+    public var showTimeoutMessage: Bool {
+        get { presentationState.showTimeoutMessage }
+        set { updatePresentation { $0.showTimeoutMessage = newValue } }
+    }
     private var startTime: Date?
     private var timeoutTask: Task<Void, Never>?
     private var suppressCancellationReset = false
@@ -564,19 +655,38 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     // MARK: - Batch Update Mechanism
     
-    /// Batches multiple @Published property updates into a single objectWillChange.send()
-    /// This prevents multiple UI refresh cycles when updating related properties
+    /// Publishes one invalidation for a related set of presentation changes.
     @MainActor
     public func withBatchUpdates(_ updates: () -> Void) {
-        objectWillChange.send()
+        beginBatchUpdates()
+        defer { endBatchUpdates() }
         updates()
     }
     
     /// Perform batch updates asynchronously
     @MainActor
     public func withBatchUpdatesAsync(_ updates: () async -> Void) async {
-        objectWillChange.send()
+        beginBatchUpdates()
+        defer { endBatchUpdates() }
         await updates()
+    }
+
+    private func updatePresentation(_ update: (inout PresentationState) -> Void) {
+        if batchUpdateDepth == 0 {
+            objectWillChange.send()
+        }
+        update(&presentationState)
+    }
+
+    private func beginBatchUpdates() {
+        if batchUpdateDepth == 0 {
+            objectWillChange.send()
+        }
+        batchUpdateDepth += 1
+    }
+
+    private func endBatchUpdates() {
+        batchUpdateDepth -= 1
     }
     
     // MARK: - State Transition Validation
@@ -621,16 +731,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     // Track current directory for status checks
-    @Published public var currentDirectory: URL?
+    public var currentDirectory: URL? {
+        get { presentationState.currentDirectory }
+        set { updatePresentation { $0.currentDirectory = newValue } }
+    }
     /// The rule that blocked the root folder for the current organization attempt.
-    @Published public private(set) var blockingExclusionRule: ExclusionRule?
+    public private(set) var blockingExclusionRule: ExclusionRule? {
+        get { presentationState.blockingExclusionRule }
+        set { updatePresentation { $0.blockingExclusionRule = newValue } }
+    }
     
     // Track detected duplicates for the current session
-    @Published public var detectedDuplicates: [DuplicateGroup] = []
+    public var detectedDuplicates: [DuplicateGroup] {
+        get { presentationState.detectedDuplicates }
+        set { updatePresentation { $0.detectedDuplicates = newValue } }
+    }
     
     // Track file count for better progress estimation
     public var scannedFileCount: Int = 0
-    @Published public var scannedFiles: [FileItem] = []
+    public var scannedFiles: [FileItem] {
+        get { presentationState.scannedFiles }
+        set { updatePresentation { $0.scannedFiles = newValue } }
+    }
     private var scannedFilePathLookup: [String: [String]] = [:]
     private let scannedFilesUIPublishLimit = 200
 
