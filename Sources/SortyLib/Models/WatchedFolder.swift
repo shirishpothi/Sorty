@@ -117,9 +117,23 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var url: URL {
         URL(fileURLWithPath: path)
     }
-    
-    public var exists: Bool {
-        FileManager.default.fileExists(atPath: path)
+}
+
+private struct WatchedFolderExistenceRequest: Sendable {
+    let id: UUID
+    let path: String
+}
+
+private actor WatchedFolderExistenceProbe {
+    func statuses(for requests: [WatchedFolderExistenceRequest]) -> [UUID: Bool] {
+        var statuses: [UUID: Bool] = [:]
+        statuses.reserveCapacity(requests.count)
+
+        for request in requests {
+            guard !Task.isCancelled else { break }
+            statuses[request.id] = FileManager.default.fileExists(atPath: request.path)
+        }
+        return statuses
     }
 }
 
@@ -131,18 +145,22 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var accessIssueFolderCount = 0
     @Published public private(set) var monitoringRevision = 0
     @Published public private(set) var activityByFolder: [UUID: WatchedFolderActivity] = [:]
+    @Published public private(set) var folderExistenceByID: [UUID: Bool] = [:]
 
     private let userDefaults = UserDefaults.standard
     private let legacyStorageKey = "watchedFolders"
     private let activeCountStorageKey = "activeWatchedFolderCount"
     private let journal = WatchedFolderJournal()
+    private let existenceProbe = WatchedFolderExistenceProbe()
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private var indexByID: [UUID: Int] = [:]
     private var idByNormalizedPath: [String: UUID] = [:]
+    private var existenceRefreshTask: Task<Void, Never>?
     
     public init() {
         loadFolders()
         setupNotificationObservers()
+        refreshFolderExistence()
     }
 
     private func setupNotificationObservers() {
@@ -168,6 +186,7 @@ public class WatchedFoldersManager: ObservableObject {
         if Self.hasAccessIssue(normalizedFolder) {
             accessIssueFolderCount += 1
         }
+        refreshFolderExistence()
         AnalyticsManager.shared.captureFeature(
             feature: "watched_folders",
             subfeature: "folder_management",
@@ -181,6 +200,7 @@ public class WatchedFoldersManager: ObservableObject {
         stopAllSecurityScopedAccess()
         folders.removeAll()
         activityByFolder.removeAll()
+        folderExistenceByID.removeAll()
         indexByID.removeAll()
         idByNormalizedPath.removeAll()
         activeFolderCount = 0
@@ -205,6 +225,7 @@ public class WatchedFoldersManager: ObservableObject {
         folders.removeLast()
         journal.remove(folder.id)
         activityByFolder.removeValue(forKey: folder.id)
+        folderExistenceByID.removeValue(forKey: folder.id)
         monitoringRevision &+= 1
         if removedFolder.isEnabled {
             setActiveFolderCount(max(activeFolderCount - 1, 0))
@@ -254,6 +275,9 @@ public class WatchedFoldersManager: ObservableObject {
         let hasAccessIssue = Self.hasAccessIssue(normalizedFolder)
         if hadAccessIssue != hasAccessIssue {
             accessIssueFolderCount += hasAccessIssue ? 1 : -1
+        }
+        if oldPath != newPath || folderExistenceByID[folder.id] == nil {
+            refreshFolderExistence()
         }
     }
     
@@ -474,6 +498,39 @@ public class WatchedFoldersManager: ObservableObject {
             return nil
         }
         return folder(withID: id)
+    }
+
+    public func folderExists(_ folderID: UUID) -> Bool {
+        folderExistenceByID[folderID] ?? true
+    }
+
+    /// Refreshes cached folder existence without performing filesystem work on the main actor.
+    public func refreshFolderExistence() {
+        existenceRefreshTask?.cancel()
+        let requests = folders.map {
+            WatchedFolderExistenceRequest(id: $0.id, path: $0.path)
+        }
+
+        guard !requests.isEmpty else {
+            folderExistenceByID.removeAll()
+            return
+        }
+
+        existenceRefreshTask = Task { [weak self, existenceProbe] in
+            let statuses = await existenceProbe.statuses(for: requests)
+            guard !Task.isCancelled, let self else { return }
+
+            var currentStatuses = folderExistenceByID
+            let currentIDs = Set(folders.map(\.id))
+            currentStatuses = currentStatuses.filter { currentIDs.contains($0.key) }
+
+            for request in requests where folder(withID: request.id)?.path == request.path {
+                currentStatuses[request.id] = statuses[request.id]
+            }
+            if currentStatuses != folderExistenceByID {
+                folderExistenceByID = currentStatuses
+            }
+        }
     }
 
     private func loadFolders() {

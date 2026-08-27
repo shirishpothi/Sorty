@@ -11,10 +11,7 @@ import SwiftUI
 
 public struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var exclusionRules: ExclusionRulesManager
     @EnvironmentObject var extensionListener: ExtensionListener
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore

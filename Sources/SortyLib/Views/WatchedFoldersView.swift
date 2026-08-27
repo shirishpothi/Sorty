@@ -45,21 +45,16 @@ struct WatchedFoldersView: View {
                 ZStack {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
-                            SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
-                                LazyVStack(spacing: 12) {
-                                    ForEach(
-                                        Array(watchedFoldersManager.folders.enumerated()),
-                                        id: \.element.id
-                                    ) { index, folder in
-                                        WatchedFolderCard(
-                                            folder: folder,
-                                            currentDate: context.date
-                                        )
-                                        .id(folder.id)
-                                        .animatedAppearance(
-                                            delay: 0.05 + min(Double(index), 8) * 0.04
-                                        )
-                                    }
+                            LazyVStack(spacing: 12) {
+                                ForEach(
+                                    Array(watchedFoldersManager.folders.enumerated()),
+                                    id: \.element.id
+                                ) { index, folder in
+                                    WatchedFolderCard(folder: folder)
+                                    .id(folder.id)
+                                    .animatedAppearance(
+                                        delay: 0.05 + min(Double(index), 8) * 0.04
+                                    )
                                 }
                             }
                             .padding(20)
@@ -101,6 +96,9 @@ struct WatchedFoldersView: View {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
+        }
+        .onAppear {
+            watchedFoldersManager.refreshFolderExistence()
         }
         .navigationTitle("Watched Folders")
     }
@@ -371,7 +369,6 @@ struct WatchedFolderCard: View {
     }
 
     let folder: WatchedFolder
-    let currentDate: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -412,8 +409,12 @@ struct WatchedFolderCard: View {
         organizer.aiClient != nil
     }
 
+    private var folderExists: Bool {
+        watchedFoldersManager.folderExists(folder.id)
+    }
+
     private var statusColor: Color {
-        if !folder.exists { return .red }
+        if !folderExists { return .red }
         if folder.accessStatus == .lost { return .orange }
         if !folder.isEnabled { return .secondary }
         if isOrganizing { return .blue }
@@ -421,7 +422,7 @@ struct WatchedFolderCard: View {
     }
 
     private var statusIcon: String {
-        if !folder.exists { return "exclamationmark.triangle.fill" }
+        if !folderExists { return "exclamationmark.triangle.fill" }
         if folder.accessStatus == .lost { return "lock.slash.fill" }
         if !folder.isEnabled { return "pause.circle.fill" }
         if isOrganizing { return "arrow.triangle.2.circlepath" }
@@ -439,7 +440,7 @@ struct WatchedFolderCard: View {
         if isHighlighted {
             return SortyDesignSystem.Colors.resolvedAccent.opacity(highlightPulse ? 0.9 : 0.45)
         }
-        return folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)
+        return folderExists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)
     }
 
     private var cardShadowColor: Color {
@@ -614,7 +615,7 @@ struct WatchedFolderCard: View {
 
     @ViewBuilder
     private var healthStatusView: some View {
-        if !folder.exists {
+        if !folderExists {
             missingFolderStatus
         } else if folder.accessStatus == .lost {
             grantAccessButton
@@ -640,17 +641,34 @@ struct WatchedFolderCard: View {
                 awaitingReviewLine(fileCount: count)
             } else if case .parked(let count) = activity {
                 parkedBatchLine(fileCount: count)
-            } else {
-                Label {
-                    let status = activityText(activity, now: currentDate)
-                    Text(status)
-                        .numericTextTransition(animationValue: status)
-                } icon: {
-                    Image(systemName: activityIcon(activity))
+            } else if activityHasCountdown(activity) {
+                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                    activityStatusLabel(activity, now: context.date)
                 }
-                .foregroundStyle(activityColor(activity))
+            } else {
+                activityStatusLabel(activity, now: .now)
             }
         }
+    }
+
+    private func activityHasCountdown(_ activity: WatchedFolderActivity) -> Bool {
+        switch activity {
+        case .waitingForStability, .queued, .retrying:
+            true
+        case .parked, .running, .awaitingReview:
+            false
+        }
+    }
+
+    private func activityStatusLabel(_ activity: WatchedFolderActivity, now: Date) -> some View {
+        Label {
+            let status = activityText(activity, now: now)
+            Text(status)
+                .numericTextTransition(animationValue: status)
+        } icon: {
+            Image(systemName: activityIcon(activity))
+        }
+        .foregroundStyle(activityColor(activity))
     }
 
     private func parkedBatchLine(fileCount: Int) -> some View {
@@ -929,7 +947,7 @@ struct WatchedFolderCard: View {
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
         )
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
-        .opacity(folder.exists ? 1.0 : 0.8)
+        .opacity(folderExists ? 1.0 : 0.8)
         .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
         .onHover { hovering in
             guard hovering != isHovered else { return }

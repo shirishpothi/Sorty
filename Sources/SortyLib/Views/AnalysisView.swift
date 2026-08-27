@@ -193,7 +193,7 @@ struct AnalysisView: View {
     @State private var lastInsightCount = 0
     @State private var lastMessageTier: MessageTier = .none
     @State private var lastInsightPulseAt: Date = .distantPast
-    @State private var hasRenameStreamEvents = false
+    @State private var liveRenameStreamEvents: [RenameStreamEvent] = []
     @State private var hasOrganizeStreamEvents = false
     @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
     @State private var isHoveringViewExclusion = false
@@ -230,6 +230,10 @@ struct AnalysisView: View {
         settingsViewModel.config.mode == .renameOnly
     }
 
+    private var hasRenameStreamEvents: Bool {
+        !liveRenameStreamEvents.isEmpty
+    }
+
     /// Whether the scan found zero files (empty directory or all files excluded)
     private var isEmptyDirectory: Bool {
         if organizer.blockingExclusionRule != nil {
@@ -260,9 +264,7 @@ struct AnalysisView: View {
                     if isRenameOnlyFlow {
                         if hasRenameStreamEvents {
                             RenameGenerationSequenceView(
-                                streamText: organizer.displayStreamingContent,
-                                files: organizer.scannedFiles,
-                                isStreaming: organizer.isStreaming
+                                events: liveRenameStreamEvents
                             )
                                 .frame(maxWidth: .infinity)
                                 .transition(.asymmetric(
@@ -782,11 +784,14 @@ struct AnalysisView: View {
         let streamText = organizer.displayStreamingContent
 
         if isRenameOnlyFlow {
-            hasRenameStreamEvents = RenameGenerationSequenceView.hasRenderableEvents(in: streamText)
+            liveRenameStreamEvents = RenameGenerationSequenceView.makeEvents(
+                from: streamText,
+                files: organizer.scannedFiles
+            )
             hasOrganizeStreamEvents = false
             liveOrganizingSuggestions = []
         } else {
-            hasRenameStreamEvents = false
+            liveRenameStreamEvents = []
             let suggestions = OrganizingStreamSuggestions.parse(
                 from: streamText,
                 files: organizer.scannedFiles,
@@ -1162,13 +1167,22 @@ enum OrganizingStreamSuggestions {
     }
 }
 
+private struct RenameStreamEvent: Identifiable, Equatable {
+    let id: String
+    let originalName: String
+    let suggestedName: String?
+    let reason: String?
+    let filePath: String?
+    let isDirectory: Bool
+
+    var isRevealed: Bool {
+        suggestedName?.isEmpty == false
+    }
+}
+
 private struct RenameGenerationSequenceView: View {
-    let streamText: String
-    let files: [FileItem]
-    let isStreaming: Bool
+    let events: [RenameStreamEvent]
     @State private var shouldFollowLatest = true
-    @State private var streamEvents: [RenameStreamEvent] = []
-    @State private var filesByName: [String: FileItem] = [:]
 
     private static let maxVisibleRows = 5
     private static let maxParseCharacters = 12_000
@@ -1198,21 +1212,8 @@ private struct RenameGenerationSequenceView: View {
         options: []
     )
 
-    private struct RenameStreamEvent: Identifiable, Equatable {
-        let id: String
-        let originalName: String
-        let suggestedName: String?
-        let reason: String?
-        let filePath: String?
-        let isDirectory: Bool
-
-        var isRevealed: Bool {
-            suggestedName?.isEmpty == false
-        }
-    }
-
     private var visibleRowCount: Int {
-        min(streamEvents.count, Self.maxVisibleRows)
+        events.count
     }
 
     private var rowStackHeight: CGFloat {
@@ -1237,7 +1238,7 @@ private struct RenameGenerationSequenceView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(Array(streamEvents.enumerated()), id: \.element.id) { index, event in
+                        ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                             RenameGenerationRow(
                                 originalName: event.originalName,
                                 suggestedName: event.suggestedName,
@@ -1245,7 +1246,7 @@ private struct RenameGenerationSequenceView: View {
                                 isDirectory: event.isDirectory,
                                 isActive: activeEventID == event.id,
                                 isRevealed: event.isRevealed,
-                                isMostRecent: index == streamEvents.indices.last
+                                isMostRecent: index == events.indices.last
                             )
                             .id(event.id)
                             .transition(.asymmetric(
@@ -1267,7 +1268,7 @@ private struct RenameGenerationSequenceView: View {
                 }
             }
             .frame(height: rowStackHeight)
-            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: streamEvents)
+            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: activeEventID)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
@@ -1275,17 +1276,6 @@ private struct RenameGenerationSequenceView: View {
         .frame(height: panelHeight, alignment: .top)
         .systemLiquidGlassBackground(cornerRadius: 14)
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: visibleRowCount)
-        .onAppear {
-            refreshFileLookup()
-            refreshStreamEvents()
-        }
-        .onChange(of: streamText) { _, _ in
-            refreshStreamEvents()
-        }
-        .onChange(of: files) { _, _ in
-            refreshFileLookup()
-            refreshStreamEvents()
-        }
     }
 
     @ViewBuilder
@@ -1301,14 +1291,15 @@ private struct RenameGenerationSequenceView: View {
     }
 
     private var activeEventID: String? {
-        streamEvents.last?.id
+        events.last?.id
     }
 
-    private func refreshStreamEvents() {
+    static func makeEvents(from streamText: String, files: [FileItem]) -> [RenameStreamEvent] {
+        let filesByName = Self.fileLookup(from: files)
         let parsed = Self.parseRenameEvents(from: streamText)
         let visibleEvents = Array(parsed.suffix(Self.maxVisibleRows))
 
-        streamEvents = visibleEvents.map { event in
+        return visibleEvents.map { event in
             guard let file = filesByName[Self.normalizedFileName(event.originalName)] else {
                 return event
             }
@@ -1321,10 +1312,6 @@ private struct RenameGenerationSequenceView: View {
                 isDirectory: file.isDirectory
             )
         }
-    }
-
-    private func refreshFileLookup() {
-        filesByName = Self.fileLookup(from: files)
     }
 
     private static func parseRenameEvents(from streamText: String) -> [RenameStreamEvent] {
@@ -1374,10 +1361,6 @@ private struct RenameGenerationSequenceView: View {
         }
 
         return orderedKeys.compactMap { eventsByOriginal[$0] }
-    }
-
-    static func hasRenderableEvents(in streamText: String) -> Bool {
-        !parseRenameEvents(from: streamText).isEmpty
     }
 
     private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {

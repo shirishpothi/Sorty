@@ -2260,7 +2260,7 @@ struct StatusBadge: View {
 
 struct FolderHistoryDetailRow: View {
     let suggestion: FolderSuggestion
-    var rootDirectory: URL? = nil
+    let rootDirectory: URL?
     @Binding var highlightedFileID: UUID?
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2269,6 +2269,25 @@ struct FolderHistoryDetailRow: View {
     @State private var showStoragePopover = false
     @State private var visibleFileCount: Int = 60
     private let filePageSize: Int = 60
+    private let filesByHash: [String: [FileItem]]
+
+    init(
+        suggestion: FolderSuggestion,
+        rootDirectory: URL? = nil,
+        highlightedFileID: Binding<UUID?>
+    ) {
+        self.suggestion = suggestion
+        self.rootDirectory = rootDirectory
+        _highlightedFileID = highlightedFileID
+
+        var filesByHash: [String: [FileItem]] = [:]
+        filesByHash.reserveCapacity(suggestion.files.count)
+        for file in suggestion.files {
+            guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
+            filesByHash[hash, default: []].append(file)
+        }
+        self.filesByHash = filesByHash
+    }
 
     private func fileTags(for file: FileItem) -> [String]? {
         let tags = suggestion.tags(for: file)
@@ -2277,10 +2296,6 @@ struct FolderHistoryDetailRow: View {
 
     private func fileComment(for file: FileItem) -> String? {
         suggestion.comment(for: file)
-    }
-
-    private var allSiblingFiles: [FileItem] {
-        suggestion.files
     }
 
     private var isStorageDestination: Bool {
@@ -2300,10 +2315,17 @@ struct FolderHistoryDetailRow: View {
     }
 
     private func fileDuplicateInfo(for file: FileItem) -> DuplicateInfo? {
-        guard let hash = file.sha256Hash, !hash.isEmpty else { return nil }
-        let duplicates = allSiblingFiles.filter { $0.id != file.id && $0.sha256Hash == hash }
-        guard !duplicates.isEmpty else { return nil }
-        return DuplicateInfo(file: file, duplicates: duplicates, isExactMatch: true, similarity: 1.0)
+        guard let hash = file.sha256Hash,
+              let sharedGroup = filesByHash[hash],
+              sharedGroup.count > 1 else {
+            return nil
+        }
+        return DuplicateInfo(
+            file: file,
+            sharedGroup: sharedGroup,
+            isExactMatch: true,
+            similarity: 1.0
+        )
     }
 
     private func subtreeContainsFile(_ fileID: UUID, in folder: FolderSuggestion) -> Bool {

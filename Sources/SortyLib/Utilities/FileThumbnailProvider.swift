@@ -3,6 +3,31 @@ import Combine
 @preconcurrency import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
+private struct FileThumbnailMetadata: Sendable {
+    let exists: Bool
+    let isDirectory: Bool
+    let contentTypeIdentifier: String?
+}
+
+private actor FileThumbnailMetadataProbe {
+    func metadata(for url: URL) -> FileThumbnailMetadata {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(
+            atPath: url.path,
+            isDirectory: &isDirectory
+        )
+        let contentTypeIdentifier = exists
+            ? (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType?.identifier)
+            : nil
+
+        return FileThumbnailMetadata(
+            exists: exists,
+            isDirectory: exists && isDirectory.boolValue,
+            contentTypeIdentifier: contentTypeIdentifier
+        )
+    }
+}
+
 private struct SendableThumbnailImage: @unchecked Sendable {
     let image: NSImage
 }
@@ -16,6 +41,7 @@ public class FileThumbnailProvider: ObservableObject {
     private var processingKeys: Set<String> = []
     private var continuations: [String: [CheckedContinuation<SendableThumbnailImage, Never>]] = [:]
     private let waveformCache = NSCache<NSString, NSImage>()
+    private let metadataProbe = FileThumbnailMetadataProbe()
     
     private init() {
         cache.countLimit = 180
@@ -58,16 +84,18 @@ public class FileThumbnailProvider: ObservableObject {
     }
     
     private func generateThumbnail(for url: URL, size: CGSize) async -> NSImage {
+        let metadata = await metadataProbe.metadata(for: url)
+
         // Directories get the system's per-folder icon; QuickLook only yields a generic one
-        var isDir: ObjCBool = false
-        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+        if metadata.isDirectory {
             let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
             icon.size = size
             return icon
         }
 
         // Handle audio files with custom waveform generator (only for larger sizes)
-        if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
+        if let identifier = metadata.contentTypeIdentifier,
+           let type = UTType(identifier),
            type.conforms(to: .audio) {
             if size.width >= 32 && size.height >= 32 {
                 let waveformKey = "\(url.path)|\(Int(size.width.rounded()))x\(Int(size.height.rounded()))"
@@ -88,7 +116,7 @@ public class FileThumbnailProvider: ObservableObject {
             return icon
         }
         
-        if !FileManager.default.fileExists(atPath: url.path) {
+        if !metadata.exists {
             return fallbackIcon(for: url)
         }
         

@@ -110,11 +110,17 @@ public struct ThinkingOrbsView: View {
 public struct ThinkingOrbLoaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     public init() {}
 
     public var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 60.0,
+                paused: reduceMotion || controlActiveState == .inactive
+            )
+        ) { timeline in
             let raw = reduceMotion ? 0.6 : timeline.date.timeIntervalSinceReferenceDate
             let isDark = colorScheme == .dark
             Canvas(rendersAsynchronously: true) { context, size in
@@ -224,6 +230,7 @@ public struct ThinkingOrbLoaderView: View {
 /// comes from a shared clock so inserting the label never restarts the sweep.
 public struct TextSweepModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     /// How far the gradient endpoints extend past the view (unit points).
     private let bandSize: CGFloat = 0.3
@@ -241,7 +248,12 @@ public struct TextSweepModifier: ViewModifier {
         } else {
             content
                 .mask(
-                    SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                    SwiftUI.TimelineView(
+                        .animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: controlActiveState == .inactive
+                        )
+                    ) { timeline in
                         let cycleDuration = sweepDuration + sweepDelay
                         let cycleTime = timeline.date.timeIntervalSinceReferenceDate
                             .truncatingRemainder(dividingBy: cycleDuration)
@@ -277,8 +289,15 @@ private struct ThinkingOrb: View {
     let isDark: Bool
     let reduceMotion: Bool
 
+    @Environment(\.controlActiveState) private var controlActiveState
+
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 45.0,
+                paused: reduceMotion || controlActiveState == .inactive
+            )
+        ) { timeline in
             let time = reduceMotion ? 1.25 : timeline.date.timeIntervalSinceReferenceDate
             Canvas(rendersAsynchronously: true) { context, size in
                 let dots = OrbRenderer.dots(for: state, size: size, time: time)
