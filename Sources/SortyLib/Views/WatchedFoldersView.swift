@@ -45,16 +45,21 @@ struct WatchedFoldersView: View {
                 ZStack {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(
-                                    Array(watchedFoldersManager.folders.enumerated()),
-                                    id: \.element.id
-                                ) { index, folder in
-                                    WatchedFolderCard(folder: folder)
+                            SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                                LazyVStack(spacing: 12) {
+                                    ForEach(
+                                        Array(watchedFoldersManager.folders.enumerated()),
+                                        id: \.element.id
+                                    ) { index, folder in
+                                        WatchedFolderCard(
+                                            folder: folder,
+                                            currentDate: context.date
+                                        )
                                         .id(folder.id)
                                         .animatedAppearance(
                                             delay: 0.05 + min(Double(index), 8) * 0.04
                                         )
+                                    }
                                 }
                             }
                             .padding(20)
@@ -366,6 +371,7 @@ struct WatchedFolderCard: View {
     }
 
     let folder: WatchedFolder
+    let currentDate: Date
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -635,14 +641,12 @@ struct WatchedFolderCard: View {
             } else if case .parked(let count) = activity {
                 parkedBatchLine(fileCount: count)
             } else {
-                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Label {
-                        let status = activityText(activity, now: context.date)
-                        Text(status)
-                            .numericTextTransition(animationValue: status)
-                    } icon: {
-                        Image(systemName: activityIcon(activity))
-                    }
+                Label {
+                    let status = activityText(activity, now: currentDate)
+                    Text(status)
+                        .numericTextTransition(animationValue: status)
+                } icon: {
+                    Image(systemName: activityIcon(activity))
                 }
                 .foregroundStyle(activityColor(activity))
             }
