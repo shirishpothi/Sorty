@@ -1492,6 +1492,7 @@ struct HistoryDetailSheet: View {
     @State private var highlightedFileID: UUID? = nil
     @State private var feedbackGiven: LearningsManager.SessionOutcome?
     @State private var showFeedbackConfirmation = false
+    @State private var detailModel: HistoryDetailModel?
 
     // Pre-flight validation state
     @State private var showUndoConfirmation = false
@@ -1514,7 +1515,7 @@ struct HistoryDetailSheet: View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    LazyVStack(alignment: .leading, spacing: 24) {
                     HistoryDetailHeaderSection(
                         entry: entry,
                         reasoningNotes: entry.plan?.notes
@@ -1559,14 +1560,17 @@ struct HistoryDetailSheet: View {
                     }
 
                     // Learnings Applied
-                    if let plan = entry.plan {
-                        HistoryLiquidGlassLearningsCard(plan: plan)
+                    if let detailModel {
+                        HistoryLiquidGlassLearningsCard(
+                            fileContexts: detailModel.learningsFileContexts
+                        )
                     }
 
                     // Duplicate Files
-                    if let plan = entry.plan {
+                    if let detailModel {
                         HistoryLiquidGlassDuplicateCard(
-                            plan: plan,
+                            duplicateGroups: detailModel.duplicateGroups,
+                            totalDuplicateCount: detailModel.totalDuplicateCount,
                             handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
                             highlightedFileID: $highlightedFileID
                         )
@@ -1620,6 +1624,10 @@ struct HistoryDetailSheet: View {
             }
         }
         .frame(minWidth: 600, minHeight: 500)
+        .task(id: entry.id) {
+            guard detailModel?.entryID != entry.id else { return }
+            detailModel = HistoryDetailModel(entryID: entry.id, plan: entry.plan)
+        }
         .modelSelectionOverlay(
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
@@ -2560,29 +2568,84 @@ private struct HistoryLearningsFileContext: Identifiable {
     var id: UUID { file.id }
 }
 
+private struct HistoryDetailModel {
+    let entryID: UUID
+    let learningsFileContexts: [HistoryLearningsFileContext]
+    let duplicateGroups: [DuplicateInfo]
+    let totalDuplicateCount: Int
+
+    init(entryID: UUID, plan: OrganizationPlan?) {
+        self.entryID = entryID
+        guard let plan else {
+            learningsFileContexts = []
+            duplicateGroups = []
+            totalDuplicateCount = 0
+            return
+        }
+
+        var allFiles = plan.unorganizedFiles
+        var learningContexts: [HistoryLearningsFileContext] = []
+        var seenLearningFileIDs: Set<UUID> = []
+
+        func hasRuleContext(_ suggestion: FolderSuggestion) -> Bool {
+            if let ruleID = suggestion.ruleId?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !ruleID.isEmpty {
+                return true
+            }
+            return suggestion.semanticTags.contains { $0.lowercased().hasPrefix("rule:") }
+        }
+
+        func collect(_ suggestion: FolderSuggestion) {
+            allFiles.append(contentsOf: suggestion.files)
+            if hasRuleContext(suggestion) {
+                for file in suggestion.files where seenLearningFileIDs.insert(file.id).inserted {
+                    learningContexts.append(
+                        HistoryLearningsFileContext(file: file, suggestion: suggestion)
+                    )
+                }
+            }
+            for subfolder in suggestion.subfolders {
+                collect(subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            collect(suggestion)
+        }
+
+        var uniqueFiles: [FileItem] = []
+        var seenPaths: Set<String> = []
+        for file in allFiles {
+            let path = URL(fileURLWithPath: file.path).standardizedFileURL.path
+            if seenPaths.insert(path).inserted {
+                uniqueFiles.append(file)
+            }
+        }
+
+        var filesByHash: [String: [FileItem]] = [:]
+        for file in uniqueFiles {
+            guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
+            filesByHash[hash, default: []].append(file)
+        }
+
+        let groups = filesByHash.values.compactMap { files -> DuplicateInfo? in
+            guard files.count > 1, let first = files.first else { return nil }
+            return DuplicateInfo(file: first, sharedGroup: files)
+        }
+        .sorted { $0.duplicateCount > $1.duplicateCount }
+
+        learningsFileContexts = learningContexts
+        duplicateGroups = groups
+        totalDuplicateCount = groups.reduce(0) { $0 + $1.duplicateCount }
+    }
+}
+
 struct HistoryLiquidGlassLearningsCard: View {
-    let plan: OrganizationPlan
+    fileprivate let fileContexts: [HistoryLearningsFileContext]
 
     @EnvironmentObject var learningsManager: LearningsManager
     @State private var showPopover = false
     @State private var hoveredFileID: UUID?
-
-    private var ruledSuggestions: [FolderSuggestion] {
-        flattenSuggestions(plan.suggestions).filter(hasRuleContext(_:))
-    }
-
-    private var fileContexts: [HistoryLearningsFileContext] {
-        var contexts: [HistoryLearningsFileContext] = []
-        var seenIDs: Set<UUID> = []
-
-        for suggestion in ruledSuggestions {
-            for file in suggestion.files where seenIDs.insert(file.id).inserted {
-                contexts.append(HistoryLearningsFileContext(file: file, suggestion: suggestion))
-            }
-        }
-
-        return contexts
-    }
 
     var body: some View {
         if !fileContexts.isEmpty {
@@ -2663,21 +2726,6 @@ struct HistoryLiquidGlassLearningsCard: View {
         }
     }
 
-    private func flattenSuggestions(_ suggestions: [FolderSuggestion]) -> [FolderSuggestion] {
-        suggestions.flatMap { suggestion in
-            [suggestion] + flattenSuggestions(suggestion.subfolders)
-        }
-    }
-
-    private func hasRuleContext(_ suggestion: FolderSuggestion) -> Bool {
-        if let ruleID = suggestion.ruleId?.trimmingCharacters(in: .whitespacesAndNewlines), !ruleID.isEmpty {
-            return true
-        }
-
-        return suggestion.semanticTags.contains { tag in
-            tag.lowercased().hasPrefix("rule:")
-        }
-    }
 }
 
 struct HistoryLiquidGlassReasoningCard: View {
@@ -2723,53 +2771,12 @@ struct HistoryLiquidGlassReasoningCard: View {
 // MARK: - Liquid Glass Duplicate Summary Card (History)
 
 struct HistoryLiquidGlassDuplicateCard: View {
-    let plan: OrganizationPlan
+    let duplicateGroups: [DuplicateInfo]
+    let totalDuplicateCount: Int
     var handoffDirectory: URL? = nil
     @Binding var highlightedFileID: UUID?
     @State private var showPopover = false
     @EnvironmentObject var appState: AppState
-
-    private var duplicateGroups: [DuplicateInfo] {
-        var allFiles: [FileItem] = []
-        func collectFiles(from folder: FolderSuggestion) {
-            allFiles.append(contentsOf: folder.files)
-            for subfolder in folder.subfolders { collectFiles(from: subfolder) }
-        }
-        for suggestion in plan.suggestions { collectFiles(from: suggestion) }
-        allFiles.append(contentsOf: plan.unorganizedFiles)
-
-        // Ignore repeated references to the same physical file in a historical plan.
-        var uniqueFiles: [FileItem] = []
-        var seenPaths: Set<String> = []
-        for file in allFiles {
-            let normalizedPath = URL(fileURLWithPath: file.path).standardizedFileURL.path
-            if seenPaths.insert(normalizedPath).inserted {
-                uniqueFiles.append(file)
-            }
-        }
-
-        var hashGroups: [String: [FileItem]] = [:]
-        for file in uniqueFiles {
-            guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
-            hashGroups[hash, default: []].append(file)
-        }
-
-        var infos: [DuplicateInfo] = []
-        var seenHashes: Set<String> = []
-        for (hash, files) in hashGroups where files.count > 1 {
-            guard !seenHashes.contains(hash) else { continue }
-            seenHashes.insert(hash)
-            if let first = files.first {
-                let others = Array(files.dropFirst())
-                infos.append(DuplicateInfo(file: first, duplicates: others, isExactMatch: true, similarity: 1.0))
-            }
-        }
-        return infos.sorted { $0.duplicateCount > $1.duplicateCount }
-    }
-
-    private var totalDuplicateCount: Int {
-        duplicateGroups.reduce(0) { $0 + $1.duplicateCount }
-    }
 
     var body: some View {
         if !duplicateGroups.isEmpty {
