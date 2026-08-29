@@ -41,7 +41,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             ),
                             title: "Fast Mode",
-                            description: "Uses names, metadata, and folder context; skips content and images",
+                            description: "Uses names, basic metadata, and folder context; skips deep content analysis",
                             focusTarget: .strategyFastMode
                         )
                         .disabled(!viewModel.config.provider.supportsDeepScan)
@@ -69,7 +69,7 @@ struct OrganizationStrategySettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
-                        description: "Analyze image content for stronger visual grouping, including in Fast Mode",
+                        description: "Analyze image content for stronger visual grouping, even in Fast Mode",
                         focusTarget: .strategyVision
                     )
                     .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
