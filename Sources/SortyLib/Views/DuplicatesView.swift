@@ -273,13 +273,10 @@ struct DuplicatesView: View {
 
                     List(selection: $appState.duplicateSelectedGroup) {
                         if !exactGroups.isEmpty {
-                            Section {
-                                if isExactSectionExpanded {
-                                    ForEach(exactGroups) { group in
-                                        UnifiedDuplicateGroupRow(group: group)
-                                            .tag(group)
-                                    }
-                                    .transition(.opacity.combined(with: .offset(y: -8)))
+                            Section(isExpanded: $isExactSectionExpanded) {
+                                ForEach(exactGroups) { group in
+                                    UnifiedDuplicateGroupRow(group: group)
+                                        .tag(group)
                                 }
                             } header: {
                                 DuplicateSectionHeader(
@@ -292,13 +289,10 @@ struct DuplicatesView: View {
                         }
 
                         if !similarGroups.isEmpty {
-                            Section {
-                                if isSimilarSectionExpanded {
-                                    ForEach(similarGroups) { group in
-                                        UnifiedDuplicateGroupRow(group: group)
-                                            .tag(group)
-                                    }
-                                    .transition(.opacity.combined(with: .offset(y: -8)))
+                            Section(isExpanded: $isSimilarSectionExpanded) {
+                                ForEach(similarGroups) { group in
+                                    UnifiedDuplicateGroupRow(group: group)
+                                        .tag(group)
                                 }
                             } header: {
                                 DuplicateSectionHeader(
