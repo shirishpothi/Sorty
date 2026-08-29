@@ -356,7 +356,12 @@ struct DirectorySelectionView: View {
             ? requestedDirectory
             : URL.homeDirectory
 
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+        Task { @MainActor in
+            let openedContextMenu = await FinderAutomation.openContextMenu(for: directory)
+            if !openedContextMenu {
+                NSWorkspace.shared.activateFileViewerSelecting([directory])
+            }
+        }
     }
 
     private func showMenuBarExtra() {

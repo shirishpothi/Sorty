@@ -208,7 +208,10 @@ If Finder still shows stale state, run the in-app repair buttons again and then 
 
 On the organize screen, click the **Right-Click** tip to open Finder at the selected
 folder. Before a folder is selected, it opens Finder at your home folder so you can
-try the Sorty actions on any directory.
+try the Sorty actions on any directory. When macOS grants Sorty Accessibility access,
+the tip also opens the folder's context menu and highlights the first Sorty action.
+macOS may ask for that access the first time. Without it, Finder opens with the
+folder selected so you can right-click it yourself.
 
 ---
 
