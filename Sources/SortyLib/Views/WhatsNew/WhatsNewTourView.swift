@@ -135,9 +135,8 @@ public struct WhatsNewTourView: View {
         let isReleaseSummary = currentPage == pages.count - 1
 
         return VStack(spacing: 0) {
-            // Top media is always 432pt tall so the footer never shifts when
-            // switching between the 400pt image pages and the release
-            // summary. The image is centered inside the slot.
+            // The release summary uses the copy space that the image pages
+            // need. Both layouts still end at the same fixed action-button row.
             Group {
                 if isReleaseSummary {
                     releaseSummary
@@ -145,44 +144,41 @@ public struct WhatsNewTourView: View {
                     imageSection(page)
                 }
             }
-            .frame(height: 432, alignment: .center)
+            .frame(height: isReleaseSummary ? 472 : 432, alignment: .center)
 
             VStack(spacing: 0) {
                 pageIndicator
                     .padding(.bottom, 8)
 
-                // The fixed copy slot fits a two-line description without
-                // letting any page move the action button.
-                Group {
-                    if !isReleaseSummary {
-                        VStack(spacing: 4) {
-                            Text(page.title)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityAddTraits(.isHeader)
+                if !isReleaseSummary {
+                    // Align the copy by its bottom edge. A wrapped description
+                    // grows upward and keeps the same gap above the button.
+                    VStack(spacing: 4) {
+                        Text(page.title)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
 
-                            Text(page.description)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.70))
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 28)
-                        }
-                    } else {
-                        Color.clear
+                        Text(page.description)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color.white.opacity(0.70))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 28)
                     }
+                    .frame(height: 64, alignment: .bottom)
+                    .offset(y: -20)
                 }
-                .frame(height: 64, alignment: .top)
 
                 Spacer(minLength: 0)
 
                 actionButton
                     .frame(height: 44)
             }
-            .frame(height: 136)
+            .frame(height: isReleaseSummary ? 96 : 136)
             .padding(.bottom, 8)
         }
         .frame(width: 640, height: 576, alignment: .top)
@@ -283,7 +279,7 @@ public struct WhatsNewTourView: View {
             .scrollIndicators(.automatic)
         }
         .padding(24)
-        .frame(width: 640, height: 432, alignment: .topLeading)
+        .frame(width: 640, height: 472, alignment: .topLeading)
     }
 
     private func releaseSection(
@@ -324,7 +320,7 @@ public struct WhatsNewTourView: View {
             }
         }
         .padding(SortyDesignSystem.Spacing.lg)
-        .frame(maxWidth: .infinity, minHeight: 284, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 324, alignment: .topLeading)
         .background {
             LinearGradient(
                 colors: [
@@ -346,7 +342,6 @@ public struct WhatsNewTourView: View {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xLarge, style: .continuous)
                 .strokeBorder(color.opacity(0.28), lineWidth: 1)
         }
-        .shadow(color: color.opacity(0.07), radius: 12, y: 6)
         .accessibilityElement(children: .contain)
     }
 
