@@ -223,6 +223,40 @@ final class PromptBuilderTests: XCTestCase {
         }
     }
 
+    func testEveryPromptPathPreservesFinderTagNamesAndVisibleColor() {
+        let file = FileItem(
+            path: "/tmp/Tax Return.pdf",
+            name: "Tax Return",
+            extension: "pdf",
+            finderTags: ["Taxes", "Needs Review"],
+            finderLabelNumber: FinderTagColor.red.rawValue
+        )
+
+        let fullPrompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            mode: .renameOnly,
+            customInstructions: "Rename only red-tagged files."
+        )
+        XCTAssertTrue(fullPrompt.contains("[finder_tags] Taxes, Needs Review"))
+        XCTAssertTrue(fullPrompt.contains("[finder_color] Red"))
+        XCTAssertTrue(fullPrompt.contains("Match color phrases such as \"red-tagged\" against `finder_color`"))
+        XCTAssertTrue(fullPrompt.contains("Keep every nonmatching filename unchanged"))
+
+        let config = AIConfig(mode: .renameOnly)
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let prompts = PromptBuilder.promptPair(for: level, config: config, files: [file])
+            let combined = prompts.system + "\n" + prompts.user
+            XCTAssertTrue(combined.contains("finder_tags:Taxes,Needs Review"), "Missing Finder tag names in \(level)")
+            XCTAssertTrue(combined.contains("finder_color:Red"), "Missing Finder color in \(level)")
+            XCTAssertTrue(combined.contains("Color instructions match finder_color"), "Missing tag-selection rule in \(level)")
+        }
+    }
+
     func testCompactionPreservesPersonaLearningsAndNamingPolicy() {
         var config = AIConfig(mode: .renameOnly)
         config.namingStyle = .datePrefix
@@ -421,6 +455,41 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(context?.contains("notes.txt") ?? false)
         XCTAssertTrue(context?.contains("pdf:1") ?? false)
         XCTAssertTrue(context?.contains("txt:1") ?? false)
+    }
+
+    func testDirectoryManifestIncludesFileFinderMetadata() throws {
+        let file = FileItem(
+            path: tempDir.appendingPathComponent("invoice.pdf").path,
+            name: "invoice",
+            extension: "pdf",
+            finderTags: ["Accounts"],
+            finderLabelNumber: FinderTagColor.green.rawValue
+        )
+
+        let context = try XCTUnwrap(PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: [file]
+        ))
+
+        XCTAssertTrue(context.contains("finder_tags Accounts"))
+        XCTAssertTrue(context.contains("finder_color Green"))
+    }
+
+    func testFinderTaggedFolderContextIncludesFolderColorAndDescendantRule() throws {
+        var taggedFolder = tempDir.appendingPathComponent("Incoming", isDirectory: true)
+        try FileManager.default.createDirectory(at: taggedFolder, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.labelNumber = FinderTagColor.red.rawValue
+        try taggedFolder.setResourceValues(values)
+        let nestedFile = taggedFolder.appendingPathComponent("scan.pdf")
+
+        let context = try XCTUnwrap(PromptBuilder.buildFinderTaggedFolderContext(
+            baseDirectoryURL: tempDir,
+            files: [FileItem(path: nestedFile.path, name: "scan", extension: "pdf")]
+        ))
+
+        XCTAssertTrue(context.contains("- Incoming | finder_color Red"))
+        XCTAssertTrue(context.contains("inherits that folder's match"))
     }
 
     func testDirectoryManifestContextReturnsNilWhenNoFiles() {

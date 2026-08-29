@@ -141,6 +141,8 @@ struct PromptBuilder {
             }
         }
 
+        prompt += finderTagSelectionGuidance(mode: mode)
+
         if mode == .organize {
             prompt += """
             ## ORGANIZE-ONLY WORKFLOW BOUNDARY
@@ -278,7 +280,11 @@ struct PromptBuilder {
                 }
 
                 if let tags = file.finderTags, !tags.isEmpty {
-                    fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
+                    fileDesc += "\n    [finder_tags] \(tags.joined(separator: ", "))"
+                }
+
+                if let color = file.finderTagColorName {
+                    fileDesc += "\n    [finder_color] \(color)"
                 }
 
                 if let comment = file.finderComment, !comment.isEmpty {
@@ -314,7 +320,7 @@ struct PromptBuilder {
         prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
         prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
         prompt += "- Dates (created/modified/accessed): Group by time period or project phase when relevant\n"
-        prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
+        prompt += "- Finder Tags: Match named tags against [finder_tags] and visible color instructions against [finder_color]\n"
         prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
 
         if mode == .renameOnly {
@@ -342,6 +348,24 @@ struct PromptBuilder {
         <user_instructions>
         \(trimmed)
         </user_instructions>
+        """
+    }
+
+    private static func finderTagSelectionGuidance(mode: OrganizationMode) -> String {
+        let nonmatchingRule = mode == .renameOnly
+            ? "Keep every nonmatching filename unchanged, include it under '.', and omit its rename suggestion."
+            : "Leave nonmatching files in their current locations by returning them as unorganized rather than moving them."
+
+        return """
+
+        ## FINDER TAG SELECTION
+        Finder metadata describes the existing input; it is not a request to apply new tags.
+        - Match color phrases such as "red-tagged" against `finder_color`, not the tag name.
+        - Match a custom Finder tag name against `finder_tags`.
+        - A tagged folder makes its listed descendants match instructions that select that folder by tag.
+        - When the user says "only", restrict the requested move or rename to matching items. \(nonmatchingRule)
+        - Missing `finder_color` means the item has no visible Finder label color.
+
         """
     }
 
@@ -436,7 +460,10 @@ struct PromptBuilder {
             extras.append("cloud:\(cloudStatus.rawValue)")
         }
         if let tags = file.finderTags, !tags.isEmpty {
-            extras.append("tags:\(tags.joined(separator: ","))")
+            extras.append("finder_tags:\(tags.joined(separator: ","))")
+        }
+        if let color = file.finderTagColorName {
+            extras.append("finder_color:\(color)")
         }
         if let comment = file.finderComment, !comment.isEmpty {
             extras.append("comment:\(String(comment.prefix(40)))")
@@ -534,6 +561,7 @@ struct PromptBuilder {
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
+        Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says "only", change matching items only and leave nonmatches unchanged; descendants of a selected tagged folder match that folder.
         Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough.
         """
     }
@@ -553,6 +581,7 @@ struct PromptBuilder {
             base += " Actively create folder assignments when moving files would materially improve findability. Return a no-op only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure."
         }
         base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough."
+        base += " Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says only, change matching items only and leave nonmatches unchanged; a tagged folder makes its listed descendants match."
         base += " For every folder, add one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles. Never say only that files belong together."
         base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
@@ -668,6 +697,7 @@ struct PromptBuilder {
         - Every folder must include one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles.
         - Never use vague folder reasoning such as "these files belong together".
         - Group by type: Documents, Media, Code, Archives
+        - Existing finder_tags are tag names; finder_color is the visible Finder label color. Match color instructions against finder_color. If the user says "only", change matching items only and leave nonmatches unchanged. A tagged folder makes its listed descendants match.
         - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Prefer better filenames; keep originals only when they are already clear, stable/protected, or user-excluded." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Generic camera, screenshot, scan, download, or default app names should usually receive suggested_name when evidence supports it." : "")
@@ -908,6 +938,12 @@ struct PromptBuilder {
             if let modified = file.modificationDate {
                 line += " | modified \(dateFormatter.string(from: modified))"
             }
+            if let tags = file.finderTags, !tags.isEmpty {
+                line += " | finder_tags \(tags.joined(separator: ", "))"
+            }
+            if let color = file.finderTagColorName {
+                line += " | finder_color \(color)"
+            }
             return line
         }
 
@@ -947,6 +983,7 @@ struct PromptBuilder {
             .contentModificationDateKey,
             .contentAccessDateKey,
             .tagNamesKey,
+            .labelNumberKey,
         ]
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime]
@@ -969,7 +1006,10 @@ struct PromptBuilder {
                 parts.append("accessed \(dateFormatter.string(from: accessed))")
             }
             if let tags = values?.tagNames, !tags.isEmpty {
-                parts.append("tags \(tags.joined(separator: ", "))")
+                parts.append("finder_tags \(tags.joined(separator: ", "))")
+            }
+            if let color = values?.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name {
+                parts.append("finder_color \(color)")
             }
             if let comment = url.finderComment, !comment.isEmpty {
                 parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
@@ -999,6 +1039,63 @@ struct PromptBuilder {
         if directoryCount > lines.count {
             context += "\n- ... and \(directoryCount - lines.count) more directories in scope"
         }
+        return context
+    }
+
+    static func buildFinderTaggedFolderContext(
+        baseDirectoryURL: URL,
+        files: [FileItem]
+    ) -> String? {
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .tagNamesKey, .labelNumberKey]
+        var lines: [String] = []
+        let baseURL = baseDirectoryURL.standardizedFileURL
+        let basePath = baseURL.path
+        var candidateDirectories: Set<URL> = [baseURL]
+
+        for file in files {
+            var directory = file.isDirectory
+                ? URL(fileURLWithPath: file.path).standardizedFileURL
+                : URL(fileURLWithPath: file.path).deletingLastPathComponent().standardizedFileURL
+
+            while directory.path == basePath || directory.path.hasPrefix(basePath + "/") {
+                candidateDirectories.insert(directory)
+                guard directory.path != basePath else { break }
+                let parent = directory.deletingLastPathComponent().standardizedFileURL
+                guard parent.path != directory.path else { break }
+                directory = parent
+            }
+        }
+
+        func appendTaggedDirectory(_ url: URL, relativePath: String) {
+            guard let values = try? url.resourceValues(forKeys: keys) else { return }
+            let tags = values.tagNames ?? []
+            let color = values.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name
+            guard !tags.isEmpty || color != nil else { return }
+
+            var parts = ["- \(relativePath)"]
+            if !tags.isEmpty {
+                parts.append("finder_tags \(tags.joined(separator: ", "))")
+            }
+            if let color {
+                parts.append("finder_color \(color)")
+            }
+            lines.append(parts.joined(separator: " | "))
+        }
+
+        for directory in candidateDirectories.sorted(by: {
+            $0.path.localizedStandardCompare($1.path) == .orderedAscending
+        }) {
+            appendTaggedDirectory(
+                directory,
+                relativePath: directory.path == basePath
+                    ? "."
+                    : relativePath(for: directory, baseDirectoryURL: baseURL)
+            )
+        }
+
+        guard !lines.isEmpty else { return nil }
+        var context = "## FINDER-TAGGED FOLDERS IN SCOPE\n" + lines.joined(separator: "\n")
+        context += "\nA file below a listed folder inherits that folder's match for tag-selection instructions."
         return context
     }
 

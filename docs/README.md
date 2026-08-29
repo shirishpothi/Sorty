@@ -72,6 +72,10 @@ Before organizing, you can provide specific guidance:
 - "Group all 2024 files together"
 - "Organize by client name"
 - "Keep design files separate from code"
+- "Rename only red-tagged files"
+- "Organize only folders tagged green"
+
+Sorty passes existing Finder tag names and visible Finder label colors to the organizer. When an instruction selects a tagged folder, its descendants are included; items that do not match an "only" instruction stay unchanged.
 
 ### Temperature Control
 

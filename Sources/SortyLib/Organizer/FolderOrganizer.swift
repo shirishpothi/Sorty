@@ -2096,6 +2096,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
            ) {
             completeInstructions += "\n\n" + manifest
         }
+        if mode == .renameOnly,
+           !completeInstructions.contains("## FINDER-TAGGED FOLDERS IN SCOPE"),
+           let resolvedDirectory,
+           let finderTagContext = PromptBuilder.buildFinderTaggedFolderContext(
+               baseDirectoryURL: resolvedDirectory,
+               files: files
+           ) {
+            completeInstructions += "\n\n" + finderTagContext
+        }
         let batchSize = mode == .organize
             ? Self.organizeAnalysisBatchSize
             : Self.renameAnalysisBatchSize

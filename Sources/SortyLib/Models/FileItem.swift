@@ -125,6 +125,11 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
+    /// The visible Finder label color, when Finder assigned one to this item.
+    public var finderTagColorName: String? {
+        finderLabelNumber.flatMap(FinderTagColor.init(rawValue:))?.name
+    }
+
     /// Returns the suggested filename if available, otherwise the original display name
     public var finalDisplayName: String {
         if let suggested = suggestedFilename, !suggested.isEmpty {
@@ -175,6 +180,10 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
 
         if let tags = finderTags, !tags.isEmpty {
             parts.append("Tags: \(tags.joined(separator: ", "))")
+        }
+
+        if let finderTagColorName {
+            parts.append("Finder Color: \(finderTagColorName)")
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " | ")
