@@ -53,6 +53,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     // macOS Finder metadata
     public var finderComment: String?
     public var finderTags: [String]?
+    public var finderLabelNumber: Int?
 
     public init(
         id: UUID = UUID(),
@@ -74,7 +75,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         imageHeight: Int? = nil,
         cloudStatus: CloudFileStatus? = nil,
         finderComment: String? = nil,
-        finderTags: [String]? = nil
+        finderTags: [String]? = nil,
+        finderLabelNumber: Int? = nil
     ) {
         self.id = id
         self.path = path
@@ -96,6 +98,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         self.cloudStatus = cloudStatus
         self.finderComment = finderComment
         self.finderTags = finderTags
+        self.finderLabelNumber = finderLabelNumber
     }
 
     public var url: URL? {

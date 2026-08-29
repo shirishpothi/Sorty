@@ -175,6 +175,47 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertTrue(matcher.shouldExclude(file))
     }
 
+    func testFinderTagRuleMatchesFinderLabelColor() {
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .finderTag, pattern: String(FinderTagColor.red.rawValue))
+        ])
+        let taggedFile = FileItem(
+            path: "/p/keep.txt",
+            name: "keep",
+            extension: "txt",
+            finderLabelNumber: FinderTagColor.red.rawValue
+        )
+        let untaggedFile = FileItem(
+            path: "/p/move.txt",
+            name: "move",
+            extension: "txt",
+            finderLabelNumber: FinderTagColor.blue.rawValue
+        )
+
+        XCTAssertTrue(matcher.shouldExclude(taggedFile))
+        XCTAssertFalse(matcher.shouldExclude(untaggedFile))
+    }
+
+    func testFinderTagRuleCanPruneTaggedFolder() {
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .finderTag, pattern: String(FinderTagColor.red.rawValue))
+        ])
+        let directory = URL(fileURLWithPath: "/project/Private")
+
+        XCTAssertTrue(
+            matcher.shouldPruneDirectory(
+                at: directory,
+                finderLabelNumber: FinderTagColor.red.rawValue
+            )
+        )
+        XCTAssertFalse(
+            matcher.shouldPruneDirectory(
+                at: directory,
+                finderLabelNumber: FinderTagColor.blue.rawValue
+            )
+        )
+    }
+
     func testCompiledDateMatcherRefreshesOnlyAfterBoundedAge() {
         let referenceDate = Date(timeIntervalSince1970: 2_000_000_000)
         let matcher = ExclusionMatcher(

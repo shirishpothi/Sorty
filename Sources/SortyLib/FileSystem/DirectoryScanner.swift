@@ -218,7 +218,13 @@ actor DirectoryScanner {
         guard fileManager.isReadableFile(atPath: url.path) else {
             throw ScannerError.pathNotReadable
         }
-        if exclusionMatcher?.shouldPruneDirectory(at: url) == true {
+        let rootFinderLabelNumber = try? url.resourceValues(
+            forKeys: [.labelNumberKey]
+        ).labelNumber
+        if exclusionMatcher?.shouldPruneDirectory(
+            at: url,
+            finderLabelNumber: rootFinderLabelNumber
+        ) == true {
             return []
         }
 
@@ -560,6 +566,7 @@ actor DirectoryScanner {
         let resourceKeys: [URLResourceKey] = [
             .isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey,
             .contentModificationDateKey, .contentAccessDateKey, .tagNamesKey,
+            .labelNumberKey,
         ]
         let resourceValues = try? url.resourceValues(forKeys: Set(resourceKeys))
 
@@ -569,6 +576,7 @@ actor DirectoryScanner {
         let modificationDate = resourceValues?.contentModificationDate
         let lastAccessDate = resourceValues?.contentAccessDate
         let finderTags = resourceValues?.tagNames
+        let finderLabelNumber = resourceValues?.labelNumber
 
         let pathExtension = url.pathExtension
         let fileName = url.deletingPathExtension().lastPathComponent
@@ -577,7 +585,8 @@ actor DirectoryScanner {
             at: url,
             size: Int64(size),
             creationDate: creationDate,
-            modificationDate: modificationDate
+            modificationDate: modificationDate,
+            finderLabelNumber: finderLabelNumber
         ) == true {
             throw ScannerError.excluded
         }
@@ -627,7 +636,8 @@ actor DirectoryScanner {
             imageHeight: extractedDimensions?.height,
             cloudStatus: cloudStatus,
             finderComment: finderComment,
-            finderTags: finderTags
+            finderTags: finderTags,
+            finderLabelNumber: finderLabelNumber
         )
     }
 
@@ -667,6 +677,7 @@ actor DirectoryScanner {
             [
                 .isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey,
                 .contentModificationDateKey, .contentAccessDateKey, .tagNamesKey,
+                .labelNumberKey,
             ] + cloudResourceKeys
 
         var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
@@ -720,9 +731,13 @@ actor DirectoryScanner {
             let modificationDate = resourceValues?.contentModificationDate
             let lastAccessDate = resourceValues?.contentAccessDate
             let finderTags = resourceValues?.tagNames
+            let finderLabelNumber = resourceValues?.labelNumber
 
             if isDirectory {
-                if exclusionMatcher?.shouldPruneDirectory(at: fileURL) == true {
+                if exclusionMatcher?.shouldPruneDirectory(
+                    at: fileURL,
+                    finderLabelNumber: finderLabelNumber
+                ) == true {
                     enumerator.skipDescendants()
                 }
                 continue
@@ -737,7 +752,8 @@ actor DirectoryScanner {
                 at: fileURL,
                 size: Int64(size),
                 creationDate: creationDate,
-                modificationDate: modificationDate
+                modificationDate: modificationDate,
+                finderLabelNumber: finderLabelNumber
             ) == true {
                 continue
             }
@@ -806,7 +822,8 @@ actor DirectoryScanner {
                 imageHeight: extractedDimensions?.height,
                 cloudStatus: cloudStatus,
                 finderComment: finderComment,
-                finderTags: finderTags
+                finderTags: finderTags,
+                finderLabelNumber: finderLabelNumber
             )
 
             files.append(fileItem)

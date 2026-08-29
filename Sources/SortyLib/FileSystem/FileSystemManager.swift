@@ -840,11 +840,21 @@ public actor FileSystemManager {
     
     func validateOperation(_ operation: FileOperation, exclusionManager: ExclusionRulesManager?) async -> Bool {
         guard let manager = exclusionManager else { return true }
-        
+        let matcher = await manager.matcherSnapshot()
         let sourceURL = URL(fileURLWithPath: operation.sourcePath)
-        let sourceItem = FileItem(path: sourceURL.path, name: sourceURL.lastPathComponent, extension: sourceURL.pathExtension)
-        
-        let shouldExcludeSource = await manager.shouldExclude(sourceItem)
+        let sourceValues = try? sourceURL.resourceValues(forKeys: [
+            .fileSizeKey,
+            .creationDateKey,
+            .contentModificationDateKey,
+            .labelNumberKey,
+        ])
+        let shouldExcludeSource = matcher.shouldExcludeFile(
+            at: sourceURL,
+            size: Int64(sourceValues?.fileSize ?? 0),
+            creationDate: sourceValues?.creationDate,
+            modificationDate: sourceValues?.contentModificationDate,
+            finderLabelNumber: sourceValues?.labelNumber
+        )
         if shouldExcludeSource {
             DebugLogger.log("Operation BLOCKED: Source \(operation.sourcePath) is excluded.")
             return false
@@ -852,8 +862,19 @@ public actor FileSystemManager {
         
         if let destPath = operation.destinationPath {
             let destURL = URL(fileURLWithPath: destPath)
-            let destItem = FileItem(path: destURL.path, name: destURL.lastPathComponent, extension: destURL.pathExtension)
-            let shouldExcludeDest = await manager.shouldExclude(destItem)
+            let destinationValues = try? destURL.resourceValues(forKeys: [
+                .fileSizeKey,
+                .creationDateKey,
+                .contentModificationDateKey,
+                .labelNumberKey,
+            ])
+            let shouldExcludeDest = matcher.shouldExcludeFile(
+                at: destURL,
+                size: Int64(destinationValues?.fileSize ?? 0),
+                creationDate: destinationValues?.creationDate,
+                modificationDate: destinationValues?.contentModificationDate,
+                finderLabelNumber: destinationValues?.labelNumber
+            )
             if shouldExcludeDest {
                 DebugLogger.log("Operation BLOCKED: Destination \(destPath) is excluded.")
                 return false

@@ -23,6 +23,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
     case modificationDate = "Modification Date"
     case hiddenFiles = "Hidden Files"
     case systemFiles = "System Files"
+    case finderTag = "Finder Tag"
     case fileType = "File Type Category"
     case customScript = "Custom Script"
 
@@ -40,6 +41,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
         case .modificationDate: return "Files by modification date"
         case .hiddenFiles: return "Hidden files"
         case .systemFiles: return "macOS system files"
+        case .finderTag: return "Files with a Finder tag"
         case .fileType: return "A kind of file"
         case .customScript: return "Custom script"
         }
@@ -57,6 +59,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
         case .modificationDate: return "calendar.badge.clock"
         case .hiddenFiles: return "eye.slash"
         case .systemFiles: return "gearshape.2"
+        case .finderTag: return "tag"
         case .fileType: return "doc.on.doc"
         case .customScript: return "applescript"
         }
@@ -74,6 +77,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
         case .modificationDate: return "Exclude files by modification date"
         case .hiddenFiles: return "Match hidden files (starting with '.')"
         case .systemFiles: return "Match macOS system files"
+        case .finderTag: return "Match files and folders with a Finder tag"
         case .fileType: return "Match by file type category"
         case .customScript: return "Run custom AppleScript for matching"
         }
@@ -192,6 +196,30 @@ public enum ExclusionAgeUnit: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+public enum FinderTagColor: Int, Codable, CaseIterable, Identifiable, Sendable {
+    case red = 6
+    case orange = 7
+    case yellow = 5
+    case green = 2
+    case blue = 4
+    case purple = 3
+    case gray = 1
+
+    public var id: Self { self }
+
+    public var name: String {
+        switch self {
+        case .red: "Red"
+        case .orange: "Orange"
+        case .yellow: "Yellow"
+        case .green: "Green"
+        case .blue: "Blue"
+        case .purple: "Purple"
+        case .gray: "Gray"
+        }
+    }
+}
+
 // MARK: - Exclusion Rule Model
 
 public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
@@ -296,6 +324,10 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             return "Hidden files"
         case .systemFiles:
             return "System files"
+        case .finderTag:
+            let colorName = Int(pattern)
+                .flatMap(FinderTagColor.init(rawValue:))?.name ?? "selected"
+            return "Files and folders with the \(colorName.lowercased()) Finder tag"
         case .fileType:
             return fileTypeCategory?.rawValue ?? "Selected file category"
         case .customScript:
@@ -385,7 +417,8 @@ public struct ExclusionMatcher: Sendable {
             pathExtension: file.extension,
             size: file.size,
             creationDate: file.creationDate,
-            modificationDate: file.modificationDate
+            modificationDate: file.modificationDate,
+            finderLabelNumber: file.finderLabelNumber
         )
         return matchesAnyRule(cache: &cache)
     }
@@ -403,13 +436,15 @@ public struct ExclusionMatcher: Sendable {
         at url: URL,
         size: Int64,
         creationDate: Date?,
-        modificationDate: Date?
+        modificationDate: Date?,
+        finderLabelNumber: Int? = nil
     ) -> Bool {
         var cache = ExclusionMatchCache(
             url: url,
             size: size,
             creationDate: creationDate,
-            modificationDate: modificationDate
+            modificationDate: modificationDate,
+            finderLabelNumber: finderLabelNumber
         )
         if pathOnlyRules.contains(where: { $0.matches(cache: &cache) }) {
             return true
@@ -417,20 +452,25 @@ public struct ExclusionMatcher: Sendable {
         return metadataRules.contains { $0.matches(cache: &cache) }
     }
 
-    /// Returns true only when every descendant must match a positive rule.
-    /// Negated and file-metadata rules cannot safely prune an entire subtree.
-    public func shouldPruneDirectory(at url: URL) -> Bool {
+    /// Returns true when an enabled positive rule protects an entire directory tree.
+    public func shouldPruneDirectory(
+        at url: URL,
+        finderLabelNumber: Int? = nil
+    ) -> Bool {
         guard !directoryPruningRules.isEmpty else { return false }
-        var cache = ExclusionMatchCache(url: url)
+        var cache = ExclusionMatchCache(url: url, finderLabelNumber: finderLabelNumber)
         return directoryPruningRules.contains {
             $0.matchesDirectoryForPruning(cache: &cache)
         }
     }
 
     /// The enabled rule that excludes an entire directory tree, if one applies.
-    public func firstBlockingDirectoryRuleID(at url: URL) -> UUID? {
+    public func firstBlockingDirectoryRuleID(
+        at url: URL,
+        finderLabelNumber: Int? = nil
+    ) -> UUID? {
         guard !directoryPruningRules.isEmpty else { return nil }
-        var cache = ExclusionMatchCache(url: url)
+        var cache = ExclusionMatchCache(url: url, finderLabelNumber: finderLabelNumber)
         return directoryPruningRules.first {
             $0.matchesDirectoryForPruning(cache: &cache)
         }?.id
@@ -453,7 +493,8 @@ public struct ExclusionMatcher: Sendable {
         pathExtension: String,
         size: Int64 = 0,
         creationDate: Date? = nil,
-        modificationDate: Date? = nil
+        modificationDate: Date? = nil,
+        finderLabelNumber: Int? = nil
     ) -> Bool {
         var cache = ExclusionMatchCache(
             path: path,
@@ -461,7 +502,8 @@ public struct ExclusionMatcher: Sendable {
             pathExtension: pathExtension,
             size: size,
             creationDate: creationDate,
-            modificationDate: modificationDate
+            modificationDate: modificationDate,
+            finderLabelNumber: finderLabelNumber
         )
         return matchesAnyRule(cache: &cache)
     }
@@ -473,7 +515,8 @@ public struct ExclusionMatcher: Sendable {
             pathExtension: file.extension,
             size: file.size,
             creationDate: file.creationDate,
-            modificationDate: file.modificationDate
+            modificationDate: file.modificationDate,
+            finderLabelNumber: file.finderLabelNumber
         )
         return rules.first { $0.matches(cache: &cache) }?.id
     }
@@ -485,7 +528,8 @@ public struct ExclusionMatcher: Sendable {
             pathExtension: file.extension,
             size: file.size,
             creationDate: file.creationDate,
-            modificationDate: file.modificationDate
+            modificationDate: file.modificationDate,
+            finderLabelNumber: file.finderLabelNumber
         )
         var matches: [UUID] = []
         for rule in rules where rule.matches(cache: &cache) {
@@ -513,6 +557,7 @@ private struct ExclusionMatchCache {
     let size: Int64
     let creationDate: Date?
     let modificationDate: Date?
+    let finderLabelNumber: Int?
 
     private var lowercasedPathStorage: String?
     private var lowercasedNameStorage: String?
@@ -526,7 +571,8 @@ private struct ExclusionMatchCache {
         pathExtension: String,
         size: Int64,
         creationDate: Date?,
-        modificationDate: Date?
+        modificationDate: Date?,
+        finderLabelNumber: Int? = nil
     ) {
         self.path = path
         self.name = name
@@ -534,13 +580,15 @@ private struct ExclusionMatchCache {
         self.size = size
         self.creationDate = creationDate
         self.modificationDate = modificationDate
+        self.finderLabelNumber = finderLabelNumber
     }
 
     init(
         url: URL,
         size: Int64 = 0,
         creationDate: Date? = nil,
-        modificationDate: Date? = nil
+        modificationDate: Date? = nil,
+        finderLabelNumber: Int? = nil
     ) {
         self.init(
             path: url.path,
@@ -548,7 +596,8 @@ private struct ExclusionMatchCache {
             pathExtension: url.pathExtension,
             size: size,
             creationDate: creationDate,
-            modificationDate: modificationDate
+            modificationDate: modificationDate,
+            finderLabelNumber: finderLabelNumber
         )
     }
 
@@ -686,6 +735,11 @@ private struct CompiledExclusionRule: Sendable {
         case .systemFiles:
             predicate = .systemFiles
 
+        case .finderTag:
+            guard let labelNumber = Int(trimmedPattern),
+                  FinderTagColor(rawValue: labelNumber) != nil else { return nil }
+            predicate = .finderTag(labelNumber)
+
         case .fileType:
             guard let category = rule.fileTypeCategory else { return nil }
             predicate = .fileType(Set(category.extensions.map { $0.lowercased() }))
@@ -738,12 +792,13 @@ private enum CompiledExclusionPredicate: Sendable {
     )
     case hiddenFiles
     case systemFiles
+    case finderTag(Int)
     case fileType(Set<String>)
     case constant(Bool)
 
     var isPathOnly: Bool {
         switch self {
-        case .fileSize, .date:
+        case .fileSize, .date, .finderTag:
             return false
         default:
             return true
@@ -752,7 +807,8 @@ private enum CompiledExclusionPredicate: Sendable {
 
     var canPruneDirectory: Bool {
         switch self {
-        case .folderNameContains, .pathContains, .folderTree, .hiddenFiles, .systemFiles:
+        case .folderNameContains, .pathContains, .folderTree, .hiddenFiles, .systemFiles,
+             .finderTag:
             return true
         default:
             return false
@@ -769,6 +825,8 @@ private enum CompiledExclusionPredicate: Sendable {
             return 2
         case .systemFiles:
             return 3
+        case .finderTag:
+            return 2
         case .pathContains, .folderTree:
             return 4
         case .folderNameContains:
@@ -828,6 +886,9 @@ private enum CompiledExclusionPredicate: Sendable {
 
         case .systemFiles:
             return ExclusionMatcher.isSystemItem(name: cache.name, path: cache.path)
+
+        case .finderTag(let labelNumber):
+            return cache.finderLabelNumber == labelNumber
 
         case .fileType(let extensions):
             return extensions.contains(cache.normalizedExtension())
@@ -1034,7 +1095,11 @@ public class ExclusionRulesManager: ObservableObject {
 
     /// Returns the exact enabled rule that prevents Sorty from entering this folder.
     public func blockingRule(forDirectoryAt url: URL) -> ExclusionRule? {
-        guard let ruleID = matcherSnapshot().firstBlockingDirectoryRuleID(at: url) else {
+        let finderLabelNumber = try? url.resourceValues(forKeys: [.labelNumberKey]).labelNumber
+        guard let ruleID = matcherSnapshot().firstBlockingDirectoryRuleID(
+            at: url,
+            finderLabelNumber: finderLabelNumber
+        ) else {
             return nil
         }
         return rules.first { $0.id == ruleID }

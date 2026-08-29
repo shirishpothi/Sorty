@@ -130,6 +130,46 @@ class DirectoryScannerTests: XCTestCase {
         XCTAssertNotNil(files.first?.contentMetadata)
     }
 
+    func testFinderTagExclusionSkipsTaggedFileAndTaggedFolderContents() async throws {
+        let taggedFile = tempDirectory.appendingPathComponent("private.txt")
+        try "private".write(to: taggedFile, atomically: true, encoding: .utf8)
+        var taggedFileURL = taggedFile
+        var taggedFileValues = URLResourceValues()
+        taggedFileValues.labelNumber = FinderTagColor.red.rawValue
+        try taggedFileURL.setResourceValues(taggedFileValues)
+
+        let taggedFolder = tempDirectory.appendingPathComponent("Archive", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: taggedFolder,
+            withIntermediateDirectories: true
+        )
+        try "archived".write(
+            to: taggedFolder.appendingPathComponent("old.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        var taggedFolderURL = taggedFolder
+        var taggedFolderValues = URLResourceValues()
+        taggedFolderValues.labelNumber = FinderTagColor.red.rawValue
+        try taggedFolderURL.setResourceValues(taggedFolderValues)
+
+        try "public".write(
+            to: tempDirectory.appendingPathComponent("public.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let matcher = ExclusionMatcher(rules: [
+            ExclusionRule(type: .finderTag, pattern: String(FinderTagColor.red.rawValue))
+        ])
+
+        let files = try await scanner.scanDirectory(
+            at: tempDirectory,
+            exclusionMatcher: matcher
+        )
+
+        XCTAssertEqual(files.map(\.displayName), ["public.txt"])
+    }
+
     func testScanFileRejectsExcludedItem() async throws {
         let file = tempDirectory.appendingPathComponent("scratch.tmp")
         try "temporary".write(to: file, atomically: true, encoding: .utf8)

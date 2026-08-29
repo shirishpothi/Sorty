@@ -668,6 +668,7 @@ public final class FolderWatcher: @unchecked Sendable {
             .fileSizeKey,
             .creationDateKey,
             .contentModificationDateKey,
+            .labelNumberKey,
             .ubiquitousItemDownloadingStatusKey,
         ]),
         values.isRegularFile == true,
@@ -676,7 +677,8 @@ public final class FolderWatcher: @unchecked Sendable {
             at: url,
             size: Int64(values.fileSize ?? 0),
             creationDate: values.creationDate,
-            modificationDate: values.contentModificationDate
+            modificationDate: values.contentModificationDate,
+            finderLabelNumber: values.labelNumber
         ) else {
             return
         }
@@ -724,6 +726,7 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func flushPendingFiles(for folderID: UUID) {
+        removeExcludedPendingFiles(for: folderID)
         guard let folder = watchedFolders[folderID],
               !pausedFolders.contains(folderID),
               let files = pendingFiles[folderID],
@@ -842,8 +845,13 @@ public final class FolderWatcher: @unchecked Sendable {
         } else {
             return
         }
+        let scanURL = URL(fileURLWithPath: scanPath)
+        let finderLabelNumber = try? scanURL.resourceValues(
+            forKeys: [.labelNumberKey]
+        ).labelNumber
         guard !exclusionMatcher.shouldPruneDirectory(
-            at: URL(fileURLWithPath: scanPath)
+            at: scanURL,
+            finderLabelNumber: finderLabelNumber
         ) else {
             return
         }
@@ -852,10 +860,17 @@ public final class FolderWatcher: @unchecked Sendable {
 
     private func scheduleRecoveryScans(affectedBy path: String) {
         let roots = watchedRootPaths(affectedBy: path)
-        for root in roots where !exclusionMatcher.shouldPruneDirectory(
-            at: URL(fileURLWithPath: root)
-        ) {
-            beginScan(at: root, isRecovery: true)
+        for root in roots {
+            let rootURL = URL(fileURLWithPath: root)
+            let finderLabelNumber = try? rootURL.resourceValues(
+                forKeys: [.labelNumberKey]
+            ).labelNumber
+            if !exclusionMatcher.shouldPruneDirectory(
+                at: rootURL,
+                finderLabelNumber: finderLabelNumber
+            ) {
+                beginScan(at: root, isRecovery: true)
+            }
         }
     }
 
@@ -957,6 +972,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 .fileSizeKey,
                 .creationDateKey,
                 .contentModificationDateKey,
+                .labelNumberKey,
                 .ubiquitousItemDownloadingStatusKey,
             ],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
@@ -974,6 +990,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 .fileSizeKey,
                 .creationDateKey,
                 .contentModificationDateKey,
+                .labelNumberKey,
                 .ubiquitousItemDownloadingStatusKey,
             ]) else {
                 continue
@@ -981,7 +998,10 @@ public final class FolderWatcher: @unchecked Sendable {
 
             if values.isDirectory == true {
                 if Self.isIgnoredFile(fileURL.lastPathComponent)
-                    || exclusionMatcher.shouldPruneDirectory(at: fileURL) {
+                    || exclusionMatcher.shouldPruneDirectory(
+                        at: fileURL,
+                        finderLabelNumber: values.labelNumber
+                    ) {
                     enumerator.skipDescendants()
                 }
                 continue
@@ -994,7 +1014,8 @@ public final class FolderWatcher: @unchecked Sendable {
                       at: fileURL,
                       size: Int64(values.fileSize ?? 0),
                       creationDate: values.creationDate,
-                      modificationDate: values.contentModificationDate
+                      modificationDate: values.contentModificationDate,
+                      finderLabelNumber: values.labelNumber
                   ) else {
                 continue
             }
@@ -1045,6 +1066,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 .fileSizeKey,
                 .creationDateKey,
                 .contentModificationDateKey,
+                .labelNumberKey,
                 .ubiquitousItemDownloadingStatusKey,
             ],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
@@ -1059,12 +1081,16 @@ public final class FolderWatcher: @unchecked Sendable {
                 .fileSizeKey,
                 .creationDateKey,
                 .contentModificationDateKey,
+                .labelNumberKey,
                 .ubiquitousItemDownloadingStatusKey,
             ]) else { continue }
 
             if values.isDirectory == true {
                 if Self.isIgnoredFile(fileURL.lastPathComponent)
-                    || exclusionMatcher.shouldPruneDirectory(at: fileURL) {
+                    || exclusionMatcher.shouldPruneDirectory(
+                        at: fileURL,
+                        finderLabelNumber: values.labelNumber
+                    ) {
                     enumerator.skipDescendants()
                 }
                 continue
@@ -1076,7 +1102,8 @@ public final class FolderWatcher: @unchecked Sendable {
                       at: fileURL,
                       size: Int64(values.fileSize ?? 0),
                       creationDate: values.creationDate,
-                      modificationDate: values.contentModificationDate
+                      modificationDate: values.contentModificationDate,
+                      finderLabelNumber: values.labelNumber
                   ),
                   let target = targets.first(where: {
                       Self.isPath(fileURL.standardizedFileURL.path, within: $0.rootPath)
@@ -1159,10 +1186,11 @@ public final class FolderWatcher: @unchecked Sendable {
         }
     }
 
-    private func removeExcludedPendingFiles() {
+    private func removeExcludedPendingFiles(for requestedFolderID: UUID? = nil) {
         guard !exclusionMatcher.isEmpty else { return }
 
-        for folderID in Array(pendingFiles.keys) {
+        let folderIDs = requestedFolderID.map { [$0] } ?? Array(pendingFiles.keys)
+        for folderID in folderIDs {
             guard let relativePaths = pendingFiles[folderID] else { continue }
             guard let folder = watchedFolders[folderID] else {
                 clearPendingFiles(for: folderID)
@@ -1176,6 +1204,7 @@ public final class FolderWatcher: @unchecked Sendable {
                     .fileSizeKey,
                     .creationDateKey,
                     .contentModificationDateKey,
+                    .labelNumberKey,
                 ]) else {
                     return true
                 }
@@ -1183,7 +1212,8 @@ public final class FolderWatcher: @unchecked Sendable {
                     at: url,
                     size: Int64(values.fileSize ?? 0),
                     creationDate: values.creationDate,
-                    modificationDate: values.contentModificationDate
+                    modificationDate: values.contentModificationDate,
+                    finderLabelNumber: values.labelNumber
                 )
             })
 

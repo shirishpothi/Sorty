@@ -153,6 +153,7 @@ Define files and folders to skip during organization.
 | File Name | Exclude exact filenames | `.DS_Store` |
 | Folder Name | Exclude folders by name | `node_modules`, `.git` |
 | Path Contains | Exclude paths with text | `/backup/` |
+| Finder Tag | Exclude files and folder trees by Finder tag | Red, Blue |
 | File Size | Exclude by size | `> 100MB` |
 | Hidden Files | Skip `.` prefixed files | All hidden files |
 | System Files | Skip macOS system files | `.DS_Store`, etc. |

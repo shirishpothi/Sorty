@@ -53,7 +53,7 @@ struct ExclusionRulesView: View {
         let groups: [(String, [ExclusionRuleType])] = [
             ("Files & Folders", [.fileExtension, .fileName, .folderName, .pathContains, .fileType]),
             ("Conditions", [.fileSize, .creationDate, .modificationDate, .regex, .customScript]),
-            ("macOS", [.hiddenFiles, .systemFiles]),
+            ("macOS", [.hiddenFiles, .systemFiles, .finderTag]),
         ]
 
         return groups.compactMap { (title, types) in
@@ -1114,6 +1114,12 @@ struct ExclusionRuleRow: View {
                 opacity: rule.isEnabled ? 1.0 : 0.5
             )
             .frame(width: 16, height: 16)
+        } else if rule.type == .finderTag,
+                  let labelNumber = Int(rule.pattern),
+                  let tagColor = FinderTagColor(rawValue: labelNumber) {
+            Image(systemName: "tag.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(rule.isEnabled ? tagColor.color : .secondary)
         } else {
             Image(systemName: iconForType(rule.type))
                 .font(.system(size: 14))
@@ -1133,6 +1139,7 @@ struct ExclusionRuleRow: View {
         case .modificationDate: return "calendar.badge.clock"
         case .hiddenFiles: return "eye.slash"
         case .systemFiles: return "gearshape.2"
+        case .finderTag: return "tag"
         case .fileType: return "doc.on.doc"
         case .customScript: return "applescript"
         }
@@ -1144,7 +1151,7 @@ struct ExclusionRuleRow: View {
             return .blue
         case .fileSize, .creationDate, .modificationDate:
             return .orange
-        case .hiddenFiles, .systemFiles, .fileType:
+        case .hiddenFiles, .systemFiles, .finderTag, .fileType:
             return .purple
         case .customScript:
             return .green
@@ -1156,6 +1163,7 @@ struct ExclusionRuleRow: View {
 
 private enum ExclusionIntent: String, CaseIterable, Identifiable {
     case folder
+    case finderTag
     case fileKind
     case name
     case properties
@@ -1166,6 +1174,7 @@ private enum ExclusionIntent: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .folder: "A specific folder"
+        case .finderTag: "A Finder tag"
         case .fileKind: "A kind of file"
         case .name: "Files or folders by name"
         case .properties: "Files by size or age"
@@ -1176,6 +1185,7 @@ private enum ExclusionIntent: String, CaseIterable, Identifiable {
     var explanation: String {
         switch self {
         case .folder: "Exclude one folder and everything inside it from organizations and renames."
+        case .finderTag: "Exclude files and folders with a selected Finder tag."
         case .fileKind: "Exclude a familiar category, or one specific file extension."
         case .name: "Match text in a file name or an exact folder name."
         case .properties: "Exclude files above or below a size, or based on their age."
@@ -1186,10 +1196,25 @@ private enum ExclusionIntent: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .folder: "folder.badge.minus"
+        case .finderTag: "tag"
         case .fileKind: "doc.on.doc"
         case .name: "text.magnifyingglass"
         case .properties: "slider.horizontal.3"
         case .advanced: "gearshape.2"
+        }
+    }
+}
+
+private extension FinderTagColor {
+    var color: Color {
+        switch self {
+        case .red: .red
+        case .orange: .orange
+        case .yellow: .yellow
+        case .green: .green
+        case .blue: .blue
+        case .purple: .purple
+        case .gray: .gray
         }
     }
 }
@@ -1233,6 +1258,7 @@ struct AddExclusionRuleView: View {
     @State private var nameMatchChoice: NameMatchChoice = .fileName
     @State private var propertyChoice: PropertyChoice = .fileSize
     @State private var advancedChoice: AdvancedRuleChoice = .hiddenFiles
+    @State private var selectedFinderTag: FinderTagColor = .red
     @State private var pattern: String = ""
     @State private var description: String = ""
     @State private var numericValue: Double = 100
@@ -1387,6 +1413,8 @@ struct AddExclusionRuleView: View {
                 switch intent {
                 case .folder:
                     folderConfiguration
+                case .finderTag:
+                    finderTagConfiguration
                 case .fileKind:
                     fileKindConfiguration
                 case .name:
@@ -1499,6 +1527,28 @@ struct AddExclusionRuleView: View {
                     help: "Enter it with or without the dot."
                 )
             }
+        }
+    }
+
+    private var finderTagConfiguration: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Finder tag", selection: $selectedFinderTag) {
+                ForEach(FinderTagColor.allCases) { tag in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(tag.color)
+                            .frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        Text(tag.name)
+                    }
+                    .tag(tag)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text("Tag a file or folder in Finder. Sorty will leave it alone. A tagged folder protects everything inside it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -1647,6 +1697,7 @@ struct AddExclusionRuleView: View {
     private var selectedRuleType: ExclusionRuleType? {
         switch selectedIntent {
         case .folder: .pathContains
+        case .finderTag: .finderTag
         case .fileKind: fileKindChoice == .category ? .fileType : .fileExtension
         case .name: nameMatchChoice == .fileName ? .fileName : .folderName
         case .properties:
@@ -1674,7 +1725,7 @@ struct AddExclusionRuleView: View {
         }
 
         switch selectedRuleType {
-        case .hiddenFiles, .systemFiles, .fileType:
+        case .hiddenFiles, .systemFiles, .finderTag, .fileType:
             return true
         case .fileSize, .creationDate, .modificationDate:
             return numericValue > 0
@@ -1705,6 +1756,14 @@ struct AddExclusionRuleView: View {
         let rule: ExclusionRule
 
         switch selectedRuleType {
+        case .finderTag:
+            rule = ExclusionRule(
+                type: .finderTag,
+                pattern: String(selectedFinderTag.rawValue),
+                description: description.isEmpty
+                    ? "\(selectedFinderTag.name) Finder tag"
+                    : description
+            )
         case .fileSize, .creationDate, .modificationDate:
             rule = ExclusionRule(
                 type: selectedRuleType,

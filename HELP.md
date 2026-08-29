@@ -358,6 +358,7 @@ Run "Calibrate" to perform a one-time full organization. This establishes the ba
 |-----------|----------|
 | **Pattern Matching** | `*.log`, `*.tmp`, `config*` |
 | **Folder Exclusions** | `/node_modules`, `/.git`, `/venv` |
+| **Finder Tags** | Red, Orange, Yellow, Green, Blue, Purple, Gray |
 | **Extension Filters** | `.DS_Store`, `.gitignore` |
 | **Size-Based** | Files > 1GB, Files < 1KB |
 
@@ -367,6 +368,8 @@ Run "Calibrate" to perform a one-time full organization. This establishes the ba
 2. Click "Add Rule"
 3. Choose rule type and enter criteria
 4. Rule applies immediately to future organizations
+
+Finder tag exclusions also apply to Watched Folders. If you tag a folder, Sorty leaves the folder and everything inside it alone.
 
 ### Common Exclusion Patterns
 
