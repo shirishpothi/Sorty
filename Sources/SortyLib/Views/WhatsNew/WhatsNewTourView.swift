@@ -279,7 +279,7 @@ public struct WhatsNewTourView: View {
             }
             .scrollIndicators(.automatic)
         }
-        .padding(24)
+        .padding(EdgeInsets(top: 56, leading: 24, bottom: 24, trailing: 24))
         .frame(width: 640, height: 496, alignment: .topLeading)
     }
 
