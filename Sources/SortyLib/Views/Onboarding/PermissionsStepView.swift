@@ -490,7 +490,14 @@ public struct PermissionsStepView: View {
         if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
             PermisoAssistant.shared.present(
                 panel: .notifications,
-                sourceFrameInScreen: sourceFrameInScreen
+                sourceFrameInScreen: sourceFrameInScreen,
+                onPermissionGranted: {
+                    Task { @MainActor in
+                        await notificationManager.checkNotificationPermission()
+                        permissionStates[.notifications] = .granted
+                        HapticFeedbackManager.shared.success()
+                    }
+                }
             )
             return
         }

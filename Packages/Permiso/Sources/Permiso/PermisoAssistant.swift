@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UserNotifications
 
 @MainActor
 public final class PermisoAssistant {
@@ -12,6 +13,7 @@ public final class PermisoAssistant {
     private var pendingSourceFrameInScreen: CGRect?
     private var pendingSourceSnapshot: NSImage?
     private var didPresentCurrentOverlay = false
+    private var permissionMonitorTask: Task<Void, Never>?
 
     public init() {}
 
@@ -20,8 +22,11 @@ public final class PermisoAssistant {
         hostApp: PermisoHostApp = .current(),
         sourceFrameInScreen: CGRect? = nil,
         onCancel: @escaping () -> Void = {},
-        onMissingApp: @escaping () -> Void = {}
+        onMissingApp: @escaping () -> Void = {},
+        onPermissionGranted: (() -> Void)? = nil
     ) {
+        permissionMonitorTask?.cancel()
+        permissionMonitorTask = nil
         activePanel = panel
         pendingSourceFrameInScreen = sourceFrameInScreen
         pendingSourceSnapshot = sourceFrameInScreen.flatMap {
@@ -43,6 +48,12 @@ public final class PermisoAssistant {
         )
         NSWorkspace.shared.open(panel.settingsURL)
         startTracking()
+        if panel == .notifications, let onPermissionGranted {
+            startNotificationPermissionMonitor(
+                hostApp: hostApp,
+                onPermissionGranted: onPermissionGranted
+            )
+        }
     }
 
     public func dismiss() {
@@ -52,12 +63,18 @@ public final class PermisoAssistant {
     }
 
     private func cancelAndReturnToApp(hostApp: PermisoHostApp, onCancel: @escaping () -> Void) {
+        returnToApp(hostApp: hostApp, completion: onCancel)
+    }
+
+    private func returnToApp(hostApp: PermisoHostApp, completion: @escaping () -> Void) {
         stopTracking()
+        permissionMonitorTask?.cancel()
+        permissionMonitorTask = nil
         let controller = overlayController
         controller?.returnToSource { [weak self] in
             NSWorkspace.shared.open(hostApp.bundleURL)
             NSRunningApplication.current.activate(options: [.activateAllWindows])
-            onCancel()
+            completion()
             controller?.close()
             self?.clearActiveRequest()
         }
@@ -69,6 +86,25 @@ public final class PermisoAssistant {
         if let activationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
             self.activationObserver = nil
+        }
+    }
+
+    private func startNotificationPermissionMonitor(
+        hostApp: PermisoHostApp,
+        onPermissionGranted: @escaping () -> Void
+    ) {
+        permissionMonitorTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+
+                let status = await UNUserNotificationCenter.current().notificationSettings()
+                    .authorizationStatus
+                guard status == .authorized || status == .provisional else { continue }
+
+                self?.returnToApp(hostApp: hostApp, completion: onPermissionGranted)
+                return
+            }
         }
     }
 

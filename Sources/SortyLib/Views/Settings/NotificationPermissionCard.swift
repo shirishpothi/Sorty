@@ -209,18 +209,28 @@ struct NotificationPermissionCard: View {
                     openSystemSettings(
                         sourceFrameInScreen: settingsButtonFrameInScreen.isEmpty
                             ? nil
-                            : settingsButtonFrameInScreen.integral
+                            : settingsButtonFrameInScreen.integral,
+                        dismissAfterGrant: true
                     )
                 }
             }
         }
     }
     
-    private func openSystemSettings(sourceFrameInScreen: CGRect? = nil) {
+    private func openSystemSettings(
+        sourceFrameInScreen: CGRect? = nil,
+        dismissAfterGrant: Bool = false
+    ) {
         if let sourceFrameInScreen, !sourceFrameInScreen.isEmpty {
             PermisoAssistant.shared.present(
                 panel: .notifications,
-                sourceFrameInScreen: sourceFrameInScreen
+                sourceFrameInScreen: sourceFrameInScreen,
+                onPermissionGranted: dismissAfterGrant ? {
+                    Task { @MainActor in
+                        await notificationManager.checkNotificationPermission()
+                        HapticFeedbackManager.shared.success()
+                    }
+                } : nil
             )
             return
         }
