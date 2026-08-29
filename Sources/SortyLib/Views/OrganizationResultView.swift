@@ -309,6 +309,7 @@ public struct NerdStatPillExpanded: View {
                         .monospacedDigit()
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.65)
                         .numericTextTransition(animationValue: value)
                     
                     if let unit = unit {
@@ -323,6 +324,7 @@ public struct NerdStatPillExpanded: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
             
             Spacer(minLength: 0)
@@ -371,6 +373,8 @@ struct NerdStatCard: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .tracking(0.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
             
             VStack(alignment: .leading, spacing: 2) {
@@ -392,12 +396,12 @@ struct NerdStatCard: View {
                 Text(LocalizedStringKey(description))
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(NSColor.windowBackgroundColor).opacity(0.5))

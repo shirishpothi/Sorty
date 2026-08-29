@@ -358,6 +358,8 @@ private struct HistoryNerdStatsGrid: View {
                 HistoryOptionalNerdStats(stats: stats)
             }
         }
+        .padding(16)
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 }
 
@@ -390,10 +392,30 @@ private struct HistoryOptionalNerdStats: View {
                 NerdStatCard(
                     icon: "doc.text.magnifyingglass",
                     iconColor: .green,
-                    title: "Files",
+                    title: "Reviewed",
                     value: GenerationStats.formatCount(scanned),
                     unit: "files",
                     description: "Items reviewed by Sorty"
+                )
+            }
+            if let scanDuration = stats.scanDuration {
+                NerdStatCard(
+                    icon: "stopwatch",
+                    iconColor: .blue,
+                    title: "Scan time",
+                    value: GenerationStats.formatDuration(scanDuration),
+                    unit: nil,
+                    description: "Time spent reading the folder"
+                )
+            }
+            if stats.estimatedTimeSaved > 0 {
+                NerdStatCard(
+                    icon: "hourglass.bottomhalf.filled",
+                    iconColor: .orange,
+                    title: "Time saved",
+                    value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
+                    unit: nil,
+                    description: "Estimated manual sorting time"
                 )
             }
             if let size = stats.formattedTotalFileSize {
@@ -410,10 +432,28 @@ private struct HistoryOptionalNerdStats: View {
                 NerdStatCard(
                     icon: "dollarsign.circle",
                     iconColor: .yellow,
-                    title: "Cost",
+                    title: "AI cost",
                     value: GenerationStats.formatCost(stats.computedCost),
                     unit: nil,
                     description: "Estimated API spend"
+                )
+            }
+            NerdStatCard(
+                icon: "cpu",
+                iconColor: .purple,
+                title: "Model",
+                value: stats.compactModelName,
+                unit: nil,
+                description: "Model used for this session"
+            )
+            if let provider = stats.provider {
+                NerdStatCard(
+                    icon: "network",
+                    iconColor: .secondary,
+                    title: "Provider",
+                    value: provider,
+                    unit: nil,
+                    description: "AI service used for this session"
                 )
             }
             if let duplicates = stats.duplicatesFound, duplicates > 0 {

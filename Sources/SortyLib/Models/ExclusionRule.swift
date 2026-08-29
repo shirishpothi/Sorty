@@ -289,6 +289,24 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             return "Custom script"
         }
     }
+
+    public var interpretedMatchDescription: String {
+        switch type {
+        case .fileType: return fileTypeCategory?.rawValue ?? "A file category"
+        case .fileSize:
+            return "Files \(comparisonGreater == true ? "larger" : "smaller") than \(numericValue?.formatted() ?? "the chosen size") MB"
+        case .creationDate, .modificationDate:
+            return "Files \(comparisonGreater == true ? "older" : "newer") than \(numericValue?.formatted() ?? "the chosen age") days"
+        case .hiddenFiles: return "Hidden files"
+        case .systemFiles: return "macOS system files"
+        default: return pattern.isEmpty ? type.friendlyName : pattern
+        }
+    }
+}
+
+public struct ExclusionRuleUsage: Codable, Equatable, Sendable {
+    public var matchCount: Int = 0
+    public var lastMatchedAt: Date?
 }
 
 private extension String {
@@ -938,10 +956,12 @@ public class ExclusionRulesManager: ObservableObject {
     @Published public private(set) var rules: [ExclusionRule] = []
     @Published public private(set) var naturalLanguageExceptions: [NaturalLanguageException] = []
     @Published public private(set) var compiledMatcher = ExclusionMatcher.empty
+    @Published public private(set) var usageByRuleID: [UUID: ExclusionRuleUsage] = [:]
 
     private let userDefaults: UserDefaults
     private let rulesKey = "exclusionRules"
     private let nlExceptionsKey = "naturalLanguageExceptions"
+    private let usageKey = "exclusionRuleUsage"
 
     public convenience init() {
         self.init(userDefaults: .standard)
@@ -950,6 +970,7 @@ public class ExclusionRulesManager: ObservableObject {
     init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
         loadRules()
+        loadUsage()
         removeLegacyLearningsLinkedRules()
         loadNaturalLanguageExceptions()
         if rules.isEmpty {
@@ -983,14 +1004,18 @@ public class ExclusionRulesManager: ObservableObject {
     public func clearEverything() {
         rules.removeAll()
         naturalLanguageExceptions.removeAll()
+        usageByRuleID.removeAll()
         userDefaults.removeObject(forKey: rulesKey)
         userDefaults.removeObject(forKey: nlExceptionsKey)
+        userDefaults.removeObject(forKey: usageKey)
         setupDefaultRules()
     }
 
     public func removeRule(_ rule: ExclusionRule) {
         rules.removeAll { $0.id == rule.id }
+        usageByRuleID.removeValue(forKey: rule.id)
         saveRules()
+        saveUsage()
     }
 
     public func removeLegacyLearningsLinkedRules() {
@@ -1021,7 +1046,9 @@ public class ExclusionRulesManager: ObservableObject {
 
     public func clearAllRules() {
         rules.removeAll()
+        usageByRuleID.removeAll()
         saveRules()
+        saveUsage()
     }
 
     // MARK: - Matching
@@ -1031,7 +1058,30 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     public func filterFiles(_ files: [FileItem]) -> [FileItem] {
-        matcherSnapshot().filterFiles(files)
+        let matcher = matcherSnapshot()
+        var included: [FileItem] = []
+        included.reserveCapacity(min(files.count, 4_096))
+        var matchCounts: [UUID: Int] = [:]
+
+        for file in files {
+            if let ruleID = matcher.firstMatchingRuleID(for: file) {
+                matchCounts[ruleID, default: 0] += 1
+            } else {
+                included.append(file)
+            }
+        }
+
+        if !matchCounts.isEmpty {
+            let matchedAt = Date()
+            for (ruleID, count) in matchCounts {
+                var usage = usageByRuleID[ruleID] ?? ExclusionRuleUsage()
+                usage.matchCount += count
+                usage.lastMatchedAt = matchedAt
+                usageByRuleID[ruleID] = usage
+            }
+            saveUsage()
+        }
+        return included
     }
 
     public func firstMatchingRule(for file: FileItem) -> ExclusionRule? {
@@ -1144,6 +1194,18 @@ public class ExclusionRulesManager: ObservableObject {
     private func saveNaturalLanguageExceptions() {
         guard let data = try? JSONEncoder().encode(naturalLanguageExceptions) else { return }
         userDefaults.set(data, forKey: nlExceptionsKey)
+    }
+
+    private func loadUsage() {
+        guard let data = userDefaults.data(forKey: usageKey),
+              let decoded = try? JSONDecoder().decode([UUID: ExclusionRuleUsage].self, from: data)
+        else { return }
+        usageByRuleID = decoded
+    }
+
+    private func saveUsage() {
+        guard let data = try? JSONEncoder().encode(usageByRuleID) else { return }
+        userDefaults.set(data, forKey: usageKey)
     }
 
     private func migrateConfidentNaturalLanguageExceptions() {

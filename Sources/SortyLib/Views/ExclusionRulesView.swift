@@ -21,6 +21,8 @@ struct ExclusionRulesView: View {
     @State private var naturalLanguageSuggestionIndex = 0
     @State private var isImprovingException = false
     @State private var isCreatingExceptionRules = false
+    @State private var resolvedExceptionRules: [ExclusionRule] = []
+    @State private var revealedExceptionRuleCount = 0
     @State private var showCreateExceptionError = false
     @State private var createExceptionErrorMessage = ""
     @State private var showImproveExceptionRequest = false
@@ -563,6 +565,11 @@ struct ExclusionRulesView: View {
                     )
                 }
 
+                if isCreatingExceptionRules || !resolvedExceptionRules.isEmpty {
+                    exceptionInterpretation
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
             }
         }
         .task(id: newNLException.isEmpty) {
@@ -647,6 +654,8 @@ struct ExclusionRulesView: View {
         let exception = newNLException.trimmingCharacters(in: .whitespaces)
         guard !exception.isEmpty else { return }
         isCreatingExceptionRules = true
+        resolvedExceptionRules = []
+        revealedExceptionRuleCount = 0
         defer { isCreatingExceptionRules = false }
 
         do {
@@ -655,19 +664,82 @@ struct ExclusionRulesView: View {
                 client: client,
                 description: String(exception.prefix(200))
             )
-            withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
-                for rule in rules {
-                    rulesManager.addRule(rule)
+            resolvedExceptionRules = rules
+            for count in 1...rules.count {
+                if !reduceMotion { try? await Task.sleep(for: .milliseconds(140)) }
+                withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.84)) {
+                    revealedExceptionRuleCount = count
                 }
             }
-            newNLException = ""
             showCreateExceptionError = false
-            HapticFeedbackManager.shared.success()
+            HapticFeedbackManager.shared.selection()
         } catch {
             createExceptionErrorMessage = error.localizedDescription
             showCreateExceptionError = true
             HapticFeedbackManager.shared.error()
         }
+    }
+
+    private var exceptionInterpretation: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                if isCreatingExceptionRules {
+                    SortyGradientCircularLoader(size: 14, lineWidth: 2.2)
+                    Text("Interpreting your exception...")
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Review what Sorty understood")
+                }
+                Spacer()
+            }
+            .font(.subheadline.bold())
+
+            ForEach(Array(resolvedExceptionRules.prefix(revealedExceptionRuleCount))) { rule in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(rule.displayDescription)
+                        .font(.subheadline.bold())
+                    LabeledContent("Type", value: rule.type.friendlyName)
+                    LabeledContent("Matches", value: rule.interpretedMatchDescription)
+                }
+                .font(.caption)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                .transition(.opacity.combined(with: .blurReplace))
+            }
+
+            if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
+                HStack {
+                    Button("Edit Description") {
+                        resolvedExceptionRules = []
+                        revealedExceptionRuleCount = 0
+                        isNLExceptionFocused = true
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button("Save \(resolvedExceptionRules.count == 1 ? "Exclusion" : "Exclusions")") {
+                        saveResolvedExceptionRules()
+                    }
+                    .buttonStyle(.sortyPrimary(size: .small))
+                }
+            }
+        }
+        .padding(12)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func saveResolvedExceptionRules() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+            resolvedExceptionRules.forEach(rulesManager.addRule)
+            resolvedExceptionRules = []
+            revealedExceptionRuleCount = 0
+        }
+        newNLException = ""
+        HapticFeedbackManager.shared.success()
     }
 }
 
@@ -981,6 +1053,11 @@ struct ExclusionRuleRow: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     let isHighlighted: Bool
     @State private var isHovered = false
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+
+    private var usage: ExclusionRuleUsage? {
+        rulesManager.usageByRuleID[rule.id]
+    }
 
     private static let systemFolderIcon: NSImage = {
         NSWorkspace.shared.icon(forFile: "/tmp")
@@ -1039,6 +1116,19 @@ struct ExclusionRuleRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                }
+
+                if settingsViewModel.config.showStatsForNerds {
+                    HStack(spacing: 8) {
+                        Label("\(usage?.matchCount ?? 0) files skipped", systemImage: "checkmark.shield")
+                        if let lastMatchedAt = usage?.lastMatchedAt {
+                            Text("Last matched \(lastMatchedAt, format: .relative(presentation: .named))")
+                        } else {
+                            Text("Not matched yet")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 }
             }
 

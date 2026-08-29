@@ -2264,6 +2264,7 @@ private struct LearningInsightRow: View {
     let rule: InferredRule
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
     var body: some View {
         HStack(spacing: 12) {
@@ -2300,6 +2301,19 @@ private struct LearningInsightRow: View {
                             .background(Color.blue.opacity(0.1))
                             .clipShape(Capsule())
                     }
+                }
+                if settingsViewModel.config.showStatsForNerds {
+                    HStack(spacing: 8) {
+                        Text("Used \(rule.successCount + rule.failureCount) times")
+                        if rule.successCount + rule.failureCount > 0 {
+                            Text("\(rule.successRate.formatted(.percent.precision(.fractionLength(0)))) accepted")
+                        }
+                        if let lastAppliedAt = rule.lastAppliedAt {
+                            Text("Last used \(lastAppliedAt, format: .relative(presentation: .named))")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 }
             }
 
@@ -2348,6 +2362,7 @@ struct ModelDirectoryRow: View {
     let directory: ReferenceModelDirectory
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
     private var statusText: String {
         guard directory.isAccessible else {
@@ -2394,6 +2409,12 @@ struct ModelDirectoryRow: View {
                         animationValue: statusText,
                         animation: .easeInOut(duration: 0.28)
                     )
+                if settingsViewModel.config.showStatsForNerds,
+                   let snapshot = directory.scanSnapshot {
+                    Text("\(snapshot.namingConventions.count) naming patterns · deepest structure \(snapshot.folderHierarchy.map(\.depth).max() ?? 0) levels")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer()
