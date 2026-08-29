@@ -8,7 +8,6 @@
 #   ./scripts/prerelease_check.sh [options]
 #
 # Options:
-#   --ui-tests      Deprecated (ignored; UI tests are disabled)
 #   --skip-build    Skip the build phase (useful if already built)
 #   --skip-tests    Skip unit/UI tests (useful in CI when tests already ran)
 #   --skip-sparkle  Skip Sparkle validation (useful outside release readiness)
@@ -29,7 +28,6 @@ source "${SCRIPT_DIR}/utils.sh"
 # Configuration
 # ============================================================================
 
-RUN_UI_TESTS=false
 SKIP_BUILD=false
 SKIP_TESTS=false
 SKIP_SPARKLE=false
@@ -51,11 +49,6 @@ declare -a WARNINGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --ui-tests)
-            RUN_UI_TESTS=false
-            echo "Warning: --ui-tests is deprecated and ignored (UI tests are disabled)."
-            shift
-            ;;
         --skip-build)
             SKIP_BUILD=true
             shift

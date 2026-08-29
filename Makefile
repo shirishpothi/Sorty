@@ -19,7 +19,7 @@ SWIFT_DEBUG_FLAGS := --disable-sandbox
 SWIFT_RELEASE_FLAGS := --disable-sandbox
 # Keep local app identity stable across rebuilds so macOS continues granting the
 # replacement binary access to Keychain credentials created by the prior build.
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
@@ -77,9 +77,6 @@ cache-status:
 
 cache-prune:
 	@$(BUILD_SCRIPT_ENV) BUILD_CACHE_FORCE_PRUNE=true ./scripts/build_cache.sh prune
-
-# Alias kept for muscle memory; identical to dev
-quick: dev
 
 # skips all checks and builds/runs immediately
 now:
@@ -207,7 +204,6 @@ help:
 	@echo "  make run         - Build and launch the app"
 	@echo "  make debug       - Build in DEBUG mode and launch"
 	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
-	@echo "  make quick       - Compile immediately (skips tests, parallel)"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
 	@echo ""

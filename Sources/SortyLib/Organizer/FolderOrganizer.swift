@@ -2845,7 +2845,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let hierarchyNormalizedPlan = Self.normalizingDestinationHierarchy(in: plan)
-        let normalizedInputPlan = await normalizeStorageDestinations(
+        let normalizedInputPlan = normalizeStorageDestinations(
             in: hierarchyNormalizedPlan,
             allowedLocations: allowedLocations,
             sourceDirectoryURL: directory
@@ -3099,9 +3099,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         in plan: OrganizationPlan,
         allowedLocations: [StorageLocation],
         sourceDirectoryURL: URL? = nil
-    ) async -> OrganizationPlan {
-        let knownSubfolders = await storageLocationsManager?.discoverAllSubfolders() ?? [:]
-
+    ) -> OrganizationPlan {
         if !allowedLocations.isEmpty {
             let originalFolders = plan.suggestions.map(\.folderName)
             DebugLogger.log("[StorageNorm] Before normalization — folders: \(originalFolders)")
@@ -3114,7 +3112,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let normalizedPlan = StorageDestinationNormalizer.normalize(
             plan: plan,
             allowedStorageLocations: allowedLocations,
-            knownSubfolders: knownSubfolders,
             sourceDirectoryURL: sourceDirectoryURL
         )
 
@@ -3421,7 +3418,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: temperature
             )
             
-            let normalizedRetryPlan = await normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
+            let normalizedRetryPlan = normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
 
             // Validate the retry plan
             try validator.validate(
@@ -3472,7 +3469,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: temperature
             )
             let hierarchyNormalized = Self.normalizingDestinationHierarchy(in: retryPlan)
-            let storageNormalized = await normalizeStorageDestinations(
+            let storageNormalized = normalizeStorageDestinations(
                 in: hierarchyNormalized,
                 allowedLocations: allowedStorageLocations,
                 sourceDirectoryURL: directory
@@ -3805,7 +3802,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            var planAfterValidation = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            var planAfterValidation = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             planAfterValidation = OrganizationModePlanEnforcer.enforce(
                 planAfterValidation,
                 mode: mode,
@@ -4066,7 +4063,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Validate selected-files plan before apply.
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            var validatedPlan = await normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            var validatedPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
                 try validator.validate(
                     validatedPlan,
@@ -4154,7 +4151,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let operationMode = requestedMode ?? operationConfig?.mode ?? .organize
 
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-        let normalizedPlan = await normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
+        let normalizedPlan = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
         let normalizedRenamePlan = normalizeRenameSuggestions(
             in: applyRenameRuleConfiguration(to: normalizedPlan, config: operationConfig),
             config: operationConfig

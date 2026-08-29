@@ -277,11 +277,7 @@ public struct DemoStepView: View {
                 )
             }
             .siriDropZone(
-                cornerRadius: 22,
                 isEnabled: demoState == .selectDirectory,
-                glowPresentation: .window,
-                glowLineWidth: 2.2,
-                glowRadius: 16,
                 isTargeted: $isDropTargeted
             ) { providers in
                 handleDrop(providers: providers)

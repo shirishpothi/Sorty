@@ -92,8 +92,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
 
         let normalized = StorageDestinationNormalizer.normalize(
             plan: plan,
-            allowedStorageLocations: [StorageLocation(path: storageRoot.path, name: "Documents")],
-            knownSubfolders: [:]
+            allowedStorageLocations: [StorageLocation(path: storageRoot.path, name: "Documents")]
         )
 
         XCTAssertEqual(normalized.suggestions.first?.folderName, "AyuGramDesktop")
@@ -170,10 +169,9 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         XCTAssertEqual(normalized.suggestions.first?.folderName, "RandomFolder")
     }
 
-    func testNormalizeDoesNotRemapSourceDirPlusKnownSubfolderNameWithoutRootAlias() {
+    func testNormalizeDoesNotRemapRepeatedSourceComponentWithoutRootAlias() {
         let sourceDir = URL(fileURLWithPath: "/Users/test/Documents/Documents", isDirectory: true)
         let storageRoot = "/Users/test/Downloads"
-        let knownSubfolder = "/Users/test/Downloads/AyuGram Desktop/Documents"
         let file = FileItem(
             path: "/Users/test/Documents/Documents/Bio ia practice.xlsx",
             name: "Bio ia practice",
@@ -182,7 +180,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             isDirectory: false
         )
 
-        // AI mistakenly outputs sourceDir + "Documents" — the known subfolder's last component
+        // AI mistakenly repeats "Documents" under the source directory.
         let plan = OrganizationPlan(
             suggestions: [FolderSuggestion(folderName: "/Users/test/Documents/Documents/Documents", files: [file])],
             unorganizedFiles: []
@@ -191,19 +189,13 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         let normalized = StorageDestinationNormalizer.normalize(
             plan: plan,
             allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Downloads")],
-            knownSubfolders: [storageRoot: [
-                "/Users/test/Downloads/AyuGram Desktop",
-                knownSubfolder
-            ]],
             sourceDirectoryURL: sourceDir
         )
 
         XCTAssertEqual(normalized.suggestions.first?.folderName, "Documents")
     }
 
-    func testNormalizeResolvesAliasWhenSubfolderSharesNameWithRoot() {
-        // A subfolder within the storage root has the same last component as the storage
-        // location name. Root aliases must take priority so the alias is not ambiguous.
+    func testNormalizeResolvesRootAlias() {
         let storageRoot = "/tmp/Documents"
         let file = FileItem(path: "/tmp/source/report.pdf", name: "report", extension: "pdf", size: 5, isDirectory: false)
 
@@ -212,16 +204,9 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             unorganizedFiles: []
         )
 
-        // Subfolder "/tmp/Documents/Work/Documents" has lastPathComponent "Documents" — would
-        // previously create ambiguity and prevent alias resolution.
         let normalized = StorageDestinationNormalizer.normalize(
             plan: plan,
-            allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Documents")],
-            knownSubfolders: [storageRoot: [
-                "/tmp/Documents/Work",
-                "/tmp/Documents/Work/Documents",
-                "/tmp/Documents/Personal"
-            ]]
+            allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Documents")]
         )
 
         XCTAssertEqual(

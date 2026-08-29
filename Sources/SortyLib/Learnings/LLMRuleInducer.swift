@@ -218,17 +218,6 @@ public actor LLMRuleInducer {
         return context
     }
     
-    // Legacy prompt builder for backwards compatibility
-    private func buildPrompt(examples: [LabeledExample], exampleFolders: [URL]) -> String {
-        let weightedExamples = applyTemporalWeighting(examples)
-        return buildEnhancedPrompt(
-            examples: weightedExamples,
-            exampleFolders: exampleFolders,
-            steeringPrompts: [],
-            guidingInstructions: []
-        )
-    }
-    
     // MARK: - Parsing
     
     private struct LLMRuleResponse: Codable {

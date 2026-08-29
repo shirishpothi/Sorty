@@ -4,6 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/utils.sh"
+source "${SCRIPT_DIR}/render_appcast.sh"
 
 print_header "Generating Appcast" 50
 
@@ -74,32 +75,19 @@ fi
 REPO_URL="https://github.com/sorty-organizer/Sorty"
 
 # If we have a signature from sign_update, it already contains length="..."
-ENCLOSURE_ATTRIBUTES="sparkle:version=\"${BUILD_NUM}\" sparkle:shortVersionString=\"${VERSION}\" type=\"application/octet-stream\""
-
 if [ -n "$SIGNATURE" ]; then
     # SIGNATURE contains sparkle:edSignature="..." length="..."
-    ENCLOSURE_ATTRIBUTES="${ENCLOSURE_ATTRIBUTES} ${SIGNATURE}"
+    ENCLOSURE_EXTRA_ATTR="${SIGNATURE}"
 else
-    ENCLOSURE_ATTRIBUTES="${ENCLOSURE_ATTRIBUTES} length=\"${SIZE}\""
+    ENCLOSURE_EXTRA_ATTR="length=\"${SIZE}\""
 fi
 
-cat > "$APPCAST_FILE" <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"  xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>${PROJECT_NAME} Changelog</title>
-    <link>${REPO_URL}</link>
-    <description>Most recent changes with links to updates.</description>
-    <language>en</language>
-    <item>
-      <title>Version ${VERSION}</title>
-      <sparkle:releaseNotesLink>${REPO_URL}/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
-      <pubDate>${DATE}</pubDate>
-      <enclosure url="${REPO_URL}/releases/download/v${VERSION}/${ZIP_NAME}"
-                 ${ENCLOSURE_ATTRIBUTES} />
-    </item>
-  </channel>
-</rss>
-EOF
+APPCAST_LINK="${REPO_URL}"
+APPCAST_ITEM_TITLE="Version ${VERSION}"
+APPCAST_CHANNEL=""
+RELEASE_NOTES_URL="${REPO_URL}/releases/tag/v${VERSION}"
+MINIMUM_SYSTEM_VERSION=""
+RELEASE_URL="${REPO_URL}/releases/download/v${VERSION}/${ZIP_NAME}"
+render_appcast "${APPCAST_FILE}"
 
 log_success "Generated appcast.xml"

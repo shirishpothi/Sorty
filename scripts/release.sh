@@ -8,32 +8,19 @@ source "${SCRIPT_DIR}/utils.sh"
 print_header "Starting Release Process" 60
 
 # Default settings
-RUN_UI_TESTS=false
-RUN_UNIT_TESTS=false
 SKIP_ALL_TESTS=false
 
 # Argument Parsing
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        --ui-tests)
-        RUN_UI_TESTS=false
-        RUN_UNIT_TESTS=true # Usually implies unit tests too
-        log_warn "UI tests are disabled and will be skipped."
-        shift
-        ;;
-        --skip-ui)
-        RUN_UI_TESTS=false
-        RUN_UNIT_TESTS=true
-        shift
-        ;;
         --no-tests)
         SKIP_ALL_TESTS=true
         shift
         ;;
         *)
         echo "Unknown option: $1"
-        echo "Usage: $0 [--ui-tests] [--skip-ui] [--no-tests]"
+        echo "Usage: $0 [--no-tests]"
         exit 1
         ;;
     esac

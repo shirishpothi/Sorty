@@ -163,7 +163,6 @@ struct FlatFileRowContent: View {
     let fileComment: String?
     let duplicateInfo: DuplicateInfo?
     let parentSuggestion: FolderSuggestion?
-    let handoffDirectory: URL?
     let learningsManager: LearningsManager
     @Binding var isEditingName: Bool
     @Binding var editedName: String
@@ -224,7 +223,6 @@ struct FlatFileRowContent: View {
                     if let duplicateInfo {
                         LiquidGlassDuplicateButton(
                             duplicateInfo: duplicateInfo,
-                            handoffDirectory: handoffDirectory,
                             highlightedFileID: $highlightedFileID
                         )
                     }

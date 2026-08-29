@@ -88,7 +88,7 @@ struct WatchedFoldersView: View {
                 DebugLogger.log("Failed to select folder: \(error)")
             }
         }
-        .siriDropZone(cornerRadius: 12, isTargeted: $isDropTargeted) { providers in
+        .siriDropZone(isTargeted: $isDropTargeted) { providers in
             handleFolderDrop(providers: providers)
         }
         .transaction { transaction in

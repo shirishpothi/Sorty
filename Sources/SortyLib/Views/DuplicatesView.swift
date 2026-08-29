@@ -85,7 +85,7 @@ struct DuplicatesView: View {
                             isPreparing: isPreparingScan,
                             stage: detectionManager.scanStage
                         )
-                            .transition(.sortyScaleAndFade)
+                            .transition(.opacity)
 
                     case .idle:
                         if detectionManager.lastScanDate == nil {
@@ -100,19 +100,19 @@ struct DuplicatesView: View {
                                 isDefaultAction: true,
                                 action: startScan
                             )
-                            .transition(.sortyScaleAndFade)
+                            .transition(.opacity)
                         } else {
                             noDuplicatesView
-                                .transition(.sortyScaleAndFade)
+                                .transition(.opacity)
                         }
 
                     case .completed, .failed:
                         if detectionManager.allGroups.isEmpty {
                             noDuplicatesView
-                                .transition(.sortyScaleAndFade)
+                            .transition(.opacity)
                         } else {
                             resultsView
-                                .transition(.sortySlideFromRight)
+                            .transition(.opacity)
                         }
                     }
                 }

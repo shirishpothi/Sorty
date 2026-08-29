@@ -28,6 +28,19 @@ public struct ModelInfo: Codable, Identifiable, Sendable, Equatable {
 
 @MainActor
 public final class ModelCatalog: ObservableObject {
+    private struct OpenAICompatibleModelsResponse: Decodable {
+        let data: [OpenAICompatibleModel]
+    }
+
+    private struct OpenAICompatibleModel: Decodable {
+        let id: String
+        let created: Int?
+        let modalities: [String]?
+        let capabilities: [String]?
+        let input_modalities: [String]?
+        let output_modalities: [String]?
+    }
+
     public static let shared = ModelCatalog()
     
     @Published public var modelsByProvider: [AIProvider: [ModelInfo]] = [:]
@@ -288,36 +301,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.fetchFailed
         }
         
-        struct OpenAIModelsResponse: Decodable {
-            let data: [OpenAIModel]
-        }
-        struct OpenAIModel: Decodable {
-            let id: String
-            let created: Int?
-            let modalities: [String]?
-            let capabilities: [String]?
-            let input_modalities: [String]?
-            let output_modalities: [String]?
-        }
-        
-        let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
-        let models = decoded.data.map { model in
-            let capabilityTags = mergeCapabilityTags([
-                model.modalities,
-                model.capabilities,
-                model.input_modalities,
-                model.input_modalities?.map { "input:\($0)" },
-                model.output_modalities,
-                model.output_modalities?.map { "output:\($0)" }
-            ])
-            return ModelInfo(
-                id: model.id,
-                displayName: model.id,
-                provider: .openAI,
-                capabilities: capabilityTags,
-                updatedAt: model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
-            )
-        }
+        let models = try decodeOpenAICompatibleModels(from: data, provider: .openAI)
         return (models, false)
     }
 
@@ -355,36 +339,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.fetchFailed
         }
         
-        struct GroqModelsResponse: Decodable {
-            let data: [GroqModel]
-        }
-        struct GroqModel: Decodable {
-            let id: String
-            let created: Int?
-            let modalities: [String]?
-            let capabilities: [String]?
-            let input_modalities: [String]?
-            let output_modalities: [String]?
-        }
-        
-        let decoded = try JSONDecoder().decode(GroqModelsResponse.self, from: data)
-        return decoded.data.map { model in
-            let capabilityTags = mergeCapabilityTags([
-                model.modalities,
-                model.capabilities,
-                model.input_modalities,
-                model.input_modalities?.map { "input:\($0)" },
-                model.output_modalities,
-                model.output_modalities?.map { "output:\($0)" }
-            ])
-            return ModelInfo(
-                id: model.id,
-                displayName: model.id,
-                provider: .groq,
-                capabilities: capabilityTags,
-                updatedAt: model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
-            )
-        }
+        return try decodeOpenAICompatibleModels(from: data, provider: .groq)
     }
     
     private func fetchOpenRouterModels() async throws -> [ModelInfo] {
@@ -657,35 +612,11 @@ public final class ModelCatalog: ObservableObject {
                 return (openAICompatibleFallback(), true)
             }
             
-            struct OpenAIModelsResponse: Decodable {
-                let data: [OpenAIModel]
-            }
-            struct OpenAIModel: Decodable {
-                let id: String
-                let modalities: [String]?
-                let capabilities: [String]?
-                let input_modalities: [String]?
-                let output_modalities: [String]?
-            }
-            
-            let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
-            let models = decoded.data.map { model in
-                let capabilityTags = mergeCapabilityTags([
-                    model.modalities,
-                    model.capabilities,
-                    model.input_modalities,
-                    model.input_modalities?.map { "input:\($0)" },
-                    model.output_modalities,
-                    model.output_modalities?.map { "output:\($0)" }
-                ])
-                return ModelInfo(
-                    id: model.id,
-                    displayName: model.id,
-                    provider: .openAICompatible,
-                    capabilities: capabilityTags,
-                    updatedAt: Date()
-                )
-            }
+            let models = try decodeOpenAICompatibleModels(
+                from: data,
+                provider: .openAICompatible,
+                usesCreatedTimestamp: false
+            )
             return (models, false)
         } catch {
             return (openAICompatibleFallback(), true)
@@ -1123,6 +1054,32 @@ public final class ModelCatalog: ObservableObject {
         }
 
         return tags.isEmpty ? nil : tags.sorted()
+    }
+
+    private func decodeOpenAICompatibleModels(
+        from data: Data,
+        provider: AIProvider,
+        usesCreatedTimestamp: Bool = true
+    ) throws -> [ModelInfo] {
+        let decoded = try JSONDecoder().decode(OpenAICompatibleModelsResponse.self, from: data)
+        return decoded.data.map { model in
+            ModelInfo(
+                id: model.id,
+                displayName: model.id,
+                provider: provider,
+                capabilities: mergeCapabilityTags([
+                    model.modalities,
+                    model.capabilities,
+                    model.input_modalities,
+                    model.input_modalities?.map { "input:\($0)" },
+                    model.output_modalities,
+                    model.output_modalities?.map { "output:\($0)" }
+                ]),
+                updatedAt: usesCreatedTimestamp
+                    ? model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
+                    : Date()
+            )
+        }
     }
 
     private func anthropicCapabilityTags(from capabilities: [String: AnyAnthropicCapability]?) -> [String]? {

@@ -2666,16 +2666,6 @@ struct InlineNotice: View {
         self.isCentered = isCentered
     }
 
-    @available(*, deprecated, message: "Use severity-based initializer instead")
-    init(icon: String, title: String, message: String? = nil, tintColor: Color) {
-        self.icon = icon
-        self.title = title
-        self.message = message
-        self.severity = tintColor == .orange ? .warning : (tintColor == .green ? .tip : .info)
-        self.actions = []
-        self.isCentered = false
-    }
-
     private var effectiveIcon: String {
         icon ?? severity.defaultIcon
     }

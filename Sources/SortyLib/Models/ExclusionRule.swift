@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import SwiftUI
 import Combine
 
 // MARK: - Rule Types
@@ -47,50 +46,6 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
         }
     }
 
-    public var icon: String {
-        switch self {
-        case .fileExtension: return "doc.badge.ellipsis"
-        case .fileName: return "textformat"
-        case .folderName: return "folder"
-        case .pathContains: return "folder.badge.questionmark"
-        case .regex: return "chevron.left.forwardslash.chevron.right"
-        case .fileSize: return "externaldrive"
-        case .creationDate: return "calendar.badge.plus"
-        case .modificationDate: return "calendar.badge.clock"
-        case .hiddenFiles: return "eye.slash"
-        case .systemFiles: return "gearshape.2"
-        case .finderTag: return "tag"
-        case .fileType: return "doc.on.doc"
-        case .customScript: return "applescript"
-        }
-    }
-
-    public var description: String {
-        switch self {
-        case .fileExtension: return "Match files by extension (e.g., 'pdf', 'jpg')"
-        case .fileName: return "Match files containing text in their name"
-        case .folderName: return "Exclude entire folders by name"
-        case .pathContains: return "Match files whose path contains text"
-        case .regex: return "Advanced pattern matching with regular expressions"
-        case .fileSize: return "Exclude files based on size (MB)"
-        case .creationDate: return "Exclude files by creation date"
-        case .modificationDate: return "Exclude files by modification date"
-        case .hiddenFiles: return "Match hidden files (starting with '.')"
-        case .systemFiles: return "Match macOS system files"
-        case .finderTag: return "Match files and folders with a Finder tag"
-        case .fileType: return "Match by file type category"
-        case .customScript: return "Run custom AppleScript for matching"
-        }
-    }
-
-    public var requiresPattern: Bool {
-        switch self {
-        case .hiddenFiles, .systemFiles:
-            return false
-        default:
-            return true
-        }
-    }
 }
 
 // MARK: - File Type Categories

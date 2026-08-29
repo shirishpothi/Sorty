@@ -153,14 +153,3 @@ public enum SortyDesignSystem {
 public extension Animation {
     static var sortySpringStandard: Animation { .spring(response: 0.5, dampingFraction: 0.8) }
 }
-
-// MARK: - Transition Extensions
-public extension AnyTransition {
-    static var sortyScaleAndFade: AnyTransition {
-        .opacity
-    }
-
-    static var sortySlideFromRight: AnyTransition {
-        .opacity
-    }
-}

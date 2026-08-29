@@ -5,10 +5,8 @@ enum StorageDestinationNormalizer {
     static func normalize(
         plan: OrganizationPlan,
         allowedStorageLocations: [StorageLocation],
-        knownSubfolders: [String: [String]] = [:],
         sourceDirectoryURL: URL? = nil
     ) -> OrganizationPlan {
-        _ = knownSubfolders
         let canonicalRoots = Array(Set(allowedStorageLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })).sorted()
         guard !canonicalRoots.isEmpty else { return plan }
 

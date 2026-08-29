@@ -58,13 +58,10 @@ struct LiquidGlassDuplicateButton: View {
         self.onFileSelected = onFileSelected
     }
 
-    /// Backward-compatible initializer used by history/preview rows.
-    /// `handoffDirectory` is retained for call-site compatibility.
-    init(duplicateInfo: DuplicateInfo, handoffDirectory: URL?, highlightedFileID: Binding<UUID?>) {
+    init(duplicateInfo: DuplicateInfo, highlightedFileID: Binding<UUID?>) {
         self.duplicateInfo = duplicateInfo
         self.onFileSelected = { selectedFile in
             highlightedFileID.wrappedValue = selectedFile.id
-            _ = handoffDirectory
         }
     }
 

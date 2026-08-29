@@ -1137,15 +1137,6 @@ public class NotificationManager: ObservableObject {
         }
     }
     
-    private func showSystemNotification(title: String, message: String, playSound: Bool) async {
-        await showSystemNotification(
-            type: .info(title: title, message: message),
-            title: title,
-            message: message,
-            playSound: playSound
-        )
-    }
-    
     private func showSystemNotification(
         type: NotificationType,
         title: String,
@@ -1159,17 +1150,6 @@ public class NotificationManager: ObservableObject {
             message: message,
             playSound: playSound,
             actionHandler: actionHandler
-        )
-    }
-
-    /// Show notification using native macOS UNUserNotificationCenter (fallback)
-    private func showNativeNotification(title: String, message: String, playSound: Bool) async {
-        await showNativeNotification(
-            type: .info(title: title, message: message),
-            title: title,
-            message: message,
-            playSound: playSound,
-            actionHandler: nil
         )
     }
 

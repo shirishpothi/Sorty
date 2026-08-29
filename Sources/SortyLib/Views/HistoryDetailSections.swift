@@ -567,7 +567,6 @@ struct HistoryPlanDetailsSection: View {
                 if !plan.unorganizedFiles.isEmpty {
                     HistoryUnorganizedFilesSection(
                         files: plan.unorganizedFiles,
-                        handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
                         highlightedFileID: $highlightedFileID
                     )
                 }
@@ -578,7 +577,6 @@ struct HistoryPlanDetailsSection: View {
 
 private struct HistoryUnorganizedFilesSection: View {
     let files: [FileItem]
-    let handoffDirectory: URL
     @Binding var highlightedFileID: UUID?
 
     var body: some View {
@@ -592,7 +590,6 @@ private struct HistoryUnorganizedFilesSection: View {
                     HistoryUnorganizedFileRow(
                         file: file,
                         siblings: files,
-                        handoffDirectory: handoffDirectory,
                         highlightedFileID: $highlightedFileID
                     )
                 }
@@ -607,7 +604,6 @@ private struct HistoryUnorganizedFilesSection: View {
 private struct HistoryUnorganizedFileRow: View {
     let file: FileItem
     let siblings: [FileItem]
-    let handoffDirectory: URL
     @Binding var highlightedFileID: UUID?
 
     private var duplicateInfo: DuplicateInfo? {
@@ -628,7 +624,6 @@ private struct HistoryUnorganizedFileRow: View {
             if let duplicateInfo {
                 LiquidGlassDuplicateButton(
                     duplicateInfo: duplicateInfo,
-                    handoffDirectory: handoffDirectory,
                     highlightedFileID: $highlightedFileID
                 )
             }

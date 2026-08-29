@@ -10,7 +10,6 @@ Only the members listed here exist — everything unused was removed.
 - **Spacing** — `xxs…xl` plus section spacing constants.
 - **Sizing** — icon/button/card sizes, corner radius, window minimums.
 - **Radius** — corner radius tokens.
-- **Transitions** — `.sortyScaleAndFade`, `.sortySlideFromRight`.
 
 ## Usage
 

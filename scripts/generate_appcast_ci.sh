@@ -8,6 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 source "${SCRIPT_DIR}/utils.sh"
+source "${SCRIPT_DIR}/render_appcast.sh"
 
 print_header "Generating Signed Appcast" 50
 
@@ -88,30 +89,7 @@ else
     exit 1
 fi
 
-# Generate the appcast XML
-cat > "$APPCAST_FILE" <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>${PROJECT_NAME} Changelog</title>
-    <link>${APPCAST_LINK}</link>
-    <description>Most recent changes with links to updates.</description>
-    <language>en</language>
-    <item>
-      <title>${APPCAST_ITEM_TITLE}</title>
-$(if [ -n "${APPCAST_CHANNEL}" ]; then printf '      <sparkle:channel>%s</sparkle:channel>\n' "${APPCAST_CHANNEL}"; fi)
-      <sparkle:releaseNotesLink>${RELEASE_NOTES_URL}</sparkle:releaseNotesLink>
-$(if [ -n "${MINIMUM_SYSTEM_VERSION:-}" ]; then printf '      <sparkle:minimumSystemVersion>%s</sparkle:minimumSystemVersion>\n' "${MINIMUM_SYSTEM_VERSION}"; fi)
-      <pubDate>${DATE}</pubDate>
-      <enclosure url="${RELEASE_URL}"
-                 sparkle:version="${BUILD_NUM}"
-                 sparkle:shortVersionString="${VERSION}"
-                 type="application/octet-stream"
-                 ${ENCLOSURE_EXTRA_ATTR}/>
-    </item>
-  </channel>
-</rss>
-EOF
+render_appcast "${APPCAST_FILE}"
 
 log_success "Generated appcast.xml at ${APPCAST_FILE}"
 

@@ -1299,7 +1299,6 @@ struct FlatFileRowView: View {
     let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     
@@ -1318,7 +1317,6 @@ struct FlatFileRowView: View {
             fileComment: fileComment,
             duplicateInfo: duplicateInfo,
             parentSuggestion: parentSuggestion,
-            handoffDirectory: appState.selectedDirectory,
             learningsManager: learningsManager,
             isEditingName: $isEditingName,
             editedName: $editedName,
@@ -1576,8 +1574,6 @@ struct FlatUnorganizedFileRowView: View {
     let isHighlighted: Bool
     let moveDestinations: [PreviewMoveDestination]
     let onPlanChanged: () -> Void
-    @EnvironmentObject var appState: AppState
-
     @State private var isDragging = false
 
     var body: some View {
@@ -1589,7 +1585,6 @@ struct FlatUnorganizedFileRowView: View {
             if let dupInfo = duplicateInfo {
                 LiquidGlassDuplicateButton(
                     duplicateInfo: dupInfo,
-                    handoffDirectory: appState.selectedDirectory,
                     highlightedFileID: Binding(
                         get: { store.highlightedFileID },
                         set: { store.highlightedFileID = $0 }

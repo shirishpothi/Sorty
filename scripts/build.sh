@@ -478,8 +478,8 @@ compute_bundle_fingerprint() {
         printf 'commit=%s\n' "$(git -C "${PROJECT_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
         printf 'config=%s method=%s archs=%s icon=%s\n' \
             "${BUILD_CONFIG}" "${BUILD_METHOD}" "${BUILD_ARCHS}" "${APP_ICON_VARIANT:-ci}"
-        printf 'flags=cli:%s,finder:%s,adhoc:%s,sparkle:%s identity=%s\n' \
-            "${ENABLE_CLI_BUNDLE}" "${ENABLE_FINDER_EXTENSION}" \
+        printf 'flags=finder:%s,adhoc:%s,sparkle:%s identity=%s\n' \
+            "${ENABLE_FINDER_EXTENSION}" \
             "${ENABLE_ADHOC_SIGNING}" "${ENABLE_SPARKLE_SIGNING}" "${SIGNING_IDENTITY}"
         bundle_fingerprint_generated_files "${BIN_PATH}/${SPM_BINARY_NAME}"
         bundle_fingerprint_files \
@@ -780,18 +780,6 @@ compile_asset_catalog() {
     fi
 }
 
-bundle_cli_tools() {
-    local resources_dir="$1"
-
-    if [ "${ENABLE_CLI_BUNDLE}" != "true" ]; then
-        log_detail "Skipping CLI bundle (ENABLE_CLI_BUNDLE=${ENABLE_CLI_BUNDLE})"
-        return
-    fi
-
-    rm -rf "${resources_dir}/CLI"
-    log_detail "Sorty CLI tools are deprecated and are no longer bundled"
-}
-
 prune_nonshipping_resources() {
     local resources_dir="$1"
 
@@ -1041,7 +1029,6 @@ BUILD_CONFIG="${BUILD_CONFIG:-release}"
 BUILD_ARCHS="${BUILD_ARCHS:-$(uname -m)}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
-ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-false}"
 ENABLE_FINDER_EXTENSION="${ENABLE_FINDER_EXTENSION:-true}"
 ENABLE_ADHOC_SIGNING="${ENABLE_ADHOC_SIGNING:-true}"
 ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
@@ -1076,7 +1063,6 @@ if is_truthy "${SORTY_VERBOSE}"; then
         "Archs" "${BUILD_ARCHS}" \
         "Xcode Jobs" "${XCODE_BUILD_JOBS}" \
         "Signing Identity" "${SIGNING_IDENTITY}" \
-        "Bundle CLI" "${ENABLE_CLI_BUNDLE}" \
         "Finder Extension" "${ENABLE_FINDER_EXTENSION}" \
         "Code Signing" "${ENABLE_ADHOC_SIGNING}" \
         "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
@@ -1271,8 +1257,6 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
 
     # Copy LaunchAgent plist for Background Activity
     bundle_background_agent_plist "${APP_PATH}"
-
-    bundle_cli_tools "${RESOURCES_DIR}"
 
     # Embed Finder Sync extension
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
@@ -1485,8 +1469,6 @@ else
         exit 1
     fi
     validate_sorty_app_linkage "${APP_PATH}"
-
-    bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "${BUILD_FLAGS_EXTRA}" ""
 
     # Embed Finder Sync extension
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then

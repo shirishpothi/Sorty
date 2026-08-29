@@ -42,7 +42,6 @@ swift test --disable-sandbox --filter SortyTests.TestClass/testMethod
 | `make dev` | Fastest build (debug, no tests, no launch) |
 | `make test` | Run local unit tests, for diagnostics |
 | `make test-fast` | Run local fast unit tests only |
-| `make quick` | Compile only, skip tests |
 | `make install` | Install app to /Applications |
 | `make harness` | Preview harness for rapid UI iteration |
 | `make ci` | Run local CI-style diagnostics |

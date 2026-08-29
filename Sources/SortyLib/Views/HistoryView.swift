@@ -2547,7 +2547,6 @@ private struct FolderHistoryFileRow: View {
             if let duplicateInfo {
                 LiquidGlassDuplicateButton(
                     duplicateInfo: duplicateInfo,
-                    handoffDirectory: rootDirectory,
                     highlightedFileID: $highlightedFileID
                 )
             }
