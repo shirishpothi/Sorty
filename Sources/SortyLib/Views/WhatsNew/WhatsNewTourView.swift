@@ -116,7 +116,7 @@ public struct WhatsNewTourView: View {
 
             VStack(spacing: 0) {
                 pageIndicator
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 8)
 
                 // Fixed-height title slot – on the release summary this is an
                 // invisible spacer so the Continue / Start button stays at the
@@ -149,8 +149,8 @@ public struct WhatsNewTourView: View {
 
                 actionButton
             }
-            .frame(height: 112)
-            .padding(.bottom, 16)
+            .frame(height: 120)
+            .padding(.bottom, 8)
         }
         .frame(width: 640, height: 576, alignment: .top)
         .background {
