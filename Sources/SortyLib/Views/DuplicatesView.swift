@@ -20,6 +20,8 @@ struct DuplicatesView: View {
     @State private var showSettings = false
     @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
+    @State private var isExactSectionExpanded = true
+    @State private var isSimilarSectionExpanded = true
     @State private var capturedDirectory: URL?
     @State private var semanticScanProgress: String?
 
@@ -272,23 +274,37 @@ struct DuplicatesView: View {
                     List(selection: $appState.duplicateSelectedGroup) {
                         if !exactGroups.isEmpty {
                             Section {
-                                ForEach(exactGroups) { group in
-                                    UnifiedDuplicateGroupRow(group: group)
-                                        .tag(group)
+                                if isExactSectionExpanded {
+                                    ForEach(exactGroups) { group in
+                                        UnifiedDuplicateGroupRow(group: group)
+                                            .tag(group)
+                                    }
                                 }
                             } header: {
-                                Text("Exact duplicates")
+                                DuplicateSectionHeader(
+                                    title: "Exact duplicates",
+                                    isExpanded: $isExactSectionExpanded,
+                                    guidance: "Exact matches have identical content. Keep one copy, then remove the rest when you are confident about the location you want to preserve.",
+                                    infoKey: "exactDuplicateGuidance"
+                                )
                             }
                         }
 
                         if !similarGroups.isEmpty {
                             Section {
-                                ForEach(similarGroups) { group in
-                                    UnifiedDuplicateGroupRow(group: group)
-                                        .tag(group)
+                                if isSimilarSectionExpanded {
+                                    ForEach(similarGroups) { group in
+                                        UnifiedDuplicateGroupRow(group: group)
+                                            .tag(group)
+                                    }
                                 }
                             } header: {
-                                Text("Similarity matches")
+                                DuplicateSectionHeader(
+                                    title: "Similar files",
+                                    isExpanded: $isSimilarSectionExpanded,
+                                    guidance: "Similar files may be versions or variants. Review thumbnails, dates, and resolution before applying the recommendation.\n\nExcluded from Cleanup All. Review before applying a recommendation.",
+                                    infoKey: "similarFileGuidance"
+                                )
                             }
                         }
                     }
@@ -324,7 +340,7 @@ struct DuplicatesView: View {
                         Text("Choose a group")
                             .font(.headline)
                         Text(
-                            "Review exact duplicates first. Similarity matches stay separate and need individual confirmation."
+                            "Review exact duplicates first. Similar files stay separate and need individual confirmation."
                         )
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -816,7 +832,7 @@ private struct DuplicatesResultsSidebarHeader: View {
 
     private var summaryText: String {
         let exact = "\(manager.exactGroupCount) exact group\(manager.exactGroupCount == 1 ? "" : "s")"
-        let similar = "\(manager.semanticGroupCount) similarity match\(manager.semanticGroupCount == 1 ? "" : "es")"
+        let similar = "\(manager.semanticGroupCount) similar file\(manager.semanticGroupCount == 1 ? "" : "s")"
         let recoverable = "\(manager.formattedSavings) safely recoverable"
         return [exact, similar, recoverable].joined(separator: " • ")
     }
@@ -930,9 +946,13 @@ private struct DuplicatesNerdStatsStrip: View {
                 stat("Similar analyzed", value: "\(manager.semanticAnalyzedFileCount)")
             }
             if manager.unreadableFileCount > 0 {
-                stat("Unreadable", value: "\(manager.unreadableFileCount)")
+                HStack(spacing: 8) {
+                    stat("Unreadable", value: "\(manager.unreadableFileCount)")
+                    stat("Duration", value: formattedDuration)
+                }
+            } else {
+                stat("Duration", value: formattedDuration)
             }
-            stat("Duration", value: formattedDuration)
         }
         .padding(10)
         .systemLiquidGlassBackground(cornerRadius: 12)
@@ -1038,6 +1058,95 @@ struct UnifiedDuplicateGroupRow: View {
     }
 }
 
+private struct DuplicateSectionHeader: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    let guidance: String
+    @AppStorage private var isDismissed: Bool
+    @State private var isInfoPresented = false
+    @State private var shouldDismissInfo = false
+
+    init(
+        title: String,
+        isExpanded: Binding<Bool>,
+        guidance: String,
+        infoKey: String
+    ) {
+        self.title = title
+        self._isExpanded = isExpanded
+        self.guidance = guidance
+        self._isDismissed = AppStorage(wrappedValue: false, infoKey)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+
+                    Text(title)
+                }
+                .frame(minHeight: 32, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(
+                "Double-click to " + (isExpanded ? "collapse" : "expand") + " this section"
+            )
+
+            if !isDismissed {
+                Button {
+                    shouldDismissInfo = false
+                    isInfoPresented = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("About " + title)
+                .popover(isPresented: $isInfoPresented) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("About " + title)
+                            .font(.headline)
+
+                        Text(guidance)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Toggle("Don't show again", isOn: $shouldDismissInfo)
+                            .font(.body)
+
+                        HStack {
+                            Spacer()
+                            Button("OK") {
+                                if shouldDismissInfo {
+                                    isDismissed = true
+                                }
+                                isInfoPresented = false
+                            }
+                            .keyboardShortcut(.defaultAction)
+                        }
+                    }
+                    .padding(16)
+                    .frame(width: 360, alignment: .leading)
+                }
+            }
+        }
+        .onAppear {
+            shouldDismissInfo = isDismissed
+        }
+    }
+}
+
 struct UnifiedDuplicateGroupDetailView: View {
     let group: UnifiedDuplicateGroup
     let settings: DuplicateSettings
@@ -1096,28 +1205,12 @@ struct UnifiedDuplicateGroupDetailView: View {
 
             metricsGrid
 
-            if !group.isExact {
-                Label(
-                    "Excluded from Cleanup All. Review before applying a recommendation.",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
             if let recommendation = group.recommendation, recommendation == .manualReview {
                 Text("This group needs manual review before Sorty will choose files to remove.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Text(detailGuidance)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 720, alignment: .leading)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
@@ -1260,16 +1353,6 @@ struct UnifiedDuplicateGroupDetailView: View {
         }
     }
 
-    private var detailGuidance: String {
-        if group.isExact {
-            return
-                "Exact matches have identical content. Keep one copy, then remove the rest when you are confident about the location you want to preserve."
-        }
-
-        return
-            "Similar files may be versions or variants. Review thumbnails, dates, and resolution before applying the recommendation."
-    }
-
     private func compactButtonTitle(
         for recommendation: SemanticDuplicateGroup.DuplicateRecommendation
     ) -> String {
@@ -1383,8 +1466,20 @@ struct UnifiedFileDetailRow: View {
                     lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 12))
+        .contextMenu {
+            UnifiedFileDetailContextMenu(
+                isRecommended: isRecommended,
+                onOpen: openFile,
+                onReveal: revealInFinder,
+                onKeep: onKeep,
+                onDelete: onDelete
+            )
+        }
+        .onTapGesture(count: 2, perform: openFile)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(file.displayName)
+        .accessibilityAction(named: "Open file", openFile)
+        .accessibilityAction(named: "Reveal file in Finder", revealInFinder)
     }
 
     private var verticalLayout: some View {
@@ -1541,6 +1636,49 @@ struct UnifiedFileDetailRow: View {
     private func formatPixels(_ pixels: Int) -> String {
         let mp = Double(pixels) / 1_000_000.0
         return String(format: "%.1f MP", mp)
+    }
+
+    private func openFile() {
+        _ = NSWorkspace.shared.open(fileURL)
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.selectFile(
+            file.path,
+            inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
+    }
+}
+
+private struct UnifiedFileDetailContextMenu: View {
+    let isRecommended: Bool
+    let onOpen: () -> Void
+    let onReveal: () -> Void
+    let onKeep: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            Label("Open", systemImage: "arrow.up.right.square")
+        }
+
+        Button(action: onReveal) {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Divider()
+
+        if isRecommended {
+            Label("Keep This", systemImage: "checkmark.circle")
+                .foregroundStyle(.secondary)
+        } else {
+            Button(action: onKeep) {
+                Label("Keep This", systemImage: "checkmark.circle")
+            }
+
+            Button(role: .destructive, action: onDelete) {
+                Label("Remove", systemImage: "trash")
+            }
+        }
     }
 }
 
