@@ -134,53 +134,60 @@ public struct WhatsNewTourView: View {
     private func tourPage(_ page: WhatsNewPage) -> some View {
         let isReleaseSummary = currentPage == pages.count - 1
 
-        return VStack(spacing: 0) {
-            // The release summary uses the copy space that the image pages
-            // need. Both layouts still end at the same fixed action-button row.
-            Group {
-                if isReleaseSummary {
-                    releaseSummary
-                } else {
-                    imageSection(page)
-                }
-            }
-            .frame(height: isReleaseSummary ? 496 : 416, alignment: .center)
-
+        return ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                pageIndicator
-                    .padding(.bottom, isReleaseSummary ? 8 : 16)
-
-                if !isReleaseSummary {
-                    // Align the copy by its bottom edge. A wrapped description
-                    // grows upward and keeps the same gap above the button.
-                    VStack(spacing: 4) {
-                        Text(page.title)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(.isHeader)
-
-                        Text(page.description)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.70))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 28)
+                // The release summary uses the copy space that the image pages
+                // need. Both layouts still end at the same fixed action-button row.
+                Group {
+                    if isReleaseSummary {
+                        releaseSummary
+                    } else {
+                        imageSection(page)
                     }
-                    .frame(height: 64, alignment: .bottom)
-                    .offset(y: -8)
                 }
+                .frame(height: isReleaseSummary ? 496 : 416, alignment: .center)
 
-                Spacer(minLength: 0)
+                VStack(spacing: 0) {
+                    pageIndicator
+                        .padding(.bottom, isReleaseSummary ? 8 : 16)
 
-                Color.clear
-                    .frame(height: 44)
-                    .accessibilityHidden(true)
+                    if !isReleaseSummary {
+                        // Align the copy by its bottom edge. A wrapped description
+                        // grows upward and keeps the same gap above the button.
+                        VStack(spacing: 4) {
+                            Text(page.title)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+
+                            Text(page.description)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(Color.white.opacity(0.70))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 28)
+                        }
+                        .frame(height: 64, alignment: .bottom)
+                        .offset(y: -8)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Color.clear
+                        .frame(height: 44)
+                        .accessibilityHidden(true)
+                }
+                .frame(height: isReleaseSummary ? 72 : 152)
+                .padding(.bottom, 8)
             }
-            .frame(height: isReleaseSummary ? 72 : 152)
-            .padding(.bottom, 8)
+            .frame(width: 640, height: 576, alignment: .top)
+
+            topControls
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
         }
         .frame(width: 640, height: 576, alignment: .top)
         .background {
@@ -210,28 +217,21 @@ public struct WhatsNewTourView: View {
 
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("WHAT'S NEW")
-                        .font(.system(.caption2, design: .rounded, weight: .semibold))
-                        .tracking(1.5)
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WHAT'S NEW")
+                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
 
-                    Text("Sorty 1.2.0")
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                        .foregroundStyle(.white)
-                        .accessibilityAddTraits(.isHeader)
+                Text("Sorty 1.2.0")
+                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
 
-                    Text("Safer storage, honest progress, smoother controls, and a more reliable install and update path.")
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.68))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer()
-
-                topControls
-                    .frame(width: 96)
+                Text("Safer storage, honest progress, smoother controls, and a more reliable install and update path.")
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.68))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             ScrollView(.vertical) {
@@ -347,10 +347,11 @@ public struct WhatsNewTourView: View {
     }
 
     private func imageSection(_ page: WhatsNewPage) -> some View {
-        ZStack(alignment: .top) {
+        ZStack {
             if let imageName = page.activeImageName(at: imageIndex(for: page)) {
-                bundledImage(imageName)
+                bundledImage(imageName, fillsFrame: page.imageNames.count > 1)
                     .frame(width: 640, height: 400)
+                    .clipped()
                     .id(imageName)
                     .transition(
                         .asymmetric(
@@ -373,9 +374,6 @@ public struct WhatsNewTourView: View {
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
-
-            topControls
-                .padding(12)
         }
         .frame(width: 640, height: 400)
         .animation(imageTransitionAnimation, value: workflowImageIndex)
@@ -386,12 +384,19 @@ public struct WhatsNewTourView: View {
     }
 
     @ViewBuilder
-    private func bundledImage(_ name: String) -> some View {
+    private func bundledImage(_ name: String, fillsFrame: Bool) -> some View {
         if let image = WhatsNewImageLoader.image(named: name) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            if fillsFrame {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
         } else {
             missingImagePlaceholder(name)
         }
