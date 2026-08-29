@@ -279,6 +279,7 @@ struct DuplicatesView: View {
                                         UnifiedDuplicateGroupRow(group: group)
                                             .tag(group)
                                     }
+                                    .transition(.opacity.combined(with: .offset(y: -8)))
                                 }
                             } header: {
                                 DuplicateSectionHeader(
@@ -297,6 +298,7 @@ struct DuplicatesView: View {
                                         UnifiedDuplicateGroupRow(group: group)
                                             .tag(group)
                                     }
+                                    .transition(.opacity.combined(with: .offset(y: -8)))
                                 }
                             } header: {
                                 DuplicateSectionHeader(
@@ -1062,6 +1064,7 @@ private struct DuplicateSectionHeader: View {
     let title: String
     @Binding var isExpanded: Bool
     let guidance: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage private var isDismissed: Bool
     @State private var isInfoPresented = false
     @State private var shouldDismissInfo = false
@@ -1081,12 +1084,18 @@ private struct DuplicateSectionHeader: View {
     var body: some View {
         HStack(spacing: 4) {
             Button {
-                isExpanded.toggle()
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.24)) {
+                    isExpanded.toggle()
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 0.24),
+                            value: isExpanded
+                        )
                         .accessibilityHidden(true)
 
                     Text(title)
