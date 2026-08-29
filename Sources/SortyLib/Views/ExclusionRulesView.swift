@@ -735,12 +735,6 @@ struct ExclusionRulesView: View {
                 }
             }
 
-            ProgressView(value: transformationProgress)
-                .progressViewStyle(.linear)
-                .tint(activeResolvedRule.map { toolColor(for: $0.type) } ?? .blue)
-                .accessibilityLabel("Exclusion creation progress")
-                .accessibilityValue("\(Int(transformationProgress * 100)) percent")
-
             if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
                 HStack(spacing: 8) {
                     Button {
@@ -784,9 +778,21 @@ struct ExclusionRulesView: View {
         }
         .padding(10)
         .systemLiquidGlassBackground(cornerRadius: 12)
+        .overlay {
+            if isCreatingExceptionRules {
+                FocusedInstructionBeamBorder(active: true)
+                    .transition(.blurReplace.combined(with: .opacity))
+            }
+        }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("Exclusion rule interpretation")
+        .accessibilityValue(interpretationProgressLabel)
         .animation(
             reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.84),
+            value: isCreatingExceptionRules
+        )
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86),
             value: revealedExceptionRuleCount
         )
     }
@@ -796,10 +802,12 @@ struct ExclusionRulesView: View {
         return resolvedExceptionRules[min(revealedExceptionRuleCount - 1, resolvedExceptionRules.count - 1)]
     }
 
-    private var transformationProgress: Double {
-        guard !resolvedExceptionRules.isEmpty else { return isCreatingExceptionRules ? 0.12 : 1 }
-        guard isCreatingExceptionRules else { return 1 }
-        return min(0.92, Double(revealedExceptionRuleCount) / Double(resolvedExceptionRules.count + 1))
+    private var interpretationProgressLabel: String {
+        guard isCreatingExceptionRules else {
+            return "Ready to save \(resolvedExceptionRules.count) \(resolvedExceptionRules.count == 1 ? "exclusion" : "exclusions")"
+        }
+        guard !resolvedExceptionRules.isEmpty else { return "Reading request" }
+        return "Created \(revealedExceptionRuleCount) of \(resolvedExceptionRules.count) exclusions"
     }
 
     private var transformingExceptionIcon: some View {
@@ -829,7 +837,7 @@ struct ExclusionRulesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                    .numericTextTransition(animationValue: streamedRuleDetails[rule.id] ?? "")
+                    .contentTransition(.interpolate)
             } else {
                 Text("Reading request")
                     .font(.subheadline.bold())
