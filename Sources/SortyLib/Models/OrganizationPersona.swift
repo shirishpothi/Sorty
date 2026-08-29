@@ -26,13 +26,13 @@ public enum PersonaType: String, Codable, CaseIterable, Sendable {
     public var description: String {
         switch self {
         case .general:
-            return "File types & usage"
+            return "Organize by file type and context"
         case .developer:
-            return "Projects & stacks"
+            return "Group code by project and tech stack"
         case .photographer:
-            return "Dates & events"
+            return "Sort photos by date, event, and camera"
         case .office:
-            return "Clients & projects"
+            return "Organize work by client, project, and document type"
         }
     }
     
