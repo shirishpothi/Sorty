@@ -233,6 +233,8 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(Color.white.opacity(0.68))
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.leading, 44)
+            .padding(.trailing, 56)
 
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 12) {
@@ -279,7 +281,7 @@ public struct WhatsNewTourView: View {
             }
             .scrollIndicators(.automatic)
         }
-        .padding(EdgeInsets(top: 56, leading: 24, bottom: 24, trailing: 24))
+        .padding(24)
         .frame(width: 640, height: 496, alignment: .topLeading)
     }
 
