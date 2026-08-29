@@ -29,6 +29,11 @@ public struct WhatsNewTourView: View {
                 .offset(x: reduceMotion ? 0 : resistedSwipeOffset)
                 .transition(pageTransition)
         }
+        .overlay(alignment: .bottom) {
+            actionButton
+                .frame(height: 44)
+                .padding(.bottom, 8)
+        }
         .animation(pageTransitionAnimation, value: currentPage)
         .task(id: ImageRotationTaskID(page: currentPage, reduceMotion: reduceMotion)) {
             guard !reduceMotion, page.imageNames.count > 1 else { return }
@@ -40,9 +45,6 @@ public struct WhatsNewTourView: View {
                     workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
                 }
             }
-        }
-        .onChange(of: currentPage) { _, _ in
-            workflowImageIndex = 0
         }
         .contentShape(Rectangle())
         .onHover { isInside in
@@ -64,7 +66,7 @@ public struct WhatsNewTourView: View {
     }
 
     private var pageTransitionAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.86)
+        reduceMotion ? nil : .smooth(duration: 0.36)
     }
 
     private var swipeResetAnimation: Animation? {
@@ -82,16 +84,14 @@ public struct WhatsNewTourView: View {
             insertion: .modifier(
                 active: WhatsNewPageTransitionModifier(
                     opacity: 0,
-                    scale: 0.992,
-                    horizontalOffset: navigationDirection * 36
+                    horizontalOffset: navigationDirection * 28
                 ),
                 identity: WhatsNewPageTransitionModifier()
             ),
             removal: .modifier(
                 active: WhatsNewPageTransitionModifier(
                     opacity: 0,
-                    scale: 0.996,
-                    horizontalOffset: navigationDirection * -24
+                    horizontalOffset: navigationDirection * -16
                 ),
                 identity: WhatsNewPageTransitionModifier()
             )
@@ -144,11 +144,11 @@ public struct WhatsNewTourView: View {
                     imageSection(page)
                 }
             }
-            .frame(height: isReleaseSummary ? 472 : 432, alignment: .center)
+            .frame(height: isReleaseSummary ? 496 : 416, alignment: .center)
 
             VStack(spacing: 0) {
                 pageIndicator
-                    .padding(.bottom, 8)
+                    .padding(.bottom, isReleaseSummary ? 8 : 16)
 
                 if !isReleaseSummary {
                     // Align the copy by its bottom edge. A wrapped description
@@ -170,15 +170,16 @@ public struct WhatsNewTourView: View {
                             .padding(.horizontal, 28)
                     }
                     .frame(height: 64, alignment: .bottom)
-                    .offset(y: -20)
+                    .offset(y: -8)
                 }
 
                 Spacer(minLength: 0)
 
-                actionButton
+                Color.clear
                     .frame(height: 44)
+                    .accessibilityHidden(true)
             }
-            .frame(height: isReleaseSummary ? 96 : 136)
+            .frame(height: isReleaseSummary ? 72 : 152)
             .padding(.bottom, 8)
         }
         .frame(width: 640, height: 576, alignment: .top)
@@ -279,7 +280,7 @@ public struct WhatsNewTourView: View {
             .scrollIndicators(.automatic)
         }
         .padding(24)
-        .frame(width: 640, height: 472, alignment: .topLeading)
+        .frame(width: 640, height: 496, alignment: .topLeading)
     }
 
     private func releaseSection(
@@ -320,7 +321,7 @@ public struct WhatsNewTourView: View {
             }
         }
         .padding(SortyDesignSystem.Spacing.lg)
-        .frame(maxWidth: .infinity, minHeight: 324, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 348, alignment: .topLeading)
         .background {
             LinearGradient(
                 colors: [
@@ -546,27 +547,15 @@ public struct WhatsNewTourView: View {
     }
 
     private var pageIndicator: some View {
-        ZStack {
-            HStack(spacing: 7) {
-                ForEach(pages.indices, id: \.self) { _ in
-                    Circle()
-                        .fill(Color.white.opacity(0.32))
-                        .frame(width: 7, height: 7)
-                        .frame(width: 22)
-                }
-            }
-
-            Capsule(style: .continuous)
-                .fill(SortyDesignSystem.Colors.resolvedAccent)
-                .frame(width: 22, height: 7)
-                .offset(x: CGFloat(currentPage - pages.count / 2) * 29)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.50, dampingFraction: 0.82),
-                    value: currentPage
-                )
-        }
-        .frame(width: 80, height: 7)
-        .padding(.bottom, 7)
+        GooeyPageIndicator(
+            selectedIndex: CGFloat(currentPage),
+            pageCount: pages.count,
+            accent: SortyDesignSystem.Colors.resolvedAccent
+        )
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.56, dampingFraction: 0.84),
+            value: currentPage
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
     }
@@ -755,14 +744,66 @@ public struct WhatsNewTourView: View {
 
 private struct WhatsNewPageTransitionModifier: ViewModifier {
     var opacity: Double = 1
-    var scale: CGFloat = 1
     var horizontalOffset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
             .opacity(opacity)
-            .scaleEffect(scale)
             .offset(x: horizontalOffset)
+    }
+}
+
+private struct GooeyPageIndicator: View, @MainActor Animatable {
+    var selectedIndex: CGFloat
+    let pageCount: Int
+    let accent: Color
+
+    private let dotDiameter: CGFloat = 7
+    private let restingPillWidth: CGFloat = 22
+    private let pageSpacing: CGFloat = 24
+
+    var animatableData: CGFloat {
+        get { selectedIndex }
+        set { selectedIndex = newValue }
+    }
+
+    var body: some View {
+        Canvas { context, size in
+            let centerX = size.width / 2
+            let firstCenterX = centerX - CGFloat(pageCount - 1) * pageSpacing / 2
+
+            for index in 0..<pageCount {
+                let center = CGPoint(
+                    x: firstCenterX + CGFloat(index) * pageSpacing,
+                    y: size.height / 2
+                )
+                let dotRect = CGRect(
+                    x: center.x - dotDiameter / 2,
+                    y: center.y - dotDiameter / 2,
+                    width: dotDiameter,
+                    height: dotDiameter
+                )
+                context.fill(Path(ellipseIn: dotRect), with: .color(Color.white.opacity(0.32)))
+            }
+
+            let clampedIndex = min(max(selectedIndex, 0), CGFloat(pageCount - 1))
+            let fractionalIndex = clampedIndex - floor(clampedIndex)
+            let stretch = sin(fractionalIndex * .pi)
+            let pillWidth = restingPillWidth + 12 * stretch
+            let pillHeight = dotDiameter - stretch
+            let pillCenterX = firstCenterX + clampedIndex * pageSpacing
+            let pillRect = CGRect(
+                x: pillCenterX - pillWidth / 2,
+                y: (size.height - pillHeight) / 2,
+                width: pillWidth,
+                height: pillHeight
+            )
+            context.fill(
+                Path(roundedRect: pillRect, cornerRadius: pillHeight / 2),
+                with: .color(accent)
+            )
+        }
+        .frame(width: 70, height: 8)
     }
 }
 
