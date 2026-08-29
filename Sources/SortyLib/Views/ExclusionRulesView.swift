@@ -15,6 +15,7 @@ struct ExclusionRulesView: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingAddRule = false
+    @State private var ruleToEdit: ExclusionRule?
     @State private var showingLearningExclusionImporter = false
     @State private var searchText = ""
     @State private var newNLException = ""
@@ -186,6 +187,7 @@ struct ExclusionRulesView: View {
                                         : nil,
                                     naturalLanguageExceptions: group.0 == "Files & Folders"
                                         ? filteredNaturalLanguageExceptions : [],
+                                    onEditRule: { ruleToEdit = $0 },
                                     onRemoveNaturalLanguageException: { exception in
                                         withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
                                             rulesManager.removeNaturalLanguageException(id: exception.id)
@@ -233,6 +235,10 @@ struct ExclusionRulesView: View {
         .navigationTitle("Exclusions")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
+                .modalBounce()
+        }
+        .sheet(item: $ruleToEdit) { rule in
+            AddExclusionRuleView(rulesManager: rulesManager, editing: rule)
                 .modalBounce()
         }
         .fileImporter(
@@ -999,6 +1005,7 @@ struct RuleGroupCard: View {
     let highlightedRuleID: UUID?
     let infoText: String?
     let naturalLanguageExceptions: [NaturalLanguageException]
+    let onEditRule: (ExclusionRule) -> Void
     let onRemoveNaturalLanguageException: (NaturalLanguageException) -> Void
 
     @State private var isExpanded = true
@@ -1095,7 +1102,8 @@ struct RuleGroupCard: View {
                         ExclusionRuleRow(
                             rule: rule,
                             rulesManager: rulesManager,
-                            isHighlighted: rule.id == highlightedRuleID
+                            isHighlighted: rule.id == highlightedRuleID,
+                            onEdit: { onEditRule(rule) }
                         )
                         .id(rule.id)
 
@@ -1287,6 +1295,7 @@ struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
     let isHighlighted: Bool
+    let onEdit: () -> Void
     @State private var isHovered = false
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
@@ -1397,6 +1406,10 @@ struct ExclusionRuleRow: View {
                     : "Enable rule: \(rule.displayDescription)")
         }
         .contentShape(Rectangle())
+        .onTapGesture {
+            HapticFeedbackManager.shared.selection()
+            onEdit()
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
@@ -1411,6 +1424,13 @@ struct ExclusionRuleRow: View {
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .accessibilityValue(isHighlighted ? "Newly added" : "")
         .contextMenu {
+            Button {
+                HapticFeedbackManager.shared.selection()
+                onEdit()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
             Button(role: .destructive) {
                 HapticFeedbackManager.shared.tap()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1420,6 +1440,7 @@ struct ExclusionRuleRow: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+        .accessibilityAction(named: Text("Edit"), onEdit)
         .accessibilityAction(named: Text("Delete")) {
             HapticFeedbackManager.shared.tap()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1576,6 +1597,7 @@ private enum AdvancedRuleChoice: String, CaseIterable, Identifiable {
 struct AddExclusionRuleView: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     @Environment(\.dismiss) var dismiss
+    private let editingRule: ExclusionRule?
     @State private var selectedIntent: ExclusionIntent?
     @State private var fileKindChoice: FileKindChoice = .category
     @State private var nameMatchChoice: NameMatchChoice = .fileName
@@ -1593,6 +1615,52 @@ struct AddExclusionRuleView: View {
     @State private var showingFolderPicker = false
     @State private var caseSensitive = false
     @State private var negated = false
+
+    init(rulesManager: ExclusionRulesManager, editing rule: ExclusionRule? = nil) {
+        self.rulesManager = rulesManager
+        editingRule = rule
+
+        guard let rule else { return }
+        let intent: ExclusionIntent
+        switch rule.type {
+        case .pathContains where rule.pattern.hasPrefix("/"):
+            intent = .folder
+        case .finderTag:
+            intent = .finderTag
+        case .fileType, .fileExtension:
+            intent = .fileKind
+        case .fileName, .folderName:
+            intent = .name
+        case .fileSize, .creationDate, .modificationDate:
+            intent = .properties
+        case .hiddenFiles, .systemFiles, .pathContains, .regex, .customScript:
+            intent = .advanced
+        }
+
+        _selectedIntent = State(initialValue: intent)
+        _fileKindChoice = State(initialValue: rule.type == .fileExtension ? .fileExtension : .category)
+        _nameMatchChoice = State(initialValue: rule.type == .folderName ? .folderName : .fileName)
+        _propertyChoice = State(initialValue: rule.type == .creationDate ? .creationDate : rule.type == .modificationDate ? .modificationDate : .fileSize)
+        _advancedChoice = State(initialValue: rule.type == .systemFiles ? .systemFiles : rule.type == .pathContains ? .pathContains : rule.type == .regex ? .regex : .hiddenFiles)
+        _selectedFinderTag = State(initialValue: Int(rule.pattern).flatMap(FinderTagColor.init(rawValue:)) ?? .red)
+        _pattern = State(initialValue: rule.pattern)
+        _description = State(initialValue: rule.description ?? "")
+        _sizeUnit = State(initialValue: rule.sizeUnit ?? .megabytes)
+        _dateAgeUnit = State(initialValue: rule.ageUnit ?? .days)
+        let displayedValue: Double
+        if rule.type == .fileSize {
+            displayedValue = (rule.numericValue ?? 0) / (rule.sizeUnit ?? .megabytes).megabyteMultiplier
+        } else if rule.type == .creationDate || rule.type == .modificationDate {
+            displayedValue = (rule.ageIntervalSeconds ?? 0) / (rule.ageUnit ?? .days).secondsMultiplier
+        } else {
+            displayedValue = rule.numericValue ?? 100
+        }
+        _numericValue = State(initialValue: displayedValue)
+        _selectedFileTypeCategory = State(initialValue: rule.fileTypeCategory ?? .images)
+        _selectedFolderURL = State(initialValue: intent == .folder ? URL(fileURLWithPath: rule.pattern) : nil)
+        _caseSensitive = State(initialValue: rule.caseSensitive)
+        _negated = State(initialValue: rule.negated)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1648,13 +1716,13 @@ struct AddExclusionRuleView: View {
 
             Spacer()
 
-            Text(selectedIntent == nil ? "Add an Exclusion" : "Set Up Exclusion")
+            Text(editingRule == nil ? (selectedIntent == nil ? "Add an Exclusion" : "Set Up Exclusion") : "Edit Exclusion")
                 .font(.headline)
 
             Spacer()
 
             if selectedIntent != nil {
-                Button("Add Exclusion") {
+                Button(editingRule == nil ? "Add Exclusion" : "Save Changes") {
                     HapticFeedbackManager.shared.success()
                     addRule()
                 }
@@ -2150,7 +2218,28 @@ struct AddExclusionRuleView: View {
 
     private func save(_ rule: ExclusionRule) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            rulesManager.addRule(rule)
+            if let editingRule {
+                let updatedRule = ExclusionRule(
+                    id: editingRule.id,
+                    type: rule.type,
+                    pattern: rule.pattern,
+                    isEnabled: editingRule.isEnabled,
+                    description: rule.description,
+                    isBuiltIn: editingRule.isBuiltIn,
+                    isAIGenerated: editingRule.isAIGenerated ?? false,
+                    numericValue: rule.numericValue,
+                    comparisonGreater: rule.comparisonGreater,
+                    sizeUnit: rule.sizeUnit,
+                    ageUnit: rule.ageUnit,
+                    ageIntervalSeconds: rule.ageIntervalSeconds,
+                    fileTypeCategory: rule.fileTypeCategory,
+                    caseSensitive: rule.caseSensitive,
+                    negated: rule.negated
+                )
+                rulesManager.updateRule(updatedRule)
+            } else {
+                rulesManager.addRule(rule)
+            }
         }
         dismiss()
     }

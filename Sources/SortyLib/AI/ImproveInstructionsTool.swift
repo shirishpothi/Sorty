@@ -221,12 +221,12 @@ public struct NaturalLanguageExclusionResolver: Sendable {
     - creation_age and modification_age: older or newer than a value in seconds, minutes, hours, days, weeks, months, or years
     - hidden_files and system_files
     - path_contains: text anywhere in a path
-    - regex: a valid regular expression, only when simpler tools cannot express the request
+    - regex: a valid regular expression matched against the complete file name, including its extension, only when simpler tools cannot express the request
 
     Categories: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases.
     Size units: KB, MB, GB, TB. Age units: seconds, minutes, hours, days, weeks, months, years. Comparisons: larger, smaller, older, newer.
     Finder tags: red, orange, yellow, green, blue, purple, gray.
-    Select multiple tools for independent conditions. Preserve explicit values exactly and never invent a path, threshold, extension, name, tag, or category. Set caseSensitive or negated only when the user asks. Use a concise generated name in description. Put text in supplementalDescription only when it adds a constraint no available tool can represent. Do not repeat structured tool settings there.
+    Every selected tool is an independent exclusion joined with OR. Never split conditions that the user linked with AND across multiple tools. For linked file-name and extension conditions, select one regex that preserves the full Boolean expression. Example: "PDF files containing tax or passport" becomes one regex such as `^(?=.*(?:tax|passport)).*\\.pdf$`, not separate PDF, tax, and passport tools. Use multiple tools only when each condition should exclude a file on its own. Preserve explicit values exactly and never invent a path, threshold, extension, name, tag, or category. Set caseSensitive or negated only when the user asks. Use a concise generated name in description. Put text in supplementalDescription only when it adds a constraint no available tool can represent. Do not repeat structured tool settings there.
     """
 
     private struct ResolutionPayload: Decodable {

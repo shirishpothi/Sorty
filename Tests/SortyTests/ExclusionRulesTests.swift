@@ -39,6 +39,24 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertTrue(manager.shouldExclude(file1))
         XCTAssertFalse(manager.shouldExclude(file2))
     }
+
+    @MainActor
+    func testRegexCanKeepLinkedNameAndExtensionConditionsTogether() {
+        manager.addRule(
+            ExclusionRule(
+                type: .regex,
+                pattern: #"^(?=.*(?:tax|passport)).*\.pdf$"#
+            )
+        )
+
+        let taxPDF = FileItem(path: "/p/2026_tax.pdf", name: "2026_tax", extension: "pdf", size: 0, isDirectory: false)
+        let ordinaryPDF = FileItem(path: "/p/notes.pdf", name: "notes", extension: "pdf", size: 0, isDirectory: false)
+        let taxText = FileItem(path: "/p/tax.txt", name: "tax", extension: "txt", size: 0, isDirectory: false)
+
+        XCTAssertTrue(manager.shouldExclude(taxPDF))
+        XCTAssertFalse(manager.shouldExclude(ordinaryPDF))
+        XCTAssertFalse(manager.shouldExclude(taxText))
+    }
     
     @MainActor
     func testFolderNameExclusion() {

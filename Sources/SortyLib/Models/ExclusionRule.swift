@@ -597,6 +597,7 @@ private struct ExclusionMatchCache {
     private var lowercasedPathStorage: String?
     private var lowercasedNameStorage: String?
     private var normalizedExtensionStorage: String?
+    private var fileNameWithExtensionStorage: String?
     private var pathComponentsStorage: [Substring]?
     private var lowercasedPathComponentsStorage: [Substring]?
 
@@ -662,6 +663,15 @@ private struct ExclusionMatchCache {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         normalizedExtensionStorage = value
+        return value
+    }
+
+    mutating func fileNameWithExtension() -> String {
+        if let fileNameWithExtensionStorage {
+            return fileNameWithExtensionStorage
+        }
+        let value = path.split(separator: "/").last.map(String.init) ?? name
+        fileNameWithExtensionStorage = value
         return value
     }
 
@@ -901,7 +911,7 @@ private enum CompiledExclusionPredicate: Sendable {
             return path == folderPath || path.hasPrefix(folderPath + "/")
 
         case .regex(let regex):
-            return regex.matches(cache.name)
+            return regex.matches(cache.fileNameWithExtension())
 
         case .fileSize(let limitMB, let greater):
             let sizeMB = Double(cache.size) / (1_024 * 1_024)
