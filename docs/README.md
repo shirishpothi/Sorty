@@ -206,6 +206,10 @@ Sorty can expose Finder actions without needing terminal commands.
 
 If Finder still shows stale state, run the in-app repair buttons again and then re-open Finder.
 
+On the organize screen, click the **Right-Click** tip to open Finder at the selected
+folder. Before a folder is selected, it opens Finder at your home folder so you can
+try the Sorty actions on any directory.
+
 ---
 
 ## Keyboard Shortcuts
