@@ -13,8 +13,10 @@ public struct WhatsNewTourView: View {
     @State private var isPointerInside = false
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
+    @State private var navigationDirection: CGFloat = 1
 
     private let swipeThreshold: CGFloat = 42
+    private let maximumSwipeOffset: CGFloat = 14
 
     public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
@@ -24,9 +26,10 @@ public struct WhatsNewTourView: View {
         ZStack {
             tourPage(page)
                 .id(currentPage)
-                .transition(.opacity)
+                .offset(x: reduceMotion ? 0 : resistedSwipeOffset)
+                .transition(pageTransition)
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: currentPage)
+        .animation(pageTransitionAnimation, value: currentPage)
         .task(id: ImageRotationTaskID(page: currentPage, reduceMotion: reduceMotion)) {
             guard !reduceMotion, page.imageNames.count > 1 else { return }
 
@@ -58,6 +61,41 @@ public struct WhatsNewTourView: View {
 
     private var imageTransitionAnimation: Animation? {
         reduceMotion ? nil : .easeInOut(duration: 0.72)
+    }
+
+    private var pageTransitionAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.86)
+    }
+
+    private var swipeResetAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82)
+    }
+
+    private var resistedSwipeOffset: CGFloat {
+        min(max(swipeAccumulatedTranslation * 0.20, -maximumSwipeOffset), maximumSwipeOffset)
+    }
+
+    private var pageTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+
+        return .asymmetric(
+            insertion: .modifier(
+                active: WhatsNewPageTransitionModifier(
+                    opacity: 0,
+                    scale: 0.992,
+                    horizontalOffset: navigationDirection * 36
+                ),
+                identity: WhatsNewPageTransitionModifier()
+            ),
+            removal: .modifier(
+                active: WhatsNewPageTransitionModifier(
+                    opacity: 0,
+                    scale: 0.996,
+                    horizontalOffset: navigationDirection * -24
+                ),
+                identity: WhatsNewPageTransitionModifier()
+            )
+        )
     }
 
     private var page: WhatsNewPage {
@@ -513,25 +551,26 @@ public struct WhatsNewTourView: View {
     }
 
     private var pageIndicator: some View {
-        HStack(spacing: 7) {
-            ForEach(pages.indices, id: \.self) { index in
-                Capsule(style: .continuous)
-                    .fill(
-                        index == currentPage
-                            ? SortyDesignSystem.Colors.resolvedAccent
-                            : Color.white.opacity(0.32)
-                    )
-                    .frame(width: index == currentPage ? 22 : 7, height: 7)
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.82),
-                        value: currentPage
-                    )
+        ZStack {
+            HStack(spacing: 7) {
+                ForEach(pages.indices, id: \.self) { _ in
+                    Circle()
+                        .fill(Color.white.opacity(0.32))
+                        .frame(width: 7, height: 7)
+                        .frame(width: 22)
+                }
             }
+
+            Capsule(style: .continuous)
+                .fill(SortyDesignSystem.Colors.resolvedAccent)
+                .frame(width: 22, height: 7)
+                .offset(x: CGFloat(currentPage - pages.count / 2) * 29)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.50, dampingFraction: 0.82),
+                    value: currentPage
+                )
         }
-        .animation(
-            reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.82),
-            value: currentPage
-        )
+        .frame(width: 80, height: 7)
         .padding(.bottom, 7)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
@@ -606,12 +645,14 @@ public struct WhatsNewTourView: View {
     private func navigateToPreviousPage() {
         guard currentPage > 0 else { return }
         HapticFeedbackManager.shared.selection()
+        navigationDirection = -1
         currentPage -= 1
     }
 
     private func navigateToNextPage() {
         guard currentPage < pages.count - 1 else { return }
         HapticFeedbackManager.shared.selection()
+        navigationDirection = 1
         currentPage += 1
     }
 
@@ -690,12 +731,14 @@ public struct WhatsNewTourView: View {
 
         if swipeAccumulatedTranslation <= -swipeThreshold {
             hasTriggeredSwipeForGesture = true
+            swipeAccumulatedTranslation = 0
             navigateToNextPage()
             return nil
         }
 
         if swipeAccumulatedTranslation >= swipeThreshold {
             hasTriggeredSwipeForGesture = true
+            swipeAccumulatedTranslation = 0
             navigateToPreviousPage()
             return nil
         }
@@ -708,8 +751,23 @@ public struct WhatsNewTourView: View {
     }
 
     private func resetSwipeTracking() {
-        swipeAccumulatedTranslation = 0
+        withAnimation(swipeResetAnimation) {
+            swipeAccumulatedTranslation = 0
+        }
         hasTriggeredSwipeForGesture = false
+    }
+}
+
+private struct WhatsNewPageTransitionModifier: ViewModifier {
+    var opacity: Double = 1
+    var scale: CGFloat = 1
+    var horizontalOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .scaleEffect(scale)
+            .offset(x: horizontalOffset)
     }
 }
 
