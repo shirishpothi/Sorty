@@ -21,16 +21,11 @@ public struct WhatsNewTourView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                tourPage(page)
-                    .id(currentPage)
-                    .transition(.opacity)
-            }
+        ZStack {
+            tourPage(page)
+                .id(currentPage)
+                .transition(.opacity)
         }
-        .padding(.vertical, 16)
-        .frame(width: 680)
-        .background(Color(nsColor: .windowBackgroundColor))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: currentPage)
         .task(id: ImageRotationTaskID(page: currentPage, reduceMotion: reduceMotion)) {
             guard !reduceMotion, page.imageNames.count > 1 else { return }
@@ -527,8 +522,16 @@ public struct WhatsNewTourView: View {
                             : Color.white.opacity(0.32)
                     )
                     .frame(width: index == currentPage ? 22 : 7, height: 7)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.82),
+                        value: currentPage
+                    )
             }
         }
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.82),
+            value: currentPage
+        )
         .padding(.bottom, 7)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
