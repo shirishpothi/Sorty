@@ -2892,44 +2892,11 @@ struct OnboardingIconSliver: View {
     let color: Color
     let fontSize: CGFloat
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var sweep: CGFloat = 0
-
-    // One-shot shimmer that reads as a calm diagonal wipe.
-    // Previous phase -1...1 with 0.7s easeInOut spent most time invisible
-    // at the ends and flashed through the glyph — now the travel is clamped
-    // to just outside the glyph (so visible time dominates) and runs
-    // ~1s linear-ish for constant speed, matching the 1.25s sliver cadence
-    // used elsewhere. Blur + slightly wider band softens the edge.
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: fontSize))
             .foregroundStyle(color)
-            .overlay {
-                GeometryReader { geometry in
-                    let bandW = max(16, geometry.size.width * 0.36)
-                    LinearGradient(
-                        colors: [.clear, color.opacity(0.28), .white.opacity(0.88), color.opacity(0.28), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(width: bandW, height: geometry.size.height * 1.9)
-                    .rotationEffect(.degrees(16))
-                    .offset(x: -bandW + sweep * (geometry.size.width + bandW * 2))
-                    .blur(radius: 0.9)
-                    .mask {
-                        Image(systemName: systemName)
-                            .font(.system(size: fontSize))
-                    }
-                }
-            }
-            .onAppear {
-                guard !reduceMotion else { return }
-                sweep = 0
-                withAnimation(.easeInOut(duration: 1.0).delay(0.25)) {
-                    sweep = 1
-                }
-            }
+            .accessibilityHidden(false)
     }
 }
 
