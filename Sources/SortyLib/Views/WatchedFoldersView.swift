@@ -1696,6 +1696,8 @@ struct WatchedFolderConfigView: View {
 }
 
 private struct WatchedFolderRecentActions: View {
+    private static let visibleActionCount = 3
+
     private struct ActionAlert: Identifiable {
         let id = UUID()
         let title: String
@@ -1711,12 +1713,21 @@ private struct WatchedFolderRecentActions: View {
     @State private var selectedEntry: OrganizationHistoryEntry?
     @State private var isProcessing = false
     @State private var actionAlert: ActionAlert?
+    @ScaledMetric(relativeTo: .body) private var actionRowHeight = 48
 
     private var recentEntries: [OrganizationHistoryEntry] {
         let folderPath = normalizedPath(folder.path)
-        return Array(history.entries.lazy.filter { entry in
+        return history.entries.filter { entry in
             entry.source == .watchedFolder && normalizedPath(entry.directoryPath) == folderPath
-        }.prefix(3))
+        }
+    }
+
+    private var actionListHeight: CGFloat {
+        let visibleRowCount = min(recentEntries.count, Self.visibleActionCount)
+        guard visibleRowCount > 0 else { return 0 }
+
+        let dividerCount = max(visibleRowCount - 1, 0)
+        return CGFloat(visibleRowCount) * actionRowHeight + CGFloat(dividerCount)
     }
 
     var body: some View {
@@ -1731,17 +1742,20 @@ private struct WatchedFolderRecentActions: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(recentEntries.enumerated()), id: \.element.id) { index, entry in
-                        if index > 0 {
-                            Divider()
-                                .padding(.leading, 28)
-                        }
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(recentEntries.enumerated()), id: \.element.id) { index, entry in
+                            if index > 0 {
+                                Divider()
+                                    .padding(.leading, 28)
+                            }
 
-                        actionRow(entry)
-                            .padding(.vertical, 7)
+                            actionRow(entry)
+                                .padding(.vertical, 7)
+                        }
                     }
                 }
+                .frame(height: actionListHeight)
             }
         }
         .sheet(item: $selectedEntry) { entry in
@@ -1771,8 +1785,7 @@ private struct WatchedFolderRecentActions: View {
     private func actionRow(_ entry: OrganizationHistoryEntry) -> some View {
         HStack(spacing: 10) {
             Button {
-                HapticFeedbackManager.shared.selection()
-                selectedEntry = entry
+                openDetails(for: entry)
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: iconName(for: entry))
@@ -1828,6 +1841,11 @@ private struct WatchedFolderRecentActions: View {
                 .accessibilityHint("Restores the files changed by this AI action")
             }
         }
+    }
+
+    private func openDetails(for entry: OrganizationHistoryEntry) {
+        HapticFeedbackManager.shared.selection()
+        selectedEntry = entry
     }
 
     private func undo(_ entry: OrganizationHistoryEntry) {
