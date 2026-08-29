@@ -323,19 +323,37 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
 
     public var aiToolIcon: String {
         switch type {
-        case .fileExtension: "doc.badge.gearshape"
+        case .fileExtension: "doc.badge.gearshape.fill"
         case .fileName: "doc.text.magnifyingglass"
-        case .folderName: "folder"
-        case .pathContains: "arrow.triangle.branch"
-        case .regex: "text.magnifyingglass"
-        case .fileSize: "scalemass"
-        case .creationDate: "calendar.badge.plus"
-        case .modificationDate: "calendar.badge.clock"
-        case .hiddenFiles: "eye.slash"
-        case .systemFiles: "gearshape.2"
-        case .finderTag: "tag"
-        case .fileType: "doc.on.doc"
-        case .customScript: "applescript"
+        case .folderName: "folder.badge.minus"
+        case .pathContains: pattern.hasPrefix("/") ? "folder.fill.badge.minus" : "point.bottomleft.forward.to.point.topright.scurvepath"
+        case .regex: "textformat.alt"
+        case .fileSize: "internaldrive.fill"
+        case .creationDate: "calendar.badge.minus"
+        case .modificationDate: "clock.badge"
+        case .hiddenFiles: "eye.slash.fill"
+        case .systemFiles: "gearshape.2.fill"
+        case .finderTag: "tag.fill"
+        case .fileType: "square.grid.2x2.fill"
+        case .customScript: "applescript.fill"
+        }
+    }
+
+    public var aiToolDisplayName: String {
+        switch type {
+        case .fileExtension: "File extension"
+        case .fileName: "File name"
+        case .folderName: "Folder name"
+        case .pathContains: pattern.hasPrefix("/") ? "Protected folder" : "Path match"
+        case .regex: "Name pattern"
+        case .fileSize: "File size"
+        case .creationDate: "Creation date"
+        case .modificationDate: "Modified date"
+        case .hiddenFiles: "Hidden files"
+        case .systemFiles: "macOS files"
+        case .finderTag: "Finder tag"
+        case .fileType: "File category"
+        case .customScript: "Custom matcher"
         }
     }
 

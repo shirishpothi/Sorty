@@ -24,6 +24,7 @@ struct ExclusionRulesView: View {
     @State private var resolvedExceptionRules: [ExclusionRule] = []
     @State private var revealedExceptionRuleCount = 0
     @State private var resolvedSupplementalDescription: String?
+    @State private var streamedRuleDetails: [UUID: String] = [:]
     @State private var showCreateExceptionError = false
     @State private var createExceptionErrorMessage = ""
     @State private var showImproveExceptionRequest = false
@@ -658,6 +659,7 @@ struct ExclusionRulesView: View {
         resolvedExceptionRules = []
         revealedExceptionRuleCount = 0
         resolvedSupplementalDescription = nil
+        streamedRuleDetails = [:]
         defer { isCreatingExceptionRules = false }
 
         do {
@@ -668,18 +670,35 @@ struct ExclusionRulesView: View {
             )
             resolvedExceptionRules = resolution.rules
             resolvedSupplementalDescription = resolution.supplementalDescription
-            for count in 1...resolution.rules.count {
-                if !reduceMotion { try? await Task.sleep(for: .milliseconds(140)) }
-                withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.84)) {
-                    revealedExceptionRuleCount = count
+            for (index, rule) in resolution.rules.enumerated() {
+                if !reduceMotion { try? await Task.sleep(for: .milliseconds(180)) }
+                withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82)) {
+                    revealedExceptionRuleCount = index + 1
                 }
+                HapticFeedbackManager.shared.selection()
+                await streamRuleDetail(rule)
             }
             showCreateExceptionError = false
-            HapticFeedbackManager.shared.selection()
+            HapticFeedbackManager.shared.success()
         } catch {
             createExceptionErrorMessage = error.localizedDescription
             showCreateExceptionError = true
             HapticFeedbackManager.shared.error()
+        }
+    }
+
+    private func streamRuleDetail(_ rule: ExclusionRule) async {
+        let detail = rule.interpretedMatchDescription
+        guard !reduceMotion else {
+            streamedRuleDetails[rule.id] = detail
+            return
+        }
+
+        streamedRuleDetails[rule.id] = ""
+        for character in detail {
+            guard !Task.isCancelled else { return }
+            streamedRuleDetails[rule.id, default: ""].append(character)
+            try? await Task.sleep(for: .milliseconds(16))
         }
     }
 
@@ -690,77 +709,102 @@ struct ExclusionRulesView: View {
                     SortyGradientCircularLoader(size: 14, lineWidth: 2.2)
                     Text("Interpreting your exception...")
                 } else {
-                    Image(systemName: "checkmark.circle.fill")
+                    Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(.green)
+                        .symbolEffect(.bounce, value: revealedExceptionRuleCount)
                     Text("Review what Sorty understood")
                 }
                 Spacer()
             }
             .font(.subheadline.bold())
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    exceptionProcessStep(
-                        icon: "text.bubble",
-                        eyebrow: "INPUT",
-                        title: "Read request",
-                        detail: newNLException
-                    )
-
-                    ForEach(Array(resolvedExceptionRules.prefix(revealedExceptionRuleCount))) { rule in
-                        Image(systemName: "chevron.right")
-                            .font(.caption.bold())
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
                         exceptionProcessStep(
-                            icon: rule.aiToolIcon,
-                            eyebrow: "TOOL",
-                            title: rule.aiToolName,
-                            detail: rule.interpretedMatchDescription
+                            icon: "text.bubble.fill",
+                            accent: .blue,
+                            eyebrow: "REQUEST",
+                            title: "Read request",
+                            detail: newNLException,
+                            isStreaming: isCreatingExceptionRules
+                                && revealedExceptionRuleCount == 0
                         )
-                        .transition(.blurReplace.combined(with: .opacity))
+                        .id("request")
+
+                        ForEach(Array(resolvedExceptionRules.prefix(revealedExceptionRuleCount))) { rule in
+                            processConnector
+
+                            exceptionRuleProcessStep(rule)
+                            .transition(.blurReplace.combined(with: .scale))
+                            .id(rule.id)
+                        }
+
+                        if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
+                            processConnector
+
+                            exceptionProcessStep(
+                                icon: "checkmark.shield.fill",
+                                accent: .green,
+                                eyebrow: "RESULT",
+                                title: "Ready to save",
+                                detail: "\(resolvedExceptionRules.count) configured \(resolvedExceptionRules.count == 1 ? "exclusion" : "exclusions")",
+                                isStreaming: false
+                            )
+                            .transition(.blurReplace.combined(with: .scale))
+                            .id("result")
+                        }
                     }
-
-                    if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.bold())
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-
-                        exceptionProcessStep(
-                            icon: "checkmark.shield",
-                            eyebrow: "RESULT",
-                            title: "Ready to save",
-                            detail: "\(resolvedExceptionRules.count) configured \(resolvedExceptionRules.count == 1 ? "exclusion" : "exclusions")"
-                        )
-                        .transition(.blurReplace.combined(with: .opacity))
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+                .onChange(of: revealedExceptionRuleCount) { _, count in
+                    guard count > 0, count <= resolvedExceptionRules.count else { return }
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.86)) {
+                        proxy.scrollTo(resolvedExceptionRules[count - 1].id, anchor: .trailing)
+                    }
+                }
+                .onChange(of: isCreatingExceptionRules) { wasCreating, isCreating in
+                    guard wasCreating, !isCreating, !resolvedExceptionRules.isEmpty else { return }
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.86)) {
+                        proxy.scrollTo("result", anchor: .trailing)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
 
             if let resolvedSupplementalDescription {
                 LabeledContent("Supplementary instruction", value: resolvedSupplementalDescription)
                     .font(.caption)
                     .padding(12)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .systemLiquidGlassBackground(
+                        cornerRadius: 10,
+                        clear: true,
+                        interactive: false
+                    )
             }
 
             if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
                 HStack {
-                    Button("Edit Description") {
+                    Button {
                         resolvedExceptionRules = []
                         revealedExceptionRuleCount = 0
                         resolvedSupplementalDescription = nil
+                        streamedRuleDetails = [:]
                         isNLExceptionFocused = true
+                    } label: {
+                        Label("Edit Description", systemImage: "pencil")
                     }
-                    .buttonStyle(.plain)
+                    .systemLiquidGlassButton()
 
                     Spacer()
 
-                    Button("Save \(resolvedExceptionRules.count == 1 ? "Exclusion" : "Exclusions")") {
+                    Button {
                         saveResolvedExceptionRules()
+                    } label: {
+                        Label(
+                            "Save \(resolvedExceptionRules.count == 1 ? "Exclusion" : "Exclusions")",
+                            systemImage: "checkmark.shield.fill"
+                        )
                     }
                     .buttonStyle(.sortyPrimary(size: .small))
                 }
@@ -773,31 +817,86 @@ struct ExclusionRulesView: View {
 
     private func exceptionProcessStep(
         icon: String,
+        accent: Color,
         eyebrow: String,
         title: String,
-        detail: String
+        detail: String,
+        isStreaming: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .foregroundStyle(.tint)
+                    .font(.caption.bold())
+                    .foregroundStyle(accent)
+                    .frame(width: 28, height: 28)
+                    .systemLiquidGlassBackground(
+                        cornerRadius: 8,
+                        clear: true,
+                        interactive: false
+                    )
+                    .symbolEffect(
+                        .variableColor.iterative,
+                        isActive: isStreaming && !reduceMotion
+                    )
                 Text(eyebrow)
                     .font(.caption2.bold())
                     .foregroundStyle(.secondary)
             }
             Text(title)
-                .font(.caption.bold().monospaced())
+                .font(.subheadline.bold())
                 .lineLimit(1)
             Text(detail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+            if isStreaming {
+                Capsule()
+                    .fill(accent)
+                    .frame(width: 16, height: 2)
+                    .opacity(0.8)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(12)
-        .frame(width: 168, height: 104, alignment: .topLeading)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        .frame(width: 184, height: 116, alignment: .topLeading)
+        .systemLiquidGlassBackground(cornerRadius: 12, clear: true, interactive: false)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(accent.opacity(isStreaming ? 0.4 : 0.16), lineWidth: 1)
+        }
+        .scaleEffect(isStreaming && !reduceMotion ? 1.015 : 1)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isStreaming)
         .accessibilityElement(children: .combine)
+    }
+
+    private func exceptionRuleProcessStep(_ rule: ExclusionRule) -> some View {
+        let streamedDetail = streamedRuleDetails[rule.id] ?? ""
+        let isStreaming = streamedDetail != rule.interpretedMatchDescription
+        return exceptionProcessStep(
+            icon: rule.aiToolIcon,
+            accent: toolColor(for: rule.type),
+            eyebrow: "TOOL",
+            title: rule.aiToolDisplayName,
+            detail: streamedDetail,
+            isStreaming: isStreaming
+        )
+    }
+
+    private var processConnector: some View {
+        Image(systemName: "arrow.right")
+            .font(.caption.bold())
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
+    }
+
+    private func toolColor(for type: ExclusionRuleType) -> Color {
+        switch type {
+        case .fileExtension, .fileName, .folderName, .pathContains, .regex: .blue
+        case .fileSize, .creationDate, .modificationDate: .orange
+        case .hiddenFiles, .systemFiles, .finderTag, .fileType: .purple
+        case .customScript: .green
+        }
     }
 
     private func saveResolvedExceptionRules() {
@@ -809,6 +908,7 @@ struct ExclusionRulesView: View {
             resolvedExceptionRules = []
             revealedExceptionRuleCount = 0
             resolvedSupplementalDescription = nil
+            streamedRuleDetails = [:]
         }
         newNLException = ""
         HapticFeedbackManager.shared.success()
