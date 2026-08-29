@@ -236,23 +236,41 @@ struct OrganizationStrategySettingsView: View {
                         }
                         .settingsFocusableSetting(.strategyMaxFilenameLength)
 
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Image(systemName: "sparkles")
-                                .font(.caption)
-                                .foregroundColor(.purple)
-                            Text(viewModel.config.renameNamingOptions.exampleFilename)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .numericTextTransition(
-                                    animationValue: viewModel.config.renameNamingOptions.maxFilenameLength
-                                )
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.purple)
+                                .frame(width: 28, height: 28)
+                                .background(.purple.opacity(0.12), in: Circle())
+                                .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Example filename")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.tertiary)
+
+                                Text(viewModel.config.renameNamingOptions.exampleFilename)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .numericTextTransition(
+                                        animationValue: viewModel.config.renameNamingOptions.maxFilenameLength
+                                    )
+                            }
                         }
-                        .padding(8)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(.purple.opacity(0.16), lineWidth: 1)
+                        )
+                        .accessibilityElement(children: .combine)
                     }
                     .settingsFocusableSetting(.strategyNamingOptions)
 
