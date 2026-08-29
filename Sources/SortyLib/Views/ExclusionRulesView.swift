@@ -451,12 +451,16 @@ struct ExclusionRulesView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Use ordinary language — you can combine names, folders, file kinds, and context.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if isCreatingExceptionRules || !resolvedExceptionRules.isEmpty {
+                    exceptionInterpretation
+                        .transition(.blurReplace.combined(with: .opacity))
+                } else {
+                    Text("Use ordinary language — you can combine names, folders, file kinds, and context.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                HStack(alignment: .center, spacing: 10) {
-                    ZStack(alignment: .leading) {
+                    HStack(alignment: .center, spacing: 10) {
+                        ZStack(alignment: .leading) {
                         TextField("", text: $newNLException, axis: .vertical)
                             .lineLimit(1...4)
                             .textFieldStyle(.roundedBorder)
@@ -499,7 +503,7 @@ struct ExclusionRulesView: View {
                         }
                     }
 
-                    HStack(spacing: 8) {
+                        HStack(spacing: 8) {
                         if hasNaturalLanguageExceptionText {
                             Button {
                                 Task { await improveExceptionWithAI() }
@@ -561,17 +565,12 @@ struct ExclusionRulesView: View {
                             Text(createExceptionErrorMessage)
                         }
                     }
-                    .animation(
-                        reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.82),
-                        value: hasNaturalLanguageExceptionText
-                    )
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.82),
+                            value: hasNaturalLanguageExceptionText
+                        )
+                    }
                 }
-
-                if isCreatingExceptionRules || !resolvedExceptionRules.isEmpty {
-                    exceptionInterpretation
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
             }
         }
         .task(id: newNLException.isEmpty) {
@@ -703,7 +702,7 @@ struct ExclusionRulesView: View {
     }
 
     private var exceptionInterpretation: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if isCreatingExceptionRules {
                     SortyGradientCircularLoader(size: 14, lineWidth: 2.2)
@@ -714,13 +713,19 @@ struct ExclusionRulesView: View {
                         .symbolEffect(.bounce, value: revealedExceptionRuleCount)
                     Text("Review what Sorty understood")
                 }
+                if !resolvedExceptionRules.isEmpty {
+                    Text("\(revealedExceptionRuleCount) of \(resolvedExceptionRules.count) tools")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: revealedExceptionRuleCount)
+                }
                 Spacer()
             }
             .font(.subheadline.bold())
 
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         exceptionProcessStep(
                             icon: "text.bubble.fill",
                             accent: .blue,
@@ -755,7 +760,7 @@ struct ExclusionRulesView: View {
                             .id("result")
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 1)
                 }
                 .scrollIndicators(.hidden)
                 .onChange(of: revealedExceptionRuleCount) { _, count in
@@ -774,8 +779,8 @@ struct ExclusionRulesView: View {
 
             if let resolvedSupplementalDescription {
                 LabeledContent("Supplementary instruction", value: resolvedSupplementalDescription)
-                    .font(.caption)
-                    .padding(12)
+                    .font(.caption2)
+                    .padding(8)
                     .systemLiquidGlassBackground(
                         cornerRadius: 10,
                         clear: true,
@@ -810,7 +815,7 @@ struct ExclusionRulesView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(8)
         .systemLiquidGlassBackground(cornerRadius: 12)
         .accessibilityElement(children: .contain)
     }
@@ -823,12 +828,12 @@ struct ExclusionRulesView: View {
         detail: String,
         isStreaming: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption.bold())
                     .foregroundStyle(accent)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 24, height: 24)
                     .systemLiquidGlassBackground(
                         cornerRadius: 8,
                         clear: true,
@@ -848,8 +853,9 @@ struct ExclusionRulesView: View {
             Text(detail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
+                .numericTextTransition(animationValue: detail)
             if isStreaming {
                 Capsule()
                     .fill(accent)
@@ -858,11 +864,11 @@ struct ExclusionRulesView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(12)
-        .frame(width: 184, height: 116, alignment: .topLeading)
-        .systemLiquidGlassBackground(cornerRadius: 12, clear: true, interactive: false)
+        .padding(10)
+        .frame(width: 176, height: 100, alignment: .topLeading)
+        .systemLiquidGlassBackground(cornerRadius: 10, clear: true, interactive: false)
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(accent.opacity(isStreaming ? 0.4 : 0.16), lineWidth: 1)
         }
         .scaleEffect(isStreaming && !reduceMotion ? 1.015 : 1)
@@ -873,12 +879,15 @@ struct ExclusionRulesView: View {
     private func exceptionRuleProcessStep(_ rule: ExclusionRule) -> some View {
         let streamedDetail = streamedRuleDetails[rule.id] ?? ""
         let isStreaming = streamedDetail != rule.interpretedMatchDescription
+        var details = [rule.displayDescription, streamedDetail]
+        if rule.caseSensitive { details.append("Case-sensitive") }
+        if rule.negated { details.append("Inverse match") }
         return exceptionProcessStep(
             icon: rule.aiToolIcon,
             accent: toolColor(for: rule.type),
             eyebrow: "TOOL",
             title: rule.aiToolDisplayName,
-            detail: streamedDetail,
+            detail: details.filter { !$0.isEmpty }.joined(separator: " · "),
             isStreaming: isStreaming
         )
     }
