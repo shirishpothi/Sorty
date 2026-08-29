@@ -366,12 +366,12 @@ struct ExclusionRulesView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if !isUsingManualExclusion {
                         naturalLanguageExceptionsCard
-                            .transition(.blurReplace.combined(with: .opacity))
+                            .transition(exclusionEditorTransition)
                     }
 
                     Button {
                         HapticFeedbackManager.shared.selection()
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.84)) {
+                        withAnimation(exclusionEditorAnimation) {
                             isUsingManualExclusion.toggle()
                         }
                     } label: {
@@ -383,6 +383,7 @@ struct ExclusionRulesView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .fixedSize()
+                                .contentTransition(.opacity)
                             Rectangle()
                                 .fill(Color.secondary.opacity(0.25))
                                 .frame(height: 1)
@@ -402,13 +403,32 @@ struct ExclusionRulesView: View {
                             rulesManager: rulesManager,
                             isEmbedded: true
                         )
-                        .transition(.blurReplace.combined(with: .opacity))
+                        .transition(exclusionEditorTransition)
                     }
                 }
                 .padding(20)
+                .animation(exclusionEditorAnimation, value: isUsingManualExclusion)
             }
         }
         .frame(width: 680, height: 720)
+    }
+
+    private var exclusionEditorAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.88, blendDuration: 0.12)
+    }
+
+    private var exclusionEditorTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .modifier(
+                active: ExclusionEditorTransitionModifier(opacity: 0, blurRadius: 10, yOffset: 10, scale: 0.985),
+                identity: ExclusionEditorTransitionModifier()
+            ),
+            removal: .modifier(
+                active: ExclusionEditorTransitionModifier(opacity: 0, blurRadius: 6, yOffset: -6, scale: 0.985),
+                identity: ExclusionEditorTransitionModifier()
+            )
+        )
     }
 
     private var emptyHeaderView: some View {
@@ -1025,6 +1045,21 @@ struct ExclusionRulesView: View {
             showingAddRule = false
         }
         HapticFeedbackManager.shared.success()
+    }
+}
+
+private struct ExclusionEditorTransitionModifier: ViewModifier {
+    var opacity = 1.0
+    var blurRadius = 0.0
+    var yOffset = 0.0
+    var scale = 1.0
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .blur(radius: blurRadius)
+            .scaleEffect(scale, anchor: .top)
+            .offset(y: yOffset)
     }
 }
 
