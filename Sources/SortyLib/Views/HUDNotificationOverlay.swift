@@ -93,6 +93,7 @@ struct HUDNotificationCard: View {
                 if queuedCount > 0 {
                     HUDNotificationQueueControls(
                         summary: queuedSummary,
+                        queuedCount: queuedCount,
                         onShowNext: onShowNext,
                         onDismissAll: onDismissAll
                     )
@@ -133,11 +134,10 @@ struct HUDNotificationCard: View {
             activateCard()
         }
         .onAppear {
-            if !notification.isPersistent {
-                withAnimation(reduceMotion ? nil : .linear(duration: autoDismissSeconds)) {
-                    progressRemaining = 0
-                }
-            }
+            startProgressAnimation()
+        }
+        .onChange(of: notification.id) { _, _ in
+            startProgressAnimation()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(notification.title): \(notification.message)")
@@ -157,6 +157,18 @@ struct HUDNotificationCard: View {
             defaultAction()
         } else if !notification.isPersistent {
             onDismiss()
+        }
+    }
+
+    private func startProgressAnimation() {
+        guard !notification.isPersistent else {
+            progressRemaining = 1
+            return
+        }
+
+        progressRemaining = 1
+        withAnimation(reduceMotion ? nil : .linear(duration: autoDismissSeconds)) {
+            progressRemaining = 0
         }
     }
 
@@ -252,6 +264,7 @@ private struct HUDNotificationActionGrid: View {
 
 private struct HUDNotificationQueueControls: View {
     let summary: String
+    let queuedCount: Int
     let onShowNext: () -> Void
     let onDismissAll: () -> Void
 
@@ -260,10 +273,15 @@ private struct HUDNotificationQueueControls: View {
             .opacity(0.5)
 
         HStack(spacing: 8) {
-            Label(summary, systemImage: "rectangle.stack")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Label {
+                Text(summary)
+                    .numericTextTransition(animationValue: queuedCount)
+            } icon: {
+                Image(systemName: "rectangle.stack")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
 
             Spacer(minLength: 8)
 
