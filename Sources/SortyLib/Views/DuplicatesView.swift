@@ -715,6 +715,8 @@ private struct DuplicatesResultsSidebarHeader: View {
     let showsStats: Bool
     let onScanAgain: () -> Void
     @State private var showsUnavailableFiles = false
+    @AppStorage("duplicates.semanticCleanupNoticeDismissed")
+    private var hasDismissedSemanticCleanupNotice = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -778,11 +780,22 @@ private struct DuplicatesResultsSidebarHeader: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            if manager.semanticGroupCount > 0 {
-                Label("Cleanup All only removes exact duplicates.", systemImage: "checkmark.shield")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if manager.semanticGroupCount > 0 && !hasDismissedSemanticCleanupNotice {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label("Cleanup All only removes exact duplicates.", systemImage: "checkmark.shield")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 4)
+
+                    Button("OK") {
+                        HapticFeedbackManager.shared.tap()
+                        hasDismissedSemanticCleanupNotice = true
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption.weight(.semibold))
+                }
+                .font(.caption)
             }
         }
         .padding(.horizontal, 16)
