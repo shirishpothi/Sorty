@@ -150,22 +150,22 @@ private final class RetainedCompletionFloatingGlowView: NSView {
         guard !isAnimating else { return }
         isAnimating = true
 
-        let phases = stride(from: 0, through: 64, by: 1).map { index in
-            let phase = Double(index) / 64 * 2 * Double.pi
-            return phase
+        // Smooth continuous elliptical orbit — single translation animation with
+        // uniform angular steps, linear pacing, and no autoreverse. The previous
+        // split x/y + easeInEaseOut + autoreverse caused a noticeable
+        // hesitate-and-reverse at each loop end ("weird" back-and-forth).
+        let steps = 64
+        let orbit = CAKeyframeAnimation(keyPath: "transform.translation")
+        orbit.values = (0...steps).map { i in
+            let a = Double(i) / Double(steps) * 2 * .pi
+            return NSValue(point: CGPoint(x: 30 * sin(a), y: -20 * cos(a)))
         }
-        let horizontal = CAKeyframeAnimation(keyPath: "transform.translation.x")
-        horizontal.values = phases.map { NSNumber(value: 30 * sin($0)) }
-        let vertical = CAKeyframeAnimation(keyPath: "transform.translation.y")
-        vertical.values = phases.map { NSNumber(value: -20 * cos($0)) }
-
-        let group = CAAnimationGroup()
-        group.animations = [horizontal, vertical]
-        group.duration = 4
-        group.repeatCount = .infinity
-        group.autoreverses = true
-        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        host.layer?.add(group, forKey: "completionFloatingGlowPosition")
+        orbit.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
+        orbit.calculationMode = .linear
+        orbit.duration = 6
+        orbit.repeatCount = .infinity
+        orbit.isRemovedOnCompletion = false
+        host.layer?.add(orbit, forKey: "completionFloatingGlowPosition")
     }
 
     private func stopAnimating() {
@@ -432,23 +432,30 @@ private final class RetainedCompletionParticlesView: NSView {
         for (index, particleLayer) in particleLayers.enumerated() {
             let now = particleLayer.convertTime(CACurrentMediaTime(), from: nil)
             let duration = 3 + seededParticleValue(index: index, range: 0...3)
-            let travel = CABasicAnimation(keyPath: "transform.translation.y")
-            travel.fromValue = 0
-            travel.toValue = 300
+            let travel = CAKeyframeAnimation(keyPath: "transform.translation")
+            travel.values = [
+                NSValue(point: .zero),
+                NSValue(point: CGPoint(x: 12, y: 75)),
+                NSValue(point: CGPoint(x: 16, y: 150)),
+                NSValue(point: CGPoint(x: 8, y: 225)),
+                NSValue(point: CGPoint(x: 0, y: 300))
+            ]
+            travel.keyTimes = [0, 0.25, 0.5, 0.75, 1]
             travel.beginTime = now + Double(index) * 0.4
             travel.duration = duration
             travel.repeatCount = .infinity
             travel.fillMode = .backwards
-            travel.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            travel.calculationMode = .cubic
             particleLayer.add(travel, forKey: "completionParticleTravel")
 
-            let opacity = CABasicAnimation(keyPath: "opacity")
-            opacity.fromValue = 0
-            opacity.toValue = 0.6
+            let opacity = CAKeyframeAnimation(keyPath: "opacity")
+            opacity.values = [0, 0.6, 0.6, 0]
+            opacity.keyTimes = [0, 0.12, 0.72, 1]
             opacity.beginTime = now + Double(index) * 0.4
-            opacity.duration = 1
+            opacity.duration = duration
+            opacity.repeatCount = .infinity
             opacity.fillMode = .backwards
-            opacity.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            opacity.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             particleLayer.add(opacity, forKey: "completionParticleOpacity")
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -499,6 +506,7 @@ private struct CompletionHero: View {
     let showGlowRing: Bool
     let exitTriggered: Bool
     let contentDismissed: Bool
+    let isButtonHovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -508,7 +516,10 @@ private struct CompletionHero: View {
                 showGlowRing: showGlowRing,
                 exitTriggered: exitTriggered
             )
-            CompletionCheckmarkIcon(hasAppeared: hasAppeared)
+            CompletionCheckmarkIcon(
+                hasAppeared: hasAppeared,
+                isButtonHovered: isButtonHovered
+            )
         }
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.3)
@@ -729,6 +740,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 
 private struct CompletionCheckmarkIcon: View {
     let hasAppeared: Bool
+    let isButtonHovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -740,11 +752,27 @@ private struct CompletionCheckmarkIcon: View {
             Circle()
                 .fill(CompletionPalette.softRose)
                 .frame(width: 72, height: 72)
+                .opacity(isButtonHovered ? 0 : 1)
 
-            Image(systemName: "checkmark")
-                .font(.system(size: 42, weight: .bold, design: .rounded))
-                .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
-                .symbolEffect(.bounce, value: reduceMotion ? false : hasAppeared)
+            ZStack {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
+                    .opacity(isButtonHovered ? 0 : 1)
+                    .scaleEffect(isButtonHovered ? 0.72 : 1)
+                    .symbolEffect(.bounce, value: reduceMotion ? false : hasAppeared)
+
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 88, height: 88)
+                    .opacity(isButtonHovered ? 1 : 0)
+                    .scaleEffect(isButtonHovered ? 1 : 0.72)
+            }
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
+                value: isButtonHovered
+            )
         }
     }
 }
@@ -789,24 +817,23 @@ private struct CompletionTipsGrid: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 14) {
-            GridRow {
+        HStack(alignment: .top, spacing: 48) {
+            VStack(alignment: .leading, spacing: 14) {
                 quickTip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.55)
-                quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
-            }
-
-            GridRow {
                 quickTip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.75)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
                 quickTip(icon: "gearshape", text: "Tune settings", delay: 0.85)
             }
         }
+        .frame(maxWidth: .infinity)
         .opacity(contentDismissed ? 0 : 1)
         .offset(y: contentDismissed ? 40 : 0)
     }
 
     private func quickTip(icon: String, text: String, delay: Double) -> some View {
         QuickTipRow(icon: icon, text: text)
-            .frame(width: 190, alignment: .leading)
             .opacity(tipsAppeared ? 1 : 0)
             .offset(y: tipsAppeared ? 0 : 12)
             .animation(
@@ -821,6 +848,7 @@ private struct CompletionPrimaryAction: View {
     let contentDismissed: Bool
     let isChecking: Bool
     let action: () -> Void
+    let onHoverChanged: (Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -835,6 +863,9 @@ private struct CompletionPrimaryAction: View {
         .onboardingBeamBorder(variant: .featured, active: !isChecking)
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
+        .onHover { hovering in
+            onHoverChanged(hovering)
+        }
         .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
         .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
         .animation(
@@ -1063,6 +1094,7 @@ public struct CompletionStepView: View {
     @State private var showGlowRing = false
     @State private var showParticles = false
     @State private var tipsAppeared = false
+    @State private var isCompletionButtonHovered = false
 
     private let audioController = CompletionAudioController.shared
     @State private var readinessState: ReadinessState = .idle
@@ -1107,7 +1139,8 @@ public struct CompletionStepView: View {
                     hasAppeared: hasAppeared,
                     showGlowRing: showGlowRing,
                     exitTriggered: exitTriggered,
-                    contentDismissed: contentDismissed
+                    contentDismissed: contentDismissed,
+                    isButtonHovered: isCompletionButtonHovered
                 )
                 CompletionCopy(hasAppeared: hasAppeared, contentDismissed: contentDismissed)
                 CompletionTipsGrid(tipsAppeared: tipsAppeared, contentDismissed: contentDismissed)
@@ -1124,7 +1157,16 @@ public struct CompletionStepView: View {
                     tipsAppeared: tipsAppeared,
                     contentDismissed: contentDismissed,
                     isChecking: readinessState == .checking,
-                    action: verifyAndFinish
+                    action: verifyAndFinish,
+                    onHoverChanged: { isHovered in
+                        withAnimation(
+                            reduceMotion
+                                ? nil
+                                : .spring(response: 0.28, dampingFraction: 0.82)
+                        ) {
+                            isCompletionButtonHovered = isHovered
+                        }
+                    }
                 )
 
                 if case .failed(let message) = readinessState {
@@ -1133,6 +1175,7 @@ public struct CompletionStepView: View {
                         .accessibilityIdentifier("OnboardingCompletionHealthError")
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .padding(.horizontal, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
