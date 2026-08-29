@@ -185,6 +185,8 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
     public var description: String?
     public var isBuiltIn: Bool
     public var isAIGenerated: Bool?
+    /// Rules sharing this identifier form one AND group. Ungrouped rules remain independent OR exclusions.
+    public var conditionGroupID: UUID?
 
     // For size comparison (in MB)
     public var numericValue: Double?
@@ -212,6 +214,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         description: String? = nil,
         isBuiltIn: Bool = false,
         isAIGenerated: Bool = false,
+        conditionGroupID: UUID? = nil,
         numericValue: Double? = nil,
         comparisonGreater: Bool? = nil,
         sizeUnit: ExclusionSizeUnit? = nil,
@@ -228,6 +231,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         self.description = description
         self.isBuiltIn = isBuiltIn
         self.isAIGenerated = isAIGenerated
+        self.conditionGroupID = conditionGroupID
         self.numericValue = numericValue
         self.comparisonGreater = comparisonGreater
         self.sizeUnit = sizeUnit
@@ -420,7 +424,9 @@ public struct ExclusionMatcher: Sendable {
         self.metadataRules = compiled
             .filter { !$0.isPathOnly }
             .sorted { $0.evaluationCost < $1.evaluationCost }
-        self.directoryPruningRules = compiled.filter(\.canPruneDirectory)
+        self.directoryPruningRules = compiled.filter {
+            $0.conditionGroupID == nil && $0.canPruneDirectory
+        }
         self.sourceRules = rules
         self.referenceDate = referenceDate
         self.hasRelativeDateRules = rules.contains {
@@ -463,7 +469,7 @@ public struct ExclusionMatcher: Sendable {
     public func shouldExcludeUsingPathOnly(at url: URL) -> Bool {
         guard !pathOnlyRules.isEmpty else { return false }
         var cache = ExclusionMatchCache(url: url)
-        return pathOnlyRules.contains { $0.matches(cache: &cache) }
+        return matchesAnyRule(in: pathOnlyRules, cache: &cache)
     }
 
     /// Completes matching once inexpensive filesystem metadata is available.
@@ -481,10 +487,7 @@ public struct ExclusionMatcher: Sendable {
             modificationDate: modificationDate,
             finderLabelNumber: finderLabelNumber
         )
-        if pathOnlyRules.contains(where: { $0.matches(cache: &cache) }) {
-            return true
-        }
-        return metadataRules.contains { $0.matches(cache: &cache) }
+        return matchesAnyRule(cache: &cache)
     }
 
     /// Returns true when an enabled positive rule protects an entire directory tree.
@@ -553,7 +556,7 @@ public struct ExclusionMatcher: Sendable {
             modificationDate: file.modificationDate,
             finderLabelNumber: file.finderLabelNumber
         )
-        return rules.first { $0.matches(cache: &cache) }?.id
+        return matchingRules(cache: &cache).first?.id
     }
 
     func matchingRuleIDs(for file: FileItem) -> [UUID] {
@@ -566,18 +569,49 @@ public struct ExclusionMatcher: Sendable {
             modificationDate: file.modificationDate,
             finderLabelNumber: file.finderLabelNumber
         )
-        var matches: [UUID] = []
-        for rule in rules where rule.matches(cache: &cache) {
-            matches.append(rule.id)
-        }
-        return matches
+        return matchingRules(cache: &cache).map(\.id)
     }
 
     private func matchesAnyRule(cache: inout ExclusionMatchCache) -> Bool {
-        if pathOnlyRules.contains(where: { $0.matches(cache: &cache) }) {
+        matchesAnyRule(in: rules, cache: &cache)
+    }
+
+    private func matchesAnyRule(
+        in candidates: [CompiledExclusionRule],
+        cache: inout ExclusionMatchCache
+    ) -> Bool {
+        if candidates.contains(where: {
+            $0.conditionGroupID == nil && $0.matches(cache: &cache)
+        }) {
             return true
         }
-        return metadataRules.contains { $0.matches(cache: &cache) }
+
+        let grouped = Dictionary(grouping: candidates.compactMap { rule in
+            rule.conditionGroupID.map { ($0, rule) }
+        }, by: \.0)
+        return grouped.values.contains { members in
+            let groupRules = members.map(\.1)
+            guard let groupID = groupRules.first?.conditionGroupID else { return false }
+            let completeGroup = rules.filter { $0.conditionGroupID == groupID }
+            guard completeGroup.count == groupRules.count else { return false }
+            return groupRules.allSatisfy { $0.matches(cache: &cache) }
+        }
+    }
+
+    private func matchingRules(cache: inout ExclusionMatchCache) -> [CompiledExclusionRule] {
+        var matches = rules.filter {
+            $0.conditionGroupID == nil && $0.matches(cache: &cache)
+        }
+        let grouped = Dictionary(grouping: rules.compactMap { rule in
+            rule.conditionGroupID.map { ($0, rule) }
+        }, by: \.0)
+        for members in grouped.values {
+            let groupRules = members.map(\.1)
+            if groupRules.allSatisfy({ $0.matches(cache: &cache) }) {
+                matches.append(contentsOf: groupRules)
+            }
+        }
+        return matches
     }
 
     fileprivate static func isSystemItem(name: String, path: String) -> Bool {
@@ -696,6 +730,7 @@ private struct ExclusionMatchCache {
 
 private struct CompiledExclusionRule: Sendable {
     let id: UUID
+    let conditionGroupID: UUID?
     let predicate: CompiledExclusionPredicate
     let negated: Bool
 
@@ -794,6 +829,7 @@ private struct CompiledExclusionRule: Sendable {
         }
 
         self.id = rule.id
+        self.conditionGroupID = rule.conditionGroupID
         self.predicate = predicate
         self.negated = rule.negated
     }

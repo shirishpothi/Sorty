@@ -115,4 +115,40 @@ final class ImproveInstructionsToolTests: XCTestCase {
             "Keep sibling project files together."
         )
     }
+
+    func testNaturalLanguageResolverLinksThreeConditions() throws {
+        let resolution = try NaturalLanguageExclusionResolver.decodeResolution(
+            from: """
+            {
+              "rules": [
+                {"kind":"file_category","category":"Videos","group":"old-large-videos"},
+                {"kind":"file_size","value":1,"unit":"GB","comparison":"larger","group":"old-large-videos"},
+                {"kind":"modification_age","value":30,"unit":"days","comparison":"older","group":"old-large-videos"}
+              ]
+            }
+            """
+        )
+
+        XCTAssertEqual(resolution.rules.count, 3)
+        let groupIDs = Set(resolution.rules.compactMap(\.conditionGroupID))
+        XCTAssertEqual(groupIDs.count, 1)
+        XCTAssertTrue(resolution.rules.allSatisfy { $0.conditionGroupID != nil })
+    }
+
+    func testNaturalLanguageResolverAcceptsCommonProviderVariations() throws {
+        let resolution = try NaturalLanguageExclusionResolver.decodeResolution(
+            from: """
+            {
+              "rules": [
+                {"type":"file_type","category":"Video","conditionGroup":"large-videos"},
+                {"tool":"file-size","value":"1","unit":"gigabytes","comparison":"greater_than","conditionGroup":"large-videos"}
+              ]
+            }
+            """
+        )
+
+        XCTAssertEqual(resolution.rules.map(\.type), [.fileType, .fileSize])
+        XCTAssertEqual(resolution.rules[1].numericValue, 1_024)
+        XCTAssertEqual(Set(resolution.rules.compactMap(\.conditionGroupID)).count, 1)
+    }
 }

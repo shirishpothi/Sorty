@@ -57,6 +57,46 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertFalse(manager.shouldExclude(ordinaryPDF))
         XCTAssertFalse(manager.shouldExclude(taxText))
     }
+
+    @MainActor
+    func testCompoundGroupRequiresEveryCondition() {
+        let groupID = UUID()
+        let oldDate = Date(timeIntervalSinceNow: -60 * 60 * 24 * 60)
+        manager.addRule(
+            ExclusionRule(
+                type: .fileType,
+                conditionGroupID: groupID,
+                fileTypeCategory: .videos
+            )
+        )
+        manager.addRule(
+            ExclusionRule(
+                type: .fileSize,
+                conditionGroupID: groupID,
+                numericValue: 1_024,
+                comparisonGreater: true,
+                sizeUnit: .gigabytes
+            )
+        )
+        manager.addRule(
+            ExclusionRule(
+                type: .modificationDate,
+                conditionGroupID: groupID,
+                numericValue: 30,
+                comparisonGreater: true,
+                ageUnit: .days,
+                ageIntervalSeconds: 60 * 60 * 24 * 30
+            )
+        )
+
+        let matching = FileItem(path: "/p/archive.mp4", name: "archive", extension: "mp4", size: 2_147_483_648, isDirectory: false, modificationDate: oldDate)
+        let small = FileItem(path: "/p/small.mp4", name: "small", extension: "mp4", size: 100, isDirectory: false, modificationDate: oldDate)
+        let wrongType = FileItem(path: "/p/archive.pdf", name: "archive", extension: "pdf", size: 2_147_483_648, isDirectory: false, modificationDate: oldDate)
+
+        XCTAssertTrue(manager.shouldExclude(matching))
+        XCTAssertFalse(manager.shouldExclude(small))
+        XCTAssertFalse(manager.shouldExclude(wrongType))
+    }
     
     @MainActor
     func testFolderNameExclusion() {

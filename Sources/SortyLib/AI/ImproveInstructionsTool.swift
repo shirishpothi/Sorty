@@ -179,7 +179,7 @@ public struct NaturalLanguageExclusionResolver: Sendable {
            start <= end,
            let data = String(response[start...end]).data(using: .utf8),
            let payload = try? JSONDecoder().decode(ResolutionPayload.self, from: data) {
-            let rules = payload.tools.prefix(12).compactMap(\.exclusionRule)
+            let rules = makeRules(from: payload.tools)
             guard !rules.isEmpty else { throw NaturalLanguageExclusionResolverError.noRules }
             let supplemental = payload.supplementalDescription?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,14 +201,31 @@ public struct NaturalLanguageExclusionResolver: Sendable {
             throw NaturalLanguageExclusionResolverError.invalidResponse
         }
 
-        let rules = specifications.prefix(12).compactMap(\.exclusionRule)
+        let rules = makeRules(from: specifications)
         guard !rules.isEmpty else { throw NaturalLanguageExclusionResolverError.noRules }
         return rules
     }
 
+    private static func makeRules(from specifications: [Specification]) -> [ExclusionRule] {
+        var groupIDs: [String: UUID] = [:]
+        return specifications.prefix(12).compactMap { specification in
+            let groupName = specification.group?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let groupID = groupName.flatMap { name -> UUID? in
+                guard !name.isEmpty else { return nil }
+                if let existing = groupIDs[name] { return existing }
+                let created = UUID()
+                groupIDs[name] = created
+                return created
+            }
+            return specification.exclusionRule(conditionGroupID: groupID)
+        }
+    }
+
     private static let systemPrompt = """
     You are a tool selector for Sorty's exclusion engine. Return one JSON object and no prose:
-    {"tools":[{"kind":"...","pattern":"...","category":"...","finderTag":"...","value":number,"unit":"...","comparison":"...","caseSensitive":false,"negated":false,"description":"..."}],"supplementalDescription":null}
+    {"tools":[{"kind":"...","group":"...","pattern":"...","category":"...","finderTag":"...","value":number,"unit":"...","comparison":"...","caseSensitive":false,"negated":false,"description":"..."}],"supplementalDescription":null}
 
     Available tools mirror the manual exclusion editor:
     - protect_folder: an explicit absolute or ~/ folder path and everything below it
@@ -226,12 +243,30 @@ public struct NaturalLanguageExclusionResolver: Sendable {
     Categories: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases.
     Size units: KB, MB, GB, TB. Age units: seconds, minutes, hours, days, weeks, months, years. Comparisons: larger, smaller, older, newer.
     Finder tags: red, orange, yellow, green, blue, purple, gray.
-    Every selected tool is an independent exclusion joined with OR. Never split conditions that the user linked with AND across multiple tools. For linked file-name and extension conditions, select one regex that preserves the full Boolean expression. Example: "PDF files containing tax or passport" becomes one regex such as `^(?=.*(?:tax|passport)).*\\.pdf$`, not separate PDF, tax, and passport tools. Use multiple tools only when each condition should exclude a file on its own. Preserve explicit values exactly and never invent a path, threshold, extension, name, tag, or category. Set caseSensitive or negated only when the user asks. Use a concise generated name in description. Put text in supplementalDescription only when it adds a constraint no available tool can represent. Do not repeat structured tool settings there.
+    Tools are independent OR exclusions unless they share the same non-empty `group` string. Every tool with the same group is joined with AND, with no limit on the number of conditions. Put all linked conditions in one group. Example: "video files larger than 1 GB" uses file_category Videos and file_size larger 1 GB with group "large-videos" on both. A request also requiring files modified more than 30 days ago uses a third modification_age tool in that same group. Use different groups or no group only when each condition should exclude a file on its own. For Boolean alternatives inside one file name, use one regex when practical. Preserve explicit values exactly and never invent a path, threshold, extension, name, tag, or category. Set caseSensitive or negated only when the user asks. Give every tool in one group the same concise description so the linked exclusion reads as one request. Put text in supplementalDescription only when it adds a constraint no available tool can represent. Do not repeat structured tool settings there.
     """
 
     private struct ResolutionPayload: Decodable {
         let tools: [Specification]
         let supplementalDescription: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case tools
+            case rules
+            case supplementalDescription
+            case description
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            tools = try container.decodeIfPresent([Specification].self, forKey: .tools)
+                ?? container.decodeIfPresent([Specification].self, forKey: .rules)
+                ?? []
+            supplementalDescription = try container.decodeIfPresent(
+                String.self,
+                forKey: .supplementalDescription
+            ) ?? container.decodeIfPresent(String.self, forKey: .description)
+        }
     }
 
     private struct Specification: Decodable {
@@ -245,35 +280,93 @@ public struct NaturalLanguageExclusionResolver: Sendable {
         let finderTag: String?
         let caseSensitive: Bool?
         let negated: Bool?
+        let group: String?
 
-        var exclusionRule: ExclusionRule? {
+        private enum CodingKeys: String, CodingKey {
+            case kind
+            case type
+            case tool
+            case pattern
+            case category
+            case value
+            case unit
+            case comparison
+            case description
+            case name
+            case finderTag
+            case tag
+            case caseSensitive
+            case negated
+            case group
+            case conditionGroup
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            kind = try container.decodeIfPresent(String.self, forKey: .kind)
+                ?? container.decodeIfPresent(String.self, forKey: .type)
+                ?? container.decodeIfPresent(String.self, forKey: .tool)
+                ?? ""
+            pattern = try container.decodeIfPresent(String.self, forKey: .pattern)
+            category = try container.decodeIfPresent(String.self, forKey: .category)
+            if let number = try? container.decodeIfPresent(Double.self, forKey: .value) {
+                value = number
+            } else {
+                value = try container.decodeIfPresent(String.self, forKey: .value).flatMap(Double.init)
+            }
+            unit = try container.decodeIfPresent(String.self, forKey: .unit)
+            comparison = try container.decodeIfPresent(String.self, forKey: .comparison)
+            description = try container.decodeIfPresent(String.self, forKey: .description)
+                ?? container.decodeIfPresent(String.self, forKey: .name)
+            finderTag = try container.decodeIfPresent(String.self, forKey: .finderTag)
+                ?? container.decodeIfPresent(String.self, forKey: .tag)
+            caseSensitive = try container.decodeIfPresent(Bool.self, forKey: .caseSensitive)
+            negated = try container.decodeIfPresent(Bool.self, forKey: .negated)
+            group = try container.decodeIfPresent(String.self, forKey: .group)
+                ?? container.decodeIfPresent(String.self, forKey: .conditionGroup)
+        }
+
+        func exclusionRule(conditionGroupID: UUID?) -> ExclusionRule? {
             let trimmedPattern = pattern?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let commonDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedKind = kind
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+            let rawComparison = comparison?
+                .lowercased()
+                .replacingOccurrences(of: "_than", with: "")
+            let normalizedComparison = switch rawComparison {
+            case "greater", "above", "over": "larger"
+            case "less", "below", "under": "smaller"
+            default: rawComparison
+            }
 
-            switch kind {
+            switch normalizedKind {
             case "file_extension":
                 guard !trimmedPattern.isEmpty else { return nil }
-                return rule(type: .fileExtension, pattern: trimmedPattern.trimmingLeadingDotsForResolver)
+                return rule(type: .fileExtension, pattern: trimmedPattern.trimmingLeadingDotsForResolver, conditionGroupID: conditionGroupID)
             case "file_name_contains":
                 guard !trimmedPattern.isEmpty else { return nil }
-                return rule(type: .fileName, pattern: trimmedPattern)
+                return rule(type: .fileName, pattern: trimmedPattern, conditionGroupID: conditionGroupID)
             case "folder_name":
                 guard !trimmedPattern.isEmpty else { return nil }
-                return rule(type: .folderName, pattern: trimmedPattern)
+                return rule(type: .folderName, pattern: trimmedPattern, conditionGroupID: conditionGroupID)
             case "protect_folder", "folder_path":
                 guard trimmedPattern.hasPrefix("/") || trimmedPattern.hasPrefix("~/") else { return nil }
                 return rule(
                     type: .pathContains,
-                    pattern: (trimmedPattern as NSString).expandingTildeInPath
+                    pattern: (trimmedPattern as NSString).expandingTildeInPath,
+                    conditionGroupID: conditionGroupID
                 )
-            case "file_category":
-                guard let category = FileTypeCategory.allCases.first(where: {
-                    $0.rawValue.caseInsensitiveCompare(self.category ?? "") == .orderedSame
-                }) else { return nil }
+            case "file_category", "file_type", "category":
+                guard let category = parsedCategory else { return nil }
                 return ExclusionRule(
                     type: .fileType,
                     description: commonDescription,
                     isAIGenerated: true,
+                    conditionGroupID: conditionGroupID,
                     fileTypeCategory: category,
                     caseSensitive: caseSensitive ?? false,
                     negated: negated ?? false
@@ -282,63 +375,98 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                 guard let tag = FinderTagColor.allCases.first(where: {
                     $0.name.caseInsensitiveCompare(finderTag ?? "") == .orderedSame
                 }) else { return nil }
-                return rule(type: .finderTag, pattern: String(tag.rawValue))
+                return rule(type: .finderTag, pattern: String(tag.rawValue), conditionGroupID: conditionGroupID)
             case "file_size":
                 guard let value, value > 0,
-                      let sizeUnit = ExclusionSizeUnit(rawValue: unit?.uppercased() ?? ""),
-                      comparison == "larger" || comparison == "smaller"
+                      let sizeUnit = parsedSizeUnit,
+                      normalizedComparison == "larger" || normalizedComparison == "smaller"
                 else { return nil }
                 return ExclusionRule(
                     type: .fileSize,
                     description: commonDescription,
                     isAIGenerated: true,
+                    conditionGroupID: conditionGroupID,
                     numericValue: value * sizeUnit.megabyteMultiplier,
-                    comparisonGreater: comparison == "larger",
+                    comparisonGreater: normalizedComparison == "larger",
                     sizeUnit: sizeUnit,
                     caseSensitive: caseSensitive ?? false,
                     negated: negated ?? false
                 )
             case "creation_age", "modification_age":
                 guard let value, value > 0,
-                      let ageUnit = ExclusionAgeUnit(rawValue: unit?.lowercased() ?? ""),
-                      comparison == "older" || comparison == "newer"
+                      let ageUnit = parsedAgeUnit,
+                      normalizedComparison == "older" || normalizedComparison == "newer"
                 else { return nil }
                 return ExclusionRule(
-                    type: kind == "creation_age" ? .creationDate : .modificationDate,
+                    type: normalizedKind == "creation_age" ? .creationDate : .modificationDate,
                     description: commonDescription,
                     isAIGenerated: true,
+                    conditionGroupID: conditionGroupID,
                     numericValue: value * ageUnit.secondsMultiplier / ExclusionAgeUnit.days.secondsMultiplier,
-                    comparisonGreater: comparison == "older",
+                    comparisonGreater: normalizedComparison == "older",
                     ageUnit: ageUnit,
                     ageIntervalSeconds: value * ageUnit.secondsMultiplier,
                     caseSensitive: caseSensitive ?? false,
                     negated: negated ?? false
                 )
             case "hidden_files":
-                return rule(type: .hiddenFiles)
+                return rule(type: .hiddenFiles, conditionGroupID: conditionGroupID)
             case "system_files":
-                return rule(type: .systemFiles)
+                return rule(type: .systemFiles, conditionGroupID: conditionGroupID)
             case "path_contains":
                 guard !trimmedPattern.isEmpty else { return nil }
-                return rule(type: .pathContains, pattern: trimmedPattern)
+                return rule(type: .pathContains, pattern: trimmedPattern, conditionGroupID: conditionGroupID)
             case "regex":
                 guard !trimmedPattern.isEmpty,
                       (try? NSRegularExpression(pattern: trimmedPattern)) != nil else { return nil }
-                return rule(type: .regex, pattern: trimmedPattern)
+                return rule(type: .regex, pattern: trimmedPattern, conditionGroupID: conditionGroupID)
             default:
                 return nil
             }
         }
 
-        private func rule(type: ExclusionRuleType, pattern: String = "") -> ExclusionRule {
+        private func rule(
+            type: ExclusionRuleType,
+            pattern: String = "",
+            conditionGroupID: UUID?
+        ) -> ExclusionRule {
             ExclusionRule(
                 type: type,
                 pattern: pattern,
                 description: description?.trimmingCharacters(in: .whitespacesAndNewlines),
                 isAIGenerated: true,
+                conditionGroupID: conditionGroupID,
                 caseSensitive: caseSensitive ?? false,
                 negated: negated ?? false
             )
+        }
+
+        private var parsedCategory: FileTypeCategory? {
+            guard let normalized = category?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(),
+                !normalized.isEmpty
+            else { return nil }
+            return FileTypeCategory.allCases.first {
+                let candidate = $0.rawValue.lowercased()
+                return candidate == normalized || candidate.dropLast() == normalized
+            }
+        }
+
+        private var parsedSizeUnit: ExclusionSizeUnit? {
+            switch unit?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "kb", "kilobyte", "kilobytes": .kilobytes
+            case "mb", "megabyte", "megabytes": .megabytes
+            case "gb", "gigabyte", "gigabytes": .gigabytes
+            case "tb", "terabyte", "terabytes": .terabytes
+            default: nil
+            }
+        }
+
+        private var parsedAgeUnit: ExclusionAgeUnit? {
+            guard let unit = unit?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            else { return nil }
+            return ExclusionAgeUnit(rawValue: unit.hasSuffix("s") ? unit : "\(unit)s")
         }
     }
 }
