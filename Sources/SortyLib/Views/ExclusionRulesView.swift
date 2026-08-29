@@ -45,27 +45,45 @@ struct ExclusionRulesView: View {
     }
 
     private var filteredRules: [ExclusionRule] {
+        let newestFirst = Array(rulesManager.rules.reversed())
         if !isSearching {
-            return rulesManager.rules
+            return newestFirst
         }
-        return rulesManager.rules.filter {
+        return newestFirst.filter {
             $0.displayDescription.localizedCaseInsensitiveContains(trimmedSearchText)
                 || $0.type.rawValue.localizedCaseInsensitiveContains(trimmedSearchText)
         }
     }
 
     private var groupedRules: [(String, [ExclusionRule])] {
-        let groups: [(String, [ExclusionRuleType])] = [
-            ("Files & Folders", [.fileExtension, .fileName, .folderName, .pathContains, .fileType]),
-            ("Conditions", [.fileSize, .creationDate, .modificationDate, .regex, .customScript]),
-            ("macOS", [.hiddenFiles, .systemFiles, .finderTag]),
-        ]
+        var orderedTitles: [String] = []
+        for rule in filteredRules {
+            let title = groupTitle(for: rule.type)
+            if !orderedTitles.contains(title) {
+                orderedTitles.append(title)
+            }
+        }
+        if !filteredNaturalLanguageExceptions.isEmpty,
+           !orderedTitles.contains("Files & Folders") {
+            orderedTitles.append("Files & Folders")
+        }
 
-        return groups.compactMap { (title, types) in
-            let rules = filteredRules.filter { types.contains($0.type) }
+        return orderedTitles.compactMap { title in
+            let rules = filteredRules.filter { groupTitle(for: $0.type) == title }
             let hasNaturalLanguageExceptions =
                 title == "Files & Folders" && !filteredNaturalLanguageExceptions.isEmpty
             return rules.isEmpty && !hasNaturalLanguageExceptions ? nil : (title, rules)
+        }
+    }
+
+    private func groupTitle(for type: ExclusionRuleType) -> String {
+        switch type {
+        case .fileExtension, .fileName, .folderName, .pathContains, .fileType:
+            "Files & Folders"
+        case .fileSize, .creationDate, .modificationDate, .regex, .customScript:
+            "Conditions"
+        case .hiddenFiles, .systemFiles, .finderTag:
+            "macOS"
         }
     }
 
@@ -115,9 +133,12 @@ struct ExclusionRulesView: View {
                 content
             }
         }
-        .onChange(of: rulesManager.rules.count) { _, count in
+        .onChange(of: rulesManager.rules.count) { previousCount, count in
             if count <= 1 {
                 searchText = ""
+            }
+            if count > previousCount, let newestRule = rulesManager.rules.last {
+                appState.highlightedExclusionRuleID = newestRule.id
             }
         }
     }
@@ -1378,11 +1399,17 @@ struct ExclusionRuleRow: View {
         .contentShape(Rectangle())
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(isHighlighted ? Color.accentColor.opacity(0.14) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
+        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
+        .sortyFocusHighlight(
+            isActive: isHighlighted,
+            shape: RoundedRectangle(cornerRadius: 8, style: .continuous),
+            horizontalRingPadding: 6,
+            verticalRingPadding: 3
+        )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
-        .animation(.easeInOut(duration: 0.2), value: isHighlighted)
+        .accessibilityValue(isHighlighted ? "Newly added" : "")
         .contextMenu {
             Button(role: .destructive) {
                 HapticFeedbackManager.shared.tap()

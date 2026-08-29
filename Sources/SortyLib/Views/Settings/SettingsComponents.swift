@@ -28,10 +28,8 @@ extension EnvironmentValues {
 }
 
 private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.settingsFocusDismissAction) private var dismissFocus
     @Environment(\.settingsFocusTarget) private var focusTarget
-    @State private var isBreathing = false
 
     let target: SettingsFocusTarget
     let shape: FocusShape
@@ -45,21 +43,48 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
     func body(content: Content) -> some View {
         content
             .id(target.rawValue)
-            .overlay(
+            .sortyFocusHighlight(
+                isActive: isFocused,
+                shape: shape,
+                horizontalRingPadding: horizontalRingPadding,
+                verticalRingPadding: verticalRingPadding
+            )
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    guard isFocused else { return }
+                    dismissFocus(target)
+                }
+            )
+    }
+
+}
+
+private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isBreathing = false
+
+    let isActive: Bool
+    let shape: FocusShape
+    let horizontalRingPadding: CGFloat
+    let verticalRingPadding: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
                 ZStack {
                     shape
                         .strokeBorder(
-                            isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
-                            : Color.clear,
+                            isActive
+                                ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
+                                : Color.clear,
                             lineWidth: 2
                         )
 
                     shape
                         .strokeBorder(
-                            isFocused
-                            ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
-                            : Color.clear,
+                            isActive
+                                ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
+                                : Color.clear,
                             lineWidth: 3
                         )
                         .scaleEffect(!reduceMotion && isBreathing ? 1.012 : 1)
@@ -68,29 +93,22 @@ private struct SettingsFocusableModifier<FocusShape: InsettableShape>: ViewModif
                 .padding(.horizontal, -horizontalRingPadding)
                 .padding(.vertical, -verticalRingPadding)
                 .allowsHitTesting(false)
-            )
+                .accessibilityHidden(true)
+            }
             .shadow(
-                color: isFocused && !reduceMotion
+                color: isActive && !reduceMotion
                     ? Color.accentColor.opacity(isBreathing ? 0.38 : 0.16)
                     : .clear,
                 radius: reduceMotion ? 0 : (isBreathing ? 14 : 7)
             )
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isFocused)
-            .onAppear {
-                updateBreathingAnimation(isFocused)
-            }
-            .onChange(of: isFocused) { _, newValue in
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isActive)
+            .onAppear { updateBreathingAnimation(isActive) }
+            .onChange(of: isActive) { _, newValue in
                 updateBreathingAnimation(newValue)
             }
             .onChange(of: reduceMotion) { _, _ in
-                updateBreathingAnimation(isFocused)
+                updateBreathingAnimation(isActive)
             }
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    guard isFocused else { return }
-                    dismissFocus(target)
-                }
-            )
     }
 
     private func updateBreathingAnimation(_ shouldBreathe: Bool) {
@@ -440,6 +458,22 @@ struct SettingsToggle: View {
 }
 
 extension View {
+    func sortyFocusHighlight<FocusShape: InsettableShape>(
+        isActive: Bool,
+        shape: FocusShape,
+        horizontalRingPadding: CGFloat = 0,
+        verticalRingPadding: CGFloat = 0
+    ) -> some View {
+        modifier(
+            SortyFocusHighlightModifier(
+                isActive: isActive,
+                shape: shape,
+                horizontalRingPadding: horizontalRingPadding,
+                verticalRingPadding: verticalRingPadding
+            )
+        )
+    }
+
     @ViewBuilder
     func applyIdentifier(_ id: String?) -> some View {
         if let id = id {
