@@ -97,8 +97,8 @@ public struct WhatsNewTourView: View {
         let isReleaseSummary = currentPage == pages.count - 1
 
         return VStack(spacing: 0) {
-            // Top media is always 448pt tall so the footer never shifts when
-            // switching between the 400pt image pages and the 448pt release
+            // Top media is always 432pt tall so the footer never shifts when
+            // switching between the 400pt image pages and the release
             // summary. The image is centered inside the slot.
             Group {
                 if isReleaseSummary {
@@ -107,15 +107,14 @@ public struct WhatsNewTourView: View {
                     imageSection(page)
                 }
             }
-            .frame(height: 448, alignment: .center)
+            .frame(height: 432, alignment: .center)
 
             VStack(spacing: 0) {
                 pageIndicator
                     .padding(.bottom, 8)
 
-                // Fixed-height title slot – on the release summary this is an
-                // invisible spacer so the Continue / Start button stays at the
-                // exact same Y on every page.
+                // The fixed copy slot fits a two-line description without
+                // letting any page move the action button.
                 Group {
                     if !isReleaseSummary {
                         VStack(spacing: 4) {
@@ -138,13 +137,14 @@ public struct WhatsNewTourView: View {
                         Color.clear
                     }
                 }
-                .frame(height: 44, alignment: .top)
+                .frame(height: 64, alignment: .top)
 
                 Spacer(minLength: 0)
 
                 actionButton
+                    .frame(height: 44)
             }
-            .frame(height: 120)
+            .frame(height: 136)
             .padding(.bottom, 8)
         }
         .frame(width: 640, height: 576, alignment: .top)
@@ -245,7 +245,7 @@ public struct WhatsNewTourView: View {
             .scrollIndicators(.automatic)
         }
         .padding(24)
-        .frame(width: 640, height: 448, alignment: .topLeading)
+        .frame(width: 640, height: 432, alignment: .topLeading)
     }
 
     private func releaseSection(
