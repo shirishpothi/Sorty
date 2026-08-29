@@ -285,8 +285,7 @@ public final class FinderAutomation {
         }
     }
 
-    /// Selects an item in Finder, opens its contextual menu, and best-effort
-    /// highlights the first Sorty command without activating it.
+    /// Selects an item in Finder and opens its contextual menu.
     ///
     /// macOS only exposes this UI automation path when Sorty has Accessibility
     /// permission. Callers should reveal the item themselves if this returns false.
@@ -297,17 +296,22 @@ public final class FinderAutomation {
         }
 
         NSWorkspace.shared.activateFileViewerSelecting([url])
-        try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled,
-              let selectedItem = selectedFinderItemElement(),
-              AXUIElementPerformAction(selectedItem, kAXShowMenuAction as CFString) == .success
-        else {
-            DebugLogger.log("Finder context menu unavailable: selected item could not show its menu")
+        var selectedFrame: CGRect?
+        for _ in 0..<10 {
+            guard !Task.isCancelled else { return false }
+            if let item = selectedFinderItemElement(), let itemFrame = frame(of: item) {
+                selectedFrame = itemFrame
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+
+        guard let selectedFrame else {
+            DebugLogger.log("Finder context menu unavailable: selected item was not found")
             return false
         }
 
-        try? await Task.sleep(for: .milliseconds(100))
-        return highlightFirstSortyMenuItem(in: selectedItem)
+        return postContextClick(at: CGPoint(x: selectedFrame.midX, y: selectedFrame.midY))
     }
 
     private static func hasAccessibilityPermission() -> Bool {
@@ -357,30 +361,25 @@ public final class FinderAutomation {
         }
     }
 
-    private static let sortyContextMenuTitles = [
-        "Organize with Sorty",
-        "Watch with Sorty",
-        "Exclude from Sorty"
-    ]
-
     private static func selectedFinderItemElement() -> AXUIElement? {
+        guard let finderApplication = finderApplicationElement(),
+              let focusedWindow = axElement(from: copyAttribute(
+                  from: finderApplication,
+                  attribute: kAXFocusedWindowAttribute as CFString
+              )) else {
+            return nil
+        }
+
+        return findSelectedItem(in: focusedWindow, depth: 8)
+    }
+
+    private static func finderApplicationElement() -> AXUIElement? {
         guard let finderProcess = NSRunningApplication.runningApplications(
             withBundleIdentifier: "com.apple.finder"
         ).first(where: { !$0.isTerminated }) else {
             return nil
         }
-
-        let finderApplication = AXUIElementCreateApplication(finderProcess.processIdentifier)
-        guard let focusedWindowValue = copyAttribute(
-            from: finderApplication,
-            attribute: kAXFocusedWindowAttribute as CFString
-        ),
-        CFGetTypeID(focusedWindowValue) == AXUIElementGetTypeID() else {
-            return nil
-        }
-        let focusedWindow = focusedWindowValue as! AXUIElement
-
-        return findSelectedItem(in: focusedWindow, depth: 8)
+        return AXUIElementCreateApplication(finderProcess.processIdentifier)
     }
 
     private static func findSelectedItem(in element: AXUIElement, depth: Int) -> AXUIElement? {
@@ -390,14 +389,12 @@ public final class FinderAutomation {
             from: element,
             attribute: kAXSelectedChildrenAttribute as CFString
         ))
-        if let selectedChild = selectedChildren.first(where: isFinderItem) {
+        if let selectedChild = selectedChildren.first(where: { frame(of: $0) != nil }) {
             return selectedChild
         }
 
-        if isFinderItem(element), boolAttribute(
-            from: element,
-            attribute: kAXSelectedAttribute as CFString
-        ) {
+        if boolAttribute(from: element, attribute: kAXSelectedAttribute as CFString),
+           frame(of: element) != nil {
             return element
         }
 
@@ -411,51 +408,25 @@ public final class FinderAutomation {
         return nil
     }
 
-    private static func isFinderItem(_ element: AXUIElement) -> Bool {
-        guard let role = stringAttribute(from: element, attribute: kAXRoleAttribute as CFString) else {
-            return false
-        }
-        return role == kAXRowRole || role == kAXCellRole
-    }
-
-    private static func highlightFirstSortyMenuItem(in selectedItem: AXUIElement) -> Bool {
-        let menus = elements(from: copyAttribute(
-            from: selectedItem,
-            attribute: kAXShownMenuUIElementAttribute as CFString
-        ))
-        guard let menu = menus.first,
-              let sortyItem = findSortyMenuItem(in: menu, depth: 4),
-              let frame = frame(of: sortyItem),
-              let event = CGEvent(
+    private static func postContextClick(at point: CGPoint) -> Bool {
+        guard let mouseDown = CGEvent(
                   mouseEventSource: nil,
-                  mouseType: .mouseMoved,
-                  mouseCursorPosition: CGPoint(x: frame.midX, y: frame.midY),
-                  mouseButton: .left
+                  mouseType: .rightMouseDown,
+                  mouseCursorPosition: point,
+                  mouseButton: .right
+              ),
+              let mouseUp = CGEvent(
+                  mouseEventSource: nil,
+                  mouseType: .rightMouseUp,
+                  mouseCursorPosition: point,
+                  mouseButton: .right
               ) else {
-            DebugLogger.log("Finder context menu opened without a Sorty command to highlight")
             return false
         }
 
-        event.post(tap: .cghidEventTap)
+        mouseDown.post(tap: .cghidEventTap)
+        mouseUp.post(tap: .cghidEventTap)
         return true
-    }
-
-    private static func findSortyMenuItem(in element: AXUIElement, depth: Int) -> AXUIElement? {
-        guard depth >= 0 else { return nil }
-
-        if let title = stringAttribute(from: element, attribute: kAXTitleAttribute as CFString),
-           sortyContextMenuTitles.contains(title) {
-            return element
-        }
-
-        guard depth > 0 else { return nil }
-        let children = elements(from: copyAttribute(from: element, attribute: kAXChildrenAttribute as CFString))
-        for child in children {
-            if let sortyItem = findSortyMenuItem(in: child, depth: depth - 1) {
-                return sortyItem
-            }
-        }
-        return nil
     }
 
     private static func copyAttribute(from element: AXUIElement, attribute: CFString) -> CFTypeRef? {
@@ -466,13 +437,16 @@ public final class FinderAutomation {
         return value
     }
 
+    private static func axElement(from value: CFTypeRef?) -> AXUIElement? {
+        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return value as! AXUIElement
+    }
+
     private static func elements(from value: CFTypeRef?) -> [AXUIElement] {
         guard let value else { return [] }
         return (value as? [AXUIElement]) ?? []
-    }
-
-    private static func stringAttribute(from element: AXUIElement, attribute: CFString) -> String? {
-        copyAttribute(from: element, attribute: attribute) as? String
     }
 
     private static func boolAttribute(from element: AXUIElement, attribute: CFString) -> Bool {
