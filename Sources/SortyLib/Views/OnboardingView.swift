@@ -231,7 +231,8 @@ public struct OnboardingView: View {
         let sideControlWidth: CGFloat = 180
         let backHidden = (currentStep == OnboardingStep.activeCases.first || currentStep == .completion)
 
-        return VStack(spacing: 8) {
+        return ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
             ZStack {
                 HStack(spacing: 16) {
                     // Back button - kept in layout on all steps to prevent layout shift.
@@ -299,13 +300,15 @@ public struct OnboardingView: View {
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 44)
+            .frame(height: 44)
             .contentShape(Rectangle())
             .onHover { isHovering in
                 swipeController.isHoveringStepIndicator = isHovering
                 if !isHovering {
                     resetSwipeTracking()
                 }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
             }
 
             if let advanceValidationMessage, !advanceValidationMessage.isEmpty,
@@ -316,6 +319,7 @@ public struct OnboardingView: View {
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("OnboardingValidationMessage")
+                    .padding(.bottom, 2)
             }
         }
     }
@@ -2883,6 +2887,52 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
 // MARK: - Progress Bar
 
+struct OnboardingIconSliver: View {
+    let systemName: String
+    let color: Color
+    let fontSize: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep: CGFloat = 0
+
+    // One-shot shimmer that reads as a calm diagonal wipe.
+    // Previous phase -1...1 with 0.7s easeInOut spent most time invisible
+    // at the ends and flashed through the glyph — now the travel is clamped
+    // to just outside the glyph (so visible time dominates) and runs
+    // ~1s linear-ish for constant speed, matching the 1.25s sliver cadence
+    // used elsewhere. Blur + slightly wider band softens the edge.
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: fontSize))
+            .foregroundStyle(color)
+            .overlay {
+                GeometryReader { geometry in
+                    let bandW = max(16, geometry.size.width * 0.36)
+                    LinearGradient(
+                        colors: [.clear, color.opacity(0.28), .white.opacity(0.88), color.opacity(0.28), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: bandW, height: geometry.size.height * 1.9)
+                    .rotationEffect(.degrees(16))
+                    .offset(x: -bandW + sweep * (geometry.size.width + bandW * 2))
+                    .blur(radius: 0.9)
+                    .mask {
+                        Image(systemName: systemName)
+                            .font(.system(size: fontSize))
+                    }
+                }
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                sweep = 0
+                withAnimation(.easeInOut(duration: 1.0).delay(0.25)) {
+                    sweep = 1
+                }
+            }
+    }
+}
+
 struct OnboardingProgressBar: View {
     let currentStep: OnboardingStep
 
@@ -2892,7 +2942,7 @@ struct OnboardingProgressBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             ForEach(0..<activeSteps.count, id: \.self) { index in
                 let step = activeSteps[index]
 
@@ -2903,6 +2953,7 @@ struct OnboardingProgressBar: View {
                                 ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2)
                         )
                         .frame(width: 56, height: 2)
+                        .padding(.top, 11)
                 }
 
                 VStack(spacing: 6) {
