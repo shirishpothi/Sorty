@@ -479,7 +479,9 @@ final class UpdateButtonNSView: NSView {
         let highlightColor: NSColor
         let arrowColor: NSColor
         let spinnerColor: NSColor
-        let textColor: NSColor
+        // Keep the expanded label readable while the title-bar focus state
+        // transitions. The pill's orange fill can outlive that state briefly.
+        let textColor = NSColor(calibratedWhite: 1.0, alpha: 1.0)
 
         if isBusy {
             fillColor = hoverFillColor
@@ -487,35 +489,30 @@ final class UpdateButtonNSView: NSView {
             highlightColor = hoverHighlightColor
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
-            textColor = .white
         } else if isPressed {
             fillColor = pressedFillColor
             borderColor = pressedBorderColor
             highlightColor = pressedHighlightColor
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
-            textColor = .white
         } else if isHovered && NSApp.isActive {
             fillColor = hoverFillColor
             borderColor = hoverBorderColor
             highlightColor = hoverHighlightColor
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
-            textColor = .white
         } else if isWindowFocused {
             fillColor = hoverFillColor
             borderColor = hoverBorderColor
             highlightColor = normalHighlightColor
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
-            textColor = .white
         } else {
             fillColor = normalFillColor
             borderColor = normalBorderColor
             highlightColor = normalHighlightColor
             arrowColor = normalArrowColor
             spinnerColor = normalArrowColor
-            textColor = normalArrowColor
         }
 
         CATransaction.begin()
