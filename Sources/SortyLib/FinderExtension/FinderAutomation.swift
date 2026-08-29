@@ -299,7 +299,8 @@ public final class FinderAutomation {
         var selectedFrame: CGRect?
         for _ in 0..<10 {
             guard !Task.isCancelled else { return false }
-            if let item = selectedFinderItemElement(), let itemFrame = frame(of: item) {
+            if let item = selectedFinderItemElement(matching: url.lastPathComponent),
+               let itemFrame = frame(of: item) {
                 selectedFrame = itemFrame
                 break
             }
@@ -361,7 +362,7 @@ public final class FinderAutomation {
         }
     }
 
-    private static func selectedFinderItemElement() -> AXUIElement? {
+    private static func selectedFinderItemElement(matching itemName: String) -> AXUIElement? {
         guard let finderApplication = finderApplicationElement(),
               let focusedWindow = axElement(from: copyAttribute(
                   from: finderApplication,
@@ -370,7 +371,14 @@ public final class FinderAutomation {
             return nil
         }
 
-        return findSelectedItem(in: focusedWindow, depth: 8)
+        var selectedItems: [AXUIElement] = []
+        collectSelectedItems(in: focusedWindow, depth: 8, into: &selectedItems)
+
+        return selectedItems
+            .filter { finderItem($0, matches: itemName) }
+            .max { left, right in
+                (frame(of: left)?.minX ?? 0) < (frame(of: right)?.minX ?? 0)
+            }
     }
 
     private static func finderApplicationElement() -> AXUIElement? {
@@ -382,30 +390,51 @@ public final class FinderAutomation {
         return AXUIElementCreateApplication(finderProcess.processIdentifier)
     }
 
-    private static func findSelectedItem(in element: AXUIElement, depth: Int) -> AXUIElement? {
-        guard depth >= 0 else { return nil }
+    private static func collectSelectedItems(
+        in element: AXUIElement,
+        depth: Int,
+        into selectedItems: inout [AXUIElement]
+    ) {
+        guard depth >= 0 else { return }
 
-        let selectedChildren = elements(from: copyAttribute(
+        selectedItems.append(contentsOf: elements(from: copyAttribute(
             from: element,
             attribute: kAXSelectedChildrenAttribute as CFString
-        ))
-        if let selectedChild = selectedChildren.first(where: { frame(of: $0) != nil }) {
-            return selectedChild
-        }
+        )).filter { frame(of: $0) != nil })
 
         if boolAttribute(from: element, attribute: kAXSelectedAttribute as CFString),
            frame(of: element) != nil {
-            return element
+            selectedItems.append(element)
         }
 
-        guard depth > 0 else { return nil }
+        guard depth > 0 else { return }
         let children = elements(from: copyAttribute(from: element, attribute: kAXChildrenAttribute as CFString))
         for child in children {
-            if let selectedItem = findSelectedItem(in: child, depth: depth - 1) {
-                return selectedItem
-            }
+            collectSelectedItems(in: child, depth: depth - 1, into: &selectedItems)
         }
-        return nil
+    }
+
+    private static func finderItem(_ element: AXUIElement, matches itemName: String) -> Bool {
+        guard !itemName.isEmpty else { return false }
+        return accessibilityText(in: element, depth: 2).contains { text in
+            text.localizedCaseInsensitiveCompare(itemName) == .orderedSame
+                || text.localizedCaseInsensitiveContains(itemName)
+        }
+    }
+
+    private static func accessibilityText(in element: AXUIElement, depth: Int) -> [String] {
+        let ownText = [
+            stringAttribute(from: element, attribute: kAXTitleAttribute as CFString),
+            stringAttribute(from: element, attribute: kAXDescriptionAttribute as CFString),
+            stringAttribute(from: element, attribute: kAXValueAttribute as CFString)
+        ].compactMap { $0 }
+
+        guard depth > 0 else { return ownText }
+        let childText = elements(from: copyAttribute(
+            from: element,
+            attribute: kAXChildrenAttribute as CFString
+        )).flatMap { accessibilityText(in: $0, depth: depth - 1) }
+        return ownText + childText
     }
 
     private static func postContextClick(at point: CGPoint) -> Bool {
@@ -447,6 +476,10 @@ public final class FinderAutomation {
     private static func elements(from value: CFTypeRef?) -> [AXUIElement] {
         guard let value else { return [] }
         return (value as? [AXUIElement]) ?? []
+    }
+
+    private static func stringAttribute(from element: AXUIElement, attribute: CFString) -> String? {
+        copyAttribute(from: element, attribute: attribute) as? String
     }
 
     private static func boolAttribute(from element: AXUIElement, attribute: CFString) -> Bool {
