@@ -302,6 +302,50 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         default: return pattern.isEmpty ? type.friendlyName : pattern
         }
     }
+
+    public var aiToolName: String {
+        switch type {
+        case .fileExtension: "match_file_extension"
+        case .fileName: "match_file_name"
+        case .folderName: "match_folder_name"
+        case .pathContains: pattern.hasPrefix("/") ? "protect_folder" : "match_path"
+        case .regex: "match_regular_expression"
+        case .fileSize: "compare_file_size"
+        case .creationDate: "compare_creation_age"
+        case .modificationDate: "compare_modification_age"
+        case .hiddenFiles: "match_hidden_files"
+        case .systemFiles: "match_macos_files"
+        case .finderTag: "match_finder_tag"
+        case .fileType: "match_file_category"
+        case .customScript: "run_custom_matcher"
+        }
+    }
+
+    public var aiToolIcon: String {
+        switch type {
+        case .fileExtension: "doc.badge.gearshape"
+        case .fileName: "doc.text.magnifyingglass"
+        case .folderName: "folder"
+        case .pathContains: "arrow.triangle.branch"
+        case .regex: "text.magnifyingglass"
+        case .fileSize: "scalemass"
+        case .creationDate: "calendar.badge.plus"
+        case .modificationDate: "calendar.badge.clock"
+        case .hiddenFiles: "eye.slash"
+        case .systemFiles: "gearshape.2"
+        case .finderTag: "tag"
+        case .fileType: "doc.on.doc"
+        case .customScript: "applescript"
+        }
+    }
+
+    public var promptDescription: String {
+        var components = ["tool=\(aiToolName)", "match=\(interpretedMatchDescription)"]
+        if caseSensitive { components.append("case-sensitive=true") }
+        if negated { components.append("negated=true") }
+        if let description, !description.isEmpty { components.append("label=\(description)") }
+        return components.joined(separator: "; ")
+    }
 }
 
 public struct ExclusionRuleUsage: Codable, Equatable, Sendable {

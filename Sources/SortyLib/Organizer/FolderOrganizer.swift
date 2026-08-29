@@ -2745,7 +2745,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var instructions = ""
 
         if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
-            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+            let excludedPatterns = activeRules.map { "- \($0.promptDescription)" }.joined(separator: "\n")
             let object = isRenameOnly ? "rename suggestions" : "organization plan"
             instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
         }

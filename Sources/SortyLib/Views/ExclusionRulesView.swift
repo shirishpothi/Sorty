@@ -23,6 +23,7 @@ struct ExclusionRulesView: View {
     @State private var isCreatingExceptionRules = false
     @State private var resolvedExceptionRules: [ExclusionRule] = []
     @State private var revealedExceptionRuleCount = 0
+    @State private var resolvedSupplementalDescription: String?
     @State private var showCreateExceptionError = false
     @State private var createExceptionErrorMessage = ""
     @State private var showImproveExceptionRequest = false
@@ -656,16 +657,18 @@ struct ExclusionRulesView: View {
         isCreatingExceptionRules = true
         resolvedExceptionRules = []
         revealedExceptionRuleCount = 0
+        resolvedSupplementalDescription = nil
         defer { isCreatingExceptionRules = false }
 
         do {
             let client = try AIClientFactory.createClient(config: settingsViewModel.config)
-            let rules = try await NaturalLanguageExclusionResolver.resolve(
+            let resolution = try await NaturalLanguageExclusionResolver.resolve(
                 client: client,
                 description: String(exception.prefix(200))
             )
-            resolvedExceptionRules = rules
-            for count in 1...rules.count {
+            resolvedExceptionRules = resolution.rules
+            resolvedSupplementalDescription = resolution.supplementalDescription
+            for count in 1...resolution.rules.count {
                 if !reduceMotion { try? await Task.sleep(for: .milliseconds(140)) }
                 withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.84)) {
                     revealedExceptionRuleCount = count
@@ -695,18 +698,53 @@ struct ExclusionRulesView: View {
             }
             .font(.subheadline.bold())
 
-            ForEach(Array(resolvedExceptionRules.prefix(revealedExceptionRuleCount))) { rule in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(rule.displayDescription)
-                        .font(.subheadline.bold())
-                    LabeledContent("Type", value: rule.type.friendlyName)
-                    LabeledContent("Matches", value: rule.interpretedMatchDescription)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    exceptionProcessStep(
+                        icon: "text.bubble",
+                        eyebrow: "INPUT",
+                        title: "Read request",
+                        detail: newNLException
+                    )
+
+                    ForEach(Array(resolvedExceptionRules.prefix(revealedExceptionRuleCount))) { rule in
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+
+                        exceptionProcessStep(
+                            icon: rule.aiToolIcon,
+                            eyebrow: "TOOL",
+                            title: rule.aiToolName,
+                            detail: rule.interpretedMatchDescription
+                        )
+                        .transition(.blurReplace.combined(with: .opacity))
+                    }
+
+                    if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+
+                        exceptionProcessStep(
+                            icon: "checkmark.shield",
+                            eyebrow: "RESULT",
+                            title: "Ready to save",
+                            detail: "\(resolvedExceptionRules.count) configured \(resolvedExceptionRules.count == 1 ? "exclusion" : "exclusions")"
+                        )
+                        .transition(.blurReplace.combined(with: .opacity))
+                    }
                 }
-                .font(.caption)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-                .transition(.opacity.combined(with: .blurReplace))
+            }
+            .scrollIndicators(.hidden)
+
+            if let resolvedSupplementalDescription {
+                LabeledContent("Supplementary instruction", value: resolvedSupplementalDescription)
+                    .font(.caption)
+                    .padding(12)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
             }
 
             if !resolvedExceptionRules.isEmpty && !isCreatingExceptionRules {
@@ -714,6 +752,7 @@ struct ExclusionRulesView: View {
                     Button("Edit Description") {
                         resolvedExceptionRules = []
                         revealedExceptionRuleCount = 0
+                        resolvedSupplementalDescription = nil
                         isNLExceptionFocused = true
                     }
                     .buttonStyle(.plain)
@@ -732,11 +771,44 @@ struct ExclusionRulesView: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func exceptionProcessStep(
+        icon: String,
+        eyebrow: String,
+        title: String,
+        detail: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .foregroundStyle(.tint)
+                Text(eyebrow)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+            }
+            Text(title)
+                .font(.caption.bold().monospaced())
+                .lineLimit(1)
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(width: 168, height: 104, alignment: .topLeading)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+    }
+
     private func saveResolvedExceptionRules() {
         withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
             resolvedExceptionRules.forEach(rulesManager.addRule)
+            if let resolvedSupplementalDescription {
+                rulesManager.addNaturalLanguageException(resolvedSupplementalDescription)
+            }
             resolvedExceptionRules = []
             revealedExceptionRuleCount = 0
+            resolvedSupplementalDescription = nil
         }
         newNLException = ""
         HapticFeedbackManager.shared.success()
@@ -1048,6 +1120,49 @@ private struct NaturalLanguageExceptionRow: View {
 
 // MARK: - Exclusion Rule Row
 
+private struct ExclusionRuleUsageButton: View {
+    let usage: ExclusionRuleUsage?
+    @State private var isShowingDetails = false
+
+    var body: some View {
+        Button {
+            isShowingDetails.toggle()
+            HapticFeedbackManager.shared.selection()
+        } label: {
+            Label("\(usage?.matchCount ?? 0)", systemImage: "checkmark.shield")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle((usage?.matchCount ?? 0) > 0 ? .green : .secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.04), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Show exclusion usage")
+        .accessibilityLabel("\(usage?.matchCount ?? 0) files skipped")
+        .popover(isPresented: $isShowingDetails, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Rule usage")
+                    .font(.headline)
+                LabeledContent("Files skipped", value: (usage?.matchCount ?? 0).formatted())
+                if let lastMatchedAt = usage?.lastMatchedAt {
+                    LabeledContent {
+                        Text(lastMatchedAt, format: .dateTime.month().day().year().hour().minute())
+                    } label: {
+                        Text("Last matched")
+                    }
+                } else {
+                    Text("This rule has not matched a file yet.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.caption)
+            .padding(16)
+            .frame(width: 240, alignment: .leading)
+            .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+    }
+}
+
 struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
@@ -1118,21 +1233,13 @@ struct ExclusionRuleRow: View {
                     }
                 }
 
-                if settingsViewModel.config.showStatsForNerds {
-                    HStack(spacing: 8) {
-                        Label("\(usage?.matchCount ?? 0) files skipped", systemImage: "checkmark.shield")
-                        if let lastMatchedAt = usage?.lastMatchedAt {
-                            Text("Last matched \(lastMatchedAt, format: .relative(presentation: .named))")
-                        } else {
-                            Text("Not matched yet")
-                        }
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                }
             }
 
             Spacer()
+
+            if settingsViewModel.config.showStatsForNerds {
+                ExclusionRuleUsageButton(usage: usage)
+            }
 
             if isHovered {
                 Button {
@@ -1358,6 +1465,8 @@ struct AddExclusionRuleView: View {
     @State private var selectedFileTypeCategory: FileTypeCategory = .images
     @State private var selectedFolderURL: URL?
     @State private var showingFolderPicker = false
+    @State private var caseSensitive = false
+    @State private var negated = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1528,6 +1637,26 @@ struct AddExclusionRuleView: View {
                 .padding(16)
                 .systemLiquidGlassBackground(cornerRadius: 12)
             }
+
+            if supportsMatchingOptions {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Matching options")
+                        .font(.subheadline.weight(.semibold))
+                    Toggle("Match uppercase and lowercase separately", isOn: $caseSensitive)
+                    Toggle("Exclude everything except matches", isOn: $negated)
+                }
+                .padding(16)
+                .systemLiquidGlassBackground(cornerRadius: 12)
+            }
+        }
+    }
+
+    private var supportsMatchingOptions: Bool {
+        switch selectedRuleType {
+        case .fileExtension, .fileName, .folderName, .pathContains, .regex:
+            true
+        default:
+            false
         }
     }
 
@@ -1836,7 +1965,9 @@ struct AddExclusionRuleView: View {
                 ExclusionRule(
                     type: .pathContains,
                     pattern: normalizedPath,
-                    description: folderName.isEmpty ? "Protected folder" : folderName
+                    description: folderName.isEmpty ? "Protected folder" : folderName,
+                    caseSensitive: caseSensitive,
+                    negated: negated
                 )
             )
             return
@@ -1866,19 +1997,25 @@ struct AddExclusionRuleView: View {
                 ageUnit: selectedRuleType == .fileSize ? nil : dateAgeUnit,
                 ageIntervalSeconds: selectedRuleType == .fileSize
                     ? nil
-                    : numericValue * dateAgeUnit.secondsMultiplier
+                    : numericValue * dateAgeUnit.secondsMultiplier,
+                caseSensitive: caseSensitive,
+                negated: negated
             )
         case .fileType:
             rule = ExclusionRule(
                 type: .fileType,
                 description: description.isEmpty ? nil : description,
-                fileTypeCategory: selectedFileTypeCategory
+                fileTypeCategory: selectedFileTypeCategory,
+                caseSensitive: caseSensitive,
+                negated: negated
             )
         default:
             rule = ExclusionRule(
                 type: selectedRuleType,
                 pattern: trimmedPattern,
-                description: description.isEmpty ? nil : description
+                description: description.isEmpty ? nil : description,
+                caseSensitive: caseSensitive,
+                negated: negated
             )
         }
 

@@ -156,16 +156,39 @@ public enum NaturalLanguageExclusionResolverError: LocalizedError, Sendable {
 }
 
 public struct NaturalLanguageExclusionResolver: Sendable {
+    public struct Resolution: Sendable {
+        public let rules: [ExclusionRule]
+        public let supplementalDescription: String?
+    }
+
     public static func resolve(
         client: any AIClientProtocol,
         description: String
-    ) async throws -> [ExclusionRule] {
+    ) async throws -> Resolution {
         let response = try await client.generateText(
-            prompt: "Create exclusion rules for this request:\n<request>\(description)</request>",
+            prompt: "Select and configure exclusion tools for this request:\n<request>\(description)</request>",
             systemPrompt: systemPrompt,
-            responseFormat: .jsonArray
+            responseFormat: .jsonObject
         )
-        return try decodeRules(from: response)
+        return try decodeResolution(from: response)
+    }
+
+    static func decodeResolution(from response: String) throws -> Resolution {
+        if let start = response.firstIndex(of: "{"),
+           let end = response.lastIndex(of: "}"),
+           start <= end,
+           let data = String(response[start...end]).data(using: .utf8),
+           let payload = try? JSONDecoder().decode(ResolutionPayload.self, from: data) {
+            let rules = payload.tools.prefix(12).compactMap(\.exclusionRule)
+            guard !rules.isEmpty else { throw NaturalLanguageExclusionResolverError.noRules }
+            let supplemental = payload.supplementalDescription?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return Resolution(
+                rules: rules,
+                supplementalDescription: supplemental?.isEmpty == false ? supplemental : nil
+            )
+        }
+        return Resolution(rules: try decodeRules(from: response), supplementalDescription: nil)
     }
 
     static func decodeRules(from response: String) throws -> [ExclusionRule] {
@@ -184,13 +207,32 @@ public struct NaturalLanguageExclusionResolver: Sendable {
     }
 
     private static let systemPrompt = """
-    Convert the user's plain-language request into ordinary Sorty exclusion rules. Return only a JSON array.
-    Each object uses: {"kind":"...","pattern":"...","category":"...","value":number,"unit":"...","comparison":"...","description":"..."}.
-    Supported kinds: file_extension, file_name_contains, folder_name, folder_path, file_category, file_size, creation_age, modification_age, hidden_files, system_files, regex.
+    You are a tool selector for Sorty's exclusion engine. Return one JSON object and no prose:
+    {"tools":[{"kind":"...","pattern":"...","category":"...","finderTag":"...","value":number,"unit":"...","comparison":"...","caseSensitive":false,"negated":false,"description":"..."}],"supplementalDescription":null}
+
+    Available tools mirror the manual exclusion editor:
+    - protect_folder: an explicit absolute or ~/ folder path and everything below it
+    - finder_tag: a Finder tag color
+    - file_category: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases
+    - file_extension: one extension without a leading dot
+    - file_name_contains: text contained in a file name
+    - folder_name: an exact folder name
+    - file_size: larger or smaller than a value with KB, MB, GB, or TB
+    - creation_age and modification_age: older or newer than a value in seconds, minutes, hours, days, weeks, months, or years
+    - hidden_files and system_files
+    - path_contains: text anywhere in a path
+    - regex: a valid regular expression, only when simpler tools cannot express the request
+
     Categories: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases.
     Size units: KB, MB, GB, TB. Age units: seconds, minutes, hours, days, weeks, months, years. Comparisons: larger, smaller, older, newer.
-    Emit multiple rules when the request names multiple independent matches. Preserve explicit paths exactly. Never invent a path, threshold, extension, name, or category. Use a concise human-readable description for each rule.
+    Finder tags: red, orange, yellow, green, blue, purple, gray.
+    Select multiple tools for independent conditions. Preserve explicit values exactly and never invent a path, threshold, extension, name, tag, or category. Set caseSensitive or negated only when the user asks. Use a concise generated name in description. Put text in supplementalDescription only when it adds a constraint no available tool can represent. Do not repeat structured tool settings there.
     """
+
+    private struct ResolutionPayload: Decodable {
+        let tools: [Specification]
+        let supplementalDescription: String?
+    }
 
     private struct Specification: Decodable {
         let kind: String
@@ -200,6 +242,9 @@ public struct NaturalLanguageExclusionResolver: Sendable {
         let unit: String?
         let comparison: String?
         let description: String?
+        let finderTag: String?
+        let caseSensitive: Bool?
+        let negated: Bool?
 
         var exclusionRule: ExclusionRule? {
             let trimmedPattern = pattern?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -215,7 +260,7 @@ public struct NaturalLanguageExclusionResolver: Sendable {
             case "folder_name":
                 guard !trimmedPattern.isEmpty else { return nil }
                 return rule(type: .folderName, pattern: trimmedPattern)
-            case "folder_path":
+            case "protect_folder", "folder_path":
                 guard trimmedPattern.hasPrefix("/") || trimmedPattern.hasPrefix("~/") else { return nil }
                 return rule(
                     type: .pathContains,
@@ -229,8 +274,15 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                     type: .fileType,
                     description: commonDescription,
                     isAIGenerated: true,
-                    fileTypeCategory: category
+                    fileTypeCategory: category,
+                    caseSensitive: caseSensitive ?? false,
+                    negated: negated ?? false
                 )
+            case "finder_tag":
+                guard let tag = FinderTagColor.allCases.first(where: {
+                    $0.name.caseInsensitiveCompare(finderTag ?? "") == .orderedSame
+                }) else { return nil }
+                return rule(type: .finderTag, pattern: String(tag.rawValue))
             case "file_size":
                 guard let value, value > 0,
                       let sizeUnit = ExclusionSizeUnit(rawValue: unit?.uppercased() ?? ""),
@@ -242,7 +294,9 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                     isAIGenerated: true,
                     numericValue: value * sizeUnit.megabyteMultiplier,
                     comparisonGreater: comparison == "larger",
-                    sizeUnit: sizeUnit
+                    sizeUnit: sizeUnit,
+                    caseSensitive: caseSensitive ?? false,
+                    negated: negated ?? false
                 )
             case "creation_age", "modification_age":
                 guard let value, value > 0,
@@ -256,12 +310,17 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                     numericValue: value * ageUnit.secondsMultiplier / ExclusionAgeUnit.days.secondsMultiplier,
                     comparisonGreater: comparison == "older",
                     ageUnit: ageUnit,
-                    ageIntervalSeconds: value * ageUnit.secondsMultiplier
+                    ageIntervalSeconds: value * ageUnit.secondsMultiplier,
+                    caseSensitive: caseSensitive ?? false,
+                    negated: negated ?? false
                 )
             case "hidden_files":
                 return rule(type: .hiddenFiles)
             case "system_files":
                 return rule(type: .systemFiles)
+            case "path_contains":
+                guard !trimmedPattern.isEmpty else { return nil }
+                return rule(type: .pathContains, pattern: trimmedPattern)
             case "regex":
                 guard !trimmedPattern.isEmpty,
                       (try? NSRegularExpression(pattern: trimmedPattern)) != nil else { return nil }
@@ -276,7 +335,9 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                 type: type,
                 pattern: pattern,
                 description: description?.trimmingCharacters(in: .whitespacesAndNewlines),
-                isAIGenerated: true
+                isAIGenerated: true,
+                caseSensitive: caseSensitive ?? false,
+                negated: negated ?? false
             )
         }
     }

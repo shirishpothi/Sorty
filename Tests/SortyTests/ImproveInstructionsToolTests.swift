@@ -82,4 +82,37 @@ final class ImproveInstructionsToolTests: XCTestCase {
         XCTAssertEqual(rule.ageIntervalSeconds, 1_800)
         XCTAssertFalse(try XCTUnwrap(rule.comparisonGreater))
     }
+
+    func testNaturalLanguageResolverDecodesToolSelectionAndSupplement() throws {
+        let resolution = try NaturalLanguageExclusionResolver.decodeResolution(
+            from: """
+            {
+              "tools": [
+                {
+                  "kind": "finder_tag",
+                  "finderTag": "purple",
+                  "description": "Protected work files"
+                },
+                {
+                  "kind": "file_name_contains",
+                  "pattern": "Draft",
+                  "caseSensitive": true,
+                  "negated": false,
+                  "description": "Exact-case drafts"
+                }
+              ],
+              "supplementalDescription": "Keep sibling project files together."
+            }
+            """
+        )
+
+        XCTAssertEqual(resolution.rules.map(\.type), [.finderTag, .fileName])
+        XCTAssertEqual(resolution.rules[0].pattern, String(FinderTagColor.purple.rawValue))
+        XCTAssertTrue(resolution.rules[1].caseSensitive)
+        XCTAssertFalse(resolution.rules[1].negated)
+        XCTAssertEqual(
+            resolution.supplementalDescription,
+            "Keep sibling project files together."
+        )
+    }
 }
