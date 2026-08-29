@@ -1696,16 +1696,21 @@ struct WatchedFolderConfigView: View {
 }
 
 private struct WatchedFolderRecentActions: View {
-    private struct UndoFailure: Identifiable {
+    private struct ActionAlert: Identifiable {
         let id = UUID()
+        let title: String
         let message: String
     }
 
     let folder: WatchedFolder
     @ObservedObject var history: OrganizationHistory
     @EnvironmentObject private var organizer: FolderOrganizer
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var learningsManager: LearningsManager
     @State private var undoingEntryID: UUID?
-    @State private var undoFailure: UndoFailure?
+    @State private var selectedEntry: OrganizationHistoryEntry?
+    @State private var isProcessing = false
+    @State private var actionAlert: ActionAlert?
 
     private var recentEntries: [OrganizationHistoryEntry] {
         let folderPath = normalizedPath(folder.path)
@@ -1739,10 +1744,25 @@ private struct WatchedFolderRecentActions: View {
                 }
             }
         }
-        .alert(item: $undoFailure) { failure in
+        .sheet(item: $selectedEntry) { entry in
+            HistoryDetailSheet(
+                entry: entry,
+                isProcessing: $isProcessing,
+                onAction: { message in
+                    actionAlert = ActionAlert(title: "History Action", message: message)
+                },
+                onDismiss: {
+                    selectedEntry = nil
+                }
+            )
+            .environmentObject(organizer)
+            .environmentObject(settingsViewModel)
+            .environmentObject(learningsManager)
+        }
+        .alert(item: $actionAlert) { alert in
             Alert(
-                title: Text("Couldn’t Undo Action"),
-                message: Text(failure.message),
+                title: Text(alert.title),
+                message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
         }
@@ -1750,24 +1770,45 @@ private struct WatchedFolderRecentActions: View {
 
     private func actionRow(_ entry: OrganizationHistoryEntry) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: iconName(for: entry))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(color(for: entry))
-                .frame(width: 18)
-                .accessibilityHidden(true)
+            Button {
+                HapticFeedbackManager.shared.selection()
+                selectedEntry = entry
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: iconName(for: entry))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(color(for: entry))
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(summary(for: entry))
-                    .font(.subheadline)
-                    .lineLimit(1)
-                    .numericTextTransition(animationValue: summary(for: entry))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(summary(for: entry))
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .numericTextTransition(animationValue: summary(for: entry))
 
-                Text(entry.timestamp, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                        Text(entry.timestamp, style: .relative)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                "\(summary(for: entry)), \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))"
+            )
+            .accessibilityHint("Open session details")
+            .accessibilityIdentifier("WatchedFolderRecentAction-\(entry.id.uuidString)")
 
             if canUndo(entry) {
                 Button {
@@ -1787,7 +1828,6 @@ private struct WatchedFolderRecentActions: View {
                 .accessibilityHint("Restores the files changed by this AI action")
             }
         }
-        .accessibilityElement(children: .contain)
     }
 
     private func undo(_ entry: OrganizationHistoryEntry) {
@@ -1800,7 +1840,10 @@ private struct WatchedFolderRecentActions: View {
                 HapticFeedbackManager.shared.success()
             } catch {
                 HapticFeedbackManager.shared.error()
-                undoFailure = UndoFailure(message: error.localizedDescription)
+                actionAlert = ActionAlert(
+                    title: "Couldn’t Undo Action",
+                    message: error.localizedDescription
+                )
             }
         }
     }
