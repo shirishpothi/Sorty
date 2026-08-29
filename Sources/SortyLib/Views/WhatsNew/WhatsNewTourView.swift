@@ -102,37 +102,54 @@ public struct WhatsNewTourView: View {
         let isReleaseSummary = currentPage == pages.count - 1
 
         return VStack(spacing: 0) {
-            if isReleaseSummary {
-                releaseSummary
-            } else {
-                imageSection(page)
-            }
-
-            VStack(spacing: 6) {
-                pageIndicator
-
-                if !isReleaseSummary {
-                    Text(page.title)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Text(page.description)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.70))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 28)
+            // Top media is always 448pt tall so the footer never shifts when
+            // switching between the 400pt image pages and the 448pt release
+            // summary. The image is centered inside the slot.
+            Group {
+                if isReleaseSummary {
+                    releaseSummary
+                } else {
+                    imageSection(page)
                 }
+            }
+            .frame(height: 448, alignment: .center)
+
+            VStack(spacing: 0) {
+                pageIndicator
+                    .padding(.bottom, 10)
+
+                // Fixed-height title slot – on the release summary this is an
+                // invisible spacer so the Continue / Start button stays at the
+                // exact same Y on every page.
+                Group {
+                    if !isReleaseSummary {
+                        VStack(spacing: 4) {
+                            Text(page.title)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+
+                            Text(page.description)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(Color.white.opacity(0.70))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 28)
+                        }
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(height: 44, alignment: .top)
+
+                Spacer(minLength: 0)
 
                 actionButton
-                    .padding(.top, isReleaseSummary ? 8 : 12)
             }
-            .frame(maxHeight: .infinity)
-            .padding(.top, isReleaseSummary ? 12 : 8)
+            .frame(height: 112)
             .padding(.bottom, 16)
         }
         .frame(width: 640, height: 576, alignment: .top)
