@@ -42,7 +42,7 @@ extension View {
         if #available(macOS 26.0, *) {
             self.glassEffect(
                 .regular
-                    .tint(Color.white.opacity(0.22))
+                    .tint(Color.white.opacity(0.12))
                     .interactive(),
                 in: Circle()
             )
