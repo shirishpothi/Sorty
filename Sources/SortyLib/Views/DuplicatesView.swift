@@ -714,6 +714,7 @@ private struct DuplicatesResultsSidebarHeader: View {
     @ObservedObject var manager: DuplicateDetectionManager
     let showsStats: Bool
     let onScanAgain: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsUnavailableFiles = false
     @AppStorage("duplicates.semanticCleanupNoticeDismissed")
     private var hasDismissedSemanticCleanupNotice = false
@@ -790,16 +791,27 @@ private struct DuplicatesResultsSidebarHeader: View {
 
                     Button("OK") {
                         HapticFeedbackManager.shared.tap()
-                        hasDismissedSemanticCleanupNotice = true
+                        withAnimation(noticeDismissAnimation) {
+                            hasDismissedSemanticCleanupNotice = true
+                        }
                     }
                     .buttonStyle(.borderless)
                     .font(.caption.weight(.semibold))
                 }
                 .font(.caption)
+                .transition(noticeDismissTransition)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private var noticeDismissAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.24)
+    }
+
+    private var noticeDismissTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
     }
 
     private var summaryText: String {
