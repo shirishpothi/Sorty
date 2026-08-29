@@ -64,6 +64,17 @@ struct FinderIntegrationSettingsView: View {
                     Divider()
                         .opacity(0.35)
 
+                    Label {
+                        Text("In Finder, right-click a folder to use Organize, Watch, or Exclude. This does not require Accessibility access.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "cursorarrow.click.2")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+
                     VStack(spacing: 8) {
                         compactStatusRow(
                             label: "Organize with Sorty",

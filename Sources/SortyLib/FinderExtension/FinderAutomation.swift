@@ -9,7 +9,6 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import CoreGraphics
 import Permiso
 
 /// Service for automating Finder interactions
@@ -285,45 +284,6 @@ public final class FinderAutomation {
         }
     }
 
-    /// Selects an item in Finder and opens its contextual menu.
-    ///
-    /// macOS only exposes this UI automation path when Sorty has Accessibility
-    /// permission. Callers should reveal the item themselves if this returns false.
-    public static func openContextMenu(for url: URL) async -> Bool {
-        guard hasAccessibilityPermission() else {
-            DebugLogger.log("Finder context menu unavailable: Accessibility permission is not granted")
-            return false
-        }
-
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-        var selectedFrame: CGRect?
-        for _ in 0..<10 {
-            guard !Task.isCancelled else { return false }
-            if let item = selectedFinderItemElement(matching: url.lastPathComponent),
-               let itemFrame = frame(of: item) {
-                selectedFrame = itemFrame
-                break
-            }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-
-        guard let selectedFrame else {
-            DebugLogger.log("Finder context menu unavailable: selected item was not found")
-            return false
-        }
-
-        return postContextClick(at: CGPoint(x: selectedFrame.midX, y: selectedFrame.midY))
-    }
-
-    private static func hasAccessibilityPermission() -> Bool {
-        guard !AXIsProcessTrusted() else { return true }
-
-        let options = [
-            "AXTrustedCheckOptionPrompt": true
-        ] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
     // MARK: - Finder Refresh
     
     /// Refresh all Finder windows showing the specified path
@@ -362,148 +322,6 @@ public final class FinderAutomation {
         }
     }
 
-    private static func selectedFinderItemElement(matching itemName: String) -> AXUIElement? {
-        guard let finderApplication = finderApplicationElement(),
-              let focusedWindow = axElement(from: copyAttribute(
-                  from: finderApplication,
-                  attribute: kAXFocusedWindowAttribute as CFString
-              )) else {
-            return nil
-        }
-
-        var selectedItems: [AXUIElement] = []
-        collectSelectedItems(in: focusedWindow, depth: 8, into: &selectedItems)
-
-        return selectedItems
-            .filter { finderItem($0, matches: itemName) }
-            .max { left, right in
-                (frame(of: left)?.minX ?? 0) < (frame(of: right)?.minX ?? 0)
-            }
-    }
-
-    private static func finderApplicationElement() -> AXUIElement? {
-        guard let finderProcess = NSRunningApplication.runningApplications(
-            withBundleIdentifier: "com.apple.finder"
-        ).first(where: { !$0.isTerminated }) else {
-            return nil
-        }
-        return AXUIElementCreateApplication(finderProcess.processIdentifier)
-    }
-
-    private static func collectSelectedItems(
-        in element: AXUIElement,
-        depth: Int,
-        into selectedItems: inout [AXUIElement]
-    ) {
-        guard depth >= 0 else { return }
-
-        selectedItems.append(contentsOf: elements(from: copyAttribute(
-            from: element,
-            attribute: kAXSelectedChildrenAttribute as CFString
-        )).filter { frame(of: $0) != nil })
-
-        if boolAttribute(from: element, attribute: kAXSelectedAttribute as CFString),
-           frame(of: element) != nil {
-            selectedItems.append(element)
-        }
-
-        guard depth > 0 else { return }
-        let children = elements(from: copyAttribute(from: element, attribute: kAXChildrenAttribute as CFString))
-        for child in children {
-            collectSelectedItems(in: child, depth: depth - 1, into: &selectedItems)
-        }
-    }
-
-    private static func finderItem(_ element: AXUIElement, matches itemName: String) -> Bool {
-        guard !itemName.isEmpty else { return false }
-        return accessibilityText(in: element, depth: 2).contains { text in
-            text.localizedCaseInsensitiveCompare(itemName) == .orderedSame
-                || text.localizedCaseInsensitiveContains(itemName)
-        }
-    }
-
-    private static func accessibilityText(in element: AXUIElement, depth: Int) -> [String] {
-        let ownText = [
-            stringAttribute(from: element, attribute: kAXTitleAttribute as CFString),
-            stringAttribute(from: element, attribute: kAXDescriptionAttribute as CFString),
-            stringAttribute(from: element, attribute: kAXValueAttribute as CFString)
-        ].compactMap { $0 }
-
-        guard depth > 0 else { return ownText }
-        let childText = elements(from: copyAttribute(
-            from: element,
-            attribute: kAXChildrenAttribute as CFString
-        )).flatMap { accessibilityText(in: $0, depth: depth - 1) }
-        return ownText + childText
-    }
-
-    private static func postContextClick(at point: CGPoint) -> Bool {
-        guard let mouseDown = CGEvent(
-                  mouseEventSource: nil,
-                  mouseType: .rightMouseDown,
-                  mouseCursorPosition: point,
-                  mouseButton: .right
-              ),
-              let mouseUp = CGEvent(
-                  mouseEventSource: nil,
-                  mouseType: .rightMouseUp,
-                  mouseCursorPosition: point,
-                  mouseButton: .right
-              ) else {
-            return false
-        }
-
-        mouseDown.post(tap: .cghidEventTap)
-        mouseUp.post(tap: .cghidEventTap)
-        return true
-    }
-
-    private static func copyAttribute(from element: AXUIElement, attribute: CFString) -> CFTypeRef? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
-            return nil
-        }
-        return value
-    }
-
-    private static func axElement(from value: CFTypeRef?) -> AXUIElement? {
-        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
-            return nil
-        }
-        return value as! AXUIElement
-    }
-
-    private static func elements(from value: CFTypeRef?) -> [AXUIElement] {
-        guard let value else { return [] }
-        return (value as? [AXUIElement]) ?? []
-    }
-
-    private static func stringAttribute(from element: AXUIElement, attribute: CFString) -> String? {
-        copyAttribute(from: element, attribute: attribute) as? String
-    }
-
-    private static func boolAttribute(from element: AXUIElement, attribute: CFString) -> Bool {
-        (copyAttribute(from: element, attribute: attribute) as? Bool) ?? false
-    }
-
-    private static func frame(of element: AXUIElement) -> CGRect? {
-        guard let positionValue = copyAttribute(from: element, attribute: kAXPositionAttribute as CFString),
-              let sizeValue = copyAttribute(from: element, attribute: kAXSizeAttribute as CFString),
-              CFGetTypeID(positionValue) == AXValueGetTypeID(),
-              CFGetTypeID(sizeValue) == AXValueGetTypeID() else {
-            return nil
-        }
-        let position = positionValue as! AXValue
-        let size = sizeValue as! AXValue
-
-        var origin = CGPoint.zero
-        var dimensions = CGSize.zero
-        guard AXValueGetValue(position, .cgPoint, &origin),
-              AXValueGetValue(size, .cgSize, &dimensions) else {
-            return nil
-        }
-        return CGRect(origin: origin, size: dimensions)
-    }
 }
 
 // MARK: - Supporting Types

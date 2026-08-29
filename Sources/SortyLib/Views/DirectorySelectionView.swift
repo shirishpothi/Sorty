@@ -282,8 +282,8 @@ struct DirectorySelectionView: View {
             if FeatureFlags.finderSyncEnabled {
                 QuickTipItemCompact(
                     icon: "cursorarrow.click.2",
-                    title: "Right-Click",
-                    description: "Finder extension"
+                    title: "Finder Menu",
+                    description: "Select and right-click"
                 ) {
                     openFinderForRightClick()
                 }
@@ -346,7 +346,7 @@ struct DirectorySelectionView: View {
         showMenuBarExtra()
     }
 
-    /// Opens Finder at the current folder so the user can try Sorty's context-menu actions.
+    /// Selects the current folder in Finder so the user can open Sorty's native menu.
     /// Before a folder is selected, Finder opens at the user's home directory instead.
     private func openFinderForRightClick() {
         HapticFeedbackManager.shared.tap()
@@ -356,12 +356,11 @@ struct DirectorySelectionView: View {
             ? requestedDirectory
             : URL.homeDirectory
 
-        Task { @MainActor in
-            let openedContextMenu = await FinderAutomation.openContextMenu(for: directory)
-            if !openedContextMenu {
-                NSWorkspace.shared.activateFileViewerSelecting([directory])
-            }
-        }
+        NSWorkspace.shared.activateFileViewerSelecting([directory])
+        NotificationManager.shared.showInfo(
+            title: "Folder Selected in Finder",
+            message: "Right-click it to use Organize, Watch, or Exclude."
+        )
     }
 
     private func showMenuBarExtra() {
