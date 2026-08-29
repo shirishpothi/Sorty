@@ -66,7 +66,7 @@ struct PersonaPickerView: View {
 
                 HStack {
                     Text("Custom Personas")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundColor(.secondary)
 
                     Spacer()
@@ -604,21 +604,23 @@ struct CustomPersonaButton: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 4)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.purple.opacity(0.15) : Color.clear)
+                .fill(
+                    isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
+                )
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
                             isSelected
-                                ? Color.purple : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
+                                ? SortyDesignSystem.Colors.resolvedAccent
+                                : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
                             lineWidth: isSelected ? 2 : 1
                         )
                 }
         )
-        .foregroundStyle(isSelected ? .purple : .primary)
+        .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
         .scaleEffect(isHovering && !isSelected ? 1.02 : 1.0)
         .contentShape(Rectangle())
     }
@@ -644,8 +646,7 @@ struct PersonaButton: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 4)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(
