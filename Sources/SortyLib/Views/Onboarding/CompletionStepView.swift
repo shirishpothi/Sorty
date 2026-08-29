@@ -1095,6 +1095,7 @@ public struct CompletionStepView: View {
     @State private var showParticles = false
     @State private var tipsAppeared = false
     @State private var isCompletionButtonHovered = false
+    @State private var completionHoverTask: Task<Void, Never>?
 
     private let audioController = CompletionAudioController.shared
     @State private var readinessState: ReadinessState = .idle
@@ -1159,12 +1160,21 @@ public struct CompletionStepView: View {
                     isChecking: readinessState == .checking,
                     action: verifyAndFinish,
                     onHoverChanged: { isHovered in
-                        withAnimation(
-                            reduceMotion
-                                ? nil
-                                : .spring(response: 0.28, dampingFraction: 0.82)
-                        ) {
-                            isCompletionButtonHovered = isHovered
+                        completionHoverTask?.cancel()
+                        // Small enter delay filters a sub-40ms swipe that would
+                        // otherwise flash the app icon; leave delay keeps the
+                        // exit from jittering when the cursor brushes the edge.
+                        let delayMs: Int = isHovered ? 40 : 90
+                        completionHoverTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(delayMs))
+                            guard !Task.isCancelled else { return }
+                            if reduceMotion {
+                                isCompletionButtonHovered = isHovered
+                            } else {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    isCompletionButtonHovered = isHovered
+                                }
+                            }
                         }
                     }
                 )
@@ -1181,6 +1191,8 @@ public struct CompletionStepView: View {
         }
         .onAppear(perform: startRevealSequence)
         .onDisappear {
+            completionHoverTask?.cancel()
+            completionHoverTask = nil
             finishTask?.cancel()
             finishTask = nil
             runtimeController.animationTask?.cancel()
