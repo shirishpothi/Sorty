@@ -580,7 +580,7 @@ private struct IconBurst: View {
                     )
                     ctx.stroke(
                         Path(ellipseIn: rect),
-                        with: .color(SortyDesignSystem.Colors.accent.opacity(alpha)),
+                        with: .color(Color(red: 0.850, green: 0.235, blue: 0.353).opacity(alpha)),
                         lineWidth: 2.8 * (1 - ringT) + 0.7
                     )
                     // Inner highlight
@@ -654,9 +654,9 @@ private struct IconBurst: View {
 
     private static func makeParticles() -> [BurstParticle] {
         var rng = SystemRandomNumberGenerator()
-        // Sorty palette: rose accent + complementary confetti hues
+        // Sorty rose + complementary confetti hues
         let palette: [Color] = [
-            SortyDesignSystem.Colors.accent,
+            Color(red: 0.850, green: 0.235, blue: 0.353), // sorty rose
             Color(red: 0.96, green: 0.78, blue: 0.22), // gold
             .teal, .blue, .purple, .pink, .orange, .mint, .white
         ]
