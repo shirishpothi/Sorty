@@ -147,7 +147,7 @@ print_step() {
     local step_num=$1
     local total_steps=$2
     local text=$3
-    echo -e "${BLUE}[$step_num/$total_steps]${NC} $text..."
+    echo -e "${BLUE}[$step_num/$total_steps]${NC} $text:"
 }
 
 print_summary() {

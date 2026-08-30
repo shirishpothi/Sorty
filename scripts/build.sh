@@ -312,6 +312,7 @@ strip_terminal_controls() {
 ACTIVE_BUILD_STEP_NUM=""
 ACTIVE_BUILD_STEP_TOTAL=""
 ACTIVE_BUILD_STEP_LABEL=""
+ACTIVE_BUILD_STEP_HEADER_SHOWN=false
 
 run_build_with_compact_status() {
     local log_name="$1"
@@ -408,8 +409,12 @@ show_inline_step_progress() {
     local current_work="$4"
 
     if uses_inline_build_progress; then
-        printf '\r\033[K%b[%s/%s]%b %s...  • %s' \
-            "${BLUE}" "${step_num}" "${total_steps}" "${NC}" "${step_label}" "${current_work}"
+        if [ "${ACTIVE_BUILD_STEP_HEADER_SHOWN}" != "true" ]; then
+            printf '%b[%s/%s]%b %s:\n' \
+                "${BLUE}" "${step_num}" "${total_steps}" "${NC}" "${step_label}"
+            ACTIVE_BUILD_STEP_HEADER_SHOWN=true
+        fi
+        printf '\r\033[K  • %s' "${current_work}"
     elif is_truthy "${SORTY_VERBOSE}"; then
         log_item "${current_work}"
     fi
@@ -422,8 +427,7 @@ complete_inline_step() {
     local result="$4"
 
     if uses_inline_build_progress; then
-        printf '\r\033[K%b[%s/%s]%b %s...  %b%s %s%b\n' \
-            "${BLUE}" "${step_num}" "${total_steps}" "${NC}" "${step_label}" \
+        printf '\r\033[K  %b%s %s%b\n' \
             "${GREEN}" "${SYM_CHECK}" "${result}" "${NC}"
     else
         log_success "${result}"
@@ -1403,6 +1407,7 @@ else
     ACTIVE_BUILD_STEP_NUM=""
     ACTIVE_BUILD_STEP_TOTAL=""
     ACTIVE_BUILD_STEP_LABEL=""
+    ACTIVE_BUILD_STEP_HEADER_SHOWN=false
 
     # Fast path: when every bundle input is unchanged since the
     # last successful publish, skip assembly, signing, and publishing. The
