@@ -145,7 +145,7 @@ request_sorty_quit() {
             -e "with timeout of ${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS} seconds" \
             -e 'tell application id "com.sorty.app" to quit' \
             -e 'end timeout' >/dev/null 2>&1; then
-            log_warning "Sorty did not acknowledge the quit request within ${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS}s."
+            show_build_status warning "Sorty did not respond within ${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS}s. Retrying quit."
         fi
     else
         pkill -TERM -x "Sorty" >/dev/null 2>&1 || true
