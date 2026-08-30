@@ -9,8 +9,8 @@ import AppKit
 import SwiftUI
 
 struct ThanksForUsingSortyView: View {
-    static let preferredWindowWidth: CGFloat = 540
-    static let preferredWindowHeight: CGFloat = 600
+    static let preferredWindowWidth: CGFloat = 480
+    static let preferredWindowHeight: CGFloat = 520
 
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
 
@@ -28,8 +28,7 @@ struct ThanksForUsingSortyView: View {
             }
             statsTable
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(28)
+        .padding(24)
         .frame(width: Self.preferredWindowWidth, height: Self.preferredWindowHeight)
         .modifier(WindowGlassBackground())
         .windowLinkHoverPillHost()
