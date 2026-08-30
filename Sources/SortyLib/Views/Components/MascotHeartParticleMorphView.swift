@@ -16,30 +16,53 @@ struct MascotHeartParticleMorphView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animationStart: Date?
+    @State private var animationRun = 0
 
     // `color` kept for API compat but mascot uses its true palette, not the accent.
     let color: Color
 
     var body: some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || animationStart == nil)
-        ) { timeline in
-            let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
+        Button(action: replayAnimation) {
+            SwiftUI.TimelineView(
+                .animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || animationStart == nil)
+            ) { timeline in
+                let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
 
-            ParticleMorphCanvas(
-                progress: reduceMotion ? 1 : morphProgress(at: elapsed),
-                heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed)
-            )
+                ParticleMorphCanvas(
+                    progress: reduceMotion ? 1 : morphProgress(at: elapsed),
+                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed)
+                )
+            }
+            .contentShape(Rectangle())
+            .accessibilityHidden(true)
         }
-        .task(id: reduceMotion) {
+        .buttonStyle(.plain)
+        .help("Replay animation")
+        .accessibilityLabel("Replay mascot animation") // [VERIFY] User-facing name for the visual control.
+        .accessibilityHint("Plays the mascot-to-heart animation again")
+        .task(id: AnimationTaskID(reduceMotion: reduceMotion, run: animationRun)) {
             animationStart = nil
             guard !reduceMotion else { return }
 
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else { return }
             animationStart = Date()
+
+            guard animationRun > 0 else { return }
+            try? await Task.sleep(for: .seconds(Timing.mascotHold))
+            guard !Task.isCancelled else { return }
+            HapticFeedbackManager.shared.selection()
+
+            try? await Task.sleep(for: .seconds(Timing.morphDuration))
+            guard !Task.isCancelled else { return }
+            HapticFeedbackManager.shared.success()
         }
-        .accessibilityHidden(true)
+    }
+
+    private func replayAnimation() {
+        HapticFeedbackManager.shared.tap()
+        animationStart = nil
+        animationRun &+= 1
     }
 
     private func morphProgress(at elapsed: TimeInterval) -> Double {
@@ -70,6 +93,11 @@ struct MascotHeartParticleMorphView: View {
         let c = min(max(p, 0), 1)
         return CGFloat(1 - pow(1 - c, 3))
     }
+}
+
+private struct AnimationTaskID: Hashable {
+    let reduceMotion: Bool
+    let run: Int
 }
 
 private struct ParticleMorphCanvas: View {
