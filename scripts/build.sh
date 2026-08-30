@@ -285,9 +285,14 @@ run_build_with_compact_status() {
     rm -f "${status_marker}"
 
     local status
-    if [ "${replaces_status_line}" = "true" ] && [ "${1##*/}" = "swift" ]; then
+    local replaces_native_progress_on_success=false
+    if [ "${replaces_status_line}" = "true" ] &&
+        [ "${1##*/}" = "swift" ] &&
+        [ "${2:-}" = "build" ]; then
         # Let SwiftPM own its native one-line terminal progress. `script` gives
         # it a terminal while recording the same output for failure diagnostics.
+        replaces_native_progress_on_success=true
+        printf '\033[s'
         set +e
         script -q -e -F "${log_file}" "$@"
         status=$?
@@ -321,6 +326,9 @@ run_build_with_compact_status() {
     fi
 
     if [ "${status}" -eq 0 ]; then
+        if [ "${replaces_native_progress_on_success}" = "true" ]; then
+            printf '\033[u\033[J'
+        fi
         return 0
     fi
 
