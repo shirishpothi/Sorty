@@ -652,7 +652,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         "with", "folder", "folders", "file", "files", "filename", "json", "reasoning",
         "notes", "unorganized", "data", "content", "description", "type", "rule_id",
         "semantic_tags", "suggested_name", "rename_reason", "tags", "comment", "true",
-        "false", "null"
+        "false", "null", LearningToolCall.excludeCurrentRunToolName
     ]
     nonisolated private static let quotedFileMentionRegex =
         try? NSRegularExpression(

@@ -149,4 +149,20 @@ final class AIInsightExtractorTests: XCTestCase {
 
         XCTAssertFalse(insight?.text.contains("to name") ?? false)
     }
+
+    func testLearningToolCallNeverAppearsAsStreamingFolder() async {
+        let extractor = AIInsightExtractor()
+        let content = """
+        {"learning_action":{"name":"exclude_current_run_from_learning","reason":"The user requested this run not be learned from"
+        """
+
+        let insight = await extractor.extractInsight(
+            from: content,
+            scannedFilePathLookup: [:],
+            currentDirectoryPath: nil
+        )
+
+        XCTAssertNotEqual(insight?.category, .folder)
+        XCTAssertFalse(insight?.text.contains(LearningToolCall.excludeCurrentRunToolName) ?? false)
+    }
 }

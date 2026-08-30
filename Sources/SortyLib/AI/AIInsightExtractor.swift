@@ -575,7 +575,8 @@ public actor AIInsightExtractor {
             "rename_suggestions", "file_id",
             "tags", "comment", "semantic_tags", "confidence", "rule_id",
             "file_ids", "folder_assignments", "unorganized", "notes",
-            "reasoning", "subfolders", "true", "false", "null"
+            "reasoning", "subfolders", "true", "false", "null",
+            LearningToolCall.excludeCurrentRunToolName
         ]
         if blockedExactNames.contains(lowercased) {
             return false
