@@ -20,7 +20,7 @@ SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS="${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS:-10
 SORTY_QUIT_RETRY_INTERVAL_SECONDS="${SORTY_QUIT_RETRY_INTERVAL_SECONDS:-2}"
 KEYCHAIN_UNLOCK_TIMEOUT_SECONDS="${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS:-43200}"
 AUTO_UNLOCK_SIGNING_KEYCHAIN="${AUTO_UNLOCK_SIGNING_KEYCHAIN:-true}"
-BUILD_AUTO_CLOSE_REQUEST_KEY="buildAutoCloseRequest"
+BUILD_AUTO_CLOSE_REQUEST_PATH="${HOME}/Library/Group Containers/group.com.sorty.app/.build-auto-close-request"
 BUILD_AUTO_CLOSE_REQUEST_ACTIVE=false
 AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
 BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
@@ -44,10 +44,11 @@ count_running_sorty_instances() {
 set_build_auto_close_request() {
     local enabled="$1"
     if is_truthy "${enabled}"; then
-        defaults write "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" -bool true >/dev/null 2>&1 || true
+        mkdir -p "$(dirname "${BUILD_AUTO_CLOSE_REQUEST_PATH}")"
+        touch "${BUILD_AUTO_CLOSE_REQUEST_PATH}"
         BUILD_AUTO_CLOSE_REQUEST_ACTIVE=true
     else
-        defaults delete "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" >/dev/null 2>&1 || true
+        rm -f "${BUILD_AUTO_CLOSE_REQUEST_PATH}"
         BUILD_AUTO_CLOSE_REQUEST_ACTIVE=false
     fi
 }

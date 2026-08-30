@@ -15,7 +15,8 @@ import SwiftUI
 @MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
-    private static let buildAutoCloseRequestKey = "buildAutoCloseRequest"
+    private static let buildAutoCloseRequestFileName = ".build-auto-close-request"
+    private static let appGroupIdentifier = "group.com.sorty.app"
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
     private let launchStartedAt = Date()
@@ -109,10 +110,15 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         private var shouldAllowBuildRequestedQuit: Bool {
-            // The build script changes this preference from another process.
-            // Refresh before reading so an app-modal panel cannot hide the request.
-            UserDefaults.standard.synchronize()
-            return UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
+            guard let containerURL = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
+            ) else {
+                return false
+            }
+
+            return FileManager.default.fileExists(
+                atPath: containerURL.appendingPathComponent(Self.buildAutoCloseRequestFileName).path
+            )
         }
 
         private var quitWarningContext: QuitWarningContext? {
