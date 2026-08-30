@@ -94,6 +94,49 @@ notify_sorty_build_waiting() {
     fi
 }
 
+BUILD_STATUS_LINE_ACTIVE=false
+
+show_build_status() {
+    local kind="$1"
+    local message="$2"
+
+    if [ -t 1 ] && ! is_truthy "${SORTY_VERBOSE}"; then
+        case "${kind}" in
+            warning)
+                printf '\r\033[K%b%s %s%b' "${YELLOW}" "${SYM_WARN}" "${message}" "${NC}"
+                ;;
+            failure)
+                printf '\r\033[K%b%s %s%b' "${RED}" "${SYM_CROSS}" "${message}" "${NC}"
+                ;;
+            *)
+                printf '\r\033[K  • %s' "${message}"
+                ;;
+        esac
+        BUILD_STATUS_LINE_ACTIVE=true
+        return
+    fi
+
+    case "${kind}" in
+        warning) log_warning "${message}" ;;
+        failure) log_failure "${message}" ;;
+        *) log_item "${message}" ;;
+    esac
+}
+
+finish_build_status() {
+    if [ "${BUILD_STATUS_LINE_ACTIVE}" = "true" ]; then
+        printf '\n'
+        BUILD_STATUS_LINE_ACTIVE=false
+    fi
+}
+
+clear_build_status() {
+    if [ "${BUILD_STATUS_LINE_ACTIVE}" = "true" ]; then
+        printf '\r\033[K'
+        BUILD_STATUS_LINE_ACTIVE=false
+    fi
+}
+
 request_sorty_quit() {
     if command -v osascript >/dev/null 2>&1; then
         if ! osascript \
@@ -125,26 +168,28 @@ terminate_running_sorty_if_safe() {
     else
         instance_label="instances"
     fi
-    log_item "Closing ${instance_count} running Sorty ${instance_label}"
+    show_build_status item "Closing ${instance_count} running Sorty ${instance_label}"
 
     set_build_auto_close_request true
     request_sorty_quit
     if wait_for_sorty_exit "${SORTY_QUIT_WAIT_SECONDS}"; then
         set_build_auto_close_request false
+        clear_build_status
         log_detail "Sorty closed gracefully"
         return
     fi
 
     notify_sorty_build_waiting
-    log_warning "Sorty stayed open (likely active organization). Waiting ${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}s while retrying graceful quit."
+    show_build_status warning "Sorty stayed open (likely active organization). Waiting ${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}s while retrying graceful quit."
     if wait_for_sorty_exit_with_quit_retries "${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}"; then
         set_build_auto_close_request false
+        clear_build_status
         log_detail "Sorty closed after the retry window"
         return
     fi
 
     set_build_auto_close_request false
-    log_warning "Sorty stayed open after the retry window. Build continues without force-kill."
+    show_build_status warning "Sorty stayed open after the retry window. Build continues without force-kill."
 }
 
 resolve_signing_identity() {
@@ -1752,7 +1797,8 @@ fi
 terminate_running_sorty_if_safe
 
 if sorty_processes_are_running; then
-    log_failure "Sorty is still running; refusing to replace its live bundle. Finish the active organization and rerun the build."
+    show_build_status failure "Sorty is still running; refusing to replace its live bundle. Finish the active organization and rerun the build."
+    finish_build_status
     exit 1
 fi
 
