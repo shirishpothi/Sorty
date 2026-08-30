@@ -239,6 +239,9 @@ format_compact_build_status() {
     local line="$1"
 
     case "${line}" in
+        \[*/*\]*"Compiling "*".swift"*)
+            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/\1 of \2: Compiling \4/'
+            ;;
         *"Compiling "*".swift"*)
             printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Compiling \1/'
             ;;
@@ -1341,7 +1344,7 @@ else
     fi
     BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
     BUILD_DURATION=$(get_step_duration "build")
-    log_success "Compilation succeeded (${BUILD_DURATION})"
+    log_success "Compilation successful (${BUILD_DURATION})"
 
     # Fast path: when every bundle input is unchanged since the
     # last successful publish, skip assembly, signing, and publishing. The
