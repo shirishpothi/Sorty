@@ -106,14 +106,6 @@ struct HUDNotificationCard: View {
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .systemLiquidGlassBackground(cornerRadius: 14)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(
-                    Color.white.opacity(0.18),
-                    lineWidth: 1
-                )
-        )
         .overlay(alignment: .bottom) {
             if !notification.isPersistent {
                 HUDNotificationProgress(
@@ -122,6 +114,14 @@ struct HUDNotificationCard: View {
                 )
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    Color.white.opacity(0.18),
+                    lineWidth: 1
+                )
+        )
         .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         .onHover { hovering in
@@ -313,15 +313,13 @@ private struct HUDNotificationProgress: View {
     let remaining: CGFloat
 
     var body: some View {
-        GeometryReader { geometry in
-            Capsule()
-                .fill(color.opacity(0.4))
-                .frame(width: geometry.size.width * remaining, height: 2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 2)
-        .padding(.horizontal, 6)
-        .padding(.bottom, 3)
+        Capsule()
+            .fill(color.opacity(0.4))
+            .frame(maxWidth: .infinity)
+            .scaleEffect(x: remaining, anchor: .leading)
+            .frame(height: 2)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 3)
     }
 }
 
