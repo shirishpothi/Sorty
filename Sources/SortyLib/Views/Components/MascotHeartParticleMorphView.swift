@@ -10,6 +10,7 @@ import SwiftUI
 struct MascotHeartParticleMorphView: View {
     private enum Timing {
         static let mascotHold: TimeInterval = 0.5
+        static let reverseDuration: TimeInterval = 0.85
         static let morphDuration: TimeInterval = 1.15
         static let heartbeatDuration: TimeInterval = 0.90
     }
@@ -17,6 +18,7 @@ struct MascotHeartParticleMorphView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animationStart: Date?
     @State private var animationRun = 0
+    @State private var replayStartProgress = 1.0
 
     // `color` kept for API compat but mascot uses its true palette, not the accent.
     let color: Color
@@ -29,8 +31,8 @@ struct MascotHeartParticleMorphView: View {
                 let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
 
                 ParticleMorphCanvas(
-                    progress: reduceMotion ? 1 : morphProgress(at: elapsed),
-                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed)
+                    progress: reduceMotion ? 1 : morphProgress(at: elapsed, isReplay: animationRun > 0),
+                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: animationRun > 0)
                 )
             }
             .contentShape(Rectangle())
@@ -49,6 +51,11 @@ struct MascotHeartParticleMorphView: View {
             animationStart = Date()
 
             guard animationRun > 0 else { return }
+            let reverseDuration = Timing.reverseDuration * replayStartProgress
+            try? await Task.sleep(for: .seconds(reverseDuration))
+            guard !Task.isCancelled else { return }
+            HapticFeedbackManager.shared.alignment()
+
             try? await Task.sleep(for: .seconds(Timing.mascotHold))
             guard !Task.isCancelled else { return }
             HapticFeedbackManager.shared.selection()
@@ -61,20 +68,43 @@ struct MascotHeartParticleMorphView: View {
 
     private func replayAnimation() {
         HapticFeedbackManager.shared.tap()
+        if let animationStart {
+            replayStartProgress = morphProgress(
+                at: Date().timeIntervalSince(animationStart),
+                isReplay: animationRun > 0
+            )
+        } else {
+            replayStartProgress = animationRun > 0 ? replayStartProgress : 0
+        }
         animationStart = nil
         animationRun &+= 1
     }
 
-    private func morphProgress(at elapsed: TimeInterval) -> Double {
-        let raw = min(max((elapsed - Timing.mascotHold) / Timing.morphDuration, 0), 1)
+    private func morphProgress(at elapsed: TimeInterval, isReplay: Bool) -> Double {
+        guard isReplay else {
+            return easedProgress((elapsed - Timing.mascotHold) / Timing.morphDuration)
+        }
+
+        let reverseDuration = Timing.reverseDuration * replayStartProgress
+        if elapsed < reverseDuration, reverseDuration > 0 {
+            return replayStartProgress * (1 - easedProgress(elapsed / reverseDuration))
+        }
+
+        let forwardElapsed = elapsed - reverseDuration - Timing.mascotHold
+        return easedProgress(forwardElapsed / Timing.morphDuration)
+    }
+
+    private func easedProgress(_ rawProgress: Double) -> Double {
+        let raw = min(max(rawProgress, 0), 1)
         // easeInOutCubic
         if raw < 0.5 { return 4 * raw * raw * raw }
         let p = 2 * raw - 2
         return 0.5 * p * p * p + 1
     }
 
-    private func heartbeatScale(at elapsed: TimeInterval) -> CGFloat {
-        let heartStart = Timing.mascotHold + Timing.morphDuration
+    private func heartbeatScale(at elapsed: TimeInterval, isReplay: Bool) -> CGFloat {
+        let reverseDuration = isReplay ? Timing.reverseDuration * replayStartProgress : 0
+        let heartStart = reverseDuration + Timing.mascotHold + Timing.morphDuration
         guard elapsed >= heartStart else {
             return 1
         }
