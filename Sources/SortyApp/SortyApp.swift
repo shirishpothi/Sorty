@@ -35,7 +35,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         super.init()
-        let buildAutoCloseTimer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+        let buildAutoCloseTimer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.finishBuildRequestedQuitIfSafe()
             }
@@ -109,7 +109,10 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         private var shouldAllowBuildRequestedQuit: Bool {
-            UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
+            // The build script changes this preference from another process.
+            // Refresh before reading so an app-modal panel cannot hide the request.
+            UserDefaults.standard.synchronize()
+            return UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
         }
 
         private var quitWarningContext: QuitWarningContext? {
