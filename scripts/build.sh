@@ -267,8 +267,8 @@ run_build_with_compact_status() {
     local log_name="$1"
     shift
 
-    # Codex captures stdout through a pipe, but its terminal still renders
-    # carriage-return status updates. Only disable them for CI log streams.
+    # Captured local builds use throttled newline updates below. CI keeps its
+    # existing log-only behavior so compiler progress does not flood job logs.
     if is_truthy "${SORTY_VERBOSE}" || { [ ! -t 1 ] && is_truthy "${CI:-false}"; }; then
         run_with_log "${log_name}" "$@"
         return $?
@@ -277,23 +277,40 @@ run_build_with_compact_status() {
     mkdir -p "${BUILD_LOG_DIR}"
     local log_file="${BUILD_LOG_DIR}/${log_name}.log"
     local status_marker="${BUILD_LOG_DIR}/${log_name}.status"
+    local replaces_status_line=true
+    if [ ! -t 1 ]; then
+        replaces_status_line=false
+    fi
     : > "${log_file}"
     rm -f "${status_marker}"
 
     set +e
-    "$@" 2>&1 | while IFS= read -r line; do
+    local last_captured_status_second=-2
+    local last_captured_status=""
+    # SwiftPM buffers progress when stdout is a pipe. Keep a pseudo-terminal on
+    # the compiler side so filenames reach this formatter while work is active.
+    script -q /dev/null "$@" 2>&1 | while IFS= read -r line; do
         local status_line=""
+        line=${line//$'\r'/}
+        line=${line//$'\004'/}
+        line=${line//$'\b'/}
         printf '%s\n' "${line}" >> "${log_file}"
         status_line=$(format_compact_build_status "${line}") || continue
-        if [ -n "${status_line}" ]; then
+        if [ -n "${status_line}" ] && [ "${replaces_status_line}" = "true" ]; then
             printf '\r\033[K%s' "${status_line}"
             : > "${status_marker}"
+        elif [ -n "${status_line}" ] &&
+            [ "${status_line}" != "${last_captured_status}" ] &&
+            [ $((SECONDS - last_captured_status_second)) -ge 2 ]; then
+            printf '  • %s\n' "${status_line}"
+            last_captured_status_second=${SECONDS}
+            last_captured_status="${status_line}"
         fi
     done
     local status=${PIPESTATUS[0]}
     set -e
 
-    if [ -f "${status_marker}" ]; then
+    if [ "${replaces_status_line}" = "true" ] && [ -f "${status_marker}" ]; then
         printf '\r\033[K'
         rm -f "${status_marker}"
     fi
@@ -1372,6 +1389,7 @@ else
 
     print_step 3 $TOTAL_STEPS "Assembling App Bundle"
     start_step_timer "assemble"
+    log_item "Preparing app bundle"
     stage_preserved_bundle
 
     # Build structure
@@ -1390,6 +1408,7 @@ else
     find "${MACOS_DIR}" -mindepth 1 -maxdepth 1 ! -name "${BINARY_NAME}" -exec rm -rf {} +
 
     # Copy binary (SPM output target remains SortyApp; bundled executable is Sorty)
+    log_item "Installing Sorty executable"
     if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
@@ -1422,7 +1441,8 @@ else
     # Copy Resources with integrity checks and conflict detection
     SPM_BUNDLE_PATH="${BIN_PATH}/Sorty_SortyLib.bundle"
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
-    
+
+    log_item "Copying and compiling resources"
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
     compile_string_catalogs "${RESOURCES_DIR}"
     copy_swiftpm_dependency_resource_bundles "${RESOURCES_DIR}" "${BUILD_DIR}"
@@ -1453,6 +1473,7 @@ else
     fi
     
     if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
+        log_item "Embedding Sparkle framework"
         TARGET_SPARKLE_FRAMEWORK="${FRAMEWORKS_DIR}/Sparkle.framework"
         embed_sparkle_framework "${SPARKLE_FRAMEWORK}" "${TARGET_SPARKLE_FRAMEWORK}" "${PRESERVE_APP_BUNDLE}"
 
@@ -1477,12 +1498,14 @@ else
 
     # Embed Finder Sync extension
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
+        log_item "Building Finder extension"
         bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
     else
         rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
+    log_item "Validating app bundle"
     ASSEMBLE_DURATION=$(get_step_duration "assemble")
     log_success "App bundle assembled (${ASSEMBLE_DURATION})"
 fi
