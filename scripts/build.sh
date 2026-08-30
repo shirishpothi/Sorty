@@ -257,7 +257,13 @@ format_compact_build_status() {
 
     case "${line}" in
         \[*/*\]*"Compiling "*".swift"*)
-            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/\1 of \2: Compiling \4/'
+            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/[\1\/\2] Compiling \4/'
+            ;;
+        \[*/*\]*"Emitting module "*)
+            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Emitting module ([^ ]+).*$/[\1\/\2] Emitting module \3/'
+            ;;
+        \[*/*\]*"Linking "*)
+            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Linking ([^ ]+).*$/[\1\/\2] Linking \3/'
             ;;
         *"Compiling "*".swift"*)
             printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Compiling \1/'
@@ -279,6 +285,36 @@ format_compact_build_status() {
             ;;
     esac
 }
+
+stream_terminal_frames() {
+    local buffer=""
+    local char=""
+
+    while IFS= read -r -n 1 char; do
+        if [ -z "${char}" ] || [ "${char}" = $'\r' ]; then
+            if [ -n "${buffer}" ]; then
+                printf '%s\n' "${buffer}"
+                buffer=""
+            fi
+        elif [ "${char}" = $'\b' ]; then
+            buffer="${buffer%?}"
+        elif [ "${char}" != $'\004' ]; then
+            buffer+="${char}"
+        fi
+    done
+
+    if [ -n "${buffer}" ]; then
+        printf '%s\n' "${buffer}"
+    fi
+}
+
+strip_terminal_controls() {
+    sed -E $'s/\x1B\\[[0-9;?]*[A-Za-z]//g'
+}
+
+ACTIVE_BUILD_STEP_NUM=""
+ACTIVE_BUILD_STEP_TOTAL=""
+ACTIVE_BUILD_STEP_LABEL=""
 
 run_build_with_compact_status() {
     local log_name="$1"
@@ -302,17 +338,28 @@ run_build_with_compact_status() {
     rm -f "${status_marker}"
 
     local status
-    local replaces_native_progress_on_success=false
     if [ "${replaces_status_line}" = "true" ] &&
         [ "${1##*/}" = "swift" ] &&
         [ "${2:-}" = "build" ]; then
-        # Let SwiftPM own its native one-line terminal progress. `script` gives
-        # it a terminal while recording the same output for failure diagnostics.
-        replaces_native_progress_on_success=true
-        printf '\033[s'
+        # SwiftPM only streams progress when it owns a terminal. Split its
+        # carriage-return frames as they arrive, then render one Sorty-owned line.
         set +e
-        script -q -e -F "${log_file}" "$@"
-        status=$?
+        script -q -e -F /dev/null "$@" 2>&1 | stream_terminal_frames | while IFS= read -r line; do
+            local clean_line=""
+            local status_line=""
+            clean_line=$(printf '%s\n' "${line}" | strip_terminal_controls)
+            [ -n "${clean_line}" ] || continue
+            printf '%s\n' "${clean_line}" >> "${log_file}"
+            status_line=$(format_compact_build_status "${clean_line}") || continue
+            if [ -n "${status_line}" ] && [ -n "${ACTIVE_BUILD_STEP_NUM}" ]; then
+                show_inline_step_progress \
+                    "${ACTIVE_BUILD_STEP_NUM}" \
+                    "${ACTIVE_BUILD_STEP_TOTAL}" \
+                    "${ACTIVE_BUILD_STEP_LABEL}" \
+                    "${status_line}"
+            fi
+        done
+        status=${PIPESTATUS[0]}
         set -e
     else
         set +e
@@ -343,9 +390,6 @@ run_build_with_compact_status() {
     fi
 
     if [ "${status}" -eq 0 ]; then
-        if [ "${replaces_native_progress_on_success}" = "true" ]; then
-            printf '\033[u\033[J'
-        fi
         return 0
     fi
 
@@ -374,14 +418,18 @@ show_inline_step_progress() {
     fi
 }
 
-finish_inline_step_progress() {
+complete_inline_step() {
     local step_num="$1"
     local total_steps="$2"
     local step_label="$3"
+    local result="$4"
 
     if uses_inline_build_progress; then
-        printf '\r\033[K'
-        print_step "${step_num}" "${total_steps}" "${step_label}"
+        printf '\r\033[K%b[%s/%s]%b %s...  %b%s %s%b\n' \
+            "${BLUE}" "${step_num}" "${total_steps}" "${NC}" "${step_label}" \
+            "${GREEN}" "${SYM_CHECK}" "${result}" "${NC}"
+    else
+        log_success "${result}"
     fi
 }
 
@@ -1236,7 +1284,14 @@ else
     log_detail "Skipping git info injection (SKIP_GIT_INJECT=true)"
 fi
 
-print_step 2 $TOTAL_STEPS "Compiling Project"
+if [ "${BUILD_METHOD}" != "xcodebuild" ] && uses_inline_build_progress; then
+    ACTIVE_BUILD_STEP_NUM=2
+    ACTIVE_BUILD_STEP_TOTAL=$TOTAL_STEPS
+    ACTIVE_BUILD_STEP_LABEL="Compiling Project"
+    show_inline_step_progress 2 $TOTAL_STEPS "Compiling Project" "Planning build"
+else
+    print_step 2 $TOTAL_STEPS "Compiling Project"
+fi
 start_step_timer "build"
 
 if [ "$BUILD_METHOD" = "xcodebuild" ]; then
@@ -1422,7 +1477,10 @@ else
     fi
     BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
     BUILD_DURATION=$(get_step_duration "build")
-    log_success "Compilation successful (${BUILD_DURATION})"
+    complete_inline_step 2 $TOTAL_STEPS "Compiling Project" "Compilation successful (${BUILD_DURATION})"
+    ACTIVE_BUILD_STEP_NUM=""
+    ACTIVE_BUILD_STEP_TOTAL=""
+    ACTIVE_BUILD_STEP_LABEL=""
 
     # Fast path: when every bundle input is unchanged since the
     # last successful publish, skip assembly, signing, and publishing. The
@@ -1568,8 +1626,7 @@ else
     fi
 
     ASSEMBLE_DURATION=$(get_step_duration "assemble")
-    finish_inline_step_progress 3 $TOTAL_STEPS "Assembling App Bundle"
-    log_success "App bundle assembled (${ASSEMBLE_DURATION})"
+    complete_inline_step 3 $TOTAL_STEPS "Assembling App Bundle" "App bundle assembled (${ASSEMBLE_DURATION})"
 fi
 
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
