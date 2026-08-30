@@ -82,15 +82,6 @@ public class SecurityManager: ObservableObject {
         }
     }
     
-    /// Requests authentication specifically for Learnings access.
-    /// Returns `true` when access is granted.
-    @discardableResult
-    public func authenticateForLearningsAccess() async -> Bool {
-        await authenticateForSensitiveAction(
-            reason: "Authenticate to access your personal organization learnings."
-        )
-    }
-
     /// Central authentication entry point for any sensitive action in the app.
     /// Returns `true` when the action should proceed.
     @discardableResult

@@ -98,7 +98,7 @@ The Finder Sync `.appex` registration repair path is `ExtensionCommunication.rep
 - A stale Finder Sync binary can stay active even when workspace code is updated; after deploy, `pkill -f SortyFinderSync`, re-enable `com.sorty.app.SortyFinderSync`, and restart Finder.
 
 ## Learnings System
-User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.
+User preference learning stored in `LearningsProfile` and encrypted locally by `LearningsFileManager`. Learnings controls do not require sensitive-action authentication.
 
 ## UI Presentation Pitfalls
 
