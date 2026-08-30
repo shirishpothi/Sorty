@@ -939,20 +939,17 @@ struct PermissionEducationView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                educationPage(page)
-                    .id(page.id)
-                    .transition(.opacity.combined(with: .scale(scale: 1.01)))
-            }
+        ZStack(alignment: .bottom) {
+            educationPage(page)
+                .id(page.id)
+                .transition(.opacity.combined(with: .scale(scale: 1.01)))
 
             if pages.count > 1 {
                 pageIndicator
+                    .padding(.bottom, 8)
             }
         }
-        .padding(.vertical, 16)
-        .frame(width: 680)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .systemLiquidGlassPopover(cornerRadius: 18)
         .animation(.easeOut(duration: 0.18), value: currentPage)
     }
 
@@ -964,12 +961,12 @@ struct PermissionEducationView: View {
             VStack(spacing: 8) {
                 Text(permission.educationTitle)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
 
                 Text(permission.educationDescription)
                     .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.72))
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1004,11 +1001,11 @@ struct PermissionEducationView: View {
             .padding(.bottom, 18)
         }
         .frame(width: 640)
-        .background(Color(white: 0.10))
+        .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
         }
     }
 
@@ -1025,9 +1022,9 @@ struct PermissionEducationView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(white: 0.16),
+                    Color(nsColor: .controlBackgroundColor),
                     permission.color.opacity(0.22),
-                    Color(white: 0.10),
+                    Color(nsColor: .windowBackgroundColor),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -1036,18 +1033,18 @@ struct PermissionEducationView: View {
             VStack(spacing: 14) {
                 Image(systemName: permission.icon)
                     .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.86))
+                    .foregroundStyle(.primary.opacity(0.86))
 
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(permission.color)
                     Text(permission.educationTitle)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.82))
+                        .foregroundStyle(.primary.opacity(0.82))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Color.white.opacity(0.10))
+                .background(Color.primary.opacity(0.08))
                 .clipShape(Capsule(style: .continuous))
             }
         }

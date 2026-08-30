@@ -157,14 +157,14 @@ public struct WhatsNewTourView: View {
                         VStack(spacing: 4) {
                             Text(page.title)
                                 .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
                                 .multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .accessibilityAddTraits(.isHeader)
 
                             Text(page.description)
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.70))
+                                .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -199,19 +199,19 @@ public struct WhatsNewTourView: View {
                             location: 0
                         ),
                         .init(color: Color.purple.opacity(0.06), location: 0.34),
-                        .init(color: Color(white: 0.10), location: 0.82),
+                        .init(color: Color(nsColor: .windowBackgroundColor), location: 0.82),
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             } else {
-                Color(white: 0.10)
+                Color(nsColor: .windowBackgroundColor)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         }
     }
 
@@ -225,12 +225,12 @@ public struct WhatsNewTourView: View {
 
                 Text("Sorty 1.2.0")
                     .font(.system(.title, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
                 Text("Safer storage, honest progress, smoother controls, and a more reliable install and update path.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.68))
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, 44)
@@ -302,7 +302,7 @@ public struct WhatsNewTourView: View {
 
                 Text(LocalizedStringKey(title))
                     .font(.system(.headline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -316,7 +316,7 @@ public struct WhatsNewTourView: View {
 
                         Text(item)
                             .font(.system(.caption, design: .rounded, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.78))
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -328,7 +328,7 @@ public struct WhatsNewTourView: View {
             LinearGradient(
                 colors: [
                     color.opacity(0.10),
-                    Color.white.opacity(0.035),
+                    Color.primary.opacity(0.025),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -369,8 +369,8 @@ public struct WhatsNewTourView: View {
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0),
-                    .init(color: Color(white: 0.10).opacity(0.20), location: 0.45),
-                    .init(color: Color(white: 0.10), location: 1.0),
+                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.20), location: 0.45),
+                    .init(color: Color(nsColor: .windowBackgroundColor), location: 1.0),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -408,10 +408,10 @@ public struct WhatsNewTourView: View {
         VStack(spacing: 12) {
             Image(systemName: "photo")
                 .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.secondary)
             Text(name)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -420,11 +420,11 @@ public struct WhatsNewTourView: View {
     private var finderIntegrationPreview: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Color.primary.opacity(0.06))
                 .frame(width: 500, height: 276)
                 .overlay {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
                 }
 
             VStack(alignment: .leading, spacing: 0) {
@@ -438,7 +438,7 @@ public struct WhatsNewTourView: View {
                 }
                 .padding(16)
 
-                Divider().overlay(Color.white.opacity(0.12))
+                Divider()
 
                 HStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 10) {
@@ -449,7 +449,7 @@ public struct WhatsNewTourView: View {
                     .padding(14)
                     .frame(width: 160, alignment: .topLeading)
                     .frame(maxHeight: .infinity, alignment: .topLeading)
-                    .background(Color.white.opacity(0.04))
+                    .background(Color.primary.opacity(0.04))
 
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(["Invoices", "Screenshots", "Loose PDFs"], id: \.self) { folder in
@@ -458,7 +458,7 @@ public struct WhatsNewTourView: View {
                                     .foregroundStyle(.cyan)
                                 Text(folder)
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.88))
+                                    .foregroundStyle(.primary.opacity(0.88))
                                 Spacer()
                             }
                         }
@@ -473,15 +473,15 @@ public struct WhatsNewTourView: View {
             VStack(alignment: .leading, spacing: 7) {
                 finderMenuItem("Organize with Sorty", icon: "sparkles", isPrimary: true)
                 finderMenuItem("Watch with Sorty", icon: "eye", isPrimary: false)
-                Divider().overlay(Color.white.opacity(0.12))
+                Divider()
                 finderMenuItem("Repair Finder Extension", icon: "puzzlepiece.extension", isPrimary: false)
             }
             .padding(10)
             .frame(width: 220)
-            .background(Color(white: 0.12))
+            .background(Color(nsColor: .controlBackgroundColor))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.14), lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(0.35), radius: 18, y: 10)
@@ -492,10 +492,10 @@ public struct WhatsNewTourView: View {
     private func finderSidebarRow(_ title: String, icon: String, isActive: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .foregroundStyle(isActive ? .cyan : .white.opacity(0.46))
+                .foregroundStyle(isActive ? .cyan : .secondary)
             Text(LocalizedStringKey(title))
                 .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(isActive ? .white.opacity(0.9) : .white.opacity(0.58))
+                .foregroundStyle(isActive ? .primary : .secondary)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -507,10 +507,10 @@ public struct WhatsNewTourView: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .frame(width: 16)
-                .foregroundStyle(isPrimary ? .cyan : .white.opacity(0.7))
+                .foregroundStyle(isPrimary ? .cyan : .secondary)
             Text(LocalizedStringKey(title))
                 .font(.system(size: 12, weight: isPrimary ? .semibold : .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(isPrimary ? 0.95 : 0.78))
+                .foregroundStyle(isPrimary ? .primary : .secondary)
             Spacer()
         }
         .padding(.horizontal, 8)
@@ -524,7 +524,7 @@ public struct WhatsNewTourView: View {
             Button(action: navigateToPreviousPage) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.88))
+                    .foregroundStyle(.primary.opacity(0.88))
                     .frame(width: 30, height: 30)
                     .systemLiquidGlassCircularButtonLabel()
                     .frame(width: 44, height: 44)
@@ -540,7 +540,7 @@ public struct WhatsNewTourView: View {
             Button(action: onFinish) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.88))
+                    .foregroundStyle(.primary.opacity(0.88))
                     .frame(width: 30, height: 30)
                     .systemLiquidGlassCircularButtonLabel()
                     .frame(width: 44, height: 44)
@@ -790,7 +790,7 @@ private struct GooeyPageIndicator: View, @MainActor Animatable {
                     width: dotDiameter,
                     height: dotDiameter
                 )
-                context.fill(Path(ellipseIn: dotRect), with: .color(Color.white.opacity(0.32)))
+                context.fill(Path(ellipseIn: dotRect), with: .color(Color.secondary.opacity(0.45)))
             }
 
             let clampedIndex = min(max(selectedIndex, 0), CGFloat(pageCount - 1))

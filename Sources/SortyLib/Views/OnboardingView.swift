@@ -1403,6 +1403,7 @@ private enum OnboardingFileIconProvider {
 private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
     let file: OnboardingOrbitFile
     let icon: NSImage
+    @Environment(\.colorScheme) private var colorScheme
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.file.id == rhs.file.id && lhs.icon === rhs.icon
@@ -1432,7 +1433,12 @@ private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
                 .fill(Color.primary.opacity(0.025))
         )
         .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
-        .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
+        .shadow(
+            color: .black.opacity(colorScheme == .dark ? 0.30 : 0.10),
+            radius: 16,
+            x: 0,
+            y: 12
+        )
         .accessibilityHidden(true)
     }
 }

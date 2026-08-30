@@ -287,7 +287,7 @@ struct OnboardingPersonaCard: View {
             return SortyDesignSystem.Colors.resolvedAccent.opacity(0.10)
         }
 
-        return Color.white.opacity(isHovered ? 0.13 : 0.08)
+        return Color.primary.opacity(isHovered ? 0.08 : 0.045)
     }
 
     private var cardStroke: Color {
@@ -337,7 +337,7 @@ struct OnboardingCustomPersonaCard: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(isHovered ? 0.13 : 0.08),
+                                Color.primary.opacity(isHovered ? 0.08 : 0.045),
                                 selectionAccent.opacity(isSelected ? 0.16 : 0.08)
                             ],
                             startPoint: .topLeading,

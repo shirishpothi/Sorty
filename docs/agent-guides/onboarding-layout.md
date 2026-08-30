@@ -44,7 +44,9 @@ inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
 Cache invariant retained-layer palettes at construction and only rebuild
 variant-specific colors when the variant changes.
-The intro orbit keeps noninteractive system Liquid Glass SwiftUI chips mounted. Its
+The intro orbit keeps noninteractive system Liquid Glass SwiftUI chips mounted. Use
+semantic low-opacity fills and adaptive AppKit background colors for onboarding
+cards and access education so their contrast remains correct in both appearances. Its
 idle sine components run as additive Core Animation keyframes sampled at the
 interaction refresh rate; do not reduce them to a fixed sample count because
 the slower cycles expose stepped velocity. Each finished chip is rasterized at

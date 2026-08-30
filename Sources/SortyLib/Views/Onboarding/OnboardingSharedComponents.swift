@@ -123,7 +123,7 @@ struct GeneratePersonaButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.white.opacity(isHovered ? 0.13 : 0.08))
+                        .fill(Color.primary.opacity(isHovered ? 0.08 : 0.045))
                 )
                 .systemLiquidGlassBackground(cornerRadius: cornerRadius)
                 .overlay(

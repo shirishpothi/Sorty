@@ -1293,8 +1293,9 @@ public struct CompletionStepView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
+                .fill(Color.orange.opacity(0.035))
         )
+        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.orange.opacity(0.15), lineWidth: 1)
