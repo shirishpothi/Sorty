@@ -1430,16 +1430,26 @@ private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.primary.opacity(0.025))
+                .fill(cardFill)
         )
-        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+        .systemLiquidGlassBackground(
+            cornerRadius: 16,
+            clear: colorScheme == .light,
+            interactive: false
+        )
         .shadow(
-            color: .black.opacity(colorScheme == .dark ? 0.30 : 0.10),
-            radius: 16,
+            color: .black.opacity(colorScheme == .dark ? 0.30 : 0.06),
+            radius: colorScheme == .dark ? 16 : 10,
             x: 0,
-            y: 12
+            y: colorScheme == .dark ? 12 : 6
         )
         .accessibilityHidden(true)
+    }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+            ? Color.primary.opacity(0.025)
+            : Color(nsColor: .controlBackgroundColor).opacity(0.58)
     }
 }
 
