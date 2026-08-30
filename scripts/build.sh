@@ -284,35 +284,40 @@ run_build_with_compact_status() {
     : > "${log_file}"
     rm -f "${status_marker}"
 
-    set +e
-    local last_captured_status_second=-2
-    local last_captured_status=""
-    # SwiftPM buffers progress when stdout is a pipe. Keep a pseudo-terminal on
-    # the compiler side so filenames reach this formatter while work is active.
-    script -q /dev/null "$@" 2>&1 | while IFS= read -r line; do
-        local status_line=""
-        line=${line//$'\r'/}
-        line=${line//$'\004'/}
-        line=${line//$'\b'/}
-        printf '%s\n' "${line}" >> "${log_file}"
-        status_line=$(format_compact_build_status "${line}") || continue
-        if [ -n "${status_line}" ] && [ "${replaces_status_line}" = "true" ]; then
-            printf '\r\033[K%s' "${status_line}"
-            : > "${status_marker}"
-        elif [ -n "${status_line}" ] &&
-            [ "${status_line}" != "${last_captured_status}" ] &&
-            [ $((SECONDS - last_captured_status_second)) -ge 2 ]; then
-            printf '  • %s\n' "${status_line}"
-            last_captured_status_second=${SECONDS}
-            last_captured_status="${status_line}"
-        fi
-    done
-    local status=${PIPESTATUS[0]}
-    set -e
+    local status
+    if [ "${replaces_status_line}" = "true" ] && [ "${1##*/}" = "swift" ]; then
+        # Let SwiftPM own its native one-line terminal progress. `script` gives
+        # it a terminal while recording the same output for failure diagnostics.
+        set +e
+        script -q -e -F "${log_file}" "$@"
+        status=$?
+        set -e
+    else
+        set +e
+        local last_captured_status_second=-2
+        local last_captured_status=""
+        "$@" 2>&1 | while IFS= read -r line; do
+            local status_line=""
+            printf '%s\n' "${line}" >> "${log_file}"
+            status_line=$(format_compact_build_status "${line}") || continue
+            if [ -n "${status_line}" ] && [ "${replaces_status_line}" = "true" ]; then
+                printf '\r\033[K%s' "${status_line}"
+                : > "${status_marker}"
+            elif [ -n "${status_line}" ] &&
+                [ "${status_line}" != "${last_captured_status}" ] &&
+                [ $((SECONDS - last_captured_status_second)) -ge 2 ]; then
+                printf '  • %s\n' "${status_line}"
+                last_captured_status_second=${SECONDS}
+                last_captured_status="${status_line}"
+            fi
+        done
+        status=${PIPESTATUS[0]}
+        set -e
 
-    if [ "${replaces_status_line}" = "true" ] && [ -f "${status_marker}" ]; then
-        printf '\r\033[K'
-        rm -f "${status_marker}"
+        if [ "${replaces_status_line}" = "true" ] && [ -f "${status_marker}" ]; then
+            printf '\r\033[K'
+            rm -f "${status_marker}"
+        fi
     fi
 
     if [ "${status}" -eq 0 ]; then
