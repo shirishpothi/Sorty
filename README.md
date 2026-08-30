@@ -25,13 +25,13 @@ A native macOS SwiftUI app that uses AI to organize files into relevant, semanti
   - Apple Foundation Models (on-device and privacy-focused; requires macOS 26+ with Apple Intelligence).
 - **Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
+- **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
 - **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
 - **Automatic Updates**: Background update checking on app launch (once per 24 hours) with manual check available via menu.
 - **Storage Locations**: Define custom storage destinations for organized files.
 - **HUD Notifications**: Non-intrusive visual feedback and actions for operations and status updates.
-- **Direct App Routing**: Finder, Shortcuts, widgets, notifications, and app controls navigate without external URL schemes. The old `sorty://` compatibility layer is disabled by default under Settings → Experimental while Sorty decides whether to remove it.
 - **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
 
 
@@ -160,6 +160,7 @@ flowchart LR
     subgraph EntryPoints["Entry Points"]
         User["User"]
         Finder["Finder right-click<br/>SortyFinderSync"]
+        Shortcuts["Shortcuts and App Intents<br/>sorty:// deeplinks"]
         WatchEvents["Watched folders<br/>FSEvents and schedules"]
         MenuBar["Menu bar extra<br/>global shortcuts"]
         Widgets["Widgets<br/>SortyWidgetSnapshotStore"]
@@ -170,6 +171,7 @@ flowchart LR
         MainWindow["MainWindowRootView<br/>ContentView navigation"]
         Coordinator["AppCoordinator<br/>background automation"]
         ExtensionListener["ExtensionListener"]
+        DeeplinkHandler["DeeplinkHandler"]
         WidgetSync["SortyWidgetSyncManager"]
     end
 
@@ -244,6 +246,8 @@ flowchart LR
     User --> SortyApp
     Finder --> ExtensionListener
     ExtensionListener --> MainWindow
+    Shortcuts --> DeeplinkHandler
+    DeeplinkHandler --> MainWindow
     WatchEvents --> Coordinator
     MenuBar --> MainWindow
     Widgets --> WidgetSync
@@ -344,6 +348,7 @@ Tests are located in `Tests/SortyTests/` and cover the following areas:
 
 - **Unit Tests**: Core functionality including file organization, duplicate detection, exclusion rules, response parsing, and utility functions.
 - **Integration Tests**: End-to-end workflows for AI providers, file system operations, and history management.
+- **Component Tests**: Individual modules such as personas, learnings manager, deeplinks, and security.
 
 Key test files include:
 - `SortyTests.swift` - Core organization logic
@@ -353,7 +358,23 @@ Key test files include:
 - `StorageLocationsReliabilityTests.swift` - Storage validation and reliability
 - `PrivacyPathMaskerTests.swift` - Privacy-sensitive path redaction
 - `CustomPersonaTests.swift` - Persona management
+- `DeeplinkTests.swift` - URL scheme handling
 
+## Deeplinks Reference
+
+Sorty supports the `sorty://` URL scheme for automation and external control:
+
+| Deeplink | Description |
+|----------|-------------|
+| `sorty://organize?path=<path>&persona=<id>&autostart=true` | Start organization |
+| `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
+| `sorty://learnings?action=stats` | Open Learnings statistics |
+| `sorty://settings?section=ai` | Open specific settings section |
+| `sorty://history` | Open organization history |
+| `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
+| `sorty://watched?action=add&path=<path>` | Add watched folder |
+| `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |
+| `sorty://help?section=<topic>` | Open help section |
 
 ## License
 

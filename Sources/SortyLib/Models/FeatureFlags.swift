@@ -9,18 +9,6 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
-    public static let legacyDeeplinksDefaultsKey = "legacyDeeplinksEnabled"
-
-    /// Restores the deprecated external `sorty://` compatibility layer.
-    ///
-    /// Disabled by default. Enable it temporarily with:
-    /// ```
-    /// defaults write com.sorty.app legacyDeeplinksEnabled -bool true
-    /// ```
-    public static var legacyDeeplinksEnabled: Bool {
-        UserDefaults.standard.bool(forKey: legacyDeeplinksDefaultsKey)
-    }
-
     /// Legacy preference for Finder Integration.
     ///
     /// Finder Integration is a core app feature. The key remains for migration and

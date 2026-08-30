@@ -17,7 +17,6 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|
-| Legacy Deep Links | `legacyDeeplinksEnabled` | `false` | Temporarily restores external `sorty://` automation links. This compatibility layer may be removed. |
 | Finder Integration | `finderIntegrationEnabled` | `true` | Legacy preference for Finder Integration. Finder Integration is a core app feature; the key remains for migration and older installs, and new installs default to enabled. |
 | Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover; hides API keys with manual reveal |
 | Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Blocks all internet (network) connections from the app |
@@ -26,22 +25,6 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
 | Shaders | `shadersEnabled` (see note) | `false` | Recovered shader gallery in the Help menu |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
-
-### Legacy deep links
-
-The direct-routing architecture is always active. Legacy external links are accepted only when this flag is enabled in Settings → Experimental or with:
-
-```bash
-defaults write com.sorty.app legacyDeeplinksEnabled -bool true
-```
-
-Disable the compatibility layer again with:
-
-```bash
-defaults delete com.sorty.app legacyDeeplinksEnabled
-```
-
-The Experimental page links to GitHub for users who depend on this feature and want Sorty to keep it. Consent-gated PostHog events record only whether the compatibility layer was enabled, disabled, or used.
 
 ### Harness Mode
 

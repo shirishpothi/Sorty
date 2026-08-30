@@ -3,11 +3,11 @@ import AppKit
 
 public enum WindowRoutingUserInfoKey {
     public static let targetSessionID = "targetSessionID"
-    public static let destination = "destination"
+    public static let deeplinkURLString = "deeplinkURLString"
 }
 
 public extension Notification.Name {
-    static let routeDestinationInMainWindow = Notification.Name("SortyRouteDestinationInMainWindow")
+    static let routeDeeplinkInMainWindow = Notification.Name("SortyRouteDeeplinkInMainWindow")
     static let presentSteeringPromptsInMainWindow = Notification.Name("SortyPresentSteeringPromptsInMainWindow")
     static let openOrganizeDirectoryPickerInMainWindow = Notification.Name("SortyOpenOrganizeDirectoryPickerInMainWindow")
     static let showWatchedFolders = Notification.Name("SortyShowWatchedFolders")
@@ -22,8 +22,12 @@ public extension Notification {
         return targetSessionID == sessionID.uuidString
     }
 
-    var routedDestination: AppDestination? {
-        userInfo?[WindowRoutingUserInfoKey.destination] as? AppDestination
+    var routedDeeplinkURL: URL? {
+        guard let urlString = userInfo?[WindowRoutingUserInfoKey.deeplinkURLString] as? String else {
+            return nil
+        }
+
+        return URL(string: urlString)
     }
 }
 
@@ -187,17 +191,28 @@ public final class MainWindowRouter {
     }
 
     @discardableResult
-    public func route(_ destination: AppDestination) -> Bool {
+    public func routeDeeplink(_ url: URL) -> Bool {
         guard let preferredSessionID else { return false }
-        return route(destination, to: preferredSessionID)
+
+        return routeDeeplink(url, to: preferredSessionID)
     }
 
-    private func route(_ destination: AppDestination, to sessionID: UUID) -> Bool {
+    @discardableResult
+    public func routeFinderDeeplink(_ url: URL) -> Bool {
+        pruneClosedSessions()
+
+        let availableSessions = sessions.filter { !$0.value.isBusy }
+        guard let targetSessionID = preferredSessionID(in: availableSessions) else { return false }
+        return routeDeeplink(url, to: targetSessionID)
+    }
+
+    private func routeDeeplink(_ url: URL, to sessionID: UUID) -> Bool {
+
         NotificationCenter.default.post(
-            name: .routeDestinationInMainWindow,
+            name: .routeDeeplinkInMainWindow,
             object: nil,
             userInfo: Self.scopedUserInfo(
-                [WindowRoutingUserInfoKey.destination: destination],
+                [WindowRoutingUserInfoKey.deeplinkURLString: url.absoluteString],
                 targetSessionID: sessionID
             )
         )

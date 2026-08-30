@@ -26,6 +26,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `Managers/` | `@MainActor ObservableObject` state managers |
 | `Organizer/` | Core workflow orchestration (`FolderOrganizer` state machine) |
 | `Learnings/` | ML-based preference learning (`LearningsManager`, `LearningsAnalyzer`, `RuleInducer`) |
+| `Utilities/` | Keychain, logging, deeplinks, security |
 | `DesignSystem/` | Shared design tokens and reusable UI components |
 | `FileSystem/` | File system access and scanning |
 | `FinderExtension/` | Finder extension IPC helpers |
@@ -74,11 +75,10 @@ Run `make quality-report` before prompt tuning. The report includes placement ac
 
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
-## App routing
-
-Native entry points route `AppDestination` values through `MainWindowRouter`. Finder actions use app-group preferences and distributed notifications. App Intents, menu-bar actions, HUD actions, and notifications call the router directly.
-
-`LegacyDeeplinkParser` is a temporary external compatibility layer. It accepts `sorty://` URLs only when `legacyDeeplinksEnabled` is explicitly enabled in Settings → Experimental or in the `com.sorty.app` defaults domain.
+## Deeplinks
+URL scheme `sorty://` — see `DeeplinkHandler` for routes:
+- `sorty://organize?path=/path&persona=Developer&autostart=true`
+- `sorty://settings`
 
 ## Finder Extension
 Uses App Groups (`group.com.sorty.app`) for IPC. Finder Integration is a core app feature and defaults on for new installs.
@@ -129,3 +129,4 @@ Always pair buttons with `HapticFeedbackManager.shared.tap()` on press, and use 
 - **Add AI provider**: Create client in `AI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`
 - **Add settings option**: Update `AIConfig`, `SettingsViewModel`, `SettingsView`
 - **Add new view**: Create in `Views/`, add case to `AppState.AppView`, add navigation in `ContentView`
+- **Test deeplinks**: Set `XCUITEST_DEEPLINK` environment variable before launch

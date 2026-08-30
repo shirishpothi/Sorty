@@ -69,8 +69,6 @@ The static GitHub Pages export cannot host a request-forwarding reverse proxy. P
 
 The Mac app also uses consent-gated PostHog feature flags to populate **Settings → Experimental**. Enabled flags whose keys begin with `labs-` appear there; an optional JSON payload may provide bounded `title`, `description`, and `system_image` strings. Reloads are limited to once every five minutes, at most 20 flags are rendered, flag evaluation events remain disabled, and flags are cleared from the UI when analytics consent is revoked or internet connections are blocked.
 
-The built-in legacy deep-link experiment records `app:feature_used` with the bounded `experimental` / `legacy_deeplinks` identifiers. A user turning it back on records `action = reenabled`; turning it off records `action = disabled`; opening a legacy link records `action = opened`. Count users who opt back in with a unique-users insight filtered to `feature = experimental`, `subfeature = legacy_deeplinks`, and `action = reenabled`. No URL, path, or query value is captured.
-
 The website uses the same `labs-` key prefix through the typed hooks in `website/lib/feature-flags.ts`. Components should use `useLabsFeatureEnabled`, `useLabsFeatureVariant`, or `useLabsFeaturePayload`; the hooks read cached assignments without emitting feature-flag exposure events, and payloads are limited to bounded `title`, `description`, and `system_image` values. Denying website analytics clears the rendered Labs state and stops further flag use or exposure events.
 
 ## Adding instrumentation

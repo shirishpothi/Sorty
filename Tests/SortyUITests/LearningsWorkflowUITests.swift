@@ -13,7 +13,7 @@ final class LearningsWorkflowUITests: XCTestCase {
 
     func testOrganizeLearningsChipHiddenWithoutConsent() throws {
         launchApp(environment: [
-            "XCUITEST_DESTINATION": "organize:/tmp",
+            "XCUITEST_DEEPLINK": "sorty://organize?path=/tmp",
             "XCUITEST_LEARNINGS_CONSENT": "0"
         ])
 
@@ -25,7 +25,7 @@ final class LearningsWorkflowUITests: XCTestCase {
 
     func testOrganizeLearningsChipVisibleWithSeededProfile() throws {
         launchApp(environment: [
-            "XCUITEST_DESTINATION": "organize:/tmp",
+            "XCUITEST_DEEPLINK": "sorty://organize?path=/tmp",
             "XCUITEST_LEARNINGS_CONSENT": "1",
             "XCUITEST_SEED_LEARNINGS_PROFILE": "active_rule"
         ])
@@ -37,7 +37,7 @@ final class LearningsWorkflowUITests: XCTestCase {
 
     func testHistoryFeedbackHiddenWithoutConsent() throws {
         launchApp(environment: [
-            "XCUITEST_DESTINATION": "history",
+            "XCUITEST_DEEPLINK": "sorty://history",
             "XCUITEST_LEARNINGS_CONSENT": "0",
             "XCUITEST_SEED_HISTORY_ENTRY": "1"
         ])
@@ -52,7 +52,7 @@ final class LearningsWorkflowUITests: XCTestCase {
 
     func testHistoryFeedbackVisibleAndActionableWithConsent() throws {
         launchApp(environment: [
-            "XCUITEST_DESTINATION": "history",
+            "XCUITEST_DEEPLINK": "sorty://history",
             "XCUITEST_LEARNINGS_CONSENT": "1",
             "XCUITEST_SEED_LEARNINGS_PROFILE": "active_rule",
             "XCUITEST_SEED_HISTORY_ENTRY": "1"

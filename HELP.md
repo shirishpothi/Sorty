@@ -9,6 +9,7 @@
 6. [Managing Duplicates](#managing-duplicates)
 7. [Watched Folders](#watched-folders)
 8. [Exclusion Rules](#exclusion-rules)
+10. [App Deeplinks](#app-deeplinks)
 11. [Keyboard Shortcuts](#keyboard-shortcuts)
 12. [Menu Bar Commands](#menu-bar-commands)
 13. [Version & Updates](#version--updates)
@@ -183,6 +184,12 @@ learnings-cli --clear
 sorty learnings
 ```
 
+### Deeplinks
+
+| Deeplink | Description |
+|----------|-------------|
+| `sorty://learnings` | Open Learnings dashboard |
+| `sorty://learnings?action=stats` | View learning statistics |
 
 ---
 
@@ -236,6 +243,81 @@ When enabled, "deleted" duplicates aren't immediately removed:
 
 You can scan any folder for duplicates without changing your main organization target. Use the "Settings" button in the Duplicates view to configure scanning depth and file filters.
 
+---
+
+## App Deeplinks
+
+The app provides comprehensive URL schemes to control all aspects of the application.
+
+### Organization Routes
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://organize` | Open the organization view |
+| `path` | Path to organize |
+| `persona` | ID of persona (sorty_general, developer, etc.). |
+| `autostart=true` | Automatically begin organization |
+
+### Duplicates
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://duplicates` | Open duplicates view |
+| `path` | Path to scan |
+| `autostart=true` | Automatically begin scan |
+
+### Persona Management
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://persona` | | Open persona management |
+| | `action=generate` | Generate a new persona |
+| | `prompt=<description>` | Description for persona generation |
+| | `generate=true` | Trigger generation immediately |
+
+**Examples:**
+- `sorty://persona` - Open persona view
+- `sorty://persona?action=generate&prompt=sci-fi%20ebook%20collector` - Generate persona from description
+
+### Watched Folders
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://watched` | | Open watched folders view |
+| | `action=add` | Add a new watched folder |
+| | `path=<folder_path>` | Path to add as watched |
+
+**Examples:**
+- `sorty://watched` - Open watched folders
+- `sorty://watched?action=add&path=/Users/me/Downloads` - Add Downloads as watched
+
+### Rules
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://rules` | | Open exclusion rules |
+| | `action=add` | Add a new rule |
+| | `type=<pattern\|folder\|extension>` | Type of exclusion rule |
+| | `pattern=<glob_pattern>` | Pattern to exclude (e.g., "*.tmp") |
+
+**Examples:**
+- `sorty://rules` - Open rules view
+- `sorty://rules?action=add&type=pattern&pattern=*.log` - Add pattern rule
+
+### Health
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+
+### Navigation Routes
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://settings` | | Open Settings |
+| `sorty://learnings` | | Open Learnings |
+| `sorty://history` | | Open History |
+| `sorty://help` | | Open Help |
+| `sorty://help` | `section=updates` | Jump to updates section |
 
 ---
 

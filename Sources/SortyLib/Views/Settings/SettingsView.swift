@@ -235,6 +235,7 @@ struct SettingsView: View {
         case .rules: return "organize_rules"
         case .tuning: return "parameter_tuning"
         case .automation: return "automation"
+        case .deeplinks: return "deeplinks"
         case .finder: return "finder_integration"
         case .notifications: return "notifications"
         case .permissions: return "permissions"
@@ -398,6 +399,8 @@ struct SettingsView: View {
             AutomationSettingsView()
                 .environmentObject(viewModel)
                 .environmentObject(appState)
+        case .deeplinks:
+            DeeplinkSettingsView()
         case .finder:
             FinderIntegrationSettingsView()
         case .notifications:

@@ -230,7 +230,7 @@ final class AppUITests: XCTestCase {
 
     func testHistoryFilterActuallyFiltersEntries() throws {
         app.terminate()
-        app.launchEnvironment["XCUITEST_DESTINATION"] = "history"
+        app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://history"
         app.launchEnvironment["XCUITEST_SEED_HISTORY_ENTRY"] = "filter_set"
         app.launch()
 

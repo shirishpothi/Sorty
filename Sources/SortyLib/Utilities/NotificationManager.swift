@@ -1651,8 +1651,9 @@ public class NotificationManager: ObservableObject {
             userInfo: userInfo,
             targetSessionID: originSessionID
         )
-        if didQueue {
-            NSApplication.shared.activate(ignoringOtherApps: true)
+        if didQueue,
+           let openURL = DeeplinkHandler.url(for: .open(path: nil)) {
+            NSWorkspace.shared.open(openURL)
         }
     }
 

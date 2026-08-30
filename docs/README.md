@@ -14,6 +14,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [Watched Folders](#watched-folders)
 - [Finder Integration](#finder-integration)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
+- [App Deeplinks](#app-deeplinks)
 - [CLI Tool](#cli-tool)
 - [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)
@@ -239,6 +240,22 @@ folder selected so you can right-click it yourself.
 | ⌘Z | Undo |
 | ⎋ | Cancel |
 
+---
+
+## App Deeplinks
+
+Control Sorty via URL schemes.
+
+### Examples
+
+```
+sorty://organize?path=/Users/me/Downloads&autostart=true
+sorty://duplicates?path=/Users/me/Documents
+sorty://persona?action=generate&prompt=sci-fi%20collector
+sorty://watched?action=add&path=/Users/me/Downloads
+sorty://rules?action=add&type=pattern&pattern=*.log
+sorty://settings
+```
 
 ---
 

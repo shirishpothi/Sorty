@@ -71,6 +71,10 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case automationLaunchAtLogin = "settings.automation.launch-at-login"
     case automationKeepInBackground = "settings.automation.keep-in-background"
     case automationHideDockIcon = "settings.automation.hide-dock-icon"
+    case deeplinksCore = "settings.deeplinks.core"
+    case deeplinksOrganization = "settings.deeplinks.organization"
+    case deeplinksAutomation = "settings.deeplinks.automation"
+    case deeplinksFinder = "settings.deeplinks.finder"
     case finderIntegration = "settings.finder.integration"
     case finderCheckStatus = "settings.finder.check-status"
     case finderOrganize = "settings.finder.organize"
@@ -168,6 +172,8 @@ public extension SettingsFocusTarget {
              .automationKeepInBackground, .automationHideDockIcon:
             return .automation
 
+        case .deeplinksCore, .deeplinksOrganization, .deeplinksAutomation, .deeplinksFinder:
+            return .deeplinks
 
         case .finderIntegration, .finderCheckStatus, .finderOrganize, .finderWatch, .finderExclude,
              .finderExtension, .finderAutomationPermission:
@@ -216,6 +222,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     case rules = "Organize Rules"
     case tuning = "Parameter Tuning"
     case automation = "Automation"
+    case deeplinks = "Deeplinks"
     case finder = "Finder Integration"
     case notifications = "Notifications"
     case permissions = "Permissions"
@@ -230,7 +237,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .provider, .strategy, .rules, .tuning:
             return .aiAndOrganization
-        case .automation, .finder, .notifications:
+        case .automation, .deeplinks, .finder, .notifications:
             return .features
         case .permissions, .advanced, .troubleshooting, .help, .experimental:
             return .system
@@ -248,6 +255,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy: return "wand.and.stars"
         case .tuning: return "slider.horizontal.3"
         case .automation: return "bolt.circle"
+        case .deeplinks: return "link.badge.plus"
         case .finder: return "folder.badge.plus"
         case .notifications: return "bell"
         case .permissions: return "hand.raised.fill"
@@ -265,6 +273,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy: return .orange
         case .tuning: return .green
         case .automation: return .green
+        case .deeplinks: return .cyan
         case .finder: return .cyan
         case .notifications: return .pink
         case .permissions: return .blue
@@ -287,6 +296,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return ["temperature", "creativity", "strictness", "parameters", "timeouts", "quality"]
         case .automation:
             return ["automation", "watched folders", "auto organize", "background", "scheduler", "spring cleaning", "folder trigger", "custom model", "global model", "launch at login", "login item", "dock icon", "menu bar app"]
+        case .deeplinks:
+            return ["deeplink", "deeplinks", "deep link", "url scheme", "sorty://", "shortcuts", "raycast", "automation links", "scripts", "downloads", "desktop", "documents", "open url"]
         case .finder:
             return ["finder", "quick action", "organize action", "watch action", "exclude action", "extension", "service", "automation permission", "repair"]
         case .notifications:
@@ -372,6 +383,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Launch at Login", "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"], target: .automationLaunchAtLogin),
                 feature("Keep in Background", "Continue monitoring folders even when all windows are closed.", keywords: ["background activity", "background app", "folder watching"], target: .automationKeepInBackground),
                 feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .automationHideDockIcon)
+            ]
+        case .deeplinks:
+            return [
+                feature("Core Deeplinks", "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"], target: .deeplinksCore),
+                feature("Organization Deeplinks", "Copy links for organize, duplicates, scan, and storage workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"], target: .deeplinksOrganization),
+                feature("Automation Deeplinks", "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"], target: .deeplinksAutomation),
+                feature("Finder Deeplinks", "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"], target: .deeplinksFinder)
             ]
         case .finder:
             return [
@@ -495,6 +513,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return nil
         case .automation:
             return .automationGlobalModel
+        case .deeplinks:
+            return .deeplinksCore
         case .finder:
             return .finderIntegration
         case .notifications:

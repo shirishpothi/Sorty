@@ -2,7 +2,7 @@
 //  HelpSettingsView.swift
 //  Sorty
 //
-//  Help and support settings
+//  Help, support, and deeplink settings pages
 //
 
 import AppKit
@@ -261,6 +261,114 @@ private struct GitHubMarkIcon: View {
     }
 }
 
+struct DeeplinkSettingsView: View {
+    @State private var isShowingEncodingInfo = false
+
+    private var groups: [DeeplinkGroup] {
+        var organizationEntries = [
+            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
+            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files with an optional path and autostart."),
+            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.")
+        ]
+
+        return [
+            DeeplinkGroup(
+                title: "Core",
+                icon: "app.badge",
+                color: .blue,
+                focusTarget: .deeplinksCore,
+                entries: [
+                    DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
+                    DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
+                    DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support with an optional section."),
+                    DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history.")
+                ]
+            ),
+            DeeplinkGroup(
+                title: "Organization",
+                icon: "folder.badge.gearshape",
+                color: .green,
+                focusTarget: .deeplinksOrganization,
+                entries: organizationEntries
+            ),
+            DeeplinkGroup(
+                title: "Automation",
+                icon: "bolt.circle",
+                color: .orange,
+                focusTarget: .deeplinksAutomation,
+                entries: [
+                    DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
+                    DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
+                    DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
+                    DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
+                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=stats", summary: "Open Learnings with action: stats, withdraw, export, import, or clear."),
+                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup.")
+                ]
+            ),
+            DeeplinkGroup(
+                title: "Finder",
+                icon: "folder.badge.plus",
+                color: .cyan,
+                focusTarget: .deeplinksFinder,
+                entries: [
+                    DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder."),
+                    DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders."),
+                    DeeplinkEntry(title: "Exclude from Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
+                    DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
+                ]
+            )
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Label("Deeplink Library", systemImage: "link.badge.plus")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        isShowingEncodingInfo.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+                    .popover(isPresented: $isShowingEncodingInfo, arrowEdge: .bottom) {
+                        Text("If you build a link yourself, URL-encode the folder path and prompt so spaces and special characters work correctly.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+                    .help("About generating deeplinks")
+                    .accessibilityLabel("Deeplink encoding information")
+                }
+
+                Text("Copy `sorty://` URLs for Shortcuts, Raycast, AppleScript, shell scripts, and other launchers.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 22) {
+                ForEach(groups) { group in
+                    DeeplinkGroupSection(group: group)
+                }
+            }
+        }
+    }
+}
+
 private struct HelpIconLink: View {
     let title: String
     let icon: String
@@ -335,6 +443,121 @@ private struct SupportDetailChip: View {
     }
 }
 
+private struct DeeplinkGroup: Identifiable {
+    let title: String
+    let icon: String
+    let color: Color
+    let focusTarget: SettingsFocusTarget
+    let entries: [DeeplinkEntry]
+
+    var id: String { title }
+}
+
+private struct DeeplinkEntry: Identifiable {
+    let title: String
+    let url: String
+    let summary: String
+
+    var id: String { url }
+}
+
+private struct DeeplinkGroupSection: View {
+    let group: DeeplinkGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(LocalizedStringKey(group.title))
+            } icon: {
+                Image(systemName: group.icon)
+            }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(group.color)
+
+            VStack(spacing: 0) {
+                ForEach(group.entries) { entry in
+                    DeeplinkEntryRow(entry: entry, color: group.color)
+
+                    if entry.id != group.entries.last?.id {
+                        Divider()
+                            .padding(.leading, 12)
+                    }
+                }
+            }
+        }
+        .settingsFocusable(group.focusTarget)
+    }
+}
+
+private struct DeeplinkEntryRow: View {
+    let entry: DeeplinkEntry
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LocalizedStringKey(entry.title))
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(LocalizedStringKey(entry.summary))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(minWidth: 150, maxWidth: 220, alignment: .leading)
+
+            Text(entry.url)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            copyButton
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private var copyButton: some View {
+        Button {
+            copy(entry.url)
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(copied ? .green : color)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(copied ? .green.opacity(0.14) : color.opacity(0.08))
+                )
+                .symbolReplaceTransition(animationValue: copied)
+        }
+        .buttonStyle(.plain)
+        .help("Copy \(entry.title) deeplink")
+        .accessibilityLabel("Copy \(entry.title) deeplink")
+        .accessibilityValue(copied ? "Copied" : "")
+    }
+
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        HapticFeedbackManager.shared.tap()
+
+        copied = true
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
+            copied = false
+        }
+    }
+}
+
 #Preview("Help & Support") {
     ScrollView {
         HelpSettingsView()
@@ -343,4 +566,12 @@ private struct SupportDetailChip: View {
             .environmentObject(AppState())
     }
     .frame(width: 560)
+}
+
+#Preview("Deeplinks") {
+    ScrollView {
+        DeeplinkSettingsView()
+            .padding()
+    }
+    .frame(width: 620)
 }

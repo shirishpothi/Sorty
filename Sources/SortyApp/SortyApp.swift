@@ -419,6 +419,7 @@ struct SortyApp: App {
     @StateObject private var storageLocationsManager = StorageLocationsManager()
     @StateObject private var exclusionRules = ExclusionRulesManager()
     @StateObject private var extensionListener = ExtensionListener()
+    @StateObject private var deeplinkHandler = DeeplinkHandler.shared
     @StateObject private var learningsManager = LearningsManager()
     @StateObject private var automationManager = AutomationManager()
     @StateObject private var openAIAuthManager: SubscriptionAuthManager
@@ -501,13 +502,20 @@ struct SortyApp: App {
     private var productionScenes: some Scene {
         WindowGroup("Sorty", id: "main") {
             if ApplicationMover.shouldLaunchMainUI {
-                mainWindowContent()
+                mainWindowContent(launchRequest: .constant(nil))
             }
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
         .defaultLaunchBehavior(.presented)
 
+        WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
+            if ApplicationMover.shouldLaunchMainUI {
+                mainWindowContent(launchRequest: launchRequest)
+            }
+        }
+        .windowStyle(.automatic)
+        .defaultSize(width: 1100, height: 750)
         .commands {
             SortyCommands()
         }
@@ -532,7 +540,7 @@ struct SortyApp: App {
             // never opened without SORTY_ACCENT_PROTOTYPE=1.
             if ApplicationMover.shouldLaunchMainUI,
                ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
-                mainWindowContent(accent: color)
+                mainWindowContent(launchRequest: .constant(nil), accent: color)
                     .environment(\.isAccentPrototypeWindow, true)
             }
         }
@@ -542,10 +550,13 @@ struct SortyApp: App {
     }
 
     @ViewBuilder
-    private func mainWindowContent(accent: Color? = nil) -> some View {
+    private func mainWindowContent(
+        launchRequest: Binding<WindowLaunchRequest?>,
+        accent: Color? = nil
+    ) -> some View {
         mainWindowIntegrationHandlers(
             mainWindowConfigurationHandlers(
-                mainWindowRootView(accent: accent)
+                mainWindowRootView(launchRequest: launchRequest, accent: accent)
             )
         )
     }
@@ -554,7 +565,7 @@ struct SortyApp: App {
         content
             .onAppear {
                 appDelegate.scheduleRecoveryWindow {
-                    AnyView(mainWindowContent())
+                    AnyView(mainWindowContent(launchRequest: .constant(nil)))
                 }
             }
             .task {
@@ -604,8 +615,12 @@ struct SortyApp: App {
             }
     }
 
-    private func mainWindowRootView(accent: Color?) -> some View {
+    private func mainWindowRootView(
+        launchRequest: Binding<WindowLaunchRequest?>,
+        accent: Color?
+    ) -> some View {
         MainWindowRootView(
+            launchRequest: launchRequest.wrappedValue,
             coordinator: coordinator,
             history: organizationHistory,
             updateManager: updateManager
@@ -619,6 +634,7 @@ struct SortyApp: App {
         .environmentObject(storageLocationsManager)
         .environmentObject(exclusionRules)
         .environmentObject(extensionListener)
+        .environmentObject(deeplinkHandler)
         .environmentObject(learningsManager)
         .environmentObject(automationManager)
         .environmentObject(openAIAuthManager)
