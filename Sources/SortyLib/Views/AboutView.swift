@@ -40,10 +40,11 @@ struct AboutView: View {
                 .font(.system(size: 24, weight: .bold, design: .rounded))
             
             // Description
-            Text("Sorty: The FOSS File Organiser\nLearn from your patterns and keep your workspace tidy.")
+            Text("The FOSS File Organiser")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             
             Spacer().frame(height: 2)
             
@@ -169,12 +170,11 @@ struct AboutView: View {
                 }
             }
             
-            Spacer().frame(height: 6)
+            Spacer().frame(height: 0)
 
             Text("© 2026 Shirish Pothi")
                 .font(.caption)
                 .foregroundColor(.secondary.opacity(0.6))
-                .padding(.top, 2)
         }
         .padding(.horizontal, 28)
         .padding(.top, 24)
@@ -202,9 +202,9 @@ private struct AboutAppIconEasterEgg: View {
     @StateObject private var carousel = AboutIconCarousel()
     @State private var iconHovered = false
 
-    private let iconSize: CGFloat = 128
-    private let stageWidth: CGFloat = 176
-    private let stageHeight: CGFloat = 148
+    private let iconSize: CGFloat = 152
+    private let stageWidth: CGFloat = 200
+    private let stageHeight: CGFloat = 172
 
     var body: some View {
         Button {

@@ -65,7 +65,7 @@ struct FinderIntegrationSettingsView: View {
                         .opacity(0.35)
 
                     Label {
-                        Text("In Finder, right-click a folder to use Organize, Watch, or Exclude. This does not require Accessibility access.")
+                        Text("In Finder, right-click a folder to use Organize, Watch, or Exclude.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
