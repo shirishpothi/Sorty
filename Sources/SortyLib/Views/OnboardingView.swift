@@ -2892,11 +2892,67 @@ struct OnboardingIconSliver: View {
     let color: Color
     let fontSize: CGFloat
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweepProgress: CGFloat = 0
+    private let sliverDuration: TimeInterval = 1.25
+
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: fontSize))
             .foregroundStyle(color)
+            .modifier(
+                OnboardingIconSweep(
+                    progress: reduceMotion ? 0.5 : sweepProgress,
+                    reduceMotion: reduceMotion,
+                    tint: color
+                )
+            )
+            .onAppear {
+                guard !reduceMotion else { return }
+                sweepProgress = 0
+                HapticSequenceManager.shared.playShimmerWave(duration: sliverDuration)
+                withAnimation(.easeInOut(duration: sliverDuration)) {
+                    sweepProgress = 1
+                }
+            }
             .accessibilityHidden(false)
+    }
+}
+
+private struct OnboardingIconSweep: ViewModifier, Animatable {
+    var progress: CGFloat
+    let reduceMotion: Bool
+    let tint: Color
+
+    nonisolated var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let sweep = min(max(progress, 0), 1)
+        let envelope = sin(sweep * .pi)
+        let glow = reduceMotion ? 0 : envelope * envelope
+        let overlayOpacity = Double(glow)
+
+        return content
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(color: tint.opacity(0.25), location: 0),
+                        .init(color: tint, location: max(0, sweep - 0.16)),
+                        .init(color: .white, location: sweep),
+                        .init(color: tint, location: min(1, sweep + 0.16)),
+                        .init(color: tint.opacity(0.25), location: 1)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .mask { content }
+                .opacity(overlayOpacity)
+                .shadow(color: tint.opacity(glow * 0.8), radius: glow * 13)
+            }
+            .shadow(color: tint.opacity(glow * 0.52), radius: glow * 11)
     }
 }
 

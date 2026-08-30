@@ -24,9 +24,11 @@ public struct WorkflowSelectionStepView: View {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Image(systemName: "person.crop.circle.badge.checkmark")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.teal)
+                    OnboardingIconSliver(
+                        systemName: "person.crop.circle.badge.checkmark",
+                        color: .teal,
+                        fontSize: 48
+                    )
                     
                     Text("Choose Your Workflow")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -82,22 +84,21 @@ public struct WorkflowSelectionStepView: View {
                 }
                 .frame(maxWidth: 420)
                     
-                // Divider with "or"
-                HStack {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                    Text("or")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                }
-                .frame(maxWidth: 420)
-                    
                 if !customPersonaStore.customPersonas.isEmpty {
+                    HStack {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
+                        Text("or")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
+                    }
+                    .frame(maxWidth: 420)
+
                     Group {
                         if customPersonaStore.customPersonas.count > 2 {
                             VStack(spacing: 4) {
@@ -124,12 +125,30 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
 
-                    GeneratePersonaButton(style: .compact, title: "Generate Another", subtitle: "Try a different custom workflow idea", action: presentPersonaGenerator)
-                    .frame(maxWidth: 420)
-                } else {
-                    GeneratePersonaButton(action: presentPersonaGenerator)
-                        .frame(maxWidth: 420)
                 }
+
+                // Let users choose a built-in persona or generate a custom one.
+                HStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                    Text("or")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                }
+                .frame(maxWidth: 420)
+
+                GeneratePersonaButton(
+                    style: .compact,
+                    title: customPersonaStore.customPersonas.isEmpty ? "Generate a Persona" : "Generate Another",
+                    subtitle: "Create a custom workflow",
+                    action: presentPersonaGenerator
+                )
+                .frame(maxWidth: 420)
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
@@ -218,6 +237,7 @@ struct OnboardingPersonaCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .frame(height: 110)
             .padding(.vertical, 11)
             .padding(.horizontal, 14)
             .contentShape(RoundedRectangle(cornerRadius: 16))

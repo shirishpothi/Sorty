@@ -40,9 +40,11 @@ public struct PermissionsStepView: View {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 14) {
-                    Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.blue)
+                    OnboardingIconSliver(
+                        systemName: "hand.raised.fill",
+                        color: .blue,
+                        fontSize: 44
+                    )
 
                     Text("Permissions")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -81,7 +83,7 @@ public struct PermissionsStepView: View {
                         Text("Grant Access")
                             .font(.title3.weight(.semibold))
 
-                        Text("Choose a folder to continue. Optional permissions can wait.")
+                        Text("Choose a folder so Sorty knows where to organize your files.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -139,11 +141,6 @@ public struct PermissionsStepView: View {
                         onRemovePermission: { pendingRemovalPermission = .notifications }
                     )
                 }
-
-                Text("Files & Folders unlocks Continue after macOS grants access.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 2)
             }
             .frame(maxWidth: 430)
             .frame(maxWidth: .infinity)
