@@ -42,7 +42,7 @@ struct ThanksForUsingSortyView: View {
     private var header: some View {
         VStack(spacing: 8) {
             MascotHeartParticleMorphView(color: SortyDesignSystem.Colors.resolvedAccent)
-                .frame(width: 150, height: 150)
+                .frame(width: 170, height: 170)
                 .accessibilityHidden(true)
                 .accessibilityIdentifier("thanksWindowHeart")
 
