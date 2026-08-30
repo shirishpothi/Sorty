@@ -116,7 +116,21 @@ resolve_signing_identity() {
     fi
 
     local detected_identity=""
-    detected_identity=$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '/Apple Development:|Mac Developer:|Developer ID Application:/ { print $2; exit }')
+    detected_identity=$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '
+        /Apple Development:|Mac Developer:|Developer ID Application:/ {
+            print $2
+            found_preferred=1
+            exit
+        }
+        $2 == "Sorty Local Dev Signing" {
+            local_identity=$2
+        }
+        END {
+            if (!found_preferred && local_identity != "") {
+                print local_identity
+            }
+        }
+    ')
 
     if [ -n "${detected_identity}" ]; then
         echo "${detected_identity}"
