@@ -77,7 +77,7 @@ private struct ParticleMorphCanvas: View {
     let heartbeatScale: CGFloat
 
     var body: some View {
-        Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+        Canvas(opaque: false, colorMode: .nonLinear, rendersAsynchronously: true) { context, size in
             drawParticles(in: &context, size: size)
         }
     }
@@ -156,7 +156,7 @@ private struct ParticleMorphCanvas: View {
         x = 0.5 + (x - 0.5) * heartbeatScale
         y = 0.5 + (y - 0.5) * heartbeatScale
 
-        let diameter = 1.4 + seed * 1.0
+        let diameter: CGFloat = 1.45
         let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
         return CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
     }
