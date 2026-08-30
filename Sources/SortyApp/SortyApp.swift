@@ -20,7 +20,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private var recoveryWindowController: NSWindowController?
     private let launchStartedAt = Date()
     private var applicationObservers: [NSObjectProtocol] = []
-    private var buildAutoCloseTimer: Timer?
 
     var launchDuration: TimeInterval {
         Date().timeIntervalSince(launchStartedAt)
@@ -37,9 +36,10 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         let buildAutoCloseTimer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.finishBuildRequestedQuitIfSafe()
+            MainActor.assumeIsolated {
+                self?.finishBuildRequestedQuitIfSafe()
+            }
         }
-        self.buildAutoCloseTimer = buildAutoCloseTimer
         RunLoop.main.add(buildAutoCloseTimer, forMode: .common)
         applicationObservers.append(NotificationCenter.default.addObserver(
             forName: .forceQuitSorty,
@@ -60,10 +60,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
                 SortyResources.clearImageCache()
             }
         })
-    }
-
-    deinit {
-        buildAutoCloseTimer?.invalidate()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
