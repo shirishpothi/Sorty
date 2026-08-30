@@ -502,7 +502,77 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         get { presentationState.errorMessage }
         set { updatePresentation { $0.errorMessage = newValue } }
     }
-    @Published public var customInstructions: String = ""
+    @Published public var customInstructions: String = "" {
+        didSet {
+            currentRunInstructions = customInstructions
+        }
+    }
+    private var currentRunInstructions = ""
+    private var modelExcludedCurrentRun = false
+    private var currentRunLearningExcluded: Bool {
+        modelExcludedCurrentRun
+            || LearningsManager.instructionsExcludeCurrentRun(currentRunInstructions)
+    }
+
+    private func handleLearningToolCall(
+        from plan: OrganizationPlan,
+        source: OrganizationEntrySource,
+        folderPath: String
+    ) {
+        let toolCall = plan.learningToolCall
+        let wasExcluded = toolCall?.excludesCurrentRun == true
+        let reviewTarget: LearningExclusionReviewTarget
+
+        if source == .watchedFolder {
+            reviewTarget = .watchedFolder
+        } else if toolCall?.source == "persona" {
+            reviewTarget = .persona
+        } else {
+            reviewTarget = .instructions
+        }
+
+        if wasExcluded {
+            modelExcludedCurrentRun = true
+            learningsObserver?.excludeCurrentRun(folderPath: folderPath)
+        }
+
+        guard let concern = LearningExclusionMonitor.shared.recordDecision(
+            wasExcluded: wasExcluded,
+            reviewTarget: reviewTarget
+        ) else { return }
+
+        let destination: DeeplinkDestination
+        let actionTitle: String
+        let actionIcon: String
+        switch concern.reviewTarget {
+        case .instructions:
+            destination = .organize(path: folderPath, persona: nil, mode: nil, autostart: false)
+            actionTitle = "Review Instructions"
+            actionIcon = "text.alignleft"
+        case .persona:
+            destination = .persona(action: nil, prompt: nil, generate: false)
+            actionTitle = "Review Persona"
+            actionIcon = "person.text.rectangle"
+        case .watchedFolder:
+            destination = .watched(action: nil, path: folderPath)
+            actionTitle = "Review Watched Folder"
+            actionIcon = "folder.badge.gearshape"
+        }
+
+        NotificationManager.shared.showHUDInfo(
+            title: "Learning Is Being Skipped Often",
+            message: "Sorty skipped learning for \(concern.excludedRunCount) of the last \(concern.evaluatedRunCount) runs. Review the instructions that triggered it.",
+            icon: "exclamationmark.triangle.fill",
+            iconColor: .orange,
+            identifier: "frequent-learning-exclusions",
+            actions: [
+                HUDNotificationAction(title: actionTitle, systemImage: actionIcon) {
+                    guard let url = DeeplinkHandler.url(for: destination) else { return }
+                    _ = MainWindowRouter.shared.routeDeeplink(url)
+                }
+            ]
+        )
+    }
 
     /// When true, callers (such as OrganizeView) should keep showing the OrganizationCompleteView
     /// even if `state` momentarily transitions through `.applying`/`.idle` during an in-place
@@ -1564,6 +1634,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         customPrompt: String?,
         temperature: Double?
     ) async throws {
+        currentRunInstructions = customPrompt ?? customInstructions
+        modelExcludedCurrentRun = false
         withBatchUpdates {
             clearStreamingDisplayState()
             streamFileIDTable = [:]
@@ -1672,6 +1744,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: temperature,
                 imagePayload: imagePayload
             )
+            handleLearningToolCall(
+                from: validatedPlan,
+                source: .manual,
+                folderPath: directory.path
+            )
 
             await MainActor.run {
                 currentPlan = validatedPlan
@@ -1689,8 +1766,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
 
             if let learningsObserver = learningsObserver {
-                learningsObserver.startSession(folderPath: directory.path, historyEntryId: nil)
-                recordPlanRules(plan, observer: learningsObserver)
+                learningsObserver.startSession(
+                    folderPath: directory.path,
+                    historyEntryId: nil,
+                    learningExcluded: currentRunLearningExcluded
+                )
+                if !currentRunLearningExcluded {
+                    recordPlanRules(plan, observer: learningsObserver)
+                }
             }
 
             AnalyticsManager.shared.captureWorkflow(
@@ -2305,6 +2388,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: checkpoint.temperature,
                 imagePayload: checkpoint.imagePayload
             )
+            handleLearningToolCall(
+                from: validatedPlan,
+                source: .manual,
+                folderPath: checkpoint.directory.path
+            )
             currentPlan = validatedPlan
             resumeCheckpoint = nil
             updateState(.ready, stage: "Ready!", progress: 1.0)
@@ -2487,6 +2575,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         mergeSuggestions(incoming.suggestions, into: &accumulatedPlan.suggestions)
         accumulatedPlan.unorganizedFiles.append(contentsOf: incoming.unorganizedFiles)
         accumulatedPlan.unorganizedDetails.append(contentsOf: incoming.unorganizedDetails)
+        if accumulatedPlan.learningToolCall == nil {
+            accumulatedPlan.learningToolCall = incoming.learningToolCall
+        }
     }
 
     nonisolated static func normalizingDestinationHierarchy(
@@ -3230,19 +3321,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let proposedFolders = currentPlan?.suggestions.count ?? 0
                 let folderNames = currentPlan?.suggestions.map { $0.folderName }
                 
-                learningsManager?.recordCancelledOrganization(
-                    folderPath: directory.path,
-                    fileCount: fileCount,
-                    proposedFolderCount: proposedFolders,
-                    instructions: customInstructions.isEmpty ? nil : customInstructions,
-                    stage: organizationStage.isEmpty ? "analysis" : organizationStage,
-                    proposedFolderNames: folderNames,
-                    proposedStructureSummary: nil,
-                    fileExtensionCounts: nil,
-                    regenerationCount: currentPlan?.version ?? 0,
-                    regenerationInstructions: nil,
-                    aiModel: aiConfig?.model
-                )
+                if !currentRunLearningExcluded {
+                    learningsManager?.recordCancelledOrganization(
+                        folderPath: directory.path,
+                        fileCount: fileCount,
+                        proposedFolderCount: proposedFolders,
+                        instructions: customInstructions.isEmpty ? nil : customInstructions,
+                        stage: organizationStage.isEmpty ? "analysis" : organizationStage,
+                        proposedFolderNames: folderNames,
+                        proposedStructureSummary: nil,
+                        fileExtensionCounts: nil,
+                        regenerationCount: currentPlan?.version ?? 0,
+                        regenerationInstructions: nil,
+                        aiModel: aiConfig?.model
+                    )
+                }
             }
         }
 
@@ -3568,6 +3661,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         cancelInternal()
         isCancellationRequested = false
+        currentRunInstructions = customPrompt ?? customInstructions
+        modelExcludedCurrentRun = false
 
         currentTask = Task {
             try await performIncrementalOrganization(
@@ -3848,6 +3943,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
 
+            handleLearningToolCall(
+                from: validatedPlan,
+                source: historySource,
+                folderPath: directory.path
+            )
+
             await MainActor.run {
                 currentPlan = normalizeRenameSuggestions(
                     in: applyRenameRuleConfiguration(to: validatedPlan, config: operationConfig),
@@ -3892,6 +3993,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let automationManager = automationManager else {
             throw OrganizationError.automationNotConfigured
         }
+
+        currentRunInstructions = customPrompt ?? customInstructions
+        modelExcludedCurrentRun = false
 
         // Check if we have automation permission
         guard automationManager.automationStatus == .granted else {
@@ -4091,6 +4195,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
 
+            handleLearningToolCall(
+                from: validatedPlan,
+                source: .manual,
+                folderPath: directory.path
+            )
+
             await MainActor.run {
                 currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
             }
@@ -4179,7 +4289,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         // Start learning session for rule tracking
         if let learningsObserver = learningsObserver {
-            learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil)
+            learningsObserver.startSession(
+                folderPath: baseURL.path,
+                historyEntryId: nil,
+                learningExcluded: currentRunLearningExcluded
+            )
         }
 
         var completedOperationsBeforeHistory: [FileSystemManager.FileOperation] = []
@@ -4204,7 +4318,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try checkCancellation()
             
             // Track rule applications for learning feedback
-            if let learningsObserver = learningsObserver, !dryRun {
+            if let learningsObserver = learningsObserver, !dryRun, !currentRunLearningExcluded {
                 // Pre-start the session so rule applications can be recorded
                 learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil, operations: operations)
                 recordRuleApplications(for: planToApply, operations: operations, observer: learningsObserver)
@@ -4235,7 +4349,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 userInfo: [
                     "url": baseURL,
                     "entry": historyEntry,
-                    "operations": operations
+                    "operations": operations,
+                    "learningExcluded": currentRunLearningExcluded,
                 ]
             )
             
@@ -4539,6 +4654,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     newPlan = validationResult.cleanedPlan ?? newPlan
                 }
             }
+
+            handleLearningToolCall(
+                from: newPlan,
+                source: .manual,
+                folderPath: currentDirectory?.path ?? ""
+            )
             
             try checkCancellation()
             
@@ -4780,7 +4901,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try checkCancellation()
 
             // Log the previous attempt as skipped/superseded
-            if let directory = currentDirectory {
+            if let directory = currentDirectory, !currentRunLearningExcluded {
                 let skippedEntry = OrganizationHistoryEntry(
                     directoryPath: directory.path,
                     filesOrganized: 0,
@@ -4792,24 +4913,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
                 )
                 history.addEntry(skippedEntry)
-            }
-
-            // Record to learnings
-            if let directory = currentDirectory {
-                let summary = currentPlan.suggestions.map { "\($0.folderName) (\($0.files.count) files)" }.joined(separator: ", ")
-                learningsManager?.recordRegeneratedOrganization(
-                    folderPath: directory.path,
-                    previousPlanSummary: summary,
-                    guidingInstruction: customInstructions, // FolderOrganizer uses customInstructions for the prompt
-                    regenerationCount: currentPlan.version
-                )
-                
-                // Also record as a guiding instruction for pattern analysis
-                learningsManager?.recordGuidingInstruction(
-                    customInstructions,
-                    for: directory.path,
-                    fileCount: allFiles.count
-                )
             }
 
             // Generate new plan
@@ -4847,6 +4950,29 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
                     newPlan = validationResult.cleanedPlan ?? newPlan
                 }
+            }
+
+            handleLearningToolCall(
+                from: newPlan,
+                source: .manual,
+                folderPath: currentDirectory?.path ?? ""
+            )
+
+            if let directory = currentDirectory, !currentRunLearningExcluded {
+                let summary = currentPlan.suggestions
+                    .map { "\($0.folderName) (\($0.files.count) files)" }
+                    .joined(separator: ", ")
+                learningsManager?.recordRegeneratedOrganization(
+                    folderPath: directory.path,
+                    previousPlanSummary: summary,
+                    guidingInstruction: customInstructions,
+                    regenerationCount: currentPlan.version
+                )
+                learningsManager?.recordGuidingInstruction(
+                    customInstructions,
+                    for: directory.path,
+                    fileCount: allFiles.count
+                )
             }
 
             stopTimeoutTimer()

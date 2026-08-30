@@ -97,4 +97,29 @@ final class ContinuousLearningObserverTests: XCTestCase {
         XCTAssertEqual(manager.currentProfile?.inferredRules.first?.successCount, 1)
         XCTAssertEqual(manager.currentProfile?.inferredRules.first?.failureCount, 0)
     }
+
+    func testLearningExcludedRunNeverCreatesSession() {
+        observer.startSession(
+            folderPath: "/Users/test",
+            historyEntryId: "history-excluded",
+            learningExcluded: true
+        )
+
+        XCTAssertNil(observer.currentSession)
+        XCTAssertTrue(manager.currentProfile?.sessions.isEmpty ?? false)
+    }
+
+    func testExclusionInstructionDiscardsOpenSessionWithoutRecordingInstruction() {
+        observer.startSession(folderPath: "/Users/test", historyEntryId: "history-1")
+        XCTAssertEqual(manager.currentProfile?.sessions.count, 1)
+
+        observer.trackAdditionalInstruction(
+            "Don't learn from this organization",
+            forFolder: "/Users/test"
+        )
+
+        XCTAssertNil(observer.currentSession)
+        XCTAssertTrue(manager.currentProfile?.sessions.isEmpty ?? false)
+        XCTAssertTrue(manager.currentProfile?.additionalInstructionsHistory.isEmpty ?? false)
+    }
 }

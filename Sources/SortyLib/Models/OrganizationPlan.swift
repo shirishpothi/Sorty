@@ -13,6 +13,25 @@ public struct UnorganizedFile: Codable, Hashable, Sendable, Identifiable {
     public let reason: String
 }
 
+public struct LearningToolCall: Codable, Hashable, Sendable {
+    public static let excludeCurrentRunToolName = "exclude_current_run_from_learning"
+
+    public let name: String
+    public let reason: String
+    public let source: String
+
+    public init(name: String, reason: String, source: String) {
+        self.name = name
+        self.reason = reason
+        self.source = source
+    }
+
+    public var excludesCurrentRun: Bool {
+        name == Self.excludeCurrentRunToolName
+            && !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var suggestions: [FolderSuggestion]
@@ -23,6 +42,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var version: Int
     public var generationStats: GenerationStats?
     public var qualityAssessment: PlanQualityAssessment?
+    public var learningToolCall: LearningToolCall?
     
     public init(
         id: UUID = UUID(),
@@ -33,7 +53,8 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         timestamp: Date = Date(),
         version: Int = 1,
         generationStats: GenerationStats? = nil,
-        qualityAssessment: PlanQualityAssessment? = nil
+        qualityAssessment: PlanQualityAssessment? = nil,
+        learningToolCall: LearningToolCall? = nil
     ) {
         self.id = id
         self.suggestions = suggestions
@@ -44,6 +65,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         self.version = version
         self.generationStats = generationStats
         self.qualityAssessment = qualityAssessment
+        self.learningToolCall = learningToolCall
     }
     
     public var totalFiles: Int {

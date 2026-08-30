@@ -71,6 +71,38 @@ final class PromptBuilderTests: XCTestCase {
         }
     }
 
+    func testEveryPromptMakesLearningExclusionRareAndExplicit() {
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+        let fullPrompt = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            mode: .organize,
+            enableTagging: true
+        )
+
+        XCTAssertTrue(fullPrompt.contains("learning_action"))
+        XCTAssertTrue(fullPrompt.contains("Prefer learning from the run"))
+        XCTAssertTrue(fullPrompt.contains("Do not call it because files appear private, sensitive, unusual, temporary"))
+        XCTAssertTrue(fullPrompt.contains("do not rename"))
+
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let pair = PromptBuilder.promptPair(
+                for: level,
+                config: AIConfig(mode: .organize),
+                files: files
+            )
+            let prompt = pair.system + "\n" + pair.user
+            XCTAssertTrue(prompt.contains("learning_action"), "Missing tool contract in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("ambiguity means null"), "Missing conservative default in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("prefer learning"), "Missing learning bias in \(level)")
+            XCTAssertTrue(prompt.contains("exclude_current_run_from_learning"), "Missing exact tool name in \(level)")
+        }
+    }
+
     func testEverySystemPromptDelegatesHierarchyToContextWithoutHiddenFolderCap() {
         let config = AIConfig(mode: .organize)
         let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]

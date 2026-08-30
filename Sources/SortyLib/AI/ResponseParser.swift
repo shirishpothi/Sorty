@@ -110,11 +110,13 @@ struct ResponseParser {
         let unorganized: [UnorganizedFileResponse]?
         let unorganizedIDs: [Int]?
         let notes: String?
+        let learningToolCall: LearningToolCall?
 
         enum CodingKeys: String, CodingKey {
             case folders, unorganized, notes
             case folderAssignments = "folder_assignments"
             case unorganizedIDs = "unorganized_ids"
+            case learningToolCall = "learning_action"
         }
 
         init(from decoder: Decoder) throws {
@@ -127,6 +129,10 @@ struct ResponseParser {
             unorganized = try container.decodeIfPresent([UnorganizedFileResponse].self, forKey: .unorganized)
             unorganizedIDs = try container.decodeIfPresent([Int].self, forKey: .unorganizedIDs)
             notes = try container.decodeIfPresent(String.self, forKey: .notes)
+            learningToolCall = try container.decodeIfPresent(
+                LearningToolCall.self,
+                forKey: .learningToolCall
+            )
         }
     }
 
@@ -530,7 +536,8 @@ struct ResponseParser {
             unorganizedDetails: unorganizedDetails,
             notes: response.notes ?? "",
             timestamp: Date(),
-            version: 1
+            version: 1,
+            learningToolCall: response.learningToolCall
         )
     }
 

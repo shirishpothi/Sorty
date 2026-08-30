@@ -23,44 +23,38 @@ struct LearningsView: View {
     @State private var activeFileImporter: ActiveFileImporter?
     @State private var isShowingFileImporter = false
     @State private var showLearningsModelPicker = false
-    @State private var isQuickRefreshingLearnings = false
     @State private var emptyLearningsHasAppeared = false
     @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
     @State private var selectedLearningRecordsCategory: LearningRecordsCategory?
 
     private enum PendingControlAction: Equatable {
-        case pauseResume
         case withdrawConsent
         case deleteData
 
         var title: String {
             switch self {
-            case .pauseResume: return "Updating Learning"
-            case .withdrawConsent: return "Withdrawing Consent"
+            case .withdrawConsent: return "Pausing Learning"
             case .deleteData: return "Deleting Learnings Data"
             }
         }
 
         var message: String {
             switch self {
-            case .pauseResume: return "Applying your learning collection setting..."
-            case .withdrawConsent: return "Stopping future learning and saving the consent change..."
+            case .withdrawConsent: return "Stopping future learning and saving the change..."
             case .deleteData: return "Removing your learnings profile, consent, model overrides, and local learning settings..."
             }
         }
 
         var icon: String {
             switch self {
-            case .pauseResume: return "pause.circle.fill"
-            case .withdrawConsent: return "hand.raised.fill"
+            case .withdrawConsent: return "pause.circle.fill"
             case .deleteData: return "trash.circle.fill"
             }
         }
 
         var iconColor: Color {
             switch self {
-            case .pauseResume: return .orange
             case .withdrawConsent: return .orange
             case .deleteData: return .red
             }
@@ -353,11 +347,11 @@ struct LearningsView: View {
                 )
             }
         }
-        .alert("Withdraw Consent?", isPresented: $showingWithdrawConfirmation) {
+        .alert("Pause Learning?", isPresented: $showingWithdrawConfirmation) {
             Button("Cancel", role: .cancel) {
                 cancelPendingControlAction()
             }
-            Button("Withdraw", role: .destructive) {
+            Button("Pause Learning", role: .destructive) {
                 withdrawConsent()
             }
         } message: {
@@ -367,7 +361,7 @@ struct LearningsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            pauseSessionLearning()
+            confirmWithdrawConsent()
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) {
             notification in
@@ -430,43 +424,20 @@ struct LearningsView: View {
 
                 Spacer()
 
-                HStack(spacing: 10) {
-                    Button {
-                        toggleSessionLearningPaused()
-                    } label: {
-                        if pendingControlAction == .pauseResume {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Label(
-                                manager.sessionLearningPaused ? "Resume" : "Pause",
-                                systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
-                            )
+                Button {
+                    confirmWithdrawConsent()
+                } label: {
+                    if pendingControlAction == .withdrawConsent {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Label("Pause Learning", systemImage: "pause.fill")
                             .font(.caption.bold())
-                        }
                     }
-                    .buttonStyle(
-                        .tintedPill(manager.sessionLearningPaused ? .green : .red, size: .small)
-                    )
-                    .disabled(pendingControlAction != nil)
-                    .onHover { hovering in
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-
-                    statusBadge
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .systemLiquidGlassBackground(cornerRadius: 999)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Learnings quick controls")
+                .buttonStyle(.tintedPill(.red, size: .small))
+                .disabled(pendingControlAction != nil)
+                .accessibilityHint("Stops learning until you enable it again")
             }
 
         }
@@ -474,83 +445,6 @@ struct LearningsView: View {
         .padding(.vertical, 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings header")
-    }
-
-    private func refreshLearningsInsights() {
-        guard !isQuickRefreshingLearnings else { return }
-
-        isQuickRefreshingLearnings = true
-        NotificationManager.shared.showHUDInfo(
-            title: "Refreshing Learnings",
-            message: "Analyzing saved signals and reference folders…",
-            icon: "arrow.clockwise",
-            iconColor: .blue,
-            identifier: "learnings-quick-control",
-            isPersistent: true
-        )
-
-        Task {
-            manager.configure(with: settingsViewModel.config)
-            await manager.synthesizeLearnings()
-
-            await MainActor.run {
-                isQuickRefreshingLearnings = false
-
-                if let error = manager.error, !error.isEmpty {
-                    HapticFeedbackManager.shared.error()
-                    NotificationManager.shared.showHUDInfo(
-                        title: "Refresh Failed",
-                        message: error,
-                        icon: "exclamationmark.triangle.fill",
-                        iconColor: .red,
-                        identifier: "learnings-quick-control"
-                    )
-                } else {
-                    HapticFeedbackManager.shared.success()
-                    NotificationManager.shared.showHUDInfo(
-                        title: "Learnings Refreshed",
-                        message: "Sorty rebuilt your insights from the latest saved signals.",
-                        icon: "checkmark.circle.fill",
-                        iconColor: .green,
-                        identifier: "learnings-quick-control"
-                    )
-                }
-            }
-        }
-    }
-
-    private func toggleSessionLearningPaused() {
-        setSessionLearningPaused(!manager.sessionLearningPaused)
-    }
-
-    private func pauseSessionLearning() {
-        setSessionLearningPaused(true)
-    }
-
-    private func setSessionLearningPaused(_ isPaused: Bool) {
-        requestSensitiveAction(
-            reason: "Authenticate to change learning collection for this session.",
-            pendingAction: .pauseResume
-        ) {
-            HapticFeedbackManager.shared.light()
-            let isPausing = isPaused && !manager.sessionLearningPaused
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
-                manager.sessionLearningPaused = isPaused
-            }
-            if isPausing {
-                HapticFeedbackManager.shared.selection()
-            } else {
-                HapticFeedbackManager.shared.success()
-            }
-            finishPendingControlAction(
-                title: isPaused ? "Learning Paused" : "Learning Resumed",
-                message: isPaused
-                    ? "Sorty will stop collecting learning signals for this session."
-                    : "Sorty is collecting learning signals again.",
-                icon: isPaused ? "pause.circle.fill" : "play.circle.fill",
-                iconColor: isPaused ? .orange : .green
-            )
-        }
     }
 
     private func confirmWithdrawConsent() {
@@ -577,9 +471,9 @@ struct LearningsView: View {
             await manager.withdrawConsent()
             HapticFeedbackManager.shared.success()
             finishPendingControlAction(
-                title: "Consent Withdrawn",
+                title: "Learning Paused",
                 message: "Learning is off. Your existing learnings data is still saved.",
-                icon: "hand.raised.fill",
+                icon: "pause.circle.fill",
                 iconColor: .green
             )
         }
@@ -645,31 +539,6 @@ struct LearningsView: View {
             iconColor: iconColor,
             identifier: "learnings-control-action"
         )
-    }
-
-    private var statusBadge: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-            Text(statusLabel)
-                .font(.caption.bold())
-                .foregroundColor(manager.consentManager.hasConsented ? .primary : .secondary)
-                .numericTextTransition(animationValue: statusLabel)
-        }
-        .padding(.horizontal, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Learning status: \(statusLabel)")
-    }
-
-    private var statusColor: Color {
-        if manager.sessionLearningPaused { return .orange }
-        return manager.consentManager.hasConsented ? .green : .gray
-    }
-
-    private var statusLabel: String {
-        if manager.sessionLearningPaused { return "Paused" }
-        return manager.consentManager.hasConsented ? "Active" : "Inactive"
     }
 
     // MARK: - Hero Section
@@ -1620,43 +1489,13 @@ struct LearningsView: View {
 
                 HStack(spacing: 12) {
                     settingsRowLabel(
-                        systemImage: "arrow.clockwise",
-                        title: "Learnings",
-                        detail: isQuickRefreshingLearnings
-                            ? "Analyzing saved data and example folders"
-                            : "Rebuild insights from saved learning data"
-                    )
-                    Spacer()
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        refreshLearningsInsights()
-                    } label: {
-                        if isQuickRefreshingLearnings {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text("Refresh")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(isQuickRefreshingLearnings)
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-
-                Divider().padding(.leading, 40)
-
-                HStack(spacing: 12) {
-                    settingsRowLabel(
                         systemImage: "person.text.rectangle",
-                        title: "Profile Data",
-                        detail: "Import or export your learning data"
+                        title: "Learning Data",
+                        detail: "Import, export, or delete your learning data"
                     )
                     Spacer()
                     HStack(spacing: 8) {
                         Button("Import…") {
-                            HapticFeedbackManager.shared.tap()
                             requestSensitiveAction(
                                 reason: "Authenticate to import a learnings profile."
                             ) {
@@ -1664,60 +1503,21 @@ struct LearningsView: View {
                             }
                         }
                         Button("Export…") {
-                            HapticFeedbackManager.shared.tap()
                             requestSensitiveAction(
                                 reason: "Authenticate to export your learnings profile."
                             ) {
                                 exportProfile()
                             }
                         }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-
-                Divider().padding(.leading, 40)
-
-                HStack(spacing: 12) {
-                    settingsRowLabel(
-                        systemImage: "hand.raised",
-                        title: "Privacy",
-                        detail: "Stop learning or permanently remove its data"
-                    )
-                    Spacer()
-                    Button(action: {
-                        confirmWithdrawConsent()
-                    }) {
-                        Label("Withdraw Consent", systemImage: "hand.raised")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .onHover { hovering in
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                    .accessibilityHint("Learning will stop but data is preserved")
-
-                    Button(
-                        role: .destructive,
-                        action: {
+                        Button(role: .destructive) {
                             confirmDeleteAllLearningData()
+                        } label: {
+                            Label("Delete…", systemImage: "trash")
                         }
-                    ) {
-                        Label("Delete All Data", systemImage: "trash")
-                            .font(.caption.bold())
+                        .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                        .accessibilityHint("Permanently deletes all learning data")
                     }
-                    .buttonStyle(.tintedPill(.red, size: .small))
-                    .onHover { hovering in
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                    .accessibilityHint("Permanently deletes all learning data")
+                    .buttonStyle(.sortyBordered(size: .small))
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)

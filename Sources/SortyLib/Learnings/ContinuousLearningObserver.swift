@@ -23,6 +23,7 @@ public class ContinuousLearningObserver: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var recentlyMovedFiles: [String: Date] = [:] // Path -> Time
+    private var learningExcludedRunPaths: Set<String> = []
 
     /// Known groups of related project files that should stay together
     static let relatedFileGroups: [[String]] = [
@@ -92,8 +93,20 @@ public class ContinuousLearningObserver: ObservableObject {
     }
     
     /// Start a new organization session (called when organization is applied)
-    public func startSession(folderPath: String, historyEntryId: String?, operations: [FileSystemManager.FileOperation]? = nil) {
+    public func startSession(
+        folderPath: String,
+        historyEntryId: String?,
+        operations: [FileSystemManager.FileOperation]? = nil,
+        learningExcluded: Bool = false
+    ) {
         guard canCollect else { return }
+
+        let normalizedFolderPath = standardizedPath(folderPath)
+        if learningExcluded {
+            excludeCurrentRun(folderPath: folderPath)
+            return
+        }
+        learningExcludedRunPaths.remove(normalizedFolderPath)
 
         if var session = currentSession,
            URL(fileURLWithPath: session.folderPath).standardizedFileURL.path == URL(fileURLWithPath: folderPath).standardizedFileURL.path,
@@ -162,6 +175,7 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Track a steering prompt (post-organization instruction)
     public func trackSteeringPrompt(_ prompt: String, forFolder folderPath: String? = nil) {
         guard canCollect, !prompt.isEmpty else { return }
+        if let folderPath, isRunExcluded(folderPath) { return }
         
         // Add to current session if active
         if var session = currentSession {
@@ -185,7 +199,19 @@ public class ContinuousLearningObserver: ObservableObject {
     private func handleSteeringPrompt(_ notification: Notification) {
         guard let prompt = notification.userInfo?["prompt"] as? String else { return }
         let folderPath = notification.userInfo?["folderPath"] as? String
-        
+
+        if LearningsManager.instructionsExcludeCurrentRun(prompt) {
+            if let folderPath {
+                excludeCurrentRun(folderPath: folderPath)
+            }
+            LogManager.shared.log(
+                "Excluded current run from learning",
+                level: .info,
+                category: "LearningObserver"
+            )
+            return
+        }
+
         trackSteeringPrompt(prompt, forFolder: folderPath)
         
         if let exclusionPattern = parseExclusionFromPrompt(prompt) {
@@ -232,6 +258,32 @@ public class ContinuousLearningObserver: ObservableObject {
     private func cleanupOldSessions() {
         let cutoff = Date().addingTimeInterval(-86400) // 24 hours
         recentSessions = recentSessions.filter { $0.timestamp > cutoff }
+    }
+
+    public func excludeCurrentRun(folderPath: String) {
+        let normalizedFolderPath = standardizedPath(folderPath)
+        learningExcludedRunPaths.insert(normalizedFolderPath)
+
+        guard let session = currentSession,
+              standardizedPath(session.folderPath) == normalizedFolderPath else { return }
+
+        currentSession = nil
+        recentSessions.removeAll { $0.id == session.id }
+        learningsManager.discardOrganizationSession(id: session.id)
+    }
+
+    private func isRunExcluded(_ folderPath: String) -> Bool {
+        learningExcludedRunPaths.contains(standardizedPath(folderPath))
+    }
+
+    private func isPathInExcludedRun(_ path: String) -> Bool {
+        learningExcludedRunPaths.contains { excludedFolderPath in
+            path.isSubpath(of: excludedFolderPath)
+        }
+    }
+
+    private func standardizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
     private func persistSessionUpdate(_ session: OrganizationSession, appendIfNeeded: Bool = false) {
@@ -322,6 +374,7 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Called by FolderWatcher delegate or FileSystemManager when a move occurs
     public func handleFileMove(from src: String, to dst: String) {
         guard canCollect else { return }
+        guard !isPathInExcludedRun(src), !isPathInExcludedRun(dst) else { return }
         
         if learningsManager.isPathExcludedFromLearning(src) || learningsManager.isPathExcludedFromLearning(dst) {
             LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
@@ -433,6 +486,7 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Called when a file is removed from the monitored scope (moved outside or deleted)
     public func handleFileRemoval(at path: String) {
         guard canCollect else { return }
+        guard !isPathInExcludedRun(path) else { return }
         
         if learningsManager.isPathExcludedFromLearning(path) {
             LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
@@ -495,6 +549,11 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Track when user provides additional instructions for organization
     public func trackAdditionalInstruction(_ instruction: String, forFolder folderPath: String) {
         guard canCollect else { return }
+        if LearningsManager.instructionsExcludeCurrentRun(instruction) {
+            excludeCurrentRun(folderPath: folderPath)
+            return
+        }
+        guard !isRunExcluded(folderPath) else { return }
         
         learningsManager.recordAdditionalInstruction(instruction, for: folderPath)
         LogManager.shared.log("Recorded an additional instruction", level: .debug, category: "LearningObserver")
@@ -503,6 +562,12 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Track when user provides guiding instructions for next attempt
     public func trackGuidingInstruction(_ instruction: String) {
         guard canCollect else { return }
+        if LearningsManager.instructionsExcludeCurrentRun(instruction) {
+            if let folderPath = currentSession?.folderPath {
+                excludeCurrentRun(folderPath: folderPath)
+            }
+            return
+        }
         
         learningsManager.recordGuidingInstruction(instruction)
         LogManager.shared.log("Recorded guiding instruction", level: .debug, category: "LearningObserver")
@@ -514,6 +579,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect,
               let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
               let operations = entry.operations else { return }
+        guard !isRunExcluded(entry.directoryPath) else { return }
         
         LogManager.shared.log("Learning from a reverted session", category: "LearningObserver")
         
@@ -560,6 +626,11 @@ public class ContinuousLearningObserver: ObservableObject {
         // This helps us know "AI just put file X at Y" without querying history immediately
         if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
            let operations = entry.operations {
+            let learningExcluded = notification.userInfo?["learningExcluded"] as? Bool ?? false
+            if learningExcluded || isRunExcluded(entry.directoryPath) {
+                excludeCurrentRun(folderPath: entry.directoryPath)
+                return
+            }
             
             // If already started in FolderOrganizer, just update the history ID
             if let session = currentSession, session.folderPath == entry.directoryPath {
@@ -594,6 +665,7 @@ public class ContinuousLearningObserver: ObservableObject {
 
     public func handleMonitoringWindowExpired(for directoryPath: String) {
         guard canCollect else { return }
+        guard !isRunExcluded(directoryPath) else { return }
         guard let index = recentSessions
             .enumerated()
             .filter({ $0.element.folderPath == directoryPath })

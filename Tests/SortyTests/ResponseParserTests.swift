@@ -798,4 +798,43 @@ class ResponseParserTests: XCTestCase {
         )
         XCTAssertEqual(plan.unorganizedFiles.count, 24_997)
     }
+
+    func testLearningExclusionToolCallIsParsedWithoutChangingPlan() throws {
+        let file = FileItem(path: "/path/report.pdf", name: "report", extension: "pdf")
+        let response = """
+        {
+          "folder_assignments": [
+            {"name": "Reports", "file_ids": [1], "reasoning": "The file is a report."}
+          ],
+          "learning_action": {
+            "name": "exclude_current_run_from_learning",
+            "reason": "The user asked not to learn from this run.",
+            "source": "direct_instructions"
+          }
+        }
+        """
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: [file])
+
+        XCTAssertEqual(plan.suggestions.first?.folderName, "Reports")
+        XCTAssertEqual(plan.suggestions.first?.files, [file])
+        XCTAssertTrue(plan.learningToolCall?.excludesCurrentRun == true)
+        XCTAssertEqual(plan.learningToolCall?.source, "direct_instructions")
+    }
+
+    func testNullLearningActionPrefersLearning() throws {
+        let file = FileItem(path: "/path/report.pdf", name: "report", extension: "pdf")
+        let response = """
+        {
+          "folder_assignments": [
+            {"name": "Reports", "file_ids": [1], "reasoning": "The file is a report."}
+          ],
+          "learning_action": null
+        }
+        """
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: [file])
+
+        XCTAssertNil(plan.learningToolCall)
+    }
 }

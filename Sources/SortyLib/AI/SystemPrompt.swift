@@ -144,6 +144,15 @@ Return only valid JSON matching this shape:
 - Copy the exact rule_id value from the item's rule_id attribute in the learnings context.
 - This allows the app to show users which learned rules were applied to each folder.
 
+## Learning Exclusion Tool
+- The top-level `learning_action` field is a narrowly scoped tool call. Its default value is `null`.
+- Call it only when direct instructions or the active persona clearly ask Sorty not to learn from this specific run. Explicit intent is required.
+- Do not call it because files appear private, sensitive, unusual, temporary, difficult to classify, or different from learned preferences.
+- Do not call it for ordinary negative organization instructions such as "do not rename", "leave these files here", or "do not use this folder".
+- When intent is ambiguous, keep `learning_action` as `null`. Prefer learning from the run.
+- To call the tool, return `"learning_action":{"name":"exclude_current_run_from_learning","reason":"Short quote or faithful summary of the request","source":"direct_instructions"}` or use `"source":"persona"` when the request came from the active persona.
+- Never invent another tool name or source. The tool changes learning collection only and must not change the organization plan.
+
 # OUTPUT INVARIANTS
 The returned JSON object must satisfy all of the following:
 ✓ Output is exactly one valid JSON object with no markdown, prose, progress lines, or hidden reasoning before or after it.

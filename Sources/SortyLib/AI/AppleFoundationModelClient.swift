@@ -275,7 +275,8 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             notes: notes,
             timestamp: Date(),
             version: 1,
-            generationStats: stats
+            generationStats: stats,
+            learningToolCall: completedPlans.compactMap(\.learningToolCall).first
         )
     }
 

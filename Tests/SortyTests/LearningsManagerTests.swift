@@ -1005,6 +1005,32 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertFalse(manager.sessionLearningPaused)
     }
 
+    func testInstructionsCanExcludeOnlyTheCurrentRunFromLearning() {
+        let excludedInstructions = [
+            "Don't learn from this organization",
+            "Do not learn from this run.",
+            "Skip learning for this rename",
+            "Exclude this watched folder run from learning",
+            "Don't learn from this organization and rename",
+        ]
+
+        for instructions in excludedInstructions {
+            XCTAssertTrue(
+                LearningsManager.instructionsExcludeCurrentRun(instructions),
+                "Expected to exclude: \(instructions)"
+            )
+        }
+
+        XCTAssertFalse(
+            LearningsManager.instructionsExcludeCurrentRun(
+                "Don't learn from moves in my Temp folder"
+            )
+        )
+        XCTAssertFalse(
+            LearningsManager.instructionsExcludeCurrentRun("Organize invoices by year")
+        )
+    }
+
     func testSummaryReflectsNoConsentState() async {
         await manager.withdrawConsent()
 
@@ -1300,5 +1326,52 @@ final class ExclusionParsingTests: XCTestCase {
             }
         }
         return nil
+    }
+}
+
+@MainActor
+final class LearningExclusionMonitorTests: XCTestCase {
+    func testMonitorWarnsOnlyAfterFrequentModelExclusions() {
+        let suiteName = "LearningExclusionMonitorTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = LearningExclusionMonitor(userDefaults: defaults)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        XCTAssertNil(monitor.recordDecision(wasExcluded: true, reviewTarget: .persona, now: now))
+        XCTAssertNil(monitor.recordDecision(wasExcluded: false, reviewTarget: .instructions, now: now))
+        XCTAssertNil(monitor.recordDecision(wasExcluded: true, reviewTarget: .persona, now: now))
+        XCTAssertNil(monitor.recordDecision(wasExcluded: false, reviewTarget: .instructions, now: now))
+        let concern = monitor.recordDecision(wasExcluded: true, reviewTarget: .instructions, now: now)
+
+        XCTAssertEqual(concern?.excludedRunCount, 3)
+        XCTAssertEqual(concern?.evaluatedRunCount, 5)
+        XCTAssertEqual(concern?.reviewTarget, .persona)
+        XCTAssertNil(
+            monitor.recordDecision(
+                wasExcluded: true,
+                reviewTarget: .persona,
+                now: now.addingTimeInterval(60)
+            ),
+            "The HUD must respect its cooldown."
+        )
+    }
+
+    func testMonitorDoesNotWarnForOccasionalExclusions() {
+        let suiteName = "LearningExclusionMonitorTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let monitor = LearningExclusionMonitor(userDefaults: defaults)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        for wasExcluded in [true, false, false, true, false] {
+            XCTAssertNil(
+                monitor.recordDecision(
+                    wasExcluded: wasExcluded,
+                    reviewTarget: .instructions,
+                    now: now
+                )
+            )
+        }
     }
 }

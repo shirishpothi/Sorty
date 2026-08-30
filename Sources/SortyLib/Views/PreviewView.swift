@@ -255,7 +255,11 @@ struct PreviewView: View {
     }
     
     private func regeneratePreview() {
-        if !organizer.customInstructions.isEmpty && learningsManager.consentManager.canCollectData { learningsManager.recordGuidingInstruction(organizer.customInstructions) }
+        if !organizer.customInstructions.isEmpty,
+           !LearningsManager.instructionsExcludeCurrentRun(organizer.customInstructions),
+           learningsManager.consentManager.canCollectData {
+            learningsManager.recordGuidingInstruction(organizer.customInstructions)
+        }
         Task {
             do {
                 try await organizer.regeneratePreview()

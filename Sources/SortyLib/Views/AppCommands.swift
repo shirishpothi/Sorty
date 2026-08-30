@@ -170,13 +170,6 @@ public struct SortyCommands: Commands {
             
             Divider()
             
-            Button("View Statistics", systemImage: "chart.pie") {
-                appState?.showLearningsStats()
-            }
-            .disabled(appState == nil)
-            
-            Divider()
-            
             Button("Pause Learning", systemImage: "pause.circle") {
                 appState?.pauseLearning()
             }

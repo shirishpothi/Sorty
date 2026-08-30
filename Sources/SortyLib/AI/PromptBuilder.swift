@@ -556,13 +556,14 @@ struct PromptBuilder {
         }
         return """
         Return exactly one JSON object with no markdown, prose, progress lines, or reasoning outside JSON. Preferred compact format:
-        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning)}],"notes":""}
+        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning)}],"notes":"","learning_action":null}
         Legacy format is also accepted:
-        {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}],"learning_action":null}
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
         Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says "only", change matching items only and leave nonmatches unchanged; descendants of a selected tagged folder match that folder.
         Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough.
+        `learning_action` is a rare tool call. Keep it null unless direct instructions or the active persona clearly ask Sorty not to learn from this specific run. Never call it because files look sensitive, unusual, temporary, uncertain, or different from learned preferences. Ordinary instructions such as "do not rename" do not request it. Ambiguity means null; prefer learning. The only call is {"name":"exclude_current_run_from_learning","reason":"brief explicit request","source":"direct_instructions"}; use source "persona" only for persona text.
         """
     }
 
@@ -583,6 +584,7 @@ struct PromptBuilder {
         base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough."
         base += " Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says only, change matching items only and leave nonmatches unchanged; a tagged folder makes its listed descendants match."
         base += " For every folder, add one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles. Never say only that files belong together."
+        base += " learning_action is a rare tool call and defaults to null. Use exclude_current_run_from_learning only when direct instructions or the active persona clearly request no learning from this specific run. Never infer it from sensitive, unusual, temporary, uncertain, or conflicting files, or ordinary instructions such as do not rename. Ambiguity means null; prefer learning."
         base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
     }
@@ -699,6 +701,7 @@ struct PromptBuilder {
         - Group by type: Documents, Media, Code, Archives
         - Existing finder_tags are tag names; finder_color is the visible Finder label color. Match color instructions against finder_color. If the user says "only", change matching items only and leave nonmatches unchanged. A tagged folder makes its listed descendants match.
         - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
+        - `learning_action` is a rare tool call. Default it to null. Set it to {"name":"exclude_current_run_from_learning","reason":"brief explicit request","source":"direct_instructions"} only when the user clearly asks Sorty not to learn from this specific run. A persona may use source "persona". Never call it because files are sensitive-looking, unusual, temporary, uncertain, or conflict with learned preferences. Ambiguity means null.
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Prefer better filenames; keep originals only when they are already clear, stable/protected, or user-excluded." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Generic camera, screenshot, scan, download, or default app names should usually receive suggested_name when evidence supports it." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
@@ -706,7 +709,7 @@ struct PromptBuilder {
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
-        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping"}],"notes":""}
+        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping"}],"notes":"","learning_action":null}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """

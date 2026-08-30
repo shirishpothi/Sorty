@@ -511,9 +511,37 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                     "type": ["array", "null"],
                     "items": ["type": "integer"]
                 ],
-                "notes": ["type": "string"]
+                "notes": ["type": "string"],
+                "learning_action": [
+                    "anyOf": [
+                        ["type": "null"],
+                        [
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": [
+                                "name": [
+                                    "type": "string",
+                                    "enum": [LearningToolCall.excludeCurrentRunToolName],
+                                ],
+                                "reason": ["type": "string"],
+                                "source": [
+                                    "type": "string",
+                                    "enum": ["direct_instructions", "persona"],
+                                ],
+                            ],
+                            "required": ["name", "reason", "source"],
+                        ],
+                    ]
+                ]
             ],
-            "required": ["folders", "folder_assignments", "unorganized", "unorganized_ids", "notes"],
+            "required": [
+                "folders",
+                "folder_assignments",
+                "unorganized",
+                "unorganized_ids",
+                "notes",
+                "learning_action",
+            ],
             "$defs": [
                 "folder": folderSchema()
             ]
