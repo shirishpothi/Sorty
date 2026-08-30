@@ -134,9 +134,7 @@ public struct ContentView: View {
                         .accessibilityIdentifier("SettingsReturnButton")
                         .accessibilityLabel("Return to previous view")
                     } else {
-                        Color.clear
-                            .frame(width: 0, height: 0)
-                            .accessibilityHidden(true)
+                        EmptyView()
                     }
                 }
             }
