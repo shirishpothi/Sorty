@@ -116,24 +116,7 @@ resolve_signing_identity() {
     fi
 
     local detected_identity=""
-    detected_identity=$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '
-        /^[[:space:]]*[0-9]+\)/ {
-            identity=$2
-            if (first == "") {
-                first=identity
-            }
-            if (best == "" && identity ~ /Apple Development:|Mac Developer:|Developer ID Application:/) {
-                best=identity
-            }
-        }
-        END {
-            if (best != "") {
-                print best
-            } else {
-                print first
-            }
-        }
-    ')
+    detected_identity=$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '/Apple Development:|Mac Developer:|Developer ID Application:/ { print $2; exit }')
 
     if [ -n "${detected_identity}" ]; then
         echo "${detected_identity}"
@@ -1172,7 +1155,6 @@ fi
 
 if [ "${SIGNING_IDENTITY}" = "-" ]; then
     log_detail "Using ad-hoc code signing identity"
-    log_warning "No certificate signing identity found; keychain access prompts may repeat between builds"
 fi
 
 if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
