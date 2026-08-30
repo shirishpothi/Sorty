@@ -101,15 +101,18 @@ show_build_status() {
     local message="$2"
 
     if [ -t 1 ] && ! is_truthy "${SORTY_VERBOSE}"; then
+        if [ "${BUILD_STATUS_LINE_ACTIVE}" = "true" ]; then
+            printf '\033[1A\r\033[2K'
+        fi
         case "${kind}" in
             warning)
-                printf '\r\033[K%b%s %s%b' "${YELLOW}" "${SYM_WARN}" "${message}" "${NC}"
+                printf '%b%s %s%b\n' "${YELLOW}" "${SYM_WARN}" "${message}" "${NC}"
                 ;;
             failure)
-                printf '\r\033[K%b%s %s%b' "${RED}" "${SYM_CROSS}" "${message}" "${NC}"
+                printf '%b%s %s%b\n' "${RED}" "${SYM_CROSS}" "${message}" "${NC}"
                 ;;
             *)
-                printf '\r\033[K  • %s' "${message}"
+                printf '  • %s\n' "${message}"
                 ;;
         esac
         BUILD_STATUS_LINE_ACTIVE=true
@@ -125,14 +128,13 @@ show_build_status() {
 
 finish_build_status() {
     if [ "${BUILD_STATUS_LINE_ACTIVE}" = "true" ]; then
-        printf '\n'
         BUILD_STATUS_LINE_ACTIVE=false
     fi
 }
 
 clear_build_status() {
     if [ "${BUILD_STATUS_LINE_ACTIVE}" = "true" ]; then
-        printf '\r\033[K'
+        printf '\033[1A\r\033[2K'
         BUILD_STATUS_LINE_ACTIVE=false
     fi
 }
@@ -180,7 +182,7 @@ terminate_running_sorty_if_safe() {
     fi
 
     notify_sorty_build_waiting
-    show_build_status warning "Sorty stayed open (likely active organization). Waiting ${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}s while retrying graceful quit."
+    show_build_status warning "Sorty is busy. Retrying quit for ${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}s."
     if wait_for_sorty_exit_with_quit_retries "${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}"; then
         set_build_auto_close_request false
         clear_build_status
@@ -189,7 +191,7 @@ terminate_running_sorty_if_safe() {
     fi
 
     set_build_auto_close_request false
-    show_build_status warning "Sorty stayed open after the retry window. Build continues without force-kill."
+    show_build_status warning "Sorty is still open. Build will not force-quit it."
 }
 
 resolve_signing_identity() {
@@ -1797,7 +1799,7 @@ fi
 terminate_running_sorty_if_safe
 
 if sorty_processes_are_running; then
-    show_build_status failure "Sorty is still running; refusing to replace its live bundle. Finish the active organization and rerun the build."
+    show_build_status failure "Sorty is still running. Finish its work, then rerun the build."
     finish_build_status
     exit 1
 fi
