@@ -254,28 +254,28 @@ format_compact_build_status() {
 
     case "${line}" in
         \[*/*\]*"Compiling "*".swift"*)
-            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/Compiling \2/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/Phase 2\/3: Compiling \2/'
             ;;
         \[*/*\]*"Emitting module "*)
-            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Emitting module ([^ ]+).*$/Emitting module \1/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Emitting module ([^ ]+).*$/Phase 2\/3: Emitting module \1/'
             ;;
         \[*/*\]*"Linking "*)
-            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Linking ([^ ]+).*$/Linking \1/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Linking ([^ ]+).*$/Phase 3\/3: Linking \1/'
             ;;
         *"Compiling "*".swift"*)
-            printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Compiling \1/'
+            printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Phase 2\/3: Compiling \1/'
             ;;
         *"CompileSwift "*".swift"*)
-            printf '%s' "${line}" | sed -E 's/^.*\/([^\/ ]+\.swift).*$/Compiling \1/'
+            printf '%s' "${line}" | sed -E 's/^.*\/([^\/ ]+\.swift).*$/Phase 2\/3: Compiling \1/'
             ;;
         *"CompileSwiftSources "*)
-            printf '%s' "Compiling Swift sources"
+            printf '%s' "Phase 2/3: Compiling Swift sources"
             ;;
         *"Linking "*)
-            printf '%s' "${line}" | sed -E 's/^.*Linking ([^ ]+).*$/Linking \1/'
+            printf '%s' "${line}" | sed -E 's/^.*Linking ([^ ]+).*$/Phase 3\/3: Linking \1/'
             ;;
         *"Ld "*)
-            printf '%s' "Linking app"
+            printf '%s' "Phase 3/3: Linking app"
             ;;
         *)
             return 1
@@ -1214,7 +1214,7 @@ if [ "${BUILD_METHOD}" != "xcodebuild" ] && uses_inline_build_progress; then
     ACTIVE_BUILD_STEP_NUM=2
     ACTIVE_BUILD_STEP_TOTAL=$TOTAL_STEPS
     ACTIVE_BUILD_STEP_LABEL="Compiling Project"
-    show_inline_step_progress 2 $TOTAL_STEPS "Compiling Project" "Planning build"
+    show_inline_step_progress 2 $TOTAL_STEPS "Compiling Project" "Phase 1/3: Planning build"
 else
     print_step 2 $TOTAL_STEPS "Compiling Project"
 fi
