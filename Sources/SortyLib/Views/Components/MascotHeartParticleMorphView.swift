@@ -2,69 +2,98 @@
 //  MascotHeartParticleMorphView.swift
 //  Sorty
 //
-//  Particle morph from Sorty's mascot outline into a beating heart.
-//
+//  Particle morph from Sorty's mascot into a solid heart.
 
 import SwiftUI
 
 struct MascotHeartParticleMorphView: View {
     private enum Timing {
-        static let mascotHold: TimeInterval = 0.7
-        static let morphDuration: TimeInterval = 1.35
-        static let heartbeatDuration: TimeInterval = 1.35
+        static let mascotHold: TimeInterval = 0.5
+        static let morphDuration: TimeInterval = 1.15
+        static let heartbeatDuration: TimeInterval = 0.44
+
+        static var totalDuration: TimeInterval {
+            mascotHold + morphDuration + heartbeatDuration
+        }
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animationStart = Date()
+    @State private var animationComplete = false
 
+    // `color` kept for API compat but mascot uses its true palette, not the accent.
     let color: Color
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || animationComplete)
+        ) { timeline in
             let elapsed = timeline.date.timeIntervalSince(animationStart)
+            let progress = reduceMotion || animationComplete ? 1 : morphProgress(at: elapsed)
 
-            ParticleMorphCanvas(
-                progress: reduceMotion ? 1 : morphProgress(at: elapsed),
-                heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed),
-                color: color
-            )
+            ZStack {
+                Image(nsImage: SortyResources.menuBarLabelNSImage())
+                    .resizable()
+                    .scaledToFit()
+                    .padding(6)
+                    .opacity(mascotOpacity(for: progress))
+
+                ParticleMorphCanvas(
+                    progress: progress,
+                    heartbeatScale: reduceMotion || animationComplete ? 1 : heartbeatScale(at: elapsed),
+                    color: color
+                )
+                .opacity(particleLayerOpacity(for: progress))
+            }
         }
-        .onAppear {
+        .task(id: reduceMotion) {
             animationStart = Date()
-        }
-        .onChange(of: reduceMotion) {
-            animationStart = Date()
+            animationComplete = reduceMotion
+            guard !reduceMotion else { return }
+
+            try? await Task.sleep(for: .seconds(Timing.totalDuration))
+            guard !Task.isCancelled else { return }
+            animationComplete = true
         }
         .accessibilityHidden(true)
     }
 
+    private func mascotOpacity(for progress: Double) -> Double {
+        let fade = min(max(progress / 0.22, 0), 1)
+        return 1 - fade * fade * (3 - 2 * fade)
+    }
+
+    private func particleLayerOpacity(for progress: Double) -> Double {
+        min(max(progress / 0.12, 0), 1)
+    }
+
     private func morphProgress(at elapsed: TimeInterval) -> Double {
-        let rawProgress = min(max((elapsed - Timing.mascotHold) / Timing.morphDuration, 0), 1)
-        return rawProgress * rawProgress * (3 - 2 * rawProgress)
+        let raw = min(max((elapsed - Timing.mascotHold) / Timing.morphDuration, 0), 1)
+        // easeInOutCubic
+        if raw < 0.5 { return 4 * raw * raw * raw }
+        let p = 2 * raw - 2
+        return 0.5 * p * p * p + 1
     }
 
     private func heartbeatScale(at elapsed: TimeInterval) -> CGFloat {
         let heartStart = Timing.mascotHold + Timing.morphDuration
-        guard elapsed >= heartStart else { return 1 }
-
-        let time = (elapsed - heartStart).truncatingRemainder(dividingBy: Timing.heartbeatDuration)
-        switch time {
-        case 0..<0.12:
-            return 1 + 0.09 * easedPulse(time / 0.12)
-        case 0.12..<0.26:
-            return 1.09 - 0.09 * easedPulse((time - 0.12) / 0.14)
-        case 0.32..<0.43:
-            return 1 + 0.055 * easedPulse((time - 0.32) / 0.11)
-        case 0.43..<0.58:
-            return 1.055 - 0.055 * easedPulse((time - 0.43) / 0.15)
-        default:
+        guard elapsed >= heartStart else {
             return 1
+        }
+
+        let t = elapsed - heartStart
+        switch t {
+        case 0..<0.11: return 1 + 0.075 * eased(t / 0.11)
+        case 0.11..<0.20: return 1.075 - 0.075 * eased((t - 0.11) / 0.09)
+        case 0.24..<0.32: return 1 + 0.038 * eased((t - 0.24) / 0.08)
+        case 0.32..<0.44: return 1.038 - 0.038 * eased((t - 0.32) / 0.12)
+        default: return 1
         }
     }
 
-    private func easedPulse(_ progress: Double) -> CGFloat {
-        let clamped = min(max(progress, 0), 1)
-        return CGFloat(1 - pow(1 - clamped, 3))
+    private func eased(_ p: Double) -> CGFloat {
+        let c = min(max(p, 0), 1)
+        return CGFloat(1 - pow(1 - c, 3))
     }
 }
 
@@ -82,19 +111,37 @@ private struct ParticleMorphCanvas: View {
     private func drawParticles(in context: inout GraphicsContext, size: CGSize) {
         let side = min(size.width, size.height)
         let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
-        let morph = CGFloat(progress)
-        let scatterEnvelope = CGFloat(sin(.pi * progress))
 
+        // Replace the particles with one heart at rest. Drawing both at full
+        // opacity made the final color and edges shift as the heart pulsed.
+        if progress > 0.82 {
+            let t = (progress - 0.82) / 0.18
+            let eased = t * t * (3 - 2 * t)
+            var particleContext = context
+            particleContext.opacity = 1 - eased
+            drawParticlesOnly(in: &particleContext, origin: origin, side: side)
+            drawSolidHeart(in: &context, size: size, opacity: eased)
+        } else {
+            drawParticlesOnly(in: &context, origin: origin, side: side)
+        }
+    }
+
+    private func drawParticlesOnly(
+        in context: inout GraphicsContext,
+        origin: CGPoint,
+        side: CGFloat
+    ) {
         for index in MascotHeartParticleTargets.mascot.indices {
             let mascot = MascotHeartParticleTargets.mascot[index]
             let heart = MascotHeartParticleTargets.heart[index]
             let seed = Self.seed(for: index)
+            let angle = atan2(mascot.point.y - 0.5, mascot.point.x - 0.5)
+
             let rect = particleRect(
-                mascot: mascot,
+                mascot: mascot.point,
                 heart: heart,
                 seed: seed,
-                morph: morph,
-                scatterEnvelope: scatterEnvelope,
+                angle: angle,
                 origin: origin,
                 side: side
             )
@@ -103,37 +150,75 @@ private struct ParticleMorphCanvas: View {
                 rect: rect,
                 mascot: mascot,
                 heart: heart,
-                seed: seed
+                seed: seed,
+                angle: angle
             )
         }
     }
 
+    private func drawSolidHeart(in context: inout GraphicsContext, size: CGSize, opacity: Double) {
+        let side = min(size.width, size.height)
+        let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
+        // Heart outline in 0…1 space
+        var path = Path()
+        let count = 400
+        for i in 0..<count {
+            let a = 2 * Double.pi * Double(i) / Double(count)
+            let x = 16 * pow(sin(a), 3)
+            let y = 13 * cos(a) - 5 * cos(2 * a) - 2 * cos(3 * a) - cos(4 * a)
+            var px = 0.5 + x / 42
+            var py = 0.5 - y / 42
+            px = 0.5 + (px - 0.5) * heartbeatScale
+            py = 0.5 + (py - 0.5) * heartbeatScale
+            let p = CGPoint(x: origin.x + px * side, y: origin.y + py * side)
+            if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+        }
+        path.closeSubpath()
+        context.fill(path, with: .color(Color(red: 0.96, green: 0.19, blue: 0.26).opacity(opacity)))
+    }
+
     private func particleRect(
-        mascot: MascotParticle,
+        mascot: CGPoint,
         heart: CGPoint,
         seed: CGFloat,
-        morph: CGFloat,
-        scatterEnvelope: CGFloat,
+        angle: CGFloat,
         origin: CGPoint,
         side: CGFloat
     ) -> CGRect {
-        let angle = Double(seed * 2 * .pi + morph * .pi)
-        let scatter = scatterEnvelope * (0.012 + seed * 0.016)
-        var x = mascot.point.x + (heart.x - mascot.point.x) * morph
-        var y = mascot.point.y + (heart.y - mascot.point.y) * morph
-        x += CGFloat(cos(angle)) * scatter
-        y += CGFloat(sin(angle)) * scatter
+        // tiny stagger (max 80ms) prevents pop-in glitch while keeping motion coherent
+        let angleNorm = abs(angle) / .pi // 0...1
+        let delay = seed * 0.06 + angleNorm * 0.04
+        let raw = max(0, min((CGFloat(progress) - delay) / (1 - delay), 1))
+        // match global cubic easing per-particle with same curve
+        let p: CGFloat
+        if raw < 0.5 {
+            p = 4 * raw * raw * raw
+        } else {
+            let pp = 2 * raw - 2
+            p = 0.5 * pp * pp * pp + 1
+        }
+
+        // gentle arc: perpendicular offset peaks at mid-flight, scaled by travel distance
+        let dx = heart.x - mascot.x
+        let dy = heart.y - mascot.y
+        let len = max(hypot(dx, dy), 0.001)
+        let perpX = -dy / len
+        let perpY = dx / len
+        let sideSign: CGFloat = seed > 0.5 ? 1 : -1
+        let arc = CGFloat(sin(.pi * Double(p))) * (0.012 + seed * 0.012) * min(len * 1.5, 1) * sideSign
+        let cx = (mascot.x + heart.x) * 0.5 + perpX * arc
+        let cy = (mascot.y + heart.y) * 0.5 + perpY * arc
+
+        let ipf = 1 - p
+        var x = ipf * ipf * mascot.x + 2 * ipf * p * cx + p * p * heart.x
+        var y = ipf * ipf * mascot.y + 2 * ipf * p * cy + p * p * heart.y
+
         x = 0.5 + (x - 0.5) * heartbeatScale
         y = 0.5 + (y - 0.5) * heartbeatScale
 
-        let diameter = 1.15 + seed * 1.15
+        let diameter = 1.4 + seed * 1.0
         let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
-        return CGRect(
-            x: center.x - diameter / 2,
-            y: center.y - diameter / 2,
-            width: diameter,
-            height: diameter
-        )
+        return CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
     }
 
     private func drawParticle(
@@ -141,26 +226,35 @@ private struct ParticleMorphCanvas: View {
         rect: CGRect,
         mascot: MascotParticle,
         heart: CGPoint,
-        seed: CGFloat
+        seed: CGFloat,
+        angle: CGFloat
     ) {
-        context.fill(
-            Path(ellipseIn: rect.offsetBy(dx: 0, dy: 1.2)),
-            with: .color(.black.opacity(0.08 + Double(seed) * 0.08))
-        )
+        let angleNorm = abs(angle) / .pi
+        let delay = seed * 0.06 + angleNorm * 0.04
+        let raw = max(0, min((CGFloat(progress) - delay) / (1 - delay), 1))
+        let p: Double
+        if raw < 0.5 {
+            p = 4 * Double(raw) * Double(raw) * Double(raw)
+        } else {
+            let pp = 2 * Double(raw) - 2
+            p = 0.5 * pp * pp * pp + 1
+        }
 
-        let mascotOpacity = max(0, 1 - progress * 1.35)
-        if mascotOpacity > 0 {
+        // crossfade with brief overlap — avoids muddy gray mid-morph
+        let mascotOpacity = max(0, 1 - p * 1.9)
+        let heartOpacity = max(0, (p - 0.18) / 0.82)
+        let heartEased = heartOpacity * heartOpacity * (3 - 2 * heartOpacity)
+
+        if mascotOpacity > 0.015 {
             context.fill(
                 Path(ellipseIn: rect),
                 with: .color(mascotColor(for: mascot.role, seed: seed).opacity(mascotOpacity))
             )
         }
-
-        let heartOpacity = max(0, (progress - 0.18) / 0.82)
-        if heartOpacity > 0 {
+        if heartEased > 0.015 {
             context.fill(
                 Path(ellipseIn: rect),
-                with: .color(heartColor(at: heart, seed: seed).opacity(heartOpacity))
+                with: .color(heartColor(at: heart, seed: seed).opacity(heartEased))
             )
         }
     }
@@ -168,29 +262,29 @@ private struct ParticleMorphCanvas: View {
     private func mascotColor(for role: MascotParticleRole, seed: CGFloat) -> Color {
         switch role {
         case .shell:
-            return color.opacity(0.76 + Double(seed) * 0.24)
+            // sampled Sorty shell mid-blue
+            return Color(red: 0.42, green: 0.76, blue: 0.94).opacity(0.92 + Double(seed) * 0.08)
         case .face:
-            return Color(red: 0.40, green: 0.88, blue: 0.98).opacity(0.82 + Double(seed) * 0.18)
+            // visor / inner face — near-white cyan
+            return Color(red: 0.78, green: 0.96, blue: 0.99).opacity(0.96)
         case .edge:
-            return Color(red: 0.05, green: 0.24, blue: 0.55).opacity(0.86 + Double(seed) * 0.14)
+            return Color(red: 0.06, green: 0.14, blue: 0.28).opacity(0.95)
         case .eye:
-            return Color(red: 0.02, green: 0.07, blue: 0.18)
+            return Color(red: 0.04, green: 0.09, blue: 0.18)
         case .highlight:
-            return .white.opacity(0.82 + Double(seed) * 0.18)
+            return .white.opacity(0.92)
         }
     }
 
     private func heartColor(at point: CGPoint, seed: CGFloat) -> Color {
-        let highlightDistance = hypot(point.x - 0.38, point.y - 0.34)
-        if highlightDistance < 0.09, seed > 0.28 {
-            return .white.opacity(0.82 + Double(seed) * 0.18)
-        }
-
-        let verticalShade = min(max((point.y - 0.24) / 0.62, 0), 1)
-        let red = 1 - Double(verticalShade) * 0.34
-        let green = 0.08 + (1 - Double(verticalShade)) * 0.19
-        let blue = 0.14 + (1 - Double(verticalShade)) * 0.14
-        return Color(red: red, green: green, blue: blue)
+        // Uniform filled red — no white speckles. Slight vertical depth for richness.
+        let t = min(max((point.y - 0.20) / 0.68, 0), 1)
+        let r = 0.96 - Double(t) * 0.12
+        let g = 0.17 + (1 - Double(t)) * 0.03
+        let b = 0.23 + (1 - Double(t)) * 0.02
+        _ = seed // keep param for API compat
+        _ = point
+        return Color(red: r, green: g, blue: b)
     }
 
     private static func seed(for index: Int) -> CGFloat {
@@ -226,55 +320,23 @@ private enum MascotHeartParticleTargets {
         let rightEar = CGPoint(x: 19.9, y: 12.6)
 
         var particles: [MascotParticle] = []
-        particles += makeParticles(
-            filledRoundedRectangle(rect: shellRect, radius: 5.5, count: 320),
-            role: .shell
-        )
-        particles += makeParticles(
-            roundedRectangleOutline(rect: shellRect, radius: 5.5, count: 160),
-            role: .edge
-        )
-        particles += makeParticles(
-            filledRoundedRectangle(rect: faceRect, radius: 3.8, count: 280),
-            role: .face
-        )
-        particles += makeParticles(filledCircle(center: leftEar, radius: 2.2, count: 50), role: .shell)
-        particles += makeParticles(filledCircle(center: rightEar, radius: 2.2, count: 50), role: .shell)
-        particles += makeParticles(circle(center: leftEar, radius: 2.2, count: 24), role: .edge)
-        particles += makeParticles(circle(center: rightEar, radius: 2.2, count: 24), role: .edge)
-        particles += makeParticles(
-            quadraticCurve(
-                from: CGPoint(x: 10.6, y: 6.1),
-                control: CGPoint(x: 10.6, y: 4),
-                to: CGPoint(x: 11, y: 2),
-                count: 32
-            ),
-            role: .edge
-        )
-        particles += makeParticles(filledCircle(center: CGPoint(x: 11, y: 1.8), radius: 1.65, count: 50), role: .shell)
-        particles += makeParticles(circle(center: CGPoint(x: 11, y: 1.8), radius: 1.65, count: 24), role: .edge)
-        particles += makeParticles(
-            filledRoundedRectangle(rect: CGRect(x: 8.1, y: 5.5, width: 5.8, height: 2.5), radius: 1.1, count: 45),
-            role: .shell
-        )
-        particles += makeParticles(
-            roundedRectangleOutline(rect: CGRect(x: 8.1, y: 5.5, width: 5.8, height: 2.5), radius: 1.1, count: 30),
-            role: .highlight
-        )
-        particles += makeParticles(filledCircle(center: CGPoint(x: 8, y: 11.6), radius: 1.75, count: 60), role: .eye)
-        particles += makeParticles(filledCircle(center: CGPoint(x: 14, y: 11.6), radius: 1.75, count: 60), role: .eye)
-        particles += makeParticles(filledCircle(center: CGPoint(x: 7.55, y: 11.1), radius: 0.55, count: 18), role: .highlight)
-        particles += makeParticles(filledCircle(center: CGPoint(x: 13.55, y: 11.1), radius: 0.55, count: 18), role: .highlight)
-        particles += makeParticles(
-            quadraticCurve(
-                from: CGPoint(x: 8.1, y: 14.6),
-                control: CGPoint(x: 11, y: 17.1),
-                to: CGPoint(x: 13.9, y: 14.6),
-                count: 70
-            ),
-            role: .edge
-        )
-
+        particles += makeParticles(filledRoundedRectangle(rect: shellRect, radius: 5.5, count: 340), role: .shell)
+        particles += makeParticles(roundedRectangleOutline(rect: shellRect, radius: 5.5, count: 140), role: .edge)
+        particles += makeParticles(filledRoundedRectangle(rect: faceRect, radius: 3.8, count: 260), role: .face)
+        particles += makeParticles(filledCircle(center: leftEar, radius: 2.2, count: 48), role: .shell)
+        particles += makeParticles(filledCircle(center: rightEar, radius: 2.2, count: 48), role: .shell)
+        particles += makeParticles(circle(center: leftEar, radius: 2.2, count: 22), role: .edge)
+        particles += makeParticles(circle(center: rightEar, radius: 2.2, count: 22), role: .edge)
+        particles += makeParticles(quadraticCurve(from: CGPoint(x: 10.6, y: 6.1), control: CGPoint(x: 10.6, y: 4), to: CGPoint(x: 11, y: 2), count: 28), role: .edge)
+        particles += makeParticles(filledCircle(center: CGPoint(x: 11, y: 1.8), radius: 1.65, count: 44), role: .shell)
+        particles += makeParticles(circle(center: CGPoint(x: 11, y: 1.8), radius: 1.65, count: 20), role: .edge)
+        particles += makeParticles(filledRoundedRectangle(rect: CGRect(x: 8.1, y: 5.5, width: 5.8, height: 2.5), radius: 1.1, count: 40), role: .shell)
+        particles += makeParticles(roundedRectangleOutline(rect: CGRect(x: 8.1, y: 5.5, width: 5.8, height: 2.5), radius: 1.1, count: 24), role: .highlight)
+        particles += makeParticles(filledCircle(center: CGPoint(x: 8, y: 11.6), radius: 1.75, count: 54), role: .eye)
+        particles += makeParticles(filledCircle(center: CGPoint(x: 14, y: 11.6), radius: 1.75, count: 54), role: .eye)
+        particles += makeParticles(filledCircle(center: CGPoint(x: 7.55, y: 11.1), radius: 0.55, count: 14), role: .highlight)
+        particles += makeParticles(filledCircle(center: CGPoint(x: 13.55, y: 11.1), radius: 0.55, count: 14), role: .highlight)
+        particles += makeParticles(quadraticCurve(from: CGPoint(x: 8.1, y: 14.6), control: CGPoint(x: 11, y: 17.1), to: CGPoint(x: 13.9, y: 14.6), count: 64), role: .edge)
         return particles
     }
 
@@ -282,257 +344,176 @@ private enum MascotHeartParticleTargets {
         points.map { MascotParticle(point: normalizeMascotPoint($0), role: role) }
     }
 
-    private static func makeHeartPoints(count: Int) -> [CGPoint] {
-        let vertices = (0..<heartVertexCount).map { index in
-            let angle = 2 * Double.pi * Double(index) / Double(heartVertexCount)
-            let x = 16 * pow(sin(angle), 3)
-            let y = 13 * cos(angle) - 5 * cos(2 * angle) - 2 * cos(3 * angle) - cos(4 * angle)
-            return CGPoint(x: 0.5 + x / 42, y: 0.5 - y / 42)
-        }
-        let outline = resampleClosedPolyline(vertices, count: count)
-        let center = CGPoint(x: 0.5, y: 0.54)
+    // MARK: Heart — uniform interior via point-in-polygon + Halton
 
-        return outline.enumerated().map { index, edge in
-            let radialScale: CGFloat
-            if index.isMultiple(of: 4) {
-                radialScale = 1
-            } else {
-                let fraction = (Double(index) * 0.618_033_988_75).truncatingRemainder(dividingBy: 1)
-                radialScale = CGFloat(sqrt(fraction))
+    private static func makeHeartPoints(count: Int) -> [CGPoint] {
+        let outline = makeHeartOutline()
+        var points: [CGPoint] = []
+        points.reserveCapacity(count)
+        var haltonIndex = 1
+        // tight bounding box of heart in normalized 0…1 space (from outline)
+        let minX: CGFloat = 0.12, maxX: CGFloat = 0.88
+        let minY: CGFloat = 0.18, maxY: CGFloat = 0.95
+        while points.count < count {
+            let x = minX + halton(haltonIndex, base: 2) * (maxX - minX)
+            let y = minY + halton(haltonIndex, base: 3) * (maxY - minY)
+            let p = CGPoint(x: x, y: y)
+            if isInsidePolygon(p, polygon: outline) {
+                points.append(p)
             }
-            return CGPoint(
-                x: center.x + (edge.x - center.x) * radialScale,
-                y: center.y + (edge.y - center.y) * radialScale
-            )
+            haltonIndex += 1
+            // safety: prevent infinite loop if count unreasonably large
+            if haltonIndex > 60_000 { break }
+        }
+        // fill remainder with outline resample if sampling fell short (should not happen)
+        if points.count < count {
+            let needed = count - points.count
+            let fallback = resampleClosedPolyline(outline, count: needed)
+            points.append(contentsOf: fallback.map { CGPoint(x: $0.x, y: $0.y) })
+        }
+        return points
+    }
+
+    private static func makeHeartOutline() -> [CGPoint] {
+        (0..<heartVertexCount).map { i in
+            let a = 2 * Double.pi * Double(i) / Double(heartVertexCount)
+            let x = 16 * pow(sin(a), 3)
+            let y = 13 * cos(a) - 5 * cos(2 * a) - 2 * cos(3 * a) - cos(4 * a)
+            return CGPoint(x: 0.5 + x / 42, y: 0.5 - y / 42)
         }
     }
 
+    private static func isInsidePolygon(_ point: CGPoint, polygon: [CGPoint]) -> Bool {
+        var inside = false
+        var j = polygon.count - 1
+        for i in 0..<polygon.count {
+            let xi = polygon[i].x, yi = polygon[i].y
+            let xj = polygon[j].x, yj = polygon[j].y
+            let intersect = ((yi > point.y) != (yj > point.y))
+                && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)
+            if intersect { inside.toggle() }
+            j = i
+        }
+        return inside
+    }
+
     private static func normalizeMascotPoint(_ point: CGPoint) -> CGPoint {
-        CGPoint(
-            x: 0.05 + (point.x / viewBoxSize) * 0.9,
-            y: 0.04 + (point.y / viewBoxSize) * 0.9
-        )
+        CGPoint(x: 0.05 + (point.x / viewBoxSize) * 0.9, y: 0.04 + (point.y / viewBoxSize) * 0.9)
     }
 
     private static func orderedByAngle(_ particles: [MascotParticle]) -> [MascotParticle] {
         particles.sorted { lhs, rhs in
-            let lhsAngle = atan2(lhs.point.y - 0.5, lhs.point.x - 0.5)
-            let rhsAngle = atan2(rhs.point.y - 0.5, rhs.point.x - 0.5)
-            if lhsAngle == rhsAngle {
-                return hypot(lhs.point.x - 0.5, lhs.point.y - 0.5)
-                    < hypot(rhs.point.x - 0.5, rhs.point.y - 0.5)
-            }
-            return lhsAngle < rhsAngle
+            let la = atan2(lhs.point.y - 0.5, lhs.point.x - 0.5)
+            let ra = atan2(rhs.point.y - 0.5, rhs.point.x - 0.5)
+            if la == ra { return hypot(lhs.point.x - 0.5, lhs.point.y - 0.5) < hypot(rhs.point.x - 0.5, rhs.point.y - 0.5) }
+            return la < ra
         }
     }
 
     private static func orderedByAngle(_ points: [CGPoint]) -> [CGPoint] {
         points.sorted { lhs, rhs in
-            let lhsAngle = atan2(lhs.y - 0.5, lhs.x - 0.5)
-            let rhsAngle = atan2(rhs.y - 0.5, rhs.x - 0.5)
-            if lhsAngle == rhsAngle {
-                return hypot(lhs.x - 0.5, lhs.y - 0.5) < hypot(rhs.x - 0.5, rhs.y - 0.5)
-            }
-            return lhsAngle < rhsAngle
+            let la = atan2(lhs.y - 0.5, lhs.x - 0.5)
+            let ra = atan2(rhs.y - 0.5, rhs.x - 0.5)
+            if la == ra { return hypot(lhs.x - 0.5, lhs.y - 0.5) < hypot(rhs.x - 0.5, rhs.y - 0.5) }
+            return la < ra
         }
     }
 
     private static func filledRoundedRectangle(rect: CGRect, radius: CGFloat, count: Int) -> [CGPoint] {
         guard count > 0 else { return [] }
-
         var points: [CGPoint] = []
         points.reserveCapacity(count)
-        var sampleIndex = 1
-
+        var idx = 1
         while points.count < count {
-            let point = CGPoint(
-                x: rect.minX + halton(sampleIndex, base: 2) * rect.width,
-                y: rect.minY + halton(sampleIndex, base: 3) * rect.height
-            )
-            if isInsideRoundedRectangle(point, rect: rect, radius: radius) {
-                points.append(point)
-            }
-            sampleIndex += 1
+            let p = CGPoint(x: rect.minX + halton(idx, base: 2) * rect.width, y: rect.minY + halton(idx, base: 3) * rect.height)
+            if isInsideRoundedRectangle(p, rect: rect, radius: radius) { points.append(p) }
+            idx += 1
         }
-
         return points
     }
 
     private static func isInsideRoundedRectangle(_ point: CGPoint, rect: CGRect, radius: CGFloat) -> Bool {
-        if point.x >= rect.minX + radius, point.x <= rect.maxX - radius {
-            return true
-        }
-        if point.y >= rect.minY + radius, point.y <= rect.maxY - radius {
-            return true
-        }
-
-        let corner = CGPoint(
-            x: point.x < rect.midX ? rect.minX + radius : rect.maxX - radius,
-            y: point.y < rect.midY ? rect.minY + radius : rect.maxY - radius
-        )
+        if point.x >= rect.minX + radius, point.x <= rect.maxX - radius { return true }
+        if point.y >= rect.minY + radius, point.y <= rect.maxY - radius { return true }
+        let corner = CGPoint(x: point.x < rect.midX ? rect.minX + radius : rect.maxX - radius, y: point.y < rect.midY ? rect.minY + radius : rect.maxY - radius)
         return hypot(point.x - corner.x, point.y - corner.y) <= radius
     }
 
     private static func halton(_ index: Int, base: Int) -> CGFloat {
-        var result: CGFloat = 0
-        var fraction: CGFloat = 1
-        var value = index
-
-        while value > 0 {
-            fraction /= CGFloat(base)
-            result += fraction * CGFloat(value % base)
-            value /= base
-        }
-
-        return result
+        var r: CGFloat = 0, f: CGFloat = 1, v = index
+        while v > 0 { f /= CGFloat(base); r += f * CGFloat(v % base); v /= base }
+        return r
     }
 
     private static func filledCircle(center: CGPoint, radius: CGFloat, count: Int) -> [CGPoint] {
-        let goldenAngle = Double.pi * (3 - sqrt(5))
-        return (0..<count).map { index in
-            let distance = radius * sqrt((CGFloat(index) + 0.5) / CGFloat(count))
-            let angle = Double(index) * goldenAngle
-            return CGPoint(
-                x: center.x + CGFloat(cos(angle)) * distance,
-                y: center.y + CGFloat(sin(angle)) * distance
-            )
+        let golden = Double.pi * (3 - sqrt(5))
+        return (0..<count).map { i in
+            let d = radius * sqrt((CGFloat(i) + 0.5) / CGFloat(count))
+            let a = Double(i) * golden
+            return CGPoint(x: center.x + CGFloat(cos(a)) * d, y: center.y + CGFloat(sin(a)) * d)
         }
     }
 
     private static func circle(center: CGPoint, radius: CGFloat, count: Int) -> [CGPoint] {
-        (0..<count).map { index in
-            let angle = 2 * Double.pi * Double(index) / Double(count) - .pi / 2
-            return CGPoint(
-                x: center.x + CGFloat(cos(angle)) * radius,
-                y: center.y + CGFloat(sin(angle)) * radius
-            )
+        (0..<count).map { i in
+            let a = 2 * Double.pi * Double(i) / Double(count) - .pi / 2
+            return CGPoint(x: center.x + CGFloat(cos(a)) * radius, y: center.y + CGFloat(sin(a)) * radius)
         }
     }
 
-    private static func quadraticCurve(
-        from start: CGPoint,
-        control: CGPoint,
-        to end: CGPoint,
-        count: Int
-    ) -> [CGPoint] {
+    private static func quadraticCurve(from s: CGPoint, control c: CGPoint, to e: CGPoint, count: Int) -> [CGPoint] {
         guard count > 0 else { return [] }
-
-        let denominator = CGFloat(max(count - 1, 1))
-        var points: [CGPoint] = []
-        points.reserveCapacity(count)
-
-        for index in 0..<count {
-            let progress = CGFloat(index) / denominator
-            let inverse = 1 - progress
-            let startWeight = inverse * inverse
-            let controlWeight = 2 * inverse * progress
-            let endWeight = progress * progress
-            let x = startWeight * start.x + controlWeight * control.x + endWeight * end.x
-            let y = startWeight * start.y + controlWeight * control.y + endWeight * end.y
-            points.append(CGPoint(x: x, y: y))
+        let d = CGFloat(max(count - 1, 1))
+        return (0..<count).map { i in
+            let t = CGFloat(i) / d, u = 1 - t
+            return CGPoint(x: u*u*s.x + 2*u*t*c.x + t*t*e.x, y: u*u*s.y + 2*u*t*c.y + t*t*e.y)
         }
-
-        return points
     }
 
     private static func roundedRectangleOutline(rect: CGRect, radius: CGFloat, count: Int) -> [CGPoint] {
-        let left = rect.minX
-        let right = rect.maxX
-        let top = rect.minY
-        let bottom = rect.maxY
-        let arcSteps = 24
-        var vertices = [
-            CGPoint(x: left + radius, y: top),
-            CGPoint(x: right - radius, y: top)
-        ]
-
-        vertices += arc(
-            center: CGPoint(x: right - radius, y: top + radius),
-            radius: radius,
-            from: -.pi / 2,
-            to: 0,
-            steps: arcSteps
-        )
-        vertices.append(CGPoint(x: right, y: bottom - radius))
-        vertices += arc(
-            center: CGPoint(x: right - radius, y: bottom - radius),
-            radius: radius,
-            from: 0,
-            to: .pi / 2,
-            steps: arcSteps
-        )
-        vertices.append(CGPoint(x: left + radius, y: bottom))
-        vertices += arc(
-            center: CGPoint(x: left + radius, y: bottom - radius),
-            radius: radius,
-            from: .pi / 2,
-            to: .pi,
-            steps: arcSteps
-        )
-        vertices.append(CGPoint(x: left, y: top + radius))
-        vertices += arc(
-            center: CGPoint(x: left + radius, y: top + radius),
-            radius: radius,
-            from: .pi,
-            to: .pi * 1.5,
-            steps: arcSteps
-        )
-
-        return resampleClosedPolyline(vertices, count: count)
+        let l = rect.minX, r = rect.maxX, t = rect.minY, b = rect.maxY
+        let steps = 20
+        var v: [CGPoint] = [CGPoint(x: l + radius, y: t), CGPoint(x: r - radius, y: t)]
+        v += arc(center: CGPoint(x: r - radius, y: t + radius), radius: radius, from: -.pi/2, to: 0, steps: steps)
+        v.append(CGPoint(x: r, y: b - radius))
+        v += arc(center: CGPoint(x: r - radius, y: b - radius), radius: radius, from: 0, to: .pi/2, steps: steps)
+        v.append(CGPoint(x: l + radius, y: b))
+        v += arc(center: CGPoint(x: l + radius, y: b - radius), radius: radius, from: .pi/2, to: .pi, steps: steps)
+        v.append(CGPoint(x: l, y: t + radius))
+        v += arc(center: CGPoint(x: l + radius, y: t + radius), radius: radius, from: .pi, to: .pi*1.5, steps: steps)
+        return resampleClosedPolyline(v, count: count)
     }
 
-    private static func arc(
-        center: CGPoint,
-        radius: CGFloat,
-        from startAngle: Double,
-        to endAngle: Double,
-        steps: Int
-    ) -> [CGPoint] {
-        (1...steps).map { step in
-            let progress = Double(step) / Double(steps)
-            let angle = startAngle + (endAngle - startAngle) * progress
-            return CGPoint(
-                x: center.x + CGFloat(cos(angle)) * radius,
-                y: center.y + CGFloat(sin(angle)) * radius
-            )
+    private static func arc(center: CGPoint, radius: CGFloat, from s: Double, to e: Double, steps: Int) -> [CGPoint] {
+        (1...steps).map { st in
+            let p = Double(st) / Double(steps)
+            let a = s + (e - s) * p
+            return CGPoint(x: center.x + CGFloat(cos(a)) * radius, y: center.y + CGFloat(sin(a)) * radius)
         }
     }
 
     private static func resampleClosedPolyline(_ vertices: [CGPoint], count: Int) -> [CGPoint] {
         guard vertices.count > 1, count > 0 else { return [] }
-
-        let segments = vertices.indices.map { index in
-            let nextIndex = (index + 1) % vertices.count
-            return hypot(vertices[nextIndex].x - vertices[index].x, vertices[nextIndex].y - vertices[index].y)
+        let segs = vertices.indices.map { i in
+            let n = (i + 1) % vertices.count
+            return hypot(vertices[n].x - vertices[i].x, vertices[n].y - vertices[i].y)
         }
-        let totalLength = segments.reduce(0, +)
-        guard totalLength > 0 else { return Array(repeating: vertices[0], count: count) }
-
-        var points: [CGPoint] = []
-        points.reserveCapacity(count)
-        var segmentIndex = 0
-        var segmentStartDistance: CGFloat = 0
-
-        for sampleIndex in 0..<count {
-            let targetDistance = totalLength * CGFloat(sampleIndex) / CGFloat(count)
-            while segmentIndex < segments.count - 1,
-                  segmentStartDistance + segments[segmentIndex] < targetDistance {
-                segmentStartDistance += segments[segmentIndex]
-                segmentIndex += 1
+        let total = segs.reduce(0, +)
+        guard total > 0 else { return Array(repeating: vertices[0], count: count) }
+        var pts: [CGPoint] = []
+        pts.reserveCapacity(count)
+        var segIdx = 0
+        var segStart: CGFloat = 0
+        for s in 0..<count {
+            let target = total * CGFloat(s) / CGFloat(count)
+            while segIdx < segs.count - 1, segStart + segs[segIdx] < target {
+                segStart += segs[segIdx]; segIdx += 1
             }
-
-            let start = vertices[segmentIndex]
-            let end = vertices[(segmentIndex + 1) % vertices.count]
-            let segmentLength = max(segments[segmentIndex], .leastNonzeroMagnitude)
-            let progress = (targetDistance - segmentStartDistance) / segmentLength
-            points.append(
-                CGPoint(
-                    x: start.x + (end.x - start.x) * progress,
-                    y: start.y + (end.y - start.y) * progress
-                )
-            )
+            let a = vertices[segIdx], b = vertices[(segIdx + 1) % vertices.count]
+            let len = max(segs[segIdx], .leastNonzeroMagnitude)
+            let p = (target - segStart) / len
+            pts.append(CGPoint(x: a.x + (b.x - a.x) * p, y: a.y + (b.y - a.y) * p))
         }
-
-        return points
+        return pts
     }
 }
