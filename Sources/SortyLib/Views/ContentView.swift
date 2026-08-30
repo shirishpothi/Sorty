@@ -122,8 +122,8 @@ public struct ContentView: View {
                         .accessibilityHidden(true)
                 }
 
-                if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
-                    ToolbarItem(placement: .navigation) {
+                ToolbarItem(placement: .navigation) {
+                    if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             appState.navigatedFromSettings = false
@@ -133,6 +133,10 @@ public struct ContentView: View {
                         }
                         .accessibilityIdentifier("SettingsReturnButton")
                         .accessibilityLabel("Return to previous view")
+                    } else {
+                        Color.clear
+                            .frame(width: 0, height: 0)
+                            .accessibilityHidden(true)
                     }
                 }
             }
