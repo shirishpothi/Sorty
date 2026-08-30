@@ -26,18 +26,10 @@ struct LearningsView: View {
     @State private var showingLearningsControls = false
     @State private var hoveredLearningsControl: String?
     @State private var isQuickRefreshingLearnings = false
-    @State private var showingStatusPopover = false
-    @State private var hoveredStatusPopoverAction: StatusPopoverAction?
     @State private var emptyLearningsHasAppeared = false
     @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
     @State private var selectedLearningRecordsCategory: LearningRecordsCategory?
-
-    private enum StatusPopoverAction {
-        case pauseResume
-        case withdrawConsent
-        case deleteData
-    }
 
     private enum PendingControlAction: Equatable {
         case pauseResume
@@ -470,7 +462,7 @@ struct LearningsView: View {
                         showingLearningsControls.toggle()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "gearshape")
+                            Image(systemName: "ellipsis.circle")
                                 .font(.system(size: 14, weight: .semibold))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .bold))
@@ -479,8 +471,8 @@ struct LearningsView: View {
                     }
                     .buttonStyle(.plain)
                     .frame(width: 34)
-                    .accessibilityLabel("Learnings settings")
-                    .accessibilityHint("Opens learning, model, import, and export controls")
+                    .accessibilityLabel("More learnings actions")
+                    .accessibilityHint("Opens reset, refresh, import, and export actions")
                     .popover(isPresented: $showingLearningsControls, arrowEdge: .top) {
                         learningsControlsPopover
                     }
@@ -513,7 +505,7 @@ struct LearningsView: View {
 
     private var learningsControlsPopover: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Learnings Controls")
+            Text("Learnings Actions")
                 .font(.headline)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 2)
@@ -524,14 +516,6 @@ struct LearningsView: View {
                 systemImage: "arrow.uturn.backward"
             ) {
                 restoreLearningsDefaults()
-            }
-
-            learningsControlButton(
-                title: "Model Settings…",
-                detail: "Choose the model used to refresh learnings",
-                systemImage: "gearshape"
-            ) {
-                presentLearningsModelPicker()
             }
 
             learningsControlButton(
@@ -570,17 +554,6 @@ struct LearningsView: View {
                 }
             }
 
-            Divider()
-
-            learningsControlButton(
-                title: "Delete All Data…",
-                detail: "Permanently remove learning data and settings",
-                systemImage: "trash",
-                role: .destructive
-            ) {
-                showingLearningsControls = false
-                confirmDeleteAllLearningData()
-            }
         }
         .padding(8)
         .frame(width: 310)
@@ -658,14 +631,6 @@ struct LearningsView: View {
             iconColor: .green,
             identifier: "learnings-quick-control"
         )
-    }
-
-    private func presentLearningsModelPicker() {
-        showingLearningsControls = false
-        Task { @MainActor in
-            await Task.yield()
-            showLearningsModelPicker = true
-        }
     }
 
     private func refreshLearningsInsights() {
@@ -840,159 +805,18 @@ struct LearningsView: View {
     }
 
     private var statusBadge: some View {
-        Button {
-            HapticFeedbackManager.shared.light()
-            withAnimation(.easeInOut(duration: 0.18)) {
-                showingStatusPopover.toggle()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 8, height: 8)
-                Text(statusLabel)
-                    .font(.caption.bold())
-                    .foregroundColor(manager.consentManager.hasConsented ? .primary : .secondary)
-                    .numericTextTransition(animationValue: statusLabel)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .opacity(0.8)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .systemLiquidGlassBackground(cornerRadius: 999)
-            .clipShape(Capsule())
-            .contentShape(Capsule())
+        HStack(spacing: 8) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+            Text(statusLabel)
+                .font(.caption.bold())
+                .foregroundColor(manager.consentManager.hasConsented ? .primary : .secondary)
+                .numericTextTransition(animationValue: statusLabel)
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
-        }
-        .popover(isPresented: $showingStatusPopover, arrowEdge: .top) {
-            VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    showingStatusPopover = false
-                    toggleSessionLearningPaused()
-                } label: {
-                    if pendingControlAction == .pauseResume {
-                        Label("Updating Learning", systemImage: "hourglass")
-                            .font(.subheadline)
-                    } else {
-                        Label(
-                            manager.sessionLearningPaused ? "Resume Learning" : "Pause Learning",
-                            systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
-                        )
-                        .font(.subheadline)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(pendingControlAction != nil)
-                .frame(width: 204, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            Color.secondary.opacity(
-                                hoveredStatusPopoverAction == .pauseResume ? 0.12 : 0.0))
-                )
-                .offset(x: hoveredStatusPopoverAction == .pauseResume ? 1 : 0)
-                .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.14)) {
-                        hoveredStatusPopoverAction = hovering ? .pauseResume : nil
-                    }
-                    if hovering {
-                        HapticFeedbackManager.shared.tap()
-                    }
-                }
-
-                Divider()
-
-                Button {
-                    showingStatusPopover = false
-                    confirmWithdrawConsent()
-                } label: {
-                    Label(
-                        pendingControlAction == .withdrawConsent ? "Withdrawing Consent" : "Withdraw Consent",
-                        systemImage: pendingControlAction == .withdrawConsent ? "hourglass" : "hand.raised"
-                    )
-                        .font(.subheadline)
-                }
-                .buttonStyle(.plain)
-                .disabled(pendingControlAction != nil)
-                .frame(width: 204, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            Color.secondary.opacity(
-                                hoveredStatusPopoverAction == .withdrawConsent ? 0.12 : 0.0))
-                )
-                .offset(x: hoveredStatusPopoverAction == .withdrawConsent ? 1 : 0)
-                .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.14)) {
-                        hoveredStatusPopoverAction = hovering ? .withdrawConsent : nil
-                    }
-                    if hovering {
-                        HapticFeedbackManager.shared.tap()
-                    }
-                }
-
-                Divider()
-
-                Button(role: .destructive) {
-                    showingStatusPopover = false
-                    confirmDeleteAllLearningData()
-                } label: {
-                    Label(
-                        pendingControlAction == .deleteData ? "Deleting Data" : "Delete All Data",
-                        systemImage: pendingControlAction == .deleteData ? "hourglass" : "trash"
-                    )
-                        .font(.subheadline)
-                }
-                .buttonStyle(.plain)
-                .disabled(pendingControlAction != nil)
-                .frame(width: 204, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            Color.secondary.opacity(
-                                hoveredStatusPopoverAction == .deleteData ? 0.12 : 0.0))
-                )
-                .offset(x: hoveredStatusPopoverAction == .deleteData ? 1 : 0)
-                .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.14)) {
-                        hoveredStatusPopoverAction = hovering ? .deleteData : nil
-                    }
-                    if hovering {
-                        HapticFeedbackManager.shared.tap()
-                    }
-                }
-            }
-            .padding(8)
-            .frame(width: 220)
-            .onDisappear {
-                hoveredStatusPopoverAction = nil
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Learning status quick actions")
-            .systemLiquidGlassPopover(cornerRadius: 12)
-        }
+        .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Learning status: \(statusLabel). Open quick actions")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Learning status: \(statusLabel)")
     }
 
     private var statusColor: Color {
@@ -1962,46 +1786,50 @@ struct LearningsView: View {
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
+
+                Divider().padding(.leading, 40)
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        confirmWithdrawConsent()
+                    }) {
+                        Label("Withdraw Consent", systemImage: "hand.raised")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .systemLiquidGlassBackground(cornerRadius: 999)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+                    .accessibilityHint("Learning will stop but data is preserved")
+
+                    Button(
+                        role: .destructive,
+                        action: {
+                            confirmDeleteAllLearningData()
+                        }
+                    ) {
+                        Label("Delete All Data", systemImage: "trash")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.tintedPill(.red, size: .small))
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+                    .accessibilityHint("Permanently deletes all learning data")
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
             }
             .systemLiquidGlassBackground(cornerRadius: 12)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            HStack(spacing: 12) {
-                Button(action: {
-                    confirmWithdrawConsent()
-                }) {
-                    Label("Withdraw Consent", systemImage: "hand.raised")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .systemLiquidGlassBackground(cornerRadius: 999)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
-                .accessibilityHint("Learning will stop but data is preserved")
-
-                Button(
-                    role: .destructive,
-                    action: {
-                        confirmDeleteAllLearningData()
-                    }
-                ) {
-                    Label("Delete All Data", systemImage: "trash")
-                        .font(.caption.bold())
-                }
-                .buttonStyle(.tintedPill(.red, size: .small))
-                .onHover { hovering in
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
-                .accessibilityHint("Permanently deletes all learning data")
-            }
         }
     }
 
