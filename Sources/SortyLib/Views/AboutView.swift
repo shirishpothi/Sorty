@@ -553,8 +553,8 @@ private enum AboutIconImageNormalizer {
 
 // MARK: - Icon burst
 
-/// A physics-driven particle burst: a radial spray of shards and sparks that
-/// decelerate, fall under gravity, shrink, and fade, fronted by a quick flash ring.
+/// Premium confetti burst: real confetti shapes with flutter, spin, gravity,
+/// and a soft flash — still a single Canvas/TimelineView for zero view churn.
 private struct IconBurst: View {
     let startDate: Date
 
@@ -566,12 +566,12 @@ private struct IconBurst: View {
                 let t = max(0, context.date.timeIntervalSince(startDate))
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
 
-                // Flash ring
-                let ringDuration = 0.42
+                // Soft flash ring — Sorty rose tinted, not stark white
+                let ringDuration = 0.38
                 let ringT = min(1, t / ringDuration)
                 if ringT < 1 {
-                    let radius = 16 + ringT * 78
-                    let alpha = pow(1 - ringT, 1.5) * 0.85
+                    let radius = 14 + ringT * 82
+                    let alpha = pow(1 - ringT, 1.6) * 0.62
                     let rect = CGRect(
                         x: center.x - radius,
                         y: center.y - radius,
@@ -580,55 +580,135 @@ private struct IconBurst: View {
                     )
                     ctx.stroke(
                         Path(ellipseIn: rect),
-                        with: .color(.white.opacity(alpha)),
-                        lineWidth: 3.5 * (1 - ringT) + 0.5
+                        with: .color(SortyDesignSystem.Colors.accent.opacity(alpha)),
+                        lineWidth: 2.8 * (1 - ringT) + 0.7
+                    )
+                    // Inner highlight
+                    ctx.stroke(
+                        Path(ellipseIn: rect.insetBy(dx: 2, dy: 2)),
+                        with: .color(.white.opacity(alpha * 0.55)),
+                        lineWidth: 1.1 * (1 - ringT)
                     )
                 }
 
                 for p in particles where t < p.lifetime {
                     let progress = t / p.lifetime
-                    // Decelerating outward travel (ease-out) plus gravity.
-                    let travel = (1 - exp(-3.4 * t)) / 3.4
-                    let dx = p.velocity.dx * travel
-                    let dy = p.velocity.dy * travel + 0.5 * 560 * t * t
-                    let pos = CGPoint(x: center.x + dx, y: center.y + dy)
+                    // Radial travel with drag (ease-out) + flutter + gravity
+                    let drag: Double = 2.9 + p.drag * 0.8
+                    let travel = (1 - exp(-drag * t)) / drag
+                    let flutter = sin(t * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp * min(1, t * 2.8)
+                    var dx = p.velocity.dx * travel + flutter
+                    var dy = p.velocity.dy * travel + 0.5 * p.gravity * t * t
+                    // Slight air drag on vertical fall
+                    dy *= 1 - progress * 0.08
+                    // Upward particles arc a bit wider
+                    if p.velocity.dy < 0 { dx *= 1 + progress * 0.22 }
 
-                    let alpha = pow(1 - progress, 1.4)
-                    let psize = p.size * (1 - progress * 0.55)
-                    let rect = CGRect(
-                        x: pos.x - psize / 2,
-                        y: pos.y - psize / 2,
-                        width: psize,
-                        height: max(0.5, psize)
-                    )
-                    let shape = p.isSpark
-                        ? Path(roundedRect: rect, cornerRadius: psize / 2)
-                        : Path(ellipseIn: rect)
-                    ctx.fill(shape, with: .color(p.color.opacity(alpha)))
+                    let alpha = pow(1 - progress, 1.5) * (progress < 0.08 ? progress / 0.08 : 1)
+                    let scale = 1 - progress * 0.42
+                    let psize = p.size * scale
+
+                    // Per-particle rotation + 3D-ish squash as it spins
+                    let spinDeg = p.spin * t * 180 / .pi + p.initialRotation
+                    let squash = 0.55 + 0.45 * abs(cos(t * p.spin * 0.9))
+
+                    ctx.opacity = alpha
+                    var xform = CGAffineTransform.identity
+                        .translatedBy(x: center.x + dx, y: center.y + dy)
+                        .rotated(by: spinDeg * .pi / 180)
+                        .scaledBy(x: 1, y: CGFloat(squash))
+
+                    // Soft drop shadow for depth
+                    var shadowPath: Path
+                    switch p.shape {
+                    case .circle:
+                        shadowPath = Path(ellipseIn: CGRect(x: -psize / 2, y: -psize / 2, width: psize, height: psize))
+                    case .rect:
+                        shadowPath = Path(roundedRect: CGRect(x: -psize / 2, y: -psize * 0.62 / 2, width: psize, height: psize * 0.62), cornerRadius: psize * 0.18)
+                    case .diamond:
+                        shadowPath = IconBurst.diamondPath(size: psize)
+                    case .squiggle:
+                        shadowPath = Path(ellipseIn: CGRect(x: -psize / 2, y: -psize * 0.55 / 2, width: psize, height: psize * 0.55))
+                    }
+                    ctx.fill(shadowPath.applying(xform), with: .color(.black.opacity(0.16)))
+                    // Nudge main shape up-left so shadow peeks
+                    xform = xform.translatedBy(x: -0.5, y: -0.7)
+                    ctx.fill(shadowPath.applying(xform), with: .color(p.color))
+
+                    ctx.opacity = 1
                 }
             }
         }
     }
 
+    private static func diamondPath(size: CGFloat) -> Path {
+        var path = Path()
+        let h = size / 2
+        path.move(to: CGPoint(x: 0, y: -h))
+        path.addLine(to: CGPoint(x: h, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: h))
+        path.addLine(to: CGPoint(x: -h, y: 0))
+        path.closeSubpath()
+        return path
+    }
+
     private static func makeParticles() -> [BurstParticle] {
         var rng = SystemRandomNumberGenerator()
-        let palette: [Color] = [.teal, .blue, .purple, .pink, .orange, .white]
-        let count = 44
+        // Sorty palette: rose accent + complementary confetti hues
+        let palette: [Color] = [
+            SortyDesignSystem.Colors.accent,
+            Color(red: 0.96, green: 0.78, blue: 0.22), // gold
+            .teal, .blue, .purple, .pink, .orange, .mint, .white
+        ]
+        let count = 54
 
         return (0..<count).map { i in
-            let jitter = Double.random(in: -0.16...0.16, using: &rng)
-            let angle = (Double(i) / Double(count)) * .pi * 2 + jitter
-            let speed = Double.random(in: 150...360, using: &rng)
+            let jitter = Double.random(in: -0.22...0.22, using: &rng)
+            // Even radial fill + bias: more upward/outward, fewer straight-down (less occlusion of icon shadow)
+            let baseAngle = (Double(i) / Double(count)) * .pi * 2 + jitter
+            // Push down-quadrant particles slightly outward so burst feels airy, not bottom-heavy
+            let angle = baseAngle
+            let speed: Double
+            let isUpward = sin(angle) < -0.15
+            if isUpward {
+                speed = Double.random(in: 190...405, using: &rng)
+            } else {
+                speed = Double.random(in: 150...345, using: &rng)
+            }
+            let shape: BurstShape
+            switch i % 7 {
+            case 0, 1: shape = .rect
+            case 2: shape = .diamond
+            case 3 where i % 14 == 3: shape = .squiggle
+            default: shape = .circle
+            }
+            // Confetti rectangles read bigger than dots — compensate size by shape
+            let baseSize: CGFloat
+            switch shape {
+            case .rect: baseSize = CGFloat.random(in: 7...13, using: &rng)
+            case .diamond: baseSize = CGFloat.random(in: 6...10, using: &rng)
+            case .squiggle: baseSize = CGFloat.random(in: 5...9, using: &rng)
+            case .circle: baseSize = CGFloat.random(in: 4.5...8.5, using: &rng)
+            }
             return BurstParticle(
                 velocity: CGVector(dx: cos(angle) * speed, dy: sin(angle) * speed),
-                size: CGFloat.random(in: 4...11, using: &rng),
+                size: baseSize,
                 color: palette[i % palette.count],
-                lifetime: Double.random(in: 0.7...1.15, using: &rng),
-                isSpark: i % 5 == 0
+                lifetime: Double.random(in: 0.82...1.55, using: &rng),
+                shape: shape,
+                spin: Double.random(in: -9...9, using: &rng),
+                initialRotation: Double.random(in: 0...360, using: &rng),
+                wobbleFreq: Double.random(in: 7...15, using: &rng),
+                wobbleAmp: Double.random(in: 6...18, using: &rng),
+                wobblePhase: Double.random(in: 0...(2 * .pi), using: &rng),
+                gravity: Double.random(in: 520...740, using: &rng),
+                drag: Double.random(in: -0.4...0.6, using: &rng)
             )
         }
     }
 }
+
+private enum BurstShape { case circle, rect, diamond, squiggle }
 
 private struct BurstParticle: Identifiable {
     let id = UUID()
@@ -636,7 +716,14 @@ private struct BurstParticle: Identifiable {
     let size: CGFloat
     let color: Color
     let lifetime: Double
-    let isSpark: Bool
+    let shape: BurstShape
+    let spin: Double
+    let initialRotation: Double
+    let wobbleFreq: Double
+    let wobbleAmp: Double
+    let wobblePhase: Double
+    let gravity: Double
+    let drag: Double
 }
 
 private struct AboutGlassBackground: ViewModifier {
