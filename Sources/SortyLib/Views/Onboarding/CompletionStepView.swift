@@ -1096,6 +1096,7 @@ public struct CompletionStepView: View {
     @State private var tipsAppeared = false
     @State private var isCompletionButtonHovered = false
     @State private var completionHoverTask: Task<Void, Never>?
+    @State private var lockedHoverForExit: Bool?
 
     private let audioController = CompletionAudioController.shared
     @State private var readinessState: ReadinessState = .idle
@@ -1141,7 +1142,7 @@ public struct CompletionStepView: View {
                     showGlowRing: showGlowRing,
                     exitTriggered: exitTriggered,
                     contentDismissed: contentDismissed,
-                    isButtonHovered: isCompletionButtonHovered
+                    isButtonHovered: lockedHoverForExit ?? isCompletionButtonHovered
                 )
                 CompletionCopy(hasAppeared: hasAppeared, contentDismissed: contentDismissed)
                 CompletionTipsGrid(tipsAppeared: tipsAppeared, contentDismissed: contentDismissed)
@@ -1160,6 +1161,7 @@ public struct CompletionStepView: View {
                     isChecking: readinessState == .checking,
                     action: verifyAndFinish,
                     onHoverChanged: { isHovered in
+                        guard lockedHoverForExit == nil else { return }
                         completionHoverTask?.cancel()
                         // Small enter delay filters a sub-40ms swipe that would
                         // otherwise flash the app icon; leave delay keeps the
@@ -1342,6 +1344,17 @@ public struct CompletionStepView: View {
 
     private func startTransition() {
         guard !exitTriggered else { return }
+        // Lock the hero icon to its current hover state so a click while
+        // showing the Sorty app icon doesn't flick back to the checkmark
+        // during the exit animation.
+        lockedHoverForExit = isCompletionButtonHovered
+        if lockedHoverForExit == false, completionHoverTask != nil {
+            // Hover-enter was still in its 40ms debounce (raw hover true but
+            // delayed state not yet flipped). Treat as hovered so Sorty stays.
+            lockedHoverForExit = true
+            completionHoverTask?.cancel()
+            completionHoverTask = nil
+        }
         AnalyticsManager.shared.setConsent(isAnalyticsEnabled ? .granted : .denied)
         let exitDuration = reduceMotion ? 0 : 0.52
         HapticFeedbackManager.shared.success()
