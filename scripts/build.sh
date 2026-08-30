@@ -267,7 +267,9 @@ run_build_with_compact_status() {
     local log_name="$1"
     shift
 
-    if is_truthy "${SORTY_VERBOSE}" || [ ! -t 1 ]; then
+    # Codex captures stdout through a pipe, but its terminal still renders
+    # carriage-return status updates. Only disable them for CI log streams.
+    if is_truthy "${SORTY_VERBOSE}" || { [ ! -t 1 ] && is_truthy "${CI:-false}"; }; then
         run_with_log "${log_name}" "$@"
         return $?
     fi
