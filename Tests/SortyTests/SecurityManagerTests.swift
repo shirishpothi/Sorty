@@ -262,4 +262,12 @@ final class SecurityManagerTests: XCTestCase {
         XCTAssertFalse(manager.isUnlocked, "Bypass should not create a secure session")
     }
 
+    func testLearningsAuthenticationBypassesWhenFeatureFlagDisabled() async {
+        UserDefaults.standard.removeObject(forKey: "sensitiveActionAuthenticationEnabled")
+
+        let didAuthenticate = await manager.authenticateForLearningsAccess()
+
+        XCTAssertTrue(didAuthenticate)
+        XCTAssertNil(manager.error)
+    }
 }

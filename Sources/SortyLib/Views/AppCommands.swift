@@ -1427,17 +1427,29 @@ public class AppState: ObservableObject {
     }
     
     public func pauseLearning() {
-        postWindowScopedNotification(.pauseLearning)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to pause learning and review your learnings controls."
+        ) { [weak self] in
+            self?.postWindowScopedNotification(.pauseLearning)
+        }
     }
     
     public func exportLearningsProfile() {
-        currentView = .learnings
-        postWindowScopedNotification(.exportLearningsProfile)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to export your learnings profile."
+        ) { [weak self] in
+            self?.currentView = .learnings
+            self?.postWindowScopedNotification(.exportLearningsProfile)
+        }
     }
     
     public func importLearningsProfile() {
-        currentView = .learnings
-        postWindowScopedNotification(.importLearningsProfile)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to import a learnings profile."
+        ) { [weak self] in
+            self?.currentView = .learnings
+            self?.postWindowScopedNotification(.importLearningsProfile)
+        }
     }
 
     public func requestDeleteUsageDataConfirmation() {

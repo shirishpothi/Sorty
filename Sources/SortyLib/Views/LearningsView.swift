@@ -382,7 +382,11 @@ struct LearningsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) {
             notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            exportProfile()
+            requestSensitiveAction(
+                reason: "Authenticate to export your learnings profile."
+            ) {
+                exportProfile()
+            }
         }
         .onChange(of: manager.showingImportPicker) { showing in
             guard showing else { return }
@@ -550,7 +554,9 @@ struct LearningsView: View {
                 systemImage: "square.and.arrow.up"
             ) {
                 showingLearningsControls = false
-                exportProfile()
+                requestSensitiveAction(reason: "Authenticate to export your learnings profile.") {
+                    exportProfile()
+                }
             }
 
             learningsControlButton(
@@ -559,7 +565,9 @@ struct LearningsView: View {
                 systemImage: "square.and.arrow.down"
             ) {
                 showingLearningsControls = false
-                presentFileImporter(.learningsProfile)
+                requestSensitiveAction(reason: "Authenticate to import a learnings profile.") {
+                    presentFileImporter(.learningsProfile)
+                }
             }
 
             Divider()
@@ -712,24 +720,29 @@ struct LearningsView: View {
     }
 
     private func setSessionLearningPaused(_ isPaused: Bool) {
-        HapticFeedbackManager.shared.light()
-        let isPausing = isPaused && !manager.sessionLearningPaused
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
-            manager.sessionLearningPaused = isPaused
+        requestSensitiveAction(
+            reason: "Authenticate to change learning collection for this session.",
+            pendingAction: .pauseResume
+        ) {
+            HapticFeedbackManager.shared.light()
+            let isPausing = isPaused && !manager.sessionLearningPaused
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                manager.sessionLearningPaused = isPaused
+            }
+            if isPausing {
+                HapticFeedbackManager.shared.selection()
+            } else {
+                HapticFeedbackManager.shared.success()
+            }
+            finishPendingControlAction(
+                title: isPaused ? "Learning Paused" : "Learning Resumed",
+                message: isPaused
+                    ? "Sorty will stop collecting learning signals for this session."
+                    : "Sorty is collecting learning signals again.",
+                icon: isPaused ? "pause.circle.fill" : "play.circle.fill",
+                iconColor: isPaused ? .orange : .green
+            )
         }
-        if isPausing {
-            HapticFeedbackManager.shared.selection()
-        } else {
-            HapticFeedbackManager.shared.success()
-        }
-        finishPendingControlAction(
-            title: isPaused ? "Learning Paused" : "Learning Resumed",
-            message: isPaused
-                ? "Sorty will stop collecting learning signals for this session."
-                : "Sorty is collecting learning signals again.",
-            icon: isPaused ? "pause.circle.fill" : "play.circle.fill",
-            iconColor: isPaused ? .orange : .green
-        )
     }
 
     private func confirmWithdrawConsent() {
@@ -740,8 +753,13 @@ struct LearningsView: View {
     }
 
     private func confirmDeleteAllLearningData() {
-        HapticFeedbackManager.shared.error()
-        showingDeleteConfirmation = true
+        requestSensitiveAction(
+            reason: "Authenticate to delete all learning data.",
+            pendingAction: .deleteData
+        ) {
+            HapticFeedbackManager.shared.error()
+            showingDeleteConfirmation = true
+        }
     }
 
     private func withdrawConsent() {
@@ -2109,6 +2127,40 @@ struct LearningsView: View {
         HapticFeedbackManager.shared.tap()
         activeFileImporter = importer
         isShowingFileImporter = true
+    }
+
+    private func requestSensitiveAction(
+        reason: String,
+        pendingAction: PendingControlAction? = nil,
+        onSuccess: @escaping @MainActor () -> Void
+    ) {
+        if let pendingAction {
+            guard self.pendingControlAction == nil else { return }
+            showPendingControlAction(pendingAction)
+        }
+
+        if !FeatureFlags.sensitiveActionAuthenticationEnabled {
+            onSuccess()
+            return
+        }
+
+        Task { @MainActor in
+            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
+                reason: reason)
+            guard didAuthenticate else {
+                HapticFeedbackManager.shared.error()
+                if pendingAction != nil {
+                    finishPendingControlAction(
+                        title: "Authentication Cancelled",
+                        message: "No changes were made.",
+                        icon: "xmark.circle.fill",
+                        iconColor: .orange
+                    )
+                }
+                return
+            }
+            onSuccess()
+        }
     }
 
     private var usesDedicatedLearningsModel: Bool {
