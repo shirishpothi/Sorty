@@ -65,7 +65,7 @@ public final class WindowSession: ObservableObject {
         learningsManager.configure(with: config)
     }
 
-    public func handle(destination: DeeplinkDestination,
+    public func handle(destination: AppDestination,
                 settingsViewModel: SettingsViewModel,
                 personaManager: PersonaManager,
                 customPersonaStore: CustomPersonaStore,

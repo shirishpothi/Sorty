@@ -39,7 +39,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.sorty.app</string>
+			<string>com.sorty.app.legacy-deeplinks</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>sorty</string>

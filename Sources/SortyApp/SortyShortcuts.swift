@@ -18,7 +18,7 @@ enum SortyShortcutDestination: String, AppEnum {
         .watchedFolders: DisplayRepresentation(title: "Watched Folders")
     ]
 
-    var deeplink: DeeplinkDestination {
+    var appDestination: AppDestination {
         switch self {
         case .organize:
             return .organize(path: nil, persona: nil, mode: nil, autostart: false)
@@ -63,11 +63,7 @@ struct OpenSortyDestinationIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let url = DeeplinkHandler.url(for: destination.deeplink) else {
-            return .result(dialog: "Sorty couldn't build that shortcut.")
-        }
-
-        NSWorkspace.shared.open(url)
+        route(destination.appDestination)
         return .result(dialog: destination.dialog)
     }
 }
@@ -110,19 +106,22 @@ struct OrganizeFolderInSortyIntent: AppIntent {
         }
 
         let normalizedPath = URL(fileURLWithPath: trimmedPath).standardizedFileURL.path
-        guard let url = DeeplinkHandler.url(
-            for: .organize(path: normalizedPath, persona: nil, mode: nil, autostart: startImmediately)
-        ) else {
-            return .result(dialog: "Sorty couldn't build that folder shortcut.")
-        }
-
-        NSWorkspace.shared.open(url)
+        route(.organize(path: normalizedPath, persona: nil, mode: nil, autostart: startImmediately))
         return .result(
             dialog: startImmediately
                 ? "Opening Sorty and starting organization."
                 : "Opening Sorty with that folder ready to organize."
         )
     }
+}
+
+@MainActor
+private func route(_ destination: AppDestination) {
+    _ = MainWindowRouter.shared.postOrQueue(
+        name: .routeDestinationInMainWindow,
+        userInfo: [WindowRoutingUserInfoKey.destination: destination]
+    )
+    NSApplication.shared.activate(ignoringOtherApps: true)
 }
 
 struct SortyAppShortcutsProvider: AppShortcutsProvider {

@@ -73,73 +73,6 @@ public struct ExtensionCommunication {
     private static let servicesRegistryRefreshMinimumInterval: TimeInterval = 6 * 60 * 60
     nonisolated(unsafe) private static var finderSyncHeartbeatObserver: NSObjectProtocol?
 
-    // MARK: - URL Scheme Handling
-
-    /// Handle incoming URL schemes: sorty://organize?path=/path/to/folder
-    public static func handleURL(_ url: URL) -> URL? {
-        guard url.scheme == "sorty" else { return nil }
-
-        switch url.host {
-        case "organize":
-            // sorty://organize?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "scan":
-            // sorty://scan?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "open":
-            // sorty://open?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "watched":
-            // sorty://watched?action=add&path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
-                return URL(fileURLWithPath: path)
-            }
-
-        default:
-            // Legacy: sorty:///path/to/folder (path in URL path component)
-            if !url.path.isEmpty && url.path != "/" {
-                return URL(fileURLWithPath: url.path)
-            }
-        }
-
-        return nil
-    }
-
-    /// Generate a URL scheme command for organizing a given path
-    public static func urlForOrganizing(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "organize"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
-        return components.url
-    }
-
-    /// Generate a URL scheme command for scanning a given path
-    public static func urlForScanning(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "scan"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
-        return components.url
-    }
-
     // MARK: - App Group Communication (for sandboxed extensions)
 
     public static func sendDirectoryToApp(_ directoryURL: URL) {
@@ -156,17 +89,19 @@ public struct ExtensionCommunication {
         )
     }
 
-    public static func receiveFromExtension() -> URL? {
+    public static func receiveFromExtension() -> (url: URL, action: String)? {
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
            let path = sharedDefaults.string(forKey: directoryKey) {
+            let action = sharedDefaults.string(forKey: "pendingFinderAction") ?? "organize"
             sharedDefaults.removeObject(forKey: directoryKey)
-            return URL(fileURLWithPath: path)
+            sharedDefaults.removeObject(forKey: "pendingFinderAction")
+            return (URL(fileURLWithPath: path), action)
         }
         return nil
     }
 
     @discardableResult
-    public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL) -> Void) -> NSObjectProtocol {
+    public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL, String) -> Void) -> NSObjectProtocol {
         let notificationCenter = DistributedNotificationCenter.default()
         return notificationCenter.addObserver(
             forName: notificationName,
@@ -175,10 +110,12 @@ public struct ExtensionCommunication {
         ) { notification in
             if let userInfo = notification.userInfo,
                let path = userInfo["path"] as? String {
+                let action = userInfo["action"] as? String ?? "organize"
                 UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
+                UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: "pendingFinderAction")
                 let url = URL(fileURLWithPath: path)
                 Task { @MainActor in
-                    handler(url)
+                    handler(url, action)
                 }
             }
         }
@@ -1940,7 +1877,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); /usr/bin/defaults write group.com.sorty.app selectedDirectory -string "$f"; /usr/bin/defaults write group.com.sorty.app pendingFinderAction -string organize; /usr/bin/open -b com.sorty.app; done
             """
 
             let workflowPlist = """
@@ -2347,7 +2284,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://watched?action=add&amp;path=$encoded"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); /usr/bin/defaults write group.com.sorty.app selectedDirectory -string "$f"; /usr/bin/defaults write group.com.sorty.app pendingFinderAction -string watch; /usr/bin/open -b com.sorty.app; done
             """
 
             let workflowPlist = """
@@ -2636,7 +2573,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); /usr/bin/defaults write group.com.sorty.app selectedDirectory -string "$f"; /usr/bin/defaults write group.com.sorty.app pendingFinderAction -string exclude; /usr/bin/open -b com.sorty.app; done
             """
 
             let workflowPlist = """
@@ -2973,7 +2910,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded&amp;preview=true"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); /usr/bin/defaults write group.com.sorty.app selectedDirectory -string "$f"; /usr/bin/defaults write group.com.sorty.app pendingFinderAction -string organize; /usr/bin/open -b com.sorty.app; done
             """
 
             let workflowPlist = """
@@ -3272,8 +3209,9 @@ public struct ExtensionCommunication {
         on run {input, parameters}
             repeat with theItem in input
                 set thePath to POSIX path of theItem
-                set encodedPath to do shell script "/usr/bin/python3 -c \\"import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))\\" " & quoted form of thePath & " 2>/dev/null || printf '%s' " & quoted form of thePath & " | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'"
-                do shell script "open -g 'sorty://organize?path=" & encodedPath & "&source=finder'"
+                do shell script "/usr/bin/defaults write group.com.sorty.app selectedDirectory -string " & quoted form of thePath
+                do shell script "/usr/bin/defaults write group.com.sorty.app pendingFinderAction -string organize"
+                do shell script "/usr/bin/open -b com.sorty.app"
             end repeat
             return input
         end run

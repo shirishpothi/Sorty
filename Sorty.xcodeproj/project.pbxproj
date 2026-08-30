@@ -29,7 +29,7 @@
 		B7175043EFC84B55BB376637 /* LearningsFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD17C04F03490991995D66 /* LearningsFileManager.swift */; };
 		08558CA9E8704012BEC16BB6 /* LearningsAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */; };
 		601EC048635B48738F5F3CE2 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16512BA43584CED96CBA3B6 /* SecurityManager.swift */; };
-		7989759D8FFD4445A5743204 /* DeeplinkHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B0BE9C6014659B48C3487 /* DeeplinkHandler.swift */; };
+		7989759D8FFD4445A5743204 /* AppDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B0BE9C6014659B48C3487 /* AppDestination.swift */; };
 		3E649B82FFB640C391E43ACE /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D819A55F7A41718667A095 /* BuildInfo.swift */; };
 		5FE8A8189833491A9349A25E /* DuplicateSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC308D14346345408E8CF27D /* DuplicateSettings.swift */; };
 		33007BB92F09093D000207CB /* CustomPersona.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33007BB82F09093D000207CB /* CustomPersona.swift */; };
@@ -174,7 +174,6 @@
 		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
 		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
 		AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000004 /* FeatureSpecificUITests.swift */; };
-		AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000005 /* DeeplinkUITests.swift */; };
 		CC220002000000000000B001 /* OnboardingWorkflowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000B001 /* OnboardingWorkflowUITests.swift */; };
 		CC220002000000000000B002 /* LearningsWorkflowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000B002 /* LearningsWorkflowUITests.swift */; };
 		CC220002000000000000C001 /* ContinuousLearningObserverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C001 /* ContinuousLearningObserverTests.swift */; };
@@ -194,11 +193,9 @@
 		CC220002000000000000A002 /* AIInsightExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A002 /* AIInsightExtractor.swift */; };
 		CC220002000000000000A003 /* AIRequestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A003 /* AIRequestSupport.swift */; };
 		CC220002000000000000A005 /* FileLearningsAttributionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A005 /* FileLearningsAttributionResolver.swift */; };
-		CC220002000000000000A006 /* WindowLaunchRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A006 /* WindowLaunchRequest.swift */; };
 		CC220002000000000000A007 /* WindowSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A007 /* WindowSession.swift */; };
 		CC220002000000000000A008 /* PromptContextHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A008 /* PromptContextHelper.swift */; };
 		CC220002000000000000A00A /* StorageDestinationNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00A /* StorageDestinationNormalizer.swift */; };
-		CC220002000000000000A00B /* ExternalDeeplinkDeduper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */; };
 		CC220002000000000000A00C /* FilenameSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00C /* FilenameSanitizer.swift */; };
 		CC220002000000000000A00D /* NotificationCenter+MainActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00D /* NotificationCenter+MainActor.swift */; };
 		CC220002000000000000A00E /* RenameRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00E /* RenameRuleEngine.swift */; };
@@ -219,7 +216,6 @@
 		24E239749E34CEDE786523FC /* BuildInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30D2110751104271FD9C41A7 /* BuildInfoTests.swift */; };
 		CF2C54FD134C69FDA8E96D55 /* ContentAnalyzerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C0584193892380A4389744 /* ContentAnalyzerTests.swift */; };
 		62BC7488BE2DDF2670894FB7 /* CustomPersonaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7AA06FAA752B44C39AB43B1 /* CustomPersonaTests.swift */; };
-		DE81EA4CE64EC8F2ACB7C7F6 /* DeeplinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B39DA92CFA34CED01A037730 /* DeeplinkTests.swift */; };
 		B640E983A0A3A989601804FD /* DirectoryScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 951649A15F53CB8784BF8473 /* DirectoryScannerTests.swift */; };
 		474494299806FA260FD9CEBE /* DuplicateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C29DA243719B3B66FFFB8A /* DuplicateDetectorTests.swift */; };
 		05EC2145616CDAA66575DF18 /* DuplicateSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DFA59A8A77AD337B452FBD /* DuplicateSettingsTests.swift */; };
@@ -346,7 +342,7 @@
 		DDFD17C04F03490991995D66 /* LearningsFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsFileManager.swift; sourceTree = "<group>"; };
 		C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsAnalyzer.swift; sourceTree = "<group>"; };
 		A16512BA43584CED96CBA3B6 /* SecurityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityManager.swift; sourceTree = "<group>"; };
-		C11B0BE9C6014659B48C3487 /* DeeplinkHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkHandler.swift; sourceTree = "<group>"; };
+		C11B0BE9C6014659B48C3487 /* AppDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDestination.swift; sourceTree = "<group>"; };
 		13D819A55F7A41718667A095 /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
 		BC308D14346345408E8CF27D /* DuplicateSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettings.swift; sourceTree = "<group>"; };
 		33007BB82F09093D000207CB /* CustomPersona.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomPersona.swift; sourceTree = "<group>"; };
@@ -423,7 +419,6 @@
 		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationWorkflowTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000004 /* FeatureSpecificUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSpecificUITests.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000005 /* DeeplinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000006 /* LogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageVisionAnalyzer.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000000B /* StorageLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocation.swift; sourceTree = "<group>"; };
@@ -509,11 +504,9 @@
 		CC110001000000000000A002 /* AIInsightExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInsightExtractor.swift; sourceTree = "<group>"; };
 		CC110001000000000000A003 /* AIRequestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRequestSupport.swift; sourceTree = "<group>"; };
 		CC110001000000000000A005 /* FileLearningsAttributionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileLearningsAttributionResolver.swift; sourceTree = "<group>"; };
-		CC110001000000000000A006 /* WindowLaunchRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLaunchRequest.swift; sourceTree = "<group>"; };
 		CC110001000000000000A007 /* WindowSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSession.swift; sourceTree = "<group>"; };
 		CC110001000000000000A008 /* PromptContextHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptContextHelper.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00A /* StorageDestinationNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageDestinationNormalizer.swift; sourceTree = "<group>"; };
-		CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDeeplinkDeduper.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00C /* FilenameSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilenameSanitizer.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00D /* NotificationCenter+MainActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationCenter+MainActor.swift"; sourceTree = "<group>"; };
 		CC110001000000000000A00E /* RenameRuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameRuleEngine.swift; sourceTree = "<group>"; };
@@ -532,7 +525,6 @@
 		30D2110751104271FD9C41A7 /* BuildInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfoTests.swift; sourceTree = "<group>"; };
 		65C0584193892380A4389744 /* ContentAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentAnalyzerTests.swift; sourceTree = "<group>"; };
 		C7AA06FAA752B44C39AB43B1 /* CustomPersonaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomPersonaTests.swift; sourceTree = "<group>"; };
-		B39DA92CFA34CED01A037730 /* DeeplinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkTests.swift; sourceTree = "<group>"; };
 		951649A15F53CB8784BF8473 /* DirectoryScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryScannerTests.swift; sourceTree = "<group>"; };
 		05C29DA243719B3B66FFFB8A /* DuplicateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetectorTests.swift; sourceTree = "<group>"; };
 		D0DFA59A8A77AD337B452FBD /* DuplicateSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsTests.swift; sourceTree = "<group>"; };
@@ -697,7 +689,6 @@
 				AABBCC11000100000000000D /* FeatureFlags.swift */,
 				AABBCC11000100000000000E /* ExclusionEnforcer.swift */,
 				AABBCC110001000000000079 /* NamingPreset.swift */,
-				CC110001000000000000A006 /* WindowLaunchRequest.swift */,
 				CC110001000000000000A007 /* WindowSession.swift */,
 			);
 			path = Sources/SortyLib/Models;
@@ -718,7 +709,7 @@
 			isa = PBXGroup;
 			children = (
 				A16512BA43584CED96CBA3B6 /* SecurityManager.swift */,
-				C11B0BE9C6014659B48C3487 /* DeeplinkHandler.swift */,
+				C11B0BE9C6014659B48C3487 /* AppDestination.swift */,
 				13D819A55F7A41718667A095 /* BuildInfo.swift */,
 				3353FC342F0124320097CD23 /* Constants.swift */,
 				3353FC352F0124320097CD23 /* DebugLogger.swift */,
@@ -739,7 +730,6 @@
 				AABBCC11000100000000007A /* NamingPresetManager.swift */,
 				AABBCC11000100000000007E /* OnboardingAudioManager.swift */,
 				AABBCC110001000000000095 /* SteeringPromptManager.swift */,
-				CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */,
 				CC110001000000000000A00C /* FilenameSanitizer.swift */,
 				CC110001000000000000A00D /* NotificationCenter+MainActor.swift */,
 				CC110001000000000000A00E /* RenameRuleEngine.swift */,
@@ -908,7 +898,6 @@
 				AABBCC110001000000000002 /* AppAccessibilityTests.swift */,
 				AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */,
 				AABBCC110001000000000004 /* FeatureSpecificUITests.swift */,
-				AABBCC110001000000000005 /* DeeplinkUITests.swift */,
 			);
 			path = Tests/SortyUITests;
 			sourceTree = "<group>";
@@ -994,7 +983,6 @@
 				CC110001000000000000C001 /* ContinuousLearningObserverTests.swift */,
 				65C0584193892380A4389744 /* ContentAnalyzerTests.swift */,
 				C7AA06FAA752B44C39AB43B1 /* CustomPersonaTests.swift */,
-				B39DA92CFA34CED01A037730 /* DeeplinkTests.swift */,
 				951649A15F53CB8784BF8473 /* DirectoryScannerTests.swift */,
 				05C29DA243719B3B66FFFB8A /* DuplicateDetectorTests.swift */,
 				D0DFA59A8A77AD337B452FBD /* DuplicateSettingsTests.swift */,
@@ -1257,7 +1245,6 @@
 				CC220002000000000000C001 /* ContinuousLearningObserverTests.swift in Sources */,
 				CF2C54FD134C69FDA8E96D55 /* ContentAnalyzerTests.swift in Sources */,
 				62BC7488BE2DDF2670894FB7 /* CustomPersonaTests.swift in Sources */,
-				DE81EA4CE64EC8F2ACB7C7F6 /* DeeplinkTests.swift in Sources */,
 				B640E983A0A3A989601804FD /* DirectoryScannerTests.swift in Sources */,
 				474494299806FA260FD9CEBE /* DuplicateDetectorTests.swift in Sources */,
 				05EC2145616CDAA66575DF18 /* DuplicateSettingsTests.swift in Sources */,
@@ -1320,7 +1307,6 @@
 				AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */,
 				AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */,
 				AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */,
-				AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,7 +15,6 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject private var exclusionRules: ExclusionRulesManager
     @EnvironmentObject private var extensionListener: ExtensionListener
-    @EnvironmentObject private var deeplinkHandler: DeeplinkHandler
     @EnvironmentObject private var learningsManager: LearningsManager
     @EnvironmentObject private var automationManager: AutomationManager
     @EnvironmentObject private var notificationSettings: NotificationSettingsManager
@@ -31,21 +30,17 @@ struct MainWindowRootView: View {
 
     @StateObject private var windowSession: WindowSession
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
-    @State private var handledLaunchRequestID: UUID?
-    @State private var handledUITestDeepLink = false
+    @State private var handledUITestDestination = false
     @State private var isShowingWhatsNew = false
     @State private var setupRepairTask: Task<Void, Never>?
 
-    let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
 
     init(
-        launchRequest: WindowLaunchRequest?,
         coordinator: AppCoordinator?,
         history: OrganizationHistory,
         updateManager: SparkleUpdateManager
     ) {
-        self.launchRequest = launchRequest
         self.coordinator = coordinator
         _windowSession = StateObject(
             wrappedValue: WindowSession(updateManager: updateManager, history: history)
@@ -127,13 +122,12 @@ struct MainWindowRootView: View {
 
     private var contentWithPrimaryNotificationRouting: some View {
         contentWithLifecycle
-            .onReceive(NotificationCenter.default.publisher(for: .routeDeeplinkInMainWindow)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: .routeDestinationInMainWindow)) { notification in
                 guard notification.targetsWindowSession(windowSession.id),
-                      let url = notification.routedDeeplinkURL else {
+                      let destination = notification.routedDestination else {
                     return
                 }
-
-                processDeeplink(url)
+                handle(destination)
             }
             .onReceive(NotificationCenter.default.publisher(for: .presentSteeringPromptsInMainWindow)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
@@ -245,15 +239,11 @@ struct MainWindowRootView: View {
                 updateMenuBarOrganizationActivity()
                 updateMenuBarDuplicateActivity()
                 scheduleSetupRepairReconciliation()
-                processLaunchRequestIfNeeded()
-                processUITestDeeplinkIfNeeded()
+                processUITestDestinationIfNeeded()
                 presentWhatsNewIfNeeded()
                 if coordinator != nil {
                     MainWindowRouter.shared.markReady(sessionID: windowSession.id)
                 }
-            }
-            .onChange(of: launchRequest?.id) { _, _ in
-                processLaunchRequestIfNeeded()
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in
@@ -284,6 +274,18 @@ struct MainWindowRootView: View {
                     )
                 }
             }
+            .onOpenURL { url in
+                guard let destination = LegacyDeeplinkParser.destination(for: url) else { return }
+                if !MainWindowRouter.shared.route(destination) {
+                    handle(destination)
+                }
+                AnalyticsManager.shared.captureFeature(
+                    feature: "experimental",
+                    subfeature: "legacy_deeplinks",
+                    action: "opened",
+                    outcome: "success"
+                )
+            }
             .onChange(of: windowSession.organizer.state) { _, newState in
                 MainWindowRouter.shared.setBusy(
                     newState.isOperationInProgress,
@@ -296,9 +298,6 @@ struct MainWindowRootView: View {
             }
             .onChange(of: windowSession.appState.duplicateManager.isScanning) { _, _ in
                 updateMenuBarDuplicateActivity()
-            }
-            .onOpenURL { url in
-                handleExternalDeeplink(url)
             }
             .onDisappear {
                 coordinator?.finishManualOrganization(sessionID: windowSession.id)
@@ -330,10 +329,6 @@ struct MainWindowRootView: View {
 
     private var contentWithEnvironment: some View {
         ContentView()
-            .handlesExternalEvents(
-                preferring: handledFinderExternalEvents,
-                allowing: handledFinderExternalEvents
-            )
             .environmentObject(settingsViewModel)
             .environmentObject(windowSession.appState)
             .environmentObject(windowSession.history)
@@ -343,7 +338,6 @@ struct MainWindowRootView: View {
             .environmentObject(windowSession.organizer)
             .environmentObject(exclusionRules)
             .environmentObject(extensionListener)
-            .environmentObject(deeplinkHandler)
             .environmentObject(learningsManager)
             .environmentObject(storageLocationsManager)
             .environmentObject(automationManager)
@@ -360,25 +354,6 @@ struct MainWindowRootView: View {
             .background(MainWindowSessionTracker(sessionID: windowSession.id).frame(width: 0, height: 0))
             .trafficLightInactiveBorders()
             .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
-    }
-
-    private var handledFinderExternalEvents: Set<String> {
-        // Keep claiming Finder URLs while this session is busy. The deeplink
-        // router opens a request-scoped window when no session is available;
-        // relinquishing the event here also makes SwiftUI create an unscoped
-        // scene, leaving two new windows for one Finder action.
-        return ["sorty://organize", "sorty://watched", "sorty://exclude"]
-    }
-
-    private func processLaunchRequestIfNeeded() {
-        guard let launchRequest,
-              handledLaunchRequestID != launchRequest.id,
-              let url = launchRequest.deeplinkURL else {
-            return
-        }
-
-        handledLaunchRequestID = launchRequest.id
-        processDeeplink(url)
     }
 
     private func presentWhatsNewIfNeeded() {
@@ -425,21 +400,6 @@ struct MainWindowRootView: View {
         return "\(version)-\(build)"
     }
 
-    private func processUITestDeeplinkIfNeeded() {
-        guard !handledUITestDeepLink,
-              let urlString = ProcessInfo.processInfo.environment["XCUITEST_DEEPLINK"],
-              let url = URL(string: urlString) else {
-            return
-        }
-
-        handledUITestDeepLink = true
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            processDeeplink(url)
-        }
-    }
-
     private func configureUITestPreviewIfNeeded() {
         guard ProcessInfo.processInfo.environment["XCUITEST_SEED_PREVIEW"] == "1" else { return }
 
@@ -450,39 +410,35 @@ struct MainWindowRootView: View {
         windowSession.organizer.state = .ready
     }
 
-    private func handleExternalDeeplink(_ url: URL) {
-        guard ExternalDeeplinkDeduper.shouldHandle(url) else { return }
-
-        if url.isFinderWorkflowDeeplink {
-            if MainWindowRouter.shared.routeFinderDeeplink(url) {
-                return
-            }
-
-            if MainWindowRouter.shared.hasOpenSessions {
-                openWindow(value: WindowLaunchRequest(url: url))
-                return
-            }
-        }
-
-        if MainWindowRouter.shared.routeDeeplink(url) {
+    private func processUITestDestinationIfNeeded() {
+        guard !handledUITestDestination,
+              let value = ProcessInfo.processInfo.environment["XCUITEST_DESTINATION"] else {
             return
         }
+        handledUITestDestination = true
 
-        processDeeplink(url)
+        let destination: AppDestination?
+        if value == "history" {
+            destination = .history
+        } else if value.hasPrefix("organize:") {
+            destination = .organize(
+                path: String(value.dropFirst("organize:".count)),
+                persona: nil,
+                mode: nil,
+                autostart: false
+            )
+        } else {
+            destination = nil
+        }
+
+        guard let destination else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            handle(destination)
+        }
     }
 
-    private func processDeeplink(_ url: URL) {
-        let source = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-            .queryItems?
-            .first(where: { $0.name == "source" })?
-            .value
-        windowSession.appState.showsFinderWorkflowPicker =
-            url.host?.lowercased() == "organize" && source == "finder"
-
-        deeplinkHandler.handle(url: url)
-
-        guard let destination = deeplinkHandler.pendingDestination else { return }
-
+    private func handle(_ destination: AppDestination) {
         windowSession.handle(
             destination: destination,
             settingsViewModel: settingsViewModel,
@@ -493,7 +449,6 @@ struct MainWindowRootView: View {
             storageLocationsManager: storageLocationsManager,
             learningsManager: learningsManager
         )
-        deeplinkHandler.clearPending()
     }
 
     private func routeNotificationActionRequest(
@@ -600,18 +555,6 @@ extension EnvironmentValues {
 
 private struct AccentPrototypeWindowKey: EnvironmentKey {
     static let defaultValue = false
-}
-
-private extension URL {
-    var isFinderWorkflowDeeplink: Bool {
-        guard scheme?.lowercased() == "sorty" else { return false }
-        switch host?.lowercased() {
-        case "organize", "watched", "exclude":
-            return true
-        default:
-            return false
-        }
-    }
 }
 
 private extension View {

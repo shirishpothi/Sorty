@@ -15,6 +15,8 @@ public struct ContentView: View {
     @EnvironmentObject var extensionListener: ExtensionListener
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
+    @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
+    @EnvironmentObject var exclusionRules: ExclusionRulesManager
 
     @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var previousView: AppState.AppView?
@@ -196,9 +198,32 @@ public struct ContentView: View {
         }
         .onReceive(extensionListener.$incomingURL) { url in
             if let url = url {
-                appState.showsFinderWorkflowPicker = true
-                appState.selectedDirectory = url
-                appState.currentView = .organize
+                switch extensionListener.incomingAction {
+                case "watch":
+                    let normalizedURL = url.standardizedFileURL
+                    if !watchedFoldersManager.folders.contains(where: {
+                        URL(fileURLWithPath: $0.path).standardizedFileURL == normalizedURL
+                    }) {
+                        watchedFoldersManager.addFolder(WatchedFolder(path: normalizedURL.path))
+                    }
+                    appState.currentView = .watchedFolders
+                case "exclude":
+                    let path = url.standardizedFileURL.path
+                    if !exclusionRules.rules.contains(where: { $0.pattern == path }) {
+                        exclusionRules.addRule(
+                            ExclusionRule(
+                                type: .pathContains,
+                                pattern: path,
+                                description: url.lastPathComponent
+                            )
+                        )
+                    }
+                    appState.currentView = .exclusions
+                default:
+                    appState.showsFinderWorkflowPicker = true
+                    appState.selectedDirectory = url
+                    appState.currentView = .organize
+                }
                 extensionListener.incomingURL = nil
             }
         }

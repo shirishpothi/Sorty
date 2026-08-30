@@ -20,21 +20,8 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(matches.contains { $0.snippet.title == "Enable File Tagging" })
     }
 
-    func testDeeplinkFeatureMatchesDeeplinkQuery() {
-        let matches = SettingsCategory.deeplinks.featureMatches(query: "deeplink")
 
-        XCTAssertTrue(matches.contains { $0.snippet.title == "Automation Deeplinks" })
-    }
 
-    func testDeeplinkCategoryMatchesSortySchemeQuery() {
-        XCTAssertTrue(SettingsCategory.deeplinks.matchesSearch(query: "sorty://"))
-    }
-
-    func testDeeplinkFeatureMatchesDownloadsWordQuery() {
-        let matches = SettingsCategory.deeplinks.featureMatches(query: "downloads")
-
-        XCTAssertTrue(matches.contains { $0.snippet.title == "Organization Deeplinks" })
-    }
 
     func testAutomationCategoryMatchesHyphenSeparatedQuery() {
         XCTAssertTrue(SettingsCategory.automation.matchesSearch(query: "launch-at-login"))
@@ -46,11 +33,6 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(matches.first?.snippet.title, "Enable File Tagging")
     }
 
-    func testDeeplinkFeatureMatchPrioritizesAutomationDeeplinks() {
-        let matches = SettingsCategory.deeplinks.featureMatches(query: "automation")
-
-        XCTAssertEqual(matches.first?.snippet.title, "Automation Deeplinks")
-    }
 
     func testCategoriesForGroupPartitionsAllCasesWithoutDuplicates() {
         let grouped = SettingsCategoryGroup.allCases.flatMap(SettingsCategory.categories(for:))

@@ -124,27 +124,21 @@ final class SortyFinderSync: FIFinderSync {
         _ = sender
 
         guard let url = Self.selectedDirectoryURL() else { return }
-        guard let organizeURL = Self.urlForOrganizing(path: url.path) else { return }
-
-        Self.open(organizeURL, directoryURL: url, event: "action.organize")
+        Self.sendToApp(directoryURL: url, action: "organize")
     }
 
     @objc private func watchAction(_ sender: AnyObject?) {
         _ = sender
 
         guard let url = Self.selectedDirectoryURL() else { return }
-        guard let watchURL = Self.urlForWatching(path: url.path) else { return }
-
-        Self.open(watchURL, directoryURL: url, event: "action.watch")
+        Self.sendToApp(directoryURL: url, action: "watch")
     }
 
     @objc private func excludeAction(_ sender: AnyObject?) {
         _ = sender
 
         guard let url = Self.selectedDirectoryURL() else { return }
-        guard let excludeURL = Self.urlForExcluding(path: url.path) else { return }
-
-        Self.open(excludeURL, directoryURL: url, event: "action.exclude")
+        Self.sendToApp(directoryURL: url, action: "exclude")
     }
 
     private static func selectedDirectoryURL() -> URL? {
@@ -202,50 +196,29 @@ final class SortyFinderSync: FIFinderSync {
         controller.directoryURLs = directoryURLs
     }
 
-    private static func open(_ actionURL: URL, directoryURL: URL, event: String) {
-        reportHeartbeat(event: event)
-        guard !NSWorkspace.shared.open(actionURL) else { return }
-
-        // A stale Launch Services URL-scheme registration should not turn the
-        // Finder command into a silent no-op when Sorty is already running.
-        if event == "action.organize" {
-            DistributedNotificationCenter.default().post(
-                name: directorySelectedNotificationName,
-                object: nil,
-                userInfo: ["path": directoryURL.path]
-            )
+    private static func sendToApp(directoryURL: URL, action: String) {
+        reportHeartbeat(event: "action.\(action)")
+        if let defaults = UserDefaults(suiteName: "group.com.sorty.app") {
+            defaults.set(directoryURL.path, forKey: "selectedDirectory")
+            defaults.set(action, forKey: "pendingFinderAction")
         }
-        logger.error("Could not open Sorty action URL for path: \(directoryURL.path, privacy: .private)")
-    }
+        DistributedNotificationCenter.default().post(
+            name: directorySelectedNotificationName,
+            object: nil,
+            userInfo: ["path": directoryURL.path, "action": action]
+        )
 
-    private static func urlForOrganizing(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "organize"
-        components.queryItems = [
-            URLQueryItem(name: "path", value: path),
-            URLQueryItem(name: "source", value: "finder")
-        ]
-        return components.url
-    }
-
-    private static func urlForWatching(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "watched"
-        components.queryItems = [
-            URLQueryItem(name: "action", value: "add"),
-            URLQueryItem(name: "path", value: path)
-        ]
-        return components.url
-    }
-
-    private static func urlForExcluding(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "exclude"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
-        return components.url
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.sorty.app") else {
+            logger.error("Could not find Sorty for Finder action")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
+            if let error {
+                logger.error("Could not open Sorty: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     private static func finderActionImage(named resourceName: String, fallbackSymbol: String) -> NSImage {

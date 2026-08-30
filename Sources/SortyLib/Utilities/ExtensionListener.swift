@@ -12,15 +12,18 @@ import Combine
 @MainActor
 public class ExtensionListener: ObservableObject {
     @Published public var incomingURL: URL?
+    @Published public var incomingAction = "organize"
     nonisolated(unsafe) private var notificationObserver: NSObjectProtocol?
 
     public init() {
-        notificationObserver = ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
+        notificationObserver = ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url, action in
+            self?.incomingAction = action
             self?.incomingURL = url
         }
 
-        if let existingURL = ExtensionCommunication.receiveFromExtension() {
-            incomingURL = existingURL
+        if let pending = ExtensionCommunication.receiveFromExtension() {
+            incomingAction = pending.action
+            incomingURL = pending.url
         }
     }
 

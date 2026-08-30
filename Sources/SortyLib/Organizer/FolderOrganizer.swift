@@ -541,7 +541,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             reviewTarget: reviewTarget
         ) else { return }
 
-        let destination: DeeplinkDestination
+        let destination: AppDestination
         let actionTitle: String
         let actionIcon: String
         switch concern.reviewTarget {
@@ -567,8 +567,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             identifier: "frequent-learning-exclusions",
             actions: [
                 HUDNotificationAction(title: actionTitle, systemImage: actionIcon) {
-                    guard let url = DeeplinkHandler.url(for: destination) else { return }
-                    _ = MainWindowRouter.shared.routeDeeplink(url)
+                    _ = MainWindowRouter.shared.route(destination)
                 }
             ]
         )

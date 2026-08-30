@@ -440,12 +440,15 @@ public struct MenuBarView: View {
         }
     }
 
-    private func openDestination(_ destination: DeeplinkDestination) {
-        guard let url = DeeplinkHandler.url(for: destination) else { return }
-        if MainWindowRouter.shared.routeDeeplink(url) {
+    private func openDestination(_ destination: AppDestination) {
+        if MainWindowRouter.shared.route(destination) {
             return
         }
-        NSWorkspace.shared.open(url)
+        _ = MainWindowRouter.shared.postOrQueue(
+            name: .routeDestinationInMainWindow,
+            userInfo: [WindowRoutingUserInfoKey.destination: destination]
+        )
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 }
 

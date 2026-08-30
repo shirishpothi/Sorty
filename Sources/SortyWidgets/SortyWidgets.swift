@@ -96,7 +96,6 @@ private struct SortyOverviewWidgetEntryView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .widgetURL(URL(string: "sorty://organize"))
         .containerBackground(backgroundGradient, for: .widget)
     }
 
@@ -141,10 +140,6 @@ private struct SortyOverviewWidgetEntryView: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 8) {
-                    widgetLink(title: "Organize", systemImage: "sparkles", urlString: "sorty://organize")
-                    widgetLink(title: "History", systemImage: "clock.arrow.circlepath", urlString: "sorty://history")
-                }
             }
         }
         .containerBackground(backgroundGradient, for: .widget)
@@ -199,18 +194,6 @@ private struct SortyOverviewWidgetEntryView: View {
                     .font(.system(size: 16, weight: .bold, design: .rounded))
             }
         }
-    }
-
-    private func widgetLink(title: String, systemImage: String, urlString: String) -> some View {
-        Link(destination: URL(string: urlString)!) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.white.opacity(0.12), in: Capsule(style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private var statusSymbol: String {

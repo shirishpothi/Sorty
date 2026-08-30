@@ -11,14 +11,14 @@ struct ExperimentalSettingsView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
+    @AppStorage(FeatureFlags.legacyDeeplinksDefaultsKey) private var legacyDeeplinksEnabled = false
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 14) {
+            legacyDeeplinksCard
             if analytics.isLoadingExperimentalFeatures {
                 loadingState
-            } else if analytics.experimentalFeatures.isEmpty {
-                emptyState
-            } else {
+            } else if !analytics.experimentalFeatures.isEmpty {
                 featureList
             }
         }
@@ -31,6 +31,39 @@ struct ExperimentalSettingsView: View {
             guard !Task.isCancelled else { return }
             hasAppeared = true
         }
+    }
+
+    private var legacyDeeplinksCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $legacyDeeplinksEnabled) {
+                Label("Legacy deep links", systemImage: "link.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .toggleStyle(.switch)
+            .onChange(of: legacyDeeplinksEnabled) { _, isEnabled in
+                AnalyticsManager.shared.captureFeature(
+                    feature: "experimental",
+                    subfeature: "legacy_deeplinks",
+                    action: isEnabled ? "enabled" : "disabled",
+                    outcome: "success"
+                )
+            }
+
+            Text("Restores external sorty:// automation links. This compatibility layer is off by default and is on the chopping block.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Link(
+                "Ask us to keep it",
+                destination: URL(string: "https://github.com/sorty-organizer/Sorty/issues/new?title=Keep%20legacy%20deep%20links")!
+            )
+            .font(.caption.weight(.semibold))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .contain)
     }
 
     private var loadingState: some View {

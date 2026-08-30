@@ -25,6 +25,7 @@ final class WindowSessionTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        UserDefaults.standard.removeObject(forKey: FeatureFlags.legacyDeeplinksDefaultsKey)
         watchedFoldersManager.clearAll()
         session = nil
         settingsViewModel = nil
@@ -36,18 +37,21 @@ final class WindowSessionTests: XCTestCase {
         learningsManager = nil
     }
 
-    func testWindowLaunchRequestRoundTripsURL() {
-        let url = URL(string: "sorty://settings?section=provider")!
-        let request = WindowLaunchRequest(url: url)
+    func testLegacyDeepLinksAreDisabledByDefault() {
+        UserDefaults.standard.removeObject(forKey: FeatureFlags.legacyDeeplinksDefaultsKey)
 
-        XCTAssertEqual(request.deeplinkURLString, url.absoluteString)
-        XCTAssertEqual(request.deeplinkURL, url)
+        XCTAssertNil(
+            LegacyDeeplinkParser.destination(for: URL(string: "sorty://history")!)
+        )
     }
 
-    func testExternalDeeplinkDeduplicatesRapidCalls() {
-        let url = URL(string: "sorty://watched?action=add&path=/tmp/test")!
-        XCTAssertTrue(ExternalDeeplinkDeduper.shouldHandle(url))
-        XCTAssertFalse(ExternalDeeplinkDeduper.shouldHandle(url))
+    func testLegacyDeepLinksRequireExplicitOptIn() {
+        UserDefaults.standard.set(true, forKey: FeatureFlags.legacyDeeplinksDefaultsKey)
+
+        XCTAssertEqual(
+            LegacyDeeplinkParser.destination(for: URL(string: "sorty://history")!),
+            .history
+        )
     }
 
     func testWindowSessionUsesInjectedSharedUpdateManager() {
@@ -130,7 +134,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(capture.value, targetSessionID.uuidString)
     }
 
-    func testWatchedAddDeeplinkAddsMissingFolder() {
+    func testWatchedDestinationAddsMissingFolder() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 
         handle(.watched(action: "add", path: missingPath))
@@ -140,9 +144,9 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
     }
 
-    func testWatchedAddDeeplinkAddsNewFolder() throws {
+    func testWatchedDestinationAddsNewFolder() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sorty-watch-deeplink-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("sorty-watch-destination-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -153,7 +157,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
     }
 
-    func testWatchedAddDeeplinkHighlightsExistingStandardizedPath() throws {
+    func testWatchedDestinationHighlightsExistingStandardizedPath() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-watch-duplicate-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -168,7 +172,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.highlightedWatchedFolderID, existingFolder.id)
     }
 
-    func testLearningsClearDeeplinkRequiresDeletionConfirmation() {
+    func testLearningsClearDestinationRequiresDeletionConfirmation() {
         handle(.learnings(action: .clear, project: nil))
 
         XCTAssertEqual(session.appState.currentView, .learnings)
@@ -234,7 +238,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertNil(session.appState.settingsFocusTarget)
     }
 
-    private func handle(_ destination: DeeplinkDestination) {
+    private func handle(_ destination: AppDestination) {
         session.handle(
             destination: destination,
             settingsViewModel: settingsViewModel,
