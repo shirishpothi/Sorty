@@ -254,13 +254,13 @@ format_compact_build_status() {
 
     case "${line}" in
         \[*/*\]*"Compiling "*".swift"*)
-            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/[\1\/\2] Compiling \4/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Compiling ([^ ]+ )?([^ ]+\.swift).*$/Compiling \2/'
             ;;
         \[*/*\]*"Emitting module "*)
-            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Emitting module ([^ ]+).*$/[\1\/\2] Emitting module \3/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Emitting module ([^ ]+).*$/Emitting module \1/'
             ;;
         \[*/*\]*"Linking "*)
-            printf '%s' "${line}" | sed -E 's/^\[([0-9]+)\/([0-9]+)\] Linking ([^ ]+).*$/[\1\/\2] Linking \3/'
+            printf '%s' "${line}" | sed -E 's/^\[[0-9]+\/[0-9]+\] Linking ([^ ]+).*$/Linking \1/'
             ;;
         *"Compiling "*".swift"*)
             printf '%s' "${line}" | sed -E 's/^.*Compiling ([^ ]+\.swift).*$/Compiling \1/'
