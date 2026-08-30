@@ -5,6 +5,7 @@ import Combine
 @MainActor
 public final class WindowSession: ObservableObject {
     public let id: UUID
+    public let history: OrganizationHistory
     @Published public var appState: AppState
     @Published public var organizer: FolderOrganizer
 
@@ -17,6 +18,7 @@ public final class WindowSession: ObservableObject {
         history: OrganizationHistory = OrganizationHistory()
     ) {
         self.id = id
+        self.history = history
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)
         self.organizer = FolderOrganizer(history: history)
         self.organizer.windowSessionID = id

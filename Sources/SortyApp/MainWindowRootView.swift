@@ -336,6 +336,7 @@ struct MainWindowRootView: View {
             )
             .environmentObject(settingsViewModel)
             .environmentObject(windowSession.appState)
+            .environmentObject(windowSession.history)
             .environmentObject(personaManager)
             .environmentObject(customPersonaStore)
             .environmentObject(watchedFoldersManager)
