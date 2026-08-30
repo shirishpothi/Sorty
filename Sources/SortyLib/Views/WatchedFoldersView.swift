@@ -1086,6 +1086,13 @@ private struct WatchedFolderNerdStats: View {
         return GenerationStats.formatDuration(duration)
     }
 
+    private var estimatedCost: String {
+        let cost = recentRuns
+            .compactMap { $0.plan?.generationStats?.computedCost }
+            .reduce(Decimal.zero, +)
+        return GenerationStats.formatCost(cost)
+    }
+
     private var lastRun: String {
         guard let timestamp = recentRuns.first?.timestamp else { return "Never" }
         return timestamp.formatted(.relative(presentation: .named))
@@ -1168,6 +1175,13 @@ private struct WatchedFolderNerdStats: View {
                 color: .blue,
                 title: "Total AI time",
                 value: totalAITime,
+                unit: nil
+            )
+            NerdStatPillExpanded(
+                icon: "dollarsign.circle",
+                color: .green,
+                title: "Estimated cost",
+                value: estimatedCost,
                 unit: nil
             )
             NerdStatPillExpanded(
