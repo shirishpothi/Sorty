@@ -44,7 +44,7 @@ struct ExperimentalSettingsView: View {
                 AnalyticsManager.shared.captureFeature(
                     feature: "experimental",
                     subfeature: "legacy_deeplinks",
-                    action: isEnabled ? "enabled" : "disabled",
+                    action: isEnabled ? "reenabled" : "disabled",
                     outcome: "success"
                 )
             }
