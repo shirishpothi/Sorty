@@ -9,8 +9,8 @@ import AppKit
 import SwiftUI
 
 struct ThanksForUsingSortyView: View {
-    static let preferredWindowWidth: CGFloat = 480
-    static let preferredWindowHeight: CGFloat = 520
+    static let preferredWindowWidth: CGFloat = 540
+    static let preferredWindowHeight: CGFloat = 600
 
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
 
@@ -28,7 +28,8 @@ struct ThanksForUsingSortyView: View {
             }
             statsTable
         }
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(28)
         .frame(width: Self.preferredWindowWidth, height: Self.preferredWindowHeight)
         .modifier(WindowGlassBackground())
         .windowLinkHoverPillHost()
@@ -42,7 +43,7 @@ struct ThanksForUsingSortyView: View {
     private var header: some View {
         VStack(spacing: 8) {
             MascotHeartParticleMorphView(color: SortyDesignSystem.Colors.resolvedAccent)
-                .frame(width: 120, height: 120)
+                .frame(width: 150, height: 150)
                 .accessibilityHidden(true)
                 .accessibilityIdentifier("thanksWindowHeart")
 
