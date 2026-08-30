@@ -16,6 +16,8 @@ BUILD_TAIL_LINES="${BUILD_TAIL_LINES:-40}"
 AUTO_CLOSE_SORTY_ON_BUILD="${AUTO_CLOSE_SORTY_ON_BUILD:-true}"
 SORTY_QUIT_WAIT_SECONDS="${SORTY_QUIT_WAIT_SECONDS:-6}"
 SORTY_QUIT_REQUEST_TIMEOUT_SECONDS="${SORTY_QUIT_REQUEST_TIMEOUT_SECONDS:-3}"
+SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS="${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS:-10}"
+SORTY_QUIT_RETRY_INTERVAL_SECONDS="${SORTY_QUIT_RETRY_INTERVAL_SECONDS:-2}"
 KEYCHAIN_UNLOCK_TIMEOUT_SECONDS="${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS:-43200}"
 AUTO_UNLOCK_SIGNING_KEYCHAIN="${AUTO_UNLOCK_SIGNING_KEYCHAIN:-true}"
 BUILD_AUTO_CLOSE_REQUEST_KEY="buildAutoCloseRequest"
@@ -64,6 +66,33 @@ wait_for_sorty_exit() {
     ! sorty_processes_are_running
 }
 
+wait_for_sorty_exit_with_quit_retries() {
+    local timeout_seconds="$1"
+    local elapsed=0
+    while [ "${elapsed}" -lt "${timeout_seconds}" ]; do
+        if ! sorty_processes_are_running; then
+            return 0
+        fi
+
+        if [ "${elapsed}" -gt 0 ] && [ $((elapsed % SORTY_QUIT_RETRY_INTERVAL_SECONDS)) -eq 0 ]; then
+            request_sorty_quit
+        fi
+
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    ! sorty_processes_are_running
+}
+
+notify_sorty_build_waiting() {
+    if command -v osascript >/dev/null 2>&1; then
+        osascript \
+            -e 'display notification "Finish the active organization or quit Sorty. The build will keep retrying briefly." with title "Sorty build is waiting"' \
+            >/dev/null 2>&1 || log_warning "Unable to show the Sorty build notification."
+    fi
+}
+
 request_sorty_quit() {
     if command -v osascript >/dev/null 2>&1; then
         if ! osascript \
@@ -105,8 +134,16 @@ terminate_running_sorty_if_safe() {
         return
     fi
 
+    notify_sorty_build_waiting
+    log_warning "Sorty stayed open (likely active organization). Waiting ${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}s while retrying graceful quit."
+    if wait_for_sorty_exit_with_quit_retries "${SORTY_LIVE_BUNDLE_RETRY_WAIT_SECONDS}"; then
+        set_build_auto_close_request false
+        log_detail "Sorty closed after the retry window"
+        return
+    fi
+
     set_build_auto_close_request false
-    log_warning "Sorty stayed open (likely active organization). Build continues without force-kill."
+    log_warning "Sorty stayed open after the retry window. Build continues without force-kill."
 }
 
 resolve_signing_identity() {
