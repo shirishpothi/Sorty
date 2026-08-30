@@ -23,8 +23,6 @@ struct LearningsView: View {
     @State private var activeFileImporter: ActiveFileImporter?
     @State private var isShowingFileImporter = false
     @State private var showLearningsModelPicker = false
-    @State private var showingLearningsControls = false
-    @State private var hoveredLearningsControl: String?
     @State private var isQuickRefreshingLearnings = false
     @State private var emptyLearningsHasAppeared = false
     @State private var emptyExampleFoldersHasAppeared = false
@@ -457,31 +455,6 @@ struct LearningsView: View {
                         }
                     }
 
-                    Button {
-                        HapticFeedbackManager.shared.light()
-                        showingLearningsControls.toggle()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.system(size: 14, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: 34)
-                    .accessibilityLabel("More learnings actions")
-                    .accessibilityHint("Opens reset, refresh, import, and export actions")
-                    .popover(isPresented: $showingLearningsControls, arrowEdge: .top) {
-                        learningsControlsPopover
-                    }
-                    .onHover { hovering in
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-
                     statusBadge
                 }
                 .padding(.horizontal, 10)
@@ -501,136 +474,6 @@ struct LearningsView: View {
         .padding(.vertical, 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings header")
-    }
-
-    private var learningsControlsPopover: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Learnings Actions")
-                .font(.headline)
-                .padding(.horizontal, 8)
-                .padding(.bottom, 2)
-
-            learningsControlButton(
-                title: "Reset Learnings Defaults",
-                detail: "Resume learning and use the organization model",
-                systemImage: "arrow.uturn.backward"
-            ) {
-                restoreLearningsDefaults()
-            }
-
-            learningsControlButton(
-                title: isQuickRefreshingLearnings ? "Refreshing Learnings…" : "Refresh Learnings",
-                detail: isQuickRefreshingLearnings
-                    ? "Analyzing saved signals and reference folders"
-                    : "Rebuild insights from saved learning data",
-                systemImage: "arrow.clockwise",
-                isLoading: isQuickRefreshingLearnings
-            ) {
-                refreshLearningsInsights()
-            }
-            .disabled(isQuickRefreshingLearnings)
-
-            Divider()
-
-            learningsControlButton(
-                title: "Export Profile…",
-                detail: "Save a portable copy of your learning data",
-                systemImage: "square.and.arrow.up"
-            ) {
-                showingLearningsControls = false
-                requestSensitiveAction(reason: "Authenticate to export your learnings profile.") {
-                    exportProfile()
-                }
-            }
-
-            learningsControlButton(
-                title: "Import Profile…",
-                detail: "Merge learning data from an exported profile",
-                systemImage: "square.and.arrow.down"
-            ) {
-                showingLearningsControls = false
-                requestSensitiveAction(reason: "Authenticate to import a learnings profile.") {
-                    presentFileImporter(.learningsProfile)
-                }
-            }
-
-        }
-        .padding(8)
-        .frame(width: 310)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Learnings controls")
-        .systemLiquidGlassPopover(cornerRadius: 12)
-    }
-
-    private func learningsControlButton(
-        title: String,
-        detail: String,
-        systemImage: String,
-        isLoading: Bool = false,
-        role: ButtonRole? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        let isHovered = hoveredLearningsControl == title
-
-        return Button(role: role) {
-            HapticFeedbackManager.shared.tap()
-            action()
-        } label: {
-            HStack(spacing: 10) {
-                Group {
-                    if isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: systemImage)
-                    }
-                }
-                .frame(width: 18)
-                .scaleEffect(isHovered && !reduceMotion ? 1.08 : 1)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline)
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {
-                hoveredLearningsControl = hovering ? title : nil
-            }
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
-        }
-    }
-
-    private func restoreLearningsDefaults() {
-        manager.sessionLearningPaused = false
-        manager.learningStrength = 0.5
-        manager.dataRetentionDays = 0
-        manager.clearLearningsModelOverride()
-        HapticFeedbackManager.shared.success()
-        NotificationManager.shared.showHUDInfo(
-            title: "Learnings Defaults Restored",
-            message: "Learning is active at balanced strength, keeps data until you delete it, and uses your organization model.",
-            icon: "checkmark.circle.fill",
-            iconColor: .green,
-            identifier: "learnings-quick-control"
-        )
     }
 
     private func refreshLearningsInsights() {
@@ -1724,21 +1567,13 @@ struct LearningsView: View {
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    Image(systemName: "wand.and.stars")
-                        .foregroundColor(.blue)
-                        .font(.body.bold())
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Learnings Model")
-                            .font(.subheadline)
-                        Text(
-                            usesDedicatedLearningsModel
-                                ? "Dedicated model for learnings analysis"
-                                : "Same model as organization"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
+                    settingsRowLabel(
+                        systemImage: "wand.and.stars",
+                        title: "Learnings Model",
+                        detail: usesDedicatedLearningsModel
+                            ? "Dedicated model for learnings analysis"
+                            : "Same model as organization"
+                    )
                     Spacer()
                     ModelSelectorCompactButton(
                         provider: usesDedicatedLearningsModel
@@ -1758,17 +1593,11 @@ struct LearningsView: View {
                 Divider().padding(.leading, 40)
 
                 HStack(spacing: 12) {
-                    Image(systemName: "calendar.badge.clock")
-                        .foregroundColor(.blue)
-                        .font(.body.bold())
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Data Retention")
-                            .font(.subheadline)
-                        Text("How long to keep learning data")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    settingsRowLabel(
+                        systemImage: "calendar.badge.clock",
+                        title: "Data Retention",
+                        detail: "How long to keep learning data"
+                    )
                     Spacer()
                     Picker("", selection: $manager.dataRetentionDays) {
                         Text("30 days").tag(30)
@@ -1790,17 +1619,82 @@ struct LearningsView: View {
                 Divider().padding(.leading, 40)
 
                 HStack(spacing: 12) {
+                    settingsRowLabel(
+                        systemImage: "arrow.clockwise",
+                        title: "Learnings",
+                        detail: isQuickRefreshingLearnings
+                            ? "Analyzing saved data and example folders"
+                            : "Rebuild insights from saved learning data"
+                    )
+                    Spacer()
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        refreshLearningsInsights()
+                    } label: {
+                        if isQuickRefreshingLearnings {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("Refresh")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isQuickRefreshingLearnings)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+
+                Divider().padding(.leading, 40)
+
+                HStack(spacing: 12) {
+                    settingsRowLabel(
+                        systemImage: "person.text.rectangle",
+                        title: "Profile Data",
+                        detail: "Import or export your learning data"
+                    )
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Button("Import…") {
+                            HapticFeedbackManager.shared.tap()
+                            requestSensitiveAction(
+                                reason: "Authenticate to import a learnings profile."
+                            ) {
+                                presentFileImporter(.learningsProfile)
+                            }
+                        }
+                        Button("Export…") {
+                            HapticFeedbackManager.shared.tap()
+                            requestSensitiveAction(
+                                reason: "Authenticate to export your learnings profile."
+                            ) {
+                                exportProfile()
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+
+                Divider().padding(.leading, 40)
+
+                HStack(spacing: 12) {
+                    settingsRowLabel(
+                        systemImage: "hand.raised",
+                        title: "Privacy",
+                        detail: "Stop learning or permanently remove its data"
+                    )
+                    Spacer()
                     Button(action: {
                         confirmWithdrawConsent()
                     }) {
                         Label("Withdraw Consent", systemImage: "hand.raised")
                             .font(.caption.bold())
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .systemLiquidGlassBackground(cornerRadius: 999)
-                            .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .onHover { hovering in
                         if hovering {
                             HapticFeedbackManager.shared.selection()
@@ -1830,7 +1724,31 @@ struct LearningsView: View {
             }
             .systemLiquidGlassBackground(cornerRadius: 12)
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Learnings settings")
         }
+    }
+
+    private func settingsRowLabel(
+        systemImage: String,
+        title: String,
+        detail: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .foregroundColor(.blue)
+                .font(.body.bold())
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var referenceDirectoriesSection: some View {
