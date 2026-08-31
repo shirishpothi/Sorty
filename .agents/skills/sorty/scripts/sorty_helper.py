@@ -13,6 +13,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-PLAN_VERSION = 1
+PLAN_VERSION = 2
 MODES = {"organize", "organizeAndRename", "renameOnly"}
 PACKAGE_EXTENSIONS = {
     ".app", ".bundle", ".framework", ".key", ".numbers", ".pages",
@@ -45,6 +46,27 @@ def emit(value: Any) -> None:
 
 def canonical(path: Path) -> Path:
     return Path(os.path.abspath(path.expanduser()))
+
+
+def filesystem_key(path: Path) -> str:
+    """Conservative collision key for common case-insensitive macOS volumes."""
+    return unicodedata.normalize("NFD", str(path)).casefold()
+
+
+def has_unsafe_components(path: Path) -> bool:
+    return any(
+        part in {".", ".."} or any(ord(character) < 32 for character in part)
+        for part in path.parts
+    )
+
+
+def nearest_existing_parent(path: Path) -> Path:
+    current = path
+    while not current.exists() and not current.is_symlink():
+        if current == current.parent:
+            break
+        current = current.parent
+    return current if current.is_dir() else current.parent
 
 
 def is_within(path: Path, root: Path) -> bool:
@@ -133,6 +155,7 @@ def scan(root: Path, exclusions: list[str], include_hidden: bool, expand_package
                 info = path.lstat()
                 items.append(item_record(path, root, info, "package"))
                 continue
+            items.append(item_record(path, root, path.lstat(), "directory"))
             kept_directories.append(name)
         directories[:] = kept_directories
 
@@ -160,10 +183,14 @@ def item_record(path: Path, root: Path, info: os.stat_result, kind: str) -> dict
         "path": path.relative_to(root).as_posix(),
         "kind": kind,
         "size": info.st_size,
+        "device": info.st_dev,
+        "inode": info.st_ino,
+        "modified_ns": info.st_mtime_ns,
         "modified_at": datetime.fromtimestamp(info.st_mtime, timezone.utc).isoformat(),
     }
     if kind == "symlink":
         record["target"] = os.readlink(path)
+    record["snapshot"] = source_snapshot(path)
     return record
 
 
@@ -212,6 +239,37 @@ def exact_duplicates(root: Path, exclusions: list[str], include_hidden: bool) ->
 class Operation:
     source: Path
     destination: Path
+    expected: dict[str, Any]
+
+
+def source_snapshot(path: Path) -> dict[str, Any]:
+    info = path.lstat()
+    if path.is_symlink():
+        kind = "symlink"
+    elif path.is_dir():
+        kind = "package" if is_package(path) else "directory"
+    elif path.is_file():
+        kind = "file"
+    else:
+        kind = "other"
+    snapshot: dict[str, Any] = {
+        "kind": kind,
+        "size": info.st_size,
+        "device": info.st_dev,
+        "inode": info.st_ino,
+        "modified_ns": info.st_mtime_ns,
+    }
+    if kind == "symlink":
+        snapshot["target"] = os.readlink(path)
+    return snapshot
+
+
+def snapshot_matches(path: Path, expected: dict[str, Any]) -> bool:
+    try:
+        actual = source_snapshot(path)
+    except OSError:
+        return False
+    return actual == expected
 
 
 def load_plan(path: Path) -> dict[str, Any]:
@@ -233,6 +291,8 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
     root_value = plan.get("source_root")
     if not isinstance(root_value, str) or not root_value:
         raise SortyError("source_root must be an absolute path")
+    if not Path(root_value).expanduser().is_absolute():
+        raise SortyError("source_root must be an absolute path")
     root = canonical(Path(root_value))
     reject_broad_root(root)
     if not root.is_dir():
@@ -243,21 +303,37 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
     exclusions = plan.get("exclusions", [])
     if not isinstance(exclusions, list) or not all(isinstance(pattern, str) for pattern in exclusions):
         raise SortyError("exclusions must be an array of glob strings")
+    warnings = plan.get("warnings", [])
+    if not isinstance(warnings, list) or not all(isinstance(warning, str) for warning in warnings):
+        raise SortyError("warnings must be an array of strings")
+    duplicate_groups = plan.get("duplicate_groups", [])
+    if not isinstance(duplicate_groups, list):
+        raise SortyError("duplicate_groups must be an array")
+    unorganized = plan.get("unorganized", [])
+    if not isinstance(unorganized, list):
+        raise SortyError("unorganized must be an array")
 
     raw_operations = plan.get("operations")
     if not isinstance(raw_operations, list):
         raise SortyError("operations must be an array")
     operations: list[Operation] = []
     errors: list[str] = []
-    seen_sources: set[Path] = set()
-    seen_destinations: set[Path] = set()
+    seen_sources: set[str] = set()
+    seen_destinations: set[str] = set()
 
     for index, raw in enumerate(raw_operations):
-        if not isinstance(raw, dict) or not isinstance(raw.get("source"), str) or not isinstance(raw.get("destination"), str):
-            errors.append(f"operation {index} must contain string source and destination")
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("source"), str)
+            or not isinstance(raw.get("destination"), str)
+            or not isinstance(raw.get("expected"), dict)
+        ):
+            errors.append(f"operation {index} must contain string source and destination plus an expected snapshot")
             continue
         source_input = Path(raw["source"])
         destination_input = Path(raw["destination"])
+        if has_unsafe_components(source_input) or has_unsafe_components(destination_input):
+            errors.append(f"operation {index} contains dot segments or control characters")
         source = canonical(source_input if source_input.is_absolute() else root / source_input)
         destination = canonical(destination_input if destination_input.is_absolute() else root / destination_input)
         if not is_within(source, root):
@@ -270,28 +346,77 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
                 errors.append(f"source matches an exclusion: {relative_source}")
         if source == destination:
             errors.append(f"source and destination are identical: {source}")
-        if source in seen_sources:
+        source_key = filesystem_key(source)
+        if source_key in seen_sources:
             errors.append(f"source appears more than once: {source}")
-        if destination in seen_destinations:
+        destination_key = filesystem_key(destination)
+        if destination_key in seen_destinations:
             errors.append(f"destination appears more than once: {destination}")
+        destination_is_source = False
         if destination.exists() or destination.is_symlink():
+            try:
+                destination_is_source = os.path.samefile(source, destination)
+            except OSError:
+                destination_is_source = False
+        if (destination.exists() or destination.is_symlink()) and not destination_is_source:
             errors.append(f"destination already exists: {destination}")
         if not source.exists() and not source.is_symlink():
             errors.append(f"source does not exist: {source}")
+        elif not snapshot_matches(source, raw["expected"]):
+            errors.append(f"source changed since scan: {source}")
+        if not destination_input.is_absolute():
+            resolved_parent = nearest_existing_parent(destination.parent).resolve(strict=False)
+            if not is_within(resolved_parent, root.resolve(strict=False)):
+                errors.append(f"relative destination reaches outside source_root through a symlinked parent: {destination}")
         if mode == "organize" and source.name != destination.name:
             errors.append(f"organize mode cannot rename: {source.name} -> {destination.name}")
         if mode == "renameOnly" and source.parent != destination.parent:
             errors.append(f"renameOnly mode cannot move folders: {source} -> {destination}")
+        allow_extension_change = raw.get("allow_extension_change", False)
+        if not isinstance(allow_extension_change, bool):
+            errors.append(f"allow_extension_change must be boolean for operation {index}")
+        elif source.suffix.casefold() != destination.suffix.casefold() and not allow_extension_change:
+            errors.append(f"extension change requires explicit allow_extension_change: {source.name} -> {destination.name}")
         if source.is_dir() and is_within(destination, source):
             errors.append(f"cannot move a directory inside itself: {source} -> {destination}")
-        seen_sources.add(source)
-        seen_destinations.add(destination)
-        operations.append(Operation(source, destination))
+        seen_sources.add(source_key)
+        seen_destinations.add(destination_key)
+        operations.append(Operation(source, destination, raw["expected"]))
+
+    operation_source_keys = {filesystem_key(operation.source) for operation in operations}
+    unorganized_keys: set[str] = set()
+    for index, item in enumerate(unorganized):
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("path"), str)
+            or not isinstance(item.get("reason"), str)
+            or not item["reason"].strip()
+        ):
+            errors.append(f"unorganized item {index} must contain string path and a non-empty reason")
+            continue
+        input_path = Path(item["path"])
+        if has_unsafe_components(input_path):
+            errors.append(f"unorganized item {index} contains dot segments or control characters")
+            continue
+        path = canonical(input_path if input_path.is_absolute() else root / input_path)
+        if not is_within(path, root):
+            errors.append(f"unorganized path escapes source_root: {path}")
+            continue
+        key = filesystem_key(path)
+        if key in unorganized_keys:
+            errors.append(f"unorganized path appears more than once: {path}")
+        if key in operation_source_keys:
+            errors.append(f"path is both organized and unorganized: {path}")
+        unorganized_keys.add(key)
 
     for outer in operations:
         for inner in operations:
             if outer != inner and is_within(inner.source, outer.source):
                 errors.append(f"overlapping sources: {outer.source} and {inner.source}")
+            if outer != inner and outer.source.is_dir() and is_within(inner.destination, outer.source):
+                errors.append(
+                    f"destination overlaps another source directory: {inner.destination} inside {outer.source}"
+                )
     return root, mode, operations, sorted(set(errors))
 
 
@@ -306,7 +431,11 @@ def validate_plan(plan_path: Path) -> dict[str, Any]:
         "operation_count": len(operations),
         "errors": errors,
         "operations": [
-            {"source": str(operation.source), "destination": str(operation.destination)}
+            {
+                "source": str(operation.source),
+                "destination": str(operation.destination),
+                "expected": operation.expected,
+            }
             for operation in operations
         ],
     }
@@ -346,7 +475,11 @@ def copy_then_remove(source: Path, destination: Path) -> None:
 
 def guarded_move(source: Path, destination: Path) -> str:
     if destination.exists() or destination.is_symlink():
-        raise SortyError(f"destination already exists: {destination}")
+        try:
+            if not os.path.samefile(source, destination):
+                raise SortyError(f"destination already exists: {destination}")
+        except OSError as error:
+            raise SortyError(f"cannot compare destination safely: {destination}") from error
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.rename(source, destination)
@@ -372,6 +505,8 @@ def apply_plan(plan_path: Path, state_dir: Path) -> dict[str, Any]:
     })
     completed = 0
     for index, operation in enumerate(operations):
+        if not snapshot_matches(operation.source, operation.expected):
+            raise SortyError(f"source changed before operation {index}: {operation.source}")
         operation_id = f"{apply_id}:{index}"
         base = {
             "record": "operation", "operation_id": operation_id,

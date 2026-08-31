@@ -4,7 +4,7 @@ Use this map to route current Sorty behavior. Recheck `README.md`, `CHANGELOG.md
 
 | Capability | Skill path | Boundary |
 | --- | --- | --- |
-| Organize, rename, organize and rename | Native or agent | Agent mode uses an explicit JSON plan |
+| Organize, rename, organize and rename | Native or agent | Agent mode uses a source-bound JSON plan and the planning quality rules |
 | Metadata inventory | Native or agent | Content reads need disclosure and authorization |
 | Deep Scan and image understanding | Native preferred | Cloud content transfer needs approval |
 | Interactive preview and corrections | Native | Agent mode presents a textual plan |

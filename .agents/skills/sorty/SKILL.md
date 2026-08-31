@@ -15,6 +15,8 @@ Use native Sorty for interactive previews, Finder tags, watched folders, Finder 
 
 Use agent mode for local scanning, organization or renaming, exact duplicate discovery, plan review, guarded apply, and rollback. Read [references/agent-mode.md](references/agent-mode.md) before creating or applying a plan.
 
+For organize, rename-only, or combined planning, also read [references/planning-quality.md](references/planning-quality.md). It defines the evidence and consistency checks that keep plans useful without guessing.
+
 For ambiguous requests, prefer native Sorty. Do not imply that a skill recreates the app's Finder extension, menu bar UI, widgets, Sparkle updater, provider clients, security-scoped bookmarks, or persistent FSEvents service.
 
 Read [references/capabilities.md](references/capabilities.md) when the request spans multiple features or when auditing whether this skill still covers the current app.
@@ -40,8 +42,8 @@ Never broaden authorization from one folder to another. Preserve hidden files, p
 1. Resolve and state the exact source root. Reject `/`, a home directory, or an unresolved variable as an apply root.
 2. Inventory before planning. Do not read file contents unless names, metadata, and structure are insufficient and the user has authorized content analysis.
 3. Keep organize-only, organize-and-rename, and rename-only behavior distinct. An "only" instruction leaves non-matching items untouched.
-4. Include every considered item in the plan or list it under `unorganized` with a reason.
-5. Validate paths and collisions before apply. Never silently overwrite.
+4. Include every considered item in the plan or list it under `unorganized` with a specific reason. Low-confidence items stay put.
+5. Bind each operation to the source snapshot returned by `scan`. Validate again immediately before apply. Never silently overwrite, change an extension, or traverse a symlinked destination parent.
 6. Keep the journal after apply. Roll back only completed operations and report anything that cannot be restored safely.
 7. For duplicates, distinguish exact byte matches from semantic similarity. Agent mode proves exact matches with SHA-256. Route semantic review to native Sorty.
 8. Report the verification boundary. A validated plan is not an applied plan, and a completed apply does not prove native Finder, widget, watcher, or UI behavior.

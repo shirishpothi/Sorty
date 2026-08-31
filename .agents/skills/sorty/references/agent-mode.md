@@ -8,13 +8,20 @@ Write UTF-8 JSON with this shape:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "source_root": "/absolute/source/folder",
   "mode": "organizeAndRename",
   "operations": [
     {
       "source": "Inbox/report draft.pdf",
-      "destination": "Documents/Reports/report.pdf"
+      "destination": "Documents/Reports/quarterly-report.pdf",
+      "expected": {
+        "kind": "file",
+        "size": 48102,
+        "device": 16777234,
+        "inode": 912345,
+        "modified_ns": 1788163200000000000
+      }
     }
   ],
   "tags": [],
@@ -37,11 +44,13 @@ Modes enforce intent:
 
 Operations are one-to-one moves. Do not use a directory operation when the plan only intends to move some descendants. Do not plan a source and one of its descendants separately.
 
+Copy the matching `scan` item's `snapshot` object into the operation's `expected` field. Apply rejects the plan if the item was replaced or changed after scanning. Never synthesize these values. Extension changes are rejected unless the operation includes `"allow_extension_change": true`; use that field only when the user explicitly asked to change file types or extensions.
+
 ## Workflow
 
 1. Run `scan` with explicit exclusion globs. The scanner skips hidden entries and treats packages as single items by default.
-2. Use names, extensions, sizes, dates, current folders, and the user's instructions to create the plan. Ask before reading contents or extracting image/document data.
-3. Run `validate`. Present moves, renames, unorganized items, warnings, and collisions.
+2. Use names, extensions, sizes, dates, current folders, and the user's instructions to create the plan. Follow [planning-quality.md](planning-quality.md). Ask before reading contents or extracting image/document data.
+3. Run `validate` after planning and again immediately before apply. Present moves, renames, unorganized items, warnings, and collisions.
 4. Apply only under the authorization rules in `SKILL.md`.
 5. Keep the returned journal path. Report counts and any incomplete operation.
 6. For rollback, inspect the journal first. The helper restores completed operations in reverse order and refuses occupied original paths.
@@ -49,6 +58,8 @@ Operations are one-to-one moves. Do not use a directory operation when the plan 
 ## Apply and recovery
 
 The helper writes a `pending` journal row before each move and a `completed` row after it. A cross-volume move copies to a temporary sibling, verifies content, publishes the destination without overwrite, then removes the source. File verification uses SHA-256. Directory verification compares a deterministic tree manifest with file hashes.
+
+Relative destinations must remain inside `source_root` after resolving existing parent symlinks. The helper also rejects stale source snapshots, control characters, dot segments, case-insensitive destination collisions, silent extension changes, occupied destinations, and plans that move a directory into itself.
 
 If apply stops, rerun neither apply nor rollback blindly. Inspect the last journal rows and filesystem state. A pending row with only the source present did not publish. A pending row with only the destination present likely published before completion was recorded. Resolve that row before continuing.
 

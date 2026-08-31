@@ -22,11 +22,21 @@ class SortyHelperTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def write_plan(self, mode, operations, **extra):
+        prepared_operations = []
+        for operation in operations:
+            prepared = dict(operation)
+            source = Path(prepared["source"])
+            source = source if source.is_absolute() else self.root / source
+            if source.exists() or source.is_symlink():
+                prepared.setdefault("expected", sorty_helper.source_snapshot(source))
+            else:
+                prepared.setdefault("expected", {})
+            prepared_operations.append(prepared)
         plan = {
-            "version": 1,
+            "version": 2,
             "source_root": str(self.root),
             "mode": mode,
-            "operations": operations,
+            "operations": prepared_operations,
             "tags": [],
             "exclusions": [],
             "duplicate_groups": [],
@@ -96,6 +106,19 @@ class SortyHelperTests(unittest.TestCase):
         self.assertTrue(any("overlapping sources" in error for error in result["errors"]))
         self.assertTrue(any("destination already exists" in error for error in result["errors"]))
 
+    def test_destination_cannot_modify_a_directory_moved_later(self):
+        folder = self.root / "folder"
+        folder.mkdir()
+        incoming = self.root / "incoming.txt"
+        incoming.write_text("incoming", encoding="utf-8")
+        plan = self.write_plan("organizeAndRename", [
+            {"source": "incoming.txt", "destination": "folder/incoming.txt"},
+            {"source": "folder", "destination": "archive/folder"},
+        ])
+        result = sorty_helper.validate_plan(plan)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("destination overlaps another source" in error for error in result["errors"]))
+
     def test_plan_cannot_move_an_excluded_item(self):
         (self.root / "private.txt").write_text("private", encoding="utf-8")
         plan = self.write_plan(
@@ -106,6 +129,62 @@ class SortyHelperTests(unittest.TestCase):
         result = sorty_helper.validate_plan(plan)
         self.assertFalse(result["valid"])
         self.assertTrue(any("matches an exclusion" in error for error in result["errors"]))
+
+    def test_relative_destination_cannot_escape_through_symlinked_parent(self):
+        source = self.root / "report.txt"
+        source.write_text("report", encoding="utf-8")
+        outside = self.base / "outside"
+        outside.mkdir()
+        (self.root / "linked").symlink_to(outside, target_is_directory=True)
+        plan = self.write_plan(
+            "organize",
+            [{"source": "report.txt", "destination": "linked/report.txt"}],
+        )
+        result = sorty_helper.validate_plan(plan)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("symlinked parent" in error for error in result["errors"]))
+
+    def test_apply_rejects_source_changed_after_plan(self):
+        source = self.root / "draft.txt"
+        source.write_text("first", encoding="utf-8")
+        plan = self.write_plan(
+            "renameOnly",
+            [{"source": "draft.txt", "destination": "final.txt"}],
+        )
+        source.write_text("changed", encoding="utf-8")
+        with self.assertRaises(sorty_helper.SortyError):
+            sorty_helper.apply_plan(plan, self.state)
+        self.assertTrue(source.exists())
+        self.assertFalse((self.root / "final.txt").exists())
+
+    def test_extension_change_requires_explicit_plan_field(self):
+        source = self.root / "photo.jpg"
+        source.write_text("image", encoding="utf-8")
+        rejected = self.write_plan(
+            "renameOnly",
+            [{"source": "photo.jpg", "destination": "photo.png"}],
+        )
+        self.assertFalse(sorty_helper.validate_plan(rejected)["valid"])
+        allowed = self.write_plan(
+            "renameOnly",
+            [{
+                "source": "photo.jpg",
+                "destination": "photo.png",
+                "allow_extension_change": True,
+            }],
+        )
+        self.assertTrue(sorty_helper.validate_plan(allowed)["valid"])
+
+    def test_case_insensitive_destination_collisions_are_rejected(self):
+        (self.root / "one.txt").write_text("one", encoding="utf-8")
+        (self.root / "two.txt").write_text("two", encoding="utf-8")
+        plan = self.write_plan("organizeAndRename", [
+            {"source": "one.txt", "destination": "Reports/one.txt"},
+            {"source": "two.txt", "destination": "reports/one.txt"},
+        ])
+        result = sorty_helper.validate_plan(plan)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("destination appears more than once" in error for error in result["errors"]))
 
     def test_apply_and_rollback(self):
         source = self.root / "Inbox" / "draft.txt"
