@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
 
 # Default target
 all: build
@@ -82,6 +82,16 @@ cache-prune:
 now:
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
+
+# Opens the InjectionNext-supervised Xcode workflow. Run the Sorty scheme once,
+# then saves from Xcode, Codex, or another editor update the running Debug app.
+hot:
+	@if [ ! -d /Applications/InjectionNext.app ]; then \
+		echo "InjectionNext.app is required in /Applications"; \
+		exit 1; \
+	fi
+	@echo "Opening Sorty with InjectionNext hot reload..."
+	@open -a InjectionNext --args -projectPath "$(CURDIR)/Sorty.xcodeproj"
 
 # Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
 ci:
@@ -204,6 +214,7 @@ help:
 	@echo "  make run         - Build and launch the app"
 	@echo "  make debug       - Build in DEBUG mode and launch"
 	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
+	@echo "  make hot         - Open the InjectionNext hot-reload workflow"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
 	@echo ""

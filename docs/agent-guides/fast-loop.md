@@ -8,12 +8,51 @@ Optimized workflows for rapid iteration on Sorty.
 |------|---------|-------------|
 | Build + launch (no tests) | `make now` | ~3-5s no-op; changed files vary |
 | Build only (no tests) | `make dev` | ~3-5s no-op; changed files vary |
+| Hot reload running Debug app | `make hot` | One changed Swift file |
 | Local diagnostic build + tests | `make build` | test-suite dependent |
 | Harness mode (targeted view) | `make harness` | ~3-5s no-op |
 | Profile slow expressions | `make build-profile` | ~90s clean diagnostic build |
 | Inspect build cache | `make cache-status` | <1s |
 | Force cache pruning | `make cache-prune` | varies |
 | Benchmark all builds | `make benchmark` | ~5-10min |
+
+## Hot reload
+
+Sorty uses InjectionNext 2.0.1 with Inject 1.6.0 for Debug-only Swift code
+injection. InjectionNext recompiles the saved Swift file and loads its updated
+implementation into the running app. It does not rebuild or relaunch Sorty.
+
+### Start the workflow
+
+1. Install `InjectionNext.app` in `/Applications`.
+2. Run `make hot`. InjectionNext opens the project in Xcode.
+3. Run the `Sorty` scheme once from Xcode.
+4. Keep that app process running. Saving Swift files from Xcode, Codex, or
+   another editor now updates visible SwiftUI views.
+
+The InjectionNext menu bar icon turns orange after Sorty connects, green while
+it compiles a saved file, and yellow when that file does not compile.
+
+### What reloads
+
+- SwiftUI body and function implementation changes reload in place.
+- Current navigation, window sessions, selected folders, and other app-owned
+  observable state stay alive because the process does not restart.
+- AppKit method changes take effect the next time that method runs.
+
+A normal build is still required after adding, removing, or reordering stored
+properties; changing function signatures; adding, renaming, or deleting source
+files; changing packages or build settings; or editing the Finder Sync extension
+or widget targets.
+
+### Troubleshooting
+
+- If InjectionNext does not connect, confirm the app is in `/Applications`, run
+  `make hot` again, and rebuild the `Sorty` Debug scheme once.
+- If a save reports a compile error, fix or revert that file. The running app
+  continues using its previous implementation.
+- If a structural change does not load, use `make now` or rebuild from Xcode.
+- Release builds contain no active injection observer or injection bundle.
 
 ## Harness Mode
 
