@@ -37,6 +37,14 @@ A native macOS SwiftUI app that uses AI to organize files into relevant, semanti
 
 ## Quick Start
 
+### Use Sorty from Codex
+
+This repository includes a `$sorty` skill for Codex. Ask it to organize, rename,
+scan for exact duplicates, preview a plan, or roll back work. The skill opens the
+Sorty app for native features such as Finder integration, watched folders,
+personas, Learnings, provider settings, and interactive previews. See the
+[Sorty skill guide](docs/sorty-skill.md) for setup, examples, and safety rules.
+
 ### Prerequisites
 - macOS 15.0 or later
 - Xcode 16.0 or later

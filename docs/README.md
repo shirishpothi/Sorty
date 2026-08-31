@@ -15,6 +15,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [Finder Integration](#finder-integration)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [App Deeplinks](#app-deeplinks)
+- [Codex Skill](sorty-skill.md)
 - [CLI Tool](#cli-tool)
 - [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)
