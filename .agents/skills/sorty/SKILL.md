@@ -1,0 +1,61 @@
+---
+name: sorty
+description: Organize, rename, tag, deduplicate, watch, review, or restore files with Sorty. Uses the installed macOS app for native features and a guarded agent fallback for direct filesystem work.
+metadata:
+  short-description: Organize files with Sorty
+---
+
+# Sorty
+
+Handle file-organization requests with Sorty's safety model. Prefer the installed app when it can perform the requested workflow. Use the agent fallback only for work that can be represented as a concrete, reversible filesystem plan.
+
+## Choose the execution path
+
+Use native Sorty for interactive previews, Finder tags, watched folders, Finder integration, personas, Learnings, cloud or external storage, provider and Keychain settings, HUD notifications, widgets, updates, privacy controls, and diagnostics. Read [references/native-routing.md](references/native-routing.md) before opening a `sorty://` URL.
+
+Use agent mode for local scanning, organization or renaming, exact duplicate discovery, plan review, guarded apply, and rollback. Read [references/agent-mode.md](references/agent-mode.md) before creating or applying a plan.
+
+For ambiguous requests, prefer native Sorty. Do not imply that a skill recreates the app's Finder extension, menu bar UI, widgets, Sparkle updater, provider clients, security-scoped bookmarks, or persistent FSEvents service.
+
+Read [references/capabilities.md](references/capabilities.md) when the request spans multiple features or when auditing whether this skill still covers the current app.
+
+## Authorization
+
+Treat an explicit imperative such as "organize this folder", "rename these files", or "apply this plan" as authorization for the listed, non-destructive moves and renames. Still show the exact plan before applying it in the same response when practical.
+
+Treat exploratory wording such as "how would you organize this?" or "suggest a structure" as preview-only.
+
+Always get separate approval immediately before:
+
+- deleting or trashing duplicates;
+- overwriting or merging an existing destination;
+- resolving an ambiguous collision;
+- sending file contents to a cloud model;
+- clearing Learnings, history, exclusions, personas, or other stored data.
+
+Never broaden authorization from one folder to another. Preserve hidden files, packages, exclusions, timestamps, extended attributes, and existing Finder tags unless the user explicitly changes them.
+
+## Working rules
+
+1. Resolve and state the exact source root. Reject `/`, a home directory, or an unresolved variable as an apply root.
+2. Inventory before planning. Do not read file contents unless names, metadata, and structure are insufficient and the user has authorized content analysis.
+3. Keep organize-only, organize-and-rename, and rename-only behavior distinct. An "only" instruction leaves non-matching items untouched.
+4. Include every considered item in the plan or list it under `unorganized` with a reason.
+5. Validate paths and collisions before apply. Never silently overwrite.
+6. Keep the journal after apply. Roll back only completed operations and report anything that cannot be restored safely.
+7. For duplicates, distinguish exact byte matches from semantic similarity. Agent mode proves exact matches with SHA-256. Route semantic review to native Sorty.
+8. Report the verification boundary. A validated plan is not an applied plan, and a completed apply does not prove native Finder, widget, watcher, or UI behavior.
+
+## Helper
+
+Use `scripts/sorty_helper.py` for deterministic agent-mode mechanics. Its default state directory is `~/Library/Application Support/Sorty Skill`.
+
+```text
+python3 scripts/sorty_helper.py scan ROOT [--exclude GLOB ...]
+python3 scripts/sorty_helper.py duplicates ROOT [--exclude GLOB ...]
+python3 scripts/sorty_helper.py validate PLAN.json
+python3 scripts/sorty_helper.py apply PLAN.json
+python3 scripts/sorty_helper.py rollback JOURNAL.jsonl
+```
+
+The helper does not invent an organization plan. Build the versioned JSON plan from the user's instructions and the inventory, then validate it before apply.
