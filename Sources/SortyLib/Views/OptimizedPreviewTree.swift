@@ -70,6 +70,7 @@ enum PreviewRowPresentation: Equatable {
 class PreviewStore: ObservableObject {
     private static let automaticExpansionFileLimit = 2_000
     private static let renderedFilesPerSectionLimit = 500
+    static let unorganizedSectionID = "unorganized-header"
 
     @Published private(set) var flattenedRows: [FlattenedRow] = []
     @Published private(set) var plan: OrganizationPlan
@@ -206,7 +207,10 @@ class PreviewStore: ObservableObject {
     }
     
     private func expandAllFolders() {
-        let ids = collectFolderIDs(from: plan)
+        var ids = collectFolderIDs(from: plan)
+        if plan.unorganizedFiles.count > 8 {
+            ids.remove(Self.unorganizedSectionID)
+        }
         expandedFolders = plan.totalFiles <= Self.automaticExpansionFileLimit ? ids : []
         knownFolderIDs = ids
     }
@@ -217,6 +221,9 @@ class PreviewStore: ObservableObject {
         expandedFolders = expandedFolders.intersection(currentIDs)
         if plan.totalFiles <= Self.automaticExpansionFileLimit {
             expandedFolders.formUnion(newIDs)
+        }
+        if plan.unorganizedFiles.count > 8, newIDs.contains(Self.unorganizedSectionID) {
+            expandedFolders.remove(Self.unorganizedSectionID)
         }
         knownFolderIDs = currentIDs
     }
@@ -231,6 +238,9 @@ class PreviewStore: ObservableObject {
         }
         for suggestion in plan.suggestions {
             traverse(suggestion)
+        }
+        if !plan.unorganizedFiles.isEmpty {
+            ids.insert(Self.unorganizedSectionID)
         }
         return ids
     }
@@ -296,31 +306,34 @@ class PreviewStore: ObservableObject {
         }
         
         if !plan.unorganizedFiles.isEmpty {
+            let isExpanded = expandedFolders.contains(Self.unorganizedSectionID)
             rows.append(FlattenedRow(
-                id: "unorganized-header",
+                id: Self.unorganizedSectionID,
                 depth: 0,
                 type: .unorganizedHeader,
-                isExpanded: true
+                isExpanded: isExpanded
             ))
 
-            let visibleFileCount = min(plan.unorganizedFiles.count, Self.renderedFilesPerSectionLimit)
-            for index in 0..<visibleFileCount {
-                let file = plan.unorganizedFiles[index]
-                visibleFiles.append(file)
-                rows.append(FlattenedRow(
-                    id: "unorganized-\(file.id.uuidString)-\(index)",
-                    depth: 1,
-                    type: .unorganizedFile(file),
-                    isExpanded: false
-                ))
-            }
-            if plan.unorganizedFiles.count > visibleFileCount {
-                rows.append(FlattenedRow(
-                    id: "unorganized-remaining",
-                    depth: 1,
-                    type: .remainingFiles(count: plan.unorganizedFiles.count - visibleFileCount),
-                    isExpanded: false
-                ))
+            if isExpanded {
+                let visibleFileCount = min(plan.unorganizedFiles.count, Self.renderedFilesPerSectionLimit)
+                for index in 0..<visibleFileCount {
+                    let file = plan.unorganizedFiles[index]
+                    visibleFiles.append(file)
+                    rows.append(FlattenedRow(
+                        id: "unorganized-\(file.id.uuidString)-\(index)",
+                        depth: 1,
+                        type: .unorganizedFile(file),
+                        isExpanded: false
+                    ))
+                }
+                if plan.unorganizedFiles.count > visibleFileCount {
+                    rows.append(FlattenedRow(
+                        id: "unorganized-remaining",
+                        depth: 1,
+                        type: .remainingFiles(count: plan.unorganizedFiles.count - visibleFileCount),
+                        isExpanded: false
+                    ))
+                }
             }
         }
 
@@ -1013,9 +1026,10 @@ struct FlattenedRowView: View, @MainActor Equatable {
                     onPlanChanged: onPlanChanged
                 )
             }
-        case .unorganizedHeader(_, let fileCount):
+        case .unorganizedHeader(let row, let fileCount):
             FlatUnorganizedHeaderView(
                 fileCount: fileCount,
+                isExpanded: row.isExpanded,
                 store: store,
                 dragDropManager: dragDropManager,
                 onPlanChanged: onPlanChanged
@@ -1525,14 +1539,19 @@ struct FlatFileRowView: View {
 
 struct FlatUnorganizedHeaderView: View {
     let fileCount: Int
+    let isExpanded: Bool
     let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
-    
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDropTarget = false
     
     var body: some View {
         HStack {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
             Image(systemName: "questionmark.folder")
                 .foregroundColor(.orange)
             Text("Unorganized Files")
@@ -1550,6 +1569,22 @@ struct FlatUnorganizedHeaderView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggleExpanded)
+        .focusable()
+        .onKeyPress(.space) {
+            toggleExpanded()
+            return .handled
+        }
+        .onKeyPress(.return) {
+            toggleExpanded()
+            return .handled
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(
+            named: isExpanded ? "Collapse unorganized files" : "Expand unorganized files",
+            toggleExpanded
+        )
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDropTarget ? Color.orange.opacity(0.1) : Color.clear)
@@ -1561,6 +1596,12 @@ struct FlatUnorganizedHeaderView: View {
             isTargeted: $isDropTarget,
             onPlanChanged: onPlanChanged
         ))
+    }
+
+    private func toggleExpanded() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+            store.toggleFolder(id: PreviewStore.unorganizedSectionID)
+        }
     }
 }
 

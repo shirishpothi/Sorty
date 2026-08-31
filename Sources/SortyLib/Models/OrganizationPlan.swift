@@ -103,6 +103,7 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
     public enum Kind: String, Codable, Sendable {
         case duplicateFolderNames
         case vagueOrSingleFileFolder
+        case excessiveUnorganizedFiles
         case mixedFileTypes
         case unnecessaryNesting
         case existingConventionMismatch

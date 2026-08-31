@@ -176,11 +176,9 @@ struct PlanQualityEvaluator {
         existingFolderPaths: [String]
     ) -> PlanQualityAssessment {
         let folders = flatten(plan.suggestions)
-        guard !folders.isEmpty else {
-            return PlanQualityAssessment(score: 100, issues: [])
-        }
 
         var issues: [PlanQualityIssue] = []
+        issues.append(contentsOf: excessiveUnorganizedIssues(in: plan))
         issues.append(contentsOf: duplicateNameIssues(in: folders))
         issues.append(contentsOf: vagueAndSingleFileIssues(in: folders))
         issues.append(contentsOf: mixedTypeIssues(in: folders))
@@ -190,6 +188,22 @@ struct PlanQualityEvaluator {
 
         let score = max(0, 100 - issues.reduce(0) { $0 + $1.deduction })
         return PlanQualityAssessment(score: score, issues: issues)
+    }
+
+    private static func excessiveUnorganizedIssues(in plan: OrganizationPlan) -> [PlanQualityIssue] {
+        let total = plan.totalFiles
+        let count = plan.unorganizedFiles.count
+        guard total > 0, count >= 5, Double(count) / Double(total) >= 0.20 else { return [] }
+
+        return [
+            PlanQualityIssue(
+                kind: .excessiveUnorganizedFiles,
+                message: "The plan leaves \(count) of \(total) files unorganized. Ambiguity or a standalone role is not enough: place them in a suitable existing folder, a coherent project folder, or a broad reusable category unless a safety rule explicitly prevents it.",
+                folderPaths: [],
+                fileIDs: plan.unorganizedFiles.map(\.id),
+                deduction: 35
+            )
+        ]
     }
 
     static func keepingCertainItems(
