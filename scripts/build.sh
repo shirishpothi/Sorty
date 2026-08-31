@@ -780,6 +780,16 @@ copy_resources_safely() {
             --exclude "Images/" \
             "${source_resources_dir}/" "${dest_dir}/"
     fi
+
+    # The tracked Codex skill is bundled as an experimental installable resource.
+    local sorty_skill_source="${PROJECT_DIR}/.agents/skills/sorty"
+    if [ -f "${sorty_skill_source}/SKILL.md" ]; then
+        log_detail "Syncing Sorty Codex skill"
+        rsync -a --delete \
+            --exclude ".DS_Store" \
+            --exclude "__pycache__/" \
+            "${sorty_skill_source}/" "${dest_dir}/sorty/"
+    fi
     
     # Priority 3: Fallback images (only if Images folder doesn't exist yet)
     if [ -d "${fallback_images}" ]; then

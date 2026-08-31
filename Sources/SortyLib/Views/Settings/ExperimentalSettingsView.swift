@@ -13,13 +13,19 @@ struct ExperimentalSettingsView: View {
     @State private var hasAppeared = false
 
     var body: some View {
-        Group {
-            if analytics.isLoadingExperimentalFeatures {
-                loadingState
-            } else if analytics.experimentalFeatures.isEmpty {
-                emptyState
-            } else {
-                featureList
+        VStack(spacing: 12) {
+            if isCodexSkillInstallerEnabled {
+                CodexSkillInstallerCard()
+            }
+
+            Group {
+                if analytics.isLoadingExperimentalFeatures {
+                    loadingState
+                } else if !otherExperimentalFeatures.isEmpty {
+                    featureList
+                } else if !isCodexSkillInstallerEnabled {
+                    emptyState
+                }
             }
         }
         .task {
@@ -31,6 +37,15 @@ struct ExperimentalSettingsView: View {
             guard !Task.isCancelled else { return }
             hasAppeared = true
         }
+    }
+
+    private var isCodexSkillInstallerEnabled: Bool {
+        FeatureFlags.codexSkillInstallerEnabled
+            || analytics.experimentalFeatures.contains { $0.id == FeatureFlags.codexSkillInstallerKey }
+    }
+
+    private var otherExperimentalFeatures: [ExperimentalFeature] {
+        analytics.experimentalFeatures.filter { $0.id != FeatureFlags.codexSkillInstallerKey }
     }
 
     private var loadingState: some View {
@@ -102,7 +117,7 @@ struct ExperimentalSettingsView: View {
 
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(analytics.experimentalFeatures) { feature in
+            ForEach(otherExperimentalFeatures) { feature in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: feature.systemImage)
                         .font(.system(size: 16, weight: .semibold))
@@ -134,7 +149,7 @@ struct ExperimentalSettingsView: View {
                 }
                 .accessibilityElement(children: .combine)
 
-                if feature.id != analytics.experimentalFeatures.last?.id {
+                if feature.id != otherExperimentalFeatures.last?.id {
                     Divider()
                 }
             }

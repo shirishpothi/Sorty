@@ -9,6 +9,14 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
+    public static let codexSkillInstallerKey = "labs-sorty-codex-skill"
+
+    /// Local override for the experimental Codex skill installer.
+    /// PostHog uses the same key for the production assignment.
+    public static var codexSkillInstallerEnabled: Bool {
+        UserDefaults.standard.bool(forKey: codexSkillInstallerKey)
+    }
+
     /// Legacy preference for Finder Integration.
     ///
     /// Finder Integration is a core app feature. The key remains for migration and

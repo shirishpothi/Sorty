@@ -25,6 +25,21 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
 | Shaders | `shadersEnabled` (see note) | `false` | Recovered shader gallery in the Help menu |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
+| Sorty Codex Skill | `labs-sorty-codex-skill` | PostHog assignment | Experimental one-click installer in Settings → Experimental; currently registered at 100% rollout |
+
+### Sorty Codex Skill
+
+PostHog owns the normal rollout. The local override uses the exact same key and is useful for offline development:
+
+```bash
+# Show the installer without a PostHog assignment
+defaults write com.sorty.app labs-sorty-codex-skill -bool true
+
+# Remove the local override and return to PostHog assignment
+defaults delete com.sorty.app labs-sorty-codex-skill
+```
+
+The installer copies Sorty's bundled skill into the user's Codex skills directory. It never overwrites a different existing `sorty` skill. Anonymous, opted-in analytics record bounded availability and install outcomes so adoption can be evaluated while the feature remains experimental.
 
 ### Harness Mode
 

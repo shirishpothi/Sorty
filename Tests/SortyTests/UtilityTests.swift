@@ -13,4 +13,37 @@ final class UtilityTests: XCTestCase {
         let output = RenameRuleEngine.applyRules(to: "IMG 123 Summer Photo.jpg", rules: rules)
         XCTAssertEqual(output, "123_Summer_Photo.jpg")
     }
+
+    func testCodexSkillInstallerCopiesMatchingSkillWithoutOverwritingConflicts() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-skill-installer-\(UUID().uuidString)", isDirectory: true)
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("skills/sorty", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try "---\nname: sorty\n---\n".write(
+            to: source.appendingPathComponent("SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        XCTAssertEqual(CodexSkillInstaller.inspect(source: source, destination: destination), .available)
+        XCTAssertTrue(CodexSkillInstaller.install(source: source, destination: destination))
+        guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
+            return XCTFail("Expected the copied skill to be recognized as installed")
+        }
+
+        try "different".write(
+            to: destination.appendingPathComponent("SKILL.md"),
+            atomically: true,
+            encoding: .utf8
+        )
+        XCTAssertEqual(CodexSkillInstaller.inspect(source: source, destination: destination), .conflict)
+        XCTAssertFalse(CodexSkillInstaller.install(source: source, destination: destination))
+        XCTAssertEqual(
+            try String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8),
+            "different"
+        )
+    }
 }
