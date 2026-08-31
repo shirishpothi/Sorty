@@ -2,6 +2,8 @@ import SwiftUI
 
 struct CodexSkillInstallerCard: View {
     @StateObject private var installer = CodexSkillInstaller()
+    @State private var isConfirmingRemoval = false
+    @State private var isConfirmingReplacement = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -45,35 +47,63 @@ struct CodexSkillInstallerCard: View {
         .task {
             await installer.refresh()
         }
+        .confirmationDialog(
+            "Remove Sorty from Codex?",
+            isPresented: $isConfirmingRemoval
+        ) {
+            Button("Remove Skill", role: .destructive, action: remove)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Codex will no longer discover the Sorty skill. You can install it again at any time.")
+        }
+        .confirmationDialog(
+            "Replace the existing Sorty skill?",
+            isPresented: $isConfirmingReplacement
+        ) {
+            Button("Replace Skill", role: .destructive, action: replace)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This replaces the Sorty skill currently in your Codex skills folder with the version bundled in Sorty.")
+        }
     }
 
     @ViewBuilder
     private var actionView: some View {
         switch installer.state {
-        case .checking, .installing:
+        case .checking, .installing, .replacing, .removing:
             ProgressView()
                 .controlSize(.small)
                 .frame(minWidth: 86, minHeight: 28)
-                .accessibilityLabel(installer.state == .checking ? "Checking Codex skill" : "Installing Codex skill")
+                .accessibilityLabel(progressLabel)
         case .available, .failed:
             Button("Install Skill", action: install)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.sortyProminent(size: .small))
                 .accessibilityIdentifier("experimental.codex-skill.install")
         case .installed:
-            Button("Installed", systemImage: "checkmark", action: {})
-                .controlSize(.small)
-                .disabled(true)
-                .accessibilityIdentifier("experimental.codex-skill.installed")
+            Button("Remove Skill", role: .destructive) {
+                isConfirmingRemoval = true
+            }
+            .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+            .accessibilityIdentifier("experimental.codex-skill.remove")
         case .conflict:
-            Button("Open Skills Folder", action: installer.openSkillsFolder)
-                .controlSize(.small)
-                .accessibilityIdentifier("experimental.codex-skill.open-folder")
+            VStack(alignment: .trailing, spacing: 6) {
+                Button("Replace Skill") {
+                    isConfirmingReplacement = true
+                }
+                .buttonStyle(.sortyProminent(intent: .warning, size: .small))
+                .accessibilityIdentifier("experimental.codex-skill.replace")
+
+                Button("Show Existing Skill", action: installer.revealExistingSkill)
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("experimental.codex-skill.open-folder")
+            }
         case .unavailable:
             Button("Check Again") {
                 Task { await installer.refresh(trackUsage: false) }
             }
-            .controlSize(.small)
+            .buttonStyle(.sortyBordered(size: .small))
             .accessibilityIdentifier("experimental.codex-skill.retry")
         }
     }
@@ -83,10 +113,22 @@ struct CodexSkillInstallerCard: View {
         case .checking: "Checking Codex…"
         case .available: "Ready to install"
         case .installing: "Installing…"
+        case .replacing: "Replacing existing skill…"
+        case .removing: "Removing…"
         case .installed: "Installed in Codex"
-        case .conflict: "A different Sorty skill is already installed"
+        case .conflict: "Another Sorty skill is installed. Replace it or review it first."
         case .unavailable: "The bundled skill is unavailable in this build"
         case .failed: "Installation failed"
+        }
+    }
+
+    private var progressLabel: String {
+        switch installer.state {
+        case .checking: "Checking Codex skill"
+        case .installing: "Installing Codex skill"
+        case .replacing: "Replacing Codex skill"
+        case .removing: "Removing Codex skill"
+        default: "Updating Codex skill"
         }
     }
 
@@ -116,6 +158,20 @@ struct CodexSkillInstallerCard: View {
                 announcement = statusText
             }
             AccessibilityNotification.Announcement(announcement).post()
+        }
+    }
+
+    private func replace() {
+        Task {
+            await installer.replace()
+            AccessibilityNotification.Announcement(statusText).post()
+        }
+    }
+
+    private func remove() {
+        Task {
+            await installer.remove()
+            AccessibilityNotification.Announcement(statusText).post()
         }
     }
 }

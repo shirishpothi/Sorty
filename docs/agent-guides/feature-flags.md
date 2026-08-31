@@ -39,7 +39,7 @@ defaults write com.sorty.app labs-sorty-codex-skill -bool true
 defaults delete com.sorty.app labs-sorty-codex-skill
 ```
 
-The installer copies Sorty's bundled skill into the user's Codex skills directory. It never overwrites a different existing `sorty` skill. Anonymous, opted-in analytics record bounded availability and install outcomes so adoption can be evaluated while the feature remains experimental.
+The installer copies Sorty's bundled skill into the user's Codex skills directory. Users can remove a matching installation or explicitly replace a conflicting `sorty` skill after confirmation. Anonymous, opted-in analytics record bounded install, replacement, removal, and availability outcomes so adoption can be evaluated while the feature remains experimental.
 
 ### Harness Mode
 

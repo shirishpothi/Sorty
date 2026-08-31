@@ -45,5 +45,12 @@ final class UtilityTests: XCTestCase {
             try String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8),
             "different"
         )
+
+        XCTAssertTrue(CodexSkillInstaller.replace(source: source, destination: destination))
+        guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
+            return XCTFail("Expected the conflicting skill to be replaced")
+        }
+        XCTAssertTrue(CodexSkillInstaller.remove(destination: destination))
+        XCTAssertEqual(CodexSkillInstaller.inspect(source: source, destination: destination), .available)
     }
 }

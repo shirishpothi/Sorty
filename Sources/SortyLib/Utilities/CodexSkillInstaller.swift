@@ -6,6 +6,8 @@ enum CodexSkillInstallState: Equatable, Sendable {
     case checking
     case available
     case installing
+    case replacing
+    case removing
     case installed(installedAt: Date?)
     case conflict
     case unavailable
@@ -79,7 +81,53 @@ final class CodexSkillInstaller: ObservableObject {
         }
     }
 
-    func openSkillsFolder() {
+    func replace() async {
+        guard let source = Self.bundledSkillURL() else {
+            state = .unavailable
+            captureAction("replace", outcome: "unavailable")
+            return
+        }
+
+        state = .replacing
+        let destination = destinationURL
+        let replaced = await Task.detached(priority: .userInitiated) {
+            Self.replace(source: source, destination: destination)
+        }.value
+
+        if replaced {
+            state = .installed(installedAt: Date())
+            HapticFeedbackManager.shared.success()
+            captureAction("replace", outcome: "success")
+        } else {
+            state = Self.inspect(source: source, destination: destination)
+            HapticFeedbackManager.shared.error()
+            captureAction("replace", outcome: "failed")
+        }
+    }
+
+    func remove() async {
+        state = .removing
+        let destination = destinationURL
+        let removed = await Task.detached(priority: .userInitiated) {
+            Self.remove(destination: destination)
+        }.value
+
+        if removed {
+            state = Self.bundledSkillURL() == nil ? .unavailable : .available
+            HapticFeedbackManager.shared.success()
+            captureAction("uninstall", outcome: "success")
+        } else {
+            state = Self.inspect(source: Self.bundledSkillURL(), destination: destination)
+            HapticFeedbackManager.shared.error()
+            captureAction("uninstall", outcome: "failed")
+        }
+    }
+
+    func revealExistingSkill() {
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+            return
+        }
         let skillsURL = destinationURL.deletingLastPathComponent()
         try? fileManager.createDirectory(at: skillsURL, withIntermediateDirectories: true)
         NSWorkspace.shared.open(skillsURL)
@@ -114,6 +162,49 @@ final class CodexSkillInstaller: ObservableObject {
         } catch {
             DebugLogger.log("Codex skill install failed: \(error.localizedDescription)")
             try? fileManager.removeItem(at: temporary)
+            return false
+        }
+    }
+
+    nonisolated static func replace(source: URL, destination: URL) -> Bool {
+        let fileManager = FileManager.default
+        guard isValidSkill(at: source), fileManager.fileExists(atPath: destination.path) else {
+            return false
+        }
+
+        let skillsURL = destination.deletingLastPathComponent()
+        let operationID = UUID().uuidString
+        let temporary = skillsURL.appendingPathComponent(".sorty-install-\(operationID)", isDirectory: true)
+        let backup = skillsURL.appendingPathComponent(".sorty-backup-\(operationID)", isDirectory: true)
+        do {
+            try fileManager.copyItem(at: source, to: temporary)
+            guard isValidSkill(at: temporary) else {
+                try? fileManager.removeItem(at: temporary)
+                return false
+            }
+            try fileManager.moveItem(at: destination, to: backup)
+            do {
+                try fileManager.moveItem(at: temporary, to: destination)
+                try? fileManager.removeItem(at: backup)
+                return true
+            } catch {
+                try? fileManager.moveItem(at: backup, to: destination)
+                throw error
+            }
+        } catch {
+            DebugLogger.log("Codex skill replacement failed: \(error.localizedDescription)")
+            try? fileManager.removeItem(at: temporary)
+            return false
+        }
+    }
+
+    nonisolated static func remove(destination: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: destination.path) else { return false }
+        do {
+            try FileManager.default.removeItem(at: destination)
+            return true
+        } catch {
+            DebugLogger.log("Codex skill removal failed: \(error.localizedDescription)")
             return false
         }
     }
@@ -189,10 +280,14 @@ final class CodexSkillInstaller: ObservableObject {
     }
 
     private func captureInstall(outcome: String) {
+        captureAction("install", outcome: outcome)
+    }
+
+    private func captureAction(_ action: String, outcome: String) {
         AnalyticsManager.shared.captureFeature(
             feature: "experimental",
             subfeature: "codex_skill_installer",
-            action: "install",
+            action: action,
             outcome: outcome
         )
     }
