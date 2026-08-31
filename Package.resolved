@@ -1,15 +1,6 @@
 {
-  "originHash" : "0a98d2f95614e4f42446649a02470d0ec33b6d14471b56fbfbf0c81ec6b30cce",
+  "originHash" : "f9d5bd2ffd079507f424e7f46d82e2c31a54595bb4436a6be9caeaa149090a10",
   "pins" : [
-    {
-      "identity" : "inject",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/krzysztofzablocki/Inject.git",
-      "state" : {
-        "revision" : "f53380e986a8b056e37d7ce9ca68de610b8415ef",
-        "version" : "1.6.0"
-      }
-    },
     {
       "identity" : "posthog-ios",
       "kind" : "remoteSourceControl",

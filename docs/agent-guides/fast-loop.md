@@ -18,9 +18,10 @@ Optimized workflows for rapid iteration on Sorty.
 
 ## Hot reload
 
-Sorty uses InjectionNext 2.0.1 with Inject 1.6.0 for Debug-only Swift code
-injection. InjectionNext recompiles the saved Swift file and loads its updated
-implementation into the running app. It does not rebuild or relaunch Sorty.
+Sorty uses InjectionNext 2.0.1 with a Debug-only SwiftUI observer. InjectionNext
+recompiles the saved Swift file and loads its updated implementation into the
+running app. It does not rebuild or relaunch Sorty. The observer is kept local
+because SwiftPM otherwise links Inject's application-path globals into Release.
 
 ### Start the workflow
 

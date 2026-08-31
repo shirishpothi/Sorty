@@ -32,10 +32,6 @@ let package = Package(
             url: "https://github.com/getsentry/sentry-cocoa.git",
             exact: "9.23.0"
         ),
-        .package(
-            url: "https://github.com/krzysztofzablocki/Inject.git",
-            exact: "1.6.0"
-        ),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
@@ -46,7 +42,6 @@ let package = Package(
                 .product(name: "Beam", package: "beam"),
                 .product(name: "PostHog", package: "posthog-ios"),
                 .product(name: "Sentry", package: "sentry-cocoa"),
-                .product(name: "Inject", package: "Inject"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",
