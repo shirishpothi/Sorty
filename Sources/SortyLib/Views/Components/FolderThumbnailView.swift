@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 
 /// A view that displays a folder thumbnail with async loading
 public struct FolderThumbnailView: View {
+    @SortyHotReload private var hotReload
     let url: URL
     let size: CGSize
     let loadDelay: Duration
@@ -54,6 +55,7 @@ public struct FolderThumbnailView: View {
 
 /// Compact folder thumbnail for tree views
 public struct CompactFolderThumbnail: View {
+    @SortyHotReload private var hotReload
     let url: URL?
     let folderName: String
     let size: CGFloat

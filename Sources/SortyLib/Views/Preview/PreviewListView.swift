@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct PreviewListView: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
@@ -101,6 +102,7 @@ struct PreviewListView: View {
 // MARK: - Empty Preview State
 
 struct EmptyPreviewState: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let iconColor: Color
     let title: String

@@ -46,6 +46,7 @@ private enum ErrorViewTestRoute: String {
 }
 
 struct OrganizeView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
@@ -728,6 +729,7 @@ struct OrganizeView: View {
 // MARK: - Directory Header
 
 struct DirectoryHeader: View {
+    @SortyHotReload private var hotReload
     let url: URL
     let mode: OrganizationMode
     let onBack: () -> Void
@@ -848,6 +850,7 @@ private extension AnyTransition {
 }
 
 private struct SetupRepairGateView: View {
+    @SortyHotReload private var hotReload
     let message: String
     let onOpenSettings: () -> Void
 
@@ -878,6 +881,7 @@ private struct SetupRepairGateView: View {
 // MARK: - Ready to Organize View
 
 struct ReadyToOrganizeView: View {
+    @SortyHotReload private var hotReload
     let onStart: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var organizer: FolderOrganizer
@@ -1847,6 +1851,7 @@ private struct InstructionFileReference: Identifiable, Equatable, Sendable {
 }
 
 private struct InstructionFileReferencePicker: View {
+    @SortyHotReload private var hotReload
     let matches: [InstructionFileReference]
     let query: String
     let onSelect: (InstructionFileReference) -> Void
@@ -1928,6 +1933,7 @@ private struct InstructionFileReferencePicker: View {
 }
 
 private struct PreviewHandoffView: View {
+    @SortyHotReload private var hotReload
     let mode: OrganizationMode
     @State private var appeared = false
 
@@ -1994,6 +2000,7 @@ private struct PreviewHandoffDot: ViewModifier {
 // MARK: - Saved Prompts Sheet
 
 struct SavedPromptsSheet: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var steeringManager: SteeringPromptManager
     let settingsConfig: AIConfig
     let onApplyPrompt: (String) -> Void
@@ -2328,6 +2335,7 @@ private enum SavedPromptRowAction {
 }
 
 private struct SavedPromptListRow: View {
+    @SortyHotReload private var hotReload
     let row: SavedPromptRowContent
     let editingSession: SavedPromptEditingSession?
     let steeringManager: SteeringPromptManager
@@ -2359,6 +2367,7 @@ private struct SavedPromptListRow: View {
 }
 
 private struct SavedPromptDisplayCard: View {
+    @SortyHotReload private var hotReload
     let row: SavedPromptRowContent
     let showsPinControls: Bool
     let onAction: (SavedPromptRowAction) -> Void
@@ -2471,6 +2480,7 @@ private struct SavedPromptRowButtonStyle: ButtonStyle {
 }
 
 private struct SavedPromptEditorCard: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var session: SavedPromptEditingSession
     let steeringManager: SteeringPromptManager
     let settingsConfig: AIConfig
@@ -2624,6 +2634,7 @@ private extension View {
 // MARK: - Compact Storage Location Row
 
 struct CompactStorageLocationRow: View {
+    @SortyHotReload private var hotReload
     let location: StorageLocation
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2799,6 +2810,7 @@ struct CompactStorageLocationRow: View {
 // MARK: - Storage Locations Info Popover
 
 struct StorageLocationsInfoPopover: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("How Storage Locations Work", systemImage: "externaldrive")
@@ -2821,6 +2833,7 @@ struct StorageLocationsInfoPopover: View {
 // MARK: - Error View
 
 struct ErrorView: View {
+    @SortyHotReload private var hotReload
     let error: Error
     var canResume = false
     var onResume: () -> Void = {}
@@ -3449,6 +3462,7 @@ struct ErrorView: View {
 }
 
 struct FocusedInstructionBeamBorder: View {
+    @SortyHotReload private var hotReload
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -3488,6 +3502,7 @@ struct FocusedInstructionBeamBorder: View {
 
 /// A TextEditor that treats Cmd+Enter as submit and Enter as new line
 struct SubmittableTextEditor: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     @Binding var text: String
     var isFocused: Binding<Bool>?
     var selectedRange: Binding<NSRange>?

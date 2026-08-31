@@ -47,6 +47,7 @@ public struct DuplicateInfo: Identifiable, Hashable, Sendable {
 }
 
 struct LiquidGlassDuplicateButton: View {
+    @SortyHotReload private var hotReload
     let duplicateInfo: DuplicateInfo
     var onFileSelected: ((FileItem) -> Void)? = nil
 

@@ -24,6 +24,7 @@ private struct LearningsInsightRow {
 }
 
 struct LiquidGlassLearningsButton: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     let suggestion: FolderSuggestion
     var learningsManager: LearningsManager? = nil

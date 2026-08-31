@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct TimelineView: View {
+    @SortyHotReload private var hotReload
     let entries: [OrganizationHistoryEntry]
     let directoryPath: String
     let onRestore: (OrganizationHistoryEntry) -> Void
@@ -84,6 +85,7 @@ struct TimelineView: View {
 // MARK: - Timeline Slider Track
 
 struct TimelineSliderTrack: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let entries: [OrganizationHistoryEntry]
@@ -150,6 +152,7 @@ struct TimelineSliderTrack: View {
 // MARK: - Timeline Node
 
 struct TimelineNode: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let entry: OrganizationHistoryEntry
@@ -197,6 +200,7 @@ struct TimelineNode: View {
 // MARK: - Selected Entry Card
 
 struct SelectedEntryCard: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     let allEntries: [OrganizationHistoryEntry] // All filtered entries to determine current state
     let onRestore: (OrganizationHistoryEntry) -> Void
@@ -290,6 +294,7 @@ struct SelectedEntryCard: View {
 // MARK: - Empty Timeline View
 
 struct EmptyTimelineView: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "clock")
@@ -312,6 +317,7 @@ struct EmptyTimelineView: View {
 // MARK: - Compact Timeline for HistoryView
 
 struct CompactTimelineView: View {
+    @SortyHotReload private var hotReload
     let entries: [OrganizationHistoryEntry]
     let directoryPath: String
     

@@ -7,6 +7,7 @@ import SwiftUI
 
 /// Displays paths while blurring only username path segments (for example `/Users/<name>/...`).
 struct PrivacySensitivePathText: View {
+    @SortyHotReload private var hotReload
     let path: String
     var blurRadius: CGFloat = 10
     var revealOnHover: Bool = true

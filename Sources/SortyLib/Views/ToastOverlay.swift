@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct CometLoader<S: Shape>: View {
+    @SortyHotReload private var hotReload
     var shape: S
     var size: CGFloat = 18
     var lineWidth: CGFloat = 2

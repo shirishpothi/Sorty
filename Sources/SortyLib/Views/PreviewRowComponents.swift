@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 struct RenameNameChangeView: View {
+    @SortyHotReload private var hotReload
     let suggestedName: String
     let helpText: String
     var isRegenerating = false
@@ -55,6 +56,7 @@ struct RenameNameChangeView: View {
 }
 
 private struct RenameNameRevealSweep: View {
+    @SortyHotReload private var hotReload
     @State private var progress: CGFloat = -0.35
 
     var body: some View {
@@ -87,6 +89,7 @@ private struct RenameNameRevealSweep: View {
 }
 
 struct FlatFolderRowHeaderContent: View {
+    @SortyHotReload private var hotReload
     let folderName: String
     let fileCount: Int
     let isExpanded: Bool
@@ -132,6 +135,7 @@ struct FlatFolderRowHeaderContent: View {
 }
 
 struct FlatFolderRowContextMenu: View {
+    @SortyHotReload private var hotReload
     let isStorageDestination: Bool
     let onRevert: () -> Void
     let onChangeStorage: () -> Void
@@ -151,6 +155,7 @@ struct FlatFolderRowContextMenu: View {
 }
 
 struct FlatFileRowContent: View {
+    @SortyHotReload private var hotReload
     private enum Column {
         static let sizeWidth: CGFloat = 60
         static let dragHandleWidth: CGFloat = 12
@@ -276,6 +281,7 @@ struct FlatFileRowContent: View {
 }
 
 private struct FlatFileRowContextMenu: View {
+    @SortyHotReload private var hotReload
     let hasRename: Bool
     let onOpen: () -> Void
     let onReveal: () -> Void
@@ -306,6 +312,7 @@ private struct FlatFileRowContextMenu: View {
 }
 
 struct FlatFileRowSurface: View {
+    @SortyHotReload private var hotReload
     let content: FlatFileRowContent
     let depth: Int
     let isHighlighted: Bool
@@ -371,6 +378,7 @@ struct FlatFileRowSurface: View {
 }
 
 private struct RenameActionGlassCluster: View {
+    @SortyHotReload private var hotReload
     let isRegenerating: Bool
     let onEdit: () -> Void
     let onRegenerate: () -> Void
@@ -403,6 +411,7 @@ private struct RenameActionGlassCluster: View {
 }
 
 private struct RenameGlassIconButton: View {
+    @SortyHotReload private var hotReload
     let systemImage: String
     let help: String
     let action: () -> Void

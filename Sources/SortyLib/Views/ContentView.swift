@@ -10,6 +10,7 @@
 import SwiftUI
 
 public struct ContentView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var extensionListener: ExtensionListener

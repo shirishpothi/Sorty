@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct CommentBubbleButton: View {
+    @SortyHotReload private var hotReload
     let comment: String
     @State private var showPopover = false
 
@@ -27,6 +28,7 @@ struct CommentBubbleButton: View {
 }
 
 struct CommentPopoverView: View {
+    @SortyHotReload private var hotReload
     let comment: String
 
     var body: some View {

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct TroubleshootingSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
@@ -433,6 +434,7 @@ private struct SupportHealthCheck: Identifiable {
 }
 
 private struct SupportHealthCheckRow: View {
+    @SortyHotReload private var hotReload
     let check: SupportHealthCheck
     let action: () -> Void
 
@@ -471,6 +473,7 @@ private struct SupportHealthCheckRow: View {
 }
 
 private struct MaintenanceActionTile: View {
+    @SortyHotReload private var hotReload
     let title: String
     let description: String
     let detail: String?

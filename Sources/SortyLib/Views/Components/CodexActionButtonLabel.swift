@@ -15,6 +15,7 @@ enum CodexActionVisualState {
 }
 
 struct CodexActionButtonLabel: View {
+    @SortyHotReload private var hotReload
     let idleTitle: String
     let activatingTitle: String
     let successTitle: String

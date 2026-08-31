@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PreviewHeaderView: View {
+    @SortyHotReload private var hotReload
     let version: Int
     let hasEdits: Bool
     let notes: String

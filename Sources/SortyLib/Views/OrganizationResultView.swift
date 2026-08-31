@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct OrganizationResultView: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats
     var duplicatesFound: Int = 0
     
@@ -21,6 +22,7 @@ struct OrganizationResultView: View {
 }
 
 struct GenerationStatsView: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats
     var duplicatesFound: Int = 0
     @State private var isExpanded = false
@@ -211,6 +213,7 @@ struct GenerationStatsView: View {
 }
 
 public struct NerdStatPill: View {
+    @SortyHotReload private var hotReload
     public let title: String?
     public let icon: String
     public let value: String
@@ -270,6 +273,7 @@ public struct NerdStatPill: View {
 }
 
 public struct NerdStatPillExpanded: View {
+    @SortyHotReload private var hotReload
     public let icon: String
     public let color: Color
     public let title: String
@@ -354,6 +358,7 @@ public struct NerdStatPillExpanded: View {
 }
 
 struct NerdStatCard: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let iconColor: Color
     let title: String

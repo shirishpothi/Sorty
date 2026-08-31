@@ -10,6 +10,7 @@ import AppKit
 /// colored border rings (red / yellow / green) when the window is
 /// not key, instead of the default plain-gray appearance.
 public struct TrafficLightStyling: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     public func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {

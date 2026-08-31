@@ -125,6 +125,7 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
 }
 
 struct SidebarButton: View {
+    @SortyHotReload private var hotReload
     let title: String
     let icon: String
     let color: Color
@@ -156,6 +157,7 @@ struct SidebarButton: View {
 }
 
 struct SettingsCard<Content: View>: View {
+    @SortyHotReload private var hotReload
     let title: String
     let icon: String
     let color: Color
@@ -292,6 +294,7 @@ struct SettingsCard<Content: View>: View {
 }
 
 struct StepCard<Content: View>: View {
+    @SortyHotReload private var hotReload
     let number: Int
     let title: String
     @ViewBuilder let content: Content
@@ -315,6 +318,7 @@ struct StepCard<Content: View>: View {
 }
 
 struct SettingsTextField: View {
+    @SortyHotReload private var hotReload
     let title: String
     @Binding var text: String
     var placeholder: String = ""
@@ -330,6 +334,7 @@ struct SettingsTextField: View {
 }
 
 struct SettingsSecureField: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let title: String
@@ -395,6 +400,7 @@ struct SettingsSecureField: View {
 }
 
 struct SettingsToggle: View {
+    @SortyHotReload private var hotReload
     @Binding var isOn: Bool
     let title: String
     var description: String? = nil

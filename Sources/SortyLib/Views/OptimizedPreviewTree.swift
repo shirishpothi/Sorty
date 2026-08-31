@@ -932,6 +932,7 @@ class PreviewStore: ObservableObject {
 // MARK: - Optimized Preview Tree View
 
 struct OptimizedPreviewTree: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
@@ -975,6 +976,7 @@ struct OptimizedPreviewTree: View {
 // MARK: - Flattened Row View
 
 struct FlattenedRowView: View, @MainActor Equatable {
+    @SortyHotReload private var hotReload
     let presentation: PreviewRowPresentation
     let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
@@ -1064,6 +1066,7 @@ struct FlattenedRowView: View, @MainActor Equatable {
 // MARK: - Flat Folder Row View
 
 struct FlatFolderRowView: View {
+    @SortyHotReload private var hotReload
     let suggestion: FolderSuggestion
     let depth: Int
     let isExpanded: Bool
@@ -1301,6 +1304,7 @@ struct FlatFolderRowView: View {
 // MARK: - Flat File Row View
 
 struct FlatFileRowView: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     let depth: Int
     let parentFolderID: UUID
@@ -1538,6 +1542,7 @@ struct FlatFileRowView: View {
 // MARK: - Flat Unorganized Header View
 
 struct FlatUnorganizedHeaderView: View {
+    @SortyHotReload private var hotReload
     let fileCount: Int
     let isExpanded: Bool
     let store: PreviewStore
@@ -1608,6 +1613,7 @@ struct FlatUnorganizedHeaderView: View {
 // MARK: - Flat Unorganized File Row View
 
 struct FlatUnorganizedFileRowView: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     @ObservedObject var dragDropManager: DragDropManager
     let store: PreviewStore

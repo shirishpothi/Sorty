@@ -9,6 +9,7 @@ import SwiftUI
 
 /// HUD notification overlay that appears at the bottom-left of the window
 public struct HUDNotificationOverlay: View {
+    @SortyHotReload private var hotReload
     @ObservedObject private var notificationManager: NotificationManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
@@ -57,6 +58,7 @@ public struct HUDNotificationOverlay: View {
 
 /// Individual HUD notification card with liquid glass styling
 struct HUDNotificationCard: View {
+    @SortyHotReload private var hotReload
     let notification: HUDNotification
     let queuedCount: Int
     let onShowNext: () -> Void
@@ -184,6 +186,7 @@ struct HUDNotificationCard: View {
 }
 
 private struct HUDNotificationHeader: View {
+    @SortyHotReload private var hotReload
     let notification: HUDNotification
     let isHovered: Bool
     let onDismiss: () -> Void
@@ -241,6 +244,7 @@ private struct HUDNotificationHeader: View {
 }
 
 private struct HUDNotificationActionGrid: View {
+    @SortyHotReload private var hotReload
     let actions: [HUDNotificationAction]
 
     private let columns = [
@@ -263,6 +267,7 @@ private struct HUDNotificationActionGrid: View {
 }
 
 private struct HUDNotificationQueueControls: View {
+    @SortyHotReload private var hotReload
     let summary: String
     let queuedCount: Int
     let onShowNext: () -> Void
@@ -309,6 +314,7 @@ private struct HUDNotificationQueueControls: View {
 }
 
 private struct HUDNotificationProgress: View {
+    @SortyHotReload private var hotReload
     let color: Color
     let remaining: CGFloat
 
@@ -324,6 +330,7 @@ private struct HUDNotificationProgress: View {
 }
 
 private struct HUDNotificationActionLabel: View {
+    @SortyHotReload private var hotReload
     let action: HUDNotificationAction
     let fillsWidth: Bool
     @Environment(\.isEnabled) private var isEnabled

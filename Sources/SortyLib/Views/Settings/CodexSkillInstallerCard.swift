@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CodexSkillInstallerCard: View {
+    @SortyHotReload private var hotReload
     @StateObject private var installer = CodexSkillInstaller()
     @State private var isConfirmingRemoval = false
     @State private var isConfirmingReplacement = false

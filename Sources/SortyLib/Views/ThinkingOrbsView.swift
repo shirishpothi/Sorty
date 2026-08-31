@@ -36,6 +36,7 @@ private struct OrbDot {
 // MARK: - Main View
 
 public struct ThinkingOrbsView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -108,6 +109,7 @@ public struct ThinkingOrbsView: View {
 /// a Gaussian scan meridian sweeping the front hemisphere. Renders at actual
 /// size with the upstream sub-linear radius scaling, so it stays crisp small.
 public struct ThinkingOrbLoaderView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
@@ -285,6 +287,7 @@ extension View {
 }
 
 private struct ThinkingOrb: View {
+    @SortyHotReload private var hotReload
     let state: ThinkingOrbState
     let isDark: Bool
     let reduceMotion: Bool

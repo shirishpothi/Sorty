@@ -571,6 +571,7 @@ final class GitHubContributorsFetcher: ObservableObject {
 // MARK: - Rolling Credits View
 
 struct RollingCreditsView: View {
+    @SortyHotReload private var hotReload
     let title: String
     let items: [CreditItem]
     let rowHeight: CGFloat

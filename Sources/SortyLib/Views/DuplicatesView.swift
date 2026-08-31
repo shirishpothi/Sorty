@@ -11,6 +11,7 @@ import Beam
 import SwiftUI
 
 struct DuplicatesView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var detectionManager: DuplicateDetectionManager
     @EnvironmentObject var settingsManager: DuplicateSettingsManager
@@ -593,6 +594,7 @@ struct DuplicatesView: View {
 // MARK: - Redesigned Header
 
 struct DuplicatesHeaderNew: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var manager: DuplicateDetectionManager
     let currentDirectory: URL?
     let onSelectDirectory: () -> Void
@@ -723,6 +725,7 @@ struct DuplicatesHeaderNew: View {
 // MARK: - Components
 
 private struct DuplicatesResultsSidebarHeader: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var manager: DuplicateDetectionManager
     let showsStats: Bool
     let onScanAgain: () -> Void
@@ -835,6 +838,7 @@ private struct DuplicatesResultsSidebarHeader: View {
 }
 
 private struct UnavailableDuplicateFilesPopover: View {
+    @SortyHotReload private var hotReload
     let files: [UnavailableDuplicateFile]
     let onScanAgain: () -> Void
 
@@ -925,6 +929,7 @@ private struct UnavailableDuplicateFilesPopover: View {
 }
 
 private struct DuplicatesNerdStatsStrip: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var manager: DuplicateDetectionManager
 
     var body: some View {
@@ -979,6 +984,7 @@ private struct DuplicatesNerdStatsStrip: View {
 }
 
 struct UnifiedDuplicateGroupRow: View {
+    @SortyHotReload private var hotReload
     let group: UnifiedDuplicateGroup
 
     private var firstFileURL: URL? {
@@ -1055,6 +1061,7 @@ struct UnifiedDuplicateGroupRow: View {
 }
 
 private struct DuplicateSectionHeader: View {
+    @SortyHotReload private var hotReload
     let title: String
     @Binding var isExpanded: Bool
     let guidance: String
@@ -1151,6 +1158,7 @@ private struct DuplicateSectionHeader: View {
 }
 
 struct UnifiedDuplicateGroupDetailView: View {
+    @SortyHotReload private var hotReload
     let group: UnifiedDuplicateGroup
     let settings: DuplicateSettings
     let onDelete: ([FileItem]) -> Void
@@ -1414,6 +1422,7 @@ struct UnifiedDuplicateGroupDetailView: View {
 }
 
 private struct DuplicateMetricTile: View {
+    @SortyHotReload private var hotReload
     let value: String
     let label: String
     let color: Color
@@ -1442,6 +1451,7 @@ private struct DuplicateMetricTile: View {
 }
 
 struct UnifiedFileDetailRow: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     let isRecommended: Bool
     let recommendation: String?
@@ -1653,6 +1663,7 @@ struct UnifiedFileDetailRow: View {
 }
 
 private struct UnifiedFileDetailContextMenu: View {
+    @SortyHotReload private var hotReload
     let isRecommended: Bool
     let onOpen: () -> Void
     let onReveal: () -> Void
@@ -1687,6 +1698,7 @@ private struct UnifiedFileDetailContextMenu: View {
 
 // Reused components
 struct DuplicatesEmptyStateView: View {
+    @SortyHotReload private var hotReload
     let title: String
     let description: String
     let icon: String
@@ -1780,6 +1792,7 @@ private struct DefaultActionShortcut: ViewModifier {
 }
 
 private struct ScanningPulseIcon: View {
+    @SortyHotReload private var hotReload
     let systemName: String
     let color: Color
 
@@ -1827,6 +1840,7 @@ private struct ScanningPulseIcon: View {
 }
 
 struct ScanProgressViewNew: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     var isPreparing: Bool = false
     var stage: String = ""
@@ -1990,6 +2004,7 @@ extension View {
 }
 
 private struct ScanProgressReferenceBeamFallback: View {
+    @SortyHotReload private var hotReload
     let cornerRadius: CGFloat
     let active: Bool
     let includesInteriorGlow: Bool

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The recovered Minsang Glass Loader, scaled for compact progress surfaces.
 struct MinsangGlassLoader: View {
+    @SortyHotReload private var hotReload
     let textChangeTrigger: String
     var size: CGFloat = 54
     var isActive = true

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OrganizationRulesSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     
     var body: some View {

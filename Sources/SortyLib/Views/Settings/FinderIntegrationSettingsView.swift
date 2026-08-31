@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isOrganizeActionInstalled = false
     @State private var isWatchActionInstalled = false

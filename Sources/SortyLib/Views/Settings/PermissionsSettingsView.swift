@@ -12,6 +12,7 @@ import UserNotifications
 import Permiso
 
 struct PermissionsSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var automationManager: AutomationManager
     @ObservedObject private var notificationManager = NotificationManager.shared
@@ -749,6 +750,7 @@ struct PermissionsSettingsView: View {
 }
 
 private struct PermissionSettingsCard: View {
+    @SortyHotReload private var hotReload
     let type: PermissionType
     let state: PermissionState
     let isRequired: Bool
@@ -1025,6 +1027,7 @@ private struct PermissionSettingsCard: View {
 }
 
 struct PermissionAnimatedIcon: View {
+    @SortyHotReload private var hotReload
     let type: PermissionType
     let state: PermissionState
     let grantAnimationTrigger: Int

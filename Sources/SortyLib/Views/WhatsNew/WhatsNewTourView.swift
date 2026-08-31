@@ -3,6 +3,7 @@ import Beam
 import SwiftUI
 
 public struct WhatsNewTourView: View {
+    @SortyHotReload private var hotReload
     private let onFinish: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -761,6 +762,7 @@ private struct WhatsNewPageTransitionModifier: ViewModifier {
 }
 
 private struct GooeyPageIndicator: View, @MainActor Animatable {
+    @SortyHotReload private var hotReload
     var selectedIndex: CGFloat
     let pageCount: Int
     let accent: Color

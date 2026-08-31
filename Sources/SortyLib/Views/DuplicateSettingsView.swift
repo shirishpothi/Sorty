@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct DuplicateSettingsView: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var settingsManager: DuplicateSettingsManager
     @Environment(\.dismiss) private var dismiss
     

@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct TagDotsView: View {
+    @SortyHotReload private var hotReload
     let tags: [String]
 
     @State private var isShowingHoverPopover = false

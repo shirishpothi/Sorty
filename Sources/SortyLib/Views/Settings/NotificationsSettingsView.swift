@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct NotificationsSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
     @ObservedObject private var notificationManager = NotificationManager.shared
     

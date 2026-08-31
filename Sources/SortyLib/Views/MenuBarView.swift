@@ -11,6 +11,7 @@ import SwiftUI
 // MARK: - Menu Bar Mascot Icon
 
 private struct MenuBarMascotIcon: View {
+    @SortyHotReload private var hotReload
     var size: CGSize = CGSize(width: 18, height: 18)
 
     private var mascotImage: Image {
@@ -28,6 +29,7 @@ private struct MenuBarMascotIcon: View {
 // MARK: - Launch at Login Icon
 
 private struct LaunchAtLoginIcon: View {
+    @SortyHotReload private var hotReload
     let isEnabled: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -106,6 +108,7 @@ private struct LaunchAtLoginIcon: View {
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
+    @SortyHotReload private var hotReload
     @ObservedObject private var controller: MenuBarController
 
     private static let menuBarImages: [MenuBarActivity: NSImage] = {
@@ -135,6 +138,7 @@ public struct MenuBarLabel: View {
 }
 
 public struct MenuBarView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var loginItemManager: LoginItemManager
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
@@ -452,6 +456,7 @@ public struct MenuBarView: View {
 // MARK: - Menu Bar Button
 
 private struct MenuBarButton: View {
+    @SortyHotReload private var hotReload
     let title: String
     var icon: String? = nil
     var customImage: Image? = nil
@@ -510,6 +515,7 @@ private struct MenuBarButton: View {
 // MARK: - Watched Folder Menu Item
 
 private struct WatchedFolderMenuItem: View {
+    @SortyHotReload private var hotReload
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
 

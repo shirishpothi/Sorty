@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct GlassyBackButton: View {
+    @SortyHotReload private var hotReload
     let action: () -> Void
     
     var body: some View {

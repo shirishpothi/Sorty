@@ -3,6 +3,7 @@ import AppKit
 import SwiftUI
 
 struct HistoryDetailHeaderSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     let reasoningNotes: String?
 
@@ -52,6 +53,7 @@ struct HistoryDetailHeaderSection: View {
 }
 
 struct HistorySessionStatisticsSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     let showsDetailedStats: Bool
 
@@ -70,6 +72,7 @@ struct HistorySessionStatisticsSection: View {
 }
 
 struct HistoryPartialUndoSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
 
     private var affectedItems: [PartialUndoItem] {
@@ -156,6 +159,7 @@ private struct PartialUndoItem: Identifiable {
 }
 
 private struct PartialUndoItemRow: View {
+    @SortyHotReload private var hotReload
     let item: PartialUndoItem
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -245,6 +249,7 @@ private struct PartialUndoItemRow: View {
 }
 
 private struct HistoryPrimaryStats: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
 
     var body: some View {
@@ -310,6 +315,7 @@ private struct HistoryPrimaryStats: View {
 }
 
 private struct HistoryNerdStatsGrid: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats
 
     private let columns = [
@@ -364,6 +370,7 @@ private struct HistoryNerdStatsGrid: View {
 }
 
 private struct HistoryOptionalNerdStats: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats
 
     var body: some View {
@@ -471,6 +478,7 @@ private struct HistoryOptionalNerdStats: View {
 }
 
 struct HistoryDetailErrorSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
 
     @ViewBuilder
@@ -496,6 +504,7 @@ struct HistoryDetailErrorSection: View {
 }
 
 struct HistoryDetailActionsSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     let onRestoreDuplicates: () -> Void
     let onApplyOrRedo: () -> Void
@@ -585,6 +594,7 @@ struct HistoryDetailActionsSection: View {
 }
 
 struct HistoryPlanDetailsSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     @Binding var highlightedFileID: UUID?
 
@@ -616,6 +626,7 @@ struct HistoryPlanDetailsSection: View {
 }
 
 private struct HistoryUnorganizedFilesSection: View {
+    @SortyHotReload private var hotReload
     let files: [FileItem]
     @Binding var highlightedFileID: UUID?
 
@@ -642,6 +653,7 @@ private struct HistoryUnorganizedFilesSection: View {
 }
 
 private struct HistoryUnorganizedFileRow: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     let siblings: [FileItem]
     @Binding var highlightedFileID: UUID?
@@ -684,6 +696,7 @@ private struct HistoryUnorganizedFileRow: View {
 }
 
 struct HistoryFileOperationsSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     let undoneOperationIDs: Set<UUID>
     let failedOperationIDs: Set<UUID>
@@ -729,6 +742,7 @@ struct HistoryFileOperationsSection: View {
 }
 
 struct HistoryRestorableItemsSection: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
 
     @ViewBuilder
@@ -748,6 +762,7 @@ struct HistoryRestorableItemsSection: View {
 }
 
 private struct HistoryRestorableItemRow: View {
+    @SortyHotReload private var hotReload
     let item: RestorableDuplicate
 
     private var deletedName: String {

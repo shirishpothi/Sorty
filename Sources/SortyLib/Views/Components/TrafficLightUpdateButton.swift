@@ -14,6 +14,7 @@ import SwiftUI
 /// An orange traffic-light style control that appears in the title bar right
 /// after the standard window buttons.
 public struct TrafficLightUpdateButton: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     @ObservedObject var updateManager: SparkleUpdateManager
 
     public init(updateManager: SparkleUpdateManager) {

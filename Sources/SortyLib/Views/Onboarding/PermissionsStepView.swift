@@ -13,6 +13,7 @@ import UserNotifications
 import Permiso
 
 public struct PermissionsStepView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject private var automationManager: AutomationManager
     @EnvironmentObject private var appState: AppState
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
@@ -698,6 +699,7 @@ enum PermissionState: Sendable, Equatable {
 }
 
 struct PermissionRow: View {
+    @SortyHotReload private var hotReload
     let type: PermissionType
     let state: PermissionState
     let isRequired: Bool
@@ -930,6 +932,7 @@ struct PermissionRow: View {
 }
 
 struct PermissionEducationView: View {
+    @SortyHotReload private var hotReload
     let pages: [PermissionType]
     let onFinish: () -> Void
     @State private var currentPage = 0
@@ -1063,6 +1066,7 @@ struct PermissionEducationView: View {
 }
 
 struct AutomationPermissionRecoveryView: View {
+    @SortyHotReload private var hotReload
     let onFinish: () -> Void
     private let resetCommand = "tccutil reset AppleEvents com.sorty.app"
     @State private var hasCopiedResetCommand = false
@@ -1137,6 +1141,7 @@ struct AutomationPermissionRecoveryView: View {
 }
 
 private struct PermissionDemoVideoView: View {
+    @SortyHotReload private var hotReload
     let permission: PermissionType
     let resourceName: String
 
@@ -1190,6 +1195,7 @@ private extension PermissionType {
 }
 
 private struct LoopingPermissionVideoView: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let url: URL
 
     func makeCoordinator() -> Coordinator {
@@ -1298,6 +1304,7 @@ private final class PlayerLayerView: NSView {
 }
 
 private struct PermissionActionButton: View {
+    @SortyHotReload private var hotReload
     enum Style {
         case primary
         case bordered

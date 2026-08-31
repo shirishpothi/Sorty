@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 public struct WorkflowSelectionStepView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
@@ -204,6 +205,7 @@ public struct WorkflowSelectionStepView: View {
 // MARK: - Supporting Views
 
 struct OnboardingPersonaCard: View {
+    @SortyHotReload private var hotReload
     let persona: PersonaType
     let isSelected: Bool
     let action: () -> Void
@@ -308,6 +310,7 @@ struct OnboardingPersonaCard: View {
 }
 
 struct OnboardingCustomPersonaCard: View {
+    @SortyHotReload private var hotReload
     let persona: CustomPersona
     let isSelected: Bool
     var compact: Bool = false

@@ -8,6 +8,7 @@
 import SwiftUI
 
 public struct AnalyticsConsentView: View {
+    @SortyHotReload private var hotReload
     @ObservedObject private var analytics = AnalyticsManager.shared
     @Environment(\.openURL) private var openURL
 

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct NoTickSlider: View {
+    @SortyHotReload private var hotReload
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double?

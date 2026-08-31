@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 /// A view that displays a file thumbnail with fallback and async loading
 public struct FileThumbnailView: View {
+    @SortyHotReload private var hotReload
     let url: URL
     let size: CGSize
     let utTypeHint: UTType?

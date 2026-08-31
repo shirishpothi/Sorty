@@ -10,6 +10,7 @@ import SwiftUI
 // MARK: - Private helpers
 
 private struct SortyGradientRingSegment: View {
+    @SortyHotReload private var hotReload
     let accent: Color
     let lineWidth: CGFloat
     let start: Double
@@ -70,6 +71,7 @@ private enum SortyBeamPalette {
 // MARK: - SortyGradientProgressBar
 
 struct SortyGradientProgressBar: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var height: CGFloat = 10
@@ -116,6 +118,7 @@ struct SortyGradientProgressBar: View {
 // MARK: - SortyGradientLoadingBar
 
 struct SortyGradientLoadingBar: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
@@ -178,6 +181,7 @@ struct SortyGradientLoadingBar: View {
 // MARK: - SortyGradientCircularProgress
 
 struct SortyGradientCircularProgress: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let progress: Double
@@ -265,6 +269,7 @@ struct SortyGradientCircularProgress: View {
 
 /// Compact spinning loader with a tail-to-tip gradient arc.
 struct SortyGradientCircularLoader: View {
+    @SortyHotReload private var hotReload
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var size: CGFloat = 18
     var lineWidth: CGFloat = 3

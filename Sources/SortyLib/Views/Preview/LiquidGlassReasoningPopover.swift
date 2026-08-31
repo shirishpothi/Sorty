@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct LiquidGlassReasoningButton: View {
+    @SortyHotReload private var hotReload
     let suggestion: FolderSuggestion
     var learningsManager: LearningsManager?
 
@@ -55,6 +56,7 @@ struct LiquidGlassReasoningButton: View {
 }
 
 struct LiquidGlassReasoningPopover: View {
+    @SortyHotReload private var hotReload
     let suggestion: FolderSuggestion
     let matchedRule: InferredRule?
 

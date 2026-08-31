@@ -174,6 +174,7 @@ final class AnalysisRefreshManager: ObservableObject {
 }
 
 struct AnalysisView: View {
+    @SortyHotReload private var hotReload
     var onReturnToStart: (() -> Void)?
     var onLiveOrganizationStarted: (() -> Void)?
 
@@ -1181,6 +1182,7 @@ private struct RenameStreamEvent: Identifiable, Equatable {
 }
 
 private struct RenameGenerationSequenceView: View {
+    @SortyHotReload private var hotReload
     let events: [RenameStreamEvent]
     @State private var shouldFollowLatest = true
 
@@ -1408,6 +1410,7 @@ private struct RenameGenerationSequenceView: View {
 }
 
 private struct RenameGenerationRow: View {
+    @SortyHotReload private var hotReload
     let originalName: String
     let suggestedName: String?
     let filePath: String?
@@ -1492,6 +1495,7 @@ private struct RenameGenerationRow: View {
 }
 
 private struct RenameNamePill: View {
+    @SortyHotReload private var hotReload
     let text: String
     let isPrimary: Bool
     let isStruck: Bool
@@ -1526,6 +1530,7 @@ private struct RenameNamePill: View {
 }
 
 private struct RenameGenerationRevealSweep: View {
+    @SortyHotReload private var hotReload
     @State private var progress: CGFloat = -0.35
 
     var body: some View {
@@ -1558,6 +1563,7 @@ private struct RenameGenerationRevealSweep: View {
 }
 
 private struct RenameFileIcon: View {
+    @SortyHotReload private var hotReload
     let filePath: String?
     let isDirectory: Bool
     let isUnchanged: Bool
@@ -1592,6 +1598,7 @@ private struct RenameFileIcon: View {
 }
 
 private struct RenameShiftIndicator: View {
+    @SortyHotReload private var hotReload
     let isActive: Bool
     let isUnchanged: Bool
 
@@ -1643,6 +1650,7 @@ private struct RenameShiftIndicator: View {
 
 /// Mid-organization progress card using Beam's reference playground samples.
 private struct StreamingProgressBeam: View {
+    @SortyHotReload private var hotReload
     let measuredProgress: MeasuredWorkProgress?
     let overallProgress: Double
     let stage: String
@@ -1817,6 +1825,7 @@ private extension View {
 }
 
 private struct ReferenceBeamFallback: View {
+    @SortyHotReload private var hotReload
     let cornerRadius: CGFloat
     let active: Bool
     let includesInteriorGlow: Bool
@@ -1896,6 +1905,7 @@ private struct ReferenceBeamFallback: View {
 }
 
 private struct AIReasoningStatus: View {
+    @SortyHotReload private var hotReload
     let state: OrganizationState
     let organizationStage: String
     let isStreaming: Bool
@@ -2009,6 +2019,7 @@ final class AnalysisInsightViewState: ObservableObject {
 }
 
 private struct InsightHistorySection: View {
+    @SortyHotReload private var hotReload
     let activity: AIAnalysisActivity
     let insights: (current: String, history: [AIInsight])
     let debugModeEnabled: Bool
@@ -2643,6 +2654,7 @@ enum NoticeSeverity {
 }
 
 struct InlineNotice: View {
+    @SortyHotReload private var hotReload
     let icon: String?
     let title: String
     let message: String?
@@ -2716,6 +2728,7 @@ struct InlineNotice: View {
 }
 
 private struct InlineNoticeHeader: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let title: String
     let color: Color
@@ -2742,6 +2755,7 @@ private struct InlineNoticeHeader: View {
 }
 
 private struct InlineNoticeActions: View {
+    @SortyHotReload private var hotReload
     let actions: [InlineNoticeAction]
     let color: Color
     let isCentered: Bool
@@ -2764,6 +2778,7 @@ private struct InlineNoticeActions: View {
 }
 
 private struct InlineNoticeActionButton: View {
+    @SortyHotReload private var hotReload
     let action: InlineNoticeAction
     let color: Color
 
@@ -2793,6 +2808,7 @@ private struct InlineNoticeActionButton: View {
 // MARK: - Insight Pill
 
 struct InsightPill: View {
+    @SortyHotReload private var hotReload
     let insight: AIInsight
 
     private var displayText: String {

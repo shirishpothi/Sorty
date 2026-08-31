@@ -157,6 +157,7 @@ private struct WindowLinkHoverPillHostModifier: ViewModifier {
 }
 
 struct WindowLinkHoverPillOverlay: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var hoverState: WindowLinkHoverState
 
     var body: some View {

@@ -17,6 +17,7 @@ private final class SimulatedDemoTaskController {
 }
 
 struct SimulatedDemoAnimationView: View {
+    @SortyHotReload private var hotReload
     let onComplete: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
@@ -832,6 +833,7 @@ struct SimulatedDemoAnimationView: View {
 /// Owns the scan line's per-frame animation so it does not invalidate the
 /// forty-state simulated-demo root for the full 2.5-second sweep.
 private struct DemoScanningLine: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: CGFloat = 0
 
@@ -895,6 +897,7 @@ struct DemoFolderNode: Identifiable {
 
 // MARK: - Demo Organization Plan Card
 struct DemoOrganizationPlanCard: View {
+    @SortyHotReload private var hotReload
     let title: String
     let subtitle: String
     let folderCount: Int
@@ -954,6 +957,7 @@ struct DemoOrganizationPlanCard: View {
 
 // MARK: - Demo Persona Card
 struct DemoPersonaCard: View {
+    @SortyHotReload private var hotReload
     let name: String
     let description: String
     let icon: String
@@ -1017,6 +1021,7 @@ struct DemoPersonaCard: View {
 
 // MARK: - Privacy Badge
 struct PrivacyBadge: View {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     
     var body: some View {
@@ -1041,6 +1046,7 @@ struct PrivacyBadge: View {
 
 // MARK: - Undo Safety Badge
 struct UndoSafetyBadge: View {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
@@ -1078,6 +1084,7 @@ struct UndoSafetyBadge: View {
 
 // MARK: - Transition Particle Effect
 struct TransitionParticleView: View {
+    @SortyHotReload private var hotReload
     let isActive: Bool
     let color: Color
     let particleCount: Int
@@ -1115,6 +1122,7 @@ struct TransitionParticleView: View {
 
 // MARK: - Confetti Burst Effect
 struct ConfettiBurstView: View {
+    @SortyHotReload private var hotReload
     let isActive: Bool
     
     private let confettiColors: [Color] = [.green, .blue, .purple, .orange, .pink, .yellow, .red, .mint]
@@ -1162,6 +1170,7 @@ private func seededDemoValue(index: Int, salt: Int, range: ClosedRange<Double>) 
 
 // MARK: - Organizing Sliver Effect
 struct OrganizingSliverEffect: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
 
@@ -1176,6 +1185,7 @@ struct OrganizingSliverEffect: View {
 }
 
 private struct OrganizingSliverGraphic: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Rectangle()
             .fill(
@@ -1198,6 +1208,7 @@ private struct OrganizingSliverGraphic: View {
 }
 
 private struct RetainedOrganizingSliver: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let shouldAnimate: Bool
 
     func makeNSView(context: Context) -> RetainedOrganizingSliverView {
@@ -1257,6 +1268,7 @@ private final class RetainedOrganizingSliverView: NSView {
 
 // MARK: - Folder Sliver Effect
 struct FolderSliverEffect: View {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sliverPhase: CGFloat = 0

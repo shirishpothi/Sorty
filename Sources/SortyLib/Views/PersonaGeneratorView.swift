@@ -10,6 +10,7 @@ import SwiftUI
 import Beam
 
 struct PersonaGeneratorView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -466,6 +467,7 @@ struct PersonaGeneratorView: View {
 }
 
 private struct PersonaGenerationBorderBeam: View {
+    @SortyHotReload private var hotReload
     let cornerRadius: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -595,6 +597,7 @@ private struct PersonaGenerationBorderBeam: View {
 }
 
 private struct HoningOptionButton: View {
+    @SortyHotReload private var hotReload
     let option: String
     let isSelected: Bool
     let action: () -> Void

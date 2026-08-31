@@ -5,6 +5,7 @@ import SortyLib
 #endif
 
 struct MainWindowRootView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var openAIAuth: SubscriptionAuthManager

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AdvancedSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
@@ -222,6 +223,7 @@ struct AdvancedSettingsView: View {
 // MARK: - Timeout Slider with Editable Maximum
 
 private struct TimeoutSliderRow: View {
+    @SortyHotReload private var hotReload
     let title: String
     let description: String
     @Binding var value: TimeInterval

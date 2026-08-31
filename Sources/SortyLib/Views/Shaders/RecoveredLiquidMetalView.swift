@@ -5,6 +5,7 @@ import simd
 import SwiftUI
 
 struct RecoveredLiquidMetalView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var zoom: Float = -8
     @State private var rotation = SIMD2<Float>.zero
@@ -119,6 +120,7 @@ struct RecoveredLiquidMetalView: View {
 }
 
 private struct RecoveredLiquidMetalConfigurationView: View {
+    @SortyHotReload private var hotReload
     @Binding var waveAmplitude: Double
     @Binding var waveFrequency: Double
     @Binding var baseDistortion: Double
@@ -213,6 +215,7 @@ private struct RecoveredLiquidMetalConfigurationView: View {
 }
 
 private struct RecoveredLiquidMetalRenderer: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     var zoom: Float
     var rotation: SIMD2<Float>
     var waveAmplitude: Float

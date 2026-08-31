@@ -8,6 +8,7 @@
 import SwiftUI
 
 private struct DemoCompletionView: View {
+    @SortyHotReload private var hotReload
     let plan: OrganizationPlan?
     @Binding var showPreviewTree: Bool
     let onComplete: () -> Void
@@ -45,6 +46,7 @@ private struct DemoCompletionView: View {
 }
 
 private struct DemoCompletionCelebration: View {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
 
     var body: some View {
@@ -66,6 +68,7 @@ private struct DemoCompletionCelebration: View {
 }
 
 private struct DemoCompletionRipple: View {
+    @SortyHotReload private var hotReload
     let index: Int
     let isVisible: Bool
 
@@ -89,6 +92,7 @@ private struct DemoCompletionRipple: View {
 }
 
 private struct DemoCompletionStats: View {
+    @SortyHotReload private var hotReload
     let plan: OrganizationPlan?
 
     var body: some View {
@@ -129,6 +133,7 @@ private struct DemoCompletionStats: View {
 }
 
 private struct DemoCompletionHighlights: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -156,6 +161,7 @@ private struct DemoCompletionHighlights: View {
 }
 
 public struct DemoStepView: View {
+    @SortyHotReload private var hotReload
     let onComplete: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var runtimeController = DemoRuntimeController()
@@ -645,6 +651,7 @@ private final class DemoRuntimeController {
 /// affect presentation. Streaming organizer progress still reaches this tiny
 /// adapter, but no longer rebuilds both animated demo panes.
 private struct DemoEnvironmentResolver: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject private var organizer: FolderOrganizer
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     let onSnapshot: (FolderOrganizer, SettingsViewModel, OrganizationState, OrganizationPlan?) -> Void
@@ -664,6 +671,7 @@ private struct DemoEnvironmentResolver: View {
 // MARK: - Supporting Views
 
 struct DemoStatCard: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let value: String
     let label: String
@@ -692,6 +700,7 @@ struct DemoStatCard: View {
 }
 
 struct DemoHighlightRow: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let text: String
     let color: Color

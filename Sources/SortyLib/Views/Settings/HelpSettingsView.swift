@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct HelpSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -243,6 +244,7 @@ struct HelpSettingsView: View {
 }
 
 private struct GitHubMarkIcon: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         if let image = NSImage(named: NSImage.Name("GitHub")) {
             Image(nsImage: image)
@@ -262,6 +264,7 @@ private struct GitHubMarkIcon: View {
 }
 
 struct DeeplinkSettingsView: View {
+    @SortyHotReload private var hotReload
     @State private var isShowingEncodingInfo = false
 
     private var groups: [DeeplinkGroup] {
@@ -370,6 +373,7 @@ struct DeeplinkSettingsView: View {
 }
 
 private struct HelpIconLink: View {
+    @SortyHotReload private var hotReload
     let title: String
     let icon: String
     let color: Color
@@ -421,6 +425,7 @@ private struct HelpIconLink: View {
 }
 
 private struct SupportDetailChip: View {
+    @SortyHotReload private var hotReload
     let label: String
     let value: String
 
@@ -462,6 +467,7 @@ private struct DeeplinkEntry: Identifiable {
 }
 
 private struct DeeplinkGroupSection: View {
+    @SortyHotReload private var hotReload
     let group: DeeplinkGroup
 
     var body: some View {
@@ -490,6 +496,7 @@ private struct DeeplinkGroupSection: View {
 }
 
 private struct DeeplinkEntryRow: View {
+    @SortyHotReload private var hotReload
     let entry: DeeplinkEntry
     let color: Color
 

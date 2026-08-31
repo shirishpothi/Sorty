@@ -6,6 +6,7 @@ import SwiftUI
 /// `glassEffect` only samples content inside the window, so pair this backdrop
 /// with a `.clear` glass effect layered above it.
 private struct BehindWindowBackdropView: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.blendingMode = .behindWindow

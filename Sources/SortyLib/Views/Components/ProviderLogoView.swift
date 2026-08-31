@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 public struct ProviderLogoView: View {
+    @SortyHotReload private var hotReload
     @MainActor private static var imageCache: [AIProvider: NSImage] = [:]
 
     public let provider: AIProvider

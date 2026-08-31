@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PreviewActionsView: View {
+    @SortyHotReload private var hotReload
     let isApplying: Bool
     let hasEdits: Bool
     let hasCustomInstructions: Bool
@@ -251,6 +252,7 @@ struct PreviewActionsView: View {
 // MARK: - Progress Actions View (shown during organization)
 
 struct PreviewProgressView: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     let stage: String
     let estimatedTimeRemaining: TimeInterval?
@@ -312,6 +314,7 @@ struct PreviewProgressView: View {
 }
 
 private struct PreviewProgressControls: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     let progressPercentText: String
     let estimatedTimeText: String?
@@ -369,6 +372,7 @@ private struct PreviewProgressControls: View {
 }
 
 private struct PreviewProgressStatus: View {
+    @SortyHotReload private var hotReload
     let stage: String
     let showsAILoadingIndicator: Bool
 
@@ -395,6 +399,7 @@ private struct PreviewProgressStatus: View {
 }
 
 private struct ApplyProgressBar: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     var height: CGFloat = 10
 
@@ -425,6 +430,7 @@ private struct ApplyProgressBar: View {
 // MARK: - Compact Instructions Row
 
 struct PreviewInstructionsRow: View {
+    @SortyHotReload private var hotReload
     @Binding var instructions: String
     @FocusState var isFocused: Bool
     let onInstructionsChanged: (String) -> Void
@@ -473,6 +479,7 @@ struct PreviewInstructionsRow: View {
 // MARK: - Edits Captured Popover Content
 
 private struct EditsCapturedPopoverContent: View {
+    @SortyHotReload private var hotReload
     let editsCapturedCount: Int
     
     var body: some View {

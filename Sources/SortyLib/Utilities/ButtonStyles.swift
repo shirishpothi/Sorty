@@ -386,6 +386,7 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
 }
 
 private struct MetalFxPillSurface: View {
+    @SortyHotReload private var hotReload
     let isPressed: Bool
     let isHovering: Bool
     let isEnabled: Bool
@@ -585,6 +586,7 @@ public extension View {
 }
 
 private struct OnboardingBeamBorder: View {
+    @SortyHotReload private var hotReload
     let variant: OnboardingBeamBorderVariant
     let active: Bool
     let isIntensified: Bool

@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct PreviewView: View {
+    @SortyHotReload private var hotReload
     let plan: OrganizationPlan
     let baseURL: URL
     let onReturnToStart: (() -> Void)?

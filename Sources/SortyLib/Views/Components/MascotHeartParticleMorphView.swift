@@ -8,6 +8,7 @@ import Foundation
 import SwiftUI
 
 struct MascotHeartParticleMorphView: View {
+    @SortyHotReload private var hotReload
     private enum Timing {
         static let mascotHold: TimeInterval = 0.5
         static let reverseDuration: TimeInterval = 0.85
@@ -131,6 +132,7 @@ private struct AnimationTaskID: Hashable {
 }
 
 private struct ParticleMorphCanvas: View {
+    @SortyHotReload private var hotReload
     let progress: Double
     let heartbeatScale: CGFloat
 

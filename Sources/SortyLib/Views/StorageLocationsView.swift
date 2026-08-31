@@ -11,6 +11,7 @@ import SwiftUI
 // MARK: - Storage Location Config View
 
 struct StorageLocationConfigView: View {
+    @SortyHotReload private var hotReload
     let location: StorageLocation
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @Environment(\.dismiss) var dismiss
@@ -235,6 +236,7 @@ struct StorageLocationConfigView: View {
 }
 
 private struct StorageProviderBadge: View {
+    @SortyHotReload private var hotReload
     let provider: StorageProviderKind
 
     var body: some View {
@@ -310,6 +312,7 @@ private struct StorageProviderBadge: View {
 // MARK: - Info Row
 
 struct InfoRow: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let text: String
     

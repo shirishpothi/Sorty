@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct AboutView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
@@ -198,6 +199,7 @@ struct AboutView: View {
 /// manually cycle through every variant it bursts apart before settling back to
 /// the running app icon.
 private struct AboutAppIconEasterEgg: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var carousel = AboutIconCarousel()
     @State private var iconHovered = false
@@ -556,6 +558,7 @@ private enum AboutIconImageNormalizer {
 /// Premium confetti burst: real confetti shapes with flutter, spin, gravity,
 /// and a soft flash — still a single Canvas/TimelineView for zero view churn.
 private struct IconBurst: View {
+    @SortyHotReload private var hotReload
     let startDate: Date
 
     private let particles = IconBurst.makeParticles()

@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct PreviewStatsView: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats?
     let showStatsForNerds: Bool
     let estimatedTimeRemaining: TimeInterval?

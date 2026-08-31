@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ExperimentalSettingsView: View {
+    @SortyHotReload private var hotReload
     @ObservedObject private var analytics = AnalyticsManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false

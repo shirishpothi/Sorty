@@ -53,6 +53,7 @@ extension EnvironmentValues {
 
 /// Shared container for workflow screens with consistent layout
 struct WorkflowContainer<Content: View>: View {
+    @SortyHotReload private var hotReload
     let currentStep: WorkflowStep?
     let showStepIndicator: Bool
     let allowsScrolling: Bool
@@ -109,6 +110,7 @@ struct WorkflowContainer<Content: View>: View {
 }
 
 struct WorkflowGradientBackground: View {
+    @SortyHotReload private var hotReload
     var showsBaseColor = true
 
     @Environment(\.colorScheme) private var colorScheme
@@ -281,6 +283,7 @@ private struct MilestoneEmptyStateSliverModifier: ViewModifier {
 /// (matching the History empty state). Pass a `tint` to render a static colored
 /// icon instead (e.g. a green success state).
 struct EmptyStateHeroIcon: View {
+    @SortyHotReload private var hotReload
     let systemName: String
     var tint: Color?
     var iconSize: CGFloat
@@ -412,6 +415,7 @@ private struct EmptyStateIconSweep: ViewModifier, Animatable {
 
 /// Step indicator showing progress through workflow
 struct WorkflowStepIndicator: View {
+    @SortyHotReload private var hotReload
     let currentStep: WorkflowStep
     
     var body: some View {
@@ -469,6 +473,7 @@ struct WorkflowStepIndicator: View {
 
 /// A styled card section for grouping related content
 struct WorkflowCard<Content: View>: View {
+    @SortyHotReload private var hotReload
     let title: String?
     let icon: String?
     let verticalPadding: CGFloat

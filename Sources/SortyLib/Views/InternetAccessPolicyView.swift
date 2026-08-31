@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct InternetAccessPolicyView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.openURL) private var openURL
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
 
@@ -173,6 +174,7 @@ struct InternetAccessPolicyView: View {
 }
 
 private struct ConnectionCard: View {
+    @SortyHotReload private var hotReload
     let connection: InternetAccessPolicyConnection
     let index: Int
 
@@ -249,6 +251,7 @@ private struct ConnectionCard: View {
 }
 
 private struct ConnectionList: View {
+    @SortyHotReload private var hotReload
     let connections: [InternetAccessPolicyConnection]
 
     private let cardSpacing: CGFloat = 10

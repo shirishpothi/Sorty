@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AIProviderRow: View {
+    @SortyHotReload private var hotReload
     let provider: AIProvider
     let isSelected: Bool
     let action: () -> Void

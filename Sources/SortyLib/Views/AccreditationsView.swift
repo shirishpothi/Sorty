@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AccreditationsView: View {
+    @SortyHotReload private var hotReload
     @State private var iconHovered = false
     @StateObject private var contributorsFetcher = GitHubContributorsFetcher()
     @AppStorage("fetchGitHubContributorsEnabled") private var fetchGitHubContributorsEnabled = true

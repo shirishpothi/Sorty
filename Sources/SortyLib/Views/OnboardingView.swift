@@ -23,6 +23,7 @@ private enum OnboardingIntroRevealPhase: Int {
 }
 
 public struct OnboardingView: View {
+    @SortyHotReload private var hotReload
     @Binding var hasCompletedOnboarding: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentStep: OnboardingStep = .provider
@@ -529,6 +530,7 @@ private final class OnboardingSwipeController {
 /// Keeps AppState publications scoped to the completion destination instead
 /// of invalidating the entire onboarding root throughout every step.
 private struct OnboardingCompletionDestination: View {
+    @SortyHotReload private var hotReload
     @Binding var hasCompletedOnboarding: Bool
     @EnvironmentObject private var appState: AppState
     let providerSetupStatus: ProviderSetupStatus
@@ -626,6 +628,7 @@ private final class OnboardingIntroTaskController {
 }
 
 private struct OnboardingIntroView: View {
+    @SortyHotReload private var hotReload
     let onRevealPhaseChanged: (OnboardingIntroRevealPhase) -> Void
     let onGetStarted: () -> Void
 
@@ -766,6 +769,7 @@ private struct OnboardingIntroView: View {
 /// Keeps pointer-driven intro state isolated from the reveal and audio state
 /// owned by the surrounding onboarding step.
 private struct OnboardingIntroContentLayer: View {
+    @SortyHotReload private var hotReload
     let icons: [String: NSImage]
     let filesVisible: Bool
     let iconScale: CGFloat
@@ -896,6 +900,7 @@ private struct OnboardingIntroContentLayer: View {
 }
 
 private struct RetainedIntroGlow: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     let reduceMotion: Bool
     let isActive: Bool
@@ -1060,6 +1065,7 @@ private final class RetainedIntroGlowView: NSView {
 }
 
 struct SortyEnergyScanIcon: View {
+    @SortyHotReload private var hotReload
     let image: NSImage
     let size: CGFloat
     let cornerRadius: CGFloat
@@ -1087,6 +1093,7 @@ struct SortyEnergyScanIcon: View {
 }
 
 private struct RetainedEnergyScanIcon: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let image: NSImage
     let size: CGFloat
     let cornerRadius: CGFloat
@@ -1401,6 +1408,7 @@ private enum OnboardingFileIconProvider {
 }
 
 private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
+    @SortyHotReload private var hotReload
     let file: OnboardingOrbitFile
     let icon: NSImage
     @Environment(\.colorScheme) private var colorScheme
@@ -1454,6 +1462,7 @@ private struct OnboardingOrbitFileChip: View, @MainActor Equatable {
 }
 
 private struct OnboardingOrbitField: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let icons: [String: NSImage]
     let filesVisible: Bool
     let isCollapsed: Bool
@@ -2039,6 +2048,7 @@ private final class OnboardingOrbitFieldView: NSView {
 
 }
 private struct OnboardingScreenEdgeGlow: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         ZStack {
             edgeGradient(startPoint: .top, endPoint: .bottom)
@@ -2079,6 +2089,7 @@ private struct OnboardingScreenEdgeGlow: View {
 /// Places a visual-effect surface behind the onboarding window, leaving the
 /// Sorty window clear while softening the rest of the current screen.
 private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
 
     func makeCoordinator() -> Coordinator {
@@ -2303,6 +2314,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 }
 
 private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
 
     func makeCoordinator() -> Coordinator {
@@ -2532,6 +2544,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
 }
 
 struct OnboardingBottomGradient: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
     var progress: Double = 0
     var showsBaseColor = true
@@ -2753,6 +2766,7 @@ final class RetainedOnboardingBottomGradientView: NSView {
 }
 
 private struct OnboardingNavigationBackdrop: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         LinearGradient(
             colors: [
@@ -2768,6 +2782,7 @@ private struct OnboardingNavigationBackdrop: View {
 }
 
 private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let onConfigured: () -> Void
 
     func makeNSView(context: Context) -> NSView {
@@ -2904,6 +2919,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 // MARK: - Progress Bar
 
 struct OnboardingIconSliver: View {
+    @SortyHotReload private var hotReload
     let systemName: String
     let color: Color
     let fontSize: CGFloat
@@ -2973,6 +2989,7 @@ private struct OnboardingIconSweep: ViewModifier, Animatable {
 }
 
 struct OnboardingProgressBar: View {
+    @SortyHotReload private var hotReload
     let currentStep: OnboardingStep
 
     @MainActor

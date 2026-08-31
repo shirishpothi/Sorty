@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 public struct AppKitImageView: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     public enum Scaling {
         case fit
         case fill

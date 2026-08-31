@@ -9,6 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WatchedFoldersView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
@@ -223,6 +224,7 @@ struct WatchedFoldersView: View {
 // MARK: - Empty State View
 
 struct EmptyWatchedFoldersView: View {
+    @SortyHotReload private var hotReload
     let onAddFolder: () -> Void
     let onAddSuggestedFolder: (URL) -> Void
     @State private var hasAppeared = false
@@ -296,6 +298,7 @@ struct EmptyWatchedFoldersView: View {
 }
 
 struct FolderSuggestionPill: View {
+    @SortyHotReload private var hotReload
     let name: String
     let url: URL
     let action: (URL) -> Void
@@ -336,6 +339,7 @@ struct FolderSuggestionPill: View {
 // MARK: - Watched Folder Card
 
 struct WatchedFolderCard: View {
+    @SortyHotReload private var hotReload
     private enum AccessRecoveryError: Identifiable {
         case incorrectFolder(selectedName: String)
         case bookmarkCreationFailed
@@ -1049,6 +1053,7 @@ struct WatchedFolderCard: View {
 }
 
 private struct WatchedFolderNerdStats: View {
+    @SortyHotReload private var hotReload
     let folder: WatchedFolder
     let activity: WatchedFolderActivity?
     @EnvironmentObject private var history: OrganizationHistory
@@ -1199,6 +1204,7 @@ private struct WatchedFolderNerdStats: View {
 // MARK: - Watched Folder Config View
 
 struct WatchedFolderConfigView: View {
+    @SortyHotReload private var hotReload
     let folder: WatchedFolder
     let onOpenFullOrganization: (WatchedFolder) -> Void
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -1875,6 +1881,7 @@ struct WatchedFolderConfigView: View {
 }
 
 private struct WatchedFolderRecentActions: View {
+    @SortyHotReload private var hotReload
     private static let visibleActionCount = 3
 
     private struct ActionAlert: Identifiable {

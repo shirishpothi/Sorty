@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OrganizationStrategySettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var namingGenerator = NamingInstructionsGenerator()
@@ -498,6 +499,7 @@ struct OrganizationStrategySettingsView: View {
 // MARK: - Edit Preset Sheet
 
 private struct EditPresetSheet: View {
+    @SortyHotReload private var hotReload
     let preset: NamingPreset
     let presetManager: NamingPresetManager
     let viewModel: SettingsViewModel

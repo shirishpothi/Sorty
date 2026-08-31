@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AutomationSettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
 

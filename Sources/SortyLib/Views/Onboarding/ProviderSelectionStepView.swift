@@ -42,6 +42,7 @@ private final class ProviderSelectionTaskController {
 }
 
 public struct ProviderSelectionStepView: View {
+    @SortyHotReload private var hotReload
     private let onSetupStatusChange: ((ProviderSetupStatus) -> Void)?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
@@ -1155,6 +1156,7 @@ public struct ProviderSelectionStepView: View {
 }
 
 private struct ProviderTestConnectionButton: View {
+    @SortyHotReload private var hotReload
     let canTest: Bool
     let action: () -> Void
 
@@ -1188,6 +1190,7 @@ private struct ProviderTestConnectionButton: View {
 }
 
 private struct CopilotUsernameRevealText: View {
+    @SortyHotReload private var hotReload
     let value: String
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1223,6 +1226,7 @@ private struct CopilotUsernameRevealText: View {
 }
 
 private struct CodexEmailRevealText: View {
+    @SortyHotReload private var hotReload
     let value: String
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1241,6 +1245,7 @@ private struct CodexEmailRevealText: View {
 }
 
 private struct OnboardingCodexActionButton: View {
+    @SortyHotReload private var hotReload
     let idleTitle: String
     let activatingTitle: String
     let successTitle: String
@@ -1281,6 +1286,7 @@ private struct OnboardingCodexActionButton: View {
 /// connection status. Equatable isolation keeps its nine glass/logo cards out
 /// of API-key keystroke and status-update rebuilds.
 private struct ProviderSelectionGrid: View, Equatable {
+    @SortyHotReload private var hotReload
     let selectedProvider: AIProvider
     let onSelect: (AIProvider) -> Void
 
@@ -1306,6 +1312,7 @@ private struct ProviderSelectionGrid: View, Equatable {
 }
 
 struct PrivacyFeatureRow: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let text: String
     var badge: String? = nil
@@ -1329,6 +1336,7 @@ struct PrivacyFeatureRow: View {
 }
 
 struct OnboardingProviderRow: View {
+    @SortyHotReload private var hotReload
     let provider: AIProvider
     let isSelected: Bool
     let action: () -> Void

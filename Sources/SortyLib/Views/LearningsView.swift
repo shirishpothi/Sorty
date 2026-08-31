@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 // MARK: - Main View
 
 struct LearningsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var manager: LearningsManager
     @EnvironmentObject var appState: AppState
@@ -1807,6 +1808,7 @@ struct LearningsView: View {
 // MARK: - Learning Insight Row
 
 private struct LearningInsightRow: View {
+    @SortyHotReload private var hotReload
     let rule: InferredRule
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
@@ -1905,6 +1907,7 @@ private struct LearningInsightRow: View {
 // MARK: - Model Directory Row
 
 struct ModelDirectoryRow: View {
+    @SortyHotReload private var hotReload
     let directory: ReferenceModelDirectory
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
@@ -2032,6 +2035,7 @@ struct ModelDirectoryRow: View {
 // MARK: - Learning Exclusion Row
 
 struct LearningExclusionRow: View {
+    @SortyHotReload private var hotReload
     let pattern: String
     @ObservedObject var manager: LearningsManager
     @EnvironmentObject private var exclusionRules: ExclusionRulesManager

@@ -13,6 +13,7 @@ import SwiftUI
 // MARK: - Animated Gradient Background
 
 struct AnimatedGradientBackground: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false
     var revealed: Bool = true
@@ -65,6 +66,7 @@ struct AnimatedGradientBackground: View {
 
 /// A vibrant gradient blob that expands from center to create the "reveal" moment
 private struct RevealGradientBlob: View {
+    @SortyHotReload private var hotReload
     let scale: CGFloat
     let opacity: Double
 
@@ -147,6 +149,7 @@ private struct RevealGradientBlob: View {
 
 /// A pulsing glow ring behind the app icon during reveal
 private struct GlowRing: View {
+    @SortyHotReload private var hotReload
     let isActive: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -183,6 +186,7 @@ private struct GlowRing: View {
 // MARK: - Floating Particle
 
 struct FloatingParticle: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var yOffset: CGFloat = 0
     @State private var opacity: Double = 0
@@ -219,6 +223,7 @@ struct FloatingParticle: View {
 // MARK: - Welcome Step View
 
 public struct WelcomeStepView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var revealScale: CGFloat = 0.05
@@ -619,6 +624,7 @@ private class WelcomeRevealAudio: ObservableObject {
 // MARK: - Welcome Feature Row
 
 struct WelcomeFeatureRow: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let iconColor: Color
     let title: String

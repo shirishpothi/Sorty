@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AIProviderSettingsView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
@@ -1031,6 +1032,7 @@ struct AIProviderSettingsView: View {
 }
 
 private struct CodexDeviceAuthSheet: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let session: CodexDeviceAuthSession?
@@ -1175,6 +1177,7 @@ private struct CodexDeviceAuthSheet: View {
 }
 
 private struct CodexDeviceAuthStep<Content: View>: View {
+    @SortyHotReload private var hotReload
     let number: Int
     let title: String
     @ViewBuilder let content: Content
@@ -1202,6 +1205,7 @@ private struct CodexDeviceAuthStep<Content: View>: View {
 }
 
 private struct CodexDeviceAuthStatusView: View {
+    @SortyHotReload private var hotReload
     let session: CodexDeviceAuthSession?
     let isCodexInstalled: Bool
     let authError: String?

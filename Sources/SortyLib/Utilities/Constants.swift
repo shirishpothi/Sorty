@@ -390,6 +390,7 @@ public enum TransitionStyles {
 
 /// Animated loading dots view
 public struct LoadingDotsView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let dotCount: Int
@@ -434,6 +435,7 @@ public struct LoadingDotsView: View {
 
 /// Spinning loading indicator with bounce
 public struct BouncingSpinner: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let size: CGFloat

@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OrganizationCompleteView: View {
+    @SortyHotReload private var hotReload
     let stats: GenerationStats?
     let totalFiles: Int
     let totalFolders: Int
@@ -722,6 +723,7 @@ struct OrganizationCompleteView: View {
 }
 
 private struct TimeSavedHighlight: View {
+    @SortyHotReload private var hotReload
     let value: String
     let animationValue: TimeInterval
     let usesCompactVerticalLayout: Bool
@@ -769,6 +771,7 @@ private struct TimeSavedHighlight: View {
 }
 
 private struct CompletionBadgeGlow: View {
+    @SortyHotReload private var hotReload
     let color: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -828,6 +831,7 @@ private struct CompletionBadgeGlow: View {
 }
 
 private struct ConfettiParticlesView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     struct Particle: Identifiable {
@@ -881,6 +885,7 @@ private struct ConfettiParticlesView: View {
 }
 
 private struct CompletionFeatureSuggestionCard: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let title: String
     let description: String

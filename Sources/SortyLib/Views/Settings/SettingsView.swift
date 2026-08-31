@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
     @ObservedObject private var analytics = AnalyticsManager.shared

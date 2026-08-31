@@ -21,6 +21,7 @@ private func resignWindowFirstResponder() {
 // MARK: - Model Selector Row (Compact Display + Trigger)
 
 struct ModelSelectorRow: View {
+    @SortyHotReload private var hotReload
     let provider: AIProvider
     let model: String
     let onTap: () -> Void
@@ -74,6 +75,7 @@ struct ModelSelectorRow: View {
 /// opens the model selection popover. Use in settings rows where the
 /// full-width `ModelSelectorRow` would be too heavy.
 struct ModelSelectorCompactButton: View {
+    @SortyHotReload private var hotReload
     let provider: AIProvider
     let label: String
     let onTap: () -> Void
@@ -170,6 +172,7 @@ extension View {
 // MARK: - Model Selection Popover (Two-Column Layout)
 
 struct ModelSelectionPopover: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AccessibilityFocusState private var isSearchAccessibilityFocused: Bool
     @FocusState private var isSearchFocused: Bool

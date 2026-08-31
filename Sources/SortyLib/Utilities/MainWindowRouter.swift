@@ -281,6 +281,7 @@ public final class MainWindowRouter {
 }
 
 public struct MainWindowSessionTracker: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     private let sessionID: UUID
 
     public init(sessionID: UUID) {

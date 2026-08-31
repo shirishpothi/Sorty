@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 public struct CopyButtonWithAnimation: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let content: String

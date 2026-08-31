@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct ThanksForUsingSortyView: View {
+    @SortyHotReload private var hotReload
     static let preferredWindowWidth: CGFloat = 480
     static let preferredWindowHeight: CGFloat = 520
 

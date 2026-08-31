@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ReadyToOrganizeTitle: View {
+    @SortyHotReload private var hotReload
     let mode: OrganizationMode
     let showsWorkflowPicker: Bool
     let onSelectMode: (OrganizationMode) -> Void
@@ -168,6 +169,7 @@ private extension View {
 }
 
 private struct WorkflowDottedUnderline: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Canvas { context, size in
             let diameter: CGFloat = 1.5
@@ -194,6 +196,7 @@ private struct WorkflowDottedUnderline: View {
 }
 
 struct ReadyToOrganizeStartButton: View {
+    @SortyHotReload private var hotReload
     let mode: OrganizationMode
     let isConnecting: Bool
     let hasAppeared: Bool
@@ -243,6 +246,7 @@ struct ReadyToOrganizeStartButton: View {
 }
 
 private struct ReadyToOrganizeStartLabel: View {
+    @SortyHotReload private var hotReload
     let actionVerb: String
     let isConnecting: Bool
 
@@ -264,6 +268,7 @@ private struct ReadyToOrganizeStartLabel: View {
 }
 
 struct ReadyToOrganizeKeyboardHint: View {
+    @SortyHotReload private var hotReload
     let actionVerb: String
     let isConnecting: Bool
     let hasAppeared: Bool

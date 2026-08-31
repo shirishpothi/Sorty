@@ -86,6 +86,7 @@ private struct HistorySessionRecord: Equatable {
 }
 
 struct HistoryView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -618,6 +619,7 @@ struct HistoryView: View {
 // MARK: - History Header
 
 struct HistoryHeader: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let totalSessions: Int
@@ -797,6 +799,7 @@ struct HistoryHeader: View {
 }
 
 private struct HistoryNavigatorControl: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     static let preferredWidth: CGFloat = 520
 
     @Binding var selection: HistoryView.HistoryFilter
@@ -903,6 +906,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 // MARK: - History Summary Card (Dashboard Impact Stats)
 
 private struct HistorySummaryCard: View {
+    @SortyHotReload private var hotReload
     let summary: HistoryImpactSummary
 
     private var filesOrganizedValue: String {
@@ -1013,6 +1017,7 @@ private struct HistorySummaryCard: View {
 }
 
 private struct HistoryStatItem: View {
+    @SortyHotReload private var hotReload
     let title: String
     let value: String
     let icon: String
@@ -1063,6 +1068,7 @@ private struct HistoryStatItem: View {
 // MARK: - History Session Card
 
 private struct HistorySessionCardHeader: View {
+    @SortyHotReload private var hotReload
     let entry: HistorySessionRow
     let timestampText: String
     let statusColor: Color
@@ -1116,6 +1122,7 @@ private struct HistorySessionCardHeader: View {
 }
 
 private struct HistorySessionSummary: View {
+    @SortyHotReload private var hotReload
     let entry: HistorySessionRow
 
     var body: some View {
@@ -1145,6 +1152,7 @@ private struct HistorySessionSummary: View {
 }
 
 private struct HistorySessionCard: View {
+    @SortyHotReload private var hotReload
     let entry: HistorySessionRow
     let isSelected: Bool
     let onSelect: () -> Void
@@ -1208,6 +1216,7 @@ private struct HistorySessionCard: View {
 }
 
 private struct LoadMoreHistoryRow: View {
+    @SortyHotReload private var hotReload
     let action: () -> Void
 
     var body: some View {
@@ -1228,6 +1237,7 @@ private struct LoadMoreHistoryRow: View {
 
 /// Compact feedback buttons for session outcome (useful / not useful)
 private struct QuickFeedbackButtons: View {
+    @SortyHotReload private var hotReload
     @Binding var feedbackGiven: LearningsManager.SessionOutcome?
     @Binding var showConfirmation: Bool
     let onFeedback: (LearningsManager.SessionOutcome) -> Void
@@ -1328,6 +1338,7 @@ private struct QuickFeedbackButtons: View {
 // MARK: - History Search Empty State
 
 struct HistorySearchEmptyStateView: View {
+    @SortyHotReload private var hotReload
     let searchText: String
     let onClear: () -> Void
 
@@ -1398,6 +1409,7 @@ struct HistorySearchEmptyStateView: View {
 // MARK: - History Empty State
 
 struct HistoryEmptyStateView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var appState: AppState
     @State private var isHovered = false
     @State private var hasAppeared = false
@@ -1479,6 +1491,7 @@ struct HistoryEmptyStateView: View {
 // MARK: - History Detail Sheet
 
 struct HistoryDetailSheet: View {
+    @SortyHotReload private var hotReload
     let entry: OrganizationHistoryEntry
     @Binding var isProcessing: Bool
     let onAction: (String) -> Void
@@ -2081,6 +2094,7 @@ struct HistoryDetailSheet: View {
 // MARK: - Operation Row View
 
 struct OperationRowView: View {
+    @SortyHotReload private var hotReload
     let operation: FileSystemManager.FileOperation
     let isUndone: Bool
     let isFailed: Bool
@@ -2195,6 +2209,7 @@ struct OperationRowView: View {
 // MARK: - Processing Overlay
 
 struct ProcessingOverlay: View {
+    @SortyHotReload private var hotReload
     let stage: String
     @State private var appeared = false
 
@@ -2230,6 +2245,7 @@ struct ProcessingOverlay: View {
 // MARK: - Status Badge
 
 struct StatusBadge: View {
+    @SortyHotReload private var hotReload
     let status: OrganizationStatus
 
     private var color: Color {
@@ -2259,6 +2275,7 @@ struct StatusBadge: View {
 // MARK: - Folder History Detail Row
 
 struct FolderHistoryDetailRow: View {
+    @SortyHotReload private var hotReload
     let suggestion: FolderSuggestion
     let rootDirectory: URL?
     @Binding var highlightedFileID: UUID?
@@ -2511,6 +2528,7 @@ struct FolderHistoryDetailRow: View {
 }
 
 private struct FolderHistoryFileRow: View {
+    @SortyHotReload private var hotReload
     let file: FileItem
     let suggestion: FolderSuggestion
     let tags: [String]?
@@ -2662,6 +2680,7 @@ private struct HistoryDetailModel {
 }
 
 struct HistoryLiquidGlassLearningsCard: View {
+    @SortyHotReload private var hotReload
     fileprivate let fileContexts: [HistoryLearningsFileContext]
 
     @EnvironmentObject var learningsManager: LearningsManager
@@ -2750,6 +2769,7 @@ struct HistoryLiquidGlassLearningsCard: View {
 }
 
 struct HistoryLiquidGlassReasoningCard: View {
+    @SortyHotReload private var hotReload
     let notes: String
     @State private var showPopover = false
 
@@ -2792,6 +2812,7 @@ struct HistoryLiquidGlassReasoningCard: View {
 // MARK: - Liquid Glass Duplicate Summary Card (History)
 
 struct HistoryLiquidGlassDuplicateCard: View {
+    @SortyHotReload private var hotReload
     let duplicateGroups: [DuplicateInfo]
     let totalDuplicateCount: Int
     var handoffDirectory: URL? = nil
@@ -2882,6 +2903,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
 // MARK: - History Helper Views
 
 struct HistoryDuplicateGroupRow: View {
+    @SortyHotReload private var hotReload
     let group: DuplicateInfo
     var handoffDirectory: URL? = nil
     @Binding var highlightedFileID: UUID?
@@ -3026,6 +3048,7 @@ struct PartialUndoResult {
 // MARK: - Partial Undo Result Sheet
 
 struct PartialUndoResultSheet: View {
+    @SortyHotReload private var hotReload
     let result: PartialUndoResult
     let onDismiss: () -> Void
 

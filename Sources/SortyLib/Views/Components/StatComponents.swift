@@ -10,6 +10,7 @@ import SwiftUI
 // MARK: - Icon Stat Item
 
 struct IconStatItem: View {
+    @SortyHotReload private var hotReload
     enum Style {
         case detail
         case completion
@@ -68,6 +69,7 @@ private extension IconStatItem.Style {
 }
 
 struct IconStatDivider: View {
+    @SortyHotReload private var hotReload
     var height: CGFloat
 
     var body: some View {
@@ -81,6 +83,7 @@ struct IconStatDivider: View {
 // MARK: - Glass Pill Trigger
 
 struct GlassPillButton: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let title: String
     let tint: Color
@@ -134,6 +137,7 @@ struct GlassPillButton: View {
 // MARK: - Glass Popover Header
 
 struct GlassPopoverHeader: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let title: String
     let tint: Color

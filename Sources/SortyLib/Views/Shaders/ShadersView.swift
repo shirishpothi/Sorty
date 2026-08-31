@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 
 public struct ShadersView: View {
+    @SortyHotReload private var hotReload
     @State private var selection: ShaderExperiment? = .glassLoader
 
     public init() {}
@@ -143,6 +144,7 @@ enum RecoveredShaderResources {
 }
 
 private struct RecoveredGlassLoaderView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = Phase.base
 
@@ -243,6 +245,7 @@ private struct RecoveredGlassLoaderView: View {
 }
 
 private struct RecoveredFlameInGlassView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let cameraScale: Float = 0.34
@@ -307,6 +310,7 @@ private struct RecoveredFlameInGlassView: View {
 }
 
 private struct RecoveredBlobbyLoaderView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: Float = 0
     @State private var blur = 10.0
@@ -397,6 +401,7 @@ private struct OptionalLayerEffect: ViewModifier {
 }
 
 struct ShaderUnavailableView: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         ContentUnavailableView(
             "Shader Unavailable",

@@ -10,6 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct DirectorySelectionView: View {
+    @SortyHotReload private var hotReload
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var menuBarController: MenuBarController
@@ -436,6 +437,7 @@ struct DirectorySelectionView: View {
 }
 
 struct QuickTipItemCompact: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let icon: String
@@ -481,6 +483,7 @@ struct QuickTipItemCompact: View {
 }
 
 struct OrganizationModeSegment: View {
+    @SortyHotReload private var hotReload
     let mode: OrganizationMode
     let isSelected: Bool
     let action: () -> Void

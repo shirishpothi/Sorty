@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct FormattedReasoningText: View {
+    @SortyHotReload private var hotReload
     let text: String
     var font: Font = .callout
     var secondaryFont: Font = .caption

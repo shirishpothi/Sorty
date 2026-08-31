@@ -12,6 +12,7 @@ import UserNotifications
 import Permiso
 
 struct NotificationPermissionCard: View {
+    @SortyHotReload private var hotReload
     @ObservedObject private var notificationManager = NotificationManager.shared
     @State private var isRequestingPermission = false
     @State private var isShowingPermissionInfo = false

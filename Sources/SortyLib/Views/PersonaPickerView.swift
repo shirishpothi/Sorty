@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PersonaPickerView: View {
+    @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
@@ -573,6 +574,7 @@ private enum PersonaEditableField: Hashable {
 // MARK: - Custom Persona Button
 
 struct CustomPersonaButton: View {
+    @SortyHotReload private var hotReload
     let persona: CustomPersona
     let isSelected: Bool
     let isHovering: Bool
@@ -627,6 +629,7 @@ struct CustomPersonaButton: View {
 }
 
 struct PersonaButton: View {
+    @SortyHotReload private var hotReload
     let persona: PersonaType
     let isSelected: Bool
     let isHovering: Bool
@@ -673,6 +676,7 @@ struct PersonaButton: View {
 
 /// Compact inline picker for the ready-to-organize screen
 struct CompactPersonaPicker: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
     @State private var isHovering = false

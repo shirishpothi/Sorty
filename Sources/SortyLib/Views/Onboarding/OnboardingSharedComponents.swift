@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Progress Row
 
 struct OnboardingProgressRow: View {
+    @SortyHotReload private var hotReload
     enum ProgressState {
         case idle
         case active
@@ -89,6 +90,7 @@ struct OnboardingProgressRow: View {
 // MARK: - Generate Persona Button
 
 struct GeneratePersonaButton: View {
+    @SortyHotReload private var hotReload
     enum Style {
         case expanded
         case compact
@@ -210,6 +212,7 @@ struct GeneratePersonaButton: View {
 // MARK: - Capsule Badge
 
 struct OnboardingCapsuleBadge: View {
+    @SortyHotReload private var hotReload
     let text: String
 
     var body: some View {

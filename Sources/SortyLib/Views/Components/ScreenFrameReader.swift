@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct ScreenFrameReader: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     @Binding var frameInScreen: CGRect
 
     func makeCoordinator() -> Coordinator {

@@ -22,6 +22,7 @@ private enum CompletionPalette {
 
 /// A vibrant gradient blob that expands from center for the completion celebration
 private struct CompletionRevealBlob: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let scale: CGFloat
     let opacity: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -42,6 +43,7 @@ private struct CompletionRevealBlob: NSViewRepresentable {
 }
 
 private struct CompletionRevealBaseGraphic: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Ellipse()
             .fill(
@@ -65,6 +67,7 @@ private struct CompletionRevealBaseGraphic: View {
 }
 
 private struct CompletionRevealHighlightGraphic: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Circle()
             .fill(
@@ -87,6 +90,7 @@ private struct CompletionRevealHighlightGraphic: View {
 }
 
 private struct CompletionFloatingGlowGraphic: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Ellipse()
             .fill(
@@ -320,6 +324,7 @@ private final class RetainedCompletionRevealBlobView: NSView {
 }
 
 private struct CompletionCelebrationBackdrop: View {
+    @SortyHotReload private var hotReload
     let revealScale: CGFloat
     let revealOpacity: Double
     let showParticles: Bool
@@ -350,6 +355,7 @@ private struct CompletionCelebrationBackdrop: View {
 }
 
 private struct RetainedCompletionParticles: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     let reduceMotion: Bool
     let isActive: Bool
@@ -502,6 +508,7 @@ private final class RetainedCompletionParticlesView: NSView {
 }
 
 private struct CompletionHero: View {
+    @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let showGlowRing: Bool
     let exitTriggered: Bool
@@ -533,6 +540,7 @@ private struct CompletionHero: View {
 }
 
 private struct CompletionRippleField: View {
+    @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let showGlowRing: Bool
     let exitTriggered: Bool
@@ -551,6 +559,7 @@ private struct CompletionRippleField: View {
 }
 
 private struct CompletionGlowRingGraphic: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         Circle()
             .stroke(
@@ -573,6 +582,7 @@ private struct CompletionGlowRingGraphic: View {
 }
 
 private struct RetainedCompletionHeroEffects: NSViewRepresentable {
+    @SortyHotReload private var hotReload
     let isVisible: Bool
     let reduceMotion: Bool
     let isActive: Bool
@@ -739,6 +749,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 }
 
 private struct CompletionCheckmarkIcon: View {
+    @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let isButtonHovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -778,6 +789,7 @@ private struct CompletionCheckmarkIcon: View {
 }
 
 private struct CompletionCopy: View {
+    @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let contentDismissed: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -812,6 +824,7 @@ private struct CompletionCopy: View {
 }
 
 private struct CompletionTipsGrid: View {
+    @SortyHotReload private var hotReload
     let tipsAppeared: Bool
     let contentDismissed: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -844,6 +857,7 @@ private struct CompletionTipsGrid: View {
 }
 
 private struct CompletionPrimaryAction: View {
+    @SortyHotReload private var hotReload
     let tipsAppeared: Bool
     let contentDismissed: Bool
     let isChecking: Bool
@@ -878,6 +892,7 @@ private struct CompletionPrimaryAction: View {
 }
 
 private struct CompletionAnalyticsPreference: View {
+    @SortyHotReload private var hotReload
     @Binding var isEnabled: Bool
     @State private var isShowingDetails = false
 
@@ -1079,6 +1094,7 @@ private final class CompletionRuntimeController {
 }
 
 public struct CompletionStepView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1381,6 +1397,7 @@ public struct CompletionStepView: View {
 }
 
 private struct CompletionContrastBackdrop: View {
+    @SortyHotReload private var hotReload
     var body: some View {
         ZStack {
             Color(NSColor.windowBackgroundColor).opacity(0.38)
@@ -1427,6 +1444,7 @@ private struct CompletionContrastBackdrop: View {
 }
 
 struct QuickTipRow: View {
+    @SortyHotReload private var hotReload
     let icon: String
     let text: String
 

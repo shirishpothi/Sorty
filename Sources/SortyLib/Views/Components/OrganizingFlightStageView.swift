@@ -17,6 +17,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct OrganizingFlightStageView: View {
+    @SortyHotReload private var hotReload
     let suggestions: [FolderSuggestion]
     var prioritizesFilenames = false
 
@@ -516,6 +517,7 @@ struct OrganizingFlightStageView: View {
 }
 
 private struct GeneratingFolderNameLabel: View {
+    @SortyHotReload private var hotReload
     let name: String
     let maxWidth: CGFloat
 

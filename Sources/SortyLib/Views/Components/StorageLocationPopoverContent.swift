@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct StorageLocationPopoverContent: View {
+    @SortyHotReload private var hotReload
     let displayName: String
     let path: String
     var onChangeLocation: (() -> Void)? = nil
@@ -64,6 +65,7 @@ struct StorageLocationPopoverContent: View {
 }
 
 private struct PopoverMenuButton: View {
+    @SortyHotReload private var hotReload
     let title: String
     let icon: String
     let action: () -> Void

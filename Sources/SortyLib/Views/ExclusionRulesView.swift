@@ -9,6 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ExclusionRulesView: View {
+    @SortyHotReload private var hotReload
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -1066,6 +1067,7 @@ private struct ExclusionEditorTransitionModifier: ViewModifier {
 // MARK: - Empty State View
 
 struct EmptyExclusionRulesView: View {
+    @SortyHotReload private var hotReload
     let onAddRule: () -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
@@ -1121,6 +1123,7 @@ struct EmptyExclusionRulesView: View {
 // MARK: - Rule Group Card
 
 struct RuleGroupCard: View {
+    @SortyHotReload private var hotReload
     let title: String
     let rules: [ExclusionRule]
     @ObservedObject var rulesManager: ExclusionRulesManager
@@ -1249,6 +1252,7 @@ struct RuleGroupCard: View {
 }
 
 private struct NaturalLanguageExceptionRow: View {
+    @SortyHotReload private var hotReload
     let exception: NaturalLanguageException
     @ObservedObject var rulesManager: ExclusionRulesManager
     let onDelete: () -> Void
@@ -1371,6 +1375,7 @@ private struct NaturalLanguageExceptionRow: View {
 // MARK: - Exclusion Rule Row
 
 private struct ExclusionRuleUsageButton: View {
+    @SortyHotReload private var hotReload
     let usage: ExclusionRuleUsage?
     @State private var isShowingDetails = false
 
@@ -1414,6 +1419,7 @@ private struct ExclusionRuleUsageButton: View {
 }
 
 struct ExclusionRuleRow: View {
+    @SortyHotReload private var hotReload
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
     let isHighlighted: Bool
@@ -1722,6 +1728,7 @@ private enum AdvancedRuleChoice: String, CaseIterable, Identifiable {
 }
 
 struct AddExclusionRuleView: View {
+    @SortyHotReload private var hotReload
     @ObservedObject var rulesManager: ExclusionRulesManager
     @Environment(\.dismiss) var dismiss
     private let editingRule: ExclusionRule?
