@@ -21,7 +21,7 @@ Generate a complete, compilable SwiftUI animation file in the legendary-Animo st
 
 ## Intent Inference (runs before code generation)
 
-Before generating any code, parse the prompt for under-specified details and resolve them to defaults. Print a `🔍 Inferred from prompt:` block so the user can see — and override — what was auto-resolved. Only print lines that were actually inferred (not ones the user explicitly stated).
+Before generating any code, parse the prompt for under-specified details and resolve them to defaults.
 
 ### Step 0 — Normalize designer vocabulary
 
@@ -93,17 +93,8 @@ If the prompt names a symbol (or describes one by subject) and does **not** spec
 
 Resolve any unspecified UI elements using the Defaults Contract (see below).
 
-### Step 4 — Print inference log
 
 ```
-🔍  Inferred from prompt:
-    Vocab     → "<designer word>" → <normalized term>  (only if Step 0 fired)
-    Symbol    → <name> (<stroke|fill>) → <effect>
-    Mode      → showcase (auto-loop) | interaction (tap/submit)
-    Container → .sheet (Apple default) | inline | none
-    Controls  → Clear · Done | none
-```
-
 ---
 
 ## Defaults Contract
@@ -137,11 +128,9 @@ If the animation involves images, photos, or cards, scan for existing assets fir
 
 2. List `.imageset` folder names — strip `.imageset` suffix to get the `Image("name")` string
 
-3. **If found** → use them directly. Print:
+3. **If found** → use them directly.
    ```
-   🖼️  Assets found: photo1, photo2 … (using in file)
    ```
-
 4. **If not found** → use `Image(systemName: "photo.fill")` in a colored `RoundedRectangle`. Include Asset Notes at the end.
 
 Never invent asset names. Only reference names confirmed to exist on disk.
@@ -183,7 +172,6 @@ In files written to `Carousels/` or `Animations/`, SourceKit reports `Cannot fin
 
 **Backgrounds:** `Color(white: 0.06).ignoresSafeArea()` standalone · `Color("BgColor").ignoresSafeArea()` in-project
 
-**Glass surfaces (pre-iOS 26):** `.ultraThinMaterial` or `.thickMaterial` clipped to shape · track background `.white.opacity(0.06)` + 1pt stroke `.white.opacity(0.08)`
 
 **Opacity levels:** ghost `0.06–0.08` · subtle `0.12` · inactive `0.3` · secondary `0.5` · active `0.8–0.9` · full `1.0`
 
@@ -648,7 +636,7 @@ The archetype drives physics, haptics, and container defaults. Pick the closest 
 | **Particle / Physics Sim** | "gravity", "fluid", "rope", "cloth", "sand" | full-screen | custom physics loop | lightImpact on touch |
 | **Loading Indicator** | "loading", "spinner", "progress", "scanning" | inline | `.linear(duration:)` | none |
 
-Print the resolved archetype on the `🎯  Archetype:` line. If the user's prompt overrides any default in this table, use their value and note the override in parentheses.
+If the user's prompt overrides any default in this table, use their value and note the override in parentheses.
 
 ---
 
@@ -850,23 +838,11 @@ Button(action: trigger) {
 
 ## Output (Create mode)
 
-Stream these progress lines one by one:
-
-```
-⚙️  swiftui-microinteractions v1.12.0
-🖼️  Assets: <found: name1, name2… · or · none found, using placeholders>
-🎯  Archetype: <archetype name>
-⚡  Physics: <spring preset and why — one phrase>
-🎮  Haptics: <2–3 haptic moments>
-🏗️  State: <tier> — <@State var names>
-✍️  Writing <FileName>.swift…
-```
 
 **Step 1 — Write the file to disk:**
 - Carousel → `legendary-Animo/Carousels/` if exists, else `Carousels/` if exists, else cwd
 - Other → `legendary-Animo/Animations/` if exists, else `Animations/` if exists, else cwd
 
-Print: `✅  Saved to <full relative path>`
 
 ---
 
@@ -946,17 +922,4 @@ ASSET NOTES:
 
 ## Output (Edit mode)
 
-Stream before editing:
-```
-📂  Reading <FileName>.swift…
-✏️  Applying: <one-line summary of change>
-✍️  Writing updated file…
-```
-
-Overwrite the file at its existing path, then print:
-```
-✅  Updated <full relative path>
-```
-
-Then output a **Changes** bullet list of what was modified and why.
-(No pbxproj update needed for edits — file is already registered.)
+Overwrite the file at its existing path, then output a bullet list of what was modified and why. (No pbxproj update needed for edits — file is already registered.)
