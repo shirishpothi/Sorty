@@ -37,6 +37,38 @@ run_hot_reload_build() {
         "${SCRIPT_DIR}/build.sh"
 }
 
+format_hot_reload_runtime_output() {
+    local skips_spotlight_continuation=false
+    local line
+
+    while IFS= read -r line || [ -n "${line}" ]; do
+        line="${line%$'\r'}"
+        case "${line}" in
+            *"InjectionLite: Watching for source changes"*)
+                log_success "Watching Sorty and ~/Library for source changes"
+                ;;
+            "NotificationManager: Using native macOS notifications")
+                log_success "Native notifications ready"
+                ;;
+            *"failed to scan "*"Watch with Sorty.workflow: -10811"*)
+                log_warning "Spotlight could not index Watch with Sorty.workflow (-10811)"
+                skips_spotlight_continuation=true
+                ;;
+            *"from spotlight"*)
+                if [ "${skips_spotlight_continuation}" = "true" ]; then
+                    skips_spotlight_continuation=false
+                else
+                    printf '%s\n' "${line}"
+                fi
+                ;;
+            *)
+                skips_spotlight_continuation=false
+                printf '%s\n' "${line}"
+                ;;
+        esac
+    done
+}
+
 print_header "${PROJECT_NAME} Hot Reload" 50
 print_summary "Session" \
     "Version" "$(get_version) ($(get_build_number))" \
@@ -74,5 +106,7 @@ print_step 4 4 "Watching Source Files"
 log_success "Hot reload active. Quit Sorty or press Control-C to stop."
 echo ""
 
-env INJECTION_DIRECTORIES="${PROJECT_DIR},${HOME}/Library" \
-    "${HOT_RELOAD_APP}/Contents/MacOS/${PROJECT_NAME}"
+script -q /dev/null env \
+    INJECTION_DIRECTORIES="${PROJECT_DIR},${HOME}/Library" \
+    "${HOT_RELOAD_APP}/Contents/MacOS/${PROJECT_NAME}" 2>&1 |
+    format_hot_reload_runtime_output
