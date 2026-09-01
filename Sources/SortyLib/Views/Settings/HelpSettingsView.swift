@@ -476,15 +476,11 @@ private struct DeeplinkGroupSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = true
 
-    private var expansionAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: isExpanded ? 8 : 0) {
             Button {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(expansionAnimation) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -522,11 +518,7 @@ private struct DeeplinkGroupSection: View {
                     }
                 }
                 .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
-                .transition(
-                    .move(edge: .top)
-                        .combined(with: .scale(scale: 0.985, anchor: .top))
-                        .combined(with: .opacity)
-                )
+                .transition(.opacity)
             }
         }
         .settingsFocusable(group.focusTarget)
