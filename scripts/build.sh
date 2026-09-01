@@ -1221,7 +1221,9 @@ if is_truthy "${SORTY_VERBOSE}"; then
         "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
         "Output" "${BUILD_DIR}"
 else
-    print_build_start_summary
+    if ! is_truthy "${SORTY_EMBEDDED_BUILD:-false}"; then
+        print_build_start_summary
+    fi
 fi
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
@@ -1538,7 +1540,9 @@ else
         APP_PATH="${FINAL_APP_PATH}"
         APP_SIZE=$(get_file_size "${APP_PATH}")
         TOTAL_DURATION=$(get_total_duration)
-        print_build_complete_summary
+        if ! is_truthy "${SORTY_EMBEDDED_BUILD:-false}"; then
+            print_build_complete_summary
+        fi
         exit 0
     fi
 
@@ -1860,4 +1864,6 @@ APP_PATH="${FINAL_APP_PATH}"
 APP_SIZE=$(get_file_size "${APP_PATH}")
 TOTAL_DURATION=$(get_total_duration)
 
-print_build_complete_summary
+if ! is_truthy "${SORTY_EMBEDDED_BUILD:-false}"; then
+    print_build_complete_summary
+fi

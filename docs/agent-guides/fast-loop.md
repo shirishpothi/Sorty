@@ -30,9 +30,10 @@ is no companion application or Xcode session.
 3. Save Swift files from Codex or another editor.
 
 The first run downloads and builds the pinned runtime. Later starts reuse the
-SwiftPM cache. Startup performs an initial hot Debug build, exports Swift's
-private default-argument helpers, relinks the app, and writes InjectionLite's
-compile-command cache. A normal build immediately before the first hot session
+SwiftPM cache. Startup reports four stages: preparing the runtime, recording
+compile commands, relinking the app, and starting the source watcher. It exports
+Swift's private default-argument helpers and writes InjectionLite's compile-command
+cache along the way. A normal build immediately before the first hot session
 can make that initial build slower because hot reload has a different dependency
 graph; later hot sessions reuse their own compiled outputs.
 
