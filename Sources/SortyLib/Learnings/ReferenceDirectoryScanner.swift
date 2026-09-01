@@ -23,7 +23,6 @@ public struct ReferenceDirectoryScanner: Sendable {
     
     private static let maxDepth = 3
     private static let maxFolders = 50
-    private static let maxFilesPerFolder = 20
     private static let maxSampleFileNames = 5
     
     /// Scan a directory and return a snapshot. Safe to call off the main actor.
@@ -44,12 +43,23 @@ public struct ReferenceDirectoryScanner: Sendable {
         var folders: [ReferenceFolder] = []
         var totalFileCount = 0
         var allFolderNames: [String] = []
+        var allFileNames: [String] = []
+        var categoryDistribution: [FileCategory: Int] = [:]
+        var extensionDistribution: [String: Int] = [:]
         var encounteredReadFailure = false
+        var reachedDepthLimit = false
+        var reachedFolderLimit = false
         
         func scanDirectory(_ scanURL: URL, depth: Int, prefix: String) {
-            guard !Task.isCancelled,
-                  depth <= maxDepth,
-                  folders.count < maxFolders else {
+            guard !Task.isCancelled else {
+                return
+            }
+            guard depth <= maxDepth else {
+                reachedDepthLimit = true
+                return
+            }
+            guard folders.count < maxFolders else {
+                reachedFolderLimit = true
                 return
             }
             
@@ -93,19 +103,27 @@ public struct ReferenceDirectoryScanner: Sendable {
                 $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
                     == .orderedAscending
             }
+            files.sort {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
+                    == .orderedAscending
+            }
             
-            let sampledFiles = files.prefix(maxFilesPerFolder)
             var typeDistribution: [String: Int] = [:]
-            var sampleNames: [String] = []
             
-            for file in sampledFiles {
+            for file in files {
                 let ext = file.pathExtension.lowercased()
                 let key = ext.isEmpty ? "(none)" : ext
                 typeDistribution[key, default: 0] += 1
-                if sampleNames.count < maxSampleFileNames {
-                    sampleNames.append(file.lastPathComponent)
-                }
+                extensionDistribution[key, default: 0] += 1
+                categoryDistribution[FileCategory.from(extension: ext), default: 0] += 1
             }
+            let sampleNames = representativeNames(
+                from: files.map(\.lastPathComponent),
+                limit: maxSampleFileNames
+            )
+            allFileNames.append(contentsOf: sampleNames.map {
+                URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent
+            })
             
             let fileCount = files.count
             totalFileCount += fileCount
@@ -124,7 +142,11 @@ public struct ReferenceDirectoryScanner: Sendable {
             }
             
             for subdir in subdirs {
-                guard !Task.isCancelled, folders.count < maxFolders else { return }
+                guard !Task.isCancelled else { return }
+                if folders.count >= maxFolders {
+                    reachedFolderLimit = true
+                    return
+                }
                 let name = prefix.isEmpty ? subdir.lastPathComponent : "\(prefix)/\(subdir.lastPathComponent)"
                 scanDirectory(subdir, depth: depth + 1, prefix: name)
             }
@@ -132,22 +154,45 @@ public struct ReferenceDirectoryScanner: Sendable {
         
         scanDirectory(url, depth: 0, prefix: "")
         try Task.checkCancellation()
-        guard !encounteredReadFailure,
-              fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
               isDirectory.boolValue,
               fm.isReadableFile(atPath: url.path) else {
             throw ReferenceDirectoryScanError.unavailable(url.path)
         }
         
         let conventions = detectNamingConventions(folderNames: allFolderNames)
+        let fileConventions = detectNamingConventions(folderNames: allFileNames)
+        var warnings: [String] = []
+        if encounteredReadFailure {
+            warnings.append("Some items could not be read")
+        }
+        if reachedDepthLimit {
+            warnings.append("Folders deeper than \(maxDepth) levels were not scanned")
+        }
+        if reachedFolderLimit {
+            warnings.append("Only the first \(maxFolders) folders were scanned")
+        }
         
         return ReferenceDirectorySnapshot(
             scannedAt: Date(),
             folderHierarchy: folders,
             namingConventions: conventions,
+            fileNamingConventions: fileConventions,
+            fileCategoryDistribution: categoryDistribution,
+            fileExtensionDistribution: extensionDistribution,
             totalFolderCount: folders.count,
-            totalFileCount: totalFileCount
+            totalFileCount: totalFileCount,
+            warnings: warnings,
+            isTruncated: reachedDepthLimit || reachedFolderLimit
         )
+    }
+
+    private static func representativeNames(from names: [String], limit: Int) -> [String] {
+        guard names.count > limit, limit > 1 else { return Array(names.prefix(limit)) }
+        return (0..<limit).map { index in
+            let position = index * (names.count - 1) / (limit - 1)
+            return names[position]
+        }
     }
     
     // MARK: - Naming Convention Detection
@@ -207,10 +252,12 @@ public struct ReferenceDirectoryScanner: Sendable {
     }
     
     private static func isTitleCase(_ name: String) -> Bool {
-        let words = name.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        let words = name.components(separatedBy: .whitespaces).filter {
+            $0.contains(where: \.isLetter)
+        }
         guard words.count >= 2 else { return false }
         return words.allSatisfy { word in
-            guard let first = word.first else { return false }
+            guard let first = word.first(where: \.isLetter) else { return false }
             return first.isUppercase
         }
     }

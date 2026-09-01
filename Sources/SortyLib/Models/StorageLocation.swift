@@ -278,14 +278,59 @@ public enum StorageEnvironmentInspector {
 @MainActor
 public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
+    @Published public private(set) var hasLoadedPersistedState = false
     private let userDefaults = UserDefaults.standard
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
+    private var loadTask: Task<[StorageLocation], Never>?
+    private var hasPendingChanges = false
+    private var loadGeneration = 0
     
     public init() {
-        loadLocations()
         setupNotificationObservers()
+    }
+
+    /// Decodes locations away from the main actor. In-memory additions are merged before saving.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<[StorageLocation], Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let storageData = userDefaults.data(forKey: storageKey)
+            task = Task.detached(priority: .userInitiated) {
+                guard let data = storageData,
+                      let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) else {
+                    return []
+                }
+                return Self.normalizedLocations(decoded)
+            }
+            loadTask = task
+        }
+
+        let persistedLocations = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        var seenPaths: Set<String> = []
+        var merged: [StorageLocation] = []
+        for location in persistedLocations + locations {
+            let path = StorageLocationPathResolver.canonicalPath(location.path)
+            guard seenPaths.insert(path).inserted else { continue }
+            var normalized = location
+            normalized.path = path
+            merged.append(normalized)
+        }
+        locations = merged
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            saveLocations()
+        }
     }
     
     private func setupNotificationObservers() {
@@ -311,6 +356,11 @@ public class StorageLocationsManager: ObservableObject {
     }
 
     public func clearAll() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         stopAllSecurityScopedAccess()
         locations.removeAll()
         userDefaults.removeObject(forKey: storageKey)
@@ -618,23 +668,25 @@ public class StorageLocationsManager: ObservableObject {
         activeSecurityScopedURLs.removeAll()
     }
 
-    private func loadLocations() {
-        if let data = userDefaults.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) {
-            var normalized: [StorageLocation] = []
-            var seenPaths: Set<String> = []
+    private nonisolated static func normalizedLocations(
+        _ decoded: [StorageLocation]
+    ) -> [StorageLocation] {
+        var normalized: [StorageLocation] = []
+        var seenPaths: Set<String> = []
 
-            for var location in decoded {
-                location.path = StorageLocationPathResolver.canonicalPath(location.path)
-                guard seenPaths.insert(location.path).inserted else { continue }
-                normalized.append(location)
-            }
-
-            locations = normalized
+        for var location in decoded {
+            location.path = StorageLocationPathResolver.canonicalPath(location.path)
+            guard seenPaths.insert(location.path).inserted else { continue }
+            normalized.append(location)
         }
+        return normalized
     }
 
     private func saveLocations() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         if let encoded = try? JSONEncoder().encode(locations) {
             userDefaults.set(encoded, forKey: storageKey)
         }

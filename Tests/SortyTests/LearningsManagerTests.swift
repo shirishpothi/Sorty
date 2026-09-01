@@ -421,6 +421,77 @@ final class LearningsManagerTests: XCTestCase {
        XCTAssertTrue(context.isEmpty)
     }
 
+    func testModelDirectoryContextSelectsOnlyRelevantExamples() throws {
+        let fixtures = try makeReferenceDirectoryFixtures([
+            ("photos", [.photo: 12], ["jpg": 12]),
+            ("music", [.music: 8], ["mp3": 8]),
+        ])
+        defer { fixtures.forEach { try? FileManager.default.removeItem(atPath: $0.path) } }
+        manager.modelDirectories = fixtures
+
+        let files = [FileItem(path: "/incoming/photo.jpg", name: "photo")]
+        let selection = try XCTUnwrap(manager.selectModelDirectoryContext(for: files))
+
+        XCTAssertEqual(selection.directoryIDs, ["photos"])
+        XCTAssertTrue(selection.reason.contains("photos"))
+        XCTAssertTrue(selection.context.contains("Reference: \"photos\""))
+        XCTAssertFalse(selection.context.contains("Reference: \"music\""))
+        XCTAssertTrue(selection.context.contains("do NOT move files into the reference directories"))
+    }
+
+    func testModelDirectoryContextOmitsUnrelatedExamples() throws {
+        let fixtures = try makeReferenceDirectoryFixtures([
+            ("music", [.music: 8], ["mp3": 8]),
+        ])
+        defer { fixtures.forEach { try? FileManager.default.removeItem(atPath: $0.path) } }
+        manager.modelDirectories = fixtures
+
+        let files = [FileItem(path: "/incoming/report.pdf", name: "report", extension: "pdf")]
+
+        XCTAssertNil(manager.selectModelDirectoryContext(for: files))
+        XCTAssertTrue(manager.generateModelDirectoryContext(for: files).isEmpty)
+    }
+
+    func testModelDirectoryContextUsesAtMostTwoDeterministicMatches() throws {
+        let fixtures = try makeReferenceDirectoryFixtures([
+            ("charlie", [.photo: 2], ["jpg": 2]),
+            ("alpha", [.photo: 2], ["jpg": 2]),
+            ("bravo", [.photo: 2], ["jpg": 2]),
+        ])
+        defer { fixtures.forEach { try? FileManager.default.removeItem(atPath: $0.path) } }
+        manager.modelDirectories = fixtures
+
+        let files = [FileItem(path: "/incoming/photo.jpg", name: "photo", extension: "jpg")]
+        let selection = try XCTUnwrap(manager.selectModelDirectoryContext(for: files))
+
+        XCTAssertEqual(selection.directoryIDs, ["alpha", "bravo"])
+    }
+
+    func testModelDirectoryContextSkipsDisabledAndLegacySnapshots() throws {
+        var fixtures = try makeReferenceDirectoryFixtures([
+            ("disabled", [.photo: 3], ["jpg": 3]),
+            ("legacy", [.photo: 3], ["jpg": 3]),
+        ])
+        defer { fixtures.forEach { try? FileManager.default.removeItem(atPath: $0.path) } }
+        fixtures[0].isEnabled = false
+        let legacySnapshot = ReferenceDirectorySnapshot(
+            version: 1,
+            scannedAt: Date(),
+            folderHierarchy: [],
+            namingConventions: [],
+            fileCategoryDistribution: [.photo: 3],
+            fileExtensionDistribution: ["jpg": 3],
+            totalFolderCount: 0,
+            totalFileCount: 3
+        )
+        fixtures[1].scanSnapshot = legacySnapshot
+        manager.modelDirectories = fixtures
+
+        let files = [FileItem(path: "/incoming/photo.jpg", name: "photo", extension: "jpg")]
+
+        XCTAssertNil(manager.selectModelDirectoryContext(for: files))
+    }
+
     func testFailedModelDirectoryRescanPreservesLastGoodSnapshot() async throws {
        let directory = FileManager.default.temporaryDirectory
            .appendingPathComponent("SortyModelSnapshot-\(UUID().uuidString)", isDirectory: true)
@@ -438,6 +509,34 @@ final class LearningsManagerTests: XCTestCase {
 
        XCTAssertEqual(manager.modelDirectories.first?.scanSnapshot, snapshot)
        XCTAssertEqual(manager.modelDirectories.first?.lastScannedAt, snapshot.scannedAt)
+    }
+
+    private func makeReferenceDirectoryFixtures(
+        _ values: [(id: String, categories: [FileCategory: Int], extensions: [String: Int])]
+    ) throws -> [ReferenceModelDirectory] {
+        try values.map { value in
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+                "ReferenceFixture-\(value.id)-\(UUID().uuidString)",
+                isDirectory: true
+            )
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            let snapshot = ReferenceDirectorySnapshot(
+                scannedAt: Date(),
+                folderHierarchy: [],
+                namingConventions: ["Title Case"],
+                fileNamingConventions: ["Title Case"],
+                fileCategoryDistribution: value.categories,
+                fileExtensionDistribution: value.extensions,
+                totalFolderCount: 1,
+                totalFileCount: value.categories.values.reduce(0, +)
+            )
+            return ReferenceModelDirectory(
+                id: value.id,
+                path: url.path,
+                displayName: value.id,
+                scanSnapshot: snapshot
+            )
+        }
     }
 
     func testLearningsModelOverrideUsesDedicatedModelForAnalysis() {
@@ -1280,7 +1379,27 @@ final class EnhancedLearningsTests: XCTestCase {
 
 // MARK: - Exclusion Parsing Tests
 
+@MainActor
 final class ExclusionParsingTests: XCTestCase {
+    private var manager: LearningsManager!
+    private var testDefaults: UserDefaults!
+    private var testDefaultsSuiteName: String!
+
+    override func setUp() async throws {
+        testDefaultsSuiteName = "ExclusionParsingTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        manager = LearningsManager(userDefaults: testDefaults)
+        manager.currentProfile = LearningsProfile()
+        await manager.grantConsent()
+    }
+
+    override func tearDown() async throws {
+        manager = nil
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = nil
+    }
     
     func testParseExclusionFromPrompt() {
         let testCases: [(input: String, expected: String?)] = [
@@ -1296,7 +1415,192 @@ final class ExclusionParsingTests: XCTestCase {
             XCTAssertEqual(result, testCase.expected, "Failed for input: \(testCase.input)")
         }
     }
-    
+
+    func testPlanPreferenceDifferComparesEveryRejectedAttemptWithAcceptedPlan() throws {
+        let file = FileItem(
+            id: UUID(),
+            path: "/Downloads/report.pdf",
+            name: "report",
+            extension: "pdf"
+        )
+        let first = makePlan(version: 1, destination: "Documents", file: file)
+        let second = makePlan(version: 2, destination: "Work/Reports", file: file)
+        let accepted = makePlan(version: 3, destination: "Projects/Reports/2026", file: file)
+
+        let evidence = try XCTUnwrap(
+            PlanPreferenceDiffer.compare(
+                rejectedPlans: [first, second],
+                acceptedPlan: accepted,
+                folderPath: "/Downloads"
+            )
+        )
+
+        XCTAssertEqual(evidence.acceptedVersion, 3)
+        XCTAssertEqual(evidence.attempts.map(\.rejectedVersion), [1, 2])
+        XCTAssertEqual(evidence.attempts.first?.fileChanges.first?.rejectedDestination, "Documents")
+        XCTAssertEqual(evidence.attempts.first?.fileChanges.first?.acceptedDestination, "Projects/Reports/2026")
+        XCTAssertEqual(evidence.attempts.first?.acceptedMaxDepth, 3)
+    }
+
+    func testPlanPreferenceDifferRecordsUnorganizedToOrganizedChange() throws {
+        let file = FileItem(
+            id: UUID(),
+            path: "/Downloads/photo.jpg",
+            name: "photo",
+            extension: "jpg"
+        )
+        let rejected = OrganizationPlan(unorganizedFiles: [file], version: 1)
+        let accepted = makePlan(version: 2, destination: "Photos", file: file)
+
+        let evidence = try XCTUnwrap(
+            PlanPreferenceDiffer.compare(
+                rejectedPlans: [rejected],
+                acceptedPlan: accepted,
+                folderPath: "/Downloads"
+            )
+        )
+        let change = try XCTUnwrap(evidence.attempts.first?.fileChanges.first)
+
+        XCTAssertTrue(change.wasRejectedAsUnorganized)
+        XCTAssertFalse(change.wasAcceptedAsUnorganized)
+        XCTAssertNil(change.rejectedDestination)
+        XCTAssertEqual(change.acceptedDestination, "Photos")
+    }
+
+    func testRegenerationEvidenceRequiresAChangedRejectedPlan() {
+        let file = FileItem(path: "/Downloads/a.txt", name: "a", extension: "txt")
+        let plan = makePlan(version: 1, destination: "Notes", file: file)
+
+        let evidence = PlanPreferenceDiffer.compare(
+            rejectedPlans: [plan],
+            acceptedPlan: plan,
+            folderPath: "/Downloads"
+        )
+
+        XCTAssertNil(evidence)
+        XCTAssertTrue(manager.currentProfile?.regenerationPreferenceEvidence.isEmpty ?? false)
+    }
+
+    func testRegenerationEvidenceRespectsPauseAndExcludedFolders() async {
+        let file = FileItem(path: "/Users/test/Private/a.txt", name: "a", extension: "txt")
+        let rejected = makePlan(version: 1, destination: "Misc", file: file)
+        let accepted = makePlan(version: 2, destination: "Notes", file: file)
+        let workEvidence = PlanPreferenceDiffer.compare(
+            rejectedPlans: [rejected],
+            acceptedPlan: accepted,
+            folderPath: "/Users/test/Work"
+        )
+        let privateEvidence = PlanPreferenceDiffer.compare(
+            rejectedPlans: [rejected],
+            acceptedPlan: accepted,
+            folderPath: "/Users/test/Private"
+        )
+
+        manager.sessionLearningPaused = true
+        if let workEvidence { manager.recordRegenerationPreferenceEvidence(workEvidence) }
+        manager.sessionLearningPaused = false
+        await manager.addLearningExclusion("Private")
+        if let privateEvidence { manager.recordRegenerationPreferenceEvidence(privateEvidence) }
+
+        XCTAssertTrue(manager.currentProfile?.regenerationPreferenceEvidence.isEmpty ?? false)
+    }
+
+    func testLocalInferenceRequiresRegenerationEvidenceFromTwoRuns() async throws {
+        let fileID = UUID()
+        let change = RegenerationFilePreference(
+            fileID: fileID,
+            filename: "report.pdf",
+            fileExtension: "pdf",
+            rejectedDestination: "Documents",
+            acceptedDestination: "Work/Reports",
+            rejectedFilename: "report.pdf",
+            acceptedFilename: "report.pdf",
+            wasRejectedAsUnorganized: false,
+            wasAcceptedAsUnorganized: false
+        )
+        let attempt = RegenerationAttemptComparison(
+            rejectedVersion: 1,
+            rejectedFolderCount: 1,
+            acceptedFolderCount: 2,
+            rejectedMaxDepth: 1,
+            acceptedMaxDepth: 2,
+            rejectedUnorganizedCount: 0,
+            acceptedUnorganizedCount: 0,
+            fileChanges: [change]
+        )
+        let oneRun = RegenerationPreferenceEvidence(
+            id: "run-1",
+            folderPath: "/Downloads",
+            acceptedVersion: 2,
+            attempts: [attempt]
+        )
+        let secondRun = RegenerationPreferenceEvidence(
+            id: "run-2",
+            folderPath: "/Downloads",
+            acceptedVersion: 2,
+            attempts: [attempt]
+        )
+        let engine = LocalRuleInferenceEngine()
+
+        let oneRunRules = await engine.inferRules(
+            from: LearningsProfile(regenerationPreferenceEvidence: [oneRun])
+        )
+        let repeatedRules = await engine.inferRules(
+            from: LearningsProfile(regenerationPreferenceEvidence: [oneRun, secondRun])
+        )
+
+        XCTAssertFalse(oneRunRules.contains { $0.id.hasPrefix("local-regeneration-") })
+        let rule = try XCTUnwrap(repeatedRules.first { $0.id.hasPrefix("local-regeneration-") })
+        XCTAssertEqual(rule.pattern, ".*\\.pdf$")
+        XCTAssertEqual(rule.template, "Work/Reports/{filename}")
+        XCTAssertEqual(rule.supportCount, 2)
+        XCTAssertEqual(rule.initialConfidence?.rawValue, RuleConfidence.low.rawValue)
+    }
+
+    func testProfileDecodingDefaultsMissingRegenerationEvidenceToEmpty() throws {
+        let encoded = try JSONEncoder().encode(LearningsProfile())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "regenerationPreferenceEvidence")
+
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(LearningsProfile.self, from: legacyData)
+
+        XCTAssertTrue(decoded.regenerationPreferenceEvidence.isEmpty)
+    }
+
+    func testRetentionPrunesExpiredRegenerationEvidence() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = RegenerationPreferenceEvidence(
+            id: "old",
+            timestamp: now.addingTimeInterval(-40 * 86_400),
+            folderPath: "/Old",
+            acceptedVersion: 2,
+            attempts: []
+        )
+        let recent = RegenerationPreferenceEvidence(
+            id: "recent",
+            timestamp: now.addingTimeInterval(-2 * 86_400),
+            folderPath: "/Recent",
+            acceptedVersion: 2,
+            attempts: []
+        )
+        manager.currentProfile?.regenerationPreferenceEvidence = [old, recent]
+        manager.dataRetentionDays = 30
+
+        await manager.applyDataRetentionPolicy(now: now)
+
+        XCTAssertEqual(manager.currentProfile?.regenerationPreferenceEvidence.map(\.id), ["recent"])
+    }
+
+    private func makePlan(version: Int, destination: String, file: FileItem) -> OrganizationPlan {
+        let parts = destination.split(separator: "/").map(String.init)
+        var suggestion = FolderSuggestion(folderName: parts.last ?? destination, files: [file])
+        for folder in parts.dropLast().reversed() {
+            suggestion = FolderSuggestion(folderName: folder, subfolders: [suggestion])
+        }
+        return OrganizationPlan(suggestions: [suggestion], version: version)
+    }
+
     private func parseExclusionPattern(_ prompt: String) -> String? {
         let lowered = prompt.lowercased()
         let exclusionPhrases = [

@@ -661,6 +661,46 @@ class PreviewStore: ObservableObject {
         let candidate = localRenameCandidate(for: file)
         updateRename(fileID: fileID, folderID: folderID, newName: candidate)
     }
+
+    func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
+        var updatedPlan = plan
+        for i in 0..<updatedPlan.suggestions.count {
+            guard updatedPlan.suggestions[i].id == folderID else { continue }
+            updatedPlan.suggestions[i].setRenameSelected(for: fileID, isSelected: isSelected)
+            updateInternalPlan(updatedPlan)
+            return
+        }
+        // Fallback: search nested folders
+        for i in 0..<updatedPlan.suggestions.count {
+            if let updated = setRenameSelectedInFolder(
+                updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, isSelected: isSelected
+            ) {
+                updatedPlan.suggestions[i] = updated
+                updateInternalPlan(updatedPlan)
+                return
+            }
+        }
+    }
+
+    private func setRenameSelectedInFolder(
+        _ folder: FolderSuggestion, targetID: UUID, fileID: UUID, isSelected: Bool
+    ) -> FolderSuggestion? {
+        if folder.id == targetID {
+            var copy = folder
+            copy.setRenameSelected(for: fileID, isSelected: isSelected)
+            return copy
+        }
+        var copy = folder
+        for idx in copy.subfolders.indices {
+            if let updated = setRenameSelectedInFolder(
+                copy.subfolders[idx], targetID: targetID, fileID: fileID, isSelected: isSelected
+            ) {
+                copy.subfolders[idx] = updated
+                return copy
+            }
+        }
+        return nil
+    }
     
     func revertFolderOrganization(folderID: UUID) {
         var updatedPlan = plan

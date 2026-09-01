@@ -29,11 +29,13 @@ public actor LLMRuleInducer {
         exampleFolders: [URL],
         steeringPrompts: [SteeringPrompt] = [],
         guidingInstructions: [UserInstruction] = [],
+        regenerationEvidence: [RegenerationPreferenceEvidence] = [],
         currentFolderPath: String? = nil,
         currentPersonaId: UUID? = nil
     ) async -> [InferredRule] {
         // If no examples, we can't learn anything
-        if examples.isEmpty && exampleFolders.isEmpty && steeringPrompts.isEmpty && guidingInstructions.isEmpty {
+        if examples.isEmpty && exampleFolders.isEmpty && steeringPrompts.isEmpty
+            && guidingInstructions.isEmpty && regenerationEvidence.isEmpty {
             return []
         }
         
@@ -46,6 +48,7 @@ public actor LLMRuleInducer {
             exampleFolders: exampleFolders,
             steeringPrompts: steeringPrompts,
             guidingInstructions: guidingInstructions,
+            regenerationEvidence: regenerationEvidence,
             currentFolderPath: currentFolderPath,
             currentPersonaId: currentPersonaId
         )
@@ -144,6 +147,7 @@ public actor LLMRuleInducer {
         exampleFolders: [URL],
         steeringPrompts: [SteeringPrompt],
         guidingInstructions: [UserInstruction],
+        regenerationEvidence: [RegenerationPreferenceEvidence],
         currentFolderPath: String? = nil,
         currentPersonaId: UUID? = nil
     ) -> String {
@@ -185,6 +189,22 @@ public actor LLMRuleInducer {
                 let weightLabel = weightedExample.ageCategory == "recent" ? "[RECENT - HIGH WEIGHT]" : (weightedExample.ageCategory == "medium" ? "[MEDIUM AGE]" : "[OLDER]")
                 
                 context += "- \(weightLabel) \(actionEmoji): \"\(src)\" -> \"\(dst)\"\n"
+            }
+            context += "\n"
+        }
+
+        if !regenerationEvidence.isEmpty {
+            context += "### REGENERATION COMPARISONS (IMPLICIT, LOW-CONFIDENCE EVIDENCE):\n"
+            context += "Each entry compares a discarded preview with the plan the user applied. Require the same accepted pattern in at least two separate runs before creating a rule.\n"
+            for record in regenerationEvidence.suffix(10) {
+                for attempt in record.attempts.suffix(3) {
+                    context += "- Folder \"\(record.folderPath)\", rejected version \(attempt.rejectedVersion): folders \(attempt.rejectedFolderCount) -> \(attempt.acceptedFolderCount), depth \(attempt.rejectedMaxDepth) -> \(attempt.acceptedMaxDepth), unorganized \(attempt.rejectedUnorganizedCount) -> \(attempt.acceptedUnorganizedCount)\n"
+                    for change in attempt.fileChanges.prefix(10) {
+                        let rejected = change.rejectedDestination ?? "unorganized"
+                        let accepted = change.acceptedDestination ?? "unorganized"
+                        context += "  - \"\(change.filename)\": \"\(rejected)\" -> \"\(accepted)\"\n"
+                    }
+                }
             }
             context += "\n"
         }

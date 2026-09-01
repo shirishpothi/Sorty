@@ -10,6 +10,11 @@ import Foundation
 
 /// A lightweight rule inference engine that runs locally without AI
 public actor LocalRuleInferenceEngine {
+    private struct RegenerationRuleKey: Hashable {
+        let fileExtension: String
+        let destination: String
+        let folderPath: String
+    }
     
     // MARK: - Configuration
     
@@ -38,6 +43,9 @@ public actor LocalRuleInferenceEngine {
         // 2. Infer rules from positive examples (user-accepted organization)
         let positiveRules = inferRulesFromExamples(profile.positiveExamples, action: .accept)
         rules.append(contentsOf: positiveRules)
+
+        let regenerationRules = inferRulesFromRegenerationEvidence(profile.regenerationPreferenceEvidence)
+        rules.append(contentsOf: regenerationRules)
         
         // Rejections weaken the attributed rule at feedback time. Do not turn an
         // unattributed rejection into a broad negative rule.
@@ -53,6 +61,49 @@ public actor LocalRuleInferenceEngine {
         rules.sort { $0.priority > $1.priority }
         
         return rules
+    }
+
+    /// Regeneration contrasts are implicit feedback, so require support from two separate runs.
+    private func inferRulesFromRegenerationEvidence(
+        _ evidence: [RegenerationPreferenceEvidence]
+    ) -> [InferredRule] {
+        var grouped: [RegenerationRuleKey: [String: RegenerationFilePreference]] = [:]
+
+        for record in evidence {
+            for change in record.attempts.flatMap(\.fileChanges) {
+                guard !change.wasAcceptedAsUnorganized,
+                      let destination = change.acceptedDestination,
+                      !destination.isEmpty,
+                      !change.fileExtension.isEmpty,
+                      change.rejectedDestination != destination else { continue }
+                let key = RegenerationRuleKey(
+                    fileExtension: change.fileExtension,
+                    destination: destination,
+                    folderPath: record.folderPath
+                )
+                grouped[key, default: [:]][record.id] = change
+            }
+        }
+
+        return grouped.compactMap { key, changesByRun in
+            guard changesByRun.count >= minExamplesForRule else { return nil }
+            let escapedExtension = NSRegularExpression.escapedPattern(for: key.fileExtension)
+            let destinationName = URL(fileURLWithPath: key.destination).lastPathComponent
+            let evidenceIDs = changesByRun.keys.sorted()
+            return InferredRule(
+                id: "local-regeneration-\(UUID().uuidString.prefix(8))",
+                pattern: ".*\\.\(escapedExtension)$",
+                template: "\(key.destination)/{filename}",
+                priority: 45,
+                exampleIds: evidenceIDs,
+                explanation: "After regenerating, .\(key.fileExtension) files repeatedly ended up in '\(destinationName)'.",
+                supportCount: evidenceIDs.count,
+                initialConfidence: .low,
+                scope: .folder(key.folderPath),
+                evidenceIds: evidenceIDs,
+                evidenceDescription: "Accepted after regeneration in \(evidenceIDs.count) separate organization runs."
+            )
+        }
     }
     
     // MARK: - Correction-based Inference

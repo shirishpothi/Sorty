@@ -99,6 +99,7 @@ The Learnings is a passive learning system that builds a personalized understand
 | Guiding Instructions | Pre-organization instructions | High |
 | Manual Corrections | Files you move after Sorty organization | Medium |
 | Reverts | Sessions you undo | Medium |
+| Accepted Regenerations | Differences between discarded previews and the plan you apply, confirmed across repeated runs | Low |
 
 ### Security
 

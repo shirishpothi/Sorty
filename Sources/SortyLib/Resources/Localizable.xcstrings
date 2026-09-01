@@ -52246,6 +52246,86 @@
           }
         }
       }
+    },
+    "Add folders that are already organized well. Sorty uses a matching example only when the files in a preview are similar. Representative filenames may be sent to your selected AI provider. Sorty never changes the example folder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Füge Ordner hinzu, die bereits gut organisiert sind. Sorty verwendet ein Beispiel nur, wenn die Dateien in einer Vorschau ähnlich sind. Repräsentative Dateinamen können an deinen ausgewählten KI-Anbieter gesendet werden. Sorty ändert den Beispielordner nie." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Añade carpetas que ya estén bien organizadas. Sorty solo usa un ejemplo cuando los archivos de una vista previa son similares. Es posible que se envíen nombres de archivo representativos al proveedor de IA seleccionado. Sorty nunca modifica la carpeta de ejemplo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ajoutez des dossiers déjà bien organisés. Sorty n'utilise un exemple que lorsque les fichiers d'un aperçu sont similaires. Des noms de fichiers représentatifs peuvent être envoyés au fournisseur d'IA sélectionné. Sorty ne modifie jamais le dossier d'exemple." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "整理済みのフォルダを追加します。Sorty は、プレビュー内のファイルが似ている場合にのみ一致する例を使用します。代表的なファイル名が選択した AI プロバイダに送信される場合があります。Sorty が例のフォルダを変更することはありません。" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "添加已经整理好的文件夹。只有当预览中的文件相似时，Sorty 才会使用匹配的示例。具有代表性的文件名可能会发送给你选择的 AI 提供商。Sorty 绝不会更改示例文件夹。" } }
+      }
+    },
+    "Scanning folder structure and filenames": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ordnerstruktur und Dateinamen werden gescannt" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Analizando la estructura de carpetas y los nombres de archivo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Analyse de la structure des dossiers et des noms de fichiers" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フォルダ構成とファイル名をスキャン中" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在扫描文件夹结构和文件名" } }
+      }
+    },
+    "Ready for matching previews": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bereit für passende Vorschauen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Listo para buscar coincidencias en las vistas previas" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Prêt pour les aperçus correspondants" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "一致するプレビューに使用できます" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "可用于匹配的预览" } }
+      }
+    },
+    "Rescan": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Erneut scannen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Volver a analizar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Analyser à nouveau" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再スキャン" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重新扫描" } }
+      }
+    },
+    "Example Folder Added": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Beispielordner hinzugefügt" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Carpeta de ejemplo añadida" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dossier d'exemple ajouté" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "例のフォルダを追加しました" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已添加示例文件夹" } }
+      }
+    },
+    "Example Folders Added": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Beispielordner hinzugefügt" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Carpetas de ejemplo añadidas" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dossiers d'exemple ajoutés" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "例のフォルダを追加しました" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已添加示例文件夹" } }
+      }
+    },
+    "Five Example Folders Active": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Fünf Beispielordner sind aktiv" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Hay cinco carpetas de ejemplo activas" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Cinq dossiers d'exemple sont actifs" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "5 個の例のフォルダが有効です" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已有五个示例文件夹处于启用状态" } }
+      }
+    },
+    "Folder Already Added": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ordner bereits hinzugefügt" } },
+        "es": { "stringUnit": { "state": "translated", "value": "La carpeta ya está añadida" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dossier déjà ajouté" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "フォルダは追加済みです" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "文件夹已添加" } }
+      }
     }
   },
   "version": "1.2"

@@ -657,24 +657,92 @@ public struct ReferenceModelDirectory: Codable, Identifiable, Hashable, Sendable
 
 /// Cached scan results for a reference model directory
 public struct ReferenceDirectorySnapshot: Codable, Hashable, Sendable {
+    public static let currentVersion = 2
+
+    public let version: Int
     public let scannedAt: Date
     public let folderHierarchy: [ReferenceFolder]
     public let namingConventions: [String]
+    public let fileNamingConventions: [String]
+    public let fileCategoryDistribution: [FileCategory: Int]
+    public let fileExtensionDistribution: [String: Int]
     public let totalFolderCount: Int
     public let totalFileCount: Int
+    public let maximumDepth: Int
+    public let warnings: [String]
+    public let isTruncated: Bool
     
     public init(
+        version: Int = ReferenceDirectorySnapshot.currentVersion,
         scannedAt: Date,
         folderHierarchy: [ReferenceFolder],
         namingConventions: [String],
+        fileNamingConventions: [String] = [],
+        fileCategoryDistribution: [FileCategory: Int] = [:],
+        fileExtensionDistribution: [String: Int] = [:],
         totalFolderCount: Int,
-        totalFileCount: Int
+        totalFileCount: Int,
+        maximumDepth: Int? = nil,
+        warnings: [String] = [],
+        isTruncated: Bool = false
     ) {
+        self.version = version
         self.scannedAt = scannedAt
         self.folderHierarchy = folderHierarchy
         self.namingConventions = namingConventions
+        self.fileNamingConventions = fileNamingConventions
+        self.fileCategoryDistribution = fileCategoryDistribution
+        self.fileExtensionDistribution = fileExtensionDistribution
         self.totalFolderCount = totalFolderCount
         self.totalFileCount = totalFileCount
+        self.maximumDepth = maximumDepth ?? folderHierarchy.map(\.depth).max() ?? 0
+        self.warnings = warnings
+        self.isTruncated = isTruncated
+    }
+
+    public var needsRescan: Bool {
+        version < Self.currentVersion
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case scannedAt
+        case folderHierarchy
+        case namingConventions
+        case fileNamingConventions
+        case fileCategoryDistribution
+        case fileExtensionDistribution
+        case totalFolderCount
+        case totalFileCount
+        case maximumDepth
+        case warnings
+        case isTruncated
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        scannedAt = try container.decode(Date.self, forKey: .scannedAt)
+        folderHierarchy = try container.decode([ReferenceFolder].self, forKey: .folderHierarchy)
+        namingConventions = try container.decode([String].self, forKey: .namingConventions)
+        fileNamingConventions = try container.decodeIfPresent(
+            [String].self,
+            forKey: .fileNamingConventions
+        ) ?? []
+        fileCategoryDistribution = try container.decodeIfPresent(
+            [FileCategory: Int].self,
+            forKey: .fileCategoryDistribution
+        ) ?? [:]
+        fileExtensionDistribution = try container.decodeIfPresent(
+            [String: Int].self,
+            forKey: .fileExtensionDistribution
+        ) ?? [:]
+        totalFolderCount = try container.decode(Int.self, forKey: .totalFolderCount)
+        totalFileCount = try container.decode(Int.self, forKey: .totalFileCount)
+        maximumDepth = try container.decodeIfPresent(Int.self, forKey: .maximumDepth)
+            ?? folderHierarchy.map(\.depth).max() ?? 0
+        warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        isTruncated = try container.decodeIfPresent(Bool.self, forKey: .isTruncated) ?? false
     }
 }
 

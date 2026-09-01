@@ -23,6 +23,27 @@ public struct LearningExclusionConcern: Equatable, Sendable {
     public let reviewTarget: LearningExclusionReviewTarget
 }
 
+public enum ReferenceDirectoryScanState: Equatable, Sendable {
+    case scanning
+    case ready
+    case warning(String)
+    case failed(String)
+    case unavailable
+    case paused
+}
+
+enum ReferenceDirectoryAddResult: Equatable {
+    case added
+    case duplicate
+    case activeLimitReached
+}
+
+struct ReferenceDirectorySelection: Equatable, Sendable {
+    let directoryIDs: [String]
+    let reason: String
+    let context: String
+}
+
 @MainActor
 public final class LearningExclusionMonitor {
     private struct Event: Codable {
@@ -120,6 +141,7 @@ public class LearningsManager: ObservableObject {
     public let useAIForLearnings = true
     @Published public var sessionLearningPaused: Bool = false
     @Published public var modelDirectories: [ReferenceModelDirectory] = []
+    @Published public private(set) var modelDirectoryScanStates: [String: ReferenceDirectoryScanState] = [:]
     private var activeModelDirectoryURLs: [String: URL] = [:]
     @Published public private(set) var learningsModelSelection: LearningsModelSelection?
 
@@ -400,6 +422,7 @@ public class LearningsManager: ObservableObject {
             learningsModelSelection = nil
             stopAllModelDirectoryAccess()
             modelDirectories = []
+            modelDirectoryScanStates = [:]
             learningStrength = 0.5
             dataRetentionDays = 0
 
@@ -1044,6 +1067,18 @@ public class LearningsManager: ObservableObject {
         currentProfile = profile
         debouncedSave()
     }
+
+    /// Record what the applied plan changed compared with the previews the user regenerated.
+    public func recordRegenerationPreferenceEvidence(_ evidence: RegenerationPreferenceEvidence) {
+        guard consentManager.canCollectData, !sessionLearningPaused else { return }
+        guard !isPathExcludedFromLearning(evidence.folderPath) else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+
+        profile.regenerationPreferenceEvidence.append(evidence)
+        currentProfile = profile
+        debouncedSave()
+    }
     
     /// Record a steering prompt (post-organization feedback)
     public func recordSteeringPrompt(_ prompt: String, folderPath: String?, sessionId: String?) {
@@ -1395,6 +1430,7 @@ public class LearningsManager: ObservableObject {
             profile.jobHistory.removeAll { $0.timestamp < cutoff }
             profile.cancelledOrganizations.removeAll { $0.timestamp < cutoff }
             profile.regeneratedOrganizations.removeAll { $0.timestamp < cutoff }
+            profile.regenerationPreferenceEvidence.removeAll { $0.timestamp < cutoff }
             profile.sessions.removeAll { ($0.completedAt ?? $0.timestamp) < cutoff }
             profile.inlineLearningMomentAnswers.removeAll { $0.timestamp < cutoff }
 
@@ -1421,6 +1457,7 @@ public class LearningsManager: ObservableObject {
         profile.jobHistory = Array(profile.jobHistory.suffix(cap))
         profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
         profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
+        profile.regenerationPreferenceEvidence = Array(profile.regenerationPreferenceEvidence.suffix(cap))
         profile.sessions = Array(profile.sessions.prefix(cap))
         profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
     }
@@ -1851,6 +1888,10 @@ public class LearningsManager: ObservableObject {
         mergedProfile.regeneratedOrganizations = mergedByID(
             existing.regeneratedOrganizations,
             imported.regeneratedOrganizations
+        ).sorted { $0.timestamp < $1.timestamp }
+        mergedProfile.regenerationPreferenceEvidence = mergedByID(
+            existing.regenerationPreferenceEvidence,
+            imported.regenerationPreferenceEvidence
         ).sorted { $0.timestamp < $1.timestamp }
         mergedProfile.inferredRules = mergedByID(existing.inferredRules, imported.inferredRules)
         mergedProfile.corrections = mergedByID(existing.corrections, imported.corrections)
@@ -2574,6 +2615,7 @@ public class LearningsManager: ObservableObject {
     private static let learningsModelSelectionKey = "learningsModelSelection"
     private static let modelDirectoriesKey = "learningsModelDirectories"
     private static let maxEnabledModelDirectories = 5
+    private static let maxRelevantModelDirectories = 2
     private static let maxFolderEntriesPerDirectory = 20
 
     private func loadLearningsModelSelection() {
@@ -2646,6 +2688,13 @@ public class LearningsManager: ObservableObject {
         do {
             modelDirectories = try JSONDecoder().decode([ReferenceModelDirectory].self, from: data)
             restoreModelDirectoryAccess()
+            refreshModelDirectoryScanStates()
+            let legacyIDs = modelDirectories.compactMap { directory in
+                directory.scanSnapshot?.needsRescan == true ? directory.id : nil
+            }
+            for id in legacyIDs {
+                Task { await rescanModelDirectory(id: id) }
+            }
         } catch {
             ReliabilityManager.shared.capture(
                 error: error,
@@ -2674,9 +2723,17 @@ public class LearningsManager: ObservableObject {
     /// Add a reference model directory from a URL, creating a security-scoped bookmark
     /// and triggering an initial scan. Deduplicates by canonical path.
     public func addModelDirectory(url: URL) -> Bool {
+        addModelDirectoryWithResult(url: url) == .added
+    }
+
+    @discardableResult
+    func addModelDirectoryWithResult(url: URL) -> ReferenceDirectoryAddResult {
         let canonical = url.standardizedFileURL.path
         guard !modelDirectories.contains(where: { $0.canonicalPath == canonical }) else {
-            return false
+            return .duplicate
+        }
+        guard modelDirectories.filter(\.isEnabled).count < Self.maxEnabledModelDirectories else {
+            return .activeLimitReached
         }
         
         var bookmark: Data?
@@ -2695,6 +2752,7 @@ public class LearningsManager: ObservableObject {
             bookmarkData: bookmark
         )
         modelDirectories.append(directory)
+        modelDirectoryScanStates[directory.id] = .scanning
         saveModelDirectories()
         restoreModelDirectoryAccess()
         
@@ -2703,7 +2761,7 @@ public class LearningsManager: ObservableObject {
             await rescanModelDirectory(id: directoryId)
         }
         
-        return true
+        return .added
     }
     
     /// Add a reference model directory by path (legacy convenience).
@@ -2728,14 +2786,23 @@ public class LearningsManager: ObservableObject {
     public func removeModelDirectory(id: String) {
         stopModelDirectoryAccess(id: id)
         modelDirectories.removeAll { $0.id == id }
+        modelDirectoryScanStates.removeValue(forKey: id)
         saveModelDirectories()
     }
     
     /// Toggle the enabled state of a model directory
-    public func toggleModelDirectory(id: String) {
-        guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    public func toggleModelDirectory(id: String) -> Bool {
+        guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return false }
+        if modelDirectories[index].isEnabled == false,
+           modelDirectories.filter(\.isEnabled).count >= Self.maxEnabledModelDirectories {
+            modelDirectoryScanStates[id] = .paused
+            return false
+        }
         modelDirectories[index].isEnabled.toggle()
+        modelDirectoryScanStates[id] = scanState(for: modelDirectories[index])
         saveModelDirectories()
+        return true
     }
     
     /// Validate all directories, restoring bookmark access where needed
@@ -2810,11 +2877,13 @@ public class LearningsManager: ObservableObject {
         guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
         
         let directory = modelDirectories[index]
+        modelDirectoryScanStates[id] = .scanning
         let directoryURL = activeModelDirectoryURLs[id] ?? URL(fileURLWithPath: directory.path)
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory),
               isDirectory.boolValue else {
             DebugLogger.log("Cannot scan inaccessible directory: \(directory.displayName)")
+            modelDirectoryScanStates[id] = .unavailable
             return
         }
         
@@ -2822,18 +2891,47 @@ public class LearningsManager: ObservableObject {
         do {
             snapshot = try await ReferenceDirectoryScanner.scan(url: directoryURL)
         } catch is CancellationError {
+            modelDirectoryScanStates[id] = scanState(for: directory)
             return
         } catch {
             DebugLogger.log(
                 "Preserving previous snapshot for \(directory.displayName) after scan failure: \(error.localizedDescription)"
             )
+            modelDirectoryScanStates[id] = .failed(error.localizedDescription)
             return
         }
         
         guard let currentIndex = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
         modelDirectories[currentIndex].scanSnapshot = snapshot
         modelDirectories[currentIndex].lastScannedAt = snapshot.scannedAt
+        modelDirectoryScanStates[id] = snapshot.warnings.isEmpty
+            ? .ready
+            : .warning(snapshot.warnings.joined(separator: ". "))
         saveModelDirectories()
+    }
+
+    public func modelDirectoryScanState(id: String) -> ReferenceDirectoryScanState {
+        if let state = modelDirectoryScanStates[id] { return state }
+        guard let directory = modelDirectories.first(where: { $0.id == id }) else {
+            return .unavailable
+        }
+        return scanState(for: directory)
+    }
+
+    private func refreshModelDirectoryScanStates() {
+        modelDirectoryScanStates = Dictionary(
+            uniqueKeysWithValues: modelDirectories.map { ($0.id, scanState(for: $0)) }
+        )
+    }
+
+    private func scanState(for directory: ReferenceModelDirectory) -> ReferenceDirectoryScanState {
+        guard directory.isAccessible else { return .unavailable }
+        guard directory.isEnabled else { return .paused }
+        guard let snapshot = directory.scanSnapshot else { return .scanning }
+        guard snapshot.warnings.isEmpty else {
+            return .warning(snapshot.warnings.joined(separator: ". "))
+        }
+        return .ready
     }
 
     private func stopModelDirectoryAccess(id: String) {
@@ -2876,6 +2974,60 @@ public class LearningsManager: ObservableObject {
         
         return formatSnapshotContext(snapshots: snapshots)
     }
+
+    func selectModelDirectoryContext(for files: [FileItem]) -> ReferenceDirectorySelection? {
+        let incomingFileExtensions = files.lazy
+            .filter { $0.isDirectory == false }
+            .map { file in
+                let explicitExtension = file.extension.trimmingCharacters(in: .whitespacesAndNewlines)
+                return explicitExtension.isEmpty
+                    ? URL(fileURLWithPath: file.path).pathExtension.lowercased()
+                    : explicitExtension.lowercased()
+            }
+        let incomingCategories = Set(
+            incomingFileExtensions.map { FileCategory.from(extension: $0) }
+        )
+        let incomingExtensions = Set(
+            incomingFileExtensions.filter { $0.isEmpty == false }
+        )
+        guard incomingCategories.isEmpty == false else { return nil }
+
+        let matches = modelDirectories.compactMap { directory -> (ReferenceModelDirectory, Int)? in
+            guard directory.isEnabled,
+                  directory.isAccessible,
+                  let snapshot = directory.scanSnapshot,
+                  snapshot.needsRescan == false else { return nil }
+            let exampleCategories = Set(
+                snapshot.fileCategoryDistribution.compactMap { $0.value > 0 ? $0.key : nil }
+            )
+            let categoryOverlap = incomingCategories.intersection(exampleCategories).count
+            guard categoryOverlap > 0 else { return nil }
+            let exampleExtensions = Set(snapshot.fileExtensionDistribution.keys)
+            let extensionOverlap = incomingExtensions.intersection(exampleExtensions).count
+            return (directory, categoryOverlap * 100 + extensionOverlap)
+        }
+        .sorted { lhs, rhs in
+            if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
+            return lhs.0.id < rhs.0.id
+        }
+        .prefix(Self.maxRelevantModelDirectories)
+
+        guard matches.isEmpty == false else { return nil }
+        let selected = matches.map { $0.0 }
+        let snapshots = selected.compactMap { directory in
+            directory.scanSnapshot.map { (directory.displayName, $0) }
+        }
+        let names = selected.map(\.displayName).joined(separator: ", ")
+        return ReferenceDirectorySelection(
+            directoryIDs: selected.map(\.id),
+            reason: "Matched incoming file types to \(names)",
+            context: formatSnapshotContext(snapshots: snapshots)
+        )
+    }
+
+    public func generateModelDirectoryContext(for files: [FileItem]) -> String {
+        selectModelDirectoryContext(for: files)?.context ?? ""
+    }
     
     /// Format cached snapshots into a compact prompt context string (~15 lines max)
     private func formatSnapshotContext(snapshots: [(String, ReferenceDirectorySnapshot)]) -> String {
@@ -2889,7 +3041,10 @@ public class LearningsManager: ObservableObject {
             lines.append("Reference: \"\(name)\" (\(snapshot.totalFolderCount) folders, \(snapshot.totalFileCount) files)")
             
             if !snapshot.namingConventions.isEmpty {
-                lines.append("  Naming: \(snapshot.namingConventions.joined(separator: ", "))")
+                lines.append("  Folder naming: \(snapshot.namingConventions.joined(separator: ", "))")
+            }
+            if !snapshot.fileNamingConventions.isEmpty {
+                lines.append("  File naming: \(snapshot.fileNamingConventions.joined(separator: ", "))")
             }
             
             let topFolders = snapshot.folderHierarchy.prefix(Self.maxFolderEntriesPerDirectory)
@@ -2912,7 +3067,7 @@ public class LearningsManager: ObservableObject {
         }
         
         lines.append("")
-        lines.append("IMPORTANT: These are reference examples only — do NOT move files into the reference directories. Instead, recreate analogous destination folders and names in the current organization plan. If the input resembles a media library, prefer inferred media conventions such as Artist/Album/Track, Movie (Year), Season/Episode, or date/event folders when the examples demonstrate them.")
+        lines.append("IMPORTANT: These are reference examples only — do NOT move files into the reference directories. Instead, recreate analogous destination folders and names in the current organization plan. Sample filenames may come from the user's reference folders. If the input resembles a media library, prefer inferred media conventions such as Artist/Album/Track, Movie (Year), Season/Episode, or date/event folders when the examples demonstrate them.")
         
         return lines.joined(separator: "\n")
     }
@@ -2996,6 +3151,9 @@ public class LearningsManager: ObservableObject {
         filtered.regeneratedOrganizations = profile.regeneratedOrganizations.filter {
             !isPathExcludedFromLearning($0.folderPath)
         }
+        filtered.regenerationPreferenceEvidence = profile.regenerationPreferenceEvidence.filter {
+            !isPathExcludedFromLearning($0.folderPath)
+        }
         filtered.historyReverts = profile.historyReverts.filter { revert in
             guard let folderPath = revert.folderPath else { return true }
             return !isPathExcludedFromLearning(folderPath)
@@ -3029,6 +3187,10 @@ public class LearningsManager: ObservableObject {
             .subtracting(Set(filtered.corrections.map(\.id)))
             .union(Set(profile.rejections.map(\.id)).subtracting(Set(filtered.rejections.map(\.id))))
             .union(Set(profile.positiveExamples.map(\.id)).subtracting(Set(filtered.positiveExamples.map(\.id))))
+            .union(
+                Set(profile.regenerationPreferenceEvidence.map(\.id))
+                    .subtracting(Set(filtered.regenerationPreferenceEvidence.map(\.id)))
+            )
 
         if !excludedExampleIDs.isEmpty {
             filtered.inferredRules = filtered.inferredRules.filter { rule in
@@ -3051,6 +3213,7 @@ public class LearningsManager: ObservableObject {
             profile.historyReverts.count,
             profile.cancelledOrganizations.count,
             profile.regeneratedOrganizations.count,
+            profile.regenerationPreferenceEvidence.count,
             profile.corrections.count,
             profile.rejections.count,
             profile.positiveExamples.count,

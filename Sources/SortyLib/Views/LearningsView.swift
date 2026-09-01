@@ -906,6 +906,20 @@ struct LearningsView: View {
                 )
             }
         }
+        learningRecordSection(
+            title: "Accepted Regeneration Differences",
+            count: profile.regenerationPreferenceEvidence.count
+        ) {
+            ForEach(profile.regenerationPreferenceEvidence.sorted { $0.timestamp > $1.timestamp }) { item in
+                learningRecordRow(
+                    title: safeFileName(item.folderPath),
+                    detail: "Compared the accepted plan with \(item.attempts.count) earlier attempt\(item.attempts.count == 1 ? "" : "s")",
+                    date: item.timestamp,
+                    systemImage: "arrow.clockwise.circle",
+                    fields: regenerationPreferenceFields(item)
+                )
+            }
+        }
         learningRecordSection(title: "Rename Feedback", count: profile.renameFeedbackHistory.count) {
             ForEach(profile.renameFeedbackHistory.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
@@ -1315,6 +1329,38 @@ struct LearningsView: View {
         return fields
     }
 
+    private func regenerationPreferenceFields(
+        _ item: RegenerationPreferenceEvidence
+    ) -> [LearningRecordField] {
+        let changedFiles = Set(item.attempts.flatMap(\.fileChanges).map(\.fileID)).count
+        var fields = [
+            LearningRecordField(label: "Earlier Attempts", value: "\(item.attempts.count)"),
+            LearningRecordField(label: "Files Changed", value: "\(changedFiles)"),
+            LearningRecordField(label: "Accepted Version", value: "\(item.acceptedVersion)"),
+        ]
+        if let latest = item.attempts.last {
+            fields.append(
+                LearningRecordField(
+                    label: "Folder Count",
+                    value: "\(latest.rejectedFolderCount) → \(latest.acceptedFolderCount)"
+                )
+            )
+            fields.append(
+                LearningRecordField(
+                    label: "Maximum Depth",
+                    value: "\(latest.rejectedMaxDepth) → \(latest.acceptedMaxDepth)"
+                )
+            )
+            fields.append(
+                LearningRecordField(
+                    label: "Unorganized Files",
+                    value: "\(latest.rejectedUnorganizedCount) → \(latest.acceptedUnorganizedCount)"
+                )
+            )
+        }
+        return fields
+    }
+
     private func renameFeedbackFields(
         _ item: RenameFeedbackEvent
     ) -> [LearningRecordField] {
@@ -1559,7 +1605,7 @@ struct LearningsView: View {
                     Text("Teach Sorty with example folders")
                         .font(.subheadline.bold())
                     Text(
-                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
+                        "Add folders that are already organized well. Sorty uses a matching example only when the files in a preview are similar. Representative filenames may be sent to your selected AI provider. Sorty never changes the example folder."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1748,13 +1794,44 @@ struct LearningsView: View {
         switch result {
         case .success(let urls):
             var addedCount = 0
+            var duplicateCount = 0
+            var limitReached = false
             for url in urls {
                 let hasScopedAccess = url.startAccessingSecurityScopedResource()
                 defer { if hasScopedAccess { url.stopAccessingSecurityScopedResource() } }
-                if manager.addModelDirectory(url: url) { addedCount += 1 }
+                switch manager.addModelDirectoryWithResult(url: url) {
+                case .added:
+                    addedCount += 1
+                case .duplicate:
+                    duplicateCount += 1
+                case .activeLimitReached:
+                    limitReached = true
+                }
             }
             if addedCount > 0 {
                 HapticFeedbackManager.shared.success()
+                NotificationManager.shared.showHUDInfo(
+                    title: addedCount == 1 ? "Example Folder Added" : "Example Folders Added",
+                    message: "Sorty is scanning \(addedCount) folder\(addedCount == 1 ? "" : "s") now.",
+                    icon: "folder.badge.plus",
+                    iconColor: .teal
+                )
+            } else if limitReached {
+                HapticFeedbackManager.shared.error()
+                NotificationManager.shared.showHUDInfo(
+                    title: "Five Example Folders Active",
+                    message: "Pause or remove one before adding another.",
+                    icon: "exclamationmark.triangle.fill",
+                    iconColor: .orange
+                )
+            } else if duplicateCount > 0 {
+                HapticFeedbackManager.shared.error()
+                NotificationManager.shared.showHUDInfo(
+                    title: "Folder Already Added",
+                    message: "Sorty is already learning from that folder.",
+                    icon: "folder.badge.questionmark",
+                    iconColor: .orange
+                )
             } else {
                 HapticFeedbackManager.shared.error()
             }
@@ -1912,123 +1989,205 @@ struct ModelDirectoryRow: View {
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var statusText: String {
-        guard directory.isAccessible else {
-            return "Folder is missing or unavailable"
+    private var scanState: ReferenceDirectoryScanState {
+        manager.modelDirectoryScanState(id: directory.id)
+    }
+
+    private var status: (text: String, icon: String, color: Color) {
+        switch scanState {
+        case .scanning:
+            return ("Scanning folder structure and filenames", "arrow.triangle.2.circlepath", .blue)
+        case .ready:
+            return ("Ready for matching previews", "checkmark.circle.fill", .teal)
+        case .warning(let message):
+            return (message, "exclamationmark.triangle.fill", .orange)
+        case .failed(let message):
+            return ("Scan failed: \(message)", "xmark.circle.fill", .red)
+        case .unavailable:
+            return ("Folder is missing or unavailable", "folder.badge.questionmark", .orange)
+        case .paused:
+            return ("Paused and not used in previews", "pause.circle.fill", .secondary)
         }
-        guard directory.isEnabled else {
-            return "Paused - not used in previews"
+    }
+
+    private var learnedSummary: String? {
+        guard let snapshot = directory.scanSnapshot else { return nil }
+        let categories = snapshot.fileCategoryDistribution
+            .filter { $0.value > 0 }
+            .sorted {
+                if $0.value != $1.value { return $0.value > $1.value }
+                return $0.key.rawValue < $1.key.rawValue
+            }
+            .prefix(3)
+            .map { $0.key.rawValue.capitalized }
+        let conventions = (snapshot.namingConventions + snapshot.fileNamingConventions)
+            .orderedDeduplicated()
+            .prefix(2)
+        var parts = [
+            "\(snapshot.totalFolderCount.formatted()) folders",
+            "\(snapshot.totalFileCount.formatted()) files",
+            "up to \(snapshot.maximumDepth.formatted()) levels deep",
+        ]
+        if categories.isEmpty == false {
+            parts.append(categories.joined(separator: ", "))
         }
-        guard let snapshot = directory.scanSnapshot else {
-            return "Queued for scanning - used once Sorty reads the structure"
+        if conventions.isEmpty == false {
+            parts.append(conventions.joined(separator: ", "))
         }
-        return
-            "Used in previews - scanned \(snapshot.totalFolderCount) folders and \(snapshot.totalFileCount) files"
+        return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
-                .font(.body.bold())
-                .symbolReplaceTransition(animationValue: directory.isAccessible)
-                .foregroundColor(
-                    directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange
-                )
-                .frame(width: 24)
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
+                    .font(.body.bold())
+                    .symbolReplaceTransition(animationValue: directory.isAccessible)
+                    .foregroundStyle(status.color)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(directory.displayName)
-                    .font(.subheadline.bold())
-                    .foregroundColor(directory.isEnabled ? .primary : .secondary)
-                PrivacySensitivePathText(path: directory.path)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(statusText)
-                    .font(.caption2)
-                    .foregroundStyle(
-                        directory.isEnabled && directory.isAccessible ? .teal : .secondary
-                    )
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .numericTextTransition(
-                        animationValue: statusText,
-                        animation: .easeInOut(duration: 0.28)
-                    )
-                if settingsViewModel.config.showStatsForNerds,
-                   let snapshot = directory.scanSnapshot {
-                    Text("\(snapshot.namingConventions.count) naming patterns · deepest structure \(snapshot.folderHierarchy.map(\.depth).max() ?? 0) levels")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(directory.displayName)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(directory.isEnabled ? .primary : .secondary)
+                    PrivacySensitivePathText(path: directory.path)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Spacer()
-
-            if !directory.isAccessible {
-                Text("Missing")
-                    .font(.caption2.bold())
-                    .foregroundColor(.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.orange.opacity(0.1))
-                    .clipShape(Capsule())
-            }
-
-            if directory.isAccessible {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
-                } label: {
-                    Label("Open", systemImage: "arrow.up.right.square")
-                        .font(.caption.bold())
-                }
-                .systemLiquidGlassButton()
-                .accessibilityIdentifier("OpenModelDirectoryButton_\(directory.id)")
-            }
-
-            Toggle(
-                "",
-                isOn: Binding(
-                    get: { directory.isEnabled },
-                    set: { _ in
-                        HapticFeedbackManager.shared.selection()
-                        manager.toggleModelDirectory(id: directory.id)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    HStack(spacing: 5) {
+                        if scanState == .scanning {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .accessibilityHidden(true)
+                        } else {
+                            Image(systemName: status.icon)
+                                .accessibilityHidden(true)
+                        }
+                        Text(status.text)
                     }
+                    .font(.caption)
+                    .foregroundStyle(status.color)
+                    .lineLimit(2)
+                    if let learnedSummary {
+                        Text(learnedSummary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if settingsViewModel.config.showStatsForNerds,
+                       let scannedAt = directory.lastScannedAt {
+                        Text("Last scanned \(scannedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                Spacer(minLength: 8)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { actionButtons }
+                VStack(alignment: .leading, spacing: 8) { actionButtons }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.secondary.opacity(isHovered ? 0.08 : 0.03))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+            if hovering { HapticFeedbackManager.shared.selection() }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        if directory.isAccessible {
+            Button {
+                HapticFeedbackManager.shared.tap()
+                Task { @MainActor in
+                    await manager.rescanModelDirectory(id: directory.id)
+                    switch manager.modelDirectoryScanState(id: directory.id) {
+                    case .ready, .warning:
+                        HapticFeedbackManager.shared.success()
+                        AccessibilityNotification.Announcement(
+                            "Finished scanning \(directory.displayName)"
+                        ).post()
+                    case .failed, .unavailable:
+                        HapticFeedbackManager.shared.error()
+                        AccessibilityNotification.Announcement(
+                            "Could not scan \(directory.displayName)"
+                        ).post()
+                    case .scanning, .paused:
+                        break
+                    }
+                }
+            } label: {
+                Label(isFailedScan ? "Retry" : "Rescan", systemImage: "arrow.clockwise")
+                    .font(.caption.bold())
+            }
+            .systemLiquidGlassButton()
+            .disabled(scanState == .scanning)
+            .accessibilityIdentifier("RescanModelDirectoryButton_\(directory.id)")
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                let didToggle = manager.toggleModelDirectory(id: directory.id)
+                if didToggle == false {
+                    HapticFeedbackManager.shared.error()
+                    NotificationManager.shared.showHUDInfo(
+                        title: "Five Example Folders Active",
+                        message: "Pause another folder before using this one.",
+                        icon: "exclamationmark.triangle.fill",
+                        iconColor: .orange
+                    )
+                }
+            } label: {
+                Label(
+                    directory.isEnabled ? "Pause" : "Use",
+                    systemImage: directory.isEnabled ? "pause" : "play"
                 )
-            )
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .scaleEffect(0.8)
-            .accessibilityLabel("Use \(directory.displayName) in previews")
+                .font(.caption.bold())
+            }
+            .systemLiquidGlassButton()
             .accessibilityIdentifier("ModelDirectoryToggle_\(directory.id)")
 
             Button {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    manager.removeModelDirectory(id: directory.id)
-                }
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
             } label: {
-                Label("Remove", systemImage: "xmark")
+                Label("Open", systemImage: "arrow.up.right.square")
                     .font(.caption.bold())
             }
             .systemLiquidGlassButton()
-            .accessibilityLabel("Remove \(directory.displayName)")
+            .accessibilityIdentifier("OpenModelDirectoryButton_\(directory.id)")
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(isHovered ? 0.08 : 0.03))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
-            if hovering { HapticFeedbackManager.shared.selection() }
+
+        Button {
+            HapticFeedbackManager.shared.tap()
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                manager.removeModelDirectory(id: directory.id)
+            }
+        } label: {
+            Label("Remove", systemImage: "xmark")
+                .font(.caption.bold())
         }
-        .accessibilityElement(children: .contain)
+        .systemLiquidGlassButton()
+        .accessibilityIdentifier("RemoveModelDirectoryButton_\(directory.id)")
+    }
+
+    private var isFailedScan: Bool {
+        if case .failed = scanState { return true }
+        return false
     }
 }
 

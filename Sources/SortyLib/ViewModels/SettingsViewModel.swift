@@ -144,6 +144,7 @@ public class SettingsViewModel: ObservableObject {
     @Published public var appleModelStatus: String = ""
     @Published public var availableModels: [String] = []
     @Published public var isLoadingModels: Bool = false
+    @Published public private(set) var hasLoadedPersistedState = false
     
     private let userDefaults: UserDefaults
     private let credentialStore: SettingsCredentialStore
@@ -156,6 +157,7 @@ public class SettingsViewModel: ObservableObject {
     private var modelRefreshTask: Task<Void, Never>?
     private var credentialHydrationID: UUID?
     private var credentialHydrationProvider: AIProvider?
+    private var persistedStateLoadTask: Task<AIConfig?, Never>?
     private var isApplyingConfigMutation = false
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
@@ -165,8 +167,6 @@ public class SettingsViewModel: ObservableObject {
     public init() {
         userDefaults = .standard
         credentialStore = .keychain
-        loadConfig()
-        checkAppleModelAvailability()
         setupNotificationObservers()
     }
 
@@ -177,8 +177,6 @@ public class SettingsViewModel: ObservableObject {
     ) {
         self.userDefaults = userDefaults
         self.credentialStore = credentialStore
-        loadConfig()
-        checkAppleModelAvailability()
         if observesNotifications {
             setupNotificationObservers()
         }
@@ -190,17 +188,37 @@ public class SettingsViewModel: ObservableObject {
         }
     }
     
-    private func loadConfig() {
-        if let data = userDefaults.data(forKey: configKey),
-           var decoded = try? JSONDecoder().decode(AIConfig.self, from: data) {
-            decoded.apiKey = nil
+    /// Loads settings without blocking app construction or the first SwiftUI window.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
 
+        let task: Task<AIConfig?, Never>
+        if let persistedStateLoadTask {
+            task = persistedStateLoadTask
+        } else {
+            let configData = userDefaults.data(forKey: configKey)
+            task = Task.detached(priority: .userInitiated) {
+                guard let data = configData else { return nil }
+                return try? JSONDecoder().decode(AIConfig.self, from: data)
+            }
+            persistedStateLoadTask = task
+        }
+
+        if var decoded = await task.value {
+            decoded.apiKey = nil
             decoded.enableSmartRename = true
             isApplyingConfigMutation = true
             config = decoded
             isApplyingConfigMutation = false
         }
 
+        hasLoadedPersistedState = true
+        persistedStateLoadTask = nil
+        checkAppleModelAvailability()
+        hydrateConfiguredCredentialIfNeeded()
+    }
+
+    private func hydrateConfiguredCredentialIfNeeded() {
         let provider = config.provider
         let authMethod = config.authMethod(for: provider)
         guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
@@ -292,6 +310,7 @@ public class SettingsViewModel: ObservableObject {
     /// Synchronous save for app termination. macOS does not wait for unstructured
     /// tasks started from `willTerminate`, so this path must finish before returning.
     public func forceSave() {
+        guard hasLoadedPersistedState else { return }
         saveTask?.cancel()
         let apiKey = config.apiKey
         let provider = config.provider
@@ -316,6 +335,7 @@ public class SettingsViewModel: ObservableObject {
     }
     
     private func performSave() async {
+        guard hasLoadedPersistedState else { return }
         // Capture values for thread-safe access
         let apiKey = config.apiKey
         let provider = config.provider

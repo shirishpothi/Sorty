@@ -70,7 +70,8 @@ public class LearningsAnalyzer: ObservableObject {
                 from: trainingExamples,
                 exampleFolders: exampleFolderURLs,
                 steeringPrompts: profile.steeringPrompts,
-                guidingInstructions: profile.guidingInstructionsHistory
+                guidingInstructions: profile.guidingInstructionsHistory,
+                regenerationEvidence: profile.regenerationPreferenceEvidence
             )
             rules.append(contentsOf: aiRules)
         }

@@ -45,6 +45,9 @@ public struct LearningsProfile: Codable, Sendable {
     
     /// Regenerated organization sessions (user wasn't satisfied with first result)
     public var regeneratedOrganizations: [RegeneratedOrganization]
+
+    /// Paired differences between regenerated previews and the plan the user applied.
+    public var regenerationPreferenceEvidence: [RegenerationPreferenceEvidence]
     
     // MARK: - Existing Properties
     
@@ -91,6 +94,7 @@ public struct LearningsProfile: Codable, Sendable {
         historyReverts: [RevertEvent] = [],
         cancelledOrganizations: [CancelledOrganization] = [],
         regeneratedOrganizations: [RegeneratedOrganization] = [],
+        regenerationPreferenceEvidence: [RegenerationPreferenceEvidence] = [],
         inferredRules: [InferredRule] = [],
         corrections: [LabeledExample] = [],
         rejections: [LabeledExample] = [],
@@ -113,6 +117,7 @@ public struct LearningsProfile: Codable, Sendable {
         self.historyReverts = historyReverts
         self.cancelledOrganizations = cancelledOrganizations
         self.regeneratedOrganizations = regeneratedOrganizations
+        self.regenerationPreferenceEvidence = regenerationPreferenceEvidence
         self.inferredRules = inferredRules
         self.corrections = corrections
         self.rejections = rejections
@@ -137,6 +142,7 @@ public struct LearningsProfile: Codable, Sendable {
         case historyReverts
         case cancelledOrganizations
         case regeneratedOrganizations
+        case regenerationPreferenceEvidence
         case inferredRules
         case corrections
         case rejections
@@ -163,6 +169,10 @@ public struct LearningsProfile: Codable, Sendable {
         historyReverts = try container.decodeIfPresent([RevertEvent].self, forKey: .historyReverts) ?? []
         cancelledOrganizations = try container.decodeIfPresent([CancelledOrganization].self, forKey: .cancelledOrganizations) ?? []
         regeneratedOrganizations = try container.decodeIfPresent([RegeneratedOrganization].self, forKey: .regeneratedOrganizations) ?? []
+        regenerationPreferenceEvidence = try container.decodeIfPresent(
+            [RegenerationPreferenceEvidence].self,
+            forKey: .regenerationPreferenceEvidence
+        ) ?? []
         inferredRules = try container.decodeIfPresent([InferredRule].self, forKey: .inferredRules) ?? []
         corrections = try container.decodeIfPresent([LabeledExample].self, forKey: .corrections) ?? []
         rejections = try container.decodeIfPresent([LabeledExample].self, forKey: .rejections) ?? []
@@ -188,6 +198,7 @@ public struct LearningsProfile: Codable, Sendable {
         try container.encode(historyReverts, forKey: .historyReverts)
         try container.encode(cancelledOrganizations, forKey: .cancelledOrganizations)
         try container.encode(regeneratedOrganizations, forKey: .regeneratedOrganizations)
+        try container.encode(regenerationPreferenceEvidence, forKey: .regenerationPreferenceEvidence)
         try container.encode(inferredRules, forKey: .inferredRules)
         try container.encode(corrections, forKey: .corrections)
         try container.encode(rejections, forKey: .rejections)
@@ -198,6 +209,171 @@ public struct LearningsProfile: Codable, Sendable {
         try container.encode(sessionLearningEnabled, forKey: .sessionLearningEnabled)
         try container.encode(sessions, forKey: .sessions)
         try container.encode(inlineLearningMomentAnswers, forKey: .inlineLearningMomentAnswers)
+    }
+}
+
+// MARK: - Regeneration Preference Evidence
+
+/// Compact evidence describing what changed between rejected previews and the plan the user applied.
+public struct RegenerationPreferenceEvidence: Codable, Identifiable, Sendable, Equatable {
+    public let id: String
+    public let timestamp: Date
+    public let folderPath: String
+    public let acceptedVersion: Int
+    public let attempts: [RegenerationAttemptComparison]
+
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        folderPath: String,
+        acceptedVersion: Int,
+        attempts: [RegenerationAttemptComparison]
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.folderPath = folderPath
+        self.acceptedVersion = acceptedVersion
+        self.attempts = attempts
+    }
+}
+
+public struct RegenerationAttemptComparison: Codable, Sendable, Equatable {
+    public let rejectedVersion: Int
+    public let rejectedFolderCount: Int
+    public let acceptedFolderCount: Int
+    public let rejectedMaxDepth: Int
+    public let acceptedMaxDepth: Int
+    public let rejectedUnorganizedCount: Int
+    public let acceptedUnorganizedCount: Int
+    public let fileChanges: [RegenerationFilePreference]
+}
+
+public struct RegenerationFilePreference: Codable, Sendable, Equatable {
+    public let fileID: UUID
+    public let filename: String
+    public let fileExtension: String
+    public let rejectedDestination: String?
+    public let acceptedDestination: String?
+    public let rejectedFilename: String
+    public let acceptedFilename: String
+    public let wasRejectedAsUnorganized: Bool
+    public let wasAcceptedAsUnorganized: Bool
+}
+
+enum PlanPreferenceDiffer {
+    private static let maxRecordedFileChangesPerAttempt = 200
+
+    private struct FilePlacement {
+        let file: FileItem
+        let destination: String?
+        let outputFilename: String
+        let isUnorganized: Bool
+    }
+
+    static func compare(
+        rejectedPlans: [OrganizationPlan],
+        acceptedPlan: OrganizationPlan,
+        folderPath: String,
+        timestamp: Date = Date()
+    ) -> RegenerationPreferenceEvidence? {
+        guard !rejectedPlans.isEmpty else { return nil }
+
+        let acceptedPlacements = flatten(acceptedPlan)
+        let acceptedDepth = maximumDepth(in: acceptedPlan.suggestions)
+        let attempts = rejectedPlans.compactMap { rejectedPlan -> RegenerationAttemptComparison? in
+            let rejectedPlacements = flatten(rejectedPlan)
+            let changedFiles: [RegenerationFilePreference] = acceptedPlacements.keys
+                .sorted { $0.uuidString < $1.uuidString }
+                .compactMap { fileID -> RegenerationFilePreference? in
+                guard let accepted = acceptedPlacements[fileID],
+                      let rejected = rejectedPlacements[fileID],
+                      accepted.destination != rejected.destination
+                        || accepted.outputFilename != rejected.outputFilename
+                        || accepted.isUnorganized != rejected.isUnorganized else {
+                    return nil
+                }
+
+                return RegenerationFilePreference(
+                    fileID: fileID,
+                    filename: accepted.file.displayName,
+                    fileExtension: accepted.file.extension.lowercased(),
+                    rejectedDestination: rejected.destination,
+                    acceptedDestination: accepted.destination,
+                    rejectedFilename: rejected.outputFilename,
+                    acceptedFilename: accepted.outputFilename,
+                    wasRejectedAsUnorganized: rejected.isUnorganized,
+                    wasAcceptedAsUnorganized: accepted.isUnorganized
+                )
+            }
+
+            let comparison = RegenerationAttemptComparison(
+                rejectedVersion: rejectedPlan.version,
+                rejectedFolderCount: rejectedPlan.totalFolders,
+                acceptedFolderCount: acceptedPlan.totalFolders,
+                rejectedMaxDepth: maximumDepth(in: rejectedPlan.suggestions),
+                acceptedMaxDepth: acceptedDepth,
+                rejectedUnorganizedCount: rejectedPlan.unorganizedFiles.count,
+                acceptedUnorganizedCount: acceptedPlan.unorganizedFiles.count,
+                fileChanges: Array(changedFiles.prefix(maxRecordedFileChangesPerAttempt))
+            )
+
+            let structureChanged = comparison.rejectedFolderCount != comparison.acceptedFolderCount
+                || comparison.rejectedMaxDepth != comparison.acceptedMaxDepth
+                || comparison.rejectedUnorganizedCount != comparison.acceptedUnorganizedCount
+            return changedFiles.isEmpty && !structureChanged ? nil : comparison
+        }
+
+        guard !attempts.isEmpty else { return nil }
+        return RegenerationPreferenceEvidence(
+            timestamp: timestamp,
+            folderPath: folderPath,
+            acceptedVersion: acceptedPlan.version,
+            attempts: attempts
+        )
+    }
+
+    private static func flatten(_ plan: OrganizationPlan) -> [UUID: FilePlacement] {
+        var placements: [UUID: FilePlacement] = [:]
+
+        func visit(_ suggestion: FolderSuggestion, parentPath: String) {
+            let destination = [parentPath, suggestion.folderName]
+                .filter { !$0.isEmpty }
+                .joined(separator: "/")
+            let renameMappings = Dictionary(
+                suggestion.fileRenameMappings.map { ($0.originalFile.id, $0) },
+                uniquingKeysWith: { _, latest in latest }
+            )
+
+            for file in suggestion.files {
+                let mappedName = renameMappings[file.id].flatMap { mapping in
+                    mapping.shouldApplyRename ? mapping.suggestedName : nil
+                }
+                placements[file.id] = FilePlacement(
+                    file: file,
+                    destination: destination,
+                    outputFilename: mappedName ?? file.suggestedFilename ?? file.displayName,
+                    isUnorganized: false
+                )
+            }
+            suggestion.subfolders.forEach { visit($0, parentPath: destination) }
+        }
+
+        plan.suggestions.forEach { visit($0, parentPath: "") }
+        for file in plan.unorganizedFiles {
+            placements[file.id] = FilePlacement(
+                file: file,
+                destination: nil,
+                outputFilename: file.displayName,
+                isUnorganized: true
+            )
+        }
+        return placements
+    }
+
+    private static func maximumDepth(in suggestions: [FolderSuggestion], depth: Int = 1) -> Int {
+        suggestions.reduce(0) { result, suggestion in
+            max(result, max(depth, maximumDepth(in: suggestion.subfolders, depth: depth + 1)))
+        }
     }
 }
 
@@ -233,6 +409,7 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
     let historyReverts: Int
     let cancelledOrganizations: Int
     let regeneratedOrganizations: Int
+    let regenerationPreferenceEvidence: Int
     let inferredRules: Int
     let corrections: Int
     let rejections: Int
@@ -252,6 +429,7 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
         historyReverts = profile.historyReverts.count
         cancelledOrganizations = profile.cancelledOrganizations.count
         regeneratedOrganizations = profile.regeneratedOrganizations.count
+        regenerationPreferenceEvidence = profile.regenerationPreferenceEvidence.count
         inferredRules = profile.inferredRules.count
         corrections = profile.corrections.count
         rejections = profile.rejections.count
@@ -263,6 +441,52 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
         inlineLearningMomentAnswers = profile.inlineLearningMomentAnswers.count
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case additionalInstructions
+        case guidingInstructions
+        case steeringPrompts
+        case postOrganizationChanges
+        case renameFeedbackEvents
+        case historyReverts
+        case cancelledOrganizations
+        case regeneratedOrganizations
+        case regenerationPreferenceEvidence
+        case inferredRules
+        case corrections
+        case rejections
+        case positiveExamples
+        case jobHistory
+        case rejectedRuleCooldowns
+        case learningExclusionPatterns
+        case sessions
+        case inlineLearningMomentAnswers
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        additionalInstructions = try container.decode(Int.self, forKey: .additionalInstructions)
+        guidingInstructions = try container.decode(Int.self, forKey: .guidingInstructions)
+        steeringPrompts = try container.decode(Int.self, forKey: .steeringPrompts)
+        postOrganizationChanges = try container.decode(Int.self, forKey: .postOrganizationChanges)
+        renameFeedbackEvents = try container.decode(Int.self, forKey: .renameFeedbackEvents)
+        historyReverts = try container.decode(Int.self, forKey: .historyReverts)
+        cancelledOrganizations = try container.decode(Int.self, forKey: .cancelledOrganizations)
+        regeneratedOrganizations = try container.decode(Int.self, forKey: .regeneratedOrganizations)
+        regenerationPreferenceEvidence = try container.decodeIfPresent(
+            Int.self,
+            forKey: .regenerationPreferenceEvidence
+        ) ?? 0
+        inferredRules = try container.decode(Int.self, forKey: .inferredRules)
+        corrections = try container.decode(Int.self, forKey: .corrections)
+        rejections = try container.decode(Int.self, forKey: .rejections)
+        positiveExamples = try container.decode(Int.self, forKey: .positiveExamples)
+        jobHistory = try container.decode(Int.self, forKey: .jobHistory)
+        rejectedRuleCooldowns = try container.decode(Int.self, forKey: .rejectedRuleCooldowns)
+        learningExclusionPatterns = try container.decode(Int.self, forKey: .learningExclusionPatterns)
+        sessions = try container.decode(Int.self, forKey: .sessions)
+        inlineLearningMomentAnswers = try container.decode(Int.self, forKey: .inlineLearningMomentAnswers)
+    }
+
     var totalRecordCount: Int {
         additionalInstructions
             + guidingInstructions
@@ -272,6 +496,7 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
             + historyReverts
             + cancelledOrganizations
             + regeneratedOrganizations
+            + regenerationPreferenceEvidence
             + inferredRules
             + corrections
             + rejections
@@ -293,6 +518,7 @@ struct LearningsProfileArchiveSummary: Codable, Equatable, Sendable {
             + historyReverts
             + cancelledOrganizations
             + regeneratedOrganizations
+            + regenerationPreferenceEvidence
             + corrections
             + rejections
             + positiveExamples

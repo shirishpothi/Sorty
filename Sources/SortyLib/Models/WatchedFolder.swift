@@ -146,6 +146,7 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var monitoringRevision = 0
     @Published public private(set) var activityByFolder: [UUID: WatchedFolderActivity] = [:]
     @Published public private(set) var folderExistenceByID: [UUID: Bool] = [:]
+    @Published public private(set) var hasLoadedPersistedState = false
 
     private let userDefaults = UserDefaults.standard
     private let legacyStorageKey = "watchedFolders"
@@ -156,10 +157,60 @@ public class WatchedFoldersManager: ObservableObject {
     private var indexByID: [UUID: Int] = [:]
     private var idByNormalizedPath: [String: UUID] = [:]
     private var existenceRefreshTask: Task<Void, Never>?
+    private var loadTask: Task<([WatchedFolder], Bool), Never>?
+    private var loadGeneration = 0
     
     public init() {
-        loadFolders()
+        if userDefaults.object(forKey: activeCountStorageKey) != nil {
+            activeFolderCount = userDefaults.integer(forKey: activeCountStorageKey)
+        }
         setupNotificationObservers()
+    }
+
+    /// Replays the append-only journal off the main actor so its size does not delay the first window.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<([WatchedFolder], Bool), Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let journal = journal
+            let legacyData = userDefaults.data(forKey: legacyStorageKey)
+            task = Task.detached(priority: .userInitiated) {
+                if let journalFolders = journal.load() {
+                    return (journalFolders, false)
+                }
+                guard let data = legacyData,
+                      let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
+                    return ([], false)
+                }
+                return (decoded, journal.replaceAll(with: decoded))
+            }
+            loadTask = task
+        }
+
+        let (persistedFolders, didMigrateLegacyStorage) = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
+        let persistedIDs = Set(persistedFolders.map(\.id))
+        var loadedFolders = persistedFolders.map { inMemoryByID[$0.id] ?? $0 }
+        loadedFolders.append(contentsOf: folders.filter { !persistedIDs.contains($0.id) })
+        for index in loadedFolders.indices {
+            loadedFolders[index].autoOrganize = loadedFolders[index].isEnabled
+        }
+        folders = loadedFolders
+        rebuildIndexes()
+        setActiveFolderCount(folders.lazy.filter(\.isEnabled).count)
+        accessIssueFolderCount = folders.lazy.filter(Self.hasAccessIssue).count
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if didMigrateLegacyStorage {
+            userDefaults.removeObject(forKey: legacyStorageKey)
+        }
         refreshFolderExistence()
     }
 
@@ -197,6 +248,10 @@ public class WatchedFoldersManager: ObservableObject {
     }
 
     public func clearAll() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
         stopAllSecurityScopedAccess()
         folders.removeAll()
         activityByFolder.removeAll()
@@ -531,29 +586,6 @@ public class WatchedFoldersManager: ObservableObject {
                 folderExistenceByID = currentStatuses
             }
         }
-    }
-
-    private func loadFolders() {
-        var loadedFolders: [WatchedFolder]
-        if let journalFolders = journal.load() {
-            loadedFolders = journalFolders
-        } else if let data = userDefaults.data(forKey: legacyStorageKey),
-                  let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
-            loadedFolders = decoded
-            if journal.replaceAll(with: decoded) {
-                userDefaults.removeObject(forKey: legacyStorageKey)
-            }
-        } else {
-            loadedFolders = []
-        }
-
-        for index in loadedFolders.indices {
-            loadedFolders[index].autoOrganize = loadedFolders[index].isEnabled
-        }
-        folders = loadedFolders
-        rebuildIndexes()
-        setActiveFolderCount(folders.lazy.filter(\.isEnabled).count)
-        accessIssueFolderCount = folders.lazy.filter(Self.hasAccessIssue).count
     }
 
     private func rebuildIndexes() {

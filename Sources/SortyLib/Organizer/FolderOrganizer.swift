@@ -1997,7 +1997,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Learnings context into prompt")
         }
 
-        if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+        if !isRenameOnly,
+           let modelDirContext = learningsManager?.generateModelDirectoryContext(for: files),
+           !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
             DebugLogger.log("Injected Model Directory reference context into prompt")
         }
@@ -3858,7 +3860,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             if mode != .renameOnly,
-               let modelDirContext = learningsManager?.generateModelDirectoryContext(),
+               let modelDirContext = learningsManager?.generateModelDirectoryContext(for: files),
                !modelDirContext.isEmpty {
                 finalPrompt += "\n\n" + modelDirContext
             }
@@ -4135,7 +4137,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 finalPrompt += "\n\n" + learnedContext
             }
 
-            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            if let modelDirContext = learningsManager?.generateModelDirectoryContext(for: files),
+               !modelDirContext.isEmpty {
                 finalPrompt += "\n\n" + modelDirContext
             }
 
@@ -4324,6 +4327,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 recordRuleApplications(for: planToApply, operations: operations, observer: learningsObserver)
             }
 
+            if !dryRun, !currentRunLearningExcluded, !planHistory.isEmpty {
+                let rejectedPlans = planHistory
+                let evidence = await Task.detached(priority: .utility) {
+                    PlanPreferenceDiffer.compare(
+                        rejectedPlans: rejectedPlans,
+                        acceptedPlan: planToApply,
+                        folderPath: baseURL.path
+                    )
+                }.value
+                if let evidence {
+                    learningsManager?.recordRegenerationPreferenceEvidence(evidence)
+                }
+            }
+
             let historyEntry = OrganizationHistoryEntry(
                 directoryPath: baseURL.path,
                 filesOrganized: planToApply.totalFiles,
@@ -4504,7 +4521,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if let learnedContext = learningsManager?.generatePromptContext(forFolder: currentDirectory?.path), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
         }
-        if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+        if !isRenameOnly,
+           let modelDirContext = learningsManager?.generateModelDirectoryContext(for: files),
+           !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
         }
         if !isRenameOnly, let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
@@ -4923,7 +4942,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions += "\n\n" + learnedContext
             }
 
-            if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            if !isRenameOnly,
+               let modelDirContext = learningsManager?.generateModelDirectoryContext(for: allFiles),
+               !modelDirContext.isEmpty {
                 instructions += "\n\n" + modelDirContext
             }
             
