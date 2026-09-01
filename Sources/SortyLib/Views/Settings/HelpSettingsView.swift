@@ -267,6 +267,9 @@ struct DeeplinkSettingsView: View {
     @SortyHotReload private var hotReload
     @State private var isShowingEncodingInfo = false
 
+    /// Keeps adjacent disclosure headers compact when their content is hidden.
+    private let groupSpacing: CGFloat = 8
+
     private var groups: [DeeplinkGroup] {
         var organizationEntries = [
             DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
@@ -363,7 +366,7 @@ struct DeeplinkSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: groupSpacing) {
                 ForEach(groups) { group in
                     DeeplinkGroupSection(group: group)
                 }
@@ -473,11 +476,15 @@ private struct DeeplinkGroupSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = true
 
+    private var expansionAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.88)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                withAnimation(expansionAnimation) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -515,7 +522,11 @@ private struct DeeplinkGroupSection: View {
                     }
                 }
                 .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
-                .transition(.opacity)
+                .transition(
+                    .move(edge: .top)
+                        .combined(with: .scale(scale: 0.985, anchor: .top))
+                        .combined(with: .opacity)
+                )
             }
         }
         .settingsFocusable(group.focusTarget)
