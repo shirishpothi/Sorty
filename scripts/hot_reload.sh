@@ -59,5 +59,5 @@ print_step 4 4 "Watching Source Files"
 log_success "Hot reload active. Quit Sorty or press Control-C to stop."
 echo ""
 
-env INJECTION_PROJECT_ROOT="${PROJECT_DIR}" \
+env INJECTION_DIRECTORIES="${PROJECT_DIR},${HOME}/Library" \
     "${HOT_RELOAD_APP}/Contents/MacOS/${PROJECT_NAME}"
