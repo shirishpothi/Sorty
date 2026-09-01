@@ -42,7 +42,9 @@ format_hot_reload_runtime_output() {
     local line
 
     while IFS= read -r line || [ -n "${line}" ]; do
-        line="${line%$'\r'}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        line="${line#🔥 }"
         case "${line}" in
             *"InjectionLite: Watching for source changes"*)
                 log_success "Watching Sorty and ~/Library for source changes"
@@ -61,12 +63,66 @@ format_hot_reload_runtime_output() {
                     printf '%s\n' "${line}"
                 fi
                 ;;
+            *"⚡ Compiled in "*)
+                line="${line#*⚡ }"
+                log_success "${line}"
+                ;;
+            *"⚠️ Size of type "*" changed from "*)
+                line="${line#*⚠️ }"
+                log_warning "${line}"
+                ;;
+            *"⚠️ Size of a type changed over injection"*"blocked"*)
+                log_warning "Type layout changed. Injection blocked; save again to retry."
+                ;;
+            *"⚠️ Logs dir not initialised."*)
+                log_warning "Compile log is not ready. Edit a file and rebuild."
+                ;;
+            *"⚠️ Could not locate command for "*)
+                local source_path="${line#*⚠️ Could not locate command for }"
+                source_path="${source_path%%. Try editing*}"
+                source_path="${source_path//\\/}"
+                log_warning "No compile command for ${source_path##*/}"
+                log_item "Edit the file and rebuild. Whole Module mode is unsupported."
+                ;;
+            "⚠️ "*)
+                log_warning "${line#⚠️ }"
+                ;;
+            "⚠ "*)
+                log_warning "${line#⚠ }"
+                ;;
+            "⚡ "*)
+                log_success "${line#⚡ }"
+                ;;
             *)
                 skips_spotlight_continuation=false
-                printf '%s\n' "${line}"
+                if [ -n "${line}" ]; then
+                    printf '%s\n' "${line}"
+                fi
                 ;;
         esac
     done
+}
+
+stream_hot_reload_frames() {
+    local buffer=""
+    local character=""
+
+    while IFS= read -r -n 1 character; do
+        if [ -z "${character}" ] || [ "${character}" = $'\r' ]; then
+            if [ -n "${buffer}" ]; then
+                printf '%s\n' "${buffer}"
+                buffer=""
+            fi
+        elif [ "${character}" = $'\b' ]; then
+            buffer="${buffer%?}"
+        elif [ "${character}" != $'\004' ]; then
+            buffer+="${character}"
+        fi
+    done
+
+    if [ -n "${buffer}" ]; then
+        printf '%s\n' "${buffer}"
+    fi
 }
 
 print_header "${PROJECT_NAME} Hot Reload" 50
@@ -109,4 +165,5 @@ echo ""
 script -q /dev/null env \
     INJECTION_DIRECTORIES="${PROJECT_DIR},${HOME}/Library" \
     "${HOT_RELOAD_APP}/Contents/MacOS/${PROJECT_NAME}" 2>&1 |
+    stream_hot_reload_frames |
     format_hot_reload_runtime_output
