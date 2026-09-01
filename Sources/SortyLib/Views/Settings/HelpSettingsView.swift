@@ -470,27 +470,53 @@ private struct DeeplinkGroupSection: View {
     @SortyHotReload private var hotReload
     let group: DeeplinkGroup
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isExpanded = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label {
-                Text(LocalizedStringKey(group.title))
-            } icon: {
-                Image(systemName: group.icon)
-            }
+            Button {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Label {
+                        Text(LocalizedStringKey(group.title))
+                    } icon: {
+                        Image(systemName: group.icon)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(group.color)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
-            VStack(spacing: 0) {
-                ForEach(group.entries) { entry in
-                    DeeplinkEntryRow(entry: entry, color: group.color)
+            if isExpanded {
+                VStack(spacing: 0) {
+                    ForEach(group.entries) { entry in
+                        DeeplinkEntryRow(entry: entry, color: group.color)
 
-                    if entry.id != group.entries.last?.id {
-                        Divider()
-                            .padding(.leading, 12)
+                        if entry.id != group.entries.last?.id {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
                     }
                 }
+                .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
+                .transition(.opacity)
             }
-            .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
         }
         .settingsFocusable(group.focusTarget)
     }
