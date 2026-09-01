@@ -37,6 +37,22 @@ run_hot_reload_build() {
         "${SCRIPT_DIR}/build.sh"
 }
 
+print_runtime_success() {
+    printf '\r  %b%s %s%b\r\n' "${GREEN}" "${SYM_CHECK}" "$1" "${NC}"
+}
+
+print_runtime_warning() {
+    printf '\r  %b! %s%b\r\n' "${YELLOW}" "$1" "${NC}"
+}
+
+print_runtime_item() {
+    printf '\r  • %s\r\n' "$1"
+}
+
+print_runtime_line() {
+    printf '\r%s\r\n' "$1"
+}
+
 format_hot_reload_runtime_output() {
     local skips_spotlight_continuation=false
     local line
@@ -47,56 +63,56 @@ format_hot_reload_runtime_output() {
         line="${line#🔥 }"
         case "${line}" in
             *"InjectionLite: Watching for source changes"*)
-                log_success "Watching Sorty and ~/Library for source changes"
+                print_runtime_success "Watching Sorty and ~/Library for source changes"
                 ;;
             "NotificationManager: Using native macOS notifications")
-                log_success "Native notifications ready"
+                print_runtime_success "Native notifications ready"
                 ;;
             *"failed to scan "*"Watch with Sorty.workflow: -10811"*)
-                log_warning "Spotlight could not index Watch with Sorty.workflow (-10811)"
+                print_runtime_warning "Spotlight could not index Watch with Sorty.workflow (-10811)"
                 skips_spotlight_continuation=true
                 ;;
             *"from spotlight"*)
                 if [ "${skips_spotlight_continuation}" = "true" ]; then
                     skips_spotlight_continuation=false
                 else
-                    printf '%s\n' "${line}"
+                    print_runtime_line "${line}"
                 fi
                 ;;
             *"⚡ Compiled in "*)
                 line="${line#*⚡ }"
-                log_success "${line}"
+                print_runtime_success "${line}"
                 ;;
             *"⚠️ Size of type "*" changed from "*)
                 line="${line#*⚠️ }"
-                log_warning "${line}"
+                print_runtime_warning "${line}"
                 ;;
             *"⚠️ Size of a type changed over injection"*"blocked"*)
-                log_warning "Type layout changed. Injection blocked; save again to retry."
+                print_runtime_warning "Type layout changed. Injection blocked; save again to retry."
                 ;;
             *"⚠️ Logs dir not initialised."*)
-                log_warning "Compile log is not ready. Edit a file and rebuild."
+                print_runtime_warning "Compile log is not ready. Edit a file and rebuild."
                 ;;
             *"⚠️ Could not locate command for "*)
                 local source_path="${line#*⚠️ Could not locate command for }"
                 source_path="${source_path%%. Try editing*}"
                 source_path="${source_path//\\/}"
-                log_warning "No compile command for ${source_path##*/}"
-                log_item "Edit the file and rebuild. Whole Module mode is unsupported."
+                print_runtime_warning "No compile command for ${source_path##*/}"
+                print_runtime_item "Edit the file and rebuild. Whole Module mode is unsupported."
                 ;;
             "⚠️ "*)
-                log_warning "${line#⚠️ }"
+                print_runtime_warning "${line#⚠️ }"
                 ;;
             "⚠ "*)
-                log_warning "${line#⚠ }"
+                print_runtime_warning "${line#⚠ }"
                 ;;
             "⚡ "*)
-                log_success "${line#⚡ }"
+                print_runtime_success "${line#⚡ }"
                 ;;
             *)
                 skips_spotlight_continuation=false
                 if [ -n "${line}" ]; then
-                    printf '%s\n' "${line}"
+                    print_runtime_line "${line}"
                 fi
                 ;;
         esac
