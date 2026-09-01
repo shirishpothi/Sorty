@@ -267,8 +267,8 @@ struct DeeplinkSettingsView: View {
     @SortyHotReload private var hotReload
     @State private var isShowingEncodingInfo = false
 
-    /// Keeps adjacent disclosure headers compact when their content is hidden.
-    private let groupSpacing: CGFloat = 8
+    /// Lets each disclosure own its expanded spacing without adding gaps between collapsed headers.
+    private let groupSpacing: CGFloat = 0
 
     private var groups: [DeeplinkGroup] {
         var organizationEntries = [
@@ -481,7 +481,7 @@ private struct DeeplinkGroupSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: isExpanded ? 8 : 0) {
             Button {
                 HapticFeedbackManager.shared.tap()
                 withAnimation(expansionAnimation) {
