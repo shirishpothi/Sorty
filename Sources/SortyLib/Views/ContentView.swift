@@ -118,9 +118,7 @@ public struct ContentView: View {
                 .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Color.clear
-                        .frame(width: 0, height: 0)
-                        .accessibilityHidden(true)
+                    EmptyView()
                 }
 
                 ToolbarItem(placement: .navigation) {
