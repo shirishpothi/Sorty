@@ -490,6 +490,7 @@ private struct DeeplinkGroupSection: View {
                     }
                 }
             }
+            .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
         }
         .settingsFocusable(group.focusTarget)
     }
