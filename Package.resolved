@@ -1,6 +1,41 @@
 {
-  "originHash" : "f9d5bd2ffd079507f424e7f46d82e2c31a54595bb4436a6be9caeaa149090a10",
+  "originHash" : "0fd61919b68ad6928a21ef14d48c4f181f80207b4321324f487302abfbcf74d1",
   "pins" : [
+    {
+      "identity" : "dlkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/DLKit",
+      "state" : {
+        "revision" : "018d2895322c4d619de4474f991dfa9405bbac38",
+        "version" : "3.6.0"
+      }
+    },
+    {
+      "identity" : "fishhook",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/fishhook",
+      "state" : {
+        "revision" : "51b4b873fb03072921337fc4b86a45e2fb24556e",
+        "version" : "1.2.2"
+      }
+    },
+    {
+      "identity" : "injectionlite",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/InjectionLite.git",
+      "state" : {
+        "revision" : "20dd8459d058a6012ea156eecdeef586260ad90d"
+      }
+    },
+    {
+      "identity" : "popen",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/Popen",
+      "state" : {
+        "revision" : "038db824a3c72b88199de2c55884b9d81486ec12",
+        "version" : "2.2.2"
+      }
+    },
     {
       "identity" : "posthog-ios",
       "kind" : "remoteSourceControl",
@@ -26,6 +61,15 @@
       "state" : {
         "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
         "version" : "2.9.1"
+      }
+    },
+    {
+      "identity" : "swiftregex5",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/SwiftRegex5",
+      "state" : {
+        "revision" : "84c3fa9a180b2c02e65e9a61287445b0482a5efe",
+        "version" : "6.3.0"
       }
     }
   ],

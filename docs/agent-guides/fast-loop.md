@@ -18,21 +18,27 @@ Optimized workflows for rapid iteration on Sorty.
 
 ## Hot reload
 
-Sorty uses InjectionNext 2.0.1 with a Debug-only SwiftUI observer. InjectionNext
-recompiles the saved Swift file and loads its updated implementation into the
-running app. It does not rebuild or relaunch Sorty. The observer is kept local
-because SwiftPM otherwise links Inject's application-path globals into Release.
+Sorty uses the InjectionLite runtime pinned to InjectionNext 2.0.1's exact
+submodule revision. The Debug app watches the project, recompiles a saved Swift
+file, loads it, and redraws observing SwiftUI views in the same process. There
+is no companion application or Xcode session.
 
 ### Start the workflow
 
-1. Install `InjectionNext.app` in `/Applications`.
-2. Run `make hot`. InjectionNext opens the project in Xcode.
-3. Run the `Sorty` scheme once from Xcode.
-4. Keep that app process running. Saving Swift files from Xcode, Codex, or
-   another editor now updates visible SwiftUI views.
+1. Run `make hot` from the repository root.
+2. Keep that Sorty process running.
+3. Save Swift files from Codex or another editor.
 
-The InjectionNext menu bar icon turns orange after Sorty connects, green while
-it compiles a saved file, and yellow when that file does not compile.
+The first run downloads and builds the pinned runtime. Later starts reuse the
+SwiftPM cache. Startup performs an initial hot Debug build, exports Swift's
+private default-argument helpers, relinks the app, and writes InjectionLite's
+compile-command cache. A normal build immediately before the first hot session
+can make that initial build slower because hot reload has a different dependency
+graph; later hot sessions reuse their own compiled outputs.
+
+`make hot` stays attached to the running app so watcher activity, compiler
+errors, link results, and load results remain visible in that terminal. Quit
+Sorty or press Control-C to stop the session.
 
 ### What reloads
 
@@ -48,12 +54,16 @@ or widget targets.
 
 ### Troubleshooting
 
-- If InjectionNext does not connect, confirm the app is in `/Applications`, run
-  `make hot` again, and rebuild the `Sorty` Debug scheme once.
+- If no save is detected, quit Sorty and run `make hot` again from the repository
+  root so the compile-command cache is refreshed.
 - If a save reports a compile error, fix or revert that file. The running app
   continues using its previous implementation.
-- If a structural change does not load, use `make now` or rebuild from Xcode.
-- Release builds contain no active injection observer or injection bundle.
+- If a structural change does not load, quit the hot session, run `make now`,
+  then start a fresh `make hot` session.
+- Finder extension and widget edits still use their normal target builds because
+  they run in separate processes.
+- Normal `make now`, Xcode Debug, and Release app builds neither link nor start
+  InjectionLite. Only `make hot` opts the Sorty app into the runtime.
 
 ## Harness Mode
 

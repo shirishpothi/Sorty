@@ -83,15 +83,19 @@ now:
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
-# Opens the InjectionNext-supervised Xcode workflow. Run the Sorty scheme once,
-# then saves from Xcode, Codex, or another editor update the running Debug app.
+# Build and launch Sorty with its in-process InjectionLite hot-reload runtime.
 hot:
-	@if [ ! -d /Applications/InjectionNext.app ]; then \
-		echo "InjectionNext.app is required in /Applications"; \
-		exit 1; \
-	fi
-	@echo "Opening Sorty with InjectionNext hot reload..."
-	@open -a InjectionNext --args -projectPath "$(CURDIR)/Sorty.xcodeproj"
+	@chmod +x scripts/build.sh scripts/hot_reload_frontend.sh
+	@echo "Building Sorty's self-contained hot-reload runtime..."
+	@swift build $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) -c debug \
+		--product SortyHotReloadPreparer $(SWIFT_DEBUG_FLAGS)
+	@# Compile once to record commands, export Swift helpers, then relink them.
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SORTY_HOT_RELOAD=true APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@"$(SORTY_BUILD_DIR)/debug/SortyHotReloadPreparer" "$(SORTY_BUILD_DIR)"
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SORTY_HOT_RELOAD=true APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@swift scripts/prepare_hot_reload.swift "$(CURDIR)" "$(SORTY_BUILD_DIR)/hot-reload/commands" "/tmp/InjectionLite_Sorty_macOS_builds.plist"
+	@env INJECTION_PROJECT_ROOT="$(CURDIR)" \
+		"$(CURDIR)/releases/Sorty.app/Contents/MacOS/Sorty"
 
 # Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
 ci:
@@ -214,7 +218,7 @@ help:
 	@echo "  make run         - Build and launch the app"
 	@echo "  make debug       - Build in DEBUG mode and launch"
 	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
-	@echo "  make hot         - Open the InjectionNext hot-reload workflow"
+	@echo "  make hot         - Build and launch self-contained Swift hot reload"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
 	@echo ""

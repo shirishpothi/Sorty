@@ -1492,6 +1492,23 @@ else
         # shellcheck disable=SC2206
         BUILD_FLAGS_ARRAY=( ${BUILD_FLAGS_EXTRA} )
     fi
+    if is_truthy "${SORTY_HOT_RELOAD:-false}"; then
+        SORTY_HOT_COMMAND_DIR="${BUILD_DIR}/hot-reload/commands"
+        SORTY_REAL_SWIFT_FRONTEND="$(xcrun --find swift-frontend)"
+        SORTY_SWIFT_TOOLCHAIN_USR="$(cd "$(dirname "${SORTY_REAL_SWIFT_FRONTEND}")/.." && pwd)"
+        export SORTY_HOT_COMMAND_DIR SORTY_REAL_SWIFT_FRONTEND
+        mkdir -p "${SORTY_HOT_COMMAND_DIR}"
+        BUILD_FLAGS_ARRAY+=(
+            -Xswiftc -D
+            -Xswiftc SORTY_HOT_RELOAD
+            -Xswiftc -Xfrontend
+            -Xswiftc -force-public-linkage
+            -Xswiftc -driver-use-frontend-path
+            -Xswiftc "${SCRIPT_DIR}/hot_reload_frontend.sh"
+            -Xswiftc -resource-dir
+            -Xswiftc "${SORTY_SWIFT_TOOLCHAIN_USR}/lib/swift"
+        )
+    fi
     if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" --disable-dependency-cache -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1

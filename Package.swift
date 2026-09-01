@@ -1,5 +1,64 @@
 // swift-tools-version: 6.0
+import Foundation
 import PackageDescription
+
+let isHotReloadBuild = ProcessInfo.processInfo.environment["SORTY_HOT_RELOAD"] == "true"
+
+var sortyLibDependencies: [Target.Dependency] = [
+    .product(name: "Permiso", package: "Permiso"),
+    .product(name: "Beam", package: "beam"),
+    .product(name: "PostHog", package: "posthog-ios"),
+    .product(name: "Sentry", package: "sentry-cocoa"),
+    .product(name: "Sparkle", package: "Sparkle")
+]
+
+// Keep InjectionLite out of every normal Sorty app build. `make hot` opts into
+// the runtime when SwiftPM evaluates this manifest.
+if isHotReloadBuild {
+    sortyLibDependencies.append(
+        .product(name: "InjectionLite", package: "InjectionLite")
+    )
+}
+
+var sortyLibSwiftSettings: [SwiftSetting] = [
+    .define("DEBUG", .when(configuration: .debug)),
+    // Debug: Fast incremental build (SPM manages incremental builds internally)
+    .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
+    // Release: Full optimization with whole-module
+    .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
+    // Batched builds otherwise repeat the same diagnostics for many
+    // primary files, producing megabytes of low-value output.
+    .unsafeFlags(["-suppress-warnings"]),
+    // Swift 6 strict concurrency - minimal checking to reduce type-check cost
+    .unsafeFlags(["-strict-concurrency=minimal"])
+]
+var sortyLibLinkerSettings: [LinkerSetting] = [
+    // Skip deduplication in debug for faster linking
+    .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug))
+]
+var sortyAppSwiftSettings: [SwiftSetting] = [
+    .define("DEBUG", .when(configuration: .debug)),
+    .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
+    .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
+]
+var sortyAppLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug))
+]
+
+if isHotReloadBuild {
+    let opaqueTypeErasure = SwiftSetting.unsafeFlags(
+        ["-Xfrontend", "-enable-experimental-opaque-type-erasure"],
+        .when(configuration: .debug)
+    )
+    let interposable = LinkerSetting.unsafeFlags(
+        ["-Xlinker", "-interposable"],
+        .when(configuration: .debug)
+    )
+    sortyLibSwiftSettings.append(opaqueTypeErasure)
+    sortyLibLinkerSettings.append(interposable)
+    sortyAppSwiftSettings.append(opaqueTypeErasure)
+    sortyAppLinkerSettings.append(interposable)
+}
 
 let package = Package(
     name: "Sorty",
@@ -15,7 +74,10 @@ let package = Package(
             targets: ["SortyApp"]),
         .executable(
             name: "SortyQuality",
-            targets: ["SortyQuality"])
+            targets: ["SortyQuality"]),
+        .executable(
+            name: "SortyHotReloadPreparer",
+            targets: ["SortyHotReloadPreparer"])
     ],
     dependencies: [
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
@@ -32,18 +94,18 @@ let package = Package(
             url: "https://github.com/getsentry/sentry-cocoa.git",
             exact: "9.23.0"
         ),
+        // Exact InjectionNext 2.0.1 submodule revision. InjectionLite is the
+        // self-contained, in-process watcher/compiler/runtime used by make hot.
+        .package(
+            url: "https://github.com/johnno1962/InjectionLite.git",
+            revision: "20dd8459d058a6012ea156eecdeef586260ad90d"
+        ),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
         .target(
             name: "SortyLib",
-            dependencies: [
-                .product(name: "Permiso", package: "Permiso"),
-                .product(name: "Beam", package: "beam"),
-                .product(name: "PostHog", package: "posthog-ios"),
-                .product(name: "Sentry", package: "sentry-cocoa"),
-                .product(name: "Sparkle", package: "Sparkle")
-            ],
+            dependencies: sortyLibDependencies,
             path: "Sources/SortyLib",
             resources: [
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
@@ -66,43 +128,27 @@ let package = Package(
                 .process("Resources/OnboardingSound.wav"),
                 .process("Resources/Final Onboarding.wav")
             ],
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug)),
-                // Debug: Fast incremental build (SPM manages incremental builds internally)
-                .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
-                // Release: Full optimization with whole-module
-                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
-                // Batched builds otherwise repeat the same diagnostics for many
-                // primary files, producing megabytes of low-value output.
-                .unsafeFlags(["-suppress-warnings"]),
-                // Swift 6 strict concurrency - minimal checking to reduce type-check cost
-                .unsafeFlags(["-strict-concurrency=minimal"]),
-            ],
-            linkerSettings: [
-                // Skip deduplication in debug for faster linking
-                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
-                // InjectionNext interposes updated implementations in Debug builds.
-                .unsafeFlags(["-Xlinker", "-interposable"], .when(configuration: .debug)),
-            ]
+            swiftSettings: sortyLibSwiftSettings,
+            linkerSettings: sortyLibLinkerSettings
         ),
         .executableTarget(
             name: "SortyApp",
             dependencies: ["SortyLib"],
             path: "Sources/SortyApp",
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug)),
-                .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
-                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
-            ],
-            linkerSettings: [
-                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
-                .unsafeFlags(["-Xlinker", "-interposable"], .when(configuration: .debug)),
-            ]
+            swiftSettings: sortyAppSwiftSettings,
+            linkerSettings: sortyAppLinkerSettings
         ),
         .executableTarget(
             name: "SortyQuality",
             dependencies: ["SortyLib"],
             path: "Sources/SortyQuality"
+        ),
+        .executableTarget(
+            name: "SortyHotReloadPreparer",
+            dependencies: [
+                .product(name: "InjectionImpl", package: "InjectionLite")
+            ],
+            path: "Sources/SortyHotReloadPreparer"
         ),
         .testTarget(
             name: "SortyTests",
