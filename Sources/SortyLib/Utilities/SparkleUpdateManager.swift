@@ -110,66 +110,26 @@ public class SparkleUpdateManager: ObservableObject {
 
     #if canImport(Sparkle)
     private var updater: SPUUpdater?
-    private let updaterDelegate: SparkleUpdaterDelegate
-    private let userDriverDelegate: SparkleUserDriverDelegate
-    private let userDriver: SparkleUserDriver
+    private var updaterDelegate: SparkleUpdaterDelegate?
+    private var userDriverDelegate: SparkleUserDriverDelegate?
+    private var userDriver: SparkleUserDriver?
     #else
     private var updater: Any?
-    private let updaterDelegate: Any?
-    private let userDriverDelegate: Any?
-    private let userDriver: Any?
+    private var updaterDelegate: Any?
+    private var userDriverDelegate: Any?
+    private var userDriver: Any?
     #endif
 
     // UserDefaults key for persisting last check date
     private static let lastAutoCheckKey = "lastSparkleUpdateCheckDate"
     private var lastObservedUpdateChannel = UpdateChannel.current
     private var hasRequestedLaunchCheck = false
+    private var hasInitialized = false
 
     public init() {
-        // Restore last check date
         if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
             self.lastCheckDate = savedDate
         }
-
-        #if canImport(Sparkle)
-        // Create delegates
-        let updaterDelegate = SparkleUpdaterDelegate()
-        let userDriverDelegate = SparkleUserDriverDelegate()
-        self.updaterDelegate = updaterDelegate
-        self.userDriverDelegate = userDriverDelegate
-        self.userDriver = SparkleUserDriver(
-            hostBundle: .main,
-            delegate: userDriverDelegate
-        )
-        self.updateChannel = Self.UpdateChannel.current
-
-        // Set up state observation
-        updaterDelegate.stateCallback = { [weak self, weak userDriver] state in
-            switch state {
-            case .upToDate, .error, .disabled:
-                userDriver?.cancelRequestedInstall()
-            default:
-                break
-            }
-            self?.updateState = state
-        }
-        userDriver.stateCallback = { [weak self] state in
-            self?.updateState = state
-        }
-
-        // Initialize Sparkle safely - may fail during development builds
-        do {
-            try initializeSparkle()
-        } catch {
-            LogManager.shared.log("Sparkle initialization failed (expected during development builds): \(error.localizedDescription)", level: .warning, category: "SparkleUpdateManager")
-            updateState = .disabled
-        }
-        #else
-        self.updaterDelegate = nil
-        self.userDriverDelegate = nil
-        self.userDriver = nil
-        updateState = .disabled
-        #endif
 
         NotificationCenter.default.addObserver(
             self,
@@ -203,6 +163,46 @@ public class SparkleUpdateManager: ObservableObject {
         }
     }
 
+    private func initializeIfNeeded() {
+        guard !hasInitialized else { return }
+        hasInitialized = true
+
+        #if canImport(Sparkle)
+        let updaterDelegate = SparkleUpdaterDelegate()
+        let userDriverDelegate = SparkleUserDriverDelegate()
+        let userDriver = SparkleUserDriver(
+            hostBundle: .main,
+            delegate: userDriverDelegate
+        )
+        self.updaterDelegate = updaterDelegate
+        self.userDriverDelegate = userDriverDelegate
+        self.userDriver = userDriver
+        updateChannel = Self.UpdateChannel.current
+
+        updaterDelegate.stateCallback = { [weak self, weak userDriver] state in
+            switch state {
+            case .upToDate, .error, .disabled:
+                userDriver?.cancelRequestedInstall()
+            default:
+                break
+            }
+            self?.updateState = state
+        }
+        userDriver.stateCallback = { [weak self] state in
+            self?.updateState = state
+        }
+
+        do {
+            try initializeSparkle()
+        } catch {
+            LogManager.shared.log("Sparkle initialization failed (expected during development builds): \(error.localizedDescription)", level: .warning, category: "SparkleUpdateManager")
+            updateState = .disabled
+        }
+        #else
+        updateState = .disabled
+        #endif
+    }
+
     #if canImport(Sparkle)
     private func initializeSparkle() throws {
         // Check if we have a valid app bundle with SUFeedURL configured
@@ -212,6 +212,9 @@ public class SparkleUpdateManager: ObservableObject {
         
         LogManager.shared.log("Initializing Sparkle updater controller...", category: "SparkleUpdateManager")
 
+        guard let userDriver, let updaterDelegate else {
+            return
+        }
         let updater = SPUUpdater(
             hostBundle: .main,
             applicationBundle: .main,
@@ -242,6 +245,7 @@ public class SparkleUpdateManager: ObservableObject {
     /// Check for updates immediately
     public func checkForUpdates() {
         guard allowInternetUpdateAction() else { return }
+        initializeIfNeeded()
 
         #if canImport(Sparkle)
         guard let updater else {
@@ -266,6 +270,7 @@ public class SparkleUpdateManager: ObservableObject {
     /// Check for updates in the background (no UI)
     public func checkForUpdatesInBackground() {
         guard allowInternetUpdateAction() else { return }
+        initializeIfNeeded()
 
         #if canImport(Sparkle)
         guard let updater = self.updater as? SPUUpdater else {
@@ -287,6 +292,7 @@ public class SparkleUpdateManager: ObservableObject {
         guard !hasRequestedLaunchCheck else { return }
         hasRequestedLaunchCheck = true
         guard allowInternetUpdateAction() else { return }
+        initializeIfNeeded()
 
         // Skip if Sparkle is disabled
         #if canImport(Sparkle)
@@ -317,8 +323,10 @@ public class SparkleUpdateManager: ObservableObject {
     @discardableResult
     public func installAvailableUpdate() -> Bool {
         guard allowInternetUpdateAction() else { return false }
+        initializeIfNeeded()
 
         #if canImport(Sparkle)
+        guard let userDriver else { return false }
         if userDriver.installPendingUpdate() {
             return true
         }
@@ -334,6 +342,7 @@ public class SparkleUpdateManager: ObservableObject {
     /// Brings Sparkle's current download or installation status window forward.
     public func showUpdateInFocus() {
         guard allowInternetUpdateAction() else { return }
+        initializeIfNeeded()
 
         #if canImport(Sparkle)
         updater?.checkForUpdates()

@@ -36,6 +36,16 @@ public final class WindowSession: ObservableObject {
     ) async {
         guard !didConfigure else { return }
         didConfigure = true
+
+        // The window session task starts as the view appears. Yield before
+        // configuring AI clients and Sparkle so the first frame is not held
+        // behind startup work.
+        await Task.yield()
+        guard !Task.isCancelled else {
+            didConfigure = false
+            return
+        }
+
         let configurationStartedAt = Date()
 
         organizer.exclusionRules = exclusionRules

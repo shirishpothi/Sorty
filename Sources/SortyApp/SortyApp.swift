@@ -28,7 +28,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if canImport(SortyLib)
-            ReliabilityManager.shared.startIfAuthorized()
             _ = NotificationManager.shared
         #endif
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
@@ -431,7 +430,7 @@ struct SortyApp: App {
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var updateManager = SparkleUpdateManager()
     @StateObject private var organizationHistory: OrganizationHistory
-    @StateObject private var automationOrganizer: FolderOrganizer
+    @State private var automationOrganizer: FolderOrganizer?
 
     @State private var coordinator: AppCoordinator?
     @State private var hasConfiguredGlobals = false
@@ -443,9 +442,6 @@ struct SortyApp: App {
 
         let organizationHistory = OrganizationHistory()
         _organizationHistory = StateObject(wrappedValue: organizationHistory)
-        _automationOrganizer = StateObject(
-            wrappedValue: FolderOrganizer(history: organizationHistory)
-        )
 
         let codexAuthManager = CodexCLIAuthManager()
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
@@ -490,7 +486,7 @@ struct SortyApp: App {
                 .environmentObject(notificationSettings)
                 .environmentObject(menuBarController)
                 .task {
-                    configureGlobalsIfNeeded()
+                    await configureGlobalsIfNeeded()
                 }
         } label: {
             MenuBarLabel(controller: menuBarController)
@@ -569,11 +565,11 @@ struct SortyApp: App {
                 }
             }
             .task {
-                configureGlobalsIfNeeded()
+                await configureGlobalsIfNeeded()
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in
-                    try? await automationOrganizer.configure(with: newConfig)
+                    try? await automationOrganizer?.configure(with: newConfig)
                     learningsManager.configure(with: newConfig)
                 }
             }
@@ -647,9 +643,13 @@ struct SortyApp: App {
     }
 
     @MainActor
-    private func configureGlobalsIfNeeded() {
+    private func configureGlobalsIfNeeded() async {
         guard !hasConfiguredGlobals else { return }
         hasConfiguredGlobals = true
+
+        // Let the first window reach the screen before restoring folders,
+        // initializing telemetry, or starting automation.
+        await Task.yield()
 
         // Harness mode: skip heavy initialization for fast iteration
         if FeatureFlags.harnessMode {
@@ -657,8 +657,8 @@ struct SortyApp: App {
             return
         }
 
+        ReliabilityManager.shared.startIfAuthorized()
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
-        ReliabilityManager.shared.finishLaunchSpan()
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         syncLoginItemState()
 
@@ -678,6 +678,8 @@ struct SortyApp: App {
         }
 
         if coordinator == nil {
+            let automationOrganizer = FolderOrganizer(history: organizationHistory)
+            self.automationOrganizer = automationOrganizer
             coordinator = AppCoordinator(
                 organizer: automationOrganizer,
                 watchedFoldersManager: watchedFoldersManager,
@@ -686,6 +688,7 @@ struct SortyApp: App {
             )
         }
 
+        guard let automationOrganizer else { return }
         automationOrganizer.exclusionRules = exclusionRules
         automationOrganizer.personaManager = personaManager
         automationOrganizer.customPersonaStore = customPersonaStore
@@ -704,6 +707,7 @@ struct SortyApp: App {
                 learningsManager: learningsManager
             )
         }
+        ReliabilityManager.shared.finishLaunchSpan()
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
             Task { @MainActor in
