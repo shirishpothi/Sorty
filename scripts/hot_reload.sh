@@ -11,9 +11,24 @@ HOT_RELOAD_APP="${RELEASE_DIR}/${PROJECT_NAME}.app"
 HOT_RELOAD_PREPARER="${BUILD_DIR}/debug/SortyHotReloadPreparer"
 HOT_RELOAD_PLIST="/tmp/InjectionLite_Sorty_macOS_builds.plist"
 
+run_hot_reload_command() {
+    local log_name="$1"
+    shift
+
+    local log_file="${HOT_RELOAD_LOG_DIR}/${log_name}.log"
+    if "$@" >"${log_file}" 2>&1; then
+        return 0
+    fi
+
+    log_failure "${log_name} failed"
+    log_item "Last 40 log lines (${log_file}):"
+    tail -n 40 "${log_file}" || true
+    return 1
+}
+
 run_hot_reload_build() {
     local log_name="$1"
-    run_with_log "${log_name}" env \
+    run_hot_reload_command "${log_name}" env \
         SORTY_HOT_RELOAD=true \
         SORTY_EMBEDDED_BUILD=true \
         APP_ICON_VARIANT=debug \
@@ -31,7 +46,7 @@ print_summary "Session" \
 mkdir -p "${HOT_RELOAD_LOG_DIR}"
 
 print_step 1 4 "Preparing Runtime"
-if run_with_log "hot_reload_runtime" \
+if run_hot_reload_command "hot_reload_runtime" \
     swift build \
         --scratch-path "${BUILD_DIR}" \
         --disable-dependency-cache \
