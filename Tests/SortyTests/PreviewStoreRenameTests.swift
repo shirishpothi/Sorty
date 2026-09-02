@@ -220,6 +220,10 @@ final class PreviewStoreRenameTests: XCTestCase {
         }
         let store = PreviewStore(plan: OrganizationPlan(unorganizedFiles: files))
 
+        XCTAssertEqual(store.flattenedRows.count, 1)
+
+        store.toggleFolder(id: PreviewStore.unorganizedSectionID)
+
         XCTAssertEqual(store.flattenedRows.count, 502)
         guard case .remainingFiles(let count) = store.flattenedRows.last?.type else {
             return XCTFail("Expected a bounded remainder row")

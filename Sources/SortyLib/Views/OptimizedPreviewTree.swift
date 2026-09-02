@@ -592,6 +592,9 @@ class PreviewStore: ObservableObject {
         
         // Record rejection before mutating the plan
         learningsManager?.recordRejection(originalPath: file.path)
+        if let ruleID = attributedRuleID(for: fileID) {
+            learningsManager?.recordRuleFailure(ruleId: ruleID)
+        }
         recordEditCaptured()
         
         var updatedPlan = plan
@@ -604,6 +607,17 @@ class PreviewStore: ObservableObject {
         }
         
         updateInternalPlan(updatedPlan)
+    }
+
+    private func attributedRuleID(for fileID: UUID) -> String? {
+        func find(in folder: FolderSuggestion) -> String? {
+            if folder.files.contains(where: { $0.id == fileID }) {
+                return folder.ruleId
+            }
+            return folder.subfolders.lazy.compactMap(find).first
+        }
+
+        return plan.suggestions.lazy.compactMap(find).first
     }
     
     func updateRename(fileID: UUID, folderID: UUID, newName: String) {
