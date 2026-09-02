@@ -2039,6 +2039,18 @@ struct ModelDirectoryRow: View {
         return parts.joined(separator: " · ")
     }
 
+    private var accessibilitySummary: String {
+        var parts = [directory.displayName, status.text]
+        if let learnedSummary {
+            parts.append(learnedSummary)
+        }
+        if settingsViewModel.config.showStatsForNerds,
+           let scannedAt = directory.lastScannedAt {
+            parts.append("Last scanned \(scannedAt.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
@@ -2084,6 +2096,9 @@ struct ModelDirectoryRow: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
+                }
+                .accessibilityRepresentation {
+                    Text(accessibilitySummary)
                 }
 
                 Spacer(minLength: 8)
