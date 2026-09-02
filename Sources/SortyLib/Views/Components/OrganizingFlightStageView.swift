@@ -34,8 +34,9 @@ struct OrganizingFlightStageView: View {
     @State private var cardLift: CGFloat = 0
     @State private var cardScale: CGFloat = 0.85
     @State private var cardOpacity: Double = 0
-    @State private var bumpedIndex: Int?
-    @State private var haloIndex: Int?
+    @State private var bumpedFolderName: String?
+    @State private var haloFolderName: String?
+    @State private var flightTargetFolderName: String?
     @State private var bumpTrigger: Int = 0
     @State private var currentFileIcon: NSImage = AnalysisIconProvider.icon(for: .data)
     @State private var currentFileName = ""
@@ -70,10 +71,14 @@ struct OrganizingFlightStageView: View {
                                 destinationView(suggestion: suggestion, index: index)
                                     .frame(maxWidth: .infinity)
                                     .transition(.asymmetric(
-                                        insertion: .scale(scale: 0.4, anchor: .bottom)
-                                            .combined(with: .opacity)
-                                            .combined(with: .offset(y: 14)),
-                                        removal: .opacity.combined(with: .scale(scale: 0.85))
+                                        insertion: .modifier(
+                                            active: FolderRevealModifier(blurRadius: 9, opacity: 0, scale: 0.4, yOffset: 14),
+                                            identity: FolderRevealModifier()
+                                        ),
+                                        removal: .modifier(
+                                            active: FolderRevealModifier(blurRadius: 5, opacity: 0, scale: 0.85, yOffset: 0),
+                                            identity: FolderRevealModifier()
+                                        )
                                     ))
                             }
                         }
@@ -112,6 +117,9 @@ struct OrganizingFlightStageView: View {
                 .onDisappear { stopCycle() }
                 .onChange(of: suggestions) { _, _ in
                     mergeDisplayedSuggestions(animated: true)
+                }
+                .onChange(of: visibleSuggestions.map(\.folderName)) { _, _ in
+                    retargetInFlightCard()
                 }
             }
         }
@@ -223,8 +231,8 @@ struct OrganizingFlightStageView: View {
 
     @ViewBuilder
     private func destinationView(suggestion: FolderSuggestion, index: Int) -> some View {
-        let isBumped = bumpedIndex == index
-        let showHalo = haloIndex == index
+        let isBumped = bumpedFolderName == suggestion.folderName
+        let showHalo = haloFolderName == suggestion.folderName
         // Name streamed in but no file assignments yet: the model is still
         // generating this folder, so render it dimmed until files arrive.
         let isPending = suggestion.files.isEmpty && suggestion.subfolders.isEmpty
@@ -302,7 +310,7 @@ struct OrganizingFlightStageView: View {
                 )
                 renameStrikeProgress = 0
                 renameProgress = 0
-                await runFlight(toIndex: flight.folderIndex, pace: pace)
+                await runFlight(toFolderNamed: flight.folderName, pace: pace)
                 await sleepScaled(90_000_000, pace)
             }
         }
@@ -315,7 +323,15 @@ struct OrganizingFlightStageView: View {
     private func flightPace() -> Double {
         let backlog = pendingFlightCount()
         guard backlog > 1 else { return 1.0 }
-        return max(0.35, 1.0 - 0.09 * Double(backlog - 1))
+        // Floor at 0.45 so fast runs stay watchable instead of strobing.
+        return max(0.45, 1.0 - 0.08 * Double(backlog - 1))
+    }
+
+    /// At high speed a haptic per landing becomes a continuous buzz, so only
+    /// tick at relaxed paces.
+    private func landingHapticIfCalm(_ pace: Double) {
+        guard pace >= 0.6 else { return }
+        HapticFeedbackManager.shared.selection()
     }
 
     private func pendingFlightCount() -> Int {
@@ -339,16 +355,38 @@ struct OrganizingFlightStageView: View {
         tuckOffset = .zero
         cardRotation = 0
         cardLift = 0
-        bumpedIndex = nil
-        haloIndex = nil
+        bumpedFolderName = nil
+        haloFolderName = nil
+        flightTargetFolderName = nil
         renameStrikeProgress = 0
         renameProgress = 0
     }
 
-    private func runFlight(toIndex index: Int, pace: Double = 1.0) async {
+    /// Keeps the in-flight card aimed at its folder when the row reflows
+    /// (a new folder inserting shifts every bucket left). The destination is
+    /// animatable, so the card curves toward the folder's new position with
+    /// the same spring the row uses instead of landing where the folder was.
+    private func retargetInFlightCard() {
+        guard let target = flightTargetFolderName, cardOpacity > 0 else { return }
+        guard let index = visibleSuggestions.firstIndex(where: { $0.folderName == target }) else {
+            // The target folder was evicted mid-flight: fade the card out
+            // rather than dropping the file into a stranger's folder.
+            withAnimation(.easeOut(duration: 0.18)) { cardOpacity = 0 }
+            return
+        }
         let destX = centerOffset(for: index)
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
+            flightDestination.width = destX
+        }
+    }
+
+    private func runFlight(toFolderNamed folderName: String, pace: Double = 1.0) async {
+        guard let startIndex = visibleSuggestions.firstIndex(where: { $0.folderName == folderName })
+        else { return }
+        let destX = centerOffset(for: startIndex)
         let landingY = folderTopOffset() - 8
         let direction = max(-1, min(1, destX / max(1, stageWidth / 2)))
+        flightTargetFolderName = folderName
 
         // Phase 1: lift the file like a drag has just begun.
         flightProgress = 0
@@ -358,7 +396,7 @@ struct OrganizingFlightStageView: View {
         cardLift = 0
         cardScale = 0.97
         cardOpacity = 0
-        haloIndex = nil
+        haloFolderName = nil
 
         withAnimation(.spring(response: 0.24 * pace, dampingFraction: 0.72)) {
             cardOpacity = 1
@@ -381,7 +419,7 @@ struct OrganizingFlightStageView: View {
             withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.24 * pace)) {
                 renameProgress = 1
             }
-            HapticFeedbackManager.shared.selection()
+            landingHapticIfCalm(pace)
             await sleepScaled(130_000_000, pace)
             if Task.isCancelled { return }
         }
@@ -391,10 +429,13 @@ struct OrganizingFlightStageView: View {
 
         // Show the receive halo just before the file lands.
         withAnimation(.easeIn(duration: 0.28 * pace).delay(0.14 * pace)) {
-            haloIndex = index
+            haloFolderName = folderName
         }
 
-        flightDestination = CGSize(width: destX, height: landingY)
+        // Recompute the target position: folders may have shifted while the
+        // card was lifting or the rename played.
+        let launchIndex = visibleSuggestions.firstIndex(where: { $0.folderName == folderName }) ?? startIndex
+        flightDestination = CGSize(width: centerOffset(for: launchIndex), height: landingY)
         withAnimation(.timingCurve(0.22, 0.72, 0.20, 1.0, duration: 0.58 * pace)) {
             flightProgress = 1
             cardScale = 1
@@ -411,16 +452,17 @@ struct OrganizingFlightStageView: View {
             cardRotation = 0
             cardLift = 0
         }
-        bumpedIndex = index
+        bumpedFolderName = folderName
         bumpTrigger &+= 1
-        HapticFeedbackManager.shared.selection()
+        landingHapticIfCalm(pace)
 
         await sleepScaled(180_000_000, pace)
         if Task.isCancelled { return }
         withAnimation(.easeOut(duration: 0.22 * pace)) {
-            haloIndex = nil
+            haloFolderName = nil
         }
-        bumpedIndex = nil
+        bumpedFolderName = nil
+        flightTargetFolderName = nil
     }
 
     // MARK: - Suggestions and file selection
@@ -468,15 +510,15 @@ struct OrganizingFlightStageView: View {
     }
 
     private struct FlightCandidate {
-        let folderIndex: Int
+        let folderName: String
         let file: FileItem
         let renameMapping: FileRenameMapping?
     }
 
     private func nextFlight() -> FlightCandidate? {
-        let candidates = visibleSuggestions.enumerated().flatMap { index, suggestion in
+        let candidates = visibleSuggestions.flatMap { suggestion in
             filesWithRenames(in: suggestion).map {
-                FlightCandidate(folderIndex: index, file: $0.file, renameMapping: $0.renameMapping)
+                FlightCandidate(folderName: suggestion.folderName, file: $0.file, renameMapping: $0.renameMapping)
             }
         }
         guard let candidate = candidates.first(where: {
@@ -525,19 +567,24 @@ private struct GeneratingFolderNameLabel: View {
     @State private var isRevealed = false
 
     var body: some View {
+        // Wrap to a second line before truncating: full folder names beat
+        // tidy ellipses. The fixed two-line height keeps the row from
+        // jumping as names stream in.
         Text(name)
             .font(.caption2)
             .foregroundStyle(.secondary)
-            .lineLimit(1)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
             .truncationMode(.middle)
             .numericTextTransition(
                 animationValue: name,
                 animation: .easeInOut(duration: 0.28)
             )
             .frame(maxWidth: maxWidth)
-            .opacity(isRevealed ? 1 : 0.52)
-            .blur(radius: reduceMotion || isRevealed ? 0 : 4)
-            .scaleEffect(isRevealed ? 1 : 0.96)
+            .frame(height: 28, alignment: .top)
+            .opacity(isRevealed ? 1 : 0.35)
+            .blur(radius: reduceMotion || isRevealed ? 0 : 7)
+            .scaleEffect(isRevealed ? 1 : 0.94)
             .onAppear {
                 guard !reduceMotion else {
                     isRevealed = true
@@ -565,13 +612,35 @@ private struct GeneratingFolderNameLabel: View {
     }
 }
 
+/// Blur-backed appear/disappear for folder buckets: new folders resolve out of
+/// a soft blur while springing up, instead of only scaling in.
+private struct FolderRevealModifier: ViewModifier {
+    var blurRadius: CGFloat = 0
+    var opacity: Double = 1
+    var scale: CGFloat = 1
+    var yOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: blurRadius)
+            .opacity(opacity)
+            .scaleEffect(scale, anchor: .bottom)
+            .offset(y: yOffset)
+    }
+}
+
 private struct FolderDropFlightEffect: GeometryEffect {
     var progress: CGFloat
-    let destination: CGSize
+    var destination: CGSize
 
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
+    /// Progress and destination are both animatable so a mid-flight retarget
+    /// (folders reflowing under the card) glides instead of jumping.
+    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+        get { AnimatablePair(progress, AnimatablePair(destination.width, destination.height)) }
+        set {
+            progress = newValue.first
+            destination = CGSize(width: newValue.second.first, height: newValue.second.second)
+        }
     }
 
     func effectValue(size: CGSize) -> ProjectionTransform {

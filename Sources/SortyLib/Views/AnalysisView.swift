@@ -799,8 +799,12 @@ struct AnalysisView: View {
                 fileIDTable: organizer.streamFileIDTable
             )
             if suggestions.isEmpty {
+                // Between request batches the stream buffer clears, so parsed
+                // suggestions momentarily vanish. Falling back to the insights
+                // island here made the UI ping-pong organization -> insights ->
+                // organization; keep the flight stage (with its last folders)
+                // until the run actually ends.
                 if hasOrganizeStreamEvents,
-                   !streamText.isEmpty,
                    organizer.isStreaming || organizer.state == .organizing {
                     return
                 }
