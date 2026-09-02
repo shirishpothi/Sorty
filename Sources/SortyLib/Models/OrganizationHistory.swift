@@ -477,7 +477,14 @@ public class OrganizationHistory: ObservableObject {
         public var changed: Int { added + updated }
     }
 
-    @Published public private(set) var entries: [OrganizationHistoryEntry] = []
+    @Published public private(set) var entries: [OrganizationHistoryEntry] = [] {
+        didSet { revision &+= 1 }
+    }
+
+    /// Monotonic change counter for `entries`, used by views to cache derived
+    /// snapshots (session records, impact summaries) across view rebuilds
+    /// without comparing full entry arrays.
+    public private(set) var revision: UInt64 = 0
     @Published public private(set) var hasLoadedPersistedState = false
     private let repository: OrganizationHistoryRepository
     private let maxEntries = 100

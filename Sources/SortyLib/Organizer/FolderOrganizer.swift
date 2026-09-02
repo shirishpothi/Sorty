@@ -935,6 +935,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     public func configure(with config: AIConfig) async throws {
+        // Views re-run configuration on every appear; skip the client rebuild
+        // when the active configuration already matches.
+        if isAIConfigured, aiClient != nil, aiConfig == config {
+            return
+        }
         do {
             var client = try AIClientFactory.createClient(config: config)
 

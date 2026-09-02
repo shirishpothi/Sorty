@@ -85,6 +85,38 @@ private struct HistorySessionRecord: Equatable {
     }
 }
 
+/// Caches the derived history snapshot across HistoryView rebuilds so tab
+/// switches reuse the last computed records instead of remapping every entry.
+/// Entries publish on willSet while `revision` bumps on didSet, so a stored
+/// snapshot is only served when no mutation happened since it was computed.
+@MainActor
+private enum HistorySnapshotCache {
+    private static var historyID: ObjectIdentifier?
+    private static var revision: UInt64?
+    private static var records: [HistorySessionRecord] = []
+    private static var summary = HistoryImpactSummary()
+
+    static func snapshot(
+        for history: OrganizationHistory
+    ) -> (records: [HistorySessionRecord], summary: HistoryImpactSummary)? {
+        guard historyID == ObjectIdentifier(history), revision == history.revision else {
+            return nil
+        }
+        return (records, summary)
+    }
+
+    static func store(
+        records: [HistorySessionRecord],
+        summary: HistoryImpactSummary,
+        for history: OrganizationHistory
+    ) {
+        historyID = ObjectIdentifier(history)
+        revision = history.revision
+        self.records = records
+        self.summary = summary
+    }
+}
+
 struct HistoryView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -494,12 +526,23 @@ struct HistoryView: View {
     }
 
     private func refreshHistorySnapshot(_ entries: [OrganizationHistoryEntry]) {
-        let records = entries.enumerated().map { index, entry in
-            HistorySessionRecord(entry: entry, thumbnailLoadIndex: index)
+        let history = organizer.history
+        let records: [HistorySessionRecord]
+        let summary: HistoryImpactSummary
+
+        if let cached = HistorySnapshotCache.snapshot(for: history) {
+            (records, summary) = cached
+        } else {
+            records = entries.enumerated().map { index, entry in
+                HistorySessionRecord(entry: entry, thumbnailLoadIndex: index)
+            }
+            summary = HistoryImpactSummary(entries: entries)
+            HistorySnapshotCache.store(records: records, summary: summary, for: history)
         }
+
         cachedEntries = entries
         cachedSessionRecords = records
-        impactSummary = HistoryImpactSummary(entries: entries)
+        impactSummary = summary
         refreshFilteredEntries(in: records)
     }
 
