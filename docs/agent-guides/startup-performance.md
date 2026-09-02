@@ -10,8 +10,9 @@ Sorty must present its first window before it reads large persisted stores or re
 - `OrganizationHistory.loadPersistedState()` reads the History file and retains the newest 100 entries.
 - `WatchedFoldersManager.loadPersistedState()` replays the append-only watched-folder journal.
 - `StorageLocationsManager.loadPersistedState()` reads and normalizes saved storage locations.
+- `LearningsManager.loadPersistedState()` restores its model selection and resolves saved reference-model directories.
 
-Each manager publishes `hasLoadedPersistedState`. The main content appears immediately and observes the settings model as persisted configuration arrives. Settings persistence is disabled until hydration completes, so an early view mutation cannot overwrite saved configuration. History, watched folders, and storage locations may also publish after the window appears. Automation, widget sync, and bookmark restoration wait for all four loads.
+The main content appears immediately and observes the managers as persisted state arrives. Settings persistence is disabled until hydration completes, so an early view mutation cannot overwrite saved configuration. History, watched folders, storage locations, and Learnings may also publish after the window appears. Automation, widget sync, and bookmark restoration wait for all five loads.
 
 `LoginItemManager` keeps construction free of `SMAppService` queries. Its registration observation starts from `configureGlobalsIfNeeded()` after the first window appears, and startup reconciliation runs off the main actor so it cannot stall the first interactive frame.
 
