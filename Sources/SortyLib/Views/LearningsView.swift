@@ -162,6 +162,11 @@ struct LearningsView: View {
         .frame(minWidth: 700, minHeight: 600)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings Dashboard")
+        .task {
+            // No-op after the app's normal post-launch load; covers harness
+            // mode and any path that shows Learnings before globals configure.
+            await manager.loadPersistedState()
+        }
         .onAppear {
             manager.isLocked = false
             manager.loadProfileIfNeededForCollection()

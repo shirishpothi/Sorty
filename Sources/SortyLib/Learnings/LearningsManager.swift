@@ -345,6 +345,17 @@ public class LearningsManager: ObservableObject {
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
         dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
         userDefaults.removeObject(forKey: "useAIForLearnings")
+    }
+
+    private var hasLoadedPersistedState = false
+
+    /// Loads the model selection and reference-model directories after launch.
+    /// Directory loading resolves security-scoped bookmarks and stats each
+    /// directory on disk, which is too slow for app construction, so callers
+    /// run this once the first window is up (see `configureGlobalsIfNeeded`).
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+        hasLoadedPersistedState = true
         loadLearningsModelSelection()
         loadModelDirectories()
     }
