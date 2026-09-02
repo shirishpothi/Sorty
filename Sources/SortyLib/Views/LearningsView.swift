@@ -698,7 +698,7 @@ struct LearningsView: View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 HapticFeedbackManager.shared.light()
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                     isActivePatternsExpanded.toggle()
                 }
             } label: {
@@ -743,7 +743,7 @@ struct LearningsView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.bottom, 12)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
         .systemLiquidGlassBackground(cornerRadius: 12)
