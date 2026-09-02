@@ -95,8 +95,8 @@ public enum SortyResources {
 
         // Check for audio resources copied via SPM (.copy)
         if let resourceURL = bundle.resourceURL {
-            let wavAtRoot = resourceURL.appendingPathComponent("OnboardingSound.wav").path
-            let wavInResources = resourceURL.appendingPathComponent("Resources/OnboardingSound.wav").path
+            let wavAtRoot = resourceURL.appendingPathComponent("OnboardingSound.m4a").path
+            let wavInResources = resourceURL.appendingPathComponent("Resources/OnboardingSound.m4a").path
             let resourcesDir = resourceURL.appendingPathComponent("Resources").path
             if FileManager.default.fileExists(atPath: wavAtRoot) ||
                 FileManager.default.fileExists(atPath: wavInResources) ||
@@ -474,11 +474,11 @@ public enum SortyResources {
     }
 
     public static func onboardingSoundURL() -> URL? {
-        urlForCopiedResource(named: "OnboardingSound.wav")
+        urlForCopiedResource(named: "OnboardingSound.m4a")
     }
 
     public static func finalOnboardingSoundURL() -> URL? {
-        urlForCopiedResource(named: "Final Onboarding.wav")
+        urlForCopiedResource(named: "Final Onboarding.m4a")
     }
 
     private static func uniqueURLs(_ candidates: [URL]) -> [URL] {

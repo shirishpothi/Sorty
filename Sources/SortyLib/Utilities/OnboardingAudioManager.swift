@@ -119,7 +119,7 @@ class OnboardingAudioManager: ObservableObject {
             player.prepareToPlay()
             audioPlayer = player
         } catch {
-            print("[OnboardingAudioManager] Failed to prepare OnboardingSound.wav: \(error)")
+            print("[OnboardingAudioManager] Failed to prepare OnboardingSound.m4a: \(error)")
         }
     }
 
@@ -155,10 +155,10 @@ class OnboardingAudioManager: ObservableObject {
                 isPlaying = true
                 return
             } catch {
-                print("[OnboardingAudioManager] Failed to play OnboardingSound.wav: \(error)")
+                print("[OnboardingAudioManager] Failed to play OnboardingSound.m4a: \(error)")
             }
         } else {
-            print("[OnboardingAudioManager] OnboardingSound.wav not found in any bundle location")
+            print("[OnboardingAudioManager] OnboardingSound.m4a not found in any bundle location")
         }
         
         // Fallback to synthesized melody
@@ -168,7 +168,7 @@ class OnboardingAudioManager: ObservableObject {
 
     private func resolvedBackgroundMelodyURL() -> URL? {
         SortyResources.onboardingSoundURL()
-            ?? Bundle.main.url(forResource: "OnboardingSound", withExtension: "wav")
+            ?? Bundle.main.url(forResource: "OnboardingSound", withExtension: "m4a")
     }
 
     /// Play a phase-transition accent.  Use soft, ambient system sounds

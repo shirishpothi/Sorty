@@ -125,8 +125,8 @@ let package = Package(
                 .process("Resources/files-and-folders-demo.mp4"),
                 .process("Resources/full-disk-access-demo.mp4"),
                 .process("Resources/SortyMascotTemplate.svg"),
-                .process("Resources/OnboardingSound.wav"),
-                .process("Resources/Final Onboarding.wav")
+                .process("Resources/OnboardingSound.m4a"),
+                .process("Resources/Final Onboarding.m4a")
             ],
             swiftSettings: sortyLibSwiftSettings,
             linkerSettings: sortyLibLinkerSettings

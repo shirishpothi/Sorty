@@ -1047,7 +1047,7 @@ private final class CompletionAudioController {
 
     private func resolvedSoundURL() -> URL? {
         SortyResources.finalOnboardingSoundURL()
-            ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "wav")
+            ?? Bundle.main.url(forResource: "Final Onboarding", withExtension: "m4a")
     }
 
     func play() {

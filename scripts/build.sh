@@ -1733,6 +1733,11 @@ if [ -f "${ICON_SRC}" ]; then
     # CI is normalized to the debug variant in AboutView, and its source PNG is
     # byte-identical, so it has no distinct runtime use.
     rm -f "${APP_PATH}/Contents/Resources/AppIcons/AppIcon-CI.png"
+    # The wholesale Resources/ copy brings the debug .icns along; release builds
+    # never resolve it at runtime, so drop it to save bundle size.
+    if [ "${APP_ICON_VARIANT_KEY}" != "debug" ]; then
+        rm -f "${APP_PATH}/Contents/Resources/AppIcon-Debug.icns"
+    fi
     touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${ICON_DEST}"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant (${ICON_RESOURCE_BASENAME}.icns)"
 else
