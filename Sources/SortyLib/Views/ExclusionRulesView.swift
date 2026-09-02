@@ -37,6 +37,7 @@ struct ExclusionRulesView: View {
     @State private var isShowingLearningExclusionsInfo = false
     @State private var isShowingNaturalLanguageExceptionsInfo = false
     @State private var isLearningExclusionsExpanded = true
+    @State private var showingRemoveAllConfirmation = false
     @FocusState private var isNLExceptionFocused: Bool
 
     private var trimmedSearchText: String {
@@ -314,15 +315,28 @@ struct ExclusionRulesView: View {
             if !rulesManager.rules.isEmpty {
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        rulesManager.clearAllRules()
-                    }
+                    showingRemoveAllConfirmation = true
                 } label: {
                     Label("Remove All", systemImage: "trash")
                 }
                 .buttonStyle(.tintedPill(.red, size: .small))
                 .controlSize(.small)
                 .accessibilityIdentifier("ClearAllExclusionsButton")
+                .confirmationDialog(
+                    "Remove all \(rulesManager.rules.count) exclusion rules?",
+                    isPresented: $showingRemoveAllConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove All", role: .destructive) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            rulesManager.clearAllRules()
+                        }
+                        HapticFeedbackManager.shared.success()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Excluded files and folders will become eligible for organization and learnings again.")
+                }
             }
 
             Button {
