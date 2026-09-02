@@ -5160,8 +5160,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             history.updateEntry(updatedEntry)
 
             await MainActor.run {
-                if result.hasIssues {
-                    organizationStage = "Undo complete: \(result.successfulOperations) restored, \(result.missingFiles.count) skipped"
+                if result.hasIssues, !result.missingFiles.isEmpty {
+                    organizationStage = "Undo complete: \(result.successfulOperations) restored, \(result.missingFiles.count) couldn't be found"
+                } else if result.hasIssues {
+                    organizationStage = "Undo complete: \(result.successfulOperations) restored"
                 } else {
                     organizationStage = "Undo complete"
                 }

@@ -94,7 +94,10 @@ struct OrganizationCompleteView: View {
 
     private var secondaryStatValue: String {
         if undoState == .completed {
-            return "\(undoSkippedCount)"
+            // "0 Items Skipped" is noise; when nothing was skipped, show the
+            // folders the undo cleaned up instead.
+            if undoSkippedCount > 0 { return "\(undoSkippedCount)" }
+            return mode == .renameOnly ? "\(renameCount)" : "\(totalFolders)"
         }
 
         return "\(shouldShowFinalCounts ? secondaryStatTarget : 0)"
@@ -102,7 +105,13 @@ struct OrganizationCompleteView: View {
 
     private var secondaryStatLabel: String {
         if undoState == .completed {
-            return undoSkippedCount == 1 ? "Item Skipped" : "Items Skipped"
+            if undoSkippedCount > 0 {
+                return undoSkippedCount == 1 ? "Item Skipped" : "Items Skipped"
+            }
+            if mode == .renameOnly {
+                return renameCount == 1 ? "Name Reverted" : "Names Reverted"
+            }
+            return totalFolders == 1 ? "Folder Removed" : "Folders Removed"
         }
 
         switch mode {

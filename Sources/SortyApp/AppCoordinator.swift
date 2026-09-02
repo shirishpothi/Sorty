@@ -430,9 +430,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         do {
             let result = try await organizer.undoHistoryEntry(entryToUndo)
             
+            // Only surface the skipped count when files were actually skipped;
+            // "0 skipped" reads as noise.
             let message: String
-            if result.hasIssues {
-                message = "Undo complete (\(result.successfulOperations) restored, \(result.missingFiles.count) skipped)"
+            if result.hasIssues, !result.missingFiles.isEmpty {
+                message = "Undo complete (\(result.successfulOperations) restored, \(result.missingFiles.count) couldn't be found)"
+            } else if result.hasIssues {
+                message = "Undo complete (\(result.successfulOperations) restored; some items need another attempt)"
             } else {
                 message = "Undo complete - \(result.successfulOperations) files restored"
             }
