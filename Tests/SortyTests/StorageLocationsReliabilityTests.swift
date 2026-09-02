@@ -427,6 +427,26 @@ final class StorageLocationsReliabilityTests: XCTestCase {
     }
 
     @MainActor
+    func testPersistedLocationsLoadAfterConstruction() async {
+        let firstManager = StorageLocationsManager()
+        firstManager.clearAll()
+        defer { firstManager.clearAll() }
+
+        let archive = tempRoot.appendingPathComponent("Deferred Archive", isDirectory: true)
+        try? FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+        firstManager.addLocation(StorageLocation(path: archive.path, name: "Deferred Archive"))
+
+        let reloadedManager = StorageLocationsManager()
+        XCTAssertFalse(reloadedManager.hasLoadedPersistedState)
+        XCTAssertTrue(reloadedManager.locations.isEmpty)
+
+        await reloadedManager.loadPersistedState()
+
+        XCTAssertTrue(reloadedManager.hasLoadedPersistedState)
+        XCTAssertEqual(reloadedManager.locations.map(\.path), [archive.path])
+    }
+
+    @MainActor
     func testStoragePromptExplainsPurposeAndExactDestinationPath() async {
         let manager = StorageLocationsManager()
         manager.clearAll()

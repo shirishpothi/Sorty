@@ -8,6 +8,20 @@
 import Foundation
 import Combine
 
+/// UserDefaults supports concurrent reads. This wrapper makes that documented contract explicit
+/// to Swift's Sendable checker without allowing background writes through the same reference.
+final class UserDefaultsDataReader: @unchecked Sendable {
+    private let userDefaults: UserDefaults
+
+    init(_ userDefaults: UserDefaults) {
+        self.userDefaults = userDefaults
+    }
+
+    func data(forKey key: String) -> Data? {
+        userDefaults.data(forKey: key)
+    }
+}
+
 struct SettingsCredentialStore: Sendable {
     let load: @Sendable (String) async -> String?
     let save: @Sendable (String, String) async -> Bool
@@ -147,6 +161,7 @@ public class SettingsViewModel: ObservableObject {
     @Published public private(set) var hasLoadedPersistedState = false
     
     private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     private let credentialStore: SettingsCredentialStore
     private let configKey = "aiConfig"
     private let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
@@ -158,6 +173,7 @@ public class SettingsViewModel: ObservableObject {
     private var credentialHydrationID: UUID?
     private var credentialHydrationProvider: AIProvider?
     private var persistedStateLoadTask: Task<AIConfig?, Never>?
+    private var persistedStateLoadGeneration = 0
     private var isApplyingConfigMutation = false
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
@@ -166,6 +182,7 @@ public class SettingsViewModel: ObservableObject {
     
     public init() {
         userDefaults = .standard
+        persistedDataReader = UserDefaultsDataReader(.standard)
         credentialStore = .keychain
         setupNotificationObservers()
     }
@@ -176,6 +193,7 @@ public class SettingsViewModel: ObservableObject {
         observesNotifications: Bool = true
     ) {
         self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         self.credentialStore = credentialStore
         if observesNotifications {
             setupNotificationObservers()
@@ -192,19 +210,27 @@ public class SettingsViewModel: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
+        let generation = persistedStateLoadGeneration
         let task: Task<AIConfig?, Never>
         if let persistedStateLoadTask {
             task = persistedStateLoadTask
         } else {
-            let configData = userDefaults.data(forKey: configKey)
+            let persistedDataReader = persistedDataReader
+            let configKey = configKey
             task = Task.detached(priority: .userInitiated) {
-                guard let data = configData else { return nil }
+                guard let data = persistedDataReader.data(forKey: configKey) else { return nil }
                 return try? JSONDecoder().decode(AIConfig.self, from: data)
             }
             persistedStateLoadTask = task
         }
 
-        if var decoded = await task.value {
+        let decodedConfig = await task.value
+        guard !hasLoadedPersistedState,
+              generation == persistedStateLoadGeneration else {
+            return
+        }
+
+        if var decoded = decodedConfig {
             decoded.apiKey = nil
             decoded.enableSmartRename = true
             isApplyingConfigMutation = true
@@ -459,6 +485,11 @@ public class SettingsViewModel: ObservableObject {
     }
 
     public func reset() {
+        persistedStateLoadGeneration &+= 1
+        persistedStateLoadTask?.cancel()
+        persistedStateLoadTask = nil
+        hasLoadedPersistedState = true
+
         // Clear per-provider saved model selections
         for provider in AIProvider.allCases {
             userDefaults.removeObject(forKey: modelSelectionKey(for: provider))

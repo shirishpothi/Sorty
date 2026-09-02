@@ -412,23 +412,23 @@ struct SortyApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @StateObject private var settingsViewModel: SettingsViewModel
-    @StateObject private var personaManager = PersonaManager()
-    @StateObject private var customPersonaStore = CustomPersonaStore()
-    @StateObject private var watchedFoldersManager = WatchedFoldersManager()
-    @StateObject private var storageLocationsManager = StorageLocationsManager()
-    @StateObject private var exclusionRules = ExclusionRulesManager()
-    @StateObject private var extensionListener = ExtensionListener()
-    @StateObject private var deeplinkHandler = DeeplinkHandler.shared
-    @StateObject private var learningsManager = LearningsManager()
-    @StateObject private var automationManager = AutomationManager()
+    @StateObject private var personaManager: PersonaManager
+    @StateObject private var customPersonaStore: CustomPersonaStore
+    @StateObject private var watchedFoldersManager: WatchedFoldersManager
+    @StateObject private var storageLocationsManager: StorageLocationsManager
+    @StateObject private var exclusionRules: ExclusionRulesManager
+    @StateObject private var extensionListener: ExtensionListener
+    @StateObject private var deeplinkHandler: DeeplinkHandler
+    @StateObject private var learningsManager: LearningsManager
+    @StateObject private var automationManager: AutomationManager
     @StateObject private var openAIAuthManager: SubscriptionAuthManager
     @StateObject private var codexAuthManager: CodexCLIAuthManager
-    @StateObject private var notificationSettings = NotificationSettingsManager.shared
-    @StateObject private var loginItemManager = LoginItemManager.shared
-    @StateObject private var namingPresetManager = NamingPresetManager.shared
-    @StateObject private var steeringPromptManager = SteeringPromptManager.shared
-    @StateObject private var menuBarController = MenuBarController()
-    @StateObject private var updateManager = SparkleUpdateManager()
+    @StateObject private var notificationSettings: NotificationSettingsManager
+    @StateObject private var loginItemManager: LoginItemManager
+    @StateObject private var namingPresetManager: NamingPresetManager
+    @StateObject private var steeringPromptManager: SteeringPromptManager
+    @StateObject private var menuBarController: MenuBarController
+    @StateObject private var updateManager: SparkleUpdateManager
     @StateObject private var organizationHistory: OrganizationHistory
     @State private var automationOrganizer: FolderOrganizer?
 
@@ -437,17 +437,49 @@ struct SortyApp: App {
 
     private let widgetSyncManager = SortyWidgetSyncManager.shared
 
-    init() {
-        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel())
+    /// Times a manager construction during launch; logs anything over 1ms in debug builds.
+    private static func timedLaunchInit<T>(_ name: StaticString, _ make: () -> T) -> T {
+        #if DEBUG
+            let start = CFAbsoluteTimeGetCurrent()
+            let value = make()
+            let elapsedMS = (CFAbsoluteTimeGetCurrent() - start) * 1000
+            if elapsedMS > 1 {
+                NSLog("SortyLaunch: %@ init took %.1fms", "\(name)", elapsedMS)
+            }
+            return value
+        #else
+            return make()
+        #endif
+    }
 
-        let organizationHistory = OrganizationHistory()
+    init() {
+        let launchInitStart = CFAbsoluteTimeGetCurrent()
+        _settingsViewModel = StateObject(wrappedValue: Self.timedLaunchInit("SettingsViewModel") { SettingsViewModel() })
+        _personaManager = StateObject(wrappedValue: Self.timedLaunchInit("PersonaManager") { PersonaManager() })
+        _customPersonaStore = StateObject(wrappedValue: Self.timedLaunchInit("CustomPersonaStore") { CustomPersonaStore() })
+        _watchedFoldersManager = StateObject(wrappedValue: Self.timedLaunchInit("WatchedFoldersManager") { WatchedFoldersManager() })
+        _storageLocationsManager = StateObject(wrappedValue: Self.timedLaunchInit("StorageLocationsManager") { StorageLocationsManager() })
+        _exclusionRules = StateObject(wrappedValue: Self.timedLaunchInit("ExclusionRulesManager") { ExclusionRulesManager() })
+        _extensionListener = StateObject(wrappedValue: Self.timedLaunchInit("ExtensionListener") { ExtensionListener() })
+        _deeplinkHandler = StateObject(wrappedValue: Self.timedLaunchInit("DeeplinkHandler") { DeeplinkHandler.shared })
+        _learningsManager = StateObject(wrappedValue: Self.timedLaunchInit("LearningsManager") { LearningsManager() })
+        _automationManager = StateObject(wrappedValue: Self.timedLaunchInit("AutomationManager") { AutomationManager() })
+        _notificationSettings = StateObject(wrappedValue: Self.timedLaunchInit("NotificationSettingsManager") { NotificationSettingsManager.shared })
+        _loginItemManager = StateObject(wrappedValue: Self.timedLaunchInit("LoginItemManager") { LoginItemManager.shared })
+        _namingPresetManager = StateObject(wrappedValue: Self.timedLaunchInit("NamingPresetManager") { NamingPresetManager.shared })
+        _steeringPromptManager = StateObject(wrappedValue: Self.timedLaunchInit("SteeringPromptManager") { SteeringPromptManager.shared })
+        _menuBarController = StateObject(wrappedValue: Self.timedLaunchInit("MenuBarController") { MenuBarController() })
+        _updateManager = StateObject(wrappedValue: Self.timedLaunchInit("SparkleUpdateManager") { SparkleUpdateManager() })
+
+        let organizationHistory = Self.timedLaunchInit("OrganizationHistory") { OrganizationHistory() }
         _organizationHistory = StateObject(wrappedValue: organizationHistory)
 
-        let codexAuthManager = CodexCLIAuthManager()
+        let codexAuthManager = Self.timedLaunchInit("CodexCLIAuthManager") { CodexCLIAuthManager() }
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
         _openAIAuthManager = StateObject(
-            wrappedValue: SubscriptionAuthManager(
-                provider: .openAI, codexAuthManager: codexAuthManager)
+            wrappedValue: Self.timedLaunchInit("SubscriptionAuthManager") {
+                SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager)
+            }
         )
 
         UserDefaults.standard.register(defaults: [
@@ -462,6 +494,12 @@ struct SortyApp: App {
         SortyUninstaller.discardLegacyRequest()
 
         configureUITestStateIfNeeded()
+
+        #if DEBUG
+            NSLog(
+                "SortyLaunch: SortyApp.init total %.1fms",
+                (CFAbsoluteTimeGetCurrent() - launchInitStart) * 1000)
+        #endif
     }
 
     @SceneBuilder
@@ -653,13 +691,22 @@ struct SortyApp: App {
 
         // Harness mode: skip heavy initialization for fast iteration
         if FeatureFlags.harnessMode {
+            await settingsViewModel.loadPersistedState()
             configureHarnessMode()
             return
         }
 
+        async let settingsLoad: Void = settingsViewModel.loadPersistedState()
+        async let historyLoad: Void = organizationHistory.loadPersistedState()
+        async let watchedFoldersLoad: Void = watchedFoldersManager.loadPersistedState()
+        async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()
+        async let learningsLoad: Void = learningsManager.loadPersistedState()
+        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad)
+
         ReliabilityManager.shared.startIfAuthorized()
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
+        loginItemManager.startUp()
         syncLoginItemState()
 
         watchedFoldersManager.restoreSecurityScopedAccess()

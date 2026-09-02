@@ -15,6 +15,7 @@ final class WindowSessionTests: XCTestCase {
     override func setUp() async throws {
         session = WindowSession()
         settingsViewModel = SettingsViewModel()
+        await settingsViewModel.loadPersistedState()
         personaManager = PersonaManager()
         customPersonaStore = CustomPersonaStore()
         watchedFoldersManager = WatchedFoldersManager()

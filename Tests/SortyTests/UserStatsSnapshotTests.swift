@@ -33,7 +33,7 @@ final class UserStatsSnapshotTests: XCTestCase {
     }
 
     @MainActor
-    func testLoadAggregatesCompletedEntriesAndActiveDays() throws {
+    func testLoadAggregatesCompletedEntriesAndActiveDays() async throws {
         let calendar = Calendar.current
         let dayOne = calendar.startOfDay(for: Date())
         let dayTwo = calendar.date(byAdding: .day, value: -1, to: dayOne)!
@@ -45,6 +45,7 @@ final class UserStatsSnapshotTests: XCTestCase {
         ]
 
         let history = OrganizationHistory(userDefaults: defaults, storageDirectory: storageDirectory)
+        await history.loadPersistedState()
         entries.forEach { history.addEntry($0) }
 
         let stats = UserStatsSnapshot.load(userDefaults: defaults, storageDirectory: storageDirectory)

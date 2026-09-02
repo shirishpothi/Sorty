@@ -149,6 +149,7 @@ public class WatchedFoldersManager: ObservableObject {
     @Published public private(set) var hasLoadedPersistedState = false
 
     private let userDefaults = UserDefaults.standard
+    private let persistedDataReader = UserDefaultsDataReader(.standard)
     private let legacyStorageKey = "watchedFolders"
     private let activeCountStorageKey = "activeWatchedFolderCount"
     private let journal = WatchedFolderJournal()
@@ -177,12 +178,13 @@ public class WatchedFoldersManager: ObservableObject {
             task = loadTask
         } else {
             let journal = journal
-            let legacyData = userDefaults.data(forKey: legacyStorageKey)
+            let persistedDataReader = persistedDataReader
+            let legacyStorageKey = legacyStorageKey
             task = Task.detached(priority: .userInitiated) {
                 if let journalFolders = journal.load() {
                     return (journalFolders, false)
                 }
-                guard let data = legacyData,
+                guard let data = persistedDataReader.data(forKey: legacyStorageKey),
                       let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
                     return ([], false)
                 }

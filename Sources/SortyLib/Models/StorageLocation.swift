@@ -280,6 +280,7 @@ public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
     @Published public private(set) var hasLoadedPersistedState = false
     private let userDefaults = UserDefaults.standard
+    private let persistedDataReader = UserDefaultsDataReader(.standard)
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
@@ -300,9 +301,10 @@ public class StorageLocationsManager: ObservableObject {
         if let loadTask {
             task = loadTask
         } else {
-            let storageData = userDefaults.data(forKey: storageKey)
+            let persistedDataReader = persistedDataReader
+            let storageKey = storageKey
             task = Task.detached(priority: .userInitiated) {
-                guard let data = storageData,
+                guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) else {
                     return []
                 }

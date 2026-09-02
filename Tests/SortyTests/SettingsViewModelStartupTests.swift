@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class SettingsViewModelStartupTests: XCTestCase {
-    func testInitializationDoesNotWaitForCredentialLookup() throws {
+    func testInitializationDoesNotWaitForPersistedStateOrCredentialLookup() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -31,12 +31,43 @@ final class SettingsViewModelStartupTests: XCTestCase {
         )
         let initializationDuration = CFAbsoluteTimeGetCurrent() - startedAt
 
-        XCTAssertEqual(viewModel.config.model, "startup-test-model")
+        XCTAssertFalse(viewModel.hasLoadedPersistedState)
         XCTAssertLessThan(
             initializationDuration,
-            0.5,
-            "Settings construction must not wait for Security.framework or a locked keychain."
+            0.05,
+            "Settings construction must not read persisted state or wait for Security.framework."
         )
+
+        await viewModel.loadPersistedState()
+
+        XCTAssertTrue(viewModel.hasLoadedPersistedState)
+        XCTAssertEqual(viewModel.config.model, "startup-test-model")
+    }
+
+    func testResetBeforeHydrationDoesNotRestorePersistedConfiguration() async throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var persistedConfig = AIConfig.default
+        persistedConfig.model = "must-not-return"
+        defaults.set(try JSONEncoder().encode(persistedConfig), forKey: "aiConfig")
+
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: SettingsCredentialStore(
+                load: { _ in nil },
+                save: { _, _ in true },
+                saveImmediately: { _, _ in true },
+                delete: { _ in true }
+            ),
+            observesNotifications: false
+        )
+        viewModel.reset()
+        await viewModel.loadPersistedState()
+
+        XCTAssertTrue(viewModel.hasLoadedPersistedState)
+        XCTAssertEqual(viewModel.config.model, AIConfig.default.model)
     }
 
     func testSwitchingToProviderWithoutAPIKeyDoesNotHydrateStoredCredential() async throws {
@@ -61,6 +92,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
             credentialStore: credentialStore,
             observesNotifications: false
         )
+        await viewModel.loadPersistedState()
 
         viewModel.config.apiKey = "openrouter-secret"
         viewModel.config.provider = .ollama
@@ -70,7 +102,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         XCTAssertNil(viewModel.config.apiKey)
     }
 
-    func testUpdatingAPIKeyPersistsBeforeReturning() throws {
+    func testUpdatingAPIKeyPersistsBeforeReturning() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -94,6 +126,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
             credentialStore: credentialStore,
             observesNotifications: false
         )
+        await viewModel.loadPersistedState()
 
         viewModel.updateAPIKey("openrouter-secret")
 
@@ -101,7 +134,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         XCTAssertEqual(recorder.savedValue, "openrouter-secret")
     }
 
-    func testForceSavePersistsCredentialBeforeReturning() throws {
+    func testForceSavePersistsCredentialBeforeReturning() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -125,6 +158,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
             credentialStore: credentialStore,
             observesNotifications: false
         )
+        await viewModel.loadPersistedState()
         viewModel.config.apiKey = "openrouter-secret"
 
         viewModel.forceSave()
@@ -167,6 +201,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
             credentialStore: credentialStore,
             observesNotifications: false
         )
+        await viewModel.loadPersistedState()
 
         viewModel.config.temperature = 0.2
         try await Task.sleep(for: .milliseconds(600))

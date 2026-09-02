@@ -72,12 +72,13 @@ class HistoryTests: XCTestCase {
         history.addEntry(entry)
 
         let newHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
+        await newHistory.loadPersistedState()
 
         XCTAssertTrue(newHistory.entries.contains(where: { $0.directoryPath == "/persist" }))
     }
 
     @MainActor
-    func testMigratesLegacyUserDefaultsIntoFileStore() throws {
+    func testMigratesLegacyUserDefaultsIntoFileStore() async throws {
         let legacyEntry = OrganizationHistoryEntry(
             directoryPath: "/legacy",
             filesOrganized: 3,
@@ -88,6 +89,7 @@ class HistoryTests: XCTestCase {
         testDefaults.set(encoded, forKey: "organizationHistory")
 
         let migratedHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
+        await migratedHistory.loadPersistedState()
 
         XCTAssertEqual(migratedHistory.entries.count, 1)
         XCTAssertEqual(migratedHistory.entries.first?.directoryPath, "/legacy")
@@ -96,7 +98,7 @@ class HistoryTests: XCTestCase {
     }
 
     @MainActor
-    func testCorruptedPrimaryRecoversLatestSnapshotFromBackup() throws {
+    func testCorruptedPrimaryRecoversLatestSnapshotFromBackup() async throws {
         let first = OrganizationHistoryEntry(directoryPath: "/one", filesOrganized: 1, foldersCreated: 1, status: .completed)
         let second = OrganizationHistoryEntry(directoryPath: "/two", filesOrganized: 2, foldersCreated: 1, status: .completed)
 
@@ -112,6 +114,7 @@ class HistoryTests: XCTestCase {
         try corruptData.write(to: primaryURL)
 
         let recoveredHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
+        await recoveredHistory.loadPersistedState()
 
         XCTAssertEqual(recoveredHistory.entries.count, 2)
         XCTAssertEqual(Set(recoveredHistory.entries.map(\.directoryPath)), Set(["/one", "/two"]))
@@ -121,6 +124,37 @@ class HistoryTests: XCTestCase {
             storageDirectory: storageDirectory
         )
         XCTAssertEqual(recoveredEntries.count, 2)
+    }
+
+    @MainActor
+    func testConstructionDoesNotDecodeLargePersistedHistory() async throws {
+        let entries = (0..<5_000).map { index in
+            OrganizationHistoryEntry(
+                timestamp: Date(timeIntervalSince1970: TimeInterval(index)),
+                directoryPath: "/history/\(index)",
+                filesOrganized: index,
+                foldersCreated: 1
+            )
+        }
+        let fileURL = storageDirectory.appendingPathComponent("organization-history.json")
+        try JSONEncoder().encode(entries).write(to: fileURL)
+
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        let deferredHistory = OrganizationHistory(
+            userDefaults: testDefaults,
+            storageDirectory: storageDirectory
+        )
+        let constructionDuration = CFAbsoluteTimeGetCurrent() - startedAt
+
+        XCTAssertFalse(deferredHistory.hasLoadedPersistedState)
+        XCTAssertTrue(deferredHistory.entries.isEmpty)
+        XCTAssertLessThan(constructionDuration, 0.05)
+
+        await deferredHistory.loadPersistedState()
+
+        XCTAssertTrue(deferredHistory.hasLoadedPersistedState)
+        XCTAssertEqual(deferredHistory.entries.count, 100)
+        XCTAssertEqual(deferredHistory.entries.first?.directoryPath, "/history/4999")
     }
 
     @MainActor

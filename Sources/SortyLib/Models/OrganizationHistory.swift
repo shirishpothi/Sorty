@@ -177,7 +177,7 @@ private struct OrganizationHistorySnapshot: Codable {
     let entries: [OrganizationHistoryEntry]
 }
 
-private final class OrganizationHistoryRepository {
+private final class OrganizationHistoryRepository: @unchecked Sendable {
     static let legacyHistoryKey = "organizationHistory"
     static let fileName = "organization-history.json"
     static let backupFileName = "organization-history.json.bak"
@@ -478,16 +478,57 @@ public class OrganizationHistory: ObservableObject {
     }
 
     @Published public private(set) var entries: [OrganizationHistoryEntry] = []
+    @Published public private(set) var hasLoadedPersistedState = false
     private let repository: OrganizationHistoryRepository
     private let maxEntries = 100
+    private var loadTask: Task<[OrganizationHistoryEntry], Never>?
+    private var hasPendingChanges = false
+    private var loadGeneration = 0
     
     public init(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) {
         self.repository = OrganizationHistoryRepository(
             userDefaults: userDefaults,
             storageDirectory: storageDirectory
         )
-        loadHistory()
         setupNotificationObservers()
+    }
+
+    /// Loads and decodes history away from the main actor, then publishes retained entries.
+    /// Entries created during loading are merged before the first save.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<[OrganizationHistoryEntry], Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let repository = repository
+            task = Task.detached(priority: .userInitiated) {
+                repository.loadEntries()
+            }
+            loadTask = task
+        }
+
+        let persistedEntries = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        var mergedByID = Dictionary(uniqueKeysWithValues: persistedEntries.map { ($0.id, $0) })
+        for entry in entries {
+            mergedByID[entry.id] = entry
+        }
+        entries = Array(
+            mergedByID.values
+                .sorted { $0.timestamp > $1.timestamp }
+                .prefix(maxEntries)
+        )
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            saveHistory()
+        }
     }
     
     private func setupNotificationObservers() {
@@ -514,6 +555,11 @@ public class OrganizationHistory: ObservableObject {
     }
     
     public func clearHistory() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         entries.removeAll()
         repository.clear()
     }
@@ -599,11 +645,11 @@ public class OrganizationHistory: ObservableObject {
             .reduce(0, +)
     }
 
-    private func loadHistory() {
-        entries = repository.loadEntries()
-    }
-    
     private func saveHistory() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         _ = repository.saveEntries(entries)
     }
 

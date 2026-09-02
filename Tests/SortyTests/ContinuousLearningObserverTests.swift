@@ -20,6 +20,7 @@ final class ContinuousLearningObserverTests: XCTestCase {
         manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
         let history = OrganizationHistory(userDefaults: defaults, storageDirectory: historyStorageDirectory)
+        await history.loadPersistedState()
         self.history = history
         observer = ContinuousLearningObserver(learningsManager: manager, history: history)
     }

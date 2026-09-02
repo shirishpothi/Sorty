@@ -50,6 +50,7 @@ final class UndoReliabilityTests: XCTestCase {
         try FileManager.default.createDirectory(at: historyStorageDirectory, withIntermediateDirectories: true)
 
         history = OrganizationHistory(userDefaults: defaults, storageDirectory: historyStorageDirectory)
+        await history.loadPersistedState()
         organizer = FolderOrganizer(history: history)
     }
 

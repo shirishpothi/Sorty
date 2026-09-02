@@ -10,6 +10,13 @@ import ServiceManagement
 import AppKit
 import Combine
 
+private struct LoginItemServiceStatus: Sendable {
+    let isLaunchAtLoginEnabled: Bool
+    let isBackgroundAgentEnabled: Bool
+    let registrationStatus: String
+    let agentStatus: String
+}
+
 @MainActor
 public class LoginItemManager: ObservableObject {
 
@@ -26,9 +33,17 @@ public class LoginItemManager: ObservableObject {
     @Published public var agentStatus: String = "Unknown"
 
     private var cancellables = Set<AnyCancellable>()
+    private var hasStarted = false
+    private var serviceSyncTask: Task<Void, Never>?
+    private var serviceSyncGeneration = 0
 
-    private init() {
-        refreshStatus()
+    private init() {}
+
+    /// Starts system registration observation after the first window is visible.
+    /// Querying SMAppService during construction can block scene creation.
+    public func startUp() {
+        guard !hasStarted else { return }
+        hasStarted = true
         setupObservations()
     }
 
@@ -87,19 +102,19 @@ public class LoginItemManager: ObservableObject {
         // Main App Status (Launch at Login)
         let status = SMAppService.mainApp.status
         self.isLaunchAtLoginEnabled = (status == .enabled)
-        self.registrationStatus = describe(status)
+        self.registrationStatus = Self.describe(status)
 
         // Background Agent Status
         // plist name must include the .plist extension per Apple documentation
         let agent = SMAppService.agent(plistName: Self.backgroundAgentPlistName)
         let aStatus = agent.status
         self.isBackgroundAgentEnabled = (aStatus == .enabled)
-        self.agentStatus = describe(aStatus)
+        self.agentStatus = Self.describe(aStatus)
         
         DebugLogger.log("Login Item status: Main App \(registrationStatus), Background Agent \(agentStatus)")
     }
     
-    private func describe(_ status: SMAppService.Status) -> String {
+    private nonisolated static func describe(_ status: SMAppService.Status) -> String {
         switch status {
         case .enabled: return "Enabled"
         case .notRegistered: return "Not Registered"
@@ -129,7 +144,7 @@ public class LoginItemManager: ObservableObject {
             await MainActor.run {
                 guard let self else { return }
                 self.isLaunchAtLoginEnabled = (status == .enabled)
-                self.registrationStatus = self.describe(status)
+                self.registrationStatus = Self.describe(status)
             }
         }
     }
@@ -160,6 +175,36 @@ public class LoginItemManager: ObservableObject {
     /// Synchronizes the SMAppService registration based on current settings.
     /// Launch at login uses mainApp, while background activity uses a LaunchAgent.
     public func syncServiceRegistration(launchAtLogin: Bool, keepInBackground: Bool, showMenuBarExtra: Bool = false) {
+        serviceSyncGeneration &+= 1
+        let generation = serviceSyncGeneration
+        serviceSyncTask?.cancel()
+        serviceSyncTask = Task { [weak self] in
+            let status = await Task.detached(priority: .utility) {
+                Self.synchronizeServiceRegistration(
+                    launchAtLogin: launchAtLogin,
+                    keepInBackground: keepInBackground
+                )
+            }.value
+
+            guard let self,
+                  !Task.isCancelled,
+                  generation == self.serviceSyncGeneration else {
+                return
+            }
+            self.isLaunchAtLoginEnabled = status.isLaunchAtLoginEnabled
+            self.isBackgroundAgentEnabled = status.isBackgroundAgentEnabled
+            self.registrationStatus = status.registrationStatus
+            self.agentStatus = status.agentStatus
+            DebugLogger.log(
+                "Login Item status: Main App \(status.registrationStatus), Background Agent \(status.agentStatus)"
+            )
+        }
+    }
+
+    private nonisolated static func synchronizeServiceRegistration(
+        launchAtLogin: Bool,
+        keepInBackground: Bool
+    ) -> LoginItemServiceStatus {
         // 1. Sync Login Item (mainApp)
         let mainAppStatus = SMAppService.mainApp.status
         
@@ -223,7 +268,14 @@ public class LoginItemManager: ObservableObject {
             }
         }
 
-        refreshStatus()
+        let finalMainAppStatus = SMAppService.mainApp.status
+        let finalAgentStatus = agent.status
+        return LoginItemServiceStatus(
+            isLaunchAtLoginEnabled: finalMainAppStatus == .enabled,
+            isBackgroundAgentEnabled: finalAgentStatus == .enabled,
+            registrationStatus: describe(finalMainAppStatus),
+            agentStatus: describe(finalAgentStatus)
+        )
     }
 
     private func registerService() {

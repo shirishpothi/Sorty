@@ -129,7 +129,7 @@ final class FolderWatcherTests: XCTestCase {
     }
 
     @MainActor
-    func testWatchedFolderJournalRoundTripsIndexedConfiguration() {
+    func testWatchedFolderJournalRoundTripsIndexedConfiguration() async {
         let firstManager = WatchedFoldersManager()
         firstManager.clearAll()
         defer { firstManager.clearAll() }
@@ -142,6 +142,7 @@ final class FolderWatcherTests: XCTestCase {
         firstManager.addFolder(folder)
 
         let reloadedManager = WatchedFoldersManager()
+        await reloadedManager.loadPersistedState()
         XCTAssertEqual(reloadedManager.folder(withID: folder.id)?.path, folder.path)
         XCTAssertEqual(reloadedManager.folder(matchingPath: folder.path)?.id, folder.id)
         XCTAssertEqual(reloadedManager.activeFolderCount, 1)
