@@ -28,6 +28,7 @@ struct LearningsView: View {
     @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
     @State private var selectedLearningRecordsCategory: LearningRecordsCategory?
+    @AppStorage("learnings.activePatternsExpanded") private var isActivePatternsExpanded = true
 
     private enum PendingControlAction: Equatable {
         case withdrawConsent
@@ -683,27 +684,70 @@ struct LearningsView: View {
                     )
 
                     if !topRules.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Active Patterns")
-                                .font(.subheadline.bold())
-                                .accessibilityAddTraits(.isHeader)
-
-                            VStack(spacing: 0) {
-                                ForEach(Array(topRules.enumerated()), id: \.element.id) { index, rule in
-                                    LearningInsightRow(rule: rule, manager: manager)
-                                        .animatedAppearance(delay: Double(index) * 0.05)
-                                    if index < topRules.count - 1 {
-                                        Divider().padding(.leading, 36)
-                                    }
-                                }
-                            }
-                        }
+                        activePatternsPane(topRules: Array(topRules))
                     }
                 }
             } else {
                 emptyLearningsPlaceholder
             }
         }
+    }
+
+    /// Collapsible liquid-glass pane listing the learned rules Sorty applies.
+    private func activePatternsPane(topRules: [InferredRule]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                HapticFeedbackManager.shared.light()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                    isActivePatternsExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Active Patterns")
+                        .font(.subheadline.bold())
+                        .accessibilityAddTraits(.isHeader)
+                    Text("\(topRules.count)")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isActivePatternsExpanded ? 0 : -90))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("ActivePatternsDisclosureButton")
+            .accessibilityHint(
+                isActivePatternsExpanded
+                    ? "Collapses the active patterns list"
+                    : "Expands the active patterns list"
+            )
+
+            if isActivePatternsExpanded {
+                VStack(spacing: 0) {
+                    ForEach(Array(topRules.enumerated()), id: \.element.id) { index, rule in
+                        LearningInsightRow(rule: rule, manager: manager)
+                            .animatedAppearance(delay: Double(index) * 0.05)
+                        if index < topRules.count - 1 {
+                            Divider().padding(.leading, 36)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func learningDataMetrics(
