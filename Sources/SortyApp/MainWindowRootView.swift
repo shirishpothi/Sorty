@@ -358,7 +358,13 @@ struct MainWindowRootView: View {
             .environmentObject(windowSession.appState.duplicateSettings)
             .focusedSceneValue(\.appState, windowSession.appState)
             .focusedSceneValue(\.organizer, windowSession.organizer)
-            .background(MainWindowSessionTracker(sessionID: windowSession.id).frame(width: 0, height: 0))
+            .background(
+                MainWindowSessionTracker(
+                    sessionID: windowSession.id,
+                    activateOnRegistration: launchRequest != nil
+                )
+                .frame(width: 0, height: 0)
+            )
             .trafficLightInactiveBorders()
             .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
     }

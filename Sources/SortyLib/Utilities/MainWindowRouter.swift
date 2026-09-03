@@ -283,9 +283,11 @@ public final class MainWindowRouter {
 public struct MainWindowSessionTracker: NSViewRepresentable {
     @SortyHotReload private var hotReload
     private let sessionID: UUID
+    private let activateOnRegistration: Bool
 
-    public init(sessionID: UUID) {
+    public init(sessionID: UUID, activateOnRegistration: Bool = false) {
         self.sessionID = sessionID
+        self.activateOnRegistration = activateOnRegistration
     }
 
     public func makeNSView(context: Context) -> NSView {
@@ -309,16 +311,21 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
     }
 
     public func makeCoordinator() -> Coordinator {
-        Coordinator(sessionID: sessionID)
+        Coordinator(
+            sessionID: sessionID,
+            activateOnRegistration: activateOnRegistration
+        )
     }
 
     public final class Coordinator: NSObject {
         private let sessionID: UUID
+        private let activateOnRegistration: Bool
         private weak var observedWindow: NSWindow?
         private var observations: [NSObjectProtocol] = []
 
-        init(sessionID: UUID) {
+        init(sessionID: UUID, activateOnRegistration: Bool) {
             self.sessionID = sessionID
+            self.activateOnRegistration = activateOnRegistration
         }
 
         @MainActor
@@ -328,6 +335,9 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
             removeObservations()
             observedWindow = window
             MainWindowRouter.shared.register(window: window, for: sessionID)
+            if activateOnRegistration {
+                _ = MainWindowRouter.shared.activateWindow(for: sessionID)
+            }
 
             let notificationCenter = NotificationCenter.default
             let sessionID = sessionID
