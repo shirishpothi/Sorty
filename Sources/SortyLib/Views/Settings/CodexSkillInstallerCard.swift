@@ -100,7 +100,7 @@ struct CodexSkillInstallerCard: View {
             .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
             .accessibilityIdentifier("experimental.codex-skill.remove")
         case .conflict:
-            VStack(alignment: .trailing, spacing: 6) {
+            VStack(alignment: .center, spacing: 6) {
                 Button("Replace Skill") {
                     isConfirmingReplacement = true
                 }
@@ -111,21 +111,19 @@ struct CodexSkillInstallerCard: View {
                     HapticFeedbackManager.shared.tap()
                     installer.revealExistingSkill()
                 } label: {
-                    HStack(spacing: 4) {
-                        Text("Show Existing Skill")
-
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .frame(width: 10)
-                            .opacity(isHoveringShowExisting ? 1 : 0)
-                            .offset(
-                                x: reduceMotion || isHoveringShowExisting ? 0 : -3,
-                                y: reduceMotion || isHoveringShowExisting ? 0 : 3
-                            )
-                            .scaleEffect(reduceMotion || isHoveringShowExisting ? 1 : 0.75)
-                            .accessibilityHidden(true)
-                    }
-                    .contentShape(Rectangle())
+                    Text("Show Existing Skill")
+                        .overlay(alignment: .trailing) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .offset(
+                                    x: reduceMotion || isHoveringShowExisting ? 14 : 11,
+                                    y: reduceMotion || isHoveringShowExisting ? 0 : 3
+                                )
+                                .scaleEffect(reduceMotion || isHoveringShowExisting ? 1 : 0.75)
+                                .opacity(isHoveringShowExisting ? 1 : 0)
+                                .accessibilityHidden(true)
+                        }
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
