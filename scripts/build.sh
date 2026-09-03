@@ -1510,6 +1510,17 @@ else
             -Xswiftc -resource-dir
             -Xswiftc "${SORTY_SWIFT_TOOLCHAIN_USR}/lib/swift"
         )
+    elif [ -d "${BUILD_DIR}/hot-reload" ]; then
+        # Older make-hot versions shared this scratch directory with normal
+        # builds. Clean its compiled products once so incompatible opaque-type
+        # erasure and InjectionLite objects cannot be reused at app launch.
+        log_detail "Removing legacy hot-reload products from the normal build cache"
+        swift package \
+            --package-path "${PROJECT_DIR}" \
+            --scratch-path "${BUILD_DIR}" \
+            --disable-dependency-cache \
+            clean
+        rm -rf "${BUILD_DIR}/hot-reload"
     fi
     if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" --disable-dependency-cache -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"

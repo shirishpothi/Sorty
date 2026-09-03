@@ -5,6 +5,9 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
+# Hot reload changes Sorty's dependency graph, compiler flags, and ABI. Sharing
+# SwiftPM outputs with normal builds can leave InjectionLite code in `make now`.
+BUILD_DIR="${SORTY_HOT_BUILD_DIR:-${BUILD_DIR}-hot-reload}"
 HOT_RELOAD_LOG_DIR="${BUILD_LOG_DIR:-${WORKSPACE_BUILD_DIR}/logs}"
 HOT_RELOAD_COMMAND_DIR="${BUILD_DIR}/hot-reload/commands"
 HOT_RELOAD_APP="${RELEASE_DIR}/${PROJECT_NAME}.app"
@@ -29,6 +32,7 @@ run_hot_reload_command() {
 run_hot_reload_build() {
     local log_name="$1"
     run_hot_reload_command "${log_name}" env \
+        SORTY_BUILD_DIR="${BUILD_DIR}" \
         SORTY_HOT_RELOAD=true \
         SORTY_EMBEDDED_BUILD=true \
         APP_ICON_VARIANT=debug \
