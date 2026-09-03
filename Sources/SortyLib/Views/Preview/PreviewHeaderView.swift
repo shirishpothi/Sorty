@@ -18,11 +18,15 @@ struct PreviewHeaderView: View {
     var onBack: (() -> Void)? = nil
     var totalVersions: Int = 1
     var isViewingHistory: Bool = false
+    var currentDiffSource: OrganizationPlanDiff.Source? = nil
+    var previousDiffSource: OrganizationPlanDiff.Source? = nil
+    var nextDiffSource: OrganizationPlanDiff.Source? = nil
     var onPreviousVersion: (() -> Void)? = nil
     var onNextVersion: (() -> Void)? = nil
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
+    @State private var activeDiff: OrganizationPlanDiff?
 
     var body: some View {
         HStack {
@@ -36,32 +40,33 @@ struct PreviewHeaderView: View {
             HStack(spacing: 6) {
                 // Version navigation
                 if totalVersions > 1 {
-                    Button {
-                        HapticFeedbackManager.shared.selection()
-                        onPreviousVersion?()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+                    PreviewVersionNavigationButton(
+                        systemImage: "chevron.left",
+                        label: "Previous preview",
+                        diffSource: previousDiffSource,
+                        action: onPreviousVersion,
+                        showDiff: showDiff
+                    )
                     .disabled(version <= 1)
                 }
 
-                Text(version == 1 ? "Preview" : "Preview \(version)")
-                    .font(.headline)
-                    .numericTextTransition(animationValue: version)
+                Button(action: { showDiff(currentDiffSource) }) {
+                    Text(version == 1 ? "Preview" : "Preview \(version)")
+                        .font(.headline)
+                        .numericTextTransition(animationValue: version)
+                }
+                .buttonStyle(.plain)
+                .disabled(currentDiffSource == nil)
+                .help(currentDiffSource == nil ? "No other preview to compare" : "Compare with the adjacent preview")
 
                 if totalVersions > 1 {
-                    Button {
-                        HapticFeedbackManager.shared.selection()
-                        onNextVersion?()
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+                    PreviewVersionNavigationButton(
+                        systemImage: "chevron.right",
+                        label: "Next preview",
+                        diffSource: nextDiffSource,
+                        action: onNextVersion,
+                        showDiff: showDiff
+                    )
                     .disabled(!isViewingHistory)
                 }
 
@@ -76,13 +81,14 @@ struct PreviewHeaderView: View {
                 }
 
                 if hasEdits {
-                    Text("(Edited)")
+                    Button("Edited", action: { showDiff(currentDiffSource) })
                         .font(.caption)
-                        .foregroundColor(.orange)
+                        .foregroundStyle(.orange)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: 4))
+                        .buttonStyle(.plain)
+                        .help("Compare edits with Preview \(version)")
                 }
 
                 if !notes.isEmpty {
@@ -224,6 +230,51 @@ struct PreviewHeaderView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Preview header showing \(totalFiles) files in \(totalFolders) folders")
+        .popover(item: $activeDiff, arrowEdge: .bottom) { diff in
+            PreviewDiffPopoverView(diff: diff)
+        }
+    }
+
+    private func showDiff(_ source: OrganizationPlanDiff.Source?) {
+        guard let source else { return }
+        HapticFeedbackManager.shared.selection()
+        activeDiff = source.makeDiff()
+    }
+}
+
+private struct PreviewVersionNavigationButton: View {
+    let systemImage: String
+    let label: String
+    let diffSource: OrganizationPlanDiff.Source?
+    let action: (() -> Void)?
+    let showDiff: (OrganizationPlanDiff.Source?) -> Void
+    @State private var longPressHandled = false
+
+    var body: some View {
+        Button(action: navigate) {
+            Image(systemName: systemImage)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint("Activate to navigate. Press and hold to compare previews.")
+        .accessibilityAction(named: "Compare previews") { showDiff(diffSource) }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            longPressHandled = true
+            showDiff(diffSource)
+        }
+    }
+
+    private func navigate() {
+        if longPressHandled {
+            longPressHandled = false
+            return
+        }
+        HapticFeedbackManager.shared.selection()
+        action?()
     }
 }
 

@@ -57,6 +57,34 @@ struct PreviewView: View {
     private var totalVersions: Int {
         organizer.planHistory.count + 1
     }
+
+    private var displayedVersionIndex: Int {
+        viewingHistoryIndex ?? organizer.planHistory.count
+    }
+
+    private var currentDiffSource: OrganizationPlanDiff.Source? {
+        if viewingHistoryIndex == nil, hasEdits {
+            return OrganizationPlanDiff.Source(
+                oldPlan: plan,
+                newPlan: editablePlan,
+                fromLabel: "Preview \(plan.version)",
+                toLabel: "Edited"
+            )
+        }
+        if displayedVersionIndex > 0 {
+            return diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
+        }
+        return diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+    }
+
+    private var previousDiffSource: OrganizationPlanDiff.Source? {
+        guard displayedVersionIndex > 0 else { return nil }
+        return diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
+    }
+
+    private var nextDiffSource: OrganizationPlanDiff.Source? {
+        diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+    }
     
     private var renameCount: Int {
         displayedPlan.suggestions.reduce(0) { $0 + $1.renameCount }
@@ -94,6 +122,9 @@ struct PreviewView: View {
                 renameCount: isViewingHistory ? 0 : renameCount,
                 totalVersions: totalVersions,
                 isViewingHistory: isViewingHistory,
+                currentDiffSource: currentDiffSource,
+                previousDiffSource: previousDiffSource,
+                nextDiffSource: nextDiffSource,
                 onPreviousVersion: {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         if let idx = viewingHistoryIndex {
@@ -209,6 +240,17 @@ struct PreviewView: View {
         )
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private func diff(from oldIndex: Int, to newIndex: Int) -> OrganizationPlanDiff.Source? {
+        let versions = organizer.planHistory + [editablePlan]
+        guard versions.indices.contains(oldIndex), versions.indices.contains(newIndex) else { return nil }
+        return OrganizationPlanDiff.Source(
+            oldPlan: versions[oldIndex],
+            newPlan: versions[newIndex],
+            fromLabel: "Preview \(versions[oldIndex].version)",
+            toLabel: "Preview \(versions[newIndex].version)"
+        )
     }
     
     @ViewBuilder
