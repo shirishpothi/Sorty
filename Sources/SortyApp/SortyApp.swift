@@ -13,12 +13,71 @@ import SwiftUI
 #endif
 
 @MainActor
+private final class ApplicationRemovalMonitor {
+    private let originalApplicationURL: URL
+    private let fileDescriptor: Int32
+    private let onMovedToTrash: @MainActor @Sendable (URL?) -> Bool
+    private var source: DispatchSourceFileSystemObject?
+    private var hasHandledRemoval = false
+
+    init?(onMovedToTrash: @escaping @MainActor @Sendable (URL?) -> Bool) {
+        let applicationURL = Bundle.main.bundleURL.standardizedFileURL
+        let descriptor = open(applicationURL.path, O_EVTONLY)
+        guard descriptor >= 0 else { return nil }
+
+        originalApplicationURL = applicationURL
+        fileDescriptor = descriptor
+        self.onMovedToTrash = onMovedToTrash
+    }
+
+    func start() {
+        guard source == nil else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fileDescriptor,
+            eventMask: [.delete, .rename, .revoke],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                self?.handleFileSystemEvent()
+            }
+        }
+        source.setCancelHandler { [fileDescriptor] in
+            close(fileDescriptor)
+        }
+        self.source = source
+        source.resume()
+    }
+
+    private func handleFileSystemEvent() {
+        guard !hasHandledRemoval,
+              !FileManager.default.fileExists(atPath: originalApplicationURL.path) else {
+            return
+        }
+
+        hasHandledRemoval = onMovedToTrash(currentPathForOpenApplicationBundle())
+    }
+
+    private func currentPathForOpenApplicationBundle() -> URL? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(fileDescriptor, F_GETPATH, &buffer) == 0 else { return nil }
+        let path = String(
+            decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+            as: UTF8.self
+        )
+        return URL(fileURLWithPath: path, isDirectory: true)
+            .standardizedFileURL
+    }
+}
+
+@MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
     private static let buildAutoCloseRequestFileName = ".build-auto-close-request"
     private static let appGroupIdentifier = "group.com.sorty.app"
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
+    private var applicationRemovalMonitor: ApplicationRemovalMonitor?
     private let launchStartedAt = Date()
     private var applicationObservers: [NSObjectProtocol] = []
 
@@ -31,6 +90,13 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             _ = NotificationManager.shared
         #endif
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        applicationRemovalMonitor = ApplicationRemovalMonitor { [weak self] movedApplicationURL in
+            self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
+        }
+        applicationRemovalMonitor?.start()
     }
 
     override init() {
@@ -78,6 +144,33 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             return presentQuitWarning(for: warningContext)
         #else
             return .terminateNow
+        #endif
+    }
+
+    private func finishExternalUninstall(movedApplicationURL: URL?) -> Bool {
+        #if canImport(SortyLib)
+            guard let report = SortyUninstaller.runAfterExternalApplicationRemoval(
+                movedApplicationURL: movedApplicationURL
+            ) else { return false }
+            if report.didScheduleApplicationRemoval {
+                Self.forceQuit = true
+                NSApp.terminate(nil)
+                return true
+            }
+
+            let failedItems = report.blockingFailureDescriptions.joined(separator: ", ")
+            let detail = failedItems.isEmpty
+                ? "macOS couldn't finish removing Sorty."
+                : "Sorty couldn't remove its \(failedItems)."
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "Sorty Could Not Finish Uninstalling"
+            alert.informativeText = "\(detail) Restore Sorty from Trash, reopen it, and use Help > Uninstall Sorty."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return true
+        #else
+            return false
         #endif
     }
 

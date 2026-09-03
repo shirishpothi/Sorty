@@ -86,8 +86,37 @@ public enum SortyUninstaller {
     }
 
     public static func run() -> SortyUninstallReport {
+        run(
+            currentApplicationURL: Bundle.main.bundleURL.standardizedFileURL,
+            additionalApplicationURLs: [ExtensionCommunication.stagedApplicationURLForUninstall()].compactMap { $0 }
+        )
+    }
+
+    /// Finishes uninstalling when Finder moves the running app out of Applications.
+    public static func runAfterExternalApplicationRemoval(
+        movedApplicationURL: URL?
+    ) -> SortyUninstallReport? {
         let fileManager = FileManager.default
-        let currentApplicationURL = Bundle.main.bundleURL.standardizedFileURL
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser.standardizedFileURL
+        let candidates = externalRemovalApplicationBundleCandidates(
+            movedApplicationURL: movedApplicationURL,
+            homeDirectory: homeDirectory,
+            fileManager: fileManager
+        )
+        guard let currentApplicationURL = candidates.first else { return nil }
+
+        return run(
+            currentApplicationURL: currentApplicationURL,
+            additionalApplicationURLs: Array(candidates.dropFirst())
+        )
+    }
+
+    private static func run(
+        currentApplicationURL: URL,
+        additionalApplicationURLs: [URL]
+    ) -> SortyUninstallReport {
+        let fileManager = FileManager.default
+        let currentApplicationURL = currentApplicationURL.standardizedFileURL
         let homeDirectory = fileManager.homeDirectoryForCurrentUser.standardizedFileURL
         let temporaryDirectory = fileManager.temporaryDirectory.standardizedFileURL
         let customServicesDirectory = UserDefaults.standard
@@ -95,7 +124,7 @@ public enum SortyUninstaller {
             .map { URL(fileURLWithPath: $0, isDirectory: true).standardizedFileURL }
         let applicationURLs = applicationBundleCandidates(
             currentApplicationURL: currentApplicationURL,
-            stagedApplicationURL: ExtensionCommunication.stagedApplicationURLForUninstall(),
+            additionalApplicationURLs: additionalApplicationURLs,
             fileManager: fileManager
         )
 
@@ -269,19 +298,40 @@ public enum SortyUninstaller {
         stagedApplicationURL: URL?,
         fileManager: FileManager
     ) -> [URL] {
+        applicationBundleCandidates(
+            currentApplicationURL: currentApplicationURL,
+            additionalApplicationURLs: [stagedApplicationURL].compactMap { $0 },
+            fileManager: fileManager
+        )
+    }
+
+    private static func applicationBundleCandidates(
+        currentApplicationURL: URL,
+        additionalApplicationURLs: [URL],
+        fileManager: FileManager
+    ) -> [URL] {
         let currentApplicationURL = currentApplicationURL.standardizedFileURL
         guard isOwnedApplicationBundle(currentApplicationURL, fileManager: fileManager) else {
             return []
         }
 
-        var candidates = [currentApplicationURL]
-        if let stagedApplicationURL {
-            candidates.append(stagedApplicationURL)
-        }
-
-        return safeUniqueURLs(candidates).filter {
+        return safeUniqueURLs([currentApplicationURL] + additionalApplicationURLs).filter {
             isOwnedApplicationBundle($0, fileManager: fileManager)
         }
+    }
+
+    static func externalRemovalApplicationBundleCandidates(
+        movedApplicationURL: URL?,
+        homeDirectory: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        let trashDirectory = homeDirectory.appendingPathComponent(".Trash", isDirectory: true)
+        return [movedApplicationURL]
+            .compactMap { $0?.standardizedFileURL }
+            .filter { $0.path.hasPrefix(trashDirectory.path + "/") }
+            .filter {
+                isOwnedApplicationBundle($0, fileManager: fileManager)
+            }
     }
 
     static func temporaryItemCandidates(

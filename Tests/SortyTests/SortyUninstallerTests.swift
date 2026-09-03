@@ -268,6 +268,45 @@ final class SortyUninstallerTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.path), [currentApplication.path])
     }
 
+    func testExternalRemovalCandidatesRequireExactOwnedAppMovedToTrash() throws {
+        let fileManager = FileManager.default
+        let home = makeTemporaryHome(fileManager: fileManager)
+        let trash = home.appendingPathComponent(".Trash", isDirectory: true)
+        let trashedSorty = trash.appendingPathComponent("Sorty.app", isDirectory: true)
+        let otherApp = trash.appendingPathComponent("Other.app", isDirectory: true)
+        let movedElsewhere = home.appendingPathComponent("Desktop/Sorty.app", isDirectory: true)
+
+        try createApplicationBundle(
+            at: trashedSorty,
+            bundleIdentifier: "com.sorty.app",
+            fileManager: fileManager
+        )
+        try createApplicationBundle(
+            at: otherApp,
+            bundleIdentifier: "com.example.other",
+            fileManager: fileManager
+        )
+        try createApplicationBundle(
+            at: movedElsewhere,
+            bundleIdentifier: "com.sorty.app",
+            fileManager: fileManager
+        )
+
+        let movedElsewhereCandidates = SortyUninstaller.externalRemovalApplicationBundleCandidates(
+            movedApplicationURL: movedElsewhere,
+            homeDirectory: home,
+            fileManager: fileManager
+        )
+        let movedToTrashCandidates = SortyUninstaller.externalRemovalApplicationBundleCandidates(
+            movedApplicationURL: trashedSorty,
+            homeDirectory: home,
+            fileManager: fileManager
+        )
+
+        XCTAssertTrue(movedElsewhereCandidates.isEmpty)
+        XCTAssertEqual(movedToTrashCandidates.map(\.path), [trashedSorty.path])
+    }
+
     func testPostTerminationRemovalPassesPathsAsShellArguments() {
         let target = URL(fileURLWithPath: "/tmp/Sorty's $pecial App.app", isDirectory: true)
         let ready = URL(fileURLWithPath: "/tmp/sorty-uninstall-ready-test")
