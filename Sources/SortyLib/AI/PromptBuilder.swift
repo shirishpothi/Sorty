@@ -557,9 +557,10 @@ struct PromptBuilder {
         }
         return """
         Return exactly one JSON object with no markdown, prose, progress lines, or reasoning outside JSON. Preferred compact format:
-        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning)}],"notes":"","learning_action":null}
+        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning),"subfolders":[]}],"notes":"","learning_action":null}
         Legacy format is also accepted:
         {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}],"learning_action":null}
+        Nest with "subfolders" (same folder shape, e.g. {"name":"","file_ids":[3],"reasoning":"..."}) when a folder holds 2+ distinct subgroups such as projects, years/months, or types; keep depth at 2 or less unless the user asks for more.
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
         Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says "only", change matching items only and leave nonmatches unchanged; descendants of a selected tagged folder match that folder.
@@ -698,6 +699,7 @@ struct PromptBuilder {
         - Never create an Unorganized or Unorganized Files folder. Put genuinely unplaceable files only in the unorganized field.
         - Use unorganized only when all four options fail. Uncertainty alone is not enough.
         - Prefer using file_ids in compact responses when IDs are provided.
+        - Nest with "subfolders" (same folder shape) when a folder holds 2+ distinct subgroups such as projects, years/months, or types; keep depth at 2 or less unless the user asks for more.
         - Every folder must include one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles.
         - Never use vague folder reasoning such as "these files belong together".
         - Group by type: Documents, Media, Code, Archives
@@ -711,7 +713,7 @@ struct PromptBuilder {
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
-        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping"}],"notes":"","learning_action":null}
+        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping","subfolders":[]}],"notes":"","learning_action":null}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """

@@ -21,7 +21,7 @@ Your single JSON object drives live organization animations and rename suggestio
 - NEVER create a folder whose name exactly matches an existing FILE name in the input.
 - Existing DIRECTORIES may be reused (you can organize files into them).
 - If a desired folder name conflicts with a file, choose a DIFFERENT name (add a qualifier or use a broader category).
-- Folder "name" values should normally be one folder name rather than a path.
+- Folder "name" values should normally be one folder name rather than a path. Nest with "subfolders", not "A/B" paths.
 - Exception: when the user prompt provides `VALID_STORAGE_PATHS`, an approved absolute storage path or one of its subfolders MUST be returned as one complete folder "name" value.
 
 # ORGANIZATION DECISION PRIORITY
@@ -98,6 +98,7 @@ Return only valid JSON matching this shape:
 
 ## Hierarchy
 - Choose folder count and depth from the decision priority and context-sensitive hierarchy rules above.
+- Nest with "subfolders" when a folder holds 2+ distinct subgroups (project, date, or type splits); keep depth at 2 or less unless the user asks for more.
 - Consolidate small categories when that improves findability, but keep them distinct when user preferences, project boundaries, examples, learnings, or existing structure support the distinction.
 - A single file may have its own folder when it is clearly a standalone project or starts a reusable category. Do not create a one-file folder merely to avoid using "unorganized".
 
@@ -248,7 +249,7 @@ The returned JSON object must satisfy all of the following:
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "subfolders": []
+                  "subfolders": [{"name": "Subgroup", "files": [{"filename": "nested.ext", "tags": ["Gray"]}], "description": "Distinct subgroup", "subfolders": []}]
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
