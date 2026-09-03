@@ -102,10 +102,20 @@ public class SparkleUpdateManager: ObservableObject {
         case available(version: String, releaseNotes: String?)
         case upToDate
         case error(String)
-        case downloading
+        case downloading(progress: Double?, downloadedBytes: UInt64, totalBytes: UInt64?)
         case readyToInstall
         case installing
         case disabled
+
+        /// True while an update is actively downloading or installing.
+        public var isBusyPhase: Bool {
+            switch self {
+            case .downloading, .installing:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     #if canImport(Sparkle)
@@ -471,6 +481,24 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     private var pendingReply: ((SPUUserUpdateChoice) -> Void)?
     private var isHoldingScheduledUpdate = false
     private var shouldInstallNextDiscoveredUpdate = false
+    private var downloadedBytes: UInt64 = 0
+    private var expectedContentLength: UInt64 = 0
+
+    /// Fraction 0...1 when the total size is known, otherwise nil.
+    private var downloadProgress: Double? {
+        guard expectedContentLength > 0 else { return nil }
+        return min(Double(downloadedBytes) / Double(expectedContentLength), 1.0)
+    }
+
+    private func publishDownloadProgress() {
+        stateCallback?(
+            .downloading(
+                progress: downloadProgress,
+                downloadedBytes: downloadedBytes,
+                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
+            )
+        )
+    }
 
     override func showUpdateFound(
         with appcastItem: SUAppcastItem,
@@ -486,7 +514,7 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
             switch choice {
             case .install:
                 self?.skipStore.clearSkipped(version: version)
-                self?.stateCallback?(.downloading)
+                self?.stateCallback?(.downloading(progress: nil, downloadedBytes: 0, totalBytes: nil))
             case .dismiss:
                 self?.skipStore.clearSkipped(version: version)
                 self?.stateCallback?(availableState)
@@ -562,13 +590,44 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     }
 
     override func showDownloadInitiated(cancellation: @escaping () -> Void) {
-        stateCallback?(.downloading)
+        downloadedBytes = 0
+        expectedContentLength = 0
+        stateCallback?(.downloading(progress: nil, downloadedBytes: 0, totalBytes: nil))
         super.showDownloadInitiated(cancellation: cancellation)
     }
 
+    override func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
+        self.expectedContentLength = expectedContentLength
+        super.showDownloadDidReceiveExpectedContentLength(expectedContentLength)
+        publishDownloadProgress()
+    }
+
+    override func showDownloadDidReceiveDataOfLength(_ length: UInt64) {
+        downloadedBytes += length
+        super.showDownloadDidReceiveDataOfLength(length)
+        publishDownloadProgress()
+    }
+
     override func showDownloadDidStartExtractingUpdate() {
-        stateCallback?(.downloading)
+        stateCallback?(
+            .downloading(
+                progress: nil,
+                downloadedBytes: downloadedBytes,
+                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
+            )
+        )
         super.showDownloadDidStartExtractingUpdate()
+    }
+
+    override func showExtractionReceivedProgress(_ progress: Double) {
+        super.showExtractionReceivedProgress(progress)
+        stateCallback?(
+            .downloading(
+                progress: min(max(progress, 0), 1),
+                downloadedBytes: downloadedBytes,
+                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
+            )
+        )
     }
 
     override func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {

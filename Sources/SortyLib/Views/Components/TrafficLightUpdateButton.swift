@@ -141,12 +141,33 @@ final class UpdateButtonNSView: NSView {
     private let busyLabelText = "DOWNLOADING"
     #endif
 
+    private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter
+    }()
+
+    /// "25.9 MB of 49.6 MB" style text for the tooltip and VoiceOver while downloading.
+    private var downloadStatusText: String? {
+        guard case .downloading(_, let downloaded, let total) = updateState else { return nil }
+        if let total {
+            return "\(Self.byteFormatter.string(fromByteCount: Int64(downloaded))) of \(Self.byteFormatter.string(fromByteCount: Int64(total)))"
+        }
+        if downloaded > 0 {
+            return "\(Self.byteFormatter.string(fromByteCount: Int64(downloaded))) downloaded"
+        }
+        return nil
+    }
+
     private var labelText: String {
         #if DEBUG
         isBusy ? busyLabelText : idleLabelText
         #else
         switch updateState {
-        case .downloading:
+        case .downloading(let progress, _, _):
+            if let progress {
+                return "\(Int((progress * 100).rounded()))%"
+            }
             return busyLabelText
         case .readyToInstall:
             return "INSTALL"
@@ -329,8 +350,9 @@ final class UpdateButtonNSView: NSView {
         #if !DEBUG
         guard updateState != state else { return }
         updateState = state
-        setBusyState(state == .downloading || state == .installing, animated: true)
+        setBusyState(state.isBusyPhase, animated: true)
         textLayer.string = labelText
+        toolTip = downloadStatusText ?? (state.isBusyPhase ? "Downloading update…" : nil)
         setExpanded(isBusy || isHovered, animated: true)
         updateAccessibilityDescription()
         needsLayout = true
@@ -619,8 +641,19 @@ final class UpdateButtonNSView: NSView {
         switch updateState {
         case .available(let version, _):
             setAccessibilityLabel("Download Sorty \(version)")
-        case .downloading:
-            setAccessibilityLabel("Sorty update is downloading")
+        case .downloading(let progress, _, _):
+            if let progress {
+                let percent = Int((progress * 100).rounded())
+                if let status = downloadStatusText {
+                    setAccessibilityLabel("Sorty update is downloading, \(percent) percent, \(status)")
+                } else {
+                    setAccessibilityLabel("Sorty update is downloading, \(percent) percent")
+                }
+            } else if let status = downloadStatusText {
+                setAccessibilityLabel("Sorty update is downloading, \(status)")
+            } else {
+                setAccessibilityLabel("Sorty update is downloading")
+            }
         case .readyToInstall:
             setAccessibilityLabel("Sorty update is ready to install and relaunch")
         case .installing:
