@@ -5,6 +5,7 @@
 //  Organization Strategy settings section
 //
 
+import AppKit
 import SwiftUI
 
 struct OrganizationStrategySettingsView: View {
@@ -24,6 +25,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var isRenamingInfoHovered: Bool = false
     @State private var isRenamingInfoPinned: Bool = false
     @State private var showingNamingInstructionsInfo: Bool = false
+    @State private var namingReferenceFolderURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -380,17 +382,59 @@ struct OrganizationStrategySettingsView: View {
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body))
 
+                                HStack(spacing: 8) {
+                                    Button {
+                                        chooseNamingReferenceFolder()
+                                    } label: {
+                                        Label(
+                                            namingReferenceFolderURL == nil ? "Choose Reference Folder" : "Change Reference Folder",
+                                            systemImage: "folder"
+                                        )
+                                    }
+                                    .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+
+                                    if let namingReferenceFolderURL {
+                                        Text(namingReferenceFolderURL.lastPathComponent)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                            .accessibilityLabel("Reference folder: \(namingReferenceFolderURL.lastPathComponent)")
+
+                                        Button {
+                                            self.namingReferenceFolderURL = nil
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Remove reference folder")
+                                        .accessibilityLabel("Remove reference folder")
+                                    }
+
+                                    Spacer()
+                                }
+
+                                if namingReferenceFolderURL != nil {
+                                    Text("Sorty sends representative filenames from this folder to your selected AI provider. It does not read file contents.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
                                 HStack {
                                     Button("Generate") {
                                         Task {
                                             do {
                                                 let instructions = try await namingGenerator.generateNamingInstructions(
                                                     from: namingPreferenceInput,
+                                                    referenceFolderURL: namingReferenceFolderURL,
                                                     config: viewModel.config
                                                 )
                                                 pendingPresetInstructions = instructions
                                                 showNamingInput = false
                                                 namingPreferenceInput = ""
+                                                namingReferenceFolderURL = nil
                                                 presetNameInput = ""
                                                 showingSavePresetAlert = true
                                             } catch {
@@ -399,7 +443,11 @@ struct OrganizationStrategySettingsView: View {
                                         }
                                     }
                                     .buttonStyle(.sortyPrimary(size: .small))
-                                    .disabled(namingPreferenceInput.isEmpty || namingGenerator.isGenerating)
+                                    .disabled(
+                                        (namingPreferenceInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                            && namingReferenceFolderURL == nil)
+                                            || namingGenerator.isGenerating
+                                    )
 
                                     if namingGenerator.isGenerating {
                                         SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
@@ -411,6 +459,7 @@ struct OrganizationStrategySettingsView: View {
                                     Button("Cancel") {
                                         showNamingInput = false
                                         namingPreferenceInput = ""
+                                        namingReferenceFolderURL = nil
                                     }
                                     .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
                                 }
@@ -475,6 +524,21 @@ struct OrganizationStrategySettingsView: View {
 
     private var isFastModeOn: Bool {
         !viewModel.config.provider.supportsDeepScan || !viewModel.config.enableDeepScan
+    }
+
+    private func chooseNamingReferenceFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose a Reference Folder"
+        panel.message = "Choose a folder with filenames that follow the style you want Sorty to learn."
+        panel.prompt = "Choose Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        namingReferenceFolderURL = url
+        HapticFeedbackManager.shared.selection()
     }
 
     private func enforceProviderScanMode() {
