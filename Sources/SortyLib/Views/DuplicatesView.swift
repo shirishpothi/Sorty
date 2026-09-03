@@ -255,6 +255,7 @@ struct DuplicatesView: View {
                 ? "exclamationmark.triangle.fill"
                 : "checkmark.circle.fill",
             heroTint: detectionManager.unreadableFileCount > 0 ? .orange : .green,
+            celebratesAppearance: detectionManager.unreadableFileCount == 0,
             actionTitle: "Scan Another Folder",
             action: selectDirectory
         )
@@ -1707,23 +1708,42 @@ struct DuplicatesEmptyStateView: View {
     let actionTitle: String
     var actionAccessibilityIdentifier: String?
     var animatesIcon = false
+    var celebratesAppearance = false
     var isDefaultAction = false
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
 
     var body: some View {
         VStack(spacing: 20) {
-            Group {
+            ZStack {
+                if celebratesAppearance {
+                    Circle()
+                        .stroke(heroTint ?? .green, lineWidth: 2)
+                        .frame(width: 100, height: 100)
+                        .scaleEffect(reduceMotion ? 1 : (hasAppeared ? 1.28 : 0.78))
+                        .opacity(hasAppeared ? 0 : 0.42)
+                }
+
                 if animatesIcon {
                     ScanningPulseIcon(systemName: icon, color: iconColor)
                 } else {
-                    EmptyStateHeroIcon(systemName: icon, tint: heroTint)
+                    EmptyStateHeroIcon(
+                        systemName: icon,
+                        tint: heroTint,
+                        symbolBounceTrigger: celebratesAppearance && hasAppeared && !reduceMotion
+                    )
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.8)
-            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+            .scaleEffect(hasAppeared ? 1 : 0.82)
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.18)
+                    : .spring(response: 0.48, dampingFraction: 0.64).delay(0.06),
+                value: hasAppeared
+            )
             .accessibilityHidden(true)
 
             VStack(spacing: 8) {
@@ -1739,8 +1759,13 @@ struct DuplicatesEmptyStateView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(title). \(description)")
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .offset(y: reduceMotion || hasAppeared ? 0 : 10)
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.18).delay(0.04)
+                    : .spring(response: 0.5, dampingFraction: 0.82).delay(0.16),
+                value: hasAppeared
+            )
 
             Button(action: action) {
                 Text(actionTitle)
@@ -1761,19 +1786,25 @@ struct DuplicatesEmptyStateView: View {
                     ?? "\(title.replacingOccurrences(of: " ", with: ""))Action"
             )
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .offset(y: reduceMotion || hasAppeared ? 0 : 14)
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.18).delay(0.08)
+                    : .spring(response: 0.52, dampingFraction: 0.82).delay(0.24),
+                value: hasAppeared
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                hasAppeared = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                beamHasAppeared = true
-            }
+        .task {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            hasAppeared = true
+
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 80 : 420))
+            guard !Task.isCancelled else { return }
+            beamHasAppeared = true
         }
     }
 }

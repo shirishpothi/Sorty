@@ -288,17 +288,20 @@ struct EmptyStateHeroIcon: View {
     var tint: Color?
     var iconSize: CGFloat
     var circleSize: CGFloat
+    var symbolBounceTrigger: Bool
 
     init(
         systemName: String,
         tint: Color? = nil,
         iconSize: CGFloat = 44,
-        circleSize: CGFloat = 100
+        circleSize: CGFloat = 100,
+        symbolBounceTrigger: Bool = false
     ) {
         self.systemName = systemName
         self.tint = tint
         self.iconSize = iconSize
         self.circleSize = circleSize
+        self.symbolBounceTrigger = symbolBounceTrigger
     }
 
     var body: some View {
@@ -311,6 +314,7 @@ struct EmptyStateHeroIcon: View {
                 Image(systemName: systemName)
                     .font(.system(size: iconSize))
                     .foregroundStyle(tint.gradient)
+                    .symbolEffect(.bounce, value: symbolBounceTrigger)
             } else {
                 Image(systemName: systemName)
                     .font(.system(size: iconSize))
