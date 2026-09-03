@@ -22,7 +22,6 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 | Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Blocks all internet (network) connections from the app |
 | Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
 | Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
-| Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
 | Sorty Codex Skill | `labs-sorty-codex-skill` | PostHog assignment | Experimental one-click installer in Settings → Experimental; currently registered at 100% rollout |
 

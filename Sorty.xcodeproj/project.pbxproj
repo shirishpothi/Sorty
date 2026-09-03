@@ -135,7 +135,6 @@
 		AABBCC220002000000000067 /* CompletionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000067 /* CompletionStepView.swift */; };
 		AABBCC22000200000000006A /* CopyButtonWithAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */; };
 		AABBCC22000200000000006B /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006B /* CostCalculator.swift */; };
-		AABBCC22000200000000006C /* DemoStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006C /* DemoStepView.swift */; };
 		AABBCC22000200000000006F /* FinderIntegrationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */; };
 		AABBCC220002000000000071 /* FormattedReasoningText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000071 /* FormattedReasoningText.swift */; };
 		AABBCC220002000000000072 /* GlassyBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000072 /* GlassyBackButton.swift */; };
@@ -163,7 +162,6 @@
 		AABBCC22000200000000008D /* RefreshManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008D /* RefreshManager.swift */; };
 		AABBCC220002000000000090 /* SettingsCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000090 /* SettingsCategory.swift */; };
 		AABBCC220002000000000091 /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000091 /* SettingsComponents.swift */; };
-		AABBCC220002000000000092 /* SimulatedDemoAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */; };
 		AABBCC220002000000000094 /* SortyDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000094 /* SortyDesignSystem.swift */; };
 		AABBCC220002000000000095 /* SteeringPromptManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000095 /* SteeringPromptManager.swift */; };
 		AABBCC220002000000000096 /* TagDotsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000096 /* TagDotsView.swift */; };
@@ -467,7 +465,6 @@
 		AABBCC110001000000000067 /* CompletionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionStepView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyButtonWithAnimation.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006B /* CostCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostCalculator.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000006C /* DemoStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStepView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderIntegrationSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000071 /* FormattedReasoningText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattedReasoningText.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000072 /* GlassyBackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassyBackButton.swift; sourceTree = "<group>"; };
@@ -497,7 +494,6 @@
 		AABBCC11000100000000008D /* RefreshManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000090 /* SettingsCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCategory.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000091 /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatedDemoAnimationView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000094 /* SortyDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyDesignSystem.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000095 /* SteeringPromptManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteeringPromptManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000096 /* TagDotsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagDotsView.swift; sourceTree = "<group>"; };
@@ -963,11 +959,9 @@
 			isa = PBXGroup;
 			children = (
 				AABBCC110001000000000067 /* CompletionStepView.swift */,
-				AABBCC11000100000000006C /* DemoStepView.swift */,
 				AABBCC11000100000000007F /* OnboardingStepProtocol.swift */,
 				AABBCC110001000000000084 /* PermissionsStepView.swift */,
 				AABBCC11000100000000008C /* ProviderSelectionStepView.swift */,
-				AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */,
 				AABBCC110001000000000098 /* WelcomeStepView.swift */,
 				AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */,
 			);

@@ -74,23 +74,6 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: "sensitiveActionAuthenticationEnabled")
     }
 
-    /// Controls whether the interactive demo is shown during onboarding.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app featureDemoEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app featureDemoEnabled -bool false
-    /// ```
-    public static var featureDemoEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "featureDemoEnabled") == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
-    }
-
     /// Controls whether subscription-based auth methods are available for supported AI providers.
     ///
     /// Enabled by default. Disable via Terminal:

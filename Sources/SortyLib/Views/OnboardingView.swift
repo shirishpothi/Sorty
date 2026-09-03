@@ -210,13 +210,6 @@ public struct OnboardingView: View {
         case .workflow:
             WorkflowSelectionStepView()
                 .transition(TransitionStyles.slideFromRight)
-        case .demo:
-            DemoStepView(onComplete: {
-                withAnimation(.pageTransition) {
-                    currentStep = .completion
-                }
-            })
-            .transition(TransitionStyles.slideFromRight)
         case .completion:
             OnboardingCompletionDestination(
                 hasCompletedOnboarding: $hasCompletedOnboarding,
@@ -230,7 +223,7 @@ public struct OnboardingView: View {
         validation: OnboardingStepValidationResult
     ) -> some View {
         let sideControlWidth: CGFloat = 180
-        let backHidden = (currentStep == OnboardingStep.activeCases.first || currentStep == .completion)
+        let backHidden = (currentStep == OnboardingStep.allCases.first || currentStep == .completion)
 
         return ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
@@ -257,43 +250,32 @@ public struct OnboardingView: View {
 
                     Spacer(minLength: 0)
 
-                    // Next/Skip button
+                    // Next button
                     Group {
                         if currentStep != .completion {
-                            if currentStep == .demo {
-                                Button {
-                                    navigateForwardFromControls()
-                                } label: {
-                                    Text("Skip Demo")
-                                        .frame(minWidth: 80)
-                                }
-                                .buttonStyle(.bordered)
-                                .accessibilityIdentifier("OnboardingSkipDemoButton")
-                            } else {
-                                Button {
-                                    navigateForwardFromControls()
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        if isAdvancing {
-                                            BouncingSpinner(size: 10, color: .white)
-                                        }
-                                        Text(currentStep == .permissions ? "Continue" : "Next")
-                                            .numericTextTransition(animationValue: currentStep)
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
+                            Button {
+                                navigateForwardFromControls()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    if isAdvancing {
+                                        BouncingSpinner(size: 10, color: .white)
                                     }
+                                    Text(currentStep == .permissions ? "Continue" : "Next")
+                                        .numericTextTransition(animationValue: currentStep)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
                                 }
-                                .buttonStyle(.sortyPrimary)
-                                .onboardingBeamBorder(
-                                    active: validation.canAdvance && !isAdvancing
-                                )
-                                .keyboardShortcut(.rightArrow, modifiers: [])
-                                .disabled(!validation.canAdvance || isAdvancing)
-                                .opacity(
-                                    validation.canAdvance && !isAdvancing ? 1.0 : 0.5
-                                )
-                                .accessibilityIdentifier("OnboardingAdvanceButton")
                             }
+                            .buttonStyle(.sortyPrimary)
+                            .onboardingBeamBorder(
+                                active: validation.canAdvance && !isAdvancing
+                            )
+                            .keyboardShortcut(.rightArrow, modifiers: [])
+                            .disabled(!validation.canAdvance || isAdvancing)
+                            .opacity(
+                                validation.canAdvance && !isAdvancing ? 1.0 : 0.5
+                            )
+                            .accessibilityIdentifier("OnboardingAdvanceButton")
                         }
                     }
                     .frame(width: sideControlWidth, alignment: .trailing)
@@ -328,7 +310,7 @@ public struct OnboardingView: View {
     /// Normalized progress (0...1) through the active onboarding steps. Drives
     /// the background gradient so it climbs higher as the user advances.
     private var gradientProgress: Double {
-        let active = OnboardingStep.activeCases
+        let active = OnboardingStep.allCases
         guard active.count > 1, let index = active.firstIndex(of: currentStep) else {
             return 0
         }
@@ -392,7 +374,7 @@ public struct OnboardingView: View {
     }
 
     private func navigateToPreviousStep() {
-        guard currentStep != OnboardingStep.activeCases.first && currentStep != .completion else { return }
+        guard currentStep != OnboardingStep.allCases.first && currentStep != .completion else { return }
         HapticFeedbackManager.shared.selection()
         withAnimation(.pageTransition) {
             currentStep = currentStep.previous
@@ -403,11 +385,6 @@ public struct OnboardingView: View {
         guard currentStep != .completion else { return }
 
         switch currentStep {
-        case .demo:
-            HapticFeedbackManager.shared.selection()
-            withAnimation(.pageTransition) {
-                currentStep = .completion
-            }
         case .provider, .permissions, .workflow:
             attemptAdvance()
         case .completion:
@@ -552,32 +529,20 @@ enum OnboardingStep: Int, CaseIterable {
     case provider = 0
     case permissions = 1
     case workflow = 2
-    case demo = 3
-    case completion = 4
-
-    @MainActor
-    static var activeCases: [OnboardingStep] {
-        allCases.filter { step in
-            if step == .demo {
-                return FeatureFlags.featureDemoEnabled
-            }
-            return true
-        }
-    }
+    case completion = 3
 
     var title: String {
         switch self {
         case .provider: return "AI Provider"
         case .permissions: return "Permissions"
         case .workflow: return "Workflow"
-        case .demo: return "Try It Out"
         case .completion: return "Ready!"
         }
     }
 
     @MainActor
     var next: OnboardingStep {
-        let active = OnboardingStep.activeCases
+        let active = OnboardingStep.allCases
         guard let currentIndex = active.firstIndex(of: self) else { return self }
         let nextIndex = min(currentIndex + 1, active.count - 1)
         return active[nextIndex]
@@ -585,7 +550,7 @@ enum OnboardingStep: Int, CaseIterable {
 
     @MainActor
     var previous: OnboardingStep {
-        let active = OnboardingStep.activeCases
+        let active = OnboardingStep.allCases
         guard let currentIndex = active.firstIndex(of: self) else { return self }
         let prevIndex = max(currentIndex - 1, 0)
         return active[prevIndex]
@@ -607,7 +572,7 @@ extension OnboardingStep {
                 return .valid
             }
             return .blocked("Grant Files & Folders access before continuing.")
-        case .workflow, .demo, .completion:
+        case .workflow, .completion:
             return .valid
         }
     }
@@ -2994,7 +2959,7 @@ struct OnboardingProgressBar: View {
 
     @MainActor
     private var activeSteps: [OnboardingStep] {
-        OnboardingStep.activeCases
+        OnboardingStep.allCases
     }
 
     var body: some View {

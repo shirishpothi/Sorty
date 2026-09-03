@@ -29547,40 +29547,6 @@
         }
       }
     },
-    "Skip Demo": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demo überspringen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saltar Demo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passer le démo"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デモスキップ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跳过演示"
-          }
-        }
-      }
-    },
     "Skip for Now": {
       "localizations": {
         "de": {
