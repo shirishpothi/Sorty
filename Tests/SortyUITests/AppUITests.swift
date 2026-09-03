@@ -118,23 +118,6 @@ final class AppUITests: XCTestCase {
              }
         }
         
-        // 4. Test Temperature Slider
-        let slider = app.sliders["TemperatureSlider"]
-        if waitForElement(slider) {
-             slider.adjust(toNormalizedSliderPosition: 0.0)
-             Thread.sleep(forTimeInterval: 0.2)
-             // Check for 0.0 value text
-             let foundLow = app.staticTexts.allElementsBoundByIndex.contains { $0.label.contains("0.0") }
-             
-             slider.adjust(toNormalizedSliderPosition: 1.0)
-             Thread.sleep(forTimeInterval: 0.2)
-             let foundHigh = app.staticTexts.allElementsBoundByIndex.contains { $0.label.contains("1.0") }
-             
-             XCTAssertTrue(foundLow || foundHigh, "Slider should update UI value")
-             
-             // Reset
-             slider.adjust(toNormalizedSliderPosition: 0.7)
-        }
     }
 
     // MARK: - Exclusion Rules Functional Tests
@@ -395,13 +378,7 @@ final class AppUITests: XCTestCase {
             reasoningToggle.click()
         }
 
-        // 4. Adjust temperature
-        let temperatureSlider = app.sliders["TemperatureSlider"]
-        if waitForElement(temperatureSlider, timeout: 2.0) {
-            temperatureSlider.adjust(toNormalizedSliderPosition: 0.5)
-        }
-
-        // 5. Test connection button should be available
+        // 4. Test connection button should be available
         let testConnectionButton = app.buttons["TestConnectionButton"]
         if waitForElement(testConnectionButton, timeout: 2.0) {
             XCTAssertTrue(testConnectionButton.exists, "Test connection should be available after configuration")
@@ -411,12 +388,6 @@ final class AppUITests: XCTestCase {
         navigateToView("OrganizeSidebarItem")
         navigateToView("SettingsSidebarItem")
 
-        // Verify settings persisted
-        if waitForElement(temperatureSlider, timeout: 2.0) {
-            // Temperature should still be at 0.5
-            // (Can't easily read slider value in UI tests, but the fact the view loaded is good)
-            XCTAssertTrue(temperatureSlider.exists, "Settings should persist after navigation")
-        }
     }
 
     func testCompleteExclusionRuleWorkflow() throws {
@@ -553,42 +524,6 @@ final class AppUITests: XCTestCase {
             XCTAssertTrue(hasExpectedContent || app.windows.count > 0,
                          "Clicking \(identifier) should load appropriate content")
         }
-    }
-
-    // MARK: - Data Persistence Tests
-
-    func testSettingsPersistAfterNavigation() throws {
-        navigateToView("SettingsSidebarItem")
-
-        // Make a change
-        let temperatureSlider = app.sliders["TemperatureSlider"]
-        if waitForElement(temperatureSlider, timeout: 2.0) {
-            // Set to a specific value
-            temperatureSlider.adjust(toNormalizedSliderPosition: 0.3)
-            Thread.sleep(forTimeInterval: 0.3)
-        }
-
-        // Navigate through all other views
-        let otherViews = [
-            "OrganizeSidebarItem",
-            "DuplicatesSidebarItem",
-            "HistorySidebarItem",
-            "ExclusionsSidebarItem",
-            "WatchedFoldersSidebarItem"
-        ]
-
-        for viewId in otherViews {
-            navigateToView(viewId)
-            Thread.sleep(forTimeInterval: 0.2)
-        }
-
-        // Return to settings
-        navigateToView("SettingsSidebarItem")
-        Thread.sleep(forTimeInterval: 0.3)
-
-        // Verify slider still exists (settings persisted)
-        XCTAssertTrue(waitForElement(temperatureSlider, timeout: 2.0),
-                     "Settings should persist after navigating through all views")
     }
 
     // MARK: - Accessibility Tests

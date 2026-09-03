@@ -63,8 +63,6 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case strategyNamingInstructions = "settings.strategy.naming-instructions"
     case rulesContentRules = "settings.rules.content-rules"
     case rulesFileTagging = "settings.rules.file-tagging"
-    case rulesTemperature = "settings.rules.temperature"
-    case rulesTemperatureSlider = "settings.rules.temperature-slider"
     case rulesOrganizationStyle = "settings.rules.organization-style"
     case automationGlobalModel = "settings.automation.global-model"
     case automationSeparateModel = "settings.automation.separate-model"
@@ -164,8 +162,7 @@ public extension SettingsFocusTarget {
              .strategyMaxFilenameLength, .strategyNamingInstructions:
             return .strategy
 
-        case .rulesContentRules, .rulesFileTagging, .rulesTemperature,
-             .rulesTemperatureSlider, .rulesOrganizationStyle:
+        case .rulesContentRules, .rulesFileTagging, .rulesOrganizationStyle:
             return .rules
 
         case .automationGlobalModel, .automationSeparateModel, .automationLaunchAtLogin,
@@ -220,7 +217,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     case provider = "AI Provider"
     case strategy = "Analysis & Naming"
     case rules = "Organize Rules"
-    case tuning = "Parameter Tuning"
     case automation = "Automation"
     case deeplinks = "Deeplinks"
     case finder = "Finder Integration"
@@ -235,7 +231,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     
     public var group: SettingsCategoryGroup {
         switch self {
-        case .provider, .strategy, .rules, .tuning:
+        case .provider, .strategy, .rules:
             return .aiAndOrganization
         case .automation, .deeplinks, .finder, .notifications:
             return .features
@@ -245,7 +241,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     }
     
     public static func categories(for group: SettingsCategoryGroup) -> [SettingsCategory] {
-        allCases.filter { $0.group == group && $0 != .tuning }
+        allCases.filter { $0.group == group }
     }
     
     public var icon: String {
@@ -253,7 +249,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .rules: return "folder.badge.gearshape"
         case .provider: return "cpu"
         case .strategy: return "wand.and.stars"
-        case .tuning: return "slider.horizontal.3"
         case .automation: return "bolt.circle"
         case .deeplinks: return "link.badge.plus"
         case .finder: return "folder.badge.plus"
@@ -271,7 +266,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .rules: return .blue
         case .provider: return .purple
         case .strategy: return .orange
-        case .tuning: return .green
         case .automation: return .green
         case .deeplinks: return .cyan
         case .finder: return .cyan
@@ -291,9 +285,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy:
             return ["strategy", "analysis", "fast mode", "deep scan", "deep scanning", "content analysis", "vision", "image analysis", "naming style", "rename", "renaming", "folder structure", "organization style"]
         case .rules:
-            return ["rules", "controls", "organization controls", "instructions", "tagging", "pattern", "temperature", "creativity", "strictness"]
-        case .tuning:
-            return ["temperature", "creativity", "strictness", "parameters", "timeouts", "quality"]
+            return ["rules", "controls", "organization controls", "instructions", "tagging", "pattern"]
         case .automation:
             return ["automation", "watched folders", "auto organize", "background", "scheduler", "spring cleaning", "folder trigger", "custom model", "global model", "launch at login", "login item", "dock icon", "menu bar app"]
         case .deeplinks:
@@ -367,14 +359,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 feature("Content Rules", "Control AI suggestions that affect organized files.", keywords: ["rules", "organization controls"], target: .rulesContentRules),
                 feature("Enable File Tagging", "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"], target: .rulesFileTagging),
-                feature("AI Temperature", "Adjust creativity vs determinism in generation output.", keywords: ["creativity", "focused", "balanced", "creative", "slider"], target: .rulesTemperatureSlider),
                 feature("Organization Style", "Pick personas and style preferences for folder structures.", keywords: ["persona", "folder style"], target: .rulesOrganizationStyle)
-            ]
-        case .tuning:
-            return [
-                SettingsFeatureSnippet(title: "AI Temperature", summary: "Adjust creativity vs determinism in generation output."),
-                SettingsFeatureSnippet(title: "Timeout Behavior", summary: "Tune request timeout settings for slower providers."),
-                SettingsFeatureSnippet(title: "Response Quality", summary: "Balance speed, quality, and strictness.")
             ]
         case .automation:
             return [
@@ -509,8 +494,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .strategyFastMode
         case .rules:
             return .rulesContentRules
-        case .tuning:
-            return nil
         case .automation:
             return .automationGlobalModel
         case .deeplinks:

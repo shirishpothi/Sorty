@@ -549,6 +549,8 @@ public enum VisionBatchStrategy: String, Codable, CaseIterable, Sendable {
 }
 
 public struct AIConfig: Codable, Sendable, Equatable {
+    public static let organizationTemperature = 0.7
+
     public var provider: AIProvider {
         didSet {
             if provider != oldValue {
@@ -559,7 +561,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var apiURL: String?
     public var apiKey: String?
     public var model: String
-    public var temperature: Double
     
     // Advanced Settings
     public var requestTimeout: TimeInterval
@@ -608,7 +609,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         apiURL: String? = nil,
         apiKey: String? = nil,
         model: String = AIProvider.openAICompatible.defaultModel,
-        temperature: Double = 0.7,
+        temperature _: Double = AIConfig.organizationTemperature,
         requestTimeout: TimeInterval = 120,
         resourceTimeout: TimeInterval = 600,
         systemPromptOverride: String? = nil,
@@ -646,7 +647,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.apiURL = apiURL
         self.apiKey = apiKey
         self.model = model
-        self.temperature = temperature
         self.requestTimeout = requestTimeout
         self.resourceTimeout = resourceTimeout
         self.systemPromptOverride = systemPromptOverride
@@ -730,7 +730,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey)
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
         model = decodedModel ?? provider.defaultModel
-        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.7
+        _ = try container.decodeIfPresent(Double.self, forKey: .temperature)
         requestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
         resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
         systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
@@ -781,7 +781,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(apiURL, forKey: .apiURL)
         try container.encodeIfPresent(apiKey, forKey: .apiKey)
         try container.encode(model, forKey: .model)
-        try container.encode(temperature, forKey: .temperature)
+        try container.encode(Self.organizationTemperature, forKey: .temperature)
         try container.encode(requestTimeout, forKey: .requestTimeout)
         try container.encode(resourceTimeout, forKey: .resourceTimeout)
         try container.encodeIfPresent(systemPromptOverride, forKey: .systemPromptOverride)
@@ -820,7 +820,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         provider: .openAICompatible,
         apiURL: "https://api.openai.com",
         model: AIProvider.openAICompatible.defaultModel,
-        temperature: 0.7,
         requestTimeout: 120,
         resourceTimeout: 600,
         systemPromptOverride: nil,

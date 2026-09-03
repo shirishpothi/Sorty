@@ -26,47 +26,12 @@ struct OrganizationRulesSettingsView: View {
             .settingsFocusable(.rulesContentRules)
             .animatedAppearance(delay: 0.05)
 
-            SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Temperature")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(viewModel.config.temperature, specifier: "%.2f")")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                            .numericTextTransition(
-                                animationValue: viewModel.config.temperature
-                            )
-                    }
-
-                    NoTickSlider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
-                        .onChange(of: viewModel.config.temperature) { _, _ in
-                            HapticFeedbackManager.shared.selection()
-                        }
-                        .accessibilityIdentifier("TemperatureSlider")
-                        .settingsFocusableSetting(.rulesTemperatureSlider)
-
-                    HStack {
-                        Text("Focused")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("Creative")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .settingsFocusable(.rulesTemperature)
-            .animatedAppearance(delay: 0.1)
-
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
                 PersonaPickerView()
             }
             .settingsFocusable(.rulesOrganizationStyle)
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.1)
         }
     }
 }

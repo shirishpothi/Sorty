@@ -148,7 +148,6 @@ final class MultimodalRequestFormatTests: XCTestCase {
             apiURL: "https://openrouter.ai/api/v1",
             apiKey: "test-key",
             model: "openrouter/free",
-            temperature: 0.7,
             enableStreaming: false
         )
         let client = OpenAIClient(config: config)

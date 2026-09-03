@@ -203,7 +203,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         )
         await viewModel.loadPersistedState()
 
-        viewModel.config.temperature = 0.2
+        viewModel.config.enableReasoning.toggle()
         try await Task.sleep(for: .milliseconds(600))
 
         let deletedBeforeHydration = await recorder.deletedKeys()

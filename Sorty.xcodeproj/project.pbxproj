@@ -150,7 +150,6 @@
 		AABBCC22000200000000007E /* OnboardingAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007E /* OnboardingAudioManager.swift */; };
 		AABBCC220002000000000080 /* OrganizationRulesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */; };
 		AABBCC220002000000000081 /* OrganizationStrategySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */; };
-		AABBCC220002000000000083 /* ParameterTuningSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */; };
 		AABBCC220002000000000084 /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000084 /* PermissionsStepView.swift */; };
 		AABBCC220002000000000087 /* PreviewActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000087 /* PreviewActionsView.swift */; };
 		AABBCC220002000000000088 /* PreviewHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000088 /* PreviewHeaderView.swift */; };
@@ -481,7 +480,6 @@
 		AABBCC11000100000000007E /* OnboardingAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAudioManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationRulesSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationStrategySettingsView.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterTuningSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000084 /* PermissionsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsStepView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000087 /* PreviewActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewActionsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000088 /* PreviewHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHeaderView.swift; sourceTree = "<group>"; };
@@ -927,7 +925,6 @@
 				D727A0010000000000000001 /* PermissionsSettingsView.swift */,
 				AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */,
 				AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */,
-				AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */,
 				AABBCC110001000000000090 /* SettingsCategory.swift */,
 				AABBCC110001000000000091 /* SettingsComponents.swift */,
 				AABBCC110001000000000097 /* TroubleshootingSettingsView.swift */,

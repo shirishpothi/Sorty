@@ -48,7 +48,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": temperature ?? config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
         
         // Add max_tokens if specified
@@ -119,7 +119,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": contentArray]
             ],
-            "temperature": temperature ?? config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
         
         if let maxTokens = config.maxTokens {
@@ -195,7 +195,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt ?? "You are a helpful assistant."],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": 0.7
+            "temperature": AIConfig.organizationTemperature
         ]
         
         if let maxTokens = config.maxTokens {

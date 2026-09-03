@@ -75,7 +75,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": temperature ?? config.temperature,
+            "temperature": AIConfig.organizationTemperature,
             // Copilot often requires stream=true for best results, but supports false too.
         ]
         
@@ -145,7 +145,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userContent]
             ],
-            "temperature": temperature ?? config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
         
         if let maxTokens = config.maxTokens {
@@ -277,7 +277,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 ["role": "system", "content": systemPrompt ?? "You are a helpful assistant."],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": 0.7
+            "temperature": AIConfig.organizationTemperature
         ]
         
         let session = await getSession()

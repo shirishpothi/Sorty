@@ -182,7 +182,7 @@ struct SettingsView: View {
     }
     
     private var availableCategories: [SettingsCategory] {
-        SettingsCategory.allCases.filter(isCategoryEnabled)
+        SettingsCategory.allCases
     }
     
     private var filteredCategories: [SettingsCategory] {
@@ -225,16 +225,11 @@ struct SettingsView: View {
             }
     }
     
-    private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
-        category != .tuning
-    }
-
     private func analyticsSectionName(_ category: SettingsCategory) -> String {
         switch category {
         case .provider: return "ai_provider"
         case .strategy: return "analysis_and_naming"
         case .rules: return "organize_rules"
-        case .tuning: return "parameter_tuning"
         case .automation: return "automation"
         case .deeplinks: return "deeplinks"
         case .finder: return "finder_integration"
@@ -394,8 +389,6 @@ struct SettingsView: View {
             AIProviderSettingsView().environmentObject(viewModel)
         case .strategy:
             OrganizationStrategySettingsView().environmentObject(viewModel)
-        case .tuning:
-            ParameterTuningSettingsView().environmentObject(viewModel)
         case .automation:
             AutomationSettingsView()
                 .environmentObject(viewModel)

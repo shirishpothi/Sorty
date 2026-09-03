@@ -54,7 +54,7 @@ final class SettingsSearchTests: XCTestCase {
 
     func testCategoriesForGroupPartitionsAllCasesWithoutDuplicates() {
         let grouped = SettingsCategoryGroup.allCases.flatMap(SettingsCategory.categories(for:))
-        let visibleCategories = SettingsCategory.allCases.filter { $0 != .tuning }
+        let visibleCategories = SettingsCategory.allCases
 
         XCTAssertEqual(Set(grouped), Set(visibleCategories))
         XCTAssertEqual(grouped.count, visibleCategories.count)
@@ -81,7 +81,7 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testEveryVisibleFeatureSnippetHasAFocusTarget() {
-        for category in SettingsCategory.allCases where category != .tuning {
+        for category in SettingsCategory.allCases {
             for snippet in category.featureSnippets {
                 XCTAssertEqual(
                     category.focusTarget(for: snippet)?.category,
@@ -132,7 +132,7 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testEveryFocusTargetRoutesToAVisibleCategory() {
-        let visibleCategories = Set(SettingsCategory.allCases.filter { $0 != .tuning })
+        let visibleCategories = Set(SettingsCategory.allCases)
 
         for target in SettingsFocusTarget.allCases {
             XCTAssertTrue(
@@ -143,7 +143,7 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testEveryVisibleCategoryFallbackHasAFocusTarget() {
-        for category in SettingsCategory.allCases where category != .tuning {
+        for category in SettingsCategory.allCases {
             let fallback = SettingsFeatureSnippet(
                 title: category.rawValue,
                 summary: "Open this section"

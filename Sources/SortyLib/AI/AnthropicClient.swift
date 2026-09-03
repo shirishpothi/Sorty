@@ -58,7 +58,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "messages": [
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": temperature ?? config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
 
         if config.enableStreaming {
@@ -118,7 +118,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "messages": [
                 ["role": "user", "content": contentArray]
             ],
-            "temperature": temperature ?? config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
         
         if config.enableStreaming {
@@ -285,7 +285,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "messages": [
                 ["role": "user", "content": prompt]
             ],
-            "temperature": config.temperature
+            "temperature": AIConfig.organizationTemperature
         ]
         
         let request = try AIRequestSupport.makeJSONRequest(

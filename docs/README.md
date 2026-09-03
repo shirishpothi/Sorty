@@ -79,15 +79,6 @@ Before organizing, you can provide specific guidance:
 
 Sorty passes existing Finder tag names and visible Finder label colors to the organizer. When an instruction selects a tagged folder, its descendants are included; items that do not match an "only" instruction stay unchanged.
 
-### Temperature Control
-
-Adjust Sorty's creativity in Settings:
-- **Low (0.0-0.3)**: More predictable, strict categorization
-- **Medium (0.4-0.6)**: Balanced approach
-- **High (0.7-1.0)**: More creative groupings
-
----
-
 ## The Learnings
 
 The Learnings is a passive learning system that builds a personalized understanding of how you prefer to organize files.
