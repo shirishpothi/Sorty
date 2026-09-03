@@ -93,6 +93,12 @@ struct CodexSkillInstallerCard: View {
                 }
                 .buttonStyle(.sortyProminent(intent: .warning, size: .small))
                 .accessibilityIdentifier("experimental.codex-skill.replace")
+                .contextMenu {
+                    Button("Remove Existing Skill", role: .destructive) {
+                        isConfirmingRemoval = true
+                    }
+                    .accessibilityIdentifier("experimental.codex-skill.remove")
+                }
 
                 Button("Show Existing Skill", action: installer.revealExistingSkill)
                     .buttonStyle(.plain)
