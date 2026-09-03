@@ -248,12 +248,13 @@ private struct HUDNotificationActionGrid: View {
     let actions: [HUDNotificationAction]
 
     private let columns = [
-        GridItem(.adaptive(minimum: 136, maximum: 210), spacing: 8, alignment: .leading)
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
     ]
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-            ForEach(actions) { action in
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
                 Button(role: action.role) {
                     action.action()
                 } label: {
@@ -261,8 +262,14 @@ private struct HUDNotificationActionGrid: View {
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Trailing odd action (e.g. "Never show again" below "Try Faster Model" + "Cancel") spans the full row.
+                .gridCellColumns(isFullWidthRow(index) ? 2 : 1)
             }
         }
+    }
+
+    private func isFullWidthRow(_ index: Int) -> Bool {
+        actions.count % 2 == 1 && index == actions.count - 1
     }
 }
 
