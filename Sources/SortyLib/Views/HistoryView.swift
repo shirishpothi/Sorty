@@ -683,7 +683,7 @@ struct HistoryHeader: View {
                 emptyStateTitleRow
             }
         }
-        .padding(.horizontal, showsControls ? 24 : 32)
+        .padding(.horizontal, 24)
         .padding(.vertical, showsControls ? 12 : 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")

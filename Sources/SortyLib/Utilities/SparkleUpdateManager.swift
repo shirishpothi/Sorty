@@ -102,7 +102,7 @@ public class SparkleUpdateManager: ObservableObject {
         case available(version: String, releaseNotes: String?)
         case upToDate
         case error(String)
-        case downloading(progress: Double?, downloadedBytes: UInt64, totalBytes: UInt64?)
+        case downloading(progress: Double?)
         case readyToInstall
         case installing
         case disabled
@@ -491,13 +491,7 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     }
 
     private func publishDownloadProgress() {
-        stateCallback?(
-            .downloading(
-                progress: downloadProgress,
-                downloadedBytes: downloadedBytes,
-                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
-            )
-        )
+        stateCallback?(.downloading(progress: downloadProgress))
     }
 
     override func showUpdateFound(
@@ -514,7 +508,7 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
             switch choice {
             case .install:
                 self?.skipStore.clearSkipped(version: version)
-                self?.stateCallback?(.downloading(progress: nil, downloadedBytes: 0, totalBytes: nil))
+                self?.stateCallback?(.downloading(progress: nil))
             case .dismiss:
                 self?.skipStore.clearSkipped(version: version)
                 self?.stateCallback?(availableState)
@@ -592,7 +586,7 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     override func showDownloadInitiated(cancellation: @escaping () -> Void) {
         downloadedBytes = 0
         expectedContentLength = 0
-        stateCallback?(.downloading(progress: nil, downloadedBytes: 0, totalBytes: nil))
+        stateCallback?(.downloading(progress: nil))
         super.showDownloadInitiated(cancellation: cancellation)
     }
 
@@ -602,32 +596,20 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         publishDownloadProgress()
     }
 
-    override func showDownloadDidReceiveDataOfLength(_ length: UInt64) {
+    override func showDownloadDidReceiveData(ofLength length: UInt64) {
         downloadedBytes += length
-        super.showDownloadDidReceiveDataOfLength(length)
+        super.showDownloadDidReceiveData(ofLength: length)
         publishDownloadProgress()
     }
 
     override func showDownloadDidStartExtractingUpdate() {
-        stateCallback?(
-            .downloading(
-                progress: nil,
-                downloadedBytes: downloadedBytes,
-                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
-            )
-        )
+        stateCallback?(.downloading(progress: nil))
         super.showDownloadDidStartExtractingUpdate()
     }
 
     override func showExtractionReceivedProgress(_ progress: Double) {
         super.showExtractionReceivedProgress(progress)
-        stateCallback?(
-            .downloading(
-                progress: min(max(progress, 0), 1),
-                downloadedBytes: downloadedBytes,
-                totalBytes: expectedContentLength > 0 ? expectedContentLength : nil
-            )
-        )
+        stateCallback?(.downloading(progress: min(max(progress, 0), 1)))
     }
 
     override func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
