@@ -245,7 +245,7 @@ final class PersonaGeneratorTests: XCTestCase {
         
         switch networkError {
         case .networkError:
-            XCTAssertTrue(true)
+            break
         default:
             XCTFail("Expected network error")
         }
@@ -260,7 +260,7 @@ final class PersonaGeneratorTests: XCTestCase {
         
         switch invalidResponseError {
         case .invalidResponseFormat:
-            XCTAssertTrue(true)
+            break
         default:
             XCTFail("Expected invalid response format error")
         }

@@ -232,17 +232,6 @@ final class ContentMetadataExtendedTests: XCTestCase {
         XCTAssertEqual(set.count, 2) // metadata1 and metadata2 are equal
     }
     
-    // MARK: - Sendable Conformance
-    
-    func testSendableConformance() {
-        let metadata = ContentMetadata(textPreview: "Test")
-        
-        Task {
-            let _ = metadata.textPreview
-        }
-        
-        XCTAssertTrue(true) // If we got here, Sendable works
-    }
 }
 
 // MARK: - ContentAnalyzer Tests
@@ -262,14 +251,6 @@ final class ContentAnalyzerTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
         
-    }
-    
-    // MARK: - Initialization Tests
-    
-    func testInitialization() async {
-        let analyzer = ContentAnalyzer()
-        // Should initialize without errors
-        XCTAssertNotNil(analyzer)
     }
     
     func testConfigurationDefaults() async {
@@ -684,11 +665,6 @@ final class OCRKeywordsTests: XCTestCase {
         XCTAssertEqual(invoiceCount, 1, "Should not duplicate default keywords")
     }
 
-    func testCustomOCRKeywordsOnAnalyzer() async {
-        let analyzer = ContentAnalyzer()
-        await analyzer.setCustomOCRKeywords(["custom1", "custom2"])
-        // Verify the property was set (no crash)
-    }
 }
 
 // MARK: - Prompt Builder Prioritization Tests
