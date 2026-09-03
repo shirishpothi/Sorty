@@ -24,6 +24,7 @@ struct PersonaPickerView: View {
     @State private var localDescription: String = ""
     @State private var localIcon: String = "star.fill"
     @State private var showingInstructionsInfo: Bool = false
+    @State private var isCustomExpanded: Bool = false
     @State private var polishError: String?
     @StateObject private var promptPolisher = PersonaGenerator()
     @FocusState private var focusedField: PersonaEditableField?
@@ -82,7 +83,7 @@ struct PersonaPickerView: View {
                 }
 
                 LazyVGrid(columns: personaGridColumns, spacing: 8) {
-                    ForEach(customStore.customPersonas) { custom in
+                    ForEach(visibleCustomPersonas) { custom in
                         CustomPersonaButton(
                             persona: custom,
                             isSelected: personaManager.selectedCustomPersonaId == custom.id,
@@ -107,6 +108,25 @@ struct PersonaPickerView: View {
                             hoveringCustom = hovering ? custom.id : nil
                         }
                     }
+                }
+
+                if customStore.customPersonas.count > collapsedCustomLimit {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation(.spring(response: 0.3)) {
+                            isCustomExpanded.toggle()
+                        }
+                    } label: {
+                        Label(
+                            isCustomExpanded
+                                ? "Show Less"
+                                : "Show \(customStore.customPersonas.count - collapsedCustomLimit) More",
+                            systemImage: isCustomExpanded ? "chevron.up" : "chevron.down"
+                        )
+                        .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("CustomPersonasToggle")
                 }
             }
 
@@ -157,13 +177,21 @@ struct PersonaPickerView: View {
                 saveChangesIfNeeded()
             }
         }
-        .onChange(of: personaManager.selectedCustomPersonaId) { _, _ in
+        .onChange(of: personaManager.selectedCustomPersonaId) { _, newValue in
             updateLocalPrompt()
+            // Keep a hidden selection reachable: expand if it falls past the collapsed rows.
+            if let newValue, !isCustomExpanded,
+               !customStore.customPersonas.prefix(collapsedCustomLimit).contains(where: { $0.id == newValue }) {
+                isCustomExpanded = true
+            }
         }
         .onChange(of: customStore.customPersonas) { _, _ in
             updateLocalPrompt()
         }
         .onChange(of: customStore.customPersonas.count) { _, count in
+            if count <= collapsedCustomLimit {
+                isCustomExpanded = false
+            }
             AnalyticsManager.shared.capturePersonaInventory(
                 action: "inventory_changed",
                 customPersonaCount: count
@@ -550,6 +578,14 @@ struct PersonaPickerView: View {
     private var selectedCustomPersona: CustomPersona? {
         guard let customId = personaManager.selectedCustomPersonaId else { return nil }
         return customStore.customPersonas.first(where: { $0.id == customId })
+    }
+
+    // ponytail: fixed 2-row cap (12 at 6 columns), expand to per-column rows if grid shape ever changes.
+    private var collapsedCustomLimit: Int { 12 }
+
+    private var visibleCustomPersonas: [CustomPersona] {
+        guard !isCustomExpanded else { return customStore.customPersonas }
+        return Array(customStore.customPersonas.prefix(collapsedCustomLimit))
     }
 
     private var personaGridColumns: [GridItem] {
