@@ -76,24 +76,42 @@ private struct PreviewDiffRow: View {
 
             if let before = change.before, let after = change.after {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Text(before)
-                        .foregroundStyle(.secondary)
+                    diffValue(before, systemImage: "minus", color: .red)
                     Image(systemName: "arrow.right")
+                        .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
-                    Text(after)
-                        .foregroundStyle(.primary)
+                    diffValue(after, systemImage: "plus", color: .green)
                 }
                 .font(.caption)
                 .lineLimit(2)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Before: \(before). After: \(after)")
             } else {
-                Text(change.after ?? "Removed from this preview")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let after = change.after {
+                    diffValue(after, systemImage: "plus", color: .green)
+                        .accessibilityLabel("Added: \(after)")
+                } else {
+                    diffValue(
+                        change.before ?? "Removed from this preview",
+                        systemImage: "minus",
+                        color: .red
+                    )
+                    .accessibilityLabel("Removed: \(change.before ?? change.filename)")
+                }
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary, in: .rect(cornerRadius: 8))
         .accessibilityElement(children: .combine)
+    }
+
+    private func diffValue(_ value: String, systemImage: String, color: Color) -> some View {
+        Label(value, systemImage: systemImage)
+            .font(.caption)
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.1), in: .rect(cornerRadius: 6))
     }
 }
