@@ -63,7 +63,7 @@ struct DuplicatesView: View {
                         .animatedAppearance(delay: 0.08)
 
                     duplicatesBaseHeaderSection()
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 16)
                         .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
