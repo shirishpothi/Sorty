@@ -2,9 +2,11 @@ import SwiftUI
 
 struct CodexSkillInstallerCard: View {
     @SortyHotReload private var hotReload
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var installer = CodexSkillInstaller()
     @State private var isConfirmingRemoval = false
     @State private var isConfirmingReplacement = false
+    @State private var isHoveringShowExisting = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -45,6 +47,17 @@ struct CodexSkillInstallerCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 12)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contextMenu {
+            if installer.state == .conflict {
+                Button("Remove Existing Skill", role: .destructive) {
+                    isConfirmingRemoval = true
+                }
+                .accessibilityIdentifier("experimental.codex-skill.remove")
+                Button("Show in Finder") {
+                    installer.revealExistingSkill()
+                }
+            }
+        }
         .task {
             await installer.refresh()
         }
@@ -93,18 +106,41 @@ struct CodexSkillInstallerCard: View {
                 }
                 .buttonStyle(.sortyProminent(intent: .warning, size: .small))
                 .accessibilityIdentifier("experimental.codex-skill.replace")
-                .contextMenu {
-                    Button("Remove Existing Skill", role: .destructive) {
-                        isConfirmingRemoval = true
-                    }
-                    .accessibilityIdentifier("experimental.codex-skill.remove")
-                }
 
-                Button("Show Existing Skill", action: installer.revealExistingSkill)
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("experimental.codex-skill.open-folder")
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    installer.revealExistingSkill()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Show Existing Skill")
+
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 10)
+                            .opacity(isHoveringShowExisting ? 1 : 0)
+                            .offset(
+                                x: reduceMotion || isHoveringShowExisting ? 0 : -3,
+                                y: reduceMotion || isHoveringShowExisting ? 0 : 3
+                            )
+                            .scaleEffect(reduceMotion || isHoveringShowExisting ? 1 : 0.75)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    value: isHoveringShowExisting
+                )
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    isHoveringShowExisting = hovering
+                }
+                .accessibilityIdentifier("experimental.codex-skill.open-folder")
             }
         case .unavailable:
             Button("Check Again") {
