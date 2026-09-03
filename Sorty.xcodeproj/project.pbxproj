@@ -148,7 +148,6 @@
 		AABBCC22000200000000007C /* NotificationPermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007C /* NotificationPermissionCard.swift */; };
 		AABBCC22000200000000007D /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007D /* NotificationsSettingsView.swift */; };
 		AABBCC22000200000000007E /* OnboardingAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007E /* OnboardingAudioManager.swift */; };
-		AABBCC22000200000000007F /* OnboardingStepProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007F /* OnboardingStepProtocol.swift */; };
 		AABBCC220002000000000080 /* OrganizationRulesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */; };
 		AABBCC220002000000000081 /* OrganizationStrategySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */; };
 		AABBCC220002000000000083 /* ParameterTuningSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */; };
@@ -480,7 +479,6 @@
 		AABBCC11000100000000007D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		D727A0010000000000000001 /* PermissionsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007E /* OnboardingAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAudioManager.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000007F /* OnboardingStepProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepProtocol.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationRulesSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationStrategySettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterTuningSettingsView.swift; sourceTree = "<group>"; };
@@ -959,7 +957,6 @@
 			isa = PBXGroup;
 			children = (
 				AABBCC110001000000000067 /* CompletionStepView.swift */,
-				AABBCC11000100000000007F /* OnboardingStepProtocol.swift */,
 				AABBCC110001000000000084 /* PermissionsStepView.swift */,
 				AABBCC11000100000000008C /* ProviderSelectionStepView.swift */,
 				AABBCC110001000000000098 /* WelcomeStepView.swift */,
