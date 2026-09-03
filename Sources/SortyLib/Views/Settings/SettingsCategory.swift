@@ -58,7 +58,6 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case strategyNamingSeparator = "settings.strategy.naming-separator"
     case strategyNamingCase = "settings.strategy.naming-case"
     case strategyNamingDatePolicy = "settings.strategy.naming-date-policy"
-    case strategyNamingLanguage = "settings.strategy.naming-language"
     case strategyMaxFilenameLength = "settings.strategy.max-filename-length"
     case strategyNamingInstructions = "settings.strategy.naming-instructions"
     case rulesContentRules = "settings.rules.content-rules"
@@ -158,7 +157,7 @@ public extension SettingsFocusTarget {
 
         case .strategyFastMode, .strategyVision, .strategyRenaming,
              .strategyNamingTemplate, .strategyNamingOptions, .strategyNamingSeparator,
-             .strategyNamingCase, .strategyNamingDatePolicy, .strategyNamingLanguage,
+             .strategyNamingCase, .strategyNamingDatePolicy,
              .strategyMaxFilenameLength, .strategyNamingInstructions:
             return .strategy
 
@@ -347,11 +346,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("AI Vision for Images", "Use image understanding to classify screenshots and photos.", keywords: ["vision", "image analysis"], target: .strategyVision),
                 feature("Renaming", "Control how Sorty names organized files.", keywords: ["rename", "filename"], target: .strategyRenaming),
                 feature("Naming Template", "Choose a built-in or custom naming preset.", keywords: ["naming preset", "template"], target: .strategyNamingTemplate),
-                feature("Filename Format", "Set separators, letter case, dates, output language, and maximum filename length.", keywords: ["separator", "case", "date policy", "language", "max length"], target: .strategyNamingOptions),
+                feature("Filename Format", "Set separators, letter case, dates, and maximum filename length.", keywords: ["separator", "case", "date policy", "max length"], target: .strategyNamingOptions),
                 feature("Filename Separator", "Choose spaces, underscores, hyphens, or another filename separator.", keywords: ["separator", "spaces", "underscores", "hyphens"], target: .strategyNamingSeparator),
                 feature("Filename Letter Case", "Choose the capitalization style used for renamed files.", keywords: ["case", "capitalization", "camel case", "title case"], target: .strategyNamingCase),
                 feature("Filename Dates", "Choose whether renamed files include dates.", keywords: ["date policy", "dates"], target: .strategyNamingDatePolicy),
-                feature("Filename Language", "Set the output language used for renamed files.", keywords: ["output language", "language"], target: .strategyNamingLanguage),
                 feature("Maximum Filename Length", "Set the maximum character length for renamed files.", keywords: ["max length", "filename length", "slider"], target: .strategyMaxFilenameLength),
                 feature("Naming Instructions", "Add custom rules or generate a reusable naming template.", keywords: ["custom naming instructions", "additional naming instructions", "generate naming template"], target: .strategyNamingInstructions)
             ]

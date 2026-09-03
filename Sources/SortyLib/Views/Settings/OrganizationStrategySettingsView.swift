@@ -195,26 +195,14 @@ struct OrganizationStrategySettingsView: View {
                             .settingsFocusableSetting(.strategyNamingCase)
                         }
 
-                        HStack(spacing: 12) {
-                            Picker("Dates", selection: $viewModel.config.renameNamingOptions.datePolicy) {
-                                ForEach(RenameDatePolicy.allCases, id: \.self) { policy in
-                                    Text(policy.displayName).tag(policy)
-                                }
+                        Picker("Dates", selection: $viewModel.config.renameNamingOptions.datePolicy) {
+                            ForEach(RenameDatePolicy.allCases, id: \.self) { policy in
+                                Text(policy.displayName).tag(policy)
                             }
-                            .pickerStyle(.menu)
-                            .tint(.primary)
-                            .settingsFocusableSetting(.strategyNamingDatePolicy)
-
-                            TextField(
-                                "Language",
-                                text: Binding(
-                                    get: { viewModel.config.renameNamingOptions.outputLanguage },
-                                    set: { viewModel.config.renameNamingOptions.outputLanguage = $0.isEmpty ? "English" : $0 }
-                                )
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .settingsFocusableSetting(.strategyNamingLanguage)
                         }
+                        .pickerStyle(.menu)
+                        .tint(.primary)
+                        .settingsFocusableSetting(.strategyNamingDatePolicy)
 
                         HStack {
                             Text("Max Length")
