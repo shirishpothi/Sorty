@@ -75,7 +75,10 @@ struct PermissionsSettingsView: View {
 
                     LazyVGrid(
                         columns: Array(
-                            repeating: GridItem(.flexible(), spacing: 10),
+                            repeating: GridItem(
+                                .flexible(minimum: 10, maximum: .infinity),
+                                spacing: 10
+                            ),
                             count: 3
                         ),
                         spacing: 10

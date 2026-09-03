@@ -1296,7 +1296,10 @@ private struct ProviderSelectionGrid: View, Equatable {
 
     var body: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+            columns: Array(
+                repeating: GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8),
+                count: 3
+            ),
             spacing: 8
         ) {
             ForEach(AIProvider.userSelectableProviders, id: \.self) { provider in

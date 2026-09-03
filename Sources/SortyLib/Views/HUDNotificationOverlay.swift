@@ -248,8 +248,8 @@ private struct HUDNotificationActionGrid: View {
     let actions: [HUDNotificationAction]
 
     private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
+        GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8),
+        GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8)
     ]
 
     var body: some View {

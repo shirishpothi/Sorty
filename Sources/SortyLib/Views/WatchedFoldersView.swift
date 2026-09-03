@@ -1131,7 +1131,11 @@ private struct WatchedFolderNerdStats: View {
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+            columns: [
+                GridItem(.flexible(minimum: 10, maximum: .infinity)),
+                GridItem(.flexible(minimum: 10, maximum: .infinity)),
+                GridItem(.flexible(minimum: 10, maximum: .infinity))
+            ],
             spacing: 8
         ) {
             NerdStatPillExpanded(

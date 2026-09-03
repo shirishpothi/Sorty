@@ -71,7 +71,10 @@ public struct WorkflowSelectionStepView: View {
                     .fontWeight(.semibold)
                     
                 // Built-in personas grid - 2x2 layout
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                LazyVGrid(columns: [
+                    GridItem(.flexible(minimum: 10, maximum: .infinity)),
+                    GridItem(.flexible(minimum: 10, maximum: .infinity))
+                ], spacing: 8) {
                     ForEach(PersonaType.allCases, id: \.self) { persona in
                         OnboardingPersonaCard(
                             persona: persona,
@@ -174,7 +177,10 @@ public struct WorkflowSelectionStepView: View {
     }
 
     private var customPersonaGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+        LazyVGrid(columns: [
+            GridItem(.flexible(minimum: 10, maximum: .infinity)),
+            GridItem(.flexible(minimum: 10, maximum: .infinity))
+        ], spacing: 8) {
             ForEach(customPersonaStore.customPersonas) { persona in
                 OnboardingCustomPersonaCard(
                     persona: persona,

@@ -595,7 +595,7 @@ struct PersonaPickerView: View {
         )
 
         return Array(
-            repeating: GridItem(.flexible(), spacing: 8),
+            repeating: GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8),
             count: columnCount
         )
     }

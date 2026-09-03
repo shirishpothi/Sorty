@@ -29,9 +29,9 @@ struct GenerationStatsView: View {
     
     private var gridColumns: [GridItem] {
         [
-            GridItem(.flexible(), spacing: 16),
-            GridItem(.flexible(), spacing: 16),
-            GridItem(.flexible(), spacing: 16)
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 16),
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 16),
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 16)
         ]
     }
     

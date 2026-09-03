@@ -170,10 +170,10 @@ struct PreviewStatsView: View {
     
     private func detailedStatsView(stats: GenerationStats) -> some View {
         LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12)
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 12),
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 12),
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 12),
+            GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 12)
         ], spacing: 12) {
             NerdStatPillExpanded(
                 icon: "clock.fill",
