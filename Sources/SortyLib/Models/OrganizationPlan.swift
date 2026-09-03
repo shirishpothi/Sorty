@@ -104,6 +104,7 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
         case duplicateFolderNames
         case vagueOrSingleFileFolder
         case excessiveUnorganizedFiles
+        case unorganizedFolderDestination
         case mixedFileTypes
         case unnecessaryNesting
         case existingConventionMismatch

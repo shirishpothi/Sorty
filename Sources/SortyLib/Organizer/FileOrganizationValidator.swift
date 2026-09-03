@@ -179,6 +179,7 @@ struct PlanQualityEvaluator {
 
         var issues: [PlanQualityIssue] = []
         issues.append(contentsOf: excessiveUnorganizedIssues(in: plan))
+        issues.append(contentsOf: unorganizedFolderDestinationIssues(in: folders))
         issues.append(contentsOf: duplicateNameIssues(in: folders))
         issues.append(contentsOf: vagueAndSingleFileIssues(in: folders))
         issues.append(contentsOf: mixedTypeIssues(in: folders))
@@ -204,6 +205,20 @@ struct PlanQualityEvaluator {
                 deduction: 35
             )
         ]
+    }
+
+    private static func unorganizedFolderDestinationIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
+        folders.compactMap { folder in
+            let name = normalizedName(folder.suggestion.folderName)
+            guard name == "unorganized" || name == "unorganized file" else { return nil }
+            return PlanQualityIssue(
+                kind: .unorganizedFolderDestination,
+                message: "Folder \"\(folder.path)\" is a disguised unorganized bucket. Choose a useful destination for each file or return genuinely unplaceable files through the `unorganized` field so Sorty leaves them in place.",
+                folderPaths: [folder.path],
+                fileIDs: folder.files.map(\.id),
+                deduction: 35
+            )
+        }
     }
 
     static func keepingCertainItems(

@@ -143,6 +143,7 @@ final class PromptBuilderTests: XCTestCase {
         )
         XCTAssertTrue(fullPrompt.contains("a suitable existing folder, a meaningful shared folder, a broad reusable category, and a justified standalone folder"))
         XCTAssertTrue(fullPrompt.contains("Uncertainty alone is not a reason to leave a file unorganized"))
+        XCTAssertTrue(fullPrompt.contains("Never create a folder named \"Unorganized\""))
 
         let userPrompt = PromptBuilder.buildOrganizationPrompt(files: files)
         XCTAssertTrue(userPrompt.contains("Use `unorganized` only when all four options fail"))
@@ -156,6 +157,7 @@ final class PromptBuilderTests: XCTestCase {
             let prompt = PromptBuilder.promptPair(for: level, config: config, files: files).system
             XCTAssertTrue(prompt.contains("a suitable existing folder, a meaningful shared folder, a broad reusable category"), "Missing destination checks in \(level)")
             XCTAssertTrue(prompt.localizedCaseInsensitiveContains("uncertainty alone is not enough"), "Missing last-resort threshold in \(level)")
+            XCTAssertTrue(prompt.localizedCaseInsensitiveContains("never create an unorganized or unorganized files folder"), "Missing reserved-folder rule in \(level)")
         }
     }
 

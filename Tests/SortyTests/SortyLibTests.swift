@@ -507,6 +507,24 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("Ambiguity or a standalone role is not enough"))
     }
 
+    func testUnorganizedFilesFolderTriggersQualityRetry() {
+        let files = (1...6).map { file("download-\($0).bin") }
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Unorganized Files",
+                files: files,
+                reasoning: "Files without a clearer destination"
+            )
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+
+        XCTAssertFalse(assessment.passes)
+        XCTAssertTrue(assessment.issues.contains { $0.kind == .unorganizedFolderDestination })
+        XCTAssertEqual(assessment.uncertainFileIDs, Set(files.map(\.id)))
+        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("disguised unorganized bucket"))
+    }
+
     func testLowScoreKeepsCoherentPlacementsAndDemotesOnlyUncertainFiles() {
         let certain = file("statement.pdf")
         let uncertain = file("download.bin")
