@@ -487,8 +487,6 @@ public class AppState: ObservableObject {
     private var aboutWindowController: NSWindowController?
     private var accreditationsWindowController: NSWindowController?
     private var internetAccessPolicyWindowController: NSWindowController?
-    private var shadersWindowController: NSWindowController?
-    private var thinkingOrbsWindowController: NSWindowController?
     private var thanksWindowController: NSWindowController?
     private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
@@ -1722,66 +1720,6 @@ public class AppState: ObservableObject {
 
         accreditationsWindowController = NSWindowController(window: window)
         accreditationsWindowController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        HapticFeedbackManager.shared.selection()
-    }
-
-    public func showShaders() {
-        guard FeatureFlags.shadersEnabled else { return }
-
-        if let existingWindow = shadersWindowController?.window {
-            existingWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            HapticFeedbackManager.shared.selection()
-            return
-        }
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 680),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = NSHostingView(rootView: ShadersView())
-        window.title = "Shaders"
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = false
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 760, height: 520)
-        window.tabbingMode = .disallowed
-        window.center()
-
-        shadersWindowController = NSWindowController(window: window)
-        shadersWindowController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        HapticFeedbackManager.shared.selection()
-    }
-
-    public func showThinkingOrbs() {
-        if let existingWindow = thinkingOrbsWindowController?.window {
-            existingWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            HapticFeedbackManager.shared.selection()
-            return
-        }
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 600),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = NSHostingView(rootView: ThinkingOrbsView())
-        window.title = "Thinking Orbs"
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = false
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 680, height: 520)
-        window.tabbingMode = .disallowed
-        window.center()
-
-        thinkingOrbsWindowController = NSWindowController(window: window)
-        thinkingOrbsWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         HapticFeedbackManager.shared.selection()
     }

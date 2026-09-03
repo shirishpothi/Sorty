@@ -23,7 +23,6 @@ Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys
 | Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
 | Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
-| Shaders | `shadersEnabled` (see note) | `false` | Recovered shader gallery in the Help menu |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
 | Sorty Codex Skill | `labs-sorty-codex-skill` | PostHog assignment | Experimental one-click installer in Settings → Experimental; currently registered at 100% rollout |
 
@@ -50,20 +49,6 @@ Harness mode is controlled by environment variables, not `defaults`:
 | Harness Mode | `SORTY_HARNESS_MODE` | unset | Boots the app with minimal dependencies and mock services |
 
 Set via `make harness`; see `docs/agent-guides/fast-loop.md`.
-
-### Shaders
-Quit Sorty before changing the value, then reopen it so the Help menu is rebuilt.
-
-```bash
-# Show the Shaders window entry in the Help menu
-defaults write com.sorty.app.feature-flags shadersEnabled -bool true
-
-# Hide it again
-defaults write com.sorty.app.feature-flags shadersEnabled -bool false
-
-# Restore the hidden-by-default state
-defaults delete com.sorty.app.feature-flags shadersEnabled
-```
 
 ### Support the Developer
 Quit Sorty before changing the value, then reopen it. The `-container` option writes to the same sandboxed preferences domain that Sorty reads; omitting it writes a separate host preference that the app does not reliably see.

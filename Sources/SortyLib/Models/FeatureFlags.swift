@@ -91,25 +91,6 @@ public enum FeatureFlags {
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
     }
 
-    /// Controls whether the recovered shader gallery is available from the Help menu.
-    ///
-    /// Hidden by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app.feature-flags shadersEnabled -bool true
-    /// ```
-    /// Hide it again:
-    /// ```
-    /// defaults write com.sorty.app.feature-flags shadersEnabled -bool false
-    /// ```
-    public static var shadersEnabled: Bool {
-        if let override = UserDefaults(suiteName: "com.sorty.app.feature-flags")?
-            .object(forKey: "shadersEnabled") as? Bool
-        {
-            return override
-        }
-        return UserDefaults.standard.bool(forKey: "shadersEnabled")
-    }
-
     /// Controls whether subscription-based auth methods are available for supported AI providers.
     ///
     /// Enabled by default. Disable via Terminal:
