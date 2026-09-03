@@ -160,7 +160,8 @@ struct ExclusionRulesView: View {
                     .animatedAppearance(delay: 0.08)
 
                     emptyHeaderView
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
                         .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
