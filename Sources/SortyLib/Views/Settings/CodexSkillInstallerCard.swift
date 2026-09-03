@@ -34,9 +34,11 @@ struct CodexSkillInstallerCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Label(statusText, systemImage: statusImage)
-                    .font(.caption)
-                    .foregroundStyle(statusColor)
+                if installer.state != .available {
+                    Label(statusText, systemImage: statusImage)
+                        .font(.caption)
+                        .foregroundStyle(statusColor)
+                }
             }
 
             Spacer(minLength: 12)
