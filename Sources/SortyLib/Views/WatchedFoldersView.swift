@@ -1048,7 +1048,7 @@ struct WatchedFolderCard: View {
         organizer.reset()
         organizer.customInstructions = updatedFolder.customPrompt ?? ""
         appState.selectedDirectory = updatedFolder.url
-        appState.currentView = .organize
+        appState.openRelatedView(.organize)
     }
 }
 

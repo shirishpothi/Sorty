@@ -543,7 +543,7 @@ struct AnalysisView: View {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         appState.highlightedExclusionRuleID = blockingRule.id
-                        appState.currentView = .exclusions
+                        appState.openRelatedView(.exclusions)
                     } label: {
                         HStack(spacing: 6) {
                             Image(

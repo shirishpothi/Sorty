@@ -95,6 +95,7 @@ public struct ContentView: View {
                         previousView = appState.currentView
                         HapticFeedbackManager.shared.selection()
                         appState.navigatedFromSettings = false
+                        appState.clearNavigationReturnRoute()
                         appState.currentView = newValue
                     }
                 }
@@ -122,7 +123,20 @@ public struct ContentView: View {
                 }
 
                 ToolbarItem(placement: .navigation) {
-                    if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
+                    if let returnRoute = appState.navigationReturnRoute,
+                       returnRoute.destination == appState.currentView {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            appState.clearNavigationReturnRoute()
+                            appState.currentView = returnRoute.returnView
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .accessibilityIdentifier("RelatedViewReturnButton")
+                        .accessibilityLabel("Return to previous view")
+                    } else if appState.navigatedFromSettings,
+                              let prev = previousView,
+                              prev != appState.currentView {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             appState.navigatedFromSettings = false
@@ -160,6 +174,10 @@ public struct ContentView: View {
         }
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
+                if let returnRoute = appState.navigationReturnRoute,
+                   returnRoute.destination != newValue {
+                    appState.clearNavigationReturnRoute()
+                }
                 if newValue != .organize {
                     appState.showsFinderWorkflowPicker = false
                 }

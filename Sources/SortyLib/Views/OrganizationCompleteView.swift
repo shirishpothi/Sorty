@@ -416,7 +416,7 @@ struct OrganizationCompleteView: View {
                     
                     Button {
                         HapticFeedbackManager.shared.tap()
-                        appState.currentView = .history
+                        appState.openRelatedView(.history)
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "clock.arrow.circlepath")

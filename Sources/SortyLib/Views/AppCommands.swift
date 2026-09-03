@@ -401,6 +401,7 @@ public class AppState: ObservableObject {
     public let windowSessionID: UUID
 
     @Published public var currentView: AppView = .organize
+    @Published public private(set) var navigationReturnRoute: NavigationReturnRoute?
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
     public var hasPresentedReadyToOrganize = false
@@ -499,6 +500,11 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
+    }
+
+    public struct NavigationReturnRoute: Equatable, Sendable {
+        public let destination: AppView
+        public let returnView: AppView
     }
 
     public enum AccreditationsEntryPoint: Sendable {
@@ -846,6 +852,22 @@ public class AppState: ObservableObject {
         withAnimation(.pageTransition) {
             currentView = .settings
         }
+    }
+
+    /// Opens a related app page while preserving the page that launched it.
+    public func openRelatedView(_ destination: AppView) {
+        guard destination != currentView else { return }
+        navigationReturnRoute = NavigationReturnRoute(
+            destination: destination,
+            returnView: currentView
+        )
+        withAnimation(.pageTransition) {
+            currentView = destination
+        }
+    }
+
+    public func clearNavigationReturnRoute() {
+        navigationReturnRoute = nil
     }
 
     public func startSetupRepair(message: String, navigateToSettings: Bool = false) {
