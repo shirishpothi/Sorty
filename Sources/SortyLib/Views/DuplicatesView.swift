@@ -255,8 +255,8 @@ struct DuplicatesView: View {
                 ? "exclamationmark.triangle.fill"
                 : "checkmark.circle.fill",
             heroTint: detectionManager.unreadableFileCount > 0 ? .orange : .green,
-            celebratesAppearance: detectionManager.unreadableFileCount == 0,
             actionTitle: "Scan Another Folder",
+            celebratesAppearance: detectionManager.unreadableFileCount == 0,
             action: selectDirectory
         )
     }
