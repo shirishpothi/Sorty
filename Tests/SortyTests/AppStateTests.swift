@@ -419,6 +419,7 @@ class AppStateTests: XCTestCase {
 
     func testHandoffToDuplicatesCarriesNormalizedFilePaths() {
         let folder = URL(fileURLWithPath: "/tmp/handoff-folder")
+        appState.currentView = .history
         appState.handoffToDuplicates(
             forFilePaths: [
                 "/tmp/handoff-folder/a/../a/file1.txt",
@@ -430,6 +431,8 @@ class AppStateTests: XCTestCase {
         )
 
         XCTAssertEqual(appState.currentView, .duplicates)
+        XCTAssertEqual(appState.navigationReturnRoute?.destination, .duplicates)
+        XCTAssertEqual(appState.navigationReturnRoute?.returnView, .history)
         XCTAssertEqual(appState.selectedDirectory, folder.standardizedFileURL)
         XCTAssertEqual(appState.pendingDuplicatesHandoff?.directory, folder.standardizedFileURL)
         XCTAssertEqual(
