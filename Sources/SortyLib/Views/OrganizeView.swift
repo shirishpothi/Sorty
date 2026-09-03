@@ -3173,7 +3173,7 @@ struct ErrorView: View {
                             .font(.caption.bold())
                     }
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.tintedPill(.accentColor, size: .small))
                 .scaleEffect(activeActionFeedback == .retry ? 1.04 : 1.0)
                 .help("Choose how to retry this organization")
                 .accessibilityIdentifier("ErrorTryAgainButton")
