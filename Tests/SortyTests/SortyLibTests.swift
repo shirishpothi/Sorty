@@ -525,22 +525,29 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("disguised unorganized bucket"))
     }
 
-    func testLowScoreKeepsCoherentPlacementsAndDemotesOnlyUncertainFiles() {
+    func testLowScoreKeepsStructuralWarningsAndDemotesOnlyFallbackFolderFiles() {
         let certain = file("statement.pdf")
         let uncertain = file("download.bin")
         let plan = OrganizationPlan(suggestions: [
             FolderSuggestion(folderName: "Bank Statements", files: [certain, file("statement-2.pdf")]),
-            FolderSuggestion(folderName: "Other", files: [uncertain])
+            FolderSuggestion(folderName: "Unorganized", files: [uncertain])
         ])
         let assessment = PlanQualityAssessment(
             score: 60,
             issues: [
                 PlanQualityIssue(
-                    kind: .vagueOrSingleFileFolder,
-                    message: "Other is vague.",
-                    folderPaths: ["Other"],
+                    kind: .unorganizedFolderDestination,
+                    message: "Unorganized is a fallback folder.",
+                    folderPaths: ["Unorganized"],
                     fileIDs: [uncertain.id],
                     deduction: 40
+                ),
+                PlanQualityIssue(
+                    kind: .mixedFileTypes,
+                    message: "Bank Statements contains several file types.",
+                    folderPaths: ["Bank Statements"],
+                    fileIDs: [certain.id],
+                    deduction: 10
                 )
             ],
             didRetry: true
