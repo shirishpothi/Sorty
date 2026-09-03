@@ -749,9 +749,7 @@ public class AppState: ObservableObject {
             filePaths: normalizedFilePaths,
             autoStart: autoStart
         )
-        withAnimation(.pageTransition) {
-            currentView = .duplicates
-        }
+        openRelatedView(.duplicates)
     }
 
     public func handoffToDuplicates(
