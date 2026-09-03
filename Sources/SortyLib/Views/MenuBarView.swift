@@ -12,10 +12,14 @@ import SwiftUI
 
 private struct MenuBarMascotIcon: View {
     @SortyHotReload private var hotReload
+    var activity: MenuBarActivity = .idle
     var size: CGSize = CGSize(width: 18, height: 18)
 
     private var mascotImage: Image {
-        Image(nsImage: SortyResources.menuBarLabelNSImage())
+        if let image = SortyResources.image(named: activity.resourceName, withExtension: "png") {
+            return Image(nsImage: image)
+        }
+        return Image(nsImage: SortyResources.menuBarLabelNSImage())
     }
 
     var body: some View {
@@ -23,6 +27,7 @@ private struct MenuBarMascotIcon: View {
             .resizable()
             .scaledToFit()
             .frame(width: size.width, height: size.height)
+            .accessibilityLabel(activity.accessibilityLabel)
     }
 }
 
@@ -185,11 +190,12 @@ public struct MenuBarView: View {
 
     private var statusHeader: some View {
         HStack(spacing: 8) {
-            MenuBarMascotIcon(size: CGSize(width: 22, height: 20))
+            MenuBarMascotIcon(activity: menuBarController.activity, size: CGSize(width: 22, height: 20))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Sorty")
+                Text(headerTitle)
                     .font(.headline)
+                    .lineLimit(1)
 
                 if activeWatchedCount > 0 {
                     Text("\(activeWatchedCount) folder\(activeWatchedCount == 1 ? "" : "s") active")
@@ -213,6 +219,10 @@ public struct MenuBarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
+    }
+
+    private var headerTitle: String {
+        menuBarController.activity == .idle ? "Sorty" : menuBarController.activity.accessibilityLabel
     }
 
     // MARK: - Quick Actions
