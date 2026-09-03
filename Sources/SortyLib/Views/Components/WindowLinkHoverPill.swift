@@ -180,6 +180,7 @@ struct WindowLinkHoverPillOverlay: View {
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                                .numericTextTransition(animationValue: labelText(for: url))
                         }
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
