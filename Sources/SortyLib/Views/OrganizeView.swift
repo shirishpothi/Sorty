@@ -3178,6 +3178,11 @@ struct ErrorView: View {
                 .help("Choose how to retry this organization")
                 .accessibilityIdentifier("ErrorTryAgainButton")
                 .modelSelectorTriggerBounds()
+                .onHover { hovering in
+                    if hovering && !reduceMotion {
+                        retryAnimationTrigger += 1
+                    }
+                }
 
                 if category == .network && isTimeoutError {
                     Button {
