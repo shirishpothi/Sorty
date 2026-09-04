@@ -1,9 +1,8 @@
-import Foundation
-import Combine
-import SwiftUI
-
 #if DEBUG && SORTY_HOT_RELOAD
+import Combine
+import Foundation
 import InjectionLite
+import SwiftUI
 
 @MainActor
 private final class SortyInjectionObserver: @MainActor ObservableObject {
@@ -21,26 +20,37 @@ private final class SortyInjectionObserver: @MainActor ObservableObject {
             }
     }
 }
-#endif
 
 /// Invalidates a SwiftUI value when InjectionLite loads an updated implementation.
-/// Normal Debug and Release builds retain only this wrapper's inert value.
+/// Only hot-reload builds participate in SwiftUI's dynamic-property update pass.
 @propertyWrapper @MainActor
 public struct SortyHotReload: DynamicProperty {
     public struct Observation: Sendable {
         fileprivate init() {}
     }
 
-#if DEBUG && SORTY_HOT_RELOAD
     @ObservedObject private var observer = SortyInjectionObserver.shared
-#endif
 
     public init() {}
 
     public var wrappedValue: Observation {
-#if DEBUG && SORTY_HOT_RELOAD
         _ = observer
-#endif
         return Observation()
     }
 }
+#else
+/// Keeps view declarations source-compatible without enrolling production views
+/// in SwiftUI's dynamic-property update pass.
+@propertyWrapper
+public struct SortyHotReload {
+    public struct Observation: Sendable {
+        fileprivate init() {}
+    }
+
+    public init() {}
+
+    public var wrappedValue: Observation {
+        Observation()
+    }
+}
+#endif
