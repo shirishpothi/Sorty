@@ -832,7 +832,7 @@ private struct CompletionBadgeGlow: View {
         .onAppear {
             guard !reduceMotion else { return }
 
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 1.4).repeatCount(2, autoreverses: true)) {
                 isBreathing = true
             }
         }

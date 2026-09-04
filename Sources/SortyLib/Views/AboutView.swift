@@ -735,7 +735,7 @@ private struct AboutGlassBackground: ViewModifier {
             content
                 .background {
                     Color.clear
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 0))
                         .ignoresSafeArea()
                 }
         } else {

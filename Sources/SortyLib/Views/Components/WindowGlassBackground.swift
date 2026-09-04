@@ -5,7 +5,7 @@ struct WindowGlassBackground: ViewModifier {
         content
             .background {
                 Color.clear
-                    .systemLiquidGlassBackground(cornerRadius: 0)
+                    .systemLiquidGlassBackground(cornerRadius: 0, interactive: false)
                     .ignoresSafeArea()
             }
     }

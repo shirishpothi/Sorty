@@ -407,9 +407,13 @@ private struct MetalFxPillSurface: View {
         !isPaused && isEnabled && !reduceMotion
     }
 
+    private var animationFrameInterval: TimeInterval {
+        isIntensified ? 1.0 / 30.0 : 1.0 / 15.0
+    }
+
     var body: some View {
         if shouldAnimateSurface {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+            SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
                 surface(time: timeline.date.timeIntervalSinceReferenceDate)
             }
         } else {

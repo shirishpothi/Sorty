@@ -1055,7 +1055,7 @@ private struct HistorySummaryCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 18, clear: true)
+        .systemLiquidGlassBackground(cornerRadius: 18, clear: true, interactive: false)
     }
 }
 
