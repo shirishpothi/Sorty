@@ -114,18 +114,17 @@ public final class MenuBarController: ObservableObject {
 
     public func setActivity(_ activity: MenuBarActivity?, sourceID: String) {
         guard let activity else {
-            activeOperations.removeValue(forKey: sourceID)
+            guard activeOperations.removeValue(forKey: sourceID) != nil else { return }
             refreshActivity()
             return
         }
 
-        if activeOperations[sourceID]?.activity != activity {
-            nextActivityOrder &+= 1
-            activeOperations[sourceID] = ActiveOperation(
-                activity: activity,
-                order: nextActivityOrder
-            )
-        }
+        guard activeOperations[sourceID]?.activity != activity else { return }
+        nextActivityOrder &+= 1
+        activeOperations[sourceID] = ActiveOperation(
+            activity: activity,
+            order: nextActivityOrder
+        )
         refreshActivity()
     }
 
@@ -145,8 +144,10 @@ public final class MenuBarController: ObservableObject {
     }
 
     private func refreshActivity() {
-        activity = activeOperations.values
+        let nextActivity = activeOperations.values
             .max(by: { $0.order < $1.order })?
             .activity ?? .idle
+        guard activity != nextActivity else { return }
+        activity = nextActivity
     }
 }
