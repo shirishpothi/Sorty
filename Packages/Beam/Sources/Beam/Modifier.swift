@@ -234,7 +234,7 @@ struct BeamModifier: ViewModifier {
   private var beamOverlay: some View {
     TimelineView(
       .animation(
-        minimumInterval: 1.0 / 60.0,
+        minimumInterval: 1.0 / 30.0,
         paused: reduceMotion || controlActiveState == .inactive
       )
     ) { timeline in
@@ -259,7 +259,7 @@ struct BeamModifier: ViewModifier {
     if lensStrength > 0 && !reduceMotion && visualOpacity > 0.001 {
       TimelineView(
         .animation(
-          minimumInterval: 1.0 / 60.0,
+          minimumInterval: 1.0 / 30.0,
           paused: controlActiveState == .inactive
         )
       ) { timeline in
