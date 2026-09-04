@@ -365,7 +365,7 @@ private struct HistoryNerdStatsGrid: View {
             }
         }
         .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 }
 

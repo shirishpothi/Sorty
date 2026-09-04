@@ -141,7 +141,7 @@ struct AIProviderSettingsView: View {
                 copiedID: codexDeviceCodeCopiedID
             )
             .frame(width: 610)
-            .systemLiquidGlassBackground(cornerRadius: 28)
+            .systemLiquidGlassBackground(cornerRadius: 28, interactive: false)
             .systemLiquidGlassPopover(cornerRadius: 28)
         }
         .onChange(of: codexAuth.isAuthenticated) { _, isAuthenticated in
@@ -1188,7 +1188,7 @@ private struct CodexDeviceAuthStep<Content: View>: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.primary)
                 .frame(width: 32, height: 32)
-                .systemLiquidGlassBackground(cornerRadius: 16)
+                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 10) {
@@ -1200,7 +1200,7 @@ private struct CodexDeviceAuthStep<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
     }
 }
 

@@ -406,7 +406,7 @@ private struct RenameActionGlassCluster: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .systemLiquidGlassBackground(cornerRadius: 10)
+        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
     }
 }
 

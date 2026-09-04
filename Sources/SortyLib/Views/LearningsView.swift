@@ -213,7 +213,7 @@ struct LearningsView: View {
                     description: "Uses learnings to make better future suggestions")
             }
             .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: 16)
+            .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
@@ -270,7 +270,7 @@ struct LearningsView: View {
                 .font(.title2.bold())
                 .foregroundColor(.accentColor)
                 .frame(width: 40, height: 40)
-                .systemLiquidGlassBackground(cornerRadius: 10)
+                .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
@@ -586,13 +586,13 @@ struct LearningsView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .systemLiquidGlassBackground(cornerRadius: 8)
+                .systemLiquidGlassBackground(cornerRadius: 8, interactive: false)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Learning status summary")
@@ -842,7 +842,7 @@ struct LearningsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 
     private func learningRecordsDetailSheet(
@@ -1136,7 +1136,7 @@ struct LearningsView: View {
                 VStack(spacing: 0) {
                     content()
                 }
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             }
         }
     }
@@ -1280,7 +1280,7 @@ struct LearningsView: View {
                         }
                     }
                 }
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             }
             .padding(20)
         }
@@ -1516,7 +1516,7 @@ struct LearningsView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")
@@ -1626,7 +1626,7 @@ struct LearningsView: View {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
             }
-            .systemLiquidGlassBackground(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings settings")
@@ -1675,7 +1675,7 @@ struct LearningsView: View {
                         .foregroundStyle(.teal)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .systemLiquidGlassBackground(cornerRadius: 999)
+                        .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
                         .clipShape(Capsule())
                         .numericTextTransition(
                             animationValue: manager.modelDirectories.filter(\.isEnabled).count
@@ -1738,7 +1738,7 @@ struct LearningsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .task {
                     guard !emptyExampleFoldersHasAppeared else { return }
@@ -1758,7 +1758,7 @@ struct LearningsView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 16)
+        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
     }
 
     // MARK: - Helpers

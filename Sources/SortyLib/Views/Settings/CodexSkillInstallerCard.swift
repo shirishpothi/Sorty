@@ -47,7 +47,7 @@ struct CodexSkillInstallerCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contextMenu {
             if installer.state == .conflict {

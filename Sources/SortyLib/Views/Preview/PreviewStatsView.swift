@@ -126,7 +126,7 @@ struct PreviewStatsView: View {
                 .padding(.vertical, 8)
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .contextMenu {

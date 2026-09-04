@@ -223,7 +223,7 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .systemLiquidGlassBackground(cornerRadius: 4)
+                .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
             }
         }
         .padding()
