@@ -958,7 +958,7 @@ private struct DuplicatesNerdStatsStrip: View {
             }
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.sampledFileCount) files sampled. \(manager.hashedFileCount) files fully hashed. \(manager.hashCacheHitCount) cache hits. \(manager.semanticAnalyzedFileCount) files analyzed for similarity. \(manager.semanticSkippedFileCount) files skipped for similarity. \(manager.unreadableFileCount) unreadable files. Duration \(formattedDuration)."
@@ -1446,7 +1446,7 @@ private struct DuplicateMetricTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .systemLiquidGlassBackground(cornerRadius: 10)
+        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
         .frame(minHeight: 50)
         .accessibilityElement(children: .combine)
     }
@@ -1996,7 +1996,7 @@ struct ScanProgressViewNew: View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.clear)
-                .systemLiquidGlassBackground(cornerRadius: 16)
+                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
 
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))

@@ -556,7 +556,7 @@ struct ExclusionRulesView: View {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
+                    .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
                 }
             }
         }
@@ -919,7 +919,7 @@ struct ExclusionRulesView: View {
 
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .overlay {
             if isCreatingExceptionRules {
                 FocusedInstructionBeamBorder(active: true)
@@ -2028,7 +2028,7 @@ struct AddExclusionRuleView: View {
             }
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 
     private var displayedExceptionName: String {
@@ -2067,7 +2067,7 @@ struct AddExclusionRuleView: View {
                 }
             }
             .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
 
             if intent != .folder {
                 VStack(alignment: .leading, spacing: 8) {
@@ -2077,7 +2077,7 @@ struct AddExclusionRuleView: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             }
 
             if supportsMatchingOptions {
@@ -2088,7 +2088,7 @@ struct AddExclusionRuleView: View {
                     Toggle("Exclude everything except matches", isOn: $negated)
                 }
                 .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             }
         }
     }

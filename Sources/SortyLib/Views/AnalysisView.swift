@@ -1280,7 +1280,7 @@ private struct RenameGenerationSequenceView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: 720)
         .frame(height: panelHeight, alignment: .top)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: visibleRowCount)
     }
 
@@ -1776,7 +1776,7 @@ private struct StreamingProgressBeam: View {
         ZStack {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.clear)
-                .systemLiquidGlassBackground(cornerRadius: 16)
+                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
 
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
