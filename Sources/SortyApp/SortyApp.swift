@@ -750,7 +750,13 @@ struct SortyApp: App {
             launchRequest: launchRequest.wrappedValue,
             coordinator: coordinator,
             history: organizationHistory,
-            updateManager: updateManager
+            updateManager: updateManager,
+            openAIAuth: openAIAuthManager,
+            extensionListener: extensionListener,
+            notificationSettings: notificationSettings,
+            loginItemManager: loginItemManager,
+            namingPresetManager: namingPresetManager,
+            steeringPromptManager: steeringPromptManager
         )
         .tint(accent ?? SortyDesignSystem.Colors.resolvedAccent)
         .accentColor(accent ?? SortyDesignSystem.Colors.resolvedAccent)

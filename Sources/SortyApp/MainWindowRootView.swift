@@ -8,21 +8,15 @@ struct MainWindowRootView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
-    @EnvironmentObject private var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject private var codexAuth: CodexCLIAuthManager
     @EnvironmentObject private var personaManager: PersonaManager
     @EnvironmentObject private var customPersonaStore: CustomPersonaStore
     @EnvironmentObject private var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject private var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject private var exclusionRules: ExclusionRulesManager
-    @EnvironmentObject private var extensionListener: ExtensionListener
     @EnvironmentObject private var deeplinkHandler: DeeplinkHandler
     @EnvironmentObject private var learningsManager: LearningsManager
     @EnvironmentObject private var automationManager: AutomationManager
-    @EnvironmentObject private var notificationSettings: NotificationSettingsManager
-    @EnvironmentObject private var loginItemManager: LoginItemManager
-    @EnvironmentObject private var namingPresetManager: NamingPresetManager
-    @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.openWindow) private var openWindow
     @Environment(\.isAccentPrototypeWindow) private var isAccentPrototypeWindow
@@ -39,15 +33,33 @@ struct MainWindowRootView: View {
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
+    private let openAIAuth: SubscriptionAuthManager
+    private let extensionListener: ExtensionListener
+    private let notificationSettings: NotificationSettingsManager
+    private let loginItemManager: LoginItemManager
+    private let namingPresetManager: NamingPresetManager
+    private let steeringPromptManager: SteeringPromptManager
 
     init(
         launchRequest: WindowLaunchRequest?,
         coordinator: AppCoordinator?,
         history: OrganizationHistory,
-        updateManager: SparkleUpdateManager
+        updateManager: SparkleUpdateManager,
+        openAIAuth: SubscriptionAuthManager,
+        extensionListener: ExtensionListener,
+        notificationSettings: NotificationSettingsManager,
+        loginItemManager: LoginItemManager,
+        namingPresetManager: NamingPresetManager,
+        steeringPromptManager: SteeringPromptManager
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
+        self.openAIAuth = openAIAuth
+        self.extensionListener = extensionListener
+        self.notificationSettings = notificationSettings
+        self.loginItemManager = loginItemManager
+        self.namingPresetManager = namingPresetManager
+        self.steeringPromptManager = steeringPromptManager
         _windowSession = StateObject(
             wrappedValue: WindowSession(updateManager: updateManager, history: history)
         )
