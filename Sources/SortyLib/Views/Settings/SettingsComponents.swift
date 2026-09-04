@@ -118,7 +118,9 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
         }
 
         isBreathing = false
-        withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+        // A few pulses draw attention without keeping SwiftUI's animation
+        // timeline active for the full lifetime of the focus highlight.
+        withAnimation(.easeInOut(duration: 0.7).repeatCount(3, autoreverses: true)) {
             isBreathing = true
         }
     }
@@ -260,7 +262,9 @@ struct SettingsCard<Content: View>: View {
         }
         .padding(isExpanded == nil ? 16 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        // The card is a container. Its controls provide their own interaction
+        // feedback, so the glass itself does not need continuous pointer state.
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 
     private func header() -> some View {
