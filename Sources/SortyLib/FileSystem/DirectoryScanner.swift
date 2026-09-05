@@ -244,6 +244,10 @@ actor DirectoryScanner {
             files: &files
         )
 
+        if deepScan {
+            await contentAnalyzer.scheduleCacheFlush()
+        }
+
         logger.info(
             "Scan completed: \(self.scannedCount) files, cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), memory pressure: \(self.memoryPressureState.rawValue)"
         )

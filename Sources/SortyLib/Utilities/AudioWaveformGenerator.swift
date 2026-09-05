@@ -2,6 +2,62 @@ import Foundation
 @preconcurrency import AVFoundation
 @preconcurrency import AppKit
 
+private actor AudioReaderLimiter {
+    static let shared = AudioReaderLimiter(limit: 2)
+
+    private var permits: Int
+    private var waiters: [(UUID, CheckedContinuation<Void, Error>)] = []
+    private var cancelledWaiters: Set<UUID> = []
+
+    init(limit: Int) {
+        permits = limit
+    }
+
+    func acquire() async throws {
+        try Task.checkCancellation()
+        guard permits == 0 else {
+            permits -= 1
+            return
+        }
+
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                if cancelledWaiters.remove(id) != nil || Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    waiters.append((id, continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) }
+        }
+    }
+
+    func release() {
+        while !waiters.isEmpty {
+            let (id, continuation) = waiters.removeFirst()
+            if cancelledWaiters.remove(id) != nil {
+                continuation.resume(throwing: CancellationError())
+                continue
+            }
+            continuation.resume()
+            return
+        }
+        permits += 1
+    }
+
+    private func cancelWaiter(_ id: UUID) {
+        if let index = waiters.firstIndex(where: { $0.0 == id }) {
+            let (_, continuation) = waiters.remove(at: index)
+            continuation.resume(throwing: CancellationError())
+        } else {
+            cancelledWaiters.insert(id)
+        }
+    }
+}
+
 /// Generates a simple bar-style waveform image from an audio file
 @MainActor
 public final class AudioWaveformGenerator {
@@ -19,13 +75,30 @@ public final class AudioWaveformGenerator {
     /// Loads audio amplitudes from the file - runs off main thread
     nonisolated
     private func loadAmplitudes(for url: URL) async -> [Float]? {
-        let asset = AVAsset(url: url)
-        
-        guard let reader = try? AVAssetReader(asset: asset),
-              let track = try? await asset.loadTracks(withMediaType: .audio).first else {
+        do {
+            try await AudioReaderLimiter.shared.acquire()
+        } catch {
             return nil
         }
-        
+
+        let readTask = Task.detached(priority: .utility) {
+            await Self.readAmplitudes(for: url)
+        }
+        let amplitudes = await withTaskCancellationHandler {
+            await readTask.value
+        } onCancel: {
+            readTask.cancel()
+        }
+        await AudioReaderLimiter.shared.release()
+        return amplitudes
+    }
+
+    private nonisolated static func readAmplitudes(for url: URL) async -> [Float]? {
+        let asset = AVAsset(url: url)
+        guard !Task.isCancelled,
+              let track = try? await asset.loadTracks(withMediaType: .audio).first,
+              let reader = try? AVAssetReader(asset: asset) else { return nil }
+
         let outputSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVLinearPCMBitDepthKey: 16,
@@ -36,48 +109,50 @@ public final class AudioWaveformGenerator {
         
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
         reader.add(output)
-        reader.startReading()
-        
-        var sampleData = Data()
-        while let sampleBuffer = output.copyNextSampleBuffer() {
+        guard reader.startReading() else { return nil }
+
+        let duration = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+        let formatDescription = try? await track.load(.formatDescriptions).first
+        let audioDescription = formatDescription.flatMap {
+            CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee
+        }
+        let sampleRate = audioDescription?.mSampleRate ?? 44_100
+        let channelCount = max(1, Int(audioDescription?.mChannelsPerFrame ?? 1))
+        let totalFrames = max(1, Int(duration * sampleRate))
+        let barCount = 10
+        var maxima = [Int16](repeating: 0, count: barCount)
+        var frameOffset = 0
+
+        while !Task.isCancelled, let sampleBuffer = output.copyNextSampleBuffer() {
             if let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
                 let length = CMBlockBufferGetDataLength(blockBuffer)
-                var data = [Int16](repeating: 0, count: length / 2)
-                CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0, dataLength: length, destination: &data)
-                data.withUnsafeBufferPointer { buffer in
-                    sampleData.append(buffer)
-                }
-            }
-        }
-        
-        guard !sampleData.isEmpty else { return nil }
-        
-        // Downsample to the number of bars we want
-        let barCount = 10
-        let samplesPerBar = sampleData.count / 2 / barCount
-        var amplitudes: [Float] = []
-        
-        sampleData.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) in
-            let int16Ptr = ptr.bindMemory(to: Int16.self)
-            for i in 0..<barCount {
-                var maxAmplitude: Int16 = 0
-                for j in 0..<samplesPerBar {
-                    let sample = int16Ptr[i * samplesPerBar + j]
-                    let magnitude: Int16
-                    if sample == Int16.min {
-                        magnitude = Int16.max
-                    } else {
-                        magnitude = abs(sample)
-                    }
-                    if magnitude > maxAmplitude {
-                        maxAmplitude = magnitude
+                var samples = [Int16](repeating: 0, count: length / MemoryLayout<Int16>.size)
+                guard CMBlockBufferCopyDataBytes(
+                    blockBuffer,
+                    atOffset: 0,
+                    dataLength: length,
+                    destination: &samples
+                ) == kCMBlockBufferNoErr else { continue }
+
+                let frameCount = samples.count / channelCount
+                for frame in 0..<frameCount {
+                    let bucket = min(barCount - 1, (frameOffset + frame) * barCount / totalFrames)
+                    for channel in 0..<channelCount {
+                        let sample = samples[frame * channelCount + channel]
+                        let magnitude = sample == .min ? Int16.max : abs(sample)
+                        maxima[bucket] = max(maxima[bucket], magnitude)
                     }
                 }
-                amplitudes.append(Float(maxAmplitude) / Float(Int16.max))
+                frameOffset += frameCount
             }
         }
-        
-        return amplitudes
+
+        if Task.isCancelled {
+            reader.cancelReading()
+            return nil
+        }
+        guard frameOffset > 0 else { return nil }
+        return maxima.map { Float($0) / Float(Int16.max) }
     }
     
     @MainActor

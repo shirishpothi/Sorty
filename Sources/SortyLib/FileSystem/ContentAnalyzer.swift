@@ -134,6 +134,7 @@ public actor ContentAnalyzer {
     private let maxPreviewLength = ContentAnalyzer.defaultTextPreviewLength
     private let maxTextBytesToRead = 262_144 // 256KB
     private let maxDocumentTextLength = 12_000
+    private let maxOfficeXMLBytes = 2 * 1024 * 1024
     private let initialPDFPageProbeCount = 3
     private let visionAnalyzer = VisionAnalyzer()
 
@@ -168,6 +169,8 @@ public actor ContentAnalyzer {
     private var memoryCache: [String: CacheEntry] = [:]
     private let maximumCacheEntryCount = 500
     private var cacheLoaded = false
+    private var cacheFlushTask: Task<Void, Never>?
+    private var cacheGeneration = 0
     private var diskCacheURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("com.sorty.app")
@@ -178,12 +181,33 @@ public actor ContentAnalyzer {
     
     /// Clear any cached data to free memory
     public func clearCache() async {
+        cacheGeneration &+= 1
+        cacheFlushTask?.cancel()
+        cacheFlushTask = nil
         memoryCache.removeAll()
         if let cacheURL = diskCacheURL {
             try? FileManager.default.removeItem(at: cacheURL)
         }
         await visionAnalyzer.clearCache()
         ImageVisionAnalyzer.clearSharedCache()
+    }
+
+    /// Coalesces scan-driven cache writes while preventing an older write from
+    /// recreating a cache after `clearCache()`.
+    public func scheduleCacheFlush() {
+        cacheFlushTask?.cancel()
+        let generation = cacheGeneration
+        cacheFlushTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            await self?.flushCacheIfCurrent(generation: generation)
+        }
+    }
+
+    private func flushCacheIfCurrent(generation: Int) {
+        guard generation == cacheGeneration else { return }
+        saveCacheToDisk()
+        cacheFlushTask = nil
     }
 
     private func ensureCacheLoaded() {
@@ -560,7 +584,11 @@ public actor ContentAnalyzer {
             return nil
         }
 
-        guard let xmlString = extractFileFromZip(data: zipData, fileName: "word/document.xml") else {
+        guard let xmlString = extractFileFromZip(
+            data: zipData,
+            fileName: "word/document.xml",
+            maximumOutputBytes: maxOfficeXMLBytes
+        ) else {
             return nil
         }
 
@@ -570,7 +598,11 @@ public actor ContentAnalyzer {
         var metadata = ContentMetadata(textPreview: String(text.prefix(maxDocumentTextLength)))
 
         // Also try to extract core.xml for metadata
-        if let coreXML = extractFileFromZip(data: zipData, fileName: "docProps/core.xml") {
+        if let coreXML = extractFileFromZip(
+            data: zipData,
+            fileName: "docProps/core.xml",
+            maximumOutputBytes: 256 * 1024
+        ) {
             if let title = extractXMLValue(coreXML, tag: "dc:title") {
                 metadata.documentTitle = title
             }
@@ -589,16 +621,23 @@ public actor ContentAnalyzer {
             return ""
         }
 
-        let matches = regex.matches(in: xml, options: [], range: NSRange(xml.startIndex..., in: xml))
-        var texts: [String] = []
-
-        for match in matches {
-            if let range = Range(match.range(at: 1), in: xml) {
-                texts.append(String(xml[range]))
+        var text = ""
+        regex.enumerateMatches(
+            in: xml,
+            range: NSRange(xml.startIndex..., in: xml)
+        ) { match, _, stop in
+            guard let match,
+                  let range = Range(match.range(at: 1), in: xml) else { return }
+            if !text.isEmpty {
+                text.append(" ")
+            }
+            text.append(contentsOf: xml[range].prefix(maxDocumentTextLength - text.count))
+            if text.count >= maxDocumentTextLength {
+                stop.pointee = true
             }
         }
 
-        return texts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Plain Text Extraction
@@ -766,7 +805,11 @@ public actor ContentAnalyzer {
 
     private func extractZipXMLContent(from url: URL, xmlPath: String) async -> ContentMetadata? {
         guard let zipData = try? Data(contentsOf: url, options: .mappedIfSafe),
-              let xmlString = extractFileFromZip(data: zipData, fileName: xmlPath) else {
+              let xmlString = extractFileFromZip(
+                data: zipData,
+                fileName: xmlPath,
+                maximumOutputBytes: maxOfficeXMLBytes
+              ) else {
             return nil
         }
 
@@ -778,7 +821,11 @@ public actor ContentAnalyzer {
     // MARK: - Native ZIP Reading
 
     /// Extract a single file from a ZIP archive by name
-    private func extractFileFromZip(data: Data, fileName: String) -> String? {
+    private func extractFileFromZip(
+        data: Data,
+        fileName: String,
+        maximumOutputBytes: Int
+    ) -> String? {
         // ZIP end of central directory signature
         let eocdSignature: [UInt8] = [0x50, 0x4B, 0x05, 0x06]
 
@@ -841,11 +888,17 @@ public actor ContentAnalyzer {
 
                 if compressionMethod == 0 {
                     // Stored (no compression)
-                    return String(data: fileData, encoding: .utf8)
+                    return String(
+                        decoding: fileData.prefix(maximumOutputBytes),
+                        as: UTF8.self
+                    )
                 } else if compressionMethod == 8 {
                     // Deflate — use Compression framework
-                    let decompressed = decompressDeflate(Data(fileData), uncompressedSize: uncompressedSize)
-                    return decompressed.flatMap { String(data: $0, encoding: .utf8) }
+                    let decompressed = decompressDeflate(
+                        Data(fileData),
+                        maximumOutputBytes: min(uncompressedSize, maximumOutputBytes)
+                    )
+                    return decompressed.map { String(decoding: $0, as: UTF8.self) }
                 }
 
                 return nil
@@ -857,8 +910,8 @@ public actor ContentAnalyzer {
         return nil
     }
 
-    private func decompressDeflate(_ data: Data, uncompressedSize: Int) -> Data? {
-        let bufferSize = max(uncompressedSize, 4096)
+    private func decompressDeflate(_ data: Data, maximumOutputBytes: Int) -> Data? {
+        let bufferSize = max(1, maximumOutputBytes)
         var decompressed = Data(count: bufferSize)
 
         let result = decompressed.withUnsafeMutableBytes { destBuffer in

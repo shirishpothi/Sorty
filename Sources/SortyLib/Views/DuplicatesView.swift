@@ -885,11 +885,7 @@ private struct UnavailableDuplicateFilesPopover: View {
 
     private func unavailableFileRow(_ file: UnavailableDuplicateFile) -> some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: file.path))
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
+            UnavailableFileIcon(fileURL: file.url)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.url.lastPathComponent)
@@ -927,6 +923,36 @@ private struct UnavailableDuplicateFilesPopover: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .contain)
+    }
+}
+
+private struct UnavailableFileIcon: View {
+    let fileURL: URL
+    @State private var icon: NSImage
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+        _icon = State(
+            initialValue: AnalysisIconProvider.icon(
+                forFileExtension: fileURL.pathExtension
+            )
+        )
+    }
+
+    var body: some View {
+        Image(nsImage: icon)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 24, height: 24)
+            .accessibilityHidden(true)
+            .task(id: fileURL.path) {
+                let resolvedIcon = await FileThumbnailProvider.shared.thumbnail(
+                    for: fileURL,
+                    size: CGSize(width: 24, height: 24)
+                )
+                guard !Task.isCancelled else { return }
+                icon = resolvedIcon
+            }
     }
 }
 

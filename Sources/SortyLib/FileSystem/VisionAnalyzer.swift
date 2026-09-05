@@ -6,10 +6,11 @@
 //  Extracts text from images for AI-powered organization
 //
 
-import Foundation
-import Vision
 import AppKit
 import CoreImage
+import Foundation
+import ImageIO
+import Vision
 
 /// Result of OCR analysis on an image
 public struct OCRResult: Sendable {
@@ -57,6 +58,9 @@ public actor VisionAnalyzer {
     private let minimumConfidence: Float = 0.3
     private let maximumCachedResultCount = 256
     private let cacheTrimThreshold = 288
+    private let initialOCRMaximumPixelDimension = 2_048
+    private let retryOCRMaximumPixelDimension = 4_096
+    private let retryConfidenceThreshold: Float = 0.55
     private var recognitionLanguages: [String] = ["en-US"]
 
     private struct OCRCacheEntry {
@@ -101,12 +105,27 @@ public actor VisionAnalyzer {
             return cached
         }
 
-        // Load image
-        guard let cgImage = loadCGImage(from: url) else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = loadCGImage(
+                from: source,
+                maximumPixelDimension: initialOCRMaximumPixelDimension
+              ) else {
             return nil
         }
 
-        let result = await performOCR(on: cgImage)
+        let initialResult = await performOCR(on: cgImage)
+        var result = initialResult
+
+        if shouldRetryOCR(initialResult),
+           imageExceedsInitialPixelBudget(source),
+           !Task.isCancelled,
+           let higherResolutionImage = loadCGImage(
+            from: source,
+            maximumPixelDimension: retryOCRMaximumPixelDimension
+           ) {
+            result = await performOCR(on: higherResolutionImage) ?? initialResult
+        }
+
         if let result {
             cacheResult(result, for: url)
         }
@@ -120,17 +139,35 @@ public actor VisionAnalyzer {
 
     // MARK: - Private Methods
 
-    private func loadCGImage(from url: URL) -> CGImage? {
-        // Try using CGImageSource for better format support
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            // Fallback to NSImage
-            if let image = NSImage(contentsOf: url) {
-                return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            }
-            return nil
-        }
+    private func loadCGImage(
+        from source: CGImageSource,
+        maximumPixelDimension: Int
+    ) -> CGImage? {
+        CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maximumPixelDimension,
+                kCGImageSourceShouldCacheImmediately: true,
+            ] as CFDictionary
+        )
+    }
 
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    private func shouldRetryOCR(_ result: OCRResult?) -> Bool {
+        guard let result else { return true }
+        return result.confidence < retryConfidenceThreshold || result.wordCount < 3
+    }
+
+    private func imageExceedsInitialPixelBudget(_ source: CGImageSource) -> Bool {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+            as? [String: Any],
+              let width = properties[kCGImagePropertyPixelWidth as String] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight as String] as? Int else {
+            return false
+        }
+        return max(width, height) > initialOCRMaximumPixelDimension
     }
 
     private func performOCR(on cgImage: CGImage) async -> OCRResult? {
