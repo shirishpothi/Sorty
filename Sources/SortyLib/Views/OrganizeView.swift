@@ -936,7 +936,6 @@ struct ReadyToOrganizeView: View {
     @State private var showStorageLocationsInfo = false
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
-    @State private var instructionSuggestionIndex = 0
     @State private var referenceRefreshTask: Task<Void, Never>?
     @State private var startCTACompression: CGFloat = 0
 
@@ -957,10 +956,6 @@ struct ReadyToOrganizeView: View {
         )
     }
 
-    private var currentInstructionSuggestion: String {
-        instructionSuggestions[instructionSuggestionIndex % instructionSuggestions.count]
-    }
-    
     private var isConnecting: Bool {
         sessionManager.prewarmingProvider != nil
     }
@@ -1452,49 +1447,13 @@ struct ReadyToOrganizeView: View {
                     }
                     .padding(.vertical, 20)
                 } else {
-                    SubmittableTextEditor(
+                    RotatingInstructionSuggestionEditor(
                         text: $organizer.customInstructions,
                         isFocused: $isTextFieldFocused,
                         selectedRange: $instructionSelection,
-                        onAcceptSuggestion: acceptCurrentInstructionSuggestion
-                    ) {
-                        onStart()
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                }
-                if organizer.customInstructions.isEmpty {
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(currentInstructionSuggestion)
-                            .font(.body)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(2)
-                            .numericTextTransition(animationValue: instructionSuggestionIndex)
-
-                        Spacer(minLength: 0)
-
-                        Text("Tab")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
-                            .accessibilityHidden(true)
-                    }
-                        .padding(.leading, 18)
-                        .padding(.trailing, 10)
-                        .padding(.vertical, 9)
-                        .allowsHitTesting(false)
-                        .task(id: instructionSuggestions) {
-                            instructionSuggestionIndex = 0
-
-                            while !Task.isCancelled {
-                                try? await Task.sleep(for: .seconds(3.5))
-                                guard !Task.isCancelled else { return }
-                                instructionSuggestionIndex =
-                                    (instructionSuggestionIndex + 1) % instructionSuggestions.count
-                            }
-                        }
+                        suggestions: instructionSuggestions,
+                        onSubmit: onStart
+                    )
                 }
             }
             .frame(minHeight: 60, maxHeight: 80)
@@ -1673,18 +1632,6 @@ struct ReadyToOrganizeView: View {
                 }
             )
         }
-    }
-
-    private func acceptCurrentInstructionSuggestion() -> Bool {
-        guard organizer.customInstructions.isEmpty else { return false }
-
-        organizer.customInstructions = currentInstructionSuggestion
-        instructionSelection = NSRange(
-            location: (currentInstructionSuggestion as NSString).length,
-            length: 0
-        )
-        HapticFeedbackManager.shared.selection()
-        return true
     }
 
     private func improvePromptWithAI() async {
@@ -3543,6 +3490,77 @@ struct FocusedInstructionBeamBorder: View {
 // MARK: - Custom Text Editor with Enter to Submit
 
 /// A TextEditor that treats Cmd+Enter as submit and Enter as new line
+private struct RotatingInstructionSuggestionEditor: View {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    @Binding var selectedRange: NSRange
+    let suggestions: [String]
+    let onSubmit: () -> Void
+
+    @State private var suggestionIndex = 0
+
+    private var currentSuggestion: String {
+        suggestions[suggestionIndex % suggestions.count]
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            SubmittableTextEditor(
+                text: $text,
+                isFocused: $isFocused,
+                selectedRange: $selectedRange,
+                onAcceptSuggestion: acceptCurrentSuggestion,
+                onSubmit: onSubmit
+            )
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+
+            if text.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(currentSuggestion)
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                        .numericTextTransition(animationValue: suggestionIndex)
+
+                    Spacer(minLength: 0)
+
+                    Text("Tab")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            Color.secondary.opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: 5)
+                        )
+                        .accessibilityHidden(true)
+                }
+                .padding(.leading, 18)
+                .padding(.trailing, 10)
+                .padding(.vertical, 9)
+                .allowsHitTesting(false)
+            }
+        }
+        .task(id: suggestions) {
+            suggestionIndex = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3.5))
+                guard !Task.isCancelled else { return }
+                suggestionIndex = (suggestionIndex + 1) % suggestions.count
+            }
+        }
+    }
+
+    private func acceptCurrentSuggestion() -> Bool {
+        guard text.isEmpty else { return false }
+        text = currentSuggestion
+        selectedRange = NSRange(location: (currentSuggestion as NSString).length, length: 0)
+        HapticFeedbackManager.shared.selection()
+        return true
+    }
+}
+
 struct SubmittableTextEditor: NSViewRepresentable {
     @SortyHotReload private var hotReload
     @Binding var text: String
