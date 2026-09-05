@@ -416,72 +416,97 @@ private struct MetalFxPillSurface: View {
     }
 
     var body: some View {
-        Group {
-            if shouldAnimateSurface {
-                SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
-                    surface(time: timeline.date.timeIntervalSinceReferenceDate)
-                }
-            } else {
-                surface(time: 0)
-            }
-        }
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-    }
-
-    private func surface(time: TimeInterval) -> some View {
-        // Keep phase values small. Feeding an ever-growing uptime value into
-        // AngularGradient eventually loses precision and can render a dark seam.
-        let phase = time.truncatingRemainder(dividingBy: 12) / 12
-
-        return ZStack {
+        ZStack {
             Capsule()
                 .fill(baseFill)
 
-            Capsule()
-                .strokeBorder(
-                    AngularGradient(
-                        colors: ringColors,
-                        center: .center,
-                        angle: .degrees(phase * 360)
-                    ),
-                    lineWidth: isIntensified ? 3.2 : 1.6
-                )
-                .blur(radius: 0.35)
-                .opacity(idleBeamOpacity)
+            animatedRing
 
-            Capsule()
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.30 : 0.38),
-                            Color.white.opacity(0.08),
-                            Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
+            stationaryBorder
 
-            movingCatchlight(phase: phase)
-                .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
+            animatedCatchlight
 
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : (usesSubtleIdleBeam ? 0.08 : 0.11))),
-                            Color.clear,
-                            Color.black.opacity(isPressed ? 0.22 : 0.13)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .padding(3)
+            stationaryLighting
         }
         .clipShape(Capsule())
         .compositingGroup()
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+    }
+
+    @ViewBuilder
+    private var animatedRing: some View {
+        if shouldAnimateSurface {
+            SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
+                ring(phase: phase(at: timeline.date.timeIntervalSinceReferenceDate))
+            }
+        } else {
+            ring(phase: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var animatedCatchlight: some View {
+        if shouldAnimateSurface {
+            SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
+                movingCatchlight(phase: phase(at: timeline.date.timeIntervalSinceReferenceDate))
+                    .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
+            }
+        } else {
+            movingCatchlight(phase: 0)
+                .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
+        }
+    }
+
+    private func phase(at time: TimeInterval) -> Double {
+        // Keep phase values small. Feeding an ever-growing uptime value into
+        // AngularGradient eventually loses precision and can render a dark seam.
+        time.truncatingRemainder(dividingBy: 12) / 12
+    }
+
+    private func ring(phase: Double) -> some View {
+        Capsule()
+            .strokeBorder(
+                AngularGradient(
+                    colors: ringColors,
+                    center: .center,
+                    angle: .degrees(phase * 360)
+                ),
+                lineWidth: isIntensified ? 3.2 : 1.6
+            )
+            .blur(radius: 0.35)
+            .opacity(idleBeamOpacity)
+    }
+
+    private var stationaryBorder: some View {
+        Capsule()
+            .strokeBorder(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(colorScheme == .dark ? 0.30 : 0.38),
+                        Color.white.opacity(0.08),
+                        Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 1
+            )
+    }
+
+    private var stationaryLighting: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : (usesSubtleIdleBeam ? 0.08 : 0.11))),
+                        Color.clear,
+                        Color.black.opacity(isPressed ? 0.22 : 0.13)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .padding(3)
     }
 
     private var baseFill: some ShapeStyle {
