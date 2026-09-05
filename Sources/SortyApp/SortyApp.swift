@@ -898,8 +898,8 @@ struct SortyApp: App {
         loginItemManager.startUp()
         syncLoginItemState()
 
-        watchedFoldersManager.restoreSecurityScopedAccess()
-        storageLocationsManager.restoreSecurityScopedAccess()
+        await watchedFoldersManager.restoreSecurityScopedAccess()
+        await storageLocationsManager.restoreSecurityScopedAccess()
         widgetSyncManager.startIfNeeded(
             watchedFoldersManager: watchedFoldersManager,
             storageLocationsManager: storageLocationsManager

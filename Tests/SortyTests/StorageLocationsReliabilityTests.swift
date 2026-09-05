@@ -505,7 +505,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
     }
 
     @MainActor
-    func testRepeatedAccessRefreshKeepsLocationValid() throws {
+    func testRepeatedAccessRefreshKeepsLocationValid() async throws {
         let manager = StorageLocationsManager()
         manager.clearAll()
         defer { manager.clearAll() }
@@ -514,8 +514,8 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
         try manager.addLocation(url: archive)
 
-        manager.refreshAccessStatus()
-        manager.refreshAccessStatus()
+        await manager.refreshAccessStatus()
+        await manager.refreshAccessStatus()
 
         XCTAssertEqual(manager.locations.first?.accessStatus, .valid)
         XCTAssertEqual(manager.enabledLocations.count, 1)

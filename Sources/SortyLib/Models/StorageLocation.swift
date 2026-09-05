@@ -287,6 +287,23 @@ public class StorageLocationsManager: ObservableObject {
     private var loadTask: Task<[StorageLocation], Never>?
     private var hasPendingChanges = false
     private var loadGeneration = 0
+    private var restoreTask: Task<Void, Never>?
+
+    private struct BookmarkRestoreSnapshot: Sendable {
+        let id: UUID
+        let bookmarkData: Data?
+        let path: String
+    }
+
+    private struct BookmarkRestoreResult: Sendable {
+        let id: UUID
+        let originalBookmark: Data?
+        let status: FolderAccessStatus
+        let newBookmark: Data?
+        let resolvedPath: String?
+        let url: URL?
+        let didAccess: Bool
+    }
     
     public init() {
         setupNotificationObservers()
@@ -361,6 +378,8 @@ public class StorageLocationsManager: ObservableObject {
         loadGeneration &+= 1
         loadTask?.cancel()
         loadTask = nil
+        restoreTask?.cancel()
+        restoreTask = nil
         hasLoadedPersistedState = true
         hasPendingChanges = false
         stopAllSecurityScopedAccess()
@@ -574,17 +593,174 @@ public class StorageLocationsManager: ObservableObject {
         return nil
     }
     
-    /// Restores access to all security-scoped bookmarks
-    public func restoreSecurityScopedAccess() {
-        for location in locations {
-            refreshAccess(for: location)
+    /// Restores access to all security-scoped bookmarks off the main actor.
+    /// Snapshots identity before leaving, accepts results only for matching items,
+    /// and balances every acquisition. Callers await this before automation uses locations.
+    public func restoreSecurityScopedAccess() async {
+        await loadPersistedState()
+        if let restoreTask {
+            await restoreTask.value
+            return
         }
+
+        let generation = loadGeneration
+        let snapshots: [BookmarkRestoreSnapshot] = locations.map {
+            BookmarkRestoreSnapshot(id: $0.id, bookmarkData: $0.bookmarkData, path: $0.path)
+        }
+        guard !snapshots.isEmpty else { return }
+
+        let task = Task { [weak self] in
+            let results = await Task.detached(priority: .userInitiated) {
+                Self.resolveBookmarks(snapshots)
+            }.value
+            guard let self else {
+                for result in results where result.didAccess {
+                    result.url?.stopAccessingSecurityScopedResource()
+                }
+                return
+            }
+            self.applyBookmarkRestoreResults(results, generation: generation)
+        }
+        restoreTask = task
+        await task.value
+        restoreTask = nil
     }
 
     /// Re-checks all locations and repairs stale bookmarks where possible.
     /// Safe to call repeatedly; each location has at most one long-lived access session.
-    public func refreshAccessStatus() {
-        restoreSecurityScopedAccess()
+    public func refreshAccessStatus() async {
+        await restoreSecurityScopedAccess()
+    }
+
+    private nonisolated static func resolveBookmarks(
+        _ snapshots: [BookmarkRestoreSnapshot]
+    ) -> [BookmarkRestoreResult] {
+        var results: [BookmarkRestoreResult] = []
+        results.reserveCapacity(snapshots.count)
+
+        for snapshot in snapshots {
+            guard !Task.isCancelled else { break }
+            guard let bookmarkData = snapshot.bookmarkData else {
+                let exists = FileManager.default.fileExists(atPath: snapshot.path)
+                results.append(
+                    BookmarkRestoreResult(
+                        id: snapshot.id,
+                        originalBookmark: nil,
+                        status: exists ? .valid : .lost,
+                        newBookmark: nil,
+                        resolvedPath: nil,
+                        url: nil,
+                        didAccess: false
+                    )
+                )
+                continue
+            }
+
+            var isStale = false
+            do {
+                let resolvedURL = try URL(
+                    resolvingBookmarkData: bookmarkData,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                guard resolvedURL.startAccessingSecurityScopedResource() else {
+                    results.append(
+                        BookmarkRestoreResult(
+                            id: snapshot.id,
+                            originalBookmark: bookmarkData,
+                            status: .lost,
+                            newBookmark: nil,
+                            resolvedPath: nil,
+                            url: nil,
+                            didAccess: false
+                        )
+                    )
+                    continue
+                }
+
+                var newBookmark: Data? = nil
+                if isStale {
+                    newBookmark = try? resolvedURL.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                }
+                results.append(
+                    BookmarkRestoreResult(
+                        id: snapshot.id,
+                        originalBookmark: bookmarkData,
+                        status: .valid,
+                        newBookmark: newBookmark,
+                        resolvedPath: StorageLocationPathResolver.canonicalPath(resolvedURL.path),
+                        url: resolvedURL,
+                        didAccess: true
+                    )
+                )
+            } catch {
+                results.append(
+                    BookmarkRestoreResult(
+                        id: snapshot.id,
+                        originalBookmark: bookmarkData,
+                        status: .lost,
+                        newBookmark: nil,
+                        resolvedPath: nil,
+                        url: nil,
+                        didAccess: false
+                    )
+                )
+            }
+        }
+        return results
+    }
+
+    private func applyBookmarkRestoreResults(
+        _ results: [BookmarkRestoreResult],
+        generation: Int
+    ) {
+        guard generation == loadGeneration else {
+            for result in results where result.didAccess {
+                result.url?.stopAccessingSecurityScopedResource()
+            }
+            return
+        }
+
+        var didChange = false
+        for result in results {
+            guard let index = locations.firstIndex(where: { $0.id == result.id }),
+                  locations[index].bookmarkData == result.originalBookmark else {
+                if result.didAccess {
+                    result.url?.stopAccessingSecurityScopedResource()
+                }
+                continue
+            }
+
+            stopSecurityScopedAccess(for: result.id)
+
+            if result.didAccess, let url = result.url {
+                activeSecurityScopedURLs[result.id] = url
+            }
+
+            if locations[index].accessStatus != result.status {
+                locations[index].accessStatus = result.status
+                didChange = true
+            }
+            if let newBookmark = result.newBookmark,
+               locations[index].bookmarkData != newBookmark {
+                locations[index].bookmarkData = newBookmark
+                didChange = true
+            }
+            if let resolvedPath = result.resolvedPath,
+               locations[index].path != resolvedPath {
+                locations[index].path = resolvedPath
+                didChange = true
+            }
+        }
+
+        if didChange {
+            saveLocations()
+        }
     }
     
     /// Re-authorizes a storage location by creating a new security-scoped bookmark from a freshly-picked URL

@@ -160,6 +160,23 @@ public class WatchedFoldersManager: ObservableObject {
     private var existenceRefreshTask: Task<Void, Never>?
     private var loadTask: Task<([WatchedFolder], Bool), Never>?
     private var loadGeneration = 0
+    private var restoreTask: Task<Void, Never>?
+
+    private struct BookmarkRestoreSnapshot: Sendable {
+        let id: UUID
+        let bookmarkData: Data
+        let path: String
+    }
+
+    private struct BookmarkRestoreResult: Sendable {
+        let id: UUID
+        let originalBookmark: Data
+        let status: FolderAccessStatus
+        let newBookmark: Data?
+        let resolvedPath: String?
+        let url: URL?
+        let didAccess: Bool
+    }
     
     public init() {
         if userDefaults.object(forKey: activeCountStorageKey) != nil {
@@ -253,6 +270,8 @@ public class WatchedFoldersManager: ObservableObject {
         loadGeneration &+= 1
         loadTask?.cancel()
         loadTask = nil
+        restoreTask?.cancel()
+        restoreTask = nil
         hasLoadedPersistedState = true
         stopAllSecurityScopedAccess()
         folders.removeAll()
@@ -409,66 +428,188 @@ public class WatchedFoldersManager: ObservableObject {
         }
     }
     
-    /// Restores access to all security-scoped bookmarks
-    /// Should be called on app launch
-    public func restoreSecurityScopedAccess() {
+    /// Restores access to all security-scoped bookmarks off the main actor.
+    /// Snapshots identity before leaving, accepts results only for matching items,
+    /// and balances every acquisition. Callers await this before automation uses folders.
+    public func restoreSecurityScopedAccess() async {
+        await loadPersistedState()
+        if let restoreTask {
+            await restoreTask.value
+            return
+        }
+
+        let generation = loadGeneration
+        let snapshots: [BookmarkRestoreSnapshot] = folders.compactMap { folder in
+            guard let bookmarkData = folder.bookmarkData else { return nil }
+            return BookmarkRestoreSnapshot(id: folder.id, bookmarkData: bookmarkData, path: folder.path)
+        }
+        guard !snapshots.isEmpty else { return }
+
+        let task = Task { [weak self] in
+            let results = await Task.detached(priority: .userInitiated) {
+                Self.resolveBookmarks(snapshots)
+            }.value
+            guard let self else {
+                for result in results where result.didAccess {
+                    result.url?.stopAccessingSecurityScopedResource()
+                }
+                return
+            }
+            self.applyBookmarkRestoreResults(results, generation: generation)
+        }
+        restoreTask = task
+        await task.value
+        restoreTask = nil
+    }
+
+    private nonisolated static func resolveBookmarks(
+        _ snapshots: [BookmarkRestoreSnapshot]
+    ) -> [BookmarkRestoreResult] {
+        var results: [BookmarkRestoreResult] = []
+        results.reserveCapacity(snapshots.count)
+        let requiresAccess = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+
+        for snapshot in snapshots {
+            guard !Task.isCancelled else { break }
+            var isStale = false
+            do {
+                let url = try URL(
+                    resolvingBookmarkData: snapshot.bookmarkData,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                if !requiresAccess {
+                    var newBookmark: Data? = nil
+                    if isStale {
+                        newBookmark = try? url.bookmarkData(
+                            options: .withSecurityScope,
+                            includingResourceValuesForKeys: nil,
+                            relativeTo: nil
+                        )
+                    }
+                    results.append(
+                        BookmarkRestoreResult(
+                            id: snapshot.id,
+                            originalBookmark: snapshot.bookmarkData,
+                            status: isStale ? .stale : .valid,
+                            newBookmark: newBookmark,
+                            resolvedPath: url.path,
+                            url: nil,
+                            didAccess: false
+                        )
+                    )
+                    continue
+                }
+
+                guard url.startAccessingSecurityScopedResource() else {
+                    results.append(
+                        BookmarkRestoreResult(
+                            id: snapshot.id,
+                            originalBookmark: snapshot.bookmarkData,
+                            status: .lost,
+                            newBookmark: nil,
+                            resolvedPath: nil,
+                            url: nil,
+                            didAccess: false
+                        )
+                    )
+                    continue
+                }
+
+                var newBookmark: Data? = nil
+                if isStale {
+                    newBookmark = try? url.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                }
+                results.append(
+                    BookmarkRestoreResult(
+                        id: snapshot.id,
+                        originalBookmark: snapshot.bookmarkData,
+                        status: isStale ? .stale : .valid,
+                        newBookmark: newBookmark,
+                        resolvedPath: url.path,
+                        url: url,
+                        didAccess: true
+                    )
+                )
+            } catch {
+                results.append(
+                    BookmarkRestoreResult(
+                        id: snapshot.id,
+                        originalBookmark: snapshot.bookmarkData,
+                        status: .lost,
+                        newBookmark: nil,
+                        resolvedPath: nil,
+                        url: nil,
+                        didAccess: false
+                    )
+                )
+            }
+        }
+        return results
+    }
+
+    private func applyBookmarkRestoreResults(
+        _ results: [BookmarkRestoreResult],
+        generation: Int
+    ) {
+        guard generation == loadGeneration else {
+            for result in results where result.didAccess {
+                result.url?.stopAccessingSecurityScopedResource()
+            }
+            return
+        }
+
         var updatedFolders = folders
         var hasChanges = false
         var persistenceIndexes: Set<Int> = []
-        
-        for (index, folder) in folders.enumerated() {
-            guard let bookmarkData = folder.bookmarkData else {
+
+        for result in results {
+            guard let index = indexByID[result.id],
+                  updatedFolders.indices.contains(index),
+                  updatedFolders[index].id == result.id,
+                  updatedFolders[index].bookmarkData == result.originalBookmark else {
+                if result.didAccess {
+                    result.url?.stopAccessingSecurityScopedResource()
+                }
                 continue
             }
-            
-            var isStale = false
-            do {
-                stopSecurityScopedAccess(for: folder.id)
-                let url = try URL(resolvingBookmarkData: bookmarkData,
-                                  options: .withSecurityScope,
-                                  relativeTo: nil,
-                                  bookmarkDataIsStale: &isStale)
-                
-                let didAccess = !Self.requiresSecurityScopedAccess
-                    || url.startAccessingSecurityScopedResource()
-                if didAccess {
-                    if Self.requiresSecurityScopedAccess {
-                        activeSecurityScopedURLs[folder.id] = url
-                    }
-                    // Success!
-                    if isStale {
-                         // Recreate bookmark
-                         if let newData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
-                             updatedFolders[index].bookmarkData = newData
-                             hasChanges = true
-                             persistenceIndexes.insert(index)
-                         }
-                         updatedFolders[index].accessStatus = .stale
-                    } else {
-                        updatedFolders[index].accessStatus = .valid
-                    }
-                    
-                    // Update path if it changed (e.g. volume rename)
-                    if url.path != folder.path {
-                        updatedFolders[index].path = url.path
-                        hasChanges = true
-                        persistenceIndexes.insert(index)
-                    }
-                } else {
-                    DebugLogger.log("Failed to access security resource for \(folder.name)")
+
+            let previousPath = updatedFolders[index].path
+            stopSecurityScopedAccess(for: result.id)
+
+            if result.status == .lost {
+                if updatedFolders[index].accessStatus != .lost {
                     updatedFolders[index].accessStatus = .lost
                     hasChanges = true
                 }
-                if updatedFolders[index].accessStatus != folder.accessStatus {
-                    hasChanges = true
-                }
-            } catch {
-                DebugLogger.log("Failed to resolve bookmark for \(folder.name): \(error)")
-                updatedFolders[index].accessStatus = .lost
+                continue
+            }
+
+            if result.didAccess, let url = result.url, Self.requiresSecurityScopedAccess {
+                activeSecurityScopedURLs[result.id] = url
+            }
+
+            if let newBookmark = result.newBookmark {
+                updatedFolders[index].bookmarkData = newBookmark
+                hasChanges = true
+                persistenceIndexes.insert(index)
+            }
+            if updatedFolders[index].accessStatus != result.status {
+                updatedFolders[index].accessStatus = result.status
                 hasChanges = true
             }
+            if let resolvedPath = result.resolvedPath, resolvedPath != previousPath {
+                updatedFolders[index].path = resolvedPath
+                hasChanges = true
+                persistenceIndexes.insert(index)
+            }
         }
-        
+
         if hasChanges {
             folders = updatedFolders
             rebuildIndexes()

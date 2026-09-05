@@ -1106,7 +1106,7 @@ struct ReadyToOrganizeView: View {
 
     private func prepareForDisplay() {
         scheduleReferenceableFilesRefresh()
-        storageLocationsManager.refreshAccessStatus()
+        Task { await storageLocationsManager.refreshAccessStatus() }
 
         guard !hasAppeared else { return }
         guard !appState.hasPresentedReadyToOrganize else {
