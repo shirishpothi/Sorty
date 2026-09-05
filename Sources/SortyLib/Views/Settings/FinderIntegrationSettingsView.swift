@@ -16,6 +16,7 @@ struct FinderIntegrationSettingsView: View {
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
+    @State private var hasCompletedInitialStatusCheck = false
     @State private var isShowingAutomationPermissionInfo = false
     @State private var isShowingMissingAutomationRecovery = false
     @State private var automationSettingsButtonFrameInScreen: CGRect = .zero
@@ -207,6 +208,7 @@ struct FinderIntegrationSettingsView: View {
         .task {
             await refreshIntegrationStatus()
             refreshFinderContext()
+            hasCompletedInitialStatusCheck = true
         }
         .sheet(isPresented: $isShowingAutomationPermissionInfo) {
             PermissionEducationView(pages: [.automation]) {
@@ -227,10 +229,10 @@ struct FinderIntegrationSettingsView: View {
         focusTarget: SettingsFocusTarget
     ) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(isHealthy ? .green : .orange)
+            Image(systemName: compactStatusIcon(isHealthy: isHealthy))
+                .foregroundStyle(compactStatusColor(isHealthy: isHealthy))
                 .font(.caption)
-                .symbolReplaceTransition(animationValue: isHealthy)
+                .symbolReplaceTransition(animationValue: compactStatusIcon(isHealthy: isHealthy))
                 .accessibilityHidden(true)
             Text(label)
                 .font(.caption.weight(.medium))
@@ -238,7 +240,22 @@ struct FinderIntegrationSettingsView: View {
         }
         .settingsFocusableSetting(focusTarget)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isHealthy ? "ready" : "needs attention")
+        .accessibilityValue(compactStatusAccessibilityValue(isHealthy: isHealthy))
+    }
+
+    private func compactStatusIcon(isHealthy: Bool) -> String {
+        guard hasCompletedInitialStatusCheck else { return "clock.fill" }
+        return isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+
+    private func compactStatusColor(isHealthy: Bool) -> Color {
+        guard hasCompletedInitialStatusCheck else { return .secondary }
+        return isHealthy ? .green : .orange
+    }
+
+    private func compactStatusAccessibilityValue(isHealthy: Bool) -> String {
+        guard hasCompletedInitialStatusCheck else { return "checking" }
+        return isHealthy ? "ready" : "needs attention"
     }
 
     private func refreshFinderContext() {
@@ -316,7 +333,8 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var shouldShowTroubleshooting: Bool {
-        !areFinderMenuActionsInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
+        guard hasCompletedInitialStatusCheck else { return false }
+        return !areFinderMenuActionsInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
     }
 
     private var isFullyReady: Bool {
@@ -328,6 +346,7 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var overallStatusIcon: String {
+        guard hasCompletedInitialStatusCheck else { return "clock.fill" }
         if isFullyReady {
             return "checkmark.circle.fill"
         }
@@ -335,6 +354,7 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var overallStatusColor: Color {
+        guard hasCompletedInitialStatusCheck else { return .cyan }
         if isFullyReady {
             return .green
         }
@@ -342,10 +362,14 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var overallStatusTitle: String {
-        isFullyReady ? "Finder actions are ready" : "Sorty is finishing Finder setup"
+        guard hasCompletedInitialStatusCheck else { return "Checking Finder Sync" }
+        return isFullyReady ? "Finder actions are ready" : "Sorty is finishing Finder setup"
     }
 
     private var overallStatusSubtitle: String {
+        guard hasCompletedInitialStatusCheck else {
+            return "Sorty is checking the Finder menu actions, extension, and Automation permission."
+        }
         if isFullyReady {
             return "Use Finder's right-click menu to organize folders, add watched folders, or exclude paths. Sorty will keep checking this setup in the background."
         }
