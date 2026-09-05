@@ -121,6 +121,49 @@ final class ManualSessionRestoreTests: XCTestCase {
         XCTAssertEqual(relaunched.state, .idle)
     }
 
+    func testUnchangedSnapshotDoesNotRewriteSessionFile() async throws {
+        let organizer = makeOrganizer()
+        let plan = makePlan()
+        organizer.persistManualSession(
+            directory: tempDirectory,
+            plan: plan,
+            stateHint: .ready,
+            instructions: "sort receipts"
+        )
+        let firstData = try Data(contentsOf: sessionURL)
+
+        try await Task.sleep(for: .milliseconds(20))
+        organizer.persistManualSession(
+            directory: tempDirectory,
+            plan: plan,
+            stateHint: .ready,
+            instructions: "sort receipts"
+        )
+
+        XCTAssertEqual(try Data(contentsOf: sessionURL), firstData)
+    }
+
+    func testChangedSnapshotRewritesSessionFile() async throws {
+        let organizer = makeOrganizer()
+        let plan = makePlan()
+        organizer.persistManualSession(
+            directory: tempDirectory,
+            plan: plan,
+            stateHint: .ready,
+            instructions: "sort receipts"
+        )
+        let firstData = try Data(contentsOf: sessionURL)
+
+        organizer.persistManualSession(
+            directory: tempDirectory,
+            plan: plan,
+            stateHint: .completed,
+            instructions: "sort receipts"
+        )
+
+        XCTAssertNotEqual(try Data(contentsOf: sessionURL), firstData)
+    }
+
     func testRestoreDiscardsMissingDirectory() async {
         let missing = tempDirectory.appendingPathComponent("gone-\(UUID().uuidString)")
         let organizer = makeOrganizer()

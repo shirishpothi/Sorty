@@ -197,6 +197,7 @@ struct AnalysisView: View {
     @State private var liveRenameStreamEvents: [RenameStreamEvent] = []
     @State private var hasOrganizeStreamEvents = false
     @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
+    @State private var streamPreviewState = LiveStreamPreviewState()
     @State private var isHoveringViewExclusion = false
     @State private var isHoveringChangeFolder = false
 
@@ -311,7 +312,7 @@ struct AnalysisView: View {
             liveInsightsEnabled = true
             organizer.setLiveInsightsEnabled(true)
             refreshManager.start(organizer: organizer)
-            refreshStreamDerivedState()
+            refreshStreamDerivedState(force: true)
         }
         .onDisappear {
             refreshManager.stop()
@@ -342,10 +343,10 @@ struct AnalysisView: View {
             refreshStreamDerivedState()
         }
         .onChange(of: organizer.scannedFiles) { _, _ in
-            refreshStreamDerivedState()
+            refreshStreamDerivedState(force: true)
         }
         .onChange(of: settingsViewModel.config.mode) { _, _ in
-            refreshStreamDerivedState()
+            refreshStreamDerivedState(force: true)
         }
         .modelSelectionOverlay(
             isPresented: $showFasterModelPicker,
@@ -781,21 +782,42 @@ struct AnalysisView: View {
         }
     }
 
-    private func refreshStreamDerivedState() {
+    private func refreshStreamDerivedState(force: Bool = false) {
         let streamText = organizer.displayStreamingContent
+        let scannedFileIDs = organizer.scannedFiles.map(\.id)
+        if streamPreviewState.scannedFileIDs != scannedFileIDs
+            || streamPreviewState.organizeFileLookup.isEmpty && !organizer.scannedFiles.isEmpty {
+            streamPreviewState.scannedFileIDs = scannedFileIDs
+            streamPreviewState.organizeFileLookup = OrganizingStreamSuggestions.fileLookup(from: organizer.scannedFiles)
+            streamPreviewState.renameFileLookup = RenameGenerationSequenceView.fileLookup(from: organizer.scannedFiles)
+        }
+
+        let streamReset = !streamText.hasPrefix(streamPreviewState.lastStreamText)
+        let modeChanged = streamPreviewState.isRenameOnly != isRenameOnlyFlow
+        let addedParseBoundary = streamText.last.map { "\"}],}\n,".contains($0) } ?? true
+        streamPreviewState.lastStreamText = streamText
+        streamPreviewState.isRenameOnly = isRenameOnlyFlow
+        guard force || streamReset || modeChanged || isRenameOnlyFlow || addedParseBoundary else { return }
 
         if isRenameOnlyFlow {
-            liveRenameStreamEvents = RenameGenerationSequenceView.makeEvents(
+            let events = RenameGenerationSequenceView.makeEvents(
                 from: streamText,
-                files: organizer.scannedFiles
+                filesByName: streamPreviewState.renameFileLookup
             )
+            if events != liveRenameStreamEvents {
+                liveRenameStreamEvents = events
+            }
             hasOrganizeStreamEvents = false
-            liveOrganizingSuggestions = []
+            if !liveOrganizingSuggestions.isEmpty {
+                liveOrganizingSuggestions = []
+            }
         } else {
-            liveRenameStreamEvents = []
+            if !liveRenameStreamEvents.isEmpty {
+                liveRenameStreamEvents = []
+            }
             let suggestions = OrganizingStreamSuggestions.parse(
                 from: streamText,
-                files: organizer.scannedFiles,
+                filesByName: streamPreviewState.organizeFileLookup,
                 fileIDTable: organizer.streamFileIDTable
             )
             if suggestions.isEmpty {
@@ -808,11 +830,15 @@ struct AnalysisView: View {
                    organizer.isStreaming || organizer.state == .organizing {
                     return
                 }
-                liveOrganizingSuggestions = []
+                if !liveOrganizingSuggestions.isEmpty {
+                    liveOrganizingSuggestions = []
+                }
                 hasOrganizeStreamEvents = false
             } else {
                 let didStartLiveOrganization = !hasOrganizeStreamEvents
-                liveOrganizingSuggestions = suggestions
+                if suggestions != liveOrganizingSuggestions {
+                    liveOrganizingSuggestions = suggestions
+                }
                 hasOrganizeStreamEvents = true
                 if didStartLiveOrganization {
                     onLiveOrganizationStarted?()
@@ -868,6 +894,14 @@ enum OrganizingStreamSuggestions {
         files: [FileItem],
         fileIDTable: [Int: FileItem] = [:]
     ) -> [FolderSuggestion] {
+        parse(from: streamText, filesByName: fileLookup(from: files), fileIDTable: fileIDTable)
+    }
+
+    static func parse(
+        from streamText: String,
+        filesByName: [String: FileItem],
+        fileIDTable: [Int: FileItem] = [:]
+    ) -> [FolderSuggestion] {
         guard let jsonStart = streamText.firstIndex(of: "{") else { return [] }
 
         let jsonText = boundedParseText(String(streamText[jsonStart...]))
@@ -876,7 +910,6 @@ enum OrganizingStreamSuggestions {
         let folderMatches = folderNameRegex?.matches(in: jsonText, range: fullRange) ?? []
         guard !folderMatches.isEmpty else { return [] }
 
-        let filesByName = fileLookup(from: files)
         var suggestionsByFolder: [String: FolderSuggestion] = [:]
         var orderedFolderNames: [String] = []
         var assignedFileIDs: Set<UUID> = []
@@ -1114,7 +1147,7 @@ enum OrganizingStreamSuggestions {
         return String(text[start...])
     }
 
-    private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
+    fileprivate static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
         var lookup: [String: FileItem] = [:]
         var ambiguousKeys: Set<String> = []
         lookup.reserveCapacity(files.count)
@@ -1183,6 +1216,14 @@ private struct RenameStreamEvent: Identifiable, Equatable {
     var isRevealed: Bool {
         suggestedName?.isEmpty == false
     }
+}
+
+private struct LiveStreamPreviewState {
+    var scannedFileIDs: [UUID] = []
+    var organizeFileLookup: [String: FileItem] = [:]
+    var renameFileLookup: [String: FileItem] = [:]
+    var lastStreamText = ""
+    var isRenameOnly = false
 }
 
 private struct RenameGenerationSequenceView: View {
@@ -1301,7 +1342,10 @@ private struct RenameGenerationSequenceView: View {
     }
 
     static func makeEvents(from streamText: String, files: [FileItem]) -> [RenameStreamEvent] {
-        let filesByName = Self.fileLookup(from: files)
+        makeEvents(from: streamText, filesByName: fileLookup(from: files))
+    }
+
+    static func makeEvents(from streamText: String, filesByName: [String: FileItem]) -> [RenameStreamEvent] {
         let parsed = Self.parseRenameEvents(from: streamText)
         let visibleEvents = Array(parsed.suffix(Self.maxVisibleRows))
 
@@ -1369,7 +1413,7 @@ private struct RenameGenerationSequenceView: View {
         return orderedKeys.compactMap { eventsByOriginal[$0] }
     }
 
-    private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
+    fileprivate static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
         var lookup: [String: FileItem] = [:]
         lookup.reserveCapacity(files.count * 3)
         for file in files {

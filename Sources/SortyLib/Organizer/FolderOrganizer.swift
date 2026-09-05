@@ -495,6 +495,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Test hook: when set, manual-session reads/writes use this URL instead
     /// of Application Support so tests never touch real user state.
     public var manualSessionURLForTesting: URL?
+    private var cachedManualSessionDirectoryPath: String?
+    private var cachedManualSessionBookmark: Data?
+    private var lastManualSessionFingerprintByURL: [URL: Data] = [:]
     public var progress: Double {
         get { presentationState.progress }
         set { updatePresentation { $0.progress = newValue } }
@@ -5513,13 +5516,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard isManualSessionPersistenceEnabled else { return }
         let targetURL = resolvedManualSessionURL(url)
         guard let targetURL else { return }
-        let bookmark = try? directory.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        let directoryPath = directory.standardizedFileURL.path
+        let bookmark: Data?
+        if cachedManualSessionDirectoryPath == directoryPath {
+            bookmark = cachedManualSessionBookmark
+        } else {
+            bookmark = try? directory.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            cachedManualSessionDirectoryPath = directoryPath
+            cachedManualSessionBookmark = bookmark
+        }
         let snapshot = PersistedManualSession(
-            directoryPath: directory.standardizedFileURL.path,
+            directoryPath: directoryPath,
             directoryBookmark: bookmark,
             customInstructions: instructions,
             plan: plan,
@@ -5527,12 +5538,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             savedAt: Date()
         )
         do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            var fingerprintSnapshot = snapshot
+            fingerprintSnapshot.savedAt = .distantPast
+            let fingerprint = try encoder.encode(fingerprintSnapshot)
+            if lastManualSessionFingerprintByURL[targetURL] == fingerprint,
+               FileManager.default.fileExists(atPath: targetURL.path) {
+                return
+            }
             try FileManager.default.createDirectory(
                 at: targetURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let data = try JSONEncoder().encode(snapshot)
+            let data = try encoder.encode(snapshot)
             try data.write(to: targetURL, options: .atomic)
+            lastManualSessionFingerprintByURL[targetURL] = fingerprint
         } catch {
             print("FolderOrganizer: Failed to persist manual session: \(error)")
         }
@@ -5553,6 +5574,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let targetURL = resolvedManualSessionURL(url)
         guard let targetURL else { return }
         try? FileManager.default.removeItem(at: targetURL)
+        lastManualSessionFingerprintByURL.removeValue(forKey: targetURL)
     }
 
     /// Restores the snapshotted folder (and ready/completed plan when present).
