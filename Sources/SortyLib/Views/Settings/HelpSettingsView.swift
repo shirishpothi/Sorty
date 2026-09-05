@@ -506,7 +506,15 @@ private struct DeeplinkGroupSection: View {
                 VStack(spacing: 0) {
                     ForEach(group.entries) { entry in
                         DeeplinkEntryRow(entry: entry, color: group.color)
-                            .settingsFocusableSetting(entry.focusTarget)
+                            // Rows sit flush in the glass card, so inset the
+                            // ring instead of the default outset that suits
+                            // padded cards.
+                            .settingsFocusable(
+                                entry.focusTarget,
+                                shape: RoundedRectangle(cornerRadius: 10, style: .continuous),
+                                horizontalRingPadding: -6,
+                                verticalRingPadding: -4
+                            )
 
                         if entry.id != group.entries.last?.id {
                             Divider()
