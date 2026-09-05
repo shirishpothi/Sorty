@@ -10,7 +10,7 @@ struct CodexSkillInstallerCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkles.rectangle.stack")
+            Image(systemName: "cube")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.indigo)
                 .frame(width: 28, height: 28)
