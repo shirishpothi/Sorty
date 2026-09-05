@@ -80,11 +80,14 @@ public final class LogManager: @unchecked Sendable {
         }
     }
     
+    // Cheap MainActor-bound reads stay on the main actor; every blocking
+    // step (log scans, file writes, ditto zip) runs in writeReport off it,
+    // so the UI never beachballs while a report is generated.
     @MainActor
     public func generateDiagnosticReport(
         config: AIConfig,
         at destinationURL: URL
-    ) throws -> DiagnosticReportResult {
+    ) async throws -> DiagnosticReportResult {
         guard let logsDirectory else { throw DiagnosticReportError.unavailable }
         queue.sync {
             try? logFileHandle?.synchronize()
@@ -92,37 +95,75 @@ public final class LogManager: @unchecked Sendable {
         let reportID = UUID().uuidString.lowercased()
         let sentryEventID = ReliabilityManager.shared.captureDiagnosticReport(reportID: reportID)
 
+        let overview = diagnosticOverview(
+            config: config,
+            reportID: reportID,
+            sentryEventID: sentryEventID
+        )
+        let telemetry: String
+        do {
+            telemetry = try telemetryReport(reportID: reportID, sentryEventID: sentryEventID)
+        } catch {
+            throw DiagnosticReportError.unavailable
+        }
+        let readme = privacyReadme
+
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try Self.writeReport(
+                    overview: overview,
+                    telemetry: telemetry,
+                    readme: readme,
+                    logsDirectory: logsDirectory,
+                    destinationURL: destinationURL
+                )
+            }.value
+        } catch let reportError as DiagnosticReportError {
+            throw reportError
+        } catch {
+            throw DiagnosticReportError.unavailable
+        }
+        return DiagnosticReportResult(
+            reportID: reportID,
+            sentryEventID: sentryEventID
+        )
+    }
+
+    nonisolated private static func writeReport(
+        overview: String,
+        telemetry: String,
+        readme: String,
+        logsDirectory: URL,
+        destinationURL: URL
+    ) throws {
+        let fileManager = FileManager.default
         let reportDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("Sorty-Diagnostic-\(UUID().uuidString)", isDirectory: true)
         defer { try? fileManager.removeItem(at: reportDirectory) }
 
         do {
             try fileManager.createDirectory(at: reportDirectory, withIntermediateDirectories: true)
-            try diagnosticOverview(
-                config: config,
-                reportID: reportID,
-                sentryEventID: sentryEventID
-            ).write(
+            try overview.write(
                 to: reportDirectory.appendingPathComponent("diagnostic.txt"),
                 atomically: true,
                 encoding: .utf8
             )
-            try telemetryReport(reportID: reportID, sentryEventID: sentryEventID).write(
+            try telemetry.write(
                 to: reportDirectory.appendingPathComponent("telemetry.json"),
                 atomically: true,
                 encoding: .utf8
             )
-            try logSummary(in: logsDirectory).write(
+            try logSummary(in: logsDirectory, fileManager: fileManager).write(
                 to: reportDirectory.appendingPathComponent("log-summary.json"),
                 atomically: true,
                 encoding: .utf8
             )
-            try safeLogTimeline(in: logsDirectory).write(
+            try safeLogTimeline(in: logsDirectory, fileManager: fileManager).write(
                 to: reportDirectory.appendingPathComponent("log-timeline.json"),
                 atomically: true,
                 encoding: .utf8
             )
-            try privacyReadme.write(
+            try readme.write(
                 to: reportDirectory.appendingPathComponent("README.txt"),
                 atomically: true,
                 encoding: .utf8
@@ -143,10 +184,6 @@ public final class LogManager: @unchecked Sendable {
             guard process.terminationStatus == 0 else {
                 throw DiagnosticReportError.archiveFailed
             }
-            return DiagnosticReportResult(
-                reportID: reportID,
-                sentryEventID: sentryEventID
-            )
         } catch {
             if let reportError = error as? DiagnosticReportError {
                 throw reportError
@@ -288,7 +325,7 @@ public final class LogManager: @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private func safeLogTimeline(in directory: URL) throws -> String {
+    private static func safeLogTimeline(in directory: URL, fileManager: FileManager = .default) throws -> String {
         let files = try fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.creationDateKey],
@@ -390,7 +427,7 @@ public final class LogManager: @unchecked Sendable {
         return String(value[range])
     }
 
-    private func logSummary(in directory: URL) throws -> String {
+    private static func logSummary(in directory: URL, fileManager: FileManager = .default) throws -> String {
         var levels: [String: Int] = [:]
         var categories: [String: Int] = [:]
         var signals: [String: Int] = [:]

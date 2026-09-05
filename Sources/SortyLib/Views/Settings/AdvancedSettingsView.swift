@@ -16,6 +16,7 @@ struct AdvancedSettingsView: View {
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
     @State private var diagnosticReportError: String?
+    @State private var isGeneratingDiagnosticReport = false
 
     private var analyticsEnabled: Binding<Bool> {
         Binding(
@@ -141,30 +142,42 @@ struct AdvancedSettingsView: View {
                         panel.allowedFileTypes = ["zip"]
                         panel.canCreateDirectories = true
                         guard panel.runModal() == .OK, let destination = panel.url else { return }
-                        do {
-                            _ = try LogManager.shared.generateDiagnosticReport(
-                                config: viewModel.config,
-                                at: destination
-                            )
-                            HapticFeedbackManager.shared.success()
-                            AnalyticsManager.shared.captureFeature(
-                                feature: "support",
-                                subfeature: "diagnostic_report",
-                                action: "generated",
-                                outcome: "success"
-                            )
-                            NSWorkspace.shared.activateFileViewerSelecting([destination])
-                        } catch {
-                            HapticFeedbackManager.shared.error()
-                            diagnosticReportError = error.localizedDescription
+                        guard !isGeneratingDiagnosticReport else { return }
+                        isGeneratingDiagnosticReport = true
+                        Task { @MainActor in
+                            defer { isGeneratingDiagnosticReport = false }
+                            do {
+                                _ = try await LogManager.shared.generateDiagnosticReport(
+                                    config: viewModel.config,
+                                    at: destination
+                                )
+                                HapticFeedbackManager.shared.success()
+                                AnalyticsManager.shared.captureFeature(
+                                    feature: "support",
+                                    subfeature: "diagnostic_report",
+                                    action: "generated",
+                                    outcome: "success"
+                                )
+                                NSWorkspace.shared.activateFileViewerSelecting([destination])
+                            } catch {
+                                HapticFeedbackManager.shared.error()
+                                diagnosticReportError = error.localizedDescription
+                            }
                         }
                     } label: {
                         HStack {
-                            Image(systemName: "doc.zipper")
-                            Text("Generate Diagnostic Report")
+                            if isGeneratingDiagnosticReport {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Generating…")
+                            } else {
+                                Image(systemName: "doc.zipper")
+                                Text("Generate Diagnostic Report")
+                            }
                         }
                     }
                     .buttonStyle(.sortyProminent(intent: .destructive))
+                    .disabled(isGeneratingDiagnosticReport)
                     .settingsFocusableSetting(.advancedErrorLogs)
                     .accessibilityIdentifier("GenerateDiagnosticReportButton")
                     .onHover { hovering in
