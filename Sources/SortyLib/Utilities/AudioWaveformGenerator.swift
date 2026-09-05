@@ -58,11 +58,75 @@ private actor AudioReaderLimiter {
     }
 }
 
+private struct AudioFileVersion: Hashable, Sendable {
+    let path: String
+    let resourceIdentifier: String?
+    let modificationTime: TimeInterval
+    let fileSize: Int64
+
+    init?(url: URL) {
+        guard let values = try? url.resourceValues(forKeys: [
+            .fileResourceIdentifierKey,
+            .contentModificationDateKey,
+            .fileSizeKey
+        ]) else { return nil }
+
+        path = url.standardizedFileURL.path
+        resourceIdentifier = values.fileResourceIdentifier.map { String(describing: $0) }
+        modificationTime = values.contentModificationDate?.timeIntervalSinceReferenceDate ?? 0
+        fileSize = Int64(values.fileSize ?? 0)
+    }
+}
+
+private actor AudioAmplitudeCache {
+    private let countLimit = 120
+    private var values: [AudioFileVersion: [Float]] = [:]
+    private var accessOrder: [AudioFileVersion] = []
+    private var inFlight: [AudioFileVersion: Task<[Float]?, Never>] = [:]
+
+    func amplitudes(
+        for version: AudioFileVersion,
+        loader: @escaping @Sendable () async -> [Float]?
+    ) async -> [Float]? {
+        if let cached = values[version] {
+            touch(version)
+            return cached
+        }
+        if let task = inFlight[version] {
+            return await task.value
+        }
+
+        let task = Task { await loader() }
+        inFlight[version] = task
+        let result = await task.value
+        if inFlight.removeValue(forKey: version) != nil, let result {
+            values[version] = result
+            touch(version)
+            trimIfNeeded()
+        }
+        return result
+    }
+
+    private func touch(_ version: AudioFileVersion) {
+        accessOrder.removeAll { $0 == version }
+        accessOrder.append(version)
+    }
+
+    private func trimIfNeeded() {
+        while values.count > countLimit, let oldest = accessOrder.first {
+            accessOrder.removeFirst()
+            values.removeValue(forKey: oldest)
+        }
+    }
+}
+
 /// Generates a simple bar-style waveform image from an audio file
 @MainActor
 public final class AudioWaveformGenerator {
     public static let shared = AudioWaveformGenerator()
-    
+
+    private let amplitudeCache = AudioAmplitudeCache()
+
     private init() {}
     
     /// Generates a waveform image for the given audio file
@@ -75,6 +139,17 @@ public final class AudioWaveformGenerator {
     /// Loads audio amplitudes from the file - runs off main thread
     nonisolated
     private func loadAmplitudes(for url: URL) async -> [Float]? {
+        let version = await Task.detached(priority: .utility) {
+            AudioFileVersion(url: url)
+        }.value
+        guard let version else { return nil }
+
+        return await amplitudeCache.amplitudes(for: version) {
+            await Self.decodeAmplitudes(for: url)
+        }
+    }
+
+    private nonisolated static func decodeAmplitudes(for url: URL) async -> [Float]? {
         do {
             try await AudioReaderLimiter.shared.acquire()
         } catch {
