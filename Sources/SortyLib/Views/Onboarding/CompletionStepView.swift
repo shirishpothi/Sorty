@@ -191,6 +191,67 @@ private final class RetainedCompletionParticlesView: NSView {
     }
 }
 
+// A single entrance flourish; the blob rests once its spring has settled.
+private struct CompletionCelebrationBlob: View {
+    let hasAppeared: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        CompletionBlobShape()
+            .fill(
+                LinearGradient(
+                    colors: [CompletionPalette.softRose.opacity(0.65), CompletionPalette.accent.opacity(0.35)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 216, height: 200)
+            .keyframeAnimator(initialValue: Flourish(), trigger: hasAppeared) { content, value in
+                content
+                    .scaleEffect(reduceMotion ? 1 : value.scale)
+                    .scaleEffect(x: reduceMotion ? 1 : value.stretch, y: reduceMotion ? 1 : 1 / value.stretch)
+                    .rotationEffect(.degrees(reduceMotion ? 0 : value.rotation))
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    CubicKeyframe(0.45, duration: 0.01)
+                    SpringKeyframe(1, duration: 0.7, spring: .bouncy)
+                }
+                KeyframeTrack(\.stretch) {
+                    CubicKeyframe(1.18, duration: 0.15)
+                    SpringKeyframe(1, duration: 0.8, spring: .bouncy)
+                }
+                KeyframeTrack(\.rotation) {
+                    CubicKeyframe(-14, duration: 0.01)
+                    SpringKeyframe(0, duration: 0.95, spring: .bouncy)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private struct Flourish {
+        var scale: CGFloat = 1
+        var stretch: CGFloat = 1
+        var rotation: Double = 0
+    }
+}
+
+private struct CompletionBlobShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let transform = CGAffineTransform(scaleX: rect.width, y: rect.height)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+        var path = Path()
+        path.move(to: CGPoint(x: 0.48, y: 0.05))
+        path.addCurve(to: CGPoint(x: 0.94, y: 0.36), control1: CGPoint(x: 0.73, y: -0.06), control2: CGPoint(x: 0.84, y: 0.15))
+        path.addCurve(to: CGPoint(x: 0.75, y: 0.91), control1: CGPoint(x: 1.08, y: 0.59), control2: CGPoint(x: 0.97, y: 0.86))
+        path.addCurve(to: CGPoint(x: 0.20, y: 0.88), control1: CGPoint(x: 0.56, y: 0.96), control2: CGPoint(x: 0.37, y: 0.78))
+        path.addCurve(to: CGPoint(x: 0.07, y: 0.37), control1: CGPoint(x: -0.03, y: 1.01), control2: CGPoint(x: -0.01, y: 0.55))
+        path.addCurve(to: CGPoint(x: 0.48, y: 0.05), control1: CGPoint(x: 0.13, y: 0.16), control2: CGPoint(x: 0.28, y: 0.14))
+        path.closeSubpath()
+        return path.applying(transform)
+    }
+}
+
 private struct CompletionHero: View {
     @SortyHotReload private var hotReload
     let hasAppeared: Bool
@@ -202,6 +263,7 @@ private struct CompletionHero: View {
 
     var body: some View {
         ZStack {
+            CompletionCelebrationBlob(hasAppeared: hasAppeared)
             CompletionRippleField(
                 hasAppeared: hasAppeared,
                 showGlowRing: showGlowRing,
