@@ -1,8 +1,7 @@
 # Sorty
 
 - Native SwiftUI macOS 15+ folder organizer, Swift 6, SPM plus `Sorty.xcodeproj`.
-- Before edits, builds, tests, or commits, follow [Reliable agent work](docs/agent-guides/reliable-work.md) for shared-checkout coordination, build recovery, and behavior-specific evidence.
-- Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness` or `make harness-accent` launches targeted harnesses.
+- Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness[-settings|-organize]` launches targeted harnesses.
 - For minor changes, do not run local verification such as `make now` or `make dev`;
 - Local `make ci`, `make test`, and `make test-full` must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
 - Tests are valuable when they are focused. Avoid endless smoke tests, low-signal coverage, and regression tests whose only purpose is preserving behavior that has been deliberately deleted.
