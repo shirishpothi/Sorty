@@ -163,6 +163,15 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertLessThanOrEqual(organizer.truncatedDisplayStreamingContent.count, 1_003)
     }
 
+    func testChunkRetentionBoundsUTF8BytesWithoutBreakingUnicode() {
+        let chunk = String(repeating: "🗂️", count: 50_000)
+
+        organizer.didReceiveChunk(chunk)
+
+        XCTAssertLessThanOrEqual(organizer.streamingContent.utf8.count, 256_000)
+        XCTAssertFalse(organizer.streamingContent.contains("�"))
+    }
+
     func testChunkAfterCompletedStreamStartsFreshSession() async {
         organizer.didReceiveChunk("first stream")
         await settleStreamingUpdates()

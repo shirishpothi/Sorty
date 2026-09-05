@@ -402,6 +402,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let instructions: String
         let personaPrompt: String?
         let imagePayload: [String: Data]
+        let visionFiles: [FileItem]
         let temperature: Double?
         let mode: OrganizationMode
         var completedPlans: [OrganizationPlan]
@@ -631,16 +632,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
     private var lastDisplayUpdate: Date = .distantPast
+    private var retainedStreamingByteCount = 0
+    private var streamingContentRevision: UInt64 = 0
     private let displayUpdateInterval: TimeInterval = 0.55 // Slightly slower cadence to reduce dropped frames during generation
     nonisolated private static let streamPreviewCharacterLimit = 1000
     nonisolated private static let streamUIPresentationCharacterLimit = 48_000
-    nonisolated private static let streamRetentionCharacterLimit = 256_000
-    nonisolated private static let streamRetentionTrimSlack = 32_000
+    nonisolated private static let streamRetentionByteLimit = 256_000
+    nonisolated private static let streamRetentionTrimByteSlack = 32_000
     nonisolated private static let deepScanFileLimit = 2_000
     nonisolated private static let organizeAnalysisBatchSize = 350
     nonisolated private static let renameAnalysisBatchSize = 120
     nonisolated private static let minimumAdaptiveAnalysisBatchSize = 8
     nonisolated private static let previewVersionFileLimit = 20_000
+    nonisolated private static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
     nonisolated private static let assignmentDestinationRegex =
         try? NSRegularExpression(
             pattern: #"\b(?:assigning|moving|mapping)\b.+?\bto\b\s+(.+)$"#,
@@ -716,6 +720,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var timeoutTask: Task<Void, Never>?
     private var suppressCancellationReset = false
     private var resumeCheckpoint: OrganizationResumeCheckpoint?
+    private var preparedVisionAttachmentNames: Set<String> = []
+    private var visionPreparationFailureCount = 0
+    private var visionPreparationByteLimitSkipCount = 0
 
     public var canResumeOrganization: Bool {
         guard resumeCheckpoint != nil,
@@ -994,15 +1001,32 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @MainActor
     private func appendRetainedStreamChunk(_ chunk: String) {
         streamingContent += chunk
-        let trimThreshold = Self.streamRetentionCharacterLimit + Self.streamRetentionTrimSlack
-        if streamingContent.count > trimThreshold {
-            streamingContent = String(streamingContent.suffix(Self.streamRetentionCharacterLimit))
+        retainedStreamingByteCount += chunk.utf8.count
+        streamingContentRevision &+= 1
+        let trimThreshold = Self.streamRetentionByteLimit + Self.streamRetentionTrimByteSlack
+        if retainedStreamingByteCount > trimThreshold {
+            streamingContent = Self.retainingUTF8Suffix(
+                of: streamingContent,
+                maximumByteCount: Self.streamRetentionByteLimit
+            )
+            retainedStreamingByteCount = streamingContent.utf8.count
         }
     }
 
+    nonisolated private static func retainingUTF8Suffix(
+        of content: String,
+        maximumByteCount: Int
+    ) -> String {
+        guard content.utf8.count > maximumByteCount else { return content }
+        var suffix = content.utf8.suffix(maximumByteCount)
+        while let first = suffix.first, first & 0b1100_0000 == 0b1000_0000 {
+            suffix = suffix.dropFirst()
+        }
+        return String(decoding: suffix, as: UTF8.self)
+    }
+
     nonisolated private static func retainedStreamCompletion(_ content: String) -> String {
-        guard content.count > streamRetentionCharacterLimit else { return content }
-        return String(content.suffix(streamRetentionCharacterLimit))
+        retainingUTF8Suffix(of: content, maximumByteCount: streamRetentionByteLimit)
     }
 
     @MainActor
@@ -1017,12 +1041,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let estimatedTotal = estimatedStreamingCharacterTarget()
         let contentLength = contentSnapshot.count
+        let expectedRevision = streamingContentRevision
 
         displayUpdateTask?.cancel()
         displayUpdateTask = Task { @MainActor [weak self] in
             let payload = Self.makeStreamPresentationPayload(from: contentSnapshot)
             guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
-            guard self.streamingContent.count >= contentLength else { return }
+            guard self.streamingContentRevision >= expectedRevision else { return }
 
             self.withBatchUpdates {
                 self.displayStreamingContent = payload.fullContent
@@ -1055,6 +1080,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
         streamingContent = ""
+        retainedStreamingByteCount = 0
+        streamingContentRevision &+= 1
         displayStreamingContent = ""
         truncatedDisplayStreamingContent = ""
         lastDisplayUpdate = .distantPast
@@ -1555,6 +1582,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // diagnostic tail so streaming, UI, and history do not duplicate an
             // arbitrarily large response.
             streamingContent = Self.retainedStreamCompletion(content)
+            retainedStreamingByteCount = streamingContent.utf8.count
+            streamingContentRevision &+= 1
             if liveInsightsEnabled {
                 syncDisplayContentImmediately()
             }
@@ -2045,7 +2074,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Existing Folders context into prompt")
         }
 
-        var imagePayload: [String: Data] = [:]
+        let imagePayload: [String: Data] = [:]
 
         let visionEnabled = aiConfig?.enableVision ?? false
         let currentModel = aiConfig?.model ?? ""
@@ -2075,59 +2104,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if visionSelection.total > 0 && modelSupportsVision {
             let selectedBatch = visionSelection.selected
             let totalImageCount = visionSelection.total
-            let isLimitedSelection = selectedBatch.count < totalImageCount
-            let initialPreparationStage = isLimitedSelection
-                ? "Sorty is analyzing 0 of \(selectedBatch.count) selected images..."
-                : "Sorty is analyzing 0 images..."
-            aiAnalysisActivity = .preparingImages
-            updateMeasuredProgress(
-                completed: 0,
-                total: selectedBatch.count,
-                estimatedOverallProgress: 0.22,
-                stage: initialPreparationStage
-            )
-
-            imagePayload = await visionAnalyzer.prepareFilesForVision(
-                files: selectedBatch,
-                baseDirectoryURL: directory
-            ) { [weak self] completed, total in
-                guard let self else { return }
-                let phaseProgress = 0.22 + (Double(completed) / Double(max(total, 1))) * 0.08
-                let stage = isLimitedSelection
-                    ? "Sorty is analyzing \(completed) of \(total) selected images..."
-                    : "Sorty is analyzing \(completed) \(completed == 1 ? "image" : "images")..."
-                await self.updateMeasuredProgress(
-                    completed: completed,
-                    total: total,
-                    estimatedOverallProgress: phaseProgress,
-                    stage: stage
-                )
-            }
-            let analyzedNames = imagePayload.keys.sorted()
-
-            let failedCount = max(0, selectedBatch.count - analyzedNames.count)
-            let skippedCount = max(0, totalImageCount - analyzedNames.count)
+            preparedVisionAttachmentNames.removeAll(keepingCapacity: true)
+            visionPreparationFailureCount = 0
+            visionPreparationByteLimitSkipCount = 0
             visionAnalysisSummary = VisionAnalysisSummary(
-                analyzedCount: analyzedNames.count,
+                analyzedCount: 0,
                 totalImageCount: totalImageCount,
-                skippedCount: skippedCount,
-                failedCount: failedCount,
+                skippedCount: max(0, totalImageCount - selectedBatch.count),
+                failedCount: 0,
                 warningMessage: nil
             )
-
-            if !analyzedNames.isEmpty {
-                instructions += visionPromptInstructions(for: analyzedNames)
-                clearMeasuredProgress(
-                    estimatedOverallProgress: 0.30,
-                    stage: "Sorty is analyzing \(analyzedNames.count) images..."
-                )
-            } else {
-                clearMeasuredProgress(
-                    estimatedOverallProgress: 0.30,
-                    stage: "Continuing with file details..."
-                )
-            }
-            DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(totalImageCount), failed preprocess: \(failedCount))")
         } else if visionSelection.total > 0 && !modelSupportsVision {
             let warning = "Vision is enabled but \(currentProvider.displayName) (\(currentModel)) doesn't support multimodal analysis. Results will use text-only analysis."
             visionAnalysisSummary = VisionAnalysisSummary(
@@ -2150,6 +2136,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             files: files,
             client: client,
             imagePayload: imagePayload,
+            visionFiles: modelSupportsVision ? visionSelection.selected : [],
             instructions: instructions,
             personaPrompt: personaPrompt,
             temperature: temperature,
@@ -2167,6 +2154,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         files: [FileItem],
         client: AIClientProtocol,
         imagePayload: [String: Data],
+        visionFiles: [FileItem] = [],
         instructions: String,
         personaPrompt: String?,
         temperature: Double?,
@@ -2241,6 +2229,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions: completeInstructions,
                 personaPrompt: personaPrompt,
                 imagePayload: imagePayload,
+                visionFiles: visionFiles,
                 temperature: temperature,
                 mode: mode,
                 completedPlans: completedPlans,
@@ -2282,6 +2271,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 files: batch,
                 client: client,
                 imagePayload: imagePayload,
+                visionFiles: visionFiles,
+                visionBaseDirectory: resolvedDirectory,
                 instructions: batchInstructions,
                 personaPrompt: personaPrompt,
                 temperature: temperature
@@ -2379,6 +2370,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 files: checkpoint.files,
                 client: client,
                 imagePayload: checkpoint.imagePayload,
+                visionFiles: checkpoint.visionFiles,
                 instructions: checkpoint.instructions,
                 personaPrompt: checkpoint.personaPrompt,
                 temperature: checkpoint.temperature,
@@ -2436,6 +2428,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         files: [FileItem],
         client: AIClientProtocol,
         imagePayload: [String: Data],
+        visionFiles: [FileItem] = [],
+        visionBaseDirectory: URL? = nil,
         instructions: String,
         personaPrompt: String?,
         temperature: Double?
@@ -2449,14 +2443,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
 
         let fileNames = Set(files.map(visionAttachmentName))
-        let batchImages = imagePayload.filter { fileNames.contains($0.key) }
+        var batchImages = imagePayload.filter { fileNames.contains($0.key) }
+        if batchImages.isEmpty, let visionBaseDirectory {
+            let selectedFiles = visionFiles.filter {
+                fileNames.contains(visionAttachmentName(for: $0))
+            }
+            batchImages = try await prepareVisionPayload(
+                for: selectedFiles,
+                baseDirectory: visionBaseDirectory
+            )
+        }
+        let requestInstructions = batchImages.isEmpty
+            ? instructions
+            : instructions + "\n\n" + visionPromptInstructions(
+                for: batchImages.keys.sorted()
+            )
 
         do {
             let plan: OrganizationPlan
             if batchImages.isEmpty {
                 plan = try await client.analyze(
                     files: files,
-                    customInstructions: instructions,
+                    customInstructions: requestInstructions,
                     personaPrompt: personaPrompt,
                     temperature: temperature
                 )
@@ -2464,7 +2472,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 plan = try await client.analyzeWithImages(
                     files: files,
                     imageData: batchImages,
-                    customInstructions: instructions,
+                    customInstructions: requestInstructions,
                     personaPrompt: personaPrompt,
                     temperature: temperature
                 )
@@ -2496,6 +2504,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 files: firstFiles,
                 client: client,
                 imagePayload: batchImages,
+                visionFiles: [],
+                visionBaseDirectory: nil,
                 instructions: recoveryInstructions,
                 personaPrompt: personaPrompt,
                 temperature: temperature
@@ -2504,6 +2514,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 files: secondFiles,
                 client: client,
                 imagePayload: batchImages,
+                visionFiles: [],
+                visionBaseDirectory: nil,
                 instructions: recoveryInstructions,
                 personaPrompt: personaPrompt,
                 temperature: temperature
@@ -2806,6 +2818,61 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         return (selected, total)
+    }
+
+    private func prepareVisionPayload(
+        for files: [FileItem],
+        baseDirectory: URL
+    ) async throws -> [String: Data] {
+        guard !files.isEmpty else { return [:] }
+
+        aiAnalysisActivity = .preparingImages
+        var payload: [String: Data] = [:]
+        var preparedByteCount = 0
+
+        for file in files {
+            try checkCancellation()
+            let prepared = await visionAnalyzer.prepareFilesForVision(
+                files: [file],
+                baseDirectoryURL: baseDirectory
+            )
+            if prepared.isEmpty {
+                visionPreparationFailureCount += 1
+                continue
+            }
+
+            for (name, data) in prepared.sorted(by: { $0.key < $1.key }) {
+                guard preparedByteCount + data.count <= Self.maximumPreparedVisionBytes else {
+                    visionPreparationByteLimitSkipCount += 1
+                    continue
+                }
+                payload[name] = data
+                preparedByteCount += data.count
+                preparedVisionAttachmentNames.insert(name)
+            }
+        }
+
+        if let summary = visionAnalysisSummary {
+            visionAnalysisSummary = VisionAnalysisSummary(
+                analyzedCount: preparedVisionAttachmentNames.count,
+                totalImageCount: summary.totalImageCount,
+                skippedCount: max(
+                    0,
+                    summary.totalImageCount
+                        - preparedVisionAttachmentNames.count
+                        - visionPreparationFailureCount
+                ),
+                failedCount: visionPreparationFailureCount,
+                warningMessage: visionPreparationByteLimitSkipCount > 0
+                    ? "Some images were skipped to keep vision memory below 32 MB per request."
+                    : nil
+            )
+        }
+        aiAnalysisActivity = .requesting
+        DebugLogger.log(
+            "Prepared \(payload.count) vision attachments using \(preparedByteCount) bytes for the next AI request"
+        )
+        return payload
     }
 
     private func visionPriority(_ lhs: FileItem, _ rhs: FileItem) -> Bool {

@@ -68,6 +68,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private static let retryDelay: TimeInterval = 0.25
     private static let healthCheckInterval: TimeInterval = 60
     private static let reconciliationInterval: TimeInterval = 300
+    private static let maximumReconciliationInterval: TimeInterval = 3_600
     private static let maximumExplicitRootsPerAnchor = 512
     private static let maximumPendingScans = 128
 
@@ -113,6 +114,7 @@ public final class FolderWatcher: @unchecked Sendable {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var applicationObservers: [NSObjectProtocol] = []
     private var lastReconciliationAt = Date.distantPast
+    private var currentReconciliationInterval = reconciliationInterval
 
     private lazy var watcherStateURL: URL? = {
         let root = persistenceRootOverride
@@ -1122,6 +1124,7 @@ public final class FolderWatcher: @unchecked Sendable {
             )
         }
 
+        var reconciliationChangedSnapshot = false
         for target in targets {
             let current = currentStates[target.folderID] ?? [:]
             let changedPaths: [String]
@@ -1135,11 +1138,15 @@ public final class FolderWatcher: @unchecked Sendable {
             } else {
                 changedPaths = []
             }
+            let snapshotChanged = target.baseline != current
+            reconciliationChangedSnapshot = reconciliationChangedSnapshot || snapshotChanged
 
             performOnQueueSyncIfNeeded {
-                folderSnapshots[target.folderID] = current
-                dirtySnapshotFolderIDs.insert(target.folderID)
-                if changedPaths.isEmpty {
+                if snapshotChanged {
+                    folderSnapshots[target.folderID] = current
+                    dirtySnapshotFolderIDs.insert(target.folderID)
+                }
+                if changedPaths.isEmpty, snapshotChanged {
                     persistSnapshot(for: target.folderID)
                 }
             }
@@ -1150,6 +1157,17 @@ public final class FolderWatcher: @unchecked Sendable {
             ) {
                 let end = min(batchStart + Self.maximumFilesPerBatch, changedPaths.count)
                 ingestScannedPathsWithBackpressure(Array(changedPaths[batchStart..<end]))
+            }
+        }
+
+        performOnQueueSyncIfNeeded {
+            if reconciliationChangedSnapshot {
+                currentReconciliationInterval = Self.reconciliationInterval
+            } else {
+                currentReconciliationInterval = min(
+                    currentReconciliationInterval * 2,
+                    Self.maximumReconciliationInterval
+                )
             }
         }
     }
@@ -1315,13 +1333,19 @@ public final class FolderWatcher: @unchecked Sendable {
             queue: nil
         ) { [weak self] _ in
             self?.queue.async { [weak self] in
-                self?.scheduleFullReconciliation()
+                guard let self,
+                      Date().timeIntervalSince(self.lastReconciliationAt)
+                        >= self.currentReconciliationInterval else {
+                    return
+                }
+                self.scheduleFullReconciliation()
             }
         })
     }
 
     private func recoverAfterLifecycleChange(affectedPath: String) {
         guard !watchedFolders.isEmpty else { return }
+        currentReconciliationInterval = Self.reconciliationInterval
         replayFromEventID = persistedEventID ?? replayFromEventID
         if affectedPath != "/" {
             _ = reacquireRoots(affectedBy: affectedPath)
@@ -1405,7 +1429,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 self.rebuildStream()
             }
             if Date().timeIntervalSince(self.lastReconciliationAt)
-                >= Self.reconciliationInterval {
+                >= self.currentReconciliationInterval {
                 self.scheduleFullReconciliation()
             }
         }

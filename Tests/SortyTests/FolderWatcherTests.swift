@@ -77,6 +77,34 @@ final class FolderWatcherTests: XCTestCase {
         secondWatcher.stopAllWatching()
     }
 
+    func testUnchangedReconciliationDoesNotRewriteSnapshot() async throws {
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Sorty-Watcher-Unchanged-\(UUID().uuidString)", isDirectory: true)
+        let watchedURL = testRoot.appendingPathComponent("Watched", isDirectory: true)
+        let persistenceRoot = testRoot.appendingPathComponent("State", isDirectory: true)
+        try FileManager.default.createDirectory(at: watchedURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        try Data("unchanged".utf8).write(to: watchedURL.appendingPathComponent("file.txt"))
+        let folder = WatchedFolder(path: watchedURL.path, triggerDelay: 0.05)
+        let watcher = FolderWatcher(persistenceRoot: persistenceRoot)
+        watcher.syncWithFolders([folder])
+        defer { watcher.stopAllWatching() }
+
+        let snapshotURL = persistenceRoot
+            .appendingPathComponent("WatcherSnapshots", isDirectory: true)
+            .appendingPathComponent("\(folder.id.uuidString).json")
+        for _ in 0..<100 where !FileManager.default.fileExists(atPath: snapshotURL.path) {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        let initialSnapshot = try Data(contentsOf: snapshotURL)
+
+        watcher.reconcileNow()
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(try Data(contentsOf: snapshotURL), initialSnapshot)
+    }
+
     func testIgnoresICloudAndOneDrivePlaceholderFiles() {
         let iCloudPlaceholder = URL(fileURLWithPath: "/tmp/.Document.pdf.icloud")
         let oneDrivePlaceholder = URL(fileURLWithPath: "/tmp/Document.cloud")
