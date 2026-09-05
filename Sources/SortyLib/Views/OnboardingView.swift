@@ -1326,6 +1326,24 @@ private struct OnboardingOrbitFile: Identifiable {
     ]
 }
 
+private struct OnboardingSineAnimationSpec: Sendable {
+    let fileID: UUID
+    let animationKey: String
+    let keyPath: String
+    let amplitude: Double
+    let angularSpeed: Double
+    let phase: Double
+}
+
+private struct OnboardingSineAnimationPayload: Sendable {
+    let fileID: UUID
+    let animationKey: String
+    let keyPath: String
+    let values: [Double]
+    let sampleCount: Int
+    let duration: Double
+}
+
 /// Provides (and caches) the real macOS file-type icon for a given extension.
 @MainActor
 private enum OnboardingFileIconProvider {
@@ -1485,7 +1503,7 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
     private static let interactionFrameRate: Float = 120
-    private static let idleSampleRate = 120.0
+    nonisolated private static let idleSampleRate = 120.0
     private static let springResponse = 0.48
     private static let springDamping = 0.90
 
@@ -1508,6 +1526,7 @@ private final class OnboardingOrbitFieldView: NSView {
     private var isActive = true
     private var configuredIcons: [String: NSImage] = [:]
     private var preparedInitialIdleAnimations: [UUID: [String: CAKeyframeAnimation]] = [:]
+    private var idleAnimationPreparationTask: Task<Void, Never>?
 
     override var isFlipped: Bool { true }
 
@@ -1538,6 +1557,8 @@ private final class OnboardingOrbitFieldView: NSView {
             updateHostRasterizationScale()
             installDisplayLinkIfNeeded()
         } else {
+            idleAnimationPreparationTask?.cancel()
+            idleAnimationPreparationTask = nil
             stopIdleAnimations(preservingPhase: false)
             revealWorkItems.forEach { $0.cancel() }
             revealWorkItems.removeAll()
@@ -1826,45 +1847,76 @@ private final class OnboardingOrbitFieldView: NSView {
     /// stage. Creating thousands of boxed values when the cards first become
     /// visible otherwise competes with their material rasterization.
     private func prepareInitialIdleAnimationsIfNeeded() {
-        guard preparedInitialIdleAnimations.isEmpty, orbitPhase == 0 else { return }
-        for file in OnboardingOrbitFile.files where hosts[file.id] != nil {
-            preparedInitialIdleAnimations[file.id] = [
-                "idleOrbitX": sineAnimation(
-                    keyPath: "position.x",
-                    amplitude: file.orbitWidth * 1.18,
-                    angularSpeed: file.driftSpeed,
-                    phase: file.driftPhase + .pi / 2,
-                    beginTime: 0
-                ),
-                "idleDriftX": sineAnimation(
-                    keyPath: "position.x",
-                    amplitude: file.driftRadius * 1.28,
-                    angularSpeed: 0.42,
-                    phase: file.driftPhase + .pi / 2,
-                    beginTime: 0
-                ),
-                "idleOrbitY": sineAnimation(
-                    keyPath: "position.y",
-                    amplitude: file.orbitHeight * 1.22,
-                    angularSpeed: file.driftSpeed,
-                    phase: file.driftPhase,
-                    beginTime: 0
-                ),
-                "idleDriftY": sineAnimation(
-                    keyPath: "position.y",
-                    amplitude: file.driftRadius * 1.32,
-                    angularSpeed: 0.35,
-                    phase: file.driftPhase,
-                    beginTime: 0
-                ),
-                "idleRotation": sineAnimation(
-                    keyPath: "transform.rotation.z",
-                    amplitude: 3 * .pi / 180,
-                    angularSpeed: 0.7,
-                    phase: file.driftPhase,
-                    beginTime: 0
-                )
-            ]
+        guard preparedInitialIdleAnimations.isEmpty,
+              idleAnimationPreparationTask == nil,
+              orbitPhase == 0 else { return }
+
+        let specs = OnboardingOrbitFile.files
+            .filter { hosts[$0.id] != nil }
+            .flatMap(Self.initialIdleAnimationSpecs(for:))
+        idleAnimationPreparationTask = Task { [weak self] in
+            let payloads = await Task.detached(priority: .userInitiated) {
+                Self.makeInitialIdleAnimationPayloads(specs)
+            }.value
+            self?.idleAnimationPreparationTask = nil
+            guard !Task.isCancelled, let self, orbitPhase == 0 else { return }
+            installInitialIdleAnimations(payloads)
+        }
+    }
+
+    nonisolated private static func initialIdleAnimationSpecs(
+        for file: OnboardingOrbitFile
+    ) -> [OnboardingSineAnimationSpec] {
+        [
+            .init(fileID: file.id, animationKey: "idleOrbitX", keyPath: "position.x", amplitude: Double(file.orbitWidth * 1.18), angularSpeed: file.driftSpeed, phase: file.driftPhase + .pi / 2),
+            .init(fileID: file.id, animationKey: "idleDriftX", keyPath: "position.x", amplitude: Double(file.driftRadius * 1.28), angularSpeed: 0.42, phase: file.driftPhase + .pi / 2),
+            .init(fileID: file.id, animationKey: "idleOrbitY", keyPath: "position.y", amplitude: Double(file.orbitHeight * 1.22), angularSpeed: file.driftSpeed, phase: file.driftPhase),
+            .init(fileID: file.id, animationKey: "idleDriftY", keyPath: "position.y", amplitude: Double(file.driftRadius * 1.32), angularSpeed: 0.35, phase: file.driftPhase),
+            .init(fileID: file.id, animationKey: "idleRotation", keyPath: "transform.rotation.z", amplitude: 3 * .pi / 180, angularSpeed: 0.7, phase: file.driftPhase)
+        ]
+    }
+
+    nonisolated private static func makeInitialIdleAnimationPayloads(
+        _ specs: [OnboardingSineAnimationSpec]
+    ) -> [OnboardingSineAnimationPayload] {
+        specs.map { spec in
+            let duration = 2 * Double.pi / spec.angularSpeed
+            let sampleCount = max(120, Int(ceil(duration * idleSampleRate)))
+            let startingValue = spec.amplitude * sin(spec.phase)
+            let values = (0...sampleCount).map { index in
+                let progress = Double(index) / Double(sampleCount)
+                return spec.amplitude * sin(spec.phase + progress * 2 * .pi) - startingValue
+            }
+            return OnboardingSineAnimationPayload(
+                fileID: spec.fileID,
+                animationKey: spec.animationKey,
+                keyPath: spec.keyPath,
+                values: values,
+                sampleCount: sampleCount,
+                duration: duration
+            )
+        }
+    }
+
+    private func installInitialIdleAnimations(_ payloads: [OnboardingSineAnimationPayload]) {
+        var keyTimesBySampleCount: [Int: [NSNumber]] = [:]
+        for payload in payloads {
+            let keyTimes = keyTimesBySampleCount[payload.sampleCount] ?? {
+                let times = (0...payload.sampleCount).map { index in
+                    NSNumber(value: Double(index) / Double(payload.sampleCount))
+                }
+                keyTimesBySampleCount[payload.sampleCount] = times
+                return times
+            }()
+            let animation = CAKeyframeAnimation(keyPath: payload.keyPath)
+            animation.values = payload.values.map(NSNumber.init(value:))
+            animation.keyTimes = keyTimes
+            animation.duration = payload.duration
+            animation.repeatCount = .infinity
+            animation.calculationMode = .linear
+            animation.isAdditive = true
+            animation.isRemovedOnCompletion = false
+            preparedInitialIdleAnimations[payload.fileID, default: [:]][payload.animationKey] = animation
         }
     }
 
