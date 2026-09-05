@@ -32,14 +32,25 @@ private struct SendableThumbnailImage: @unchecked Sendable {
     let image: NSImage
 }
 
+@MainActor
+private struct PendingThumbnailRequest {
+    let url: URL
+    let size: CGSize
+    var waiters: [UUID: CheckedContinuation<SendableThumbnailImage, Never>]
+    var task: Task<Void, Never>?
+}
+
 /// Provides cached thumbnails for files using QuickLook and NSWorkspace
 @MainActor
 public class FileThumbnailProvider: ObservableObject {
     public static let shared = FileThumbnailProvider()
-    
+
+    private static let maximumConcurrentRequests = 4
     private let cache = NSCache<NSString, NSImage>()
-    private var processingKeys: Set<String> = []
-    private var continuations: [String: [CheckedContinuation<SendableThumbnailImage, Never>]] = [:]
+    private var pendingRequests: [String: PendingThumbnailRequest] = [:]
+    private var queuedKeys: [String] = []
+    private var activeKeys: Set<String> = []
+    private var cancelledWaiters: Set<UUID> = []
     private let waveformCache = NSCache<NSString, NSImage>()
     private let metadataProbe = FileThumbnailMetadataProbe()
     
@@ -56,35 +67,114 @@ public class FileThumbnailProvider: ObservableObject {
         if let cached = cache.object(forKey: key as NSString) {
             return cached
         }
-        
-        if processingKeys.contains(key) {
-            let sendableImage = await withCheckedContinuation { continuation in
-                continuations[key, default: []].append(continuation)
-            }
-            return sendableImage.image
-        }
-        
-        processingKeys.insert(key)
-        let image = await generateThumbnail(for: url, size: size)
-        cache.setObject(
-            image,
-            forKey: key as NSString,
-            cost: image.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
-        )
 
-        if let waitingContinuations = continuations.removeValue(forKey: key) {
+        let waiterID = UUID()
+        let sendableImage = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled,
+                      cancelledWaiters.remove(waiterID) == nil else {
+                    continuation.resume(
+                        returning: SendableThumbnailImage(image: fallbackIcon(for: url))
+                    )
+                    return
+                }
+                enqueue(
+                    key: key,
+                    url: url,
+                    size: size,
+                    waiterID: waiterID,
+                    continuation: continuation
+                )
+            }
+        } onCancel: {
+            Task { @MainActor in
+                FileThumbnailProvider.shared.cancelWaiter(waiterID, forKey: key)
+            }
+        }
+        return sendableImage.image
+    }
+
+    private func enqueue(
+        key: String,
+        url: URL,
+        size: CGSize,
+        waiterID: UUID,
+        continuation: CheckedContinuation<SendableThumbnailImage, Never>
+    ) {
+        if var request = pendingRequests[key] {
+            request.waiters[waiterID] = continuation
+            pendingRequests[key] = request
+        } else {
+            pendingRequests[key] = PendingThumbnailRequest(
+                url: url,
+                size: size,
+                waiters: [waiterID: continuation],
+                task: nil
+            )
+            queuedKeys.append(key)
+        }
+        startQueuedRequestsIfPossible()
+    }
+
+    private func startQueuedRequestsIfPossible() {
+        while activeKeys.count < Self.maximumConcurrentRequests,
+              let key = queuedKeys.first {
+            queuedKeys.removeFirst()
+            guard var request = pendingRequests[key], !request.waiters.isEmpty else {
+                pendingRequests.removeValue(forKey: key)
+                continue
+            }
+
+            activeKeys.insert(key)
+            let url = request.url
+            let size = request.size
+            request.task = Task { [weak self] in
+                guard let self else { return }
+                let image = await generateThumbnail(for: url, size: size)
+                finishGeneration(image, forKey: key)
+            }
+            pendingRequests[key] = request
+        }
+    }
+
+    private func finishGeneration(_ image: NSImage, forKey key: String) {
+        activeKeys.remove(key)
+        if let request = pendingRequests.removeValue(forKey: key), !request.waiters.isEmpty {
+            cache.setObject(
+                image,
+                forKey: key as NSString,
+                cost: image.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
+            )
             let sendableImage = SendableThumbnailImage(image: image)
-            for continuation in waitingContinuations {
+            for continuation in request.waiters.values {
                 continuation.resume(returning: sendableImage)
             }
         }
+        startQueuedRequestsIfPossible()
+    }
 
-        processingKeys.remove(key)
-        return image
+    private func cancelWaiter(_ waiterID: UUID, forKey key: String) {
+        guard var request = pendingRequests[key] else {
+            cancelledWaiters.insert(waiterID)
+            return
+        }
+        guard let continuation = request.waiters.removeValue(forKey: waiterID) else { return }
+        continuation.resume(
+            returning: SendableThumbnailImage(image: fallbackIcon(for: request.url))
+        )
+
+        if request.waiters.isEmpty {
+            request.task?.cancel()
+            pendingRequests.removeValue(forKey: key)
+            queuedKeys.removeAll { $0 == key }
+        } else {
+            pendingRequests[key] = request
+        }
     }
     
     private func generateThumbnail(for url: URL, size: CGSize) async -> NSImage {
         let metadata = await metadataProbe.metadata(for: url)
+        guard !Task.isCancelled else { return fallbackIcon(for: url) }
 
         // Directories get the system's per-folder icon; QuickLook only yields a generic one
         if metadata.isDirectory {
@@ -130,7 +220,11 @@ public class FileThumbnailProvider: ObservableObject {
         )
         
         do {
-            let thumbnail = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
+            let thumbnail = try await withTaskCancellationHandler {
+                try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
+            } onCancel: {
+                QLThumbnailGenerator.shared.cancel(request)
+            }
             return thumbnail.nsImage
         } catch {
             // Fall back to system icon from NSWorkspace, copying to avoid shared reference invalidation
@@ -164,16 +258,18 @@ public class FileThumbnailProvider: ObservableObject {
     /// Clear the thumbnail cache
     public func clearCache() {
         cache.removeAllObjects()
-        processingKeys.removeAll()
         waveformCache.removeAllObjects()
 
         let emptyImage = SendableThumbnailImage(image: NSImage(size: NSSize(width: 1, height: 1)))
-        for waitingContinuations in continuations.values {
-            for continuation in waitingContinuations {
+        for request in pendingRequests.values {
+            request.task?.cancel()
+            for continuation in request.waiters.values {
                 continuation.resume(returning: emptyImage)
             }
         }
-        continuations.removeAll()
+        pendingRequests.removeAll()
+        queuedKeys.removeAll()
+        cancelledWaiters.removeAll()
     }
 }
 

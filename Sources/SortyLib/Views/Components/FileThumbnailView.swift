@@ -35,7 +35,7 @@ public struct FileThumbnailView: View {
             let currentURL = url
             isLoading = true
             let newThumbnail = await FileThumbnailProvider.shared.thumbnail(for: currentURL, size: size)
-            if url == currentURL {
+            if !Task.isCancelled, url == currentURL {
                 thumbnail = newThumbnail
                 isLoading = false
             }
