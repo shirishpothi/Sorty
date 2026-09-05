@@ -144,19 +144,20 @@ struct PreviewActionsView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10, weight: .semibold))
                         Text("Reset")
-                            .font(.system(size: 12))
+                            .font(.caption.bold())
                     }
                 }
-                .buttonStyle(.sortySecondary(size: .small, color: .orange))
+                .buttonStyle(.tintedPill(.orange.opacity(0.8), size: .small))
                 .help("Discard manual preview edits and restore the original plan")
                 .accessibilityIdentifier("ResetEditsButton")
                 .accessibilityLabel("Reset all manual edits")
                 .accessibilityHint("Restores the initial generated organization")
-                .transition(.opacity.combined(with: .move(edge: .leading)))
+                .transition(TransitionStyles.scaleAndFade)
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasEdits)
     }
     
     private var regenerationSection: some View {
