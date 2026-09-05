@@ -1326,7 +1326,7 @@ private struct PermissionActionButton: View {
                 .frame(minWidth: style == .primary ? 74 : 96)
         }
         .buttonStyle(buttonStyle)
-        .onboardingBeamBorder(variant: style == .primary ? .standard : .info)
+        .onboardingBeamBorder(variant: style == .primary ? .standard : .info, active: isHovering)
         .contentShape(Capsule())
         .background(
             ScreenFrameReader(frameInScreen: $frameInScreen)
