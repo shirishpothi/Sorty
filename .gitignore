@@ -68,3 +68,6 @@ temp_sparkle/
 # Local quality corpus may contain private filenames and extracted evidence.
 QualityCorpus/private/
 QualityCorpus/reports/
+
+# Local agent locks and validation reports. Never remove a live lock file.
+.agent-local/

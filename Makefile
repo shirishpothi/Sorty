@@ -225,6 +225,7 @@ help:
 	@echo "  make cache-prune   - Force scheduled cache validation and pruning"
 	@echo ""
 	@echo "Testing:"
+	@echo "  make test-focused FILTER=TestClass - Guard a focused test against checkout changes"
 	@echo "  make test        - Run unit tests in parallel"
 	@echo "  make test-fast   - Run only fast unit tests (excludes slow UI tests)"
 	@echo "  make test-full   - Run unit tests with coverage (UI tests disabled)"
@@ -274,3 +275,9 @@ help:
 	@echo "  - Debug builds use -Onone with batch mode for speed"
 	@echo "  - Release builds use -O with whole-module optimization"
 	@echo "  - Tests run in parallel for faster execution"
+
+# Serialize focused checks and reject evidence from changing source inputs.
+.PHONY: test-focused
+test-focused:
+	@test -n "$(FILTER)" || (echo 'Usage: make test-focused FILTER=TestClass'; exit 2)
+	@python3 scripts/agent_run.py --check -- swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox --filter "$(FILTER)"
