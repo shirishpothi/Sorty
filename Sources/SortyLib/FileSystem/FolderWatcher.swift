@@ -1421,7 +1421,8 @@ public final class FolderWatcher: @unchecked Sendable {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(
             deadline: .now() + Self.healthCheckInterval,
-            repeating: Self.healthCheckInterval
+            repeating: Self.healthCheckInterval,
+            leeway: .seconds(5)
         )
         timer.setEventHandler { [weak self] in
             guard let self else { return }

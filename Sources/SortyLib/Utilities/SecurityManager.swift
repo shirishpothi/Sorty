@@ -25,7 +25,13 @@ public class SecurityManager: ObservableObject {
     // MARK: - Session Management
     
     /// Session timeout duration (5 minutes)
-    public var sessionTimeoutInterval: TimeInterval = 300
+    public var sessionTimeoutInterval: TimeInterval = 300 {
+        didSet {
+            if isUnlocked {
+                startSessionTimer()
+            }
+        }
+    }
     
     private var lastAuthenticationTime: Date?
     private var sessionTimer: Timer?
@@ -210,6 +216,9 @@ public class SecurityManager: ObservableObject {
     /// Refresh the session timer (call on user activity)
     public func refreshSession() {
         lastAuthenticationTime = Date()
+        if isUnlocked {
+            startSessionTimer()
+        }
     }
 
     private func completeSuccessfulAuthentication(method: AuthenticationMethod) {
@@ -225,8 +234,9 @@ public class SecurityManager: ObservableObject {
     private func startSessionTimer() {
         stopSessionTimer()
         
-        // Check session every 30 seconds
-        sessionTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        let elapsed = lastAuthenticationTime.map { Date().timeIntervalSince($0) } ?? 0
+        let remaining = max(0.001, sessionTimeoutInterval - elapsed)
+        sessionTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.checkSessionTimeout()
             }
