@@ -38,6 +38,10 @@ public final class ImageVisionAnalyzer: Sendable {
     /// - Parameter url: Local URL of the image
     /// - Returns: Base64 encoded JPEG data if successful
     public func prepareImageForVision(at url: URL) async -> Data? {
+        await prepareImageForVision(at: url, pruneAfterWrite: true)
+    }
+
+    private func prepareImageForVision(at url: URL, pruneAfterWrite: Bool) async -> Data? {
         guard FileManager.default.fileExists(atPath: url.path) else {
             DebugLogger.log("ImageVisionAnalyzer: file not found at \(url.path)")
             return nil
@@ -78,7 +82,7 @@ public final class ImageVisionAnalyzer: Sendable {
                 return nil
             }
 
-            self.persistCache(jpegData, for: url)
+            self.persistCache(jpegData, for: url, pruneAfterWrite: pruneAfterWrite)
             return jpegData
         }.value
     }
@@ -96,7 +100,7 @@ public final class ImageVisionAnalyzer: Sendable {
             for _ in 0..<min(maxConcurrentPreparations, total) {
                 guard let url = iterator.next() else { break }
                 group.addTask {
-                    let data = await self.prepareImageForVision(at: url)
+                    let data = await self.prepareImageForVision(at: url, pruneAfterWrite: false)
                     return (url, data)
                 }
             }
@@ -113,11 +117,12 @@ public final class ImageVisionAnalyzer: Sendable {
 
                 if let nextURL = iterator.next(), !Task.isCancelled {
                     group.addTask {
-                        let data = await self.prepareImageForVision(at: nextURL)
+                        let data = await self.prepareImageForVision(at: nextURL, pruneAfterWrite: false)
                         return (nextURL, data)
                     }
                 }
             }
+            self.pruneCacheAfterBatch()
             return results
         }
     }
@@ -130,7 +135,7 @@ public final class ImageVisionAnalyzer: Sendable {
         pdfPageLimit: Int = 2,
         progress: (@Sendable (_ completed: Int, _ total: Int) async -> Void)? = nil
     ) async -> [String: Data] {
-        await withTaskGroup(of: [String: Data].self) { group in
+        let results = await withTaskGroup(of: [String: Data].self) { group in
             var iterator = files.makeIterator()
             for _ in 0..<min(maxConcurrentPreparations, files.count) {
                 guard let file = iterator.next() else { break }
@@ -162,6 +167,8 @@ public final class ImageVisionAnalyzer: Sendable {
             }
             return results
         }
+        pruneCacheAfterBatch()
+        return results
     }
 
     private func prepareFileForVision(
@@ -174,7 +181,7 @@ public final class ImageVisionAnalyzer: Sendable {
         let ext = file.extension.lowercased()
         let attachmentName = attachmentLabel(for: file, baseDirectoryURL: baseDirectoryURL)
         if ["jpg", "jpeg", "png", "heic", "heif", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
-           let data = await prepareImageForVision(at: url) {
+           let data = await prepareImageForVision(at: url, pruneAfterWrite: false) {
             return [attachmentName: data]
         }
 
@@ -307,7 +314,7 @@ public final class ImageVisionAnalyzer: Sendable {
         return data
     }
 
-    private func persistCache(_ data: Data, for url: URL) {
+    private func persistCache(_ data: Data, for url: URL, pruneAfterWrite: Bool) {
         guard let cacheURL = cacheFileURL(for: url),
               let cacheDirectory = Self.visionCacheDirectory else {
             return
@@ -321,13 +328,22 @@ public final class ImageVisionAnalyzer: Sendable {
                 try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
             }
             try data.write(to: cacheURL, options: .atomic)
-            Self.pruneCache(in: cacheDirectory, preserving: cacheURL)
+            if pruneAfterWrite {
+                Self.pruneCache(in: cacheDirectory, preserving: cacheURL)
+            }
         } catch {
             DebugLogger.log("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
         }
     }
 
-    private static func pruneCache(in directory: URL, preserving preservedURL: URL) {
+    private func pruneCacheAfterBatch() {
+        guard let cacheDirectory = Self.visionCacheDirectory else { return }
+        Self.cacheLock.lock()
+        defer { Self.cacheLock.unlock() }
+        Self.pruneCache(in: cacheDirectory, preserving: nil)
+    }
+
+    private static func pruneCache(in directory: URL, preserving preservedURL: URL?) {
         let keys: Set<URLResourceKey> = [
             .contentModificationDateKey,
             .fileSizeKey,
