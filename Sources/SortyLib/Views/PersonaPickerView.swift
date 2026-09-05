@@ -48,7 +48,6 @@ struct PersonaPickerView: View {
                         saveChangesIfNeeded()
                         withAnimation(.spring(response: 0.3)) {
                             personaManager.selectPersona(persona)
-                            personaManager.selectedCustomPersonaId = nil
                             updateLocalPrompt()
                         }
                         AnalyticsManager.shared.capturePersonaInventory(
@@ -91,7 +90,7 @@ struct PersonaPickerView: View {
                             onSelect: {
                                 saveChangesIfNeeded()
                                 withAnimation(.spring(response: 0.3)) {
-                                    personaManager.selectedCustomPersonaId = custom.id
+                                    personaManager.selectCustomPersona(custom.id)
                                     updateLocalPrompt()
                                 }
                                 AnalyticsManager.shared.capturePersonaInventory(
@@ -723,7 +722,6 @@ struct CompactPersonaPicker: View {
                 ForEach(PersonaType.allCases, id: \.self) { persona in
                     Button {
                         personaManager.selectPersona(persona)
-                        personaManager.selectedCustomPersonaId = nil
                         AnalyticsManager.shared.capturePersonaInventory(
                             action: "persona_selected",
                             customPersonaCount: customStore.customPersonas.count,
@@ -748,7 +746,7 @@ struct CompactPersonaPicker: View {
                 Section("Custom") {
                     ForEach(customStore.customPersonas) { custom in
                         Button {
-                            personaManager.selectedCustomPersonaId = custom.id
+                            personaManager.selectCustomPersona(custom.id)
                             AnalyticsManager.shared.capturePersonaInventory(
                                 action: "persona_selected",
                                 customPersonaCount: customStore.customPersonas.count,

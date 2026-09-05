@@ -62,14 +62,77 @@ public struct SavedSteeringPrompt: Codable, Identifiable, Sendable {
 @MainActor
 public class SteeringPromptManager: ObservableObject {
     @Published public private(set) var prompts: [SavedSteeringPrompt] = []
+    @Published public private(set) var hasLoadedPersistedState = false
 
     private static let storageKey = "sorty.steeringPrompts"
 
+    private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
+    private var loadTask: Task<PersistedSnapshot, Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
+
+    private struct PersistedSnapshot: Sendable {
+        var prompts: [SavedSteeringPrompt] = []
+        var didRemovePlaceholders = false
+    }
+
     public static let shared = SteeringPromptManager()
 
-    private init() {
-        load()
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
+    }
+
+    /// Decodes prompts away from the main actor. In-memory additions are merged before saving.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<PersistedSnapshot, Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let persistedDataReader = persistedDataReader
+            let storageKey = Self.storageKey
+            task = Task.detached(priority: .userInitiated) {
+                var snapshot = PersistedSnapshot()
+                guard let data = persistedDataReader.data(forKey: storageKey),
+                      let decoded = try? JSONDecoder().decode([SavedSteeringPrompt].self, from: data) else {
+                    return snapshot
+                }
+                let loadedCount = decoded.count
+                let cleaned = decoded.filter { prompt in
+                    !(prompt.name.hasPrefix("Placeholder Instruction ")
+                        && prompt.prompt == "Use placeholder instruction \(prompt.name.dropFirst("Placeholder Instruction ".count)) while testing long saved-instruction lists.")
+                }
+                snapshot.prompts = cleaned
+                snapshot.didRemovePlaceholders = cleaned.count != loadedCount
+                return snapshot
+            }
+            loadTask = task
+        }
+
+        let snapshot = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: prompts.map { ($0.id, $0) })
+        let persistedIDs = Set(snapshot.prompts.map(\.id))
+        var merged = snapshot.prompts.map { inMemoryByID[$0.id] ?? $0 }
+        merged.append(contentsOf: prompts.filter { !persistedIDs.contains($0.id) })
+        prompts = merged
+        if snapshot.didRemovePlaceholders {
+            hasPendingChanges = true
+        }
+
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            save()
+        }
     }
 
     private func setupNotificationObservers() {
@@ -133,8 +196,13 @@ public class SteeringPromptManager: ObservableObject {
     }
 
     public func clearAll() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         prompts.removeAll()
-        UserDefaults.standard.removeObject(forKey: SteeringPromptManager.storageKey)
+        userDefaults.removeObject(forKey: Self.storageKey)
     }
 
     public func setPinned(_ isPinned: Bool, id: UUID) {
@@ -147,28 +215,14 @@ public class SteeringPromptManager: ObservableObject {
 
     // MARK: - Persistence
 
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: SteeringPromptManager.storageKey) else { return }
-        do {
-            prompts = try JSONDecoder().decode([SavedSteeringPrompt].self, from: data)
-            // Remove the temporary stress-test records written by older builds.
-            let loadedCount = prompts.count
-            prompts.removeAll { prompt in
-                prompt.name.hasPrefix("Placeholder Instruction ")
-                    && prompt.prompt == "Use placeholder instruction \(prompt.name.dropFirst("Placeholder Instruction ".count)) while testing long saved-instruction lists."
-            }
-            if prompts.count != loadedCount {
-                save()
-            }
-        } catch {
-            print("[SteeringPromptManager] Failed to decode prompts: \(error)")
-        }
-    }
-
     private func save() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         do {
             let data = try JSONEncoder().encode(prompts)
-            UserDefaults.standard.set(data, forKey: SteeringPromptManager.storageKey)
+            userDefaults.set(data, forKey: Self.storageKey)
         } catch {
             print("[SteeringPromptManager] Failed to encode prompts: \(error)")
         }

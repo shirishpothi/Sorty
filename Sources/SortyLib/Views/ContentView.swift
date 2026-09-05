@@ -74,7 +74,13 @@ public struct ContentView: View {
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
             PersonaGeneratorView(
                 store: customPersonaStore,
-                selectedPersonaId: $personaManager.selectedCustomPersonaId,
+                selectedPersonaId: Binding(
+                    get: { personaManager.selectedCustomPersonaId },
+                    set: { id in
+                        guard let id else { return }
+                        personaManager.selectCustomPersona(id)
+                    }
+                ),
                 onPersonaGenerated: {
                     if context == .settings {
                         showPersonaGenerationHighlight()

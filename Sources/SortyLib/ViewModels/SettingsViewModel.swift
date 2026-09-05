@@ -21,6 +21,10 @@ final class UserDefaultsDataReader: @unchecked Sendable {
         userDefaults.data(forKey: key)
     }
 
+    func string(forKey key: String) -> String? {
+        userDefaults.string(forKey: key)
+    }
+
     func stringArray(forKey key: String) -> [String]? {
         userDefaults.stringArray(forKey: key)
     }

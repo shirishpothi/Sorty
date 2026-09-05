@@ -123,20 +123,65 @@ public struct CustomPersona: Codable, Identifiable, Hashable, Sendable {
 // MARK: - Custom Persona Store
 
 /// Manager for persisting custom personas
+@MainActor
 public class CustomPersonaStore: ObservableObject {
     @Published public var customPersonas: [CustomPersona] = []
-    
-    private let userDefaults = UserDefaults.standard
+    @Published public private(set) var hasLoadedPersistedState = false
+
+    private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     private let storageKey = "customPersonas"
-    private var clearUsageObserver: NSObjectProtocol?
-    
-    public init() {
-        loadPersonas()
+    nonisolated(unsafe) private var clearUsageObserver: NSObjectProtocol?
+    private var loadTask: Task<[CustomPersona], Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
+
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
     }
-    
+
+    /// Decodes personas away from the main actor. In-memory additions are merged before saving.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<[CustomPersona], Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let persistedDataReader = persistedDataReader
+            let storageKey = storageKey
+            task = Task.detached(priority: .userInitiated) {
+                guard let data = persistedDataReader.data(forKey: storageKey),
+                      let decoded = try? JSONDecoder().decode([CustomPersona].self, from: data) else {
+                    return []
+                }
+                return decoded
+            }
+            loadTask = task
+        }
+
+        let persistedPersonas = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: customPersonas.map { ($0.id, $0) })
+        let persistedIDs = Set(persistedPersonas.map(\.id))
+        var merged = persistedPersonas.map { inMemoryByID[$0.id] ?? $0 }
+        merged.append(contentsOf: customPersonas.filter { !persistedIDs.contains($0.id) })
+        customPersonas = merged
+
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            savePersonas()
+        }
+    }
     private func setupNotificationObservers() {
-        clearUsageObserver = NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+        clearUsageObserver = NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearAll()
         }
     }
@@ -153,6 +198,11 @@ public class CustomPersonaStore: ObservableObject {
     }
 
     public func clearAll() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         customPersonas.removeAll()
         userDefaults.removeObject(forKey: storageKey)
     }
@@ -186,15 +236,11 @@ public class CustomPersonaStore: ObservableObject {
         customPersonas.first { $0.name.lowercased() == name.lowercased() }
     }
     
-    private func loadPersonas() {
-        guard let data = userDefaults.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode([CustomPersona].self, from: data) else {
+    private func savePersonas() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
             return
         }
-        customPersonas = decoded
-    }
-    
-    private func savePersonas() {
         if let encoded = try? JSONEncoder().encode(customPersonas) {
             userDefaults.set(encoded, forKey: storageKey)
         }

@@ -14,6 +14,10 @@ Apply this rule to dependencies reached through `SortyApp`, `WindowSession`, vie
 - `StorageLocationsManager.loadPersistedState()` reads and normalizes saved storage locations.
 - `LearningsManager.loadPersistedState()` restores its model selection and resolves saved reference-model directories.
 - `ExclusionRulesManager.loadPersistedState()` restores rules and compiles the matcher before any organization scan uses it.
+- `PersonaManager.loadPersistedState()` restores the selected built-in or custom persona and custom prompts.
+- `CustomPersonaStore.loadPersistedState()` restores custom personas.
+- `NamingPresetManager.loadPersistedState()` restores custom naming presets.
+- `SteeringPromptManager.loadPersistedState()` restores saved steering prompts and removes obsolete placeholder prompts.
 
 The main content observes the managers as persisted state arrives. Settings persistence is disabled until hydration completes, so an early view mutation cannot overwrite saved configuration. `configureGlobalsIfNeeded()` must await exclusion hydration before it publishes globals that consume the matcher. Every `FolderOrganizer` scan entry point must do the same. Empty loading state must never mean that a user's rules can be skipped.
 
@@ -31,7 +35,7 @@ File reads, journal replay, and JSON decoding run in detached user-initiated tas
 
 For asynchronous bookmark restoration, snapshot the bookmark, item identity, and generation before leaving the main actor. Accept a result only when its generation and bookmark still match the current item. Keep access ownership explicit. Balance every successful security-scope acquisition with its eventual `stopAccessingSecurityScopedResource()` release, including discarded results. Discard stale results after removal, reauthorization, or reset. Await required access before automation uses a folder. `StorageLocationsManager.refreshAccess(for:)` remains a synchronous main-actor operation for the one-item add-location path. Only bulk restore uses the asynchronous path.
 
-Do not move every preference read out of initialization by default. `PersonaManager`, `CustomPersonaStore`, `NamingPresetManager`, and `SteeringPromptManager` still perform their small `UserDefaults` decodes on the launch path. They have a wider UI touch surface and no equivalent hydration-gate consumer. If that work becomes measurable, move it in a separate change with lightweight initialization, `loadPersistedState()`, a pending-change merge contract, and focused tests.
+`PersonaManager`, `CustomPersonaStore`, `NamingPresetManager`, and `SteeringPromptManager` use the same lightweight initialization and pending-change merge contract as the other loaders. A picker or preview can display defaults or mocks before those stores hydrate. An organizer scan waits for persona and custom-persona hydration. Naming and steering are view-driven, so a pre-hydration custom preset reference falls back to a built-in preset until the view refreshes.
 
 ## Verification
 

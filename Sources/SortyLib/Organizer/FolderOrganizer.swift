@@ -1643,6 +1643,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         // Never organize with empty/unhydrated exclusion rules.
         await exclusionRules?.loadPersistedState()
+        await personaManager?.loadPersistedState()
+        await customPersonaStore?.loadPersistedState()
         let reliabilitySpan = ReliabilityManager.shared.startSpan(
             name: "organize",
             operation: "workflow.organize",
@@ -2014,7 +2016,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         try checkCancellation()
 
-        let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
+        let personaPrompt: String? = if let personaManager {
+            if let customPersonaStore {
+                personaManager.getEffectivePrompt(customStore: customPersonaStore)
+            } else {
+                personaManager.getPrompt(for: personaManager.selectedPersona)
+            }
+        } else {
+            nil
+        }
 
         let directInstructions = customPrompt ?? customInstructions
         var instructions = PromptBuilder.wrapDirectUserInstructions(directInstructions)
@@ -3736,6 +3746,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         await exclusionRules?.loadPersistedState()
+        await personaManager?.loadPersistedState()
+        await customPersonaStore?.loadPersistedState()
 
         cancelInternal()
         isCancellationRequested = false
@@ -4073,6 +4085,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         await exclusionRules?.loadPersistedState()
+        await personaManager?.loadPersistedState()
+        await customPersonaStore?.loadPersistedState()
 
         currentRunInstructions = customPrompt ?? customInstructions
         modelExcludedCurrentRun = false

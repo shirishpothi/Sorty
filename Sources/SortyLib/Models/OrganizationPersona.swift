@@ -129,20 +129,87 @@ public enum PersonaType: String, Codable, CaseIterable, Sendable {
 @MainActor
 public class PersonaManager: ObservableObject {
     @Published public var selectedPersona: PersonaType = .general
-    @Published public var selectedCustomPersonaId: String?
+    @Published public private(set) var selectedCustomPersonaId: String?
     
     @Published public var customPrompts: [PersonaType: String] = [:]
     
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     private let storageKey = "selectedPersona"
     private let customPromptsKey = "customPersonaPrompts"
     private let customIdKey = "selectedCustomPersonaId"
-    
-    public init() {
-        loadPersona()
-        loadCustomPrompts()
-        loadCustomPersonaId()
+    @Published public private(set) var hasLoadedPersistedState = false
+    private var loadTask: Task<PersistedSnapshot, Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
+    private var hasPendingScalarChanges = false
+
+    private struct PersistedSnapshot: Sendable {
+        var selectedPersonaRaw: String?
+        var customPrompts: [PersonaType: String] = [:]
+        var selectedCustomPersonaId: String?
+    }
+
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
+    }
+
+    /// Reads small persona preferences off the main actor. Early selections win over persisted state.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<PersistedSnapshot, Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let persistedDataReader = persistedDataReader
+            let storageKey = storageKey
+            let customPromptsKey = customPromptsKey
+            let customIdKey = customIdKey
+            task = Task.detached(priority: .userInitiated) {
+                var snapshot = PersistedSnapshot()
+                snapshot.selectedPersonaRaw = persistedDataReader.string(forKey: storageKey)
+                snapshot.selectedCustomPersonaId = persistedDataReader.string(forKey: customIdKey)
+                if let data = persistedDataReader.data(forKey: customPromptsKey),
+                   let decoded = try? JSONDecoder().decode([PersonaType: String].self, from: data) {
+                    snapshot.customPrompts = decoded
+                }
+                return snapshot
+            }
+            loadTask = task
+        }
+
+        let snapshot = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        if !hasPendingScalarChanges {
+            if let rawValue = snapshot.selectedPersonaRaw,
+               let persona = PersonaType(rawValue: rawValue) {
+                selectedPersona = persona
+            }
+            if let id = snapshot.selectedCustomPersonaId {
+                selectedCustomPersonaId = id
+            }
+        }
+        var mergedPrompts = snapshot.customPrompts
+        for (type, prompt) in customPrompts {
+            mergedPrompts[type] = prompt
+        }
+        customPrompts = mergedPrompts
+
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges || hasPendingScalarChanges {
+            hasPendingChanges = false
+            hasPendingScalarChanges = false
+            savePersona()
+            saveCustomPrompts()
+            saveCustomPersonaId()
+        }
     }
     
     private func setupNotificationObservers() {
@@ -204,6 +271,12 @@ public class PersonaManager: ObservableObject {
     }
 
     public func reset() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
+        hasPendingScalarChanges = false
         selectedPersona = .general
         selectedCustomPersonaId = nil
         customPrompts.removeAll()
@@ -211,38 +284,32 @@ public class PersonaManager: ObservableObject {
         userDefaults.removeObject(forKey: customPromptsKey)
         userDefaults.removeObject(forKey: customIdKey)
     }
-    
-    private func loadPersona() {
-        if let rawValue = userDefaults.string(forKey: storageKey),
-           let persona = PersonaType(rawValue: rawValue) {
-            selectedPersona = persona
-        }
-    }
-    
+
     private func savePersona() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            hasPendingScalarChanges = true
+            return
+        }
         userDefaults.set(selectedPersona.rawValue, forKey: storageKey)
     }
-    
-    private func loadCustomPrompts() {
-        if let data = userDefaults.data(forKey: customPromptsKey),
-           let decoded = try? JSONDecoder().decode([PersonaType: String].self, from: data) {
-            customPrompts = decoded
-        }
-    }
-    
+
     private func saveCustomPrompts() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         if let encoded = try? JSONEncoder().encode(customPrompts) {
             userDefaults.set(encoded, forKey: customPromptsKey)
         }
     }
-    
-    private func loadCustomPersonaId() {
-        if let id = userDefaults.string(forKey: customIdKey) {
-            selectedCustomPersonaId = id
-        }
-    }
-    
+
     private func saveCustomPersonaId() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            hasPendingScalarChanges = true
+            return
+        }
         if let id = selectedCustomPersonaId {
             userDefaults.set(id, forKey: customIdKey)
         } else {

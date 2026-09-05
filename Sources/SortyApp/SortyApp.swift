@@ -890,7 +890,11 @@ struct SortyApp: App {
         async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()
         async let learningsLoad: Void = learningsManager.loadPersistedState()
         async let exclusionLoad: Void = exclusionRules.loadPersistedState()
-        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad, exclusionLoad)
+        async let personaLoad: Void = personaManager.loadPersistedState()
+        async let customPersonaLoad: Void = customPersonaStore.loadPersistedState()
+        async let namingPresetLoad: Void = namingPresetManager.loadPersistedState()
+        async let steeringPromptLoad: Void = steeringPromptManager.loadPersistedState()
+        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad, exclusionLoad, personaLoad, customPersonaLoad, namingPresetLoad, steeringPromptLoad)
 
         ReliabilityManager.shared.startIfAuthorized()
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)

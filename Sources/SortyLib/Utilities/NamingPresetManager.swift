@@ -11,14 +11,61 @@ import Combine
 @MainActor
 public class NamingPresetManager: ObservableObject {
     @Published public private(set) var customPresets: [NamingPreset] = []
+    @Published public private(set) var hasLoadedPersistedState = false
 
     private static let storageKey = "sorty.namingPresets"
 
+    private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
+    private var loadTask: Task<[NamingPreset], Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
+
     public static let shared = NamingPresetManager()
 
-    private init() {
-        load()
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
+    }
+
+    /// Decodes custom presets away from the main actor. In-memory additions are merged before saving.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<[NamingPreset], Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let persistedDataReader = persistedDataReader
+            let storageKey = Self.storageKey
+            task = Task.detached(priority: .userInitiated) {
+                guard let data = persistedDataReader.data(forKey: storageKey),
+                      let decoded = try? JSONDecoder().decode([NamingPreset].self, from: data) else {
+                    return []
+                }
+                return decoded
+            }
+            loadTask = task
+        }
+
+        let persistedPresets = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: customPresets.map { ($0.id, $0) })
+        let persistedIDs = Set(persistedPresets.map(\.id))
+        var merged = persistedPresets.map { inMemoryByID[$0.id] ?? $0 }
+        merged.append(contentsOf: customPresets.filter { !persistedIDs.contains($0.id) })
+        customPresets = merged
+
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            save()
+        }
     }
 
     private func setupNotificationObservers() {
@@ -85,8 +132,13 @@ public class NamingPresetManager: ObservableObject {
     }
 
     public func clearAll() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         customPresets.removeAll()
-        UserDefaults.standard.removeObject(forKey: NamingPresetManager.storageKey)
+        userDefaults.removeObject(forKey: Self.storageKey)
     }
 
     public func preset(for id: UUID) -> NamingPreset? {
@@ -112,19 +164,14 @@ public class NamingPresetManager: ObservableObject {
 
     // MARK: - Persistence
 
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: NamingPresetManager.storageKey) else { return }
-        do {
-            customPresets = try JSONDecoder().decode([NamingPreset].self, from: data)
-        } catch {
-            print("[NamingPresetManager] Failed to decode presets: \(error)")
-        }
-    }
-
     private func save() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         do {
             let data = try JSONEncoder().encode(customPresets)
-            UserDefaults.standard.set(data, forKey: NamingPresetManager.storageKey)
+            userDefaults.set(data, forKey: Self.storageKey)
         } catch {
             print("[NamingPresetManager] Failed to encode presets: \(error)")
         }

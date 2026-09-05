@@ -142,4 +142,117 @@ final class StartupHydrationTests: XCTestCase {
         XCTAssertTrue(manager.folders.isEmpty)
         XCTAssertEqual(manager.accessIssueFolderCount, 0)
     }
+
+    @MainActor
+    func testPersonaInitDoesNotHydrateSynchronously() throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(PersonaType.developer.rawValue, forKey: "selectedPersona")
+
+        let startedAt = CFAbsoluteTimeGetCurrent()
+        let manager = PersonaManager(userDefaults: defaults)
+        let initDuration = CFAbsoluteTimeGetCurrent() - startedAt
+
+        XCTAssertFalse(manager.hasLoadedPersistedState)
+        XCTAssertEqual(manager.selectedPersona, .general)
+        XCTAssertLessThan(initDuration, 0.05, "Persona construction must not read persisted state.")
+    }
+
+    @MainActor
+    func testPersonaEarlySelectionWinsOverPersisted() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(PersonaType.developer.rawValue, forKey: "selectedPersona")
+
+        let manager = PersonaManager(userDefaults: defaults)
+        manager.selectPersona(.photographer)
+        await manager.loadPersistedState()
+
+        XCTAssertTrue(manager.hasLoadedPersistedState)
+        XCTAssertEqual(manager.selectedPersona, .photographer)
+    }
+
+    @MainActor
+    func testPersonaResetBeforeHydrationDoesNotRestorePersisted() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(PersonaType.office.rawValue, forKey: "selectedPersona")
+
+        let manager = PersonaManager(userDefaults: defaults)
+        manager.reset()
+        await manager.loadPersistedState()
+
+        XCTAssertTrue(manager.hasLoadedPersistedState)
+        XCTAssertEqual(manager.selectedPersona, .general)
+    }
+
+    @MainActor
+    func testCustomPersonaEarlyAddPreservedThroughHydration() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persisted = CustomPersona(name: "Persisted", promptModifier: "persisted prompt")
+        defaults.set(try JSONEncoder().encode([persisted]), forKey: "customPersonas")
+
+        let store = CustomPersonaStore(userDefaults: defaults)
+        store.addPersona(CustomPersona(name: "Early", promptModifier: "early prompt"))
+        await store.loadPersistedState()
+
+        XCTAssertTrue(store.hasLoadedPersistedState)
+        XCTAssertTrue(store.customPersonas.contains { $0.name == "Persisted" })
+        XCTAssertTrue(store.customPersonas.contains { $0.name == "Early" })
+    }
+
+    @MainActor
+    func testCustomPersonaClearBeforeHydrationDoesNotRestore() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persisted = CustomPersona(name: "MustNotReturn", promptModifier: "x")
+        defaults.set(try JSONEncoder().encode([persisted]), forKey: "customPersonas")
+
+        let store = CustomPersonaStore(userDefaults: defaults)
+        store.clearAll()
+        await store.loadPersistedState()
+
+        XCTAssertTrue(store.hasLoadedPersistedState)
+        XCTAssertTrue(store.customPersonas.isEmpty)
+    }
+
+    @MainActor
+    func testNamingPresetEarlyAddPreservedThroughHydration() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persisted = NamingPreset(name: "Persisted", instructions: "persisted instructions")
+        defaults.set(try JSONEncoder().encode([persisted]), forKey: "sorty.namingPresets")
+
+        let manager = NamingPresetManager(userDefaults: defaults)
+        manager.addPreset(NamingPreset(name: "Early", instructions: "early instructions"))
+        await manager.loadPersistedState()
+
+        XCTAssertTrue(manager.hasLoadedPersistedState)
+        XCTAssertTrue(manager.customPresets.contains { $0.name == "Persisted" })
+        XCTAssertTrue(manager.customPresets.contains { $0.name == "Early" })
+    }
+
+    @MainActor
+    func testSteeringPromptEarlyAddPreservedThroughHydration() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persisted = SavedSteeringPrompt(name: "Persisted", prompt: "persisted prompt")
+        defaults.set(try JSONEncoder().encode([persisted]), forKey: "sorty.steeringPrompts")
+
+        let manager = SteeringPromptManager(userDefaults: defaults)
+        XCTAssertTrue(manager.addPrompt(SavedSteeringPrompt(name: "Early", prompt: "early prompt")))
+        await manager.loadPersistedState()
+
+        XCTAssertTrue(manager.hasLoadedPersistedState)
+        XCTAssertTrue(manager.prompts.contains { $0.name == "Persisted" })
+        XCTAssertTrue(manager.prompts.contains { $0.name == "Early" })
+    }
 }
