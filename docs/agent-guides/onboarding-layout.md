@@ -28,8 +28,8 @@ directly when its panes already have value-scoped spring modifiers; wrapping
 that same mutation in `withAnimation` creates a second broad transaction and
 can animate unrelated work during the first render. Gate those local springs
 with Reduce Motion. The completion sequence follows this rule too: its
-checkmark, copy, tips, and CTA own their staggered springs, while retained glow
-and particle layers own their motion, so their trigger states are assigned
+checkmark, copy, tips, and CTA own their staggered springs, while the retained bloom
+layer owns its motion, so their trigger states are assigned
 directly rather than wrapped in another animation transaction.
 
 ## Animation performance
@@ -88,20 +88,25 @@ visible hitch.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy
-scan, plus the completion blob, ripple, and particle motion, likewise use
-retained layers; do not move those continuous effects back into broad SwiftUI
-state or frame timelines. The completion reveal rasterizes its large blurred
-artwork once and animates retained scale and opacity in a single entrance;
-Reduce Motion keeps the reveal as a short opacity fade. The optional demo's
+scan and the completion bloom likewise use retained layers; do not move
+continuous effects back into broad SwiftUI state or frame timelines. The final
+slide has one soft radial rose bloom centered in the hero's 240-point layout
+slot, with transparent edges before the copy. It replaces the repeating rings
+and particles. Mount the gradient first, then defer the shared hero reveal by
+50 ms. Its retained scale expands once over 0.7 seconds, then breathes by only
+2.5 percent over a 16-second cycle. Copy follows the hero and tips begin after
+480 ms. Reduce Motion shows all content settled immediately without motion.
+The bloom stays mounted through the hero's shared dismissal fade and pauses
+its layer clock during exit. The optional demo's
 continuous organizing sliver follows the same rule, and its per-file/folder
 collections are derived once per mutation rather
 than repeatedly filtered in row builders. The full-window color climb uses
 retained accent, shade, and additive radial-gradient layers. Step changes
 animate only their colors and geometry; do not restore a full-window SwiftUI
 Canvas or multiple gradient subtrees that redraw throughout every transition.
-When Sorty becomes inactive, completion glow and ripple layers pause their
-existing layer time and resume from the same phase instead of rebuilding their
-infinite animation groups.
+When Sorty becomes inactive, the completion bloom pauses its
+existing layer time and resumes from the same phase instead of restarting its
+entrance or idle animation.
 Completion copy, tips, checkmark, analytics, and CTA entrance springs are also
 disabled under Reduce Motion; their fully revealed state remains unchanged.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
