@@ -127,6 +127,150 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
     }
 }
 
+private actor SharedContentMetadataCache {
+    static let shared = SharedContentMetadataCache()
+
+    struct Options: Codable, Hashable, Sendable {
+        let performsOCR: Bool
+        let performsDeepScan: Bool
+        let ocrLanguages: [String]
+        let customOCRKeywords: [String]
+    }
+
+    struct Key: Codable, Hashable, Sendable {
+        let filePath: String
+        let modificationDate: Date
+        let fileSize: Int64
+        let options: Options
+    }
+
+    private struct Entry: Codable, Sendable {
+        let key: Key
+        let metadata: ContentMetadata
+        var lastAccessedAt: Date
+        let byteCost: Int
+    }
+
+    private var entries: [Key: Entry] = [:]
+    private var inFlight: [Key: Task<ContentMetadata?, Never>] = [:]
+    private var totalByteCost = 0
+    private let maximumByteCost = 32 * 1024 * 1024
+    private var hasLoaded = false
+    private var flushTask: Task<Void, Never>?
+    private var generation = 0
+
+    private var diskURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("com.sorty.app")
+            .appendingPathComponent("content-metadata-cache.json")
+    }
+
+    func value(
+        for key: Key,
+        operation: @escaping @Sendable () async -> ContentMetadata?
+    ) async -> ContentMetadata? {
+        loadIfNeeded()
+        if var entry = entries[key] {
+            entry.lastAccessedAt = Date()
+            entries[key] = entry
+            return entry.metadata
+        }
+        if let task = inFlight[key] {
+            return await task.value
+        }
+
+        let currentGeneration = generation
+        let task = Task { await operation() }
+        inFlight[key] = task
+        let result = await task.value
+        inFlight[key] = nil
+        if let result, generation == currentGeneration {
+            insert(result, for: key)
+        }
+        return result
+    }
+
+    func scheduleFlush() {
+        flushTask?.cancel()
+        let currentGeneration = generation
+        flushTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            await self?.flushIfCurrent(currentGeneration)
+        }
+    }
+
+    func flush() {
+        saveToDisk()
+    }
+
+    func clear() {
+        generation &+= 1
+        flushTask?.cancel()
+        flushTask = nil
+        for task in inFlight.values { task.cancel() }
+        inFlight.removeAll()
+        entries.removeAll()
+        totalByteCost = 0
+        hasLoaded = true
+        if let diskURL { try? FileManager.default.removeItem(at: diskURL) }
+    }
+
+    private func insert(_ metadata: ContentMetadata, for key: Key) {
+        let byteCost = (try? JSONEncoder().encode(metadata).count) ?? 0
+        if let previous = entries[key] { totalByteCost -= previous.byteCost }
+        entries[key] = Entry(
+            key: key,
+            metadata: metadata,
+            lastAccessedAt: Date(),
+            byteCost: byteCost
+        )
+        totalByteCost += byteCost
+        trimIfNeeded()
+    }
+
+    private func trimIfNeeded() {
+        guard totalByteCost > maximumByteCost else { return }
+        for entry in entries.values.sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
+            guard totalByteCost > maximumByteCost else { break }
+            entries.removeValue(forKey: entry.key)
+            totalByteCost -= entry.byteCost
+        }
+    }
+
+    private func loadIfNeeded() {
+        guard !hasLoaded else { return }
+        hasLoaded = true
+        guard let diskURL,
+              let data = try? Data(contentsOf: diskURL),
+              let decoded = try? JSONDecoder().decode([Entry].self, from: data) else { return }
+        for entry in decoded.sorted(by: { $0.lastAccessedAt > $1.lastAccessedAt }) {
+            guard totalByteCost + entry.byteCost <= maximumByteCost else { continue }
+            entries[entry.key] = entry
+            totalByteCost += entry.byteCost
+        }
+    }
+
+    private func flushIfCurrent(_ expectedGeneration: Int) {
+        guard generation == expectedGeneration else { return }
+        saveToDisk()
+        flushTask = nil
+    }
+
+    private func saveToDisk() {
+        guard let diskURL else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: diskURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try JSONEncoder().encode(Array(entries.values)).write(to: diskURL, options: .atomic)
+        } catch {
+            DebugLogger.log("Failed to save content cache: \(error)")
+        }
+    }
+}
+
 /// Actor that analyzes file content
 public actor ContentAnalyzer {
     static let defaultTextPreviewLength = 1600
@@ -143,7 +287,7 @@ public actor ContentAnalyzer {
     public var enableDeepDocumentScan: Bool = true
     public var customOCRKeywords: [String] = []
     public var ocrLanguages: [String] = ["en-US"]
-    
+
     public func setCustomOCRKeywords(_ keywords: [String]) {
         self.customOCRKeywords = keywords
     }
@@ -156,38 +300,11 @@ public actor ContentAnalyzer {
         await visionAnalyzer.setRecognitionLanguages(self.ocrLanguages)
     }
 
-    // MARK: - Content Metadata Cache
-
-    /// Cache entry for content metadata
-    private struct CacheEntry: Codable {
-        let filePath: String
-        let modificationDate: Date
-        let fileSize: Int64
-        let metadata: ContentMetadata
-    }
-
-    private var memoryCache: [String: CacheEntry] = [:]
-    private let maximumCacheEntryCount = 500
-    private var cacheLoaded = false
-    private var cacheFlushTask: Task<Void, Never>?
-    private var cacheGeneration = 0
-    private var diskCacheURL: URL? {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("com.sorty.app")
-            .appendingPathComponent("content-metadata-cache.json")
-    }
-
     public init() {}
-    
+
     /// Clear any cached data to free memory
     public func clearCache() async {
-        cacheGeneration &+= 1
-        cacheFlushTask?.cancel()
-        cacheFlushTask = nil
-        memoryCache.removeAll()
-        if let cacheURL = diskCacheURL {
-            try? FileManager.default.removeItem(at: cacheURL)
-        }
+        await SharedContentMetadataCache.shared.clear()
         await visionAnalyzer.clearCache()
         ImageVisionAnalyzer.clearSharedCache()
     }
@@ -195,98 +312,7 @@ public actor ContentAnalyzer {
     /// Coalesces scan-driven cache writes while preventing an older write from
     /// recreating a cache after `clearCache()`.
     public func scheduleCacheFlush() {
-        cacheFlushTask?.cancel()
-        let generation = cacheGeneration
-        cacheFlushTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled else { return }
-            await self?.flushCacheIfCurrent(generation: generation)
-        }
-    }
-
-    private func flushCacheIfCurrent(generation: Int) {
-        guard generation == cacheGeneration else { return }
-        saveCacheToDisk()
-        cacheFlushTask = nil
-    }
-
-    private func ensureCacheLoaded() {
-        if !cacheLoaded {
-            cacheLoaded = true
-            loadCacheFromDisk()
-        }
-    }
-
-    private func lookupCache(for url: URL) -> ContentMetadata? {
-        ensureCacheLoaded()
-        let key = url.path
-        guard let entry = memoryCache[key] else { return nil }
-
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let modDate = attrs[.modificationDate] as? Date,
-              let size = attrs[.size] as? Int64 else {
-            memoryCache.removeValue(forKey: key)
-            return nil
-        }
-
-        if entry.modificationDate == modDate && entry.fileSize == size {
-            return entry.metadata
-        }
-
-        memoryCache.removeValue(forKey: key)
-        return nil
-    }
-
-    private func cacheResult(_ metadata: ContentMetadata, for url: URL) {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let modDate = attrs[.modificationDate] as? Date,
-              let size = attrs[.size] as? Int64 else { return }
-
-        let entry = CacheEntry(
-            filePath: url.path,
-            modificationDate: modDate,
-            fileSize: size,
-            metadata: metadata
-        )
-        memoryCache[url.path] = entry
-        trimCacheIfNeeded()
-    }
-
-    private func trimCacheIfNeeded() {
-        let overflow = memoryCache.count - maximumCacheEntryCount
-        guard overflow > 0 else { return }
-
-        let oldestKeys = memoryCache
-            .sorted { $0.value.modificationDate < $1.value.modificationDate }
-            .prefix(overflow)
-            .map(\.key)
-        for key in oldestKeys {
-            memoryCache.removeValue(forKey: key)
-        }
-    }
-
-    private func saveCacheToDisk() {
-        guard let cacheURL = diskCacheURL else { return }
-        do {
-            let dir = cacheURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(Array(memoryCache.values))
-            try data.write(to: cacheURL, options: .atomic)
-        } catch {
-            DebugLogger.log("Failed to save content cache: \(error)")
-        }
-    }
-
-    private func loadCacheFromDisk() {
-        guard let cacheURL = diskCacheURL,
-              let data = try? Data(contentsOf: cacheURL),
-              let entries = try? JSONDecoder().decode([CacheEntry].self, from: data) else { return }
-
-        for entry in entries
-            .sorted(by: { $0.modificationDate > $1.modificationDate })
-            .prefix(maximumCacheEntryCount) {
-            memoryCache[entry.filePath] = entry
-        }
+        Task { await SharedContentMetadataCache.shared.scheduleFlush() }
     }
 
     /// Analyze a file and extract relevant metadata
@@ -295,10 +321,26 @@ public actor ContentAnalyzer {
             return nil
         }
 
-        // Check cache first
-        if let cached = lookupCache(for: fileURL) {
-            return cached
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let modificationDate = attrs[.modificationDate] as? Date,
+              let fileSize = attrs[.size] as? Int64 else { return nil }
+        let key = SharedContentMetadataCache.Key(
+            filePath: fileURL.path,
+            modificationDate: modificationDate,
+            fileSize: fileSize,
+            options: SharedContentMetadataCache.Options(
+                performsOCR: enableOCR,
+                performsDeepScan: enableDeepDocumentScan,
+                ocrLanguages: ocrLanguages,
+                customOCRKeywords: customOCRKeywords
+            )
+        )
+        return await SharedContentMetadataCache.shared.value(for: key) { [self] in
+            await analyzeUncached(fileURL: fileURL, enableOCR: enableOCR)
         }
+    }
+
+    private func analyzeUncached(fileURL: URL, enableOCR: Bool) async -> ContentMetadata? {
 
         let ext = fileURL.pathExtension.lowercased()
 
@@ -326,11 +368,6 @@ public actor ContentAnalyzer {
             result = enableDeepDocumentScan ? await extractPPTXContent(from: fileURL) : nil
         default:
             result = enableDeepDocumentScan && isTextLikeFile(fileURL) ? extractTextContent(from: fileURL) : nil
-        }
-
-        // Cache the result
-        if let result = result {
-            cacheResult(result, for: fileURL)
         }
 
         return result
@@ -376,7 +413,7 @@ public actor ContentAnalyzer {
         }
 
         // Save cache after batch analysis
-        saveCacheToDisk()
+        await SharedContentMetadataCache.shared.flush()
 
         return results
     }
