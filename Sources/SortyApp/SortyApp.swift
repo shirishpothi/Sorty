@@ -71,6 +71,40 @@ private final class ApplicationRemovalMonitor {
 }
 
 @MainActor
+private final class BuildAutoCloseMonitor {
+    private let fileDescriptor: Int32
+    private let onRequest: @MainActor @Sendable () -> Void
+    private var source: DispatchSourceFileSystemObject?
+
+    init?(containerURL: URL, onRequest: @escaping @MainActor @Sendable () -> Void) {
+        let descriptor = open(containerURL.path, O_EVTONLY)
+        guard descriptor >= 0 else { return nil }
+
+        fileDescriptor = descriptor
+        self.onRequest = onRequest
+    }
+
+    func start() {
+        guard source == nil else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fileDescriptor,
+            eventMask: [.write, .rename, .delete, .revoke],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                self?.onRequest()
+            }
+        }
+        source.setCancelHandler { [fileDescriptor] in
+            close(fileDescriptor)
+        }
+        self.source = source
+        source.resume()
+    }
+}
+
+@MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
     private static let buildAutoCloseRequestFileName = ".build-auto-close-request"
@@ -78,6 +112,9 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var forceQuit = false
     private var recoveryWindowController: NSWindowController?
     private var applicationRemovalMonitor: ApplicationRemovalMonitor?
+    private var buildAutoCloseMonitor: BuildAutoCloseMonitor?
+    private var cacheEvictionTask: Task<Void, Never>?
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
     private let launchStartedAt = Date()
     private var applicationObservers: [NSObjectProtocol] = []
 
@@ -101,12 +138,8 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         super.init()
-        let buildAutoCloseTimer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.finishBuildRequestedQuitIfSafe()
-            }
-        }
-        RunLoop.main.add(buildAutoCloseTimer, forMode: .common)
+        configureBuildAutoCloseMonitor()
+        configureMemoryPressureEviction()
         applicationObservers.append(NotificationCenter.default.addObserver(
             forName: .forceQuitSorty,
             object: nil,
@@ -120,12 +153,68 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             MainActor.assumeIsolated {
-                FileThumbnailProvider.shared.clearCache()
-                SortyResources.clearImageCache()
+                self?.scheduleCacheEviction()
             }
         })
+        applicationObservers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.cacheEvictionTask?.cancel()
+                self?.cacheEvictionTask = nil
+            }
+        })
+    }
+
+    private func configureBuildAutoCloseMonitor() {
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
+        ) else { return }
+
+        buildAutoCloseMonitor = BuildAutoCloseMonitor(containerURL: containerURL) { [weak self] in
+            self?.finishBuildRequestedQuitIfSafe()
+        }
+        buildAutoCloseMonitor?.start()
+        finishBuildRequestedQuitIfSafe()
+    }
+
+    private func configureMemoryPressureEviction() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                self?.clearImageCaches()
+            }
+        }
+        memoryPressureSource = source
+        source.resume()
+    }
+
+    private func scheduleCacheEviction() {
+        cacheEvictionTask?.cancel()
+        cacheEvictionTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(60))
+            } catch {
+                return
+            }
+            guard !NSApp.isActive else { return }
+            self?.clearImageCaches()
+            self?.cacheEvictionTask = nil
+        }
+    }
+
+    private func clearImageCaches() {
+        cacheEvictionTask?.cancel()
+        cacheEvictionTask = nil
+        FileThumbnailProvider.shared.clearCache()
+        SortyResources.clearImageCache()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

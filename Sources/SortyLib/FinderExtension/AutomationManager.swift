@@ -31,6 +31,7 @@ public final class AutomationManager: ObservableObject {
     private var isInitializing = true
     private var isStartedUp = false
     private var automationChecksEnabled = false
+    private var isApplicationActive = NSApp.isActive
     
     // MARK: - UserDefaults Keys
     
@@ -103,6 +104,12 @@ public final class AutomationManager: ObservableObject {
             self,
             selector: #selector(appDidBecomeActive),
             name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidResignActive),
+            name: NSApplication.didResignActiveNotification,
             object: nil
         )
     }
@@ -188,8 +195,12 @@ public final class AutomationManager: ObservableObject {
             statusMessage = "Selection monitoring unavailable (permission not granted)"
             return
         }
+        guard isApplicationActive else {
+            pauseSelectionMonitoring()
+            return
+        }
         
-        stopSelectionMonitoring()
+        pauseSelectionMonitoring()
         
         // Check immediately
         updateFinderSelection()
@@ -200,7 +211,8 @@ public final class AutomationManager: ObservableObject {
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.updateFinderSelection()
+                guard let self, self.isApplicationActive else { return }
+                self.updateFinderSelection()
             }
         }
         statusMessage = "Monitoring Finder selection"
@@ -208,8 +220,7 @@ public final class AutomationManager: ObservableObject {
     
     /// Stop monitoring Finder selection
     public func stopSelectionMonitoring() {
-        selectionCheckTimer?.invalidate()
-        selectionCheckTimer = nil
+        pauseSelectionMonitoring()
         selectedFinderItems = []
         hasValidFinderSelection = false
         statusMessage = "Finder selection monitoring paused"
@@ -222,17 +233,29 @@ public final class AutomationManager: ObservableObject {
             return
         }
         
-        if let selection = FinderAutomation.getSelectedFiles() {
-            selectedFinderItems = selection
-            hasValidFinderSelection = !selection.isEmpty
-            lastSelectionRefresh = Date()
-            statusMessage = selection.isEmpty ? "Finder selection is empty" : "Finder selection updated (\(selection.count) item\(selection.count == 1 ? "" : "s"))"
-        } else {
-            selectedFinderItems = []
-            hasValidFinderSelection = false
-            lastSelectionRefresh = Date()
-            statusMessage = "Finder selection unavailable"
-        }
+        let selection = FinderAutomation.getSelectedFiles()
+        let updatedItems = selection ?? []
+        let updatedHasValidSelection = !updatedItems.isEmpty
+        let updatedStatus = selection == nil
+            ? "Finder selection unavailable"
+            : updatedItems.isEmpty
+                ? "Finder selection is empty"
+                : "Finder selection updated (\(updatedItems.count) item\(updatedItems.count == 1 ? "" : "s"))"
+
+        guard updatedItems != selectedFinderItems
+                || updatedHasValidSelection != hasValidFinderSelection
+                || updatedStatus != statusMessage
+        else { return }
+
+        selectedFinderItems = updatedItems
+        hasValidFinderSelection = updatedHasValidSelection
+        lastSelectionRefresh = Date()
+        statusMessage = updatedStatus
+    }
+
+    private func pauseSelectionMonitoring() {
+        selectionCheckTimer?.invalidate()
+        selectionCheckTimer = nil
     }
     
     /// Get the path of the frontmost Finder window
@@ -316,13 +339,19 @@ public final class AutomationManager: ObservableObject {
     @objc private func appDidBecomeActive() {
         Task { @MainActor [weak self] in
             guard let self = self, self.isStartedUp else { return }
+            self.isApplicationActive = true
             guard self.automationChecksEnabled else { return }
             self.checkPermissions()
 
             if self.enableSelectionMonitoring && self.automationStatus == .granted {
-                self.updateFinderSelection()
+                self.startSelectionMonitoring()
             }
         }
+    }
+
+    @objc private func appDidResignActive() {
+        isApplicationActive = false
+        pauseSelectionMonitoring()
     }
 }
 

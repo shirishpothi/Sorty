@@ -57,15 +57,14 @@ public class AISessionManager: ObservableObject {
     
     // MARK: - Initialization
     
-    private init() {
-        scheduleCleanup()
-    }
+    private init() {}
     
     // MARK: - Session Management
     
     /// Get or create a URLSession for a provider
     public func session(for provider: AIProvider, config: AIConfig) -> URLSession {
         lastUsed[provider] = Date()
+        scheduleCleanup()
         
         let currentSignature = SessionSignature(
             requestTimeout: config.requestTimeout,
@@ -78,11 +77,9 @@ public class AISessionManager: ObservableObject {
                 return existing
             }
             LogManager.shared.log("Config changed for \(provider.displayName), recreating session", level: .debug, category: "AISessionManager")
-            // Don't call invalidateAndCancel() here as it can cause crashes (NSGenericException)
-            // if other concurrent tasks are still using this session or about to use it.
-            // The session will be naturally deallocated once all tasks referencing it complete.
-            sessions.removeValue(forKey: provider)
+            let retiredSession = sessions.removeValue(forKey: provider)
             sessionSignatures.removeValue(forKey: provider)
+            retire(retiredSession)
         }
         
         let sessionConfig = createSessionConfiguration(for: provider, aiConfig: config)
@@ -250,15 +247,15 @@ public class AISessionManager: ObservableObject {
     
     /// Invalidate session for a provider (e.g., after auth failure)
     public func invalidate(provider: AIProvider) {
-        if let _ = sessions[provider] {
-            // Don't call invalidateAndCancel() as it can cause crashes in concurrent tasks
-            sessions.removeValue(forKey: provider)
+        if let session = sessions.removeValue(forKey: provider) {
             sessionSignatures.removeValue(forKey: provider)
             lastUsed.removeValue(forKey: provider)
+            retire(session)
             LogManager.shared.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
         
         prewarmingProviders.remove(provider)
+        scheduleCleanup()
     }
     
     /// Invalidate all sessions
@@ -266,13 +263,14 @@ public class AISessionManager: ObservableObject {
         for (provider, _) in sessions {
             LogManager.shared.log("Removing session for \(provider.displayName)", category: "AISessionManager")
         }
-        // Just remove from dictionary. Existing tasks will finish naturally on their session objects.
-        // Calling invalidateAndCancel() here can cause crashes (NSGenericException) if any tasks 
-        // are about to start on these sessions (e.g. during rapid config changes).
+        let retiredSessions = Array(sessions.values)
         sessions.removeAll()
         sessionSignatures.removeAll()
         lastUsed.removeAll()
         isPrewarmed = false
+        cleanupTask?.cancel()
+        cleanupTask = nil
+        retiredSessions.forEach(retire)
     }
     
     // MARK: - Configuration
@@ -318,24 +316,44 @@ public class AISessionManager: ObservableObject {
     
     private func scheduleCleanup() {
         cleanupTask?.cancel()
-        cleanupTask = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)  // Check every minute
-                guard !Task.isCancelled else { break }
-                
-                cleanupStaleSessions()
+        cleanupTask = nil
+
+        guard let nextExpiry = lastUsed.values.min()?.addingTimeInterval(sessionTimeout) else {
+            return
+        }
+
+        cleanupTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(until: .now + .seconds(max(0, nextExpiry.timeIntervalSinceNow)))
+            } catch {
+                return
             }
+            guard let self else { return }
+            self.cleanupTask = nil
+            self.cleanupStaleSessions()
+            self.scheduleCleanup()
+        }
+    }
+
+    /// Stops pooling immediately, then gives freshly returned callers one run-loop turn
+    /// to create their task before the session rejects new work.
+    private func retire(_ session: URLSession?) {
+        guard let session else { return }
+        Task { @MainActor in
+            await Task.yield()
+            session.finishTasksAndInvalidate()
         }
     }
     
     private func cleanupStaleSessions() {
         let now = Date()
-        
-        for (provider, lastAccess) in lastUsed {
-            if now.timeIntervalSince(lastAccess) > sessionTimeout {
-                LogManager.shared.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
-                invalidate(provider: provider)
-            }
+
+        let staleProviders = lastUsed.compactMap { provider, lastAccess in
+            now.timeIntervalSince(lastAccess) >= sessionTimeout ? provider : nil
+        }
+        for provider in staleProviders {
+            LogManager.shared.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
+            invalidate(provider: provider)
         }
     }
 }
