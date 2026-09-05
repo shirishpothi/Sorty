@@ -581,6 +581,7 @@ struct RollingCreditsView: View {
     @State private var scrollStartDate: Date = .now
     @State private var pausedAt: Date?
     @State private var accumulatedPauseDuration: TimeInterval = 0
+    @State private var isWindowVisible = true
 
     private let pointsPerSecond: CGFloat = 14
 
@@ -619,17 +620,14 @@ struct RollingCreditsView: View {
                 .accessibilityIdentifier("RollingCreditsTitle")
 
             GeometryReader { _ in
-                SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 60.0)) { context in
-                    let phase = scrollPhase(at: context.date)
-                    let rows = visibleRows(for: phase)
-
-                    ZStack(alignment: .topLeading) {
-                        ForEach(rows) { row in
-                            creditRow(item: row.item, rowKey: row.id)
-                                .offset(y: row.y)
+                Group {
+                    if isScrollingSuspended {
+                        creditRows(at: pausedAt ?? .now)
+                    } else {
+                        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 60.0)) { context in
+                            creditRows(at: context.date)
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
             .frame(height: viewportHeight)
@@ -641,17 +639,39 @@ struct RollingCreditsView: View {
                 resetScrollClock()
             }
             .onChange(of: hoveredRowKey) { oldValue, newValue in
+                updateSuspension(
+                    wasSuspended: oldValue != nil || !isWindowVisible,
+                    isSuspended: newValue != nil || !isWindowVisible
+                )
                 if oldValue == nil, newValue != nil {
-                    pausedAt = .now
                     HapticFeedbackManager.shared.selection()
-                } else if oldValue != nil, newValue == nil, let pausedAt {
-                    accumulatedPauseDuration += Date().timeIntervalSince(pausedAt)
-                    self.pausedAt = nil
                 }
             }
+            .onChange(of: isWindowVisible) { oldValue, newValue in
+                updateSuspension(
+                    wasSuspended: hoveredRowKey != nil || !oldValue,
+                    isSuspended: hoveredRowKey != nil || !newValue
+                )
+            }
+            .background(WindowVisibilityReader(isVisible: $isWindowVisible))
             .accessibilityIdentifier("RollingCreditsViewport")
         }
         .accessibilityIdentifier("RollingCreditsView")
+    }
+
+    private var isScrollingSuspended: Bool {
+        hoveredRowKey != nil || !isWindowVisible
+    }
+
+    private func creditRows(at date: Date) -> some View {
+        let phase = scrollPhase(at: date)
+        return ZStack(alignment: .topLeading) {
+            ForEach(visibleRows(for: phase)) { row in
+                creditRow(item: row.item, rowKey: row.id)
+                    .offset(y: row.y)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -698,19 +718,22 @@ struct RollingCreditsView: View {
 
         let lowerBound = -rowHeight
         let upperBound = viewportHeight
-        var rows: [VisibleRow] = []
+        let firstIndex = max(0, Int(ceil((phase + lowerBound) / rowHeight)))
+        let lastIndex = min(
+            items.count * 2 - 1,
+            Int(floor((phase + upperBound) / rowHeight))
+        )
+        guard firstIndex <= lastIndex else { return [] }
 
-        for (index, item) in items.enumerated() {
-            let baseY = CGFloat(index) * rowHeight - phase
-            let candidates = [baseY, baseY + cycleHeight]
-
-            for (cycle, y) in candidates.enumerated() where y >= lowerBound && y <= upperBound {
-                let rowKey = "\(cycle)-\(index)"
-                rows.append(VisibleRow(id: rowKey, item: item, y: y))
-            }
+        return (firstIndex...lastIndex).map { repeatedIndex in
+            let cycle = repeatedIndex / items.count
+            let itemIndex = repeatedIndex % items.count
+            return VisibleRow(
+                id: "\(cycle)-\(itemIndex)",
+                item: items[itemIndex],
+                y: CGFloat(repeatedIndex) * rowHeight - phase
+            )
         }
-
-        return rows.sorted { $0.y < $1.y }
     }
 
     private func scrollPhase(at date: Date) -> CGFloat {
@@ -728,5 +751,14 @@ struct RollingCreditsView: View {
         scrollStartDate = .now
         pausedAt = nil
         accumulatedPauseDuration = 0
+    }
+
+    private func updateSuspension(wasSuspended: Bool, isSuspended: Bool) {
+        if !wasSuspended, isSuspended {
+            pausedAt = .now
+        } else if wasSuspended, !isSuspended, let pausedAt {
+            accumulatedPauseDuration += Date().timeIntervalSince(pausedAt)
+            self.pausedAt = nil
+        }
     }
 }

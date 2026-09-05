@@ -567,7 +567,7 @@ private struct MetalFxPillSurface: View {
     }
 }
 
-private struct WindowVisibilityReader: NSViewRepresentable {
+struct WindowVisibilityReader: NSViewRepresentable {
     @Binding var isVisible: Bool
 
     func makeCoordinator() -> Coordinator {
