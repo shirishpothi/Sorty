@@ -15,7 +15,6 @@ struct AdvancedSettingsView: View {
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
-    @State private var isShowingFinderRecommendation = false
     @State private var diagnosticReportError: String?
 
     private var analyticsEnabled: Binding<Bool> {
@@ -47,35 +46,7 @@ struct AdvancedSettingsView: View {
             SettingsCard(
                 title: "Finder Workflow",
                 icon: "folder.badge.gearshape",
-                color: .mint,
-                headerAccessory: {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        isShowingFinderRecommendation.toggle()
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isHovering in
-                        if isHovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                        isShowingFinderRecommendation = isHovering
-                    }
-                    .popover(isPresented: $isShowingFinderRecommendation, arrowEdge: .trailing) {
-                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(14)
-                            .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
-                    }
-                    .help("About automatically revealing organized folders")
-                    .accessibilityLabel("Automatically reveal organized folders recommendation")
-                }
+                color: .mint
             ) {
                 SettingsToggle(
                     isOn: $automationManager.autoSelectOrganizedFolders,
