@@ -30,6 +30,11 @@ public struct FSSnapshot: Sendable {
         self.files = fileSet
         self.timestamp = Date()
     }
+
+    init(files: Set<String>, timestamp: Date = Date()) {
+        self.files = files
+        self.timestamp = timestamp
+    }
 }
 
 /// Represents a detected file move
@@ -137,6 +142,7 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Cleanup timers for auto-removing monitoring after correlation window
     private var cleanupTasks: [URL: Task<Void, Never>] = [:]
+    private var initialSnapshotTasks: [URL: Task<Void, Never>] = [:]
     
     /// Stream manager (not MainActor isolated)
     private let streamManager: FSEventStreamManager
@@ -159,6 +165,8 @@ public class LearningsFSMonitor: ObservableObject {
     /// Minimum time between snapshot updates to avoid thrashing
     private let snapshotDebounceInterval: TimeInterval = 2.0
     private var pendingSnapshotUpdates: [URL: Task<Void, Never>] = [:]
+    private var pendingSnapshotScopes: [URL: Set<URL>] = [:]
+    private var directoriesNeedingFullSnapshot: Set<URL> = []
     
     /// Queue for FSEvents callbacks
     private let eventQueue = DispatchQueue(label: "com.sorty.learnings.fsmonitor", qos: .utility)
@@ -177,6 +185,9 @@ public class LearningsFSMonitor: ObservableObject {
         for task in pendingSnapshotUpdates.values {
             task.cancel()
         }
+        for task in initialSnapshotTasks.values {
+            task.cancel()
+        }
         streamManager.stopStream()
     }
     
@@ -184,29 +195,40 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Start monitoring a directory for file moves
     public func startMonitoring(directory: URL) {
-        guard !monitoredDirectories.keys.contains(directory) else {
+        guard monitoringGenerations[directory] == nil else {
             LogManager.shared.log("Already monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
             return
         }
         
-        // Take initial snapshot
-        let snapshot = FSSnapshot(at: directory)
-        monitoredDirectories[directory] = snapshot
-        monitoringGenerations[directory] = UUID()
-        
-        LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
+        let generation = UUID()
+        monitoringGenerations[directory] = generation
         
         // Schedule automatic cleanup after correlation window
         scheduleCleanup(for: directory)
         
         // Restart FSEvents stream with new path
-        watchedPaths = monitoredDirectories.keys.map { $0.path }
+        watchedPaths = monitoringGenerations.keys.map { $0.path }
         streamManager.startStream(paths: watchedPaths)
+
+        initialSnapshotTasks[directory] = Task { [weak self] in
+            let scanTask = Task.detached(priority: .utility) { FSSnapshot(at: directory) }
+            let snapshot = await withTaskCancellationHandler {
+                await scanTask.value
+            } onCancel: {
+                scanTask.cancel()
+            }
+            guard !Task.isCancelled,
+                  let self,
+                  self.monitoringGenerations[directory] == generation else { return }
+            self.monitoredDirectories[directory] = snapshot
+            self.initialSnapshotTasks[directory] = nil
+            LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
+        }
     }
     
     /// Stop monitoring a specific directory
     public func stopMonitoring(directory: URL) {
-        guard monitoredDirectories.keys.contains(directory) else { return }
+        guard monitoringGenerations[directory] != nil else { return }
         
         monitoredDirectories.removeValue(forKey: directory)
         monitoringGenerations.removeValue(forKey: directory)
@@ -214,15 +236,19 @@ public class LearningsFSMonitor: ObservableObject {
         cleanupTasks.removeValue(forKey: directory)
         pendingSnapshotUpdates[directory]?.cancel()
         pendingSnapshotUpdates.removeValue(forKey: directory)
+        initialSnapshotTasks[directory]?.cancel()
+        initialSnapshotTasks.removeValue(forKey: directory)
+        pendingSnapshotScopes.removeValue(forKey: directory)
+        directoriesNeedingFullSnapshot.remove(directory)
         
         LogManager.shared.log("Stopped monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
         
         // Restart FSEvents stream without this path
-        if monitoredDirectories.isEmpty {
+        if monitoringGenerations.isEmpty {
             streamManager.stopStream()
             watchedPaths = []
         } else {
-            watchedPaths = monitoredDirectories.keys.map { $0.path }
+            watchedPaths = monitoringGenerations.keys.map { $0.path }
             streamManager.startStream(paths: watchedPaths)
         }
     }
@@ -237,32 +263,57 @@ public class LearningsFSMonitor: ObservableObject {
         for task in pendingSnapshotUpdates.values {
             task.cancel()
         }
+        for task in initialSnapshotTasks.values {
+            task.cancel()
+        }
         monitoredDirectories.removeAll()
         monitoringGenerations.removeAll()
         cleanupTasks.removeAll()
         pendingSnapshotUpdates.removeAll()
+        initialSnapshotTasks.removeAll()
+        pendingSnapshotScopes.removeAll()
+        directoriesNeedingFullSnapshot.removeAll()
     }
     
     /// Get list of currently monitored directories
     public var monitoredURLs: [URL] {
-        Array(monitoredDirectories.keys)
+        Array(monitoringGenerations.keys)
     }
     
     // MARK: - Event Handling
     
     fileprivate func handleFSEvents(paths: [String], flags: [FSEventStreamEventFlags]) {
         // Debounce: schedule snapshot update for affected directories
-        for path in paths {
-            for (dirURL, _) in monitoredDirectories {
+        for (index, path) in paths.enumerated() {
+            for dirURL in monitoringGenerations.keys {
                 if path.isSubpath(of: dirURL.path) {
-                    scheduleSnapshotUpdate(for: dirURL)
+                    let flag = flags.indices.contains(index) ? flags[index] : 0
+                    let requiresFullSnapshot = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
+                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
+                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagKernelDropped) != 0
+                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0
+                    let isDirectory = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemIsDir) != 0
+                    let eventURL = URL(fileURLWithPath: path)
+                    scheduleSnapshotUpdate(
+                        for: dirURL,
+                        scope: isDirectory ? eventURL : eventURL.deletingLastPathComponent(),
+                        requiresFullSnapshot: requiresFullSnapshot
+                    )
                     break
                 }
             }
         }
     }
     
-    private func scheduleSnapshotUpdate(for directory: URL) {
+    private func scheduleSnapshotUpdate(
+        for directory: URL,
+        scope: URL,
+        requiresFullSnapshot: Bool
+    ) {
+        pendingSnapshotScopes[directory, default: []].insert(scope)
+        if requiresFullSnapshot {
+            directoriesNeedingFullSnapshot.insert(directory)
+        }
         // Cancel any pending update for this directory
         pendingSnapshotUpdates[directory]?.cancel()
         
@@ -271,25 +322,44 @@ public class LearningsFSMonitor: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(snapshotDebounceInterval * 1_000_000_000))
             guard !Task.isCancelled else { return }
             
-            await self.updateSnapshotAndDetectMoves(for: directory)
+            let scopes = self.pendingSnapshotScopes.removeValue(forKey: directory) ?? []
+            let needsFullSnapshot = self.directoriesNeedingFullSnapshot.remove(directory) != nil
+            await self.updateSnapshotAndDetectMoves(
+                for: directory,
+                scopes: needsFullSnapshot ? [directory] : Array(scopes)
+            )
         }
     }
     
-    private func updateSnapshotAndDetectMoves(for directory: URL) async {
+    private func updateSnapshotAndDetectMoves(for directory: URL, scopes: [URL]) async {
         guard let oldSnapshot = monitoredDirectories[directory],
               let generation = monitoringGenerations[directory] else { return }
-        
-        // Take new snapshot on background thread
-        let newSnapshot = await Task.detached(priority: .utility) {
-            FSSnapshot(at: directory)
-        }.value
+
+        let scanTask = Task.detached(priority: .utility) {
+            let effectiveScopes = Self.minimizedScopes(scopes, within: directory)
+            var refreshedFiles: Set<String> = []
+            for scope in effectiveScopes where !Task.isCancelled {
+                refreshedFiles.formUnion(FSSnapshot(at: scope).files)
+            }
+            let retainedFiles = oldSnapshot.files.filter { path in
+                !effectiveScopes.contains { path.isSubpath(of: $0.path) }
+            }
+            return FSSnapshot(files: Set(retainedFiles).union(refreshedFiles))
+        }
+        let newSnapshot = await withTaskCancellationHandler {
+            await scanTask.value
+        } onCancel: {
+            scanTask.cancel()
+        }
 
         guard !Task.isCancelled,
               monitoredDirectories[directory] != nil,
               monitoringGenerations[directory] == generation else { return }
         
         // Detect moves by comparing snapshots
-        let detection = detectFileMoves(from: oldSnapshot, to: newSnapshot, in: directory)
+        let detection = await Task.detached(priority: .utility) {
+            Self.detectFileMoves(from: oldSnapshot, to: newSnapshot)
+        }.value
         
         // Update stored snapshot
         monitoredDirectories[directory] = newSnapshot
@@ -311,39 +381,41 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Detect file moves by comparing snapshots
     /// Uses filename matching as a heuristic (could be enhanced with file hashes)
-    private func detectFileMoves(from oldSnapshot: FSSnapshot, to newSnapshot: FSSnapshot, in directory: URL) -> (moves: [DetectedFileMove], removed: [String]) {
+    private nonisolated static func detectFileMoves(
+        from oldSnapshot: FSSnapshot,
+        to newSnapshot: FSSnapshot
+    ) -> (moves: [DetectedFileMove], removed: [String]) {
         var moves: [DetectedFileMove] = []
         var matchedRemoved: Set<String> = []
-        var matchedAdded: Set<String> = []
         
         let removedFiles = oldSnapshot.files.subtracting(newSnapshot.files)
         let addedFiles = newSnapshot.files.subtracting(oldSnapshot.files)
         
-        // For each removed file, see if a file with the same name appeared elsewhere
+        var addedByFilename: [String: [String]] = [:]
+        for path in addedFiles {
+            addedByFilename[URL(fileURLWithPath: path).lastPathComponent, default: []].append(path)
+        }
+
         for removedPath in removedFiles {
-            let removedURL = URL(fileURLWithPath: removedPath)
-            let fileName = removedURL.lastPathComponent
-            
-            // Look for the same filename in added files
-            for addedPath in addedFiles {
-                if matchedAdded.contains(addedPath) { continue }
-                let addedURL = URL(fileURLWithPath: addedPath)
-                if addedURL.lastPathComponent == fileName {
-                    // Found a probable move
-                    moves.append(DetectedFileMove(
-                        fromPath: removedPath,
-                        toPath: addedPath,
-                        timestamp: Date()
-                    ))
-                    matchedRemoved.insert(removedPath)
-                    matchedAdded.insert(addedPath)
-                    break
-                }
-            }
+            let fileName = URL(fileURLWithPath: removedPath).lastPathComponent
+            guard var matches = addedByFilename[fileName], let addedPath = matches.popLast() else { continue }
+            addedByFilename[fileName] = matches
+            moves.append(DetectedFileMove(fromPath: removedPath, toPath: addedPath, timestamp: Date()))
+            matchedRemoved.insert(removedPath)
         }
         
         let unmatchedRemoved = removedFiles.subtracting(matchedRemoved)
         return (moves, Array(unmatchedRemoved))
+    }
+
+    private nonisolated static func minimizedScopes(_ scopes: [URL], within root: URL) -> [URL] {
+        let eligible = scopes.filter { $0.path.isSubpath(of: root.path) }
+            .sorted { $0.path.count < $1.path.count }
+        var result: [URL] = []
+        for scope in eligible where !result.contains(where: { scope.path.isSubpath(of: $0.path) }) {
+            result.append(scope)
+        }
+        return result.isEmpty ? [root] : result
     }
     
     // MARK: - Cleanup
