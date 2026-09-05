@@ -63,6 +63,7 @@ struct OrganizeView: View {
     @State private var isShowingReturnToStartContent = false
     @State private var keepsDirectorySelectionVisibleAfterReturn = false
     @State private var workflowContentIsVisible = false
+    @State private var directorySelectionIsPresented = true
     @State private var workflowEntranceTask: Task<Void, Never>?
     @State private var showsCompletionContent = false
     @State private var liveOrganizationStartedAt: Date?
@@ -79,7 +80,8 @@ struct OrganizeView: View {
         ZStack {
             DirectorySelectionView(
                 selectedDirectory: $appState.selectedDirectory,
-                startsVisible: keepsDirectorySelectionVisibleAfterReturn
+                startsVisible: keepsDirectorySelectionVisibleAfterReturn,
+                isPresented: directorySelectionIsPresented
             )
             .opacity(workflowContentIsVisible ? 0 : 1)
             .offset(x: reduceMotion || !workflowContentIsVisible ? 0 : -10)
@@ -155,6 +157,7 @@ struct OrganizeView: View {
         .accessibilityLabel("Organization workflow")
         .accessibilityHint("Select a folder and configure options")
         .onAppear {
+            directorySelectionIsPresented = appState.selectedDirectory == nil
             settingsViewModel.config.enableStreaming = true
             organizer.setLiveInsightsEnabled(true)
             configureOrganizer()
@@ -178,6 +181,7 @@ struct OrganizeView: View {
             } else {
                 workflowEntranceTask?.cancel()
                 workflowContentIsVisible = false
+                directorySelectionIsPresented = true
             }
             // Prewarm AI connection when user selects a folder
             if newValue != nil {
@@ -212,6 +216,7 @@ struct OrganizeView: View {
             updateSetupRepairHUD()
         }
         .onDisappear {
+            directorySelectionIsPresented = false
             workflowEntranceTask?.cancel()
             readyPreviewHandoffTask?.cancel()
             readyPreviewHandoffTask = nil
@@ -448,6 +453,7 @@ struct OrganizeView: View {
 
         workflowEntranceTask?.cancel()
         keepsDirectorySelectionVisibleAfterReturn = true
+        directorySelectionIsPresented = true
         errorViewTestRoute = nil
 
         withAnimation(workflowNavigationAnimation, completionCriteria: .logicallyComplete) {
@@ -480,8 +486,11 @@ struct OrganizeView: View {
         workflowEntranceTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled, appState.selectedDirectory != nil else { return }
-            withAnimation(workflowNavigationAnimation) {
+            withAnimation(workflowNavigationAnimation, completionCriteria: .logicallyComplete) {
                 workflowContentIsVisible = true
+            } completion: {
+                guard appState.selectedDirectory != nil else { return }
+                directorySelectionIsPresented = false
             }
         }
     }

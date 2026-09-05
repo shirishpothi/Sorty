@@ -16,6 +16,7 @@ struct DirectorySelectionView: View {
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    let isPresented: Bool
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
@@ -23,9 +24,14 @@ struct DirectorySelectionView: View {
     @State private var iconBounce = false
     @State private var hasAppeared = false
 
-    init(selectedDirectory: Binding<URL?>, startsVisible: Bool = false) {
+    init(
+        selectedDirectory: Binding<URL?>,
+        startsVisible: Bool = false,
+        isPresented: Bool = true
+    ) {
         _selectedDirectory = selectedDirectory
         _hasAppeared = State(initialValue: startsVisible)
+        self.isPresented = isPresented
     }
 
     var body: some View {
@@ -75,7 +81,10 @@ struct DirectorySelectionView: View {
                     .small,
                     palette: .ocean,
                     theme: .dark,
-                    active: hasAppeared && !reduceMotion && controlActiveState != .inactive,
+                    active: hasAppeared
+                        && isPresented
+                        && !reduceMotion
+                        && controlActiveState != .inactive,
                     shape: .capsule,
                     strength: 1
                 )
