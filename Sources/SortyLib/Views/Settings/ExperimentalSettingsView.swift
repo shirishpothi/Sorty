@@ -29,6 +29,10 @@ struct ExperimentalSettingsView: View {
                 }
             }
         }
+        // Section-level target: the card, list, or empty state swap
+        // conditionally, so the focus ID must live on the container
+        // that is always present.
+        .settingsFocusable(.experimentalEmptyState)
         .task {
             analytics.reloadExperimentalFeatures()
             guard !hasAppeared else { return }
@@ -111,7 +115,6 @@ struct ExperimentalSettingsView: View {
         .frame(maxWidth: .infinity)
         .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .settingsFocusable(.experimentalEmptyState)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No experimental features are available right now.")
     }
@@ -159,7 +162,6 @@ struct ExperimentalSettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .settingsFocusable(.experimentalEmptyState)
         .opacity(hasAppeared ? 1 : 0)
         .offset(y: hasAppeared ? 0 : 8)
         .animation(
