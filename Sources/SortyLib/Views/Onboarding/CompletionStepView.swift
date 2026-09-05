@@ -832,12 +832,12 @@ private struct CompletionTipsGrid: View {
     var body: some View {
         HStack(alignment: .top, spacing: 48) {
             VStack(alignment: .leading, spacing: 14) {
-                quickTip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.55)
-                quickTip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.75)
+                quickTip(icon: "folder.badge.plus", text: "Organize from Finder", delay: 0.55)
+                quickTip(icon: "arrow.uturn.backward", text: "Undo from History", delay: 0.75)
             }
             VStack(alignment: .leading, spacing: 14) {
-                quickTip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.65)
-                quickTip(icon: "gearshape", text: "Tune settings", delay: 0.85)
+                quickTip(icon: "keyboard", text: "⌘O opens a folder", delay: 0.65)
+                quickTip(icon: "gearshape", text: "Swap models in Settings", delay: 0.85)
             }
         }
         .frame(maxWidth: .infinity)
