@@ -216,9 +216,8 @@ its retained instance when the app becomes active.
 ### Completion reveal timing
 
 The final step reveals its hero immediately and its tips plus particles
-after 200 ms. A custom Bézier blob behind the checkmark pops in and wobbles
-once, then rests. Its finite keyframe animation stays in a decorative leaf;
-it does not drive the full-window backdrop. Reduce Motion keeps the blob
-still. The retained glow ring and rising particles accompany it. Reduce Motion shows content
+after 200 ms. There is no expanding blob or ambient reveal backdrop: the
+step rests on the shared contrast backdrop with the retained glow ring and
+rising particles carrying the celebration. Reduce Motion shows content
 immediately with no particles. Cancel the entry task when finishing so it
 cannot restart the celebration during dismissal.
