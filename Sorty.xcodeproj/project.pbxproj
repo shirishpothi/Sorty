@@ -184,6 +184,7 @@
 		CC220002000000000000C009 /* SortyUninstallerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C009 /* SortyUninstallerTests.swift */; };
 		CC220002000000000000C00A /* PreviewPlanSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C00A /* PreviewPlanSelectionTests.swift */; };
 		CC220002000000000000C00B /* ReduceMotionBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C00B /* ReduceMotionBehaviorTests.swift */; };
+		CC220002000000000000C00C /* CacheMaintenanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000C00C /* CacheMaintenanceTests.swift */; };
 		99999999AAAA000000000002 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 99999999AAAA000000000001 /* AppIcon.icns */; };
 		99999999AAAA000000000004 /* AppIcon-Debug.icns in Resources */ = {isa = PBXBuildFile; fileRef = 99999999AAAA000000000003 /* AppIcon-Debug.icns */; };
 		CC220002000000000000A001 /* MainWindowRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A001 /* MainWindowRootView.swift */; };
@@ -417,6 +418,7 @@
 		CC110001000000000000C009 /* SortyUninstallerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyUninstallerTests.swift; sourceTree = "<group>"; };
 		CC110001000000000000C00A /* PreviewPlanSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPlanSelectionTests.swift; sourceTree = "<group>"; };
 		CC110001000000000000C00B /* ReduceMotionBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReduceMotionBehaviorTests.swift; sourceTree = "<group>"; };
+		CC110001000000000000C00C /* CacheMaintenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheMaintenanceTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationWorkflowTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000004 /* FeatureSpecificUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSpecificUITests.swift; sourceTree = "<group>"; };
@@ -986,6 +988,7 @@
 				94E640E9F5531D468E67A0EC /* AIInsightExtractorTests.swift */,
 				B41C3F34679E0B27BE6BD9DD /* AppStateTests.swift */,
 				30D2110751104271FD9C41A7 /* BuildInfoTests.swift */,
+				CC110001000000000000C00C /* CacheMaintenanceTests.swift */,
 				CC110001000000000000C001 /* ContinuousLearningObserverTests.swift */,
 				65C0584193892380A4389744 /* ContentAnalyzerTests.swift */,
 				C7AA06FAA752B44C39AB43B1 /* CustomPersonaTests.swift */,
@@ -1300,6 +1303,7 @@
 				CC220002000000000000C009 /* SortyUninstallerTests.swift in Sources */,
 				CC220002000000000000C00A /* PreviewPlanSelectionTests.swift in Sources */,
 				CC220002000000000000C00B /* ReduceMotionBehaviorTests.swift in Sources */,
+				CC220002000000000000C00C /* CacheMaintenanceTests.swift in Sources */,
 				CCE084CF694F2524EA26AEDD /* UtilityTests.swift in Sources */,
 				16B81F282B36EAF958598254 /* WindowSessionTests.swift in Sources */,
 			);

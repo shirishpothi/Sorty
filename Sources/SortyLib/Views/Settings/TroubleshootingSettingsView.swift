@@ -15,6 +15,8 @@ struct TroubleshootingSettingsView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     
     @State private var cacheSize: String = "Calculating..."
+    @State private var isClearingCache = false
+    @State private var cacheSizeTask: Task<Void, Never>?
     @State private var showingResetConfirmation = false
     @State private var showingDeleteDataConfirmation = false
     @State private var healthChecks: [SupportHealthCheck] = []
@@ -30,12 +32,14 @@ struct TroubleshootingSettingsView: View {
                         detail: cacheSize,
                         icon: "internaldrive",
                         color: .orange,
-                        buttonTitle: "Clear",
+                        buttonTitle: isClearingCache ? "Clearing…" : "Clear",
                         buttonIcon: "trash",
-                        focusTarget: .troubleshootingCache
+                        focusTarget: .troubleshootingCache,
+                        isBusy: isClearingCache
                     ) {
                         clearCache()
                     }
+                    .accessibilityIdentifier("ClearCacheButton")
 
                     MaintenanceActionTile(
                         title: "Learnings Data",
@@ -68,6 +72,9 @@ struct TroubleshootingSettingsView: View {
             .animatedAppearance(delay: 0.05)
             .onAppear {
                 calculateCacheSize()
+            }
+            .onDisappear {
+                cacheSizeTask?.cancel()
             }
             .alert("Delete All Learning Data?", isPresented: $showingDeleteDataConfirmation) {
                 Button("Cancel", role: .cancel) {}
@@ -295,34 +302,216 @@ struct TroubleshootingSettingsView: View {
     }
     
     private func calculateCacheSize() {
-        Task {
-            let size = await getCacheSizeAsync()
+        // Cancel any in-flight scan so a stale result can never overwrite a newer one.
+        cacheSizeTask?.cancel()
+        let directories = cacheDirectories
+        cacheSizeTask = Task.detached(priority: .utility) {
+            let size = CacheMaintenance.totalSize(of: directories)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
-                cacheSize = formatBytes(size)
+                guard !Task.isCancelled else { return }
+                cacheSize = CacheMaintenance.formatBytes(size)
             }
         }
     }
-    
-    private func getCacheSizeAsync() async -> Int64 {
-        let fileManager = FileManager.default
 
-        return cacheDirectories.reduce(into: 0) { totalSize, cacheDirectory in
-            if fileManager.fileExists(atPath: cacheDirectory.path) {
-                totalSize += directorySize(at: cacheDirectory)
+    private func clearCache() {
+        guard !isClearingCache else { return }
+        isClearingCache = true
+        cacheSizeTask?.cancel()
+        cacheSize = "Clearing…"
+        HapticFeedbackManager.shared.tap()
+
+        Task {
+            // File I/O runs off the main actor so a large cache never freezes Settings.
+            let deletionErrors = await Task.detached(priority: .userInitiated) {
+                CacheMaintenance.clear()
+            }.value
+
+            URLCache.shared.removeAllCachedResponses()
+            FileThumbnailProvider.shared.clearCache()
+            ImageVisionAnalyzer.clearSharedCache()
+
+            isClearingCache = false
+            calculateCacheSize()
+
+            if let error = deletionErrors.first {
+                HapticFeedbackManager.shared.error()
+                NotificationManager.shared.showError(
+                    message: "Some cached data could not be cleared: \(error.localizedDescription)"
+                )
+            } else {
+                HapticFeedbackManager.shared.success()
             }
         }
     }
-    
-    private func directorySize(at url: URL) -> Int64 {
-        let fileManager = FileManager.default
+
+    private var cacheDirectories: [URL] {
+        CacheMaintenance.cacheDirectories()
+    }
+}
+
+// How cache size is measured and cleared. Kept in one place so the tile's
+// displayed size and the Clear action always cover the same locations.
+enum CacheMaintenance {
+    /// Filename prefixes for Sorty-owned items in the shared temporary directory.
+    static let ownedTemporaryPrefixes = ["sorty-", "Sorty_", "SortyNotificationIcon-"]
+
+    static func cacheDirectories(
+        fileManager: FileManager = .default,
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sorty.app",
+        cachesDirectory: URL? = nil,
+        appSupportDirectory: URL? = nil
+    ) -> [URL] {
+        var directories: [URL] = []
+
+        let caches = cachesDirectory ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+        if let cachesURL = caches {
+            directories.append(cachesURL.appendingPathComponent(bundleIdentifier, isDirectory: true))
+            directories.append(cachesURL.appendingPathComponent("Sorty", isDirectory: true))
+        }
+
+        let appSupport = appSupportDirectory ?? fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first
+        if let appSupportURL = appSupport {
+            let sortySupport = appSupportURL.appendingPathComponent("Sorty", isDirectory: true)
+            directories.append(sortySupport.appendingPathComponent("Cache", isDirectory: true))
+            directories.append(sortySupport.appendingPathComponent("ModelCache", isDirectory: true))
+        }
+
+        return directories
+    }
+
+    static func ownedTemporaryItems(
+        in directory: URL,
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        return items.filter { item in
+            ownedTemporaryPrefixes.contains { item.lastPathComponent.hasPrefix($0) }
+        }
+    }
+
+    static func totalSize(
+        of directories: [URL],
+        fileManager: FileManager = .default,
+        temporaryDirectory: URL? = nil
+    ) -> Int64 {
+        var totalSize: Int64 = 0
+        for directory in directories where fileManager.fileExists(atPath: directory.path) {
+            totalSize += directorySize(at: directory, fileManager: fileManager)
+        }
+        let temporary = temporaryDirectory ?? fileManager.temporaryDirectory
+        for item in ownedTemporaryItems(in: temporary, fileManager: fileManager) {
+            totalSize += size(of: item, fileManager: fileManager)
+        }
+        return totalSize
+    }
+
+    /// Removes cached data and recreates the roots so later writers never hit a missing directory.
+    /// Deletes directory contents item-by-item so one locked file can't block everything else.
+    @discardableResult
+    static func clear(
+        fileManager: FileManager = .default,
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sorty.app",
+        cachesDirectory: URL? = nil,
+        appSupportDirectory: URL? = nil,
+        temporaryDirectory: URL? = nil
+    ) -> [Error] {
+        var deletionErrors: [Error] = []
+
+        let directories = cacheDirectories(
+            fileManager: fileManager,
+            bundleIdentifier: bundleIdentifier,
+            cachesDirectory: cachesDirectory,
+            appSupportDirectory: appSupportDirectory
+        )
+        for directory in directories {
+            deletionErrors.append(contentsOf: removeContents(
+                of: directory,
+                fileManager: fileManager,
+                recreateRoot: true
+            ))
+        }
+
+        let temporary = temporaryDirectory ?? fileManager.temporaryDirectory
+        for item in ownedTemporaryItems(in: temporary, fileManager: fileManager) {
+            do {
+                try fileManager.removeItem(at: item)
+            } catch {
+                deletionErrors.append(error)
+            }
+        }
+
+        return deletionErrors
+    }
+
+    static func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    private static func removeContents(
+        of directory: URL,
+        fileManager: FileManager,
+        recreateRoot: Bool
+    ) -> [Error] {
+        guard fileManager.fileExists(atPath: directory.path) else { return [] }
+
+        var deletionErrors: [Error] = []
+        if let items = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ) {
+            for item in items {
+                do {
+                    try fileManager.removeItem(at: item)
+                } catch {
+                    deletionErrors.append(error)
+                }
+            }
+        } else {
+            do {
+                try fileManager.removeItem(at: directory)
+            } catch {
+                deletionErrors.append(error)
+            }
+        }
+
+        if recreateRoot {
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        return deletionErrors
+    }
+
+    private static func size(of url: URL, fileManager: FileManager) -> Int64 {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return 0 }
+        if isDirectory.boolValue {
+            return directorySize(at: url, fileManager: fileManager)
+        }
+        return Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+    }
+
+    private static func directorySize(at url: URL, fileManager: FileManager = .default) -> Int64 {
         var size: Int64 = 0
-        
+
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else { return 0 }
-        
+
         for case let fileURL as URL in enumerator {
             do {
                 let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
@@ -333,62 +522,8 @@ struct TroubleshootingSettingsView: View {
                 // Skip files we can't access
             }
         }
-        
+
         return size
-    }
-    
-    private func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
-    
-    private func clearCache() {
-        let fileManager = FileManager.default
-        var deletionErrors: [Error] = []
-
-        for cacheDirectory in cacheDirectories where fileManager.fileExists(atPath: cacheDirectory.path) {
-            do {
-                try fileManager.removeItem(at: cacheDirectory)
-            } catch {
-                deletionErrors.append(error)
-            }
-        }
-
-        FileThumbnailProvider.shared.clearCache()
-        FileThumbnailProvider.shared.clearCache()
-        calculateCacheSize()
-
-        if let error = deletionErrors.first {
-            HapticFeedbackManager.shared.error()
-            NotificationManager.shared.showError(
-                message: "Some cached data could not be cleared: \(error.localizedDescription)"
-            )
-        } else {
-            HapticFeedbackManager.shared.success()
-        }
-    }
-
-    private var cacheDirectories: [URL] {
-        let fileManager = FileManager.default
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
-        var directories: [URL] = []
-
-        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            directories.append(cachesURL.appendingPathComponent(bundleId, isDirectory: true))
-            directories.append(cachesURL.appendingPathComponent("Sorty", isDirectory: true))
-        }
-
-        if let appSupportURL = fileManager.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first {
-            let sortySupport = appSupportURL.appendingPathComponent("Sorty", isDirectory: true)
-            directories.append(sortySupport.appendingPathComponent("Cache", isDirectory: true))
-            directories.append(sortySupport.appendingPathComponent("ModelCache", isDirectory: true))
-        }
-
-        return directories
     }
 }
 
@@ -482,6 +617,7 @@ private struct MaintenanceActionTile: View {
     let buttonTitle: String
     let buttonIcon: String
     let focusTarget: SettingsFocusTarget
+    var isBusy = false
     let action: () -> Void
 
     @State private var isHovered = false
@@ -539,6 +675,8 @@ private struct MaintenanceActionTile: View {
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
+        .disabled(isBusy)
+        .opacity(isBusy ? 0.6 : 1)
         .settingsFocusable(
             focusTarget,
             shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
