@@ -90,10 +90,12 @@ resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy
 scan and the completion bloom likewise use retained layers; do not move
 continuous effects back into broad SwiftUI state or frame timelines. The final
-slide has one soft radial rose bloom centered in the hero's 240-point layout
-slot, with transparent edges before the copy. It replaces the repeating rings
+slide has one rose bloom centered in the hero's 380-by-240-point layout
+slot, with transparent edges before the copy. Three overlapping radial lobes
+form one broad organic glow with a brighter core and balanced diagonal
+shoulders. They move together as one retained layer. It replaces the repeating rings
 and particles. Mount the gradient first, then defer the shared hero reveal by
-50 ms. Its retained scale expands once over 0.7 seconds, then breathes by only
+50 ms. Its retained scale expands once over 0.9 seconds, then breathes by only
 2.5 percent over a 16-second cycle. Copy follows the hero and tips begin after
 480 ms. Reduce Motion shows all content settled immediately without motion.
 The bloom stays mounted through the hero's shared dismissal fade and pauses

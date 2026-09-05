@@ -60,7 +60,7 @@ private struct CompletionBloom: View {
             reduceMotion: reduceMotion,
             isActive: controlActiveState != .inactive && !isExiting
         )
-        .frame(width: 240, height: 240)
+        .frame(width: 380, height: 240)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -87,7 +87,8 @@ private struct RetainedCompletionHeroEffects: NSViewRepresentable {
 
 @MainActor
 private final class RetainedCompletionHeroEffectsView: NSView {
-    private let bloom = CAGradientLayer()
+    private let bloom = CALayer()
+    private let glowLobes = (0..<3).map { _ in CAGradientLayer() }
     private var isVisible = false
     private var isAnimating = false
     private var isPaused = false
@@ -99,16 +100,22 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         wantsLayer = true
         setAccessibilityElement(false)
 
-        bloom.type = .radial
-        bloom.startPoint = CGPoint(x: 0.5, y: 0.5)
-        bloom.endPoint = CGPoint(x: 1, y: 0.92)
-        bloom.colors = [
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0.42).cgColor,
-            NSColor(CompletionPalette.accent).withAlphaComponent(0.23).cgColor,
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0.07).cgColor,
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0).cgColor
-        ]
-        bloom.locations = [0, 0.28, 0.60, 1]
+        // Overlapping soft lobes form one luminous, uneven silhouette. Only
+        // their shared parent moves; no blur or gradient is rebuilt per frame.
+        for (index, lobe) in glowLobes.enumerated() {
+            lobe.type = .radial
+            lobe.startPoint = CGPoint(x: 0.5, y: 0.5)
+            lobe.endPoint = CGPoint(x: 1, y: 1)
+            let strength = index == 0 ? 0.76 : 0.38
+            lobe.colors = [
+                NSColor(CompletionPalette.softRose).withAlphaComponent(strength).cgColor,
+                NSColor(CompletionPalette.accent).withAlphaComponent(strength * 0.68).cgColor,
+                NSColor(CompletionPalette.softRose).withAlphaComponent(strength * 0.20).cgColor,
+                NSColor(CompletionPalette.softRose).withAlphaComponent(0).cgColor
+            ]
+            lobe.locations = [0, 0.30, 0.62, 1]
+            bloom.addSublayer(lobe)
+        }
         bloom.opacity = 0
         layer?.addSublayer(bloom)
     }
@@ -124,9 +131,24 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        // Share the hero's center; the transparent falloff stays inside its slot.
-        bloom.bounds = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height * 0.94)
+        // The composite remains centered on the hero at every window size.
+        // Balanced diagonal shoulders add an organic contour without moving its center.
+        bloom.bounds = CGRect(origin: .zero, size: bounds.size)
         bloom.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        let centers: [CGPoint] = [
+            CGPoint(x: 0.5, y: 0.5),
+            CGPoint(x: 0.32, y: 0.57),
+            CGPoint(x: 0.68, y: 0.43)
+        ]
+        for (index, lobe) in glowLobes.enumerated() {
+            let width = bounds.width * (index == 0 ? 0.86 : 0.64)
+            let height = bounds.height * (index == 0 ? 0.94 : 0.72)
+            lobe.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+            lobe.position = CGPoint(
+                x: bounds.width * centers[index].x,
+                y: bounds.height * centers[index].y
+            )
+        }
         CATransaction.commit()
     }
 
@@ -167,9 +189,9 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 
         if reveal {
             let arrival = CABasicAnimation(keyPath: "transform.scale")
-            arrival.fromValue = 0.62
+            arrival.fromValue = 0.42
             arrival.toValue = 1
-            arrival.duration = 0.7
+            arrival.duration = 0.9
             arrival.timingFunction = CAMediaTimingFunction(name: .easeOut)
             bloom.add(arrival, forKey: "completionBloomArrival")
         }
@@ -181,7 +203,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         breath.duration = 8
         breath.autoreverses = true
         breath.repeatCount = .infinity
-        breath.beginTime = bloom.convertTime(CACurrentMediaTime(), from: nil) + 0.7
+        breath.beginTime = bloom.convertTime(CACurrentMediaTime(), from: nil) + 0.9
         breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         bloom.add(breath, forKey: "completionBloomBreath")
     }
