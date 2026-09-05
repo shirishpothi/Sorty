@@ -223,7 +223,10 @@ ambient at +540 ms, and tips plus particles land at +720 ms. The blob is a
 520x440 layer mounted as the hero's background, so it stays centered on the
 tick without affecting layout, and it dismisses with the hero. It is two
 small shape layers under Gaussian blur containers, so the compositor
-animates scale, opacity, and blur radius without re-rendering content. Once
+animates scale, opacity, and blur radius without re-rendering content. The
+entrance lands with a slight overshoot rather than a flat stop; the ambient
+settle softens outward (blur blooms, slight outward drift, presence held)
+so it never reads as the reveal reversing. Once
 ambient it breathes quietly (blob 3.8 s, core 2.9 s, scale only). Reduce
 Motion reveals everything synchronously with no particles or breathing.
 Pause the layers while inactive and fade them on dismissal. Cancel the entry

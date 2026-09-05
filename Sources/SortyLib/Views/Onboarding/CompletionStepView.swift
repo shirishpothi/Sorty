@@ -143,12 +143,12 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             let visible = !exitTriggered && phase != .hidden
-            blobContainer.opacity = visible ? 0.62 : 0
-            coreContainer.opacity = visible ? 0.58 : 0
+            blobContainer.opacity = visible ? 0.75 : 0
+            coreContainer.opacity = visible ? 0.7 : 0
             blobContainer.transform = CATransform3DIdentity
             coreContainer.transform = CATransform3DIdentity
-            blobBlur.radius = 52
-            coreBlur.radius = 30
+            blobBlur.radius = 56
+            coreBlur.radius = 32
             CATransaction.commit()
         } else if exitTriggered || phase == .hidden {
             stopBreathing()
@@ -178,61 +178,106 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         let now = blobContainer.convertTime(CACurrentMediaTime(), from: nil)
         setModel(opacity: 1, scale: 1, blobBlur: 40, coreBlur: 22)
 
-        let blobScale = CABasicAnimation(keyPath: "transform.scale")
-        blobScale.fromValue = 0.35
-        blobScale.toValue = 1
+        // Slight overshoot so the blob lands with a soft settle instead of a
+        // flat ease-out stop.
+        let blobScale = CAKeyframeAnimation(keyPath: "transform.scale")
+        blobScale.values = [0.3, 1.04, 1.0].map { NSNumber(value: $0) }
+        blobScale.keyTimes = [0, 0.7, 1].map { NSNumber(value: $0) }
+        blobScale.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
         blobScale.beginTime = now
-        blobScale.duration = 0.9
-        blobScale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        blobScale.duration = 1.0
         blobScale.fillMode = .backwards
         blobContainer.add(blobScale, forKey: "celebrationRevealScale")
 
-        let blobOpacity = CABasicAnimation(keyPath: "opacity")
-        blobOpacity.fromValue = 0
-        blobOpacity.toValue = 1
+        let blobOpacity = CAKeyframeAnimation(keyPath: "opacity")
+        blobOpacity.values = [0, 1, 1].map { NSNumber(value: $0) }
+        blobOpacity.keyTimes = [0, 0.75, 1].map { NSNumber(value: $0) }
+        blobOpacity.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
         blobOpacity.beginTime = now
-        blobOpacity.duration = 0.7
-        blobOpacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        blobOpacity.duration = 0.8
         blobOpacity.fillMode = .backwards
         blobContainer.add(blobOpacity, forKey: "celebrationRevealOpacity")
 
-        let coreScale = CABasicAnimation(keyPath: "transform.scale")
-        coreScale.fromValue = 0.4
-        coreScale.toValue = 1
+        let coreScale = CAKeyframeAnimation(keyPath: "transform.scale")
+        coreScale.values = [0.35, 1.03, 1.0].map { NSNumber(value: $0) }
+        coreScale.keyTimes = [0, 0.7, 1].map { NSNumber(value: $0) }
+        coreScale.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
         coreScale.beginTime = now + 0.1
-        coreScale.duration = 0.85
-        coreScale.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        coreScale.duration = 0.95
         coreScale.fillMode = .backwards
         coreContainer.add(coreScale, forKey: "celebrationRevealScale")
 
-        let coreOpacity = CABasicAnimation(keyPath: "opacity")
-        coreOpacity.fromValue = 0
-        coreOpacity.toValue = 1
+        let coreOpacity = CAKeyframeAnimation(keyPath: "opacity")
+        coreOpacity.values = [0, 1, 1].map { NSNumber(value: $0) }
+        coreOpacity.keyTimes = [0, 0.75, 1].map { NSNumber(value: $0) }
+        coreOpacity.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
         coreOpacity.beginTime = now + 0.1
-        coreOpacity.duration = 0.7
-        coreOpacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        coreOpacity.duration = 0.8
         coreOpacity.fillMode = .backwards
         coreContainer.add(coreOpacity, forKey: "celebrationRevealOpacity")
     }
 
     private func animateSettleToAmbient() {
-        setModel(opacity: 0.62, scale: 1, blobBlur: 52, coreBlur: 30, coreOpacity: 0.58)
+        // Soften rather than dim: hold presence while the blur blooms outward,
+        // with a slight outward drift so the settle reads as motion, not as
+        // the reveal reversing.
+        setModel(opacity: 0.75, scale: 1.02, blobBlur: 56, coreBlur: 32, coreOpacity: 0.7)
 
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = blobContainer.presentation()?.opacity ?? 1
-        fade.toValue = 0.62
-        fade.duration = 1.1
+        fade.toValue = 0.75
+        fade.duration = 1.0
         fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         blobContainer.add(fade, forKey: "celebrationSettleOpacity")
 
         let coreFade = CABasicAnimation(keyPath: "opacity")
         coreFade.fromValue = coreContainer.presentation()?.opacity ?? 1
-        coreFade.toValue = 0.58
-        coreFade.duration = 1.1
+        coreFade.toValue = 0.7
+        coreFade.duration = 1.0
         coreFade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         coreContainer.add(coreFade, forKey: "celebrationSettleOpacity")
 
-        startBreathing()
+        let drift = CABasicAnimation(keyPath: "transform.scale")
+        drift.fromValue = (blobContainer.presentation()?.value(forKeyPath: "transform.scale") as? Double) ?? 1
+        drift.toValue = 1.02
+        drift.duration = 1.0
+        drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(drift, forKey: "celebrationSettleScale")
+
+        let coreDrift = CABasicAnimation(keyPath: "transform.scale")
+        coreDrift.fromValue = (coreContainer.presentation()?.value(forKeyPath: "transform.scale") as? Double) ?? 1
+        coreDrift.toValue = 1.02
+        coreDrift.duration = 1.0
+        coreDrift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreDrift, forKey: "celebrationSettleScale")
+
+        let blur = CABasicAnimation(keyPath: "filters.celebrationBlobBlur.inputRadius")
+        blur.fromValue = 40
+        blur.toValue = 56
+        blur.duration = 1.0
+        blur.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(blur, forKey: "celebrationSettleBlur")
+
+        let coreBlurAnimation = CABasicAnimation(keyPath: "filters.celebrationCoreBlur.inputRadius")
+        coreBlurAnimation.fromValue = 22
+        coreBlurAnimation.toValue = 32
+        coreBlurAnimation.duration = 1.0
+        coreBlurAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreBlurAnimation, forKey: "celebrationSettleBlur")
+
+        startBreathing(delay: 0.95)
     }
 
     private func fadeOut() {
@@ -269,12 +314,14 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         CATransaction.commit()
     }
 
-    private func startBreathing() {
+    private func startBreathing(delay: CFTimeInterval = 0) {
         guard !isBreathing else { return }
         isBreathing = true
+        let base = blobContainer.convertTime(CACurrentMediaTime(), from: nil) + delay
         let blobBreath = CABasicAnimation(keyPath: "transform.scale")
-        blobBreath.fromValue = 1
-        blobBreath.toValue = 1.06
+        blobBreath.fromValue = 1.02
+        blobBreath.toValue = 1.07
+        blobBreath.beginTime = base
         blobBreath.duration = 3.8
         blobBreath.autoreverses = true
         blobBreath.repeatCount = .infinity
@@ -282,10 +329,10 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         blobContainer.add(blobBreath, forKey: "celebrationAmbientBreath")
 
         let coreBreath = CABasicAnimation(keyPath: "transform.scale")
-        coreBreath.fromValue = 1
-        coreBreath.toValue = 1.08
+        coreBreath.fromValue = 1.02
+        coreBreath.toValue = 1.09
+        coreBreath.beginTime = base + 0.6
         coreBreath.duration = 2.9
-        coreBreath.beginTime = CACurrentMediaTime() + 0.6
         coreBreath.autoreverses = true
         coreBreath.repeatCount = .infinity
         coreBreath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
