@@ -28,8 +28,8 @@ directly when its panes already have value-scoped spring modifiers; wrapping
 that same mutation in `withAnimation` creates a second broad transaction and
 can animate unrelated work during the first render. Gate those local springs
 with Reduce Motion. The completion sequence follows this rule too: its
-checkmark, copy, tips, and CTA own their staggered springs, while the retained bloom
-layer owns its motion, so their trigger states are assigned
+checkmark, copy, tips, and CTA own their staggered springs, while retained glow
+and particle layers own their motion, so their trigger states are assigned
 directly rather than wrapped in another animation transaction.
 
 ## Animation performance
@@ -88,25 +88,20 @@ visible hitch.
 Pause the orbit while Sorty is inactive, preserving its phase for a clean
 resume; moving the pointer to another display without deactivating Sorty must
 not affect it. Its Gaussian glow and energy
-scan and the completion bloom likewise use retained layers; do not move
-continuous effects back into broad SwiftUI state or frame timelines. The final
-slide has one soft radial rose bloom centered in the hero's 240-point layout
-slot, with transparent edges before the copy. It replaces the repeating rings
-and particles. Mount the gradient first, then defer the shared hero reveal by
-50 ms. Its retained scale expands once over 0.7 seconds, then breathes by only
-2.5 percent over a 16-second cycle. Copy follows the hero and tips begin after
-480 ms. Reduce Motion shows all content settled immediately without motion.
-The bloom stays mounted through the hero's shared dismissal fade and pauses
-its layer clock during exit. The optional demo's
+scan, plus the completion blob, ripple, and particle motion, likewise use
+retained layers; do not move those continuous effects back into broad SwiftUI
+state or frame timelines. The completion reveal rasterizes its large blurred
+artwork once and animates retained scale and opacity in a single entrance;
+Reduce Motion keeps the reveal as a short opacity fade. The optional demo's
 continuous organizing sliver follows the same rule, and its per-file/folder
 collections are derived once per mutation rather
 than repeatedly filtered in row builders. The full-window color climb uses
 retained accent, shade, and additive radial-gradient layers. Step changes
 animate only their colors and geometry; do not restore a full-window SwiftUI
 Canvas or multiple gradient subtrees that redraw throughout every transition.
-When Sorty becomes inactive, the completion bloom pauses its
-existing layer time and resumes from the same phase instead of restarting its
-entrance or idle animation.
+When Sorty becomes inactive, completion glow and ripple layers pause their
+existing layer time and resume from the same phase instead of rebuilding their
+infinite animation groups.
 Completion copy, tips, checkmark, analytics, and CTA entrance springs are also
 disabled under Reduce Motion; their fully revealed state remains unchanged.
 The intro's one-shot energy sweep uses Core Animation completion and pauses its
@@ -220,9 +215,19 @@ its retained instance when the app becomes active.
 
 ### Completion reveal timing
 
-The final step reveals its hero immediately and its tips plus particles
-after 200 ms. There is no expanding blob or ambient reveal backdrop: the
-step rests on the shared contrast backdrop with the retained glow ring and
-rising particles carrying the celebration. Reduce Motion shows content
-immediately with no particles. Cancel the entry task when finishing so it
-cannot restart the celebration during dismissal.
+The final step runs a choreographed phased reveal. The appear frame paints
+only the static backdrop; the bloom (audio plus blob plus hero) starts on
+the next frame so blur rasterization and audio startup can't hitch initial
+layout. From there the glow ring joins at +220 ms, the blob settles to
+ambient at +540 ms, and tips plus particles land at +720 ms. The blob is a
+520x440 layer mounted as the hero's background, so it stays centered on the
+tick without affecting layout, and it dismisses with the hero. It is two
+small shape layers under Gaussian blur containers, so the compositor
+animates scale, opacity, and blur radius without re-rendering content. The
+entrance lands with a slight overshoot rather than a flat stop; the ambient
+settle softens outward (blur blooms, slight outward drift, presence held)
+so it never reads as the reveal reversing. Once
+ambient it breathes quietly (blob 3.8 s, core 2.9 s, scale only). Reduce
+Motion reveals everything synchronously with no particles or breathing.
+Pause the layers while inactive and fade them on dismissal. Cancel the entry
+task when finishing so it cannot restart the celebration during dismissal.

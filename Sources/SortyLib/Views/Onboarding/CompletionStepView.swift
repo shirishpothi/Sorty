@@ -7,6 +7,8 @@
 
 import AppKit
 import AVFoundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
 
@@ -18,23 +20,557 @@ private enum CompletionPalette {
     static let shadowRose = Color(red: 0.22, green: 0.10, blue: 0.14)
 }
 
+// MARK: - Completion Celebration Blob
+
+/// Phased ambient backdrop for the completion celebration. The blob leads the
+/// entrance (reveal), then settles into a quiet breathing ambient state.
+private enum CompletionCelebrationPhase: Int {
+    case hidden
+    case reveal
+    case ambient
+}
+
+private struct RetainedCompletionCelebrationBlob: NSViewRepresentable {
+    @SortyHotReload private var hotReload
+    let phase: CompletionCelebrationPhase
+    let exitTriggered: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
+
+    func makeNSView(context: Context) -> RetainedCompletionCelebrationBlobView {
+        RetainedCompletionCelebrationBlobView()
+    }
+
+    func updateNSView(_ nsView: RetainedCompletionCelebrationBlobView, context: Context) {
+        nsView.update(
+            phase: phase,
+            exitTriggered: exitTriggered,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
+    }
+}
+
+/// Retained two-layer celebration blob. Gradient color lives on small shape
+/// layers under Gaussian blur containers, so the compositor animates scale,
+/// opacity, and blur radius without re-rendering any SwiftUI content.
+@MainActor
+private final class RetainedCompletionCelebrationBlobView: NSView {
+    private let blobContainer = CALayer()
+    private let blobShape = CALayer()
+    private let blobBlur = CIFilter.gaussianBlur()
+    private let coreContainer = CALayer()
+    private let coreShape = CALayer()
+    private let coreBlur = CIFilter.gaussianBlur()
+    private var isBreathing = false
+    private var isPaused = false
+    private var lastPhase: CompletionCelebrationPhase?
+    private var lastExitTriggered: Bool?
+    private var lastReduceMotion: Bool?
+    private var lastIsActive: Bool?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+
+        blobBlur.name = "celebrationBlobBlur"
+        blobBlur.radius = 48
+        blobContainer.filters = [blobBlur]
+        blobContainer.opacity = 0
+        coreBlur.name = "celebrationCoreBlur"
+        coreBlur.radius = 26
+        coreContainer.filters = [coreBlur]
+        coreContainer.opacity = 0
+        blobContainer.addSublayer(blobShape)
+        coreContainer.addSublayer(coreShape)
+        layer?.addSublayer(blobContainer)
+        layer?.addSublayer(coreContainer)
+        refreshPalette()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let blurOutset: CGFloat = 64
+        blobContainer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
+        coreContainer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
+        let blobSize = CGSize(width: 400, height: 320)
+        blobShape.frame = CGRect(
+            x: blobContainer.bounds.midX - blobSize.width / 2,
+            y: blobContainer.bounds.midY - blobSize.height / 2,
+            width: blobSize.width,
+            height: blobSize.height
+        )
+        blobShape.cornerRadius = blobSize.height / 2
+        let coreSize = CGSize(width: 220, height: 200)
+        coreShape.frame = CGRect(
+            x: coreContainer.bounds.midX - coreSize.width / 2,
+            y: coreContainer.bounds.midY - coreSize.height / 2,
+            width: coreSize.width,
+            height: coreSize.height
+        )
+        coreShape.cornerRadius = coreSize.height / 2
+        CATransaction.commit()
+    }
+
+    func update(
+        phase: CompletionCelebrationPhase,
+        exitTriggered: Bool,
+        reduceMotion: Bool,
+        isActive: Bool
+    ) {
+        guard lastPhase != phase
+            || lastExitTriggered != exitTriggered
+            || lastReduceMotion != reduceMotion
+            || lastIsActive != isActive else { return }
+        lastPhase = phase
+        lastExitTriggered = exitTriggered
+        lastReduceMotion = reduceMotion
+        lastIsActive = isActive
+
+        refreshPalette()
+
+        if reduceMotion {
+            stopBreathing()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            let visible = !exitTriggered && phase != .hidden
+            blobContainer.opacity = visible ? 0.75 : 0
+            coreContainer.opacity = visible ? 0.7 : 0
+            blobContainer.transform = CATransform3DIdentity
+            coreContainer.transform = CATransform3DIdentity
+            blobBlur.radius = 56
+            coreBlur.radius = 32
+            CATransaction.commit()
+        } else if exitTriggered || phase == .hidden {
+            stopBreathing()
+            fadeOut()
+        } else if phase == .reveal {
+            stopBreathing()
+            animateReveal()
+        } else {
+            animateSettleToAmbient()
+        }
+
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func refreshPalette() {
+        blobShape.backgroundColor = NSColor(CompletionPalette.softRose)
+            .withAlphaComponent(0.42).cgColor
+        coreShape.backgroundColor = NSColor(CompletionPalette.accent)
+            .withAlphaComponent(0.38).cgColor
+    }
+
+    private func animateReveal() {
+        let now = blobContainer.convertTime(CACurrentMediaTime(), from: nil)
+        setModel(opacity: 1, scale: 1, blobBlur: 40, coreBlur: 22)
+
+        // Slight overshoot so the blob lands with a soft settle instead of a
+        // flat ease-out stop.
+        let blobScale = CAKeyframeAnimation(keyPath: "transform.scale")
+        blobScale.values = [0.3, 1.04, 1.0].map { NSNumber(value: $0) }
+        blobScale.keyTimes = [0, 0.7, 1].map { NSNumber(value: $0) }
+        blobScale.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        blobScale.beginTime = now
+        blobScale.duration = 1.0
+        blobScale.fillMode = .backwards
+        blobContainer.add(blobScale, forKey: "celebrationRevealScale")
+
+        let blobOpacity = CAKeyframeAnimation(keyPath: "opacity")
+        blobOpacity.values = [0, 1, 1].map { NSNumber(value: $0) }
+        blobOpacity.keyTimes = [0, 0.75, 1].map { NSNumber(value: $0) }
+        blobOpacity.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        blobOpacity.beginTime = now
+        blobOpacity.duration = 0.8
+        blobOpacity.fillMode = .backwards
+        blobContainer.add(blobOpacity, forKey: "celebrationRevealOpacity")
+
+        let coreScale = CAKeyframeAnimation(keyPath: "transform.scale")
+        coreScale.values = [0.35, 1.03, 1.0].map { NSNumber(value: $0) }
+        coreScale.keyTimes = [0, 0.7, 1].map { NSNumber(value: $0) }
+        coreScale.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        coreScale.beginTime = now + 0.1
+        coreScale.duration = 0.95
+        coreScale.fillMode = .backwards
+        coreContainer.add(coreScale, forKey: "celebrationRevealScale")
+
+        let coreOpacity = CAKeyframeAnimation(keyPath: "opacity")
+        coreOpacity.values = [0, 1, 1].map { NSNumber(value: $0) }
+        coreOpacity.keyTimes = [0, 0.75, 1].map { NSNumber(value: $0) }
+        coreOpacity.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut)
+        ]
+        coreOpacity.beginTime = now + 0.1
+        coreOpacity.duration = 0.8
+        coreOpacity.fillMode = .backwards
+        coreContainer.add(coreOpacity, forKey: "celebrationRevealOpacity")
+    }
+
+    private func animateSettleToAmbient() {
+        // Soften rather than dim: hold presence while the blur blooms outward,
+        // with a slight outward drift so the settle reads as motion, not as
+        // the reveal reversing.
+        setModel(opacity: 0.75, scale: 1.02, blobBlur: 56, coreBlur: 32, coreOpacity: 0.7)
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = blobContainer.presentation()?.opacity ?? 1
+        fade.toValue = 0.75
+        fade.duration = 1.0
+        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(fade, forKey: "celebrationSettleOpacity")
+
+        let coreFade = CABasicAnimation(keyPath: "opacity")
+        coreFade.fromValue = coreContainer.presentation()?.opacity ?? 1
+        coreFade.toValue = 0.7
+        coreFade.duration = 1.0
+        coreFade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreFade, forKey: "celebrationSettleOpacity")
+
+        let drift = CABasicAnimation(keyPath: "transform.scale")
+        drift.fromValue = (blobContainer.presentation()?.value(forKeyPath: "transform.scale") as? Double) ?? 1
+        drift.toValue = 1.02
+        drift.duration = 1.0
+        drift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(drift, forKey: "celebrationSettleScale")
+
+        let coreDrift = CABasicAnimation(keyPath: "transform.scale")
+        coreDrift.fromValue = (coreContainer.presentation()?.value(forKeyPath: "transform.scale") as? Double) ?? 1
+        coreDrift.toValue = 1.02
+        coreDrift.duration = 1.0
+        coreDrift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreDrift, forKey: "celebrationSettleScale")
+
+        let blur = CABasicAnimation(keyPath: "filters.celebrationBlobBlur.inputRadius")
+        blur.fromValue = 40
+        blur.toValue = 56
+        blur.duration = 1.0
+        blur.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(blur, forKey: "celebrationSettleBlur")
+
+        let coreBlurAnimation = CABasicAnimation(keyPath: "filters.celebrationCoreBlur.inputRadius")
+        coreBlurAnimation.fromValue = 22
+        coreBlurAnimation.toValue = 32
+        coreBlurAnimation.duration = 1.0
+        coreBlurAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreBlurAnimation, forKey: "celebrationSettleBlur")
+
+        startBreathing(delay: 0.95)
+    }
+
+    private func fadeOut() {
+        let blobFade = CABasicAnimation(keyPath: "opacity")
+        blobFade.fromValue = blobContainer.presentation()?.opacity ?? blobContainer.opacity
+        blobFade.toValue = 0
+        blobFade.duration = 0.45
+        blobFade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(blobFade, forKey: "celebrationExitOpacity")
+
+        let coreFade = CABasicAnimation(keyPath: "opacity")
+        coreFade.fromValue = coreContainer.presentation()?.opacity ?? coreContainer.opacity
+        coreFade.toValue = 0
+        coreFade.duration = 0.45
+        coreFade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreFade, forKey: "celebrationExitOpacity")
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        blobContainer.opacity = 0
+        coreContainer.opacity = 0
+        CATransaction.commit()
+    }
+
+    private func setModel(opacity: Float, scale: CGFloat, blobBlur: Float, coreBlur: Float, coreOpacity: Float? = nil) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        blobContainer.opacity = opacity
+        coreContainer.opacity = coreOpacity ?? opacity
+        blobContainer.transform = CATransform3DMakeScale(scale, scale, 1)
+        coreContainer.transform = CATransform3DMakeScale(scale, scale, 1)
+        self.blobBlur.radius = blobBlur
+        self.coreBlur.radius = coreBlur
+        CATransaction.commit()
+    }
+
+    private func startBreathing(delay: CFTimeInterval = 0) {
+        guard !isBreathing else { return }
+        isBreathing = true
+        let base = blobContainer.convertTime(CACurrentMediaTime(), from: nil) + delay
+        let blobBreath = CABasicAnimation(keyPath: "transform.scale")
+        blobBreath.fromValue = 1.02
+        blobBreath.toValue = 1.07
+        blobBreath.beginTime = base
+        blobBreath.duration = 3.8
+        blobBreath.autoreverses = true
+        blobBreath.repeatCount = .infinity
+        blobBreath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        blobContainer.add(blobBreath, forKey: "celebrationAmbientBreath")
+
+        let coreBreath = CABasicAnimation(keyPath: "transform.scale")
+        coreBreath.fromValue = 1.02
+        coreBreath.toValue = 1.09
+        coreBreath.beginTime = base + 0.6
+        coreBreath.duration = 2.9
+        coreBreath.autoreverses = true
+        coreBreath.repeatCount = .infinity
+        coreBreath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        coreContainer.add(coreBreath, forKey: "celebrationAmbientBreath")
+    }
+
+    private func stopBreathing() {
+        guard isBreathing else { return }
+        isBreathing = false
+        blobContainer.removeAnimation(forKey: "celebrationAmbientBreath")
+        coreContainer.removeAnimation(forKey: "celebrationAmbientBreath")
+    }
+
+    private func pauseIfNeeded() {
+        guard !isPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
+}
+
+private struct CompletionParticleBackdrop: View {
+    @SortyHotReload private var hotReload
+    let showParticles: Bool
+    let exitTriggered: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    var body: some View {
+        RetainedCompletionParticles(
+            isVisible: showParticles && !exitTriggered,
+            reduceMotion: reduceMotion,
+            isActive: controlActiveState != .inactive
+        )
+        .frame(width: 520, height: 420)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+}
+
+private struct RetainedCompletionParticles: NSViewRepresentable {
+    @SortyHotReload private var hotReload
+    let isVisible: Bool
+    let reduceMotion: Bool
+    let isActive: Bool
+
+    func makeNSView(context: Context) -> RetainedCompletionParticlesView {
+        RetainedCompletionParticlesView()
+    }
+
+    func updateNSView(_ nsView: RetainedCompletionParticlesView, context: Context) {
+        nsView.update(
+            isVisible: isVisible,
+            reduceMotion: reduceMotion,
+            isActive: isActive
+        )
+    }
+}
+
+@MainActor
+private final class RetainedCompletionParticlesView: NSView {
+    private let particleLayers = (0..<7).map { _ in CAShapeLayer() }
+    private var isAnimating = false
+    private var isPaused = false
+    private var lastIsVisible: Bool?
+    private var lastReduceMotion: Bool?
+    private var lastIsActive: Bool?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+        particleLayers.forEach {
+            $0.fillColor = NSColor.white.withAlphaComponent(0.30).cgColor
+            $0.opacity = 0
+            layer?.addSublayer($0)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        for (index, particleLayer) in particleLayers.enumerated() {
+            let size = 3 + CGFloat((index * 17 + 5) % 30) / 10
+            particleLayer.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+            particleLayer.path = CGPath(ellipseIn: particleLayer.bounds, transform: nil)
+            particleLayer.position = CGPoint(
+                x: bounds.midX - 200 + CGFloat((index * 137 + 43) % 400),
+                y: bounds.midY - 80
+            )
+        }
+    }
+
+    func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
+        guard lastIsVisible != isVisible
+                || lastReduceMotion != reduceMotion
+                || lastIsActive != isActive else { return }
+        lastIsVisible = isVisible
+        lastReduceMotion = reduceMotion
+        lastIsActive = isActive
+
+        if reduceMotion || !isVisible {
+            stopAnimating()
+        } else if !isAnimating {
+            startAnimating()
+        }
+
+        if isActive {
+            resumeIfNeeded()
+        } else {
+            pauseIfNeeded()
+        }
+    }
+
+    private func startAnimating() {
+        isAnimating = true
+        for (index, particleLayer) in particleLayers.enumerated() {
+            let now = particleLayer.convertTime(CACurrentMediaTime(), from: nil)
+            let duration = 3 + seededParticleValue(index: index, range: 0...3)
+            let travel = CAKeyframeAnimation(keyPath: "transform.translation")
+            travel.values = [
+                NSValue(point: .zero),
+                NSValue(point: CGPoint(x: 12, y: 75)),
+                NSValue(point: CGPoint(x: 16, y: 150)),
+                NSValue(point: CGPoint(x: 8, y: 225)),
+                NSValue(point: CGPoint(x: 0, y: 300))
+            ]
+            travel.keyTimes = [0, 0.25, 0.5, 0.75, 1]
+            travel.beginTime = now + Double(index) * 0.4
+            travel.duration = duration
+            travel.repeatCount = .infinity
+            travel.fillMode = .backwards
+            travel.calculationMode = .cubic
+            particleLayer.add(travel, forKey: "completionParticleTravel")
+
+            let opacity = CAKeyframeAnimation(keyPath: "opacity")
+            opacity.values = [0, 0.6, 0.6, 0]
+            opacity.keyTimes = [0, 0.12, 0.72, 1]
+            opacity.beginTime = now + Double(index) * 0.4
+            opacity.duration = duration
+            opacity.repeatCount = .infinity
+            opacity.fillMode = .backwards
+            opacity.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            particleLayer.add(opacity, forKey: "completionParticleOpacity")
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            particleLayer.opacity = 0.6
+            CATransaction.commit()
+        }
+    }
+
+    private func stopAnimating() {
+        guard isAnimating else { return }
+        isAnimating = false
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        particleLayers.forEach {
+            $0.removeAnimation(forKey: "completionParticleTravel")
+            $0.removeAnimation(forKey: "completionParticleOpacity")
+            $0.opacity = 0
+        }
+        CATransaction.commit()
+    }
+
+    private func pauseIfNeeded() {
+        guard isAnimating, !isPaused, let layer else { return }
+        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
+        layer.speed = 0
+        layer.timeOffset = pausedTime
+        isPaused = true
+    }
+
+    private func resumeIfNeeded() {
+        guard isPaused, let layer else { return }
+        let pausedTime = layer.timeOffset
+        layer.speed = 1
+        layer.timeOffset = 0
+        layer.beginTime = 0
+        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
+        isPaused = false
+    }
+
+    private func seededParticleValue(index: Int, range: ClosedRange<Double>) -> Double {
+        let value = Double((index * 53 + 17) % 101) / 100
+        return range.lowerBound + (range.upperBound - range.lowerBound) * value
+    }
+}
+
 private struct CompletionHero: View {
     @SortyHotReload private var hotReload
     let hasAppeared: Bool
+    let showGlowRing: Bool
+    let celebrationPhase: CompletionCelebrationPhase
+    let exitTriggered: Bool
     let contentDismissed: Bool
     let isButtonHovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         ZStack {
-            CompletionBloom(
-                hasAppeared: reduceMotion || hasAppeared,
-                isExiting: contentDismissed
+            CompletionRippleField(
+                hasAppeared: hasAppeared,
+                showGlowRing: showGlowRing,
+                exitTriggered: exitTriggered
             )
             CompletionCheckmarkIcon(
-                hasAppeared: reduceMotion || hasAppeared,
+                hasAppeared: hasAppeared,
                 isButtonHovered: isButtonHovered
             )
+        }
+        .background {
+            RetainedCompletionCelebrationBlob(
+                phase: celebrationPhase,
+                exitTriggered: exitTriggered,
+                reduceMotion: reduceMotion,
+                isActive: controlActiveState != .inactive
+            )
+            .frame(width: 520, height: 440)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.9)
@@ -47,22 +583,45 @@ private struct CompletionHero: View {
     }
 }
 
-private struct CompletionBloom: View {
+private struct CompletionRippleField: View {
     @SortyHotReload private var hotReload
     let hasAppeared: Bool
+    let showGlowRing: Bool
+    let exitTriggered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let isExiting: Bool
     @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         RetainedCompletionHeroEffects(
-            isVisible: hasAppeared,
+            isVisible: !exitTriggered && showGlowRing && hasAppeared,
             reduceMotion: reduceMotion,
-            isActive: controlActiveState != .inactive && !isExiting
+            isActive: controlActiveState != .inactive
         )
         .frame(width: 240, height: 240)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .transition(.opacity)
+    }
+}
+
+private struct CompletionGlowRingGraphic: View {
+    @SortyHotReload private var hotReload
+    var body: some View {
+        Circle()
+            .stroke(
+                AngularGradient(
+                    colors: [
+                        CompletionPalette.softRose.opacity(0.86),
+                        CompletionPalette.accent.opacity(0.78),
+                        CompletionPalette.deepRose.opacity(0.46),
+                        CompletionPalette.softRose.opacity(0.86)
+                    ],
+                    center: .center
+                ),
+                lineWidth: 3
+            )
+            .frame(width: 140, height: 140)
+            .blur(radius: 8)
+            .frame(width: 180, height: 180)
+            .accessibilityHidden(true)
     }
 }
 
@@ -87,7 +646,8 @@ private struct RetainedCompletionHeroEffects: NSViewRepresentable {
 
 @MainActor
 private final class RetainedCompletionHeroEffectsView: NSView {
-    private let bloom = CAGradientLayer()
+    private let glowHost = NSHostingView(rootView: CompletionGlowRingGraphic())
+    private let rippleLayers = (0..<3).map { _ in CAShapeLayer() }
     private var isVisible = false
     private var isAnimating = false
     private var isPaused = false
@@ -99,18 +659,18 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         wantsLayer = true
         setAccessibilityElement(false)
 
-        bloom.type = .radial
-        bloom.startPoint = CGPoint(x: 0.5, y: 0.5)
-        bloom.endPoint = CGPoint(x: 1, y: 0.92)
-        bloom.colors = [
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0.42).cgColor,
-            NSColor(CompletionPalette.accent).withAlphaComponent(0.23).cgColor,
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0.07).cgColor,
-            NSColor(CompletionPalette.softRose).withAlphaComponent(0).cgColor
-        ]
-        bloom.locations = [0, 0.28, 0.60, 1]
-        bloom.opacity = 0
-        layer?.addSublayer(bloom)
+        glowHost.wantsLayer = true
+        glowHost.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        addSubview(glowHost)
+
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            rippleLayer.fillColor = NSColor.clear.cgColor
+            rippleLayer.strokeColor = NSColor(
+                CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04)
+            ).cgColor
+            rippleLayer.lineWidth = 2
+            layer?.insertSublayer(rippleLayer, below: glowHost.layer)
+        }
     }
 
     @available(*, unavailable)
@@ -118,16 +678,27 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
     override func layout() {
         super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        // Share the hero's center; the transparent falloff stays inside its slot.
-        bloom.bounds = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height * 0.94)
-        bloom.position = CGPoint(x: bounds.midX, y: bounds.midY)
-        CATransaction.commit()
+        glowHost.frame = CGRect(
+            x: bounds.midX - 90,
+            y: bounds.midY - 90,
+            width: 180,
+            height: 180
+        )
+        glowHost.layer?.position = CGPoint(x: bounds.midX, y: bounds.midY)
+
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            let diameter = CGFloat(140 + index * 30)
+            let frame = CGRect(
+                x: bounds.midX - diameter / 2,
+                y: bounds.midY - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            rippleLayer.frame = frame
+            rippleLayer.path = CGPath(ellipseIn: rippleLayer.bounds, transform: nil)
+        }
     }
 
     func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
@@ -141,7 +712,8 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        bloom.opacity = isVisible ? 1 : 0
+        glowHost.layer?.opacity = isVisible ? 0.6 : 0
+        rippleLayers.forEach { $0.opacity = isVisible && reduceMotion ? 0.10 : 0 }
         CATransaction.commit()
 
         guard isVisible else {
@@ -153,7 +725,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
             return
         }
 
-        startAnimatingIfNeeded(reveal: visibilityChanged)
+        startAnimatingIfNeeded()
         if isActive {
             resumeIfNeeded()
         } else {
@@ -161,36 +733,44 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         }
     }
 
-    private func startAnimatingIfNeeded(reveal: Bool) {
+    private func startAnimatingIfNeeded() {
         guard !isAnimating else { return }
         isAnimating = true
 
-        if reveal {
-            let arrival = CABasicAnimation(keyPath: "transform.scale")
-            arrival.fromValue = 0.62
-            arrival.toValue = 1
-            arrival.duration = 0.7
-            arrival.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            bloom.add(arrival, forKey: "completionBloomArrival")
-        }
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1
+        pulse.toValue = 1.15
+        pulse.duration = 2
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        glowHost.layer?.add(pulse, forKey: "completionGlowPulse")
 
-        // A sixteen-second breath moves only the compositor layer, never view state.
-        let breath = CABasicAnimation(keyPath: "transform.scale")
-        breath.fromValue = 1
-        breath.toValue = 1.025
-        breath.duration = 8
-        breath.autoreverses = true
-        breath.repeatCount = .infinity
-        breath.beginTime = bloom.convertTime(CACurrentMediaTime(), from: nil) + 0.7
-        breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        bloom.add(breath, forKey: "completionBloomBreath")
+        for (index, rippleLayer) in rippleLayers.enumerated() {
+            let scale = CABasicAnimation(keyPath: "transform.scale")
+            scale.fromValue = 0.8
+            scale.toValue = 1.2
+
+            let opacity = CABasicAnimation(keyPath: "opacity")
+            opacity.fromValue = 1
+            opacity.toValue = 0
+
+            let group = CAAnimationGroup()
+            group.animations = [scale, opacity]
+            group.duration = 1.5
+            group.beginTime = CACurrentMediaTime() + Double(index) * 0.3
+            group.repeatCount = .infinity
+            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            rippleLayer.add(group, forKey: "completionRipple")
+        }
     }
 
     private func stopAnimating() {
         guard isAnimating || isPaused else { return }
         resumeIfNeeded()
         isAnimating = false
-        bloom.removeAllAnimations()
+        glowHost.layer?.removeAnimation(forKey: "completionGlowPulse")
+        rippleLayers.forEach { $0.removeAllAnimations() }
     }
 
     private func pauseIfNeeded() {
@@ -344,7 +924,7 @@ private struct CompletionPrimaryAction: View {
         .onHover { hovering in
             onHoverChanged(hovering)
         }
-        .opacity((reduceMotion || tipsAppeared) && !contentDismissed ? 1 : 0)
+        .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
         .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
         .animation(
             reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(0.2),
@@ -568,7 +1148,10 @@ public struct CompletionStepView: View {
     let onFinish: () -> Void
 
     // Entry animation states
+    @State private var celebrationPhase: CompletionCelebrationPhase = .hidden
     @State private var hasAppeared = false
+    @State private var showGlowRing = false
+    @State private var showParticles = false
     @State private var tipsAppeared = false
     @State private var isCompletionButtonHovered = false
     @State private var completionHoverTask: Task<Void, Never>?
@@ -604,20 +1187,26 @@ public struct CompletionStepView: View {
         ZStack {
             CompletionContrastBackdrop()
                 .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .opacity(contentDismissed ? 0 : 1)
+
+            CompletionParticleBackdrop(
+                showParticles: showParticles,
+                exitTriggered: exitTriggered
+            )
 
             VStack(spacing: 16) {
                 CompletionHero(
-                    hasAppeared: reduceMotion || hasAppeared,
+                    hasAppeared: hasAppeared,
+                    showGlowRing: showGlowRing,
+                    celebrationPhase: celebrationPhase,
+                    exitTriggered: exitTriggered,
                     contentDismissed: contentDismissed,
                     isButtonHovered: lockedHoverForExit ?? isCompletionButtonHovered
                 )
-                CompletionCopy(hasAppeared: reduceMotion || hasAppeared, contentDismissed: contentDismissed)
-                CompletionTipsGrid(tipsAppeared: reduceMotion || tipsAppeared, contentDismissed: contentDismissed)
+                CompletionCopy(hasAppeared: hasAppeared, contentDismissed: contentDismissed)
+                CompletionTipsGrid(tipsAppeared: tipsAppeared, contentDismissed: contentDismissed)
                 CompletionAnalyticsPreference(isEnabled: $isAnalyticsEnabled)
-                    .opacity((reduceMotion || tipsAppeared) && !contentDismissed ? 1 : 0)
-                    .offset(y: reduceMotion || tipsAppeared ? (contentDismissed ? 40 : 0) : 12)
+                    .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
+                    .offset(y: tipsAppeared ? (contentDismissed ? 40 : 0) : 12)
                     .animation(
                         reduceMotion
                             ? nil
@@ -625,7 +1214,7 @@ public struct CompletionStepView: View {
                         value: tipsAppeared
                     )
                 CompletionPrimaryAction(
-                    tipsAppeared: reduceMotion || tipsAppeared,
+                    tipsAppeared: tipsAppeared,
                     contentDismissed: contentDismissed,
                     isChecking: readinessState == .checking,
                     action: verifyAndFinish,
@@ -678,24 +1267,41 @@ public struct CompletionStepView: View {
 
     private func startRevealSequence() {
         runtimeController.animationTask?.cancel()
+
         if reduceMotion {
+            audioController.play()
+            celebrationPhase = .ambient
             hasAppeared = true
+            showGlowRing = true
             tipsAppeared = true
             return
         }
 
+        // Keep the appear frame free of heavy work: first paint lands the
+        // static backdrop, then the bloom (audio + blob + hero) starts on the
+        // next frame so blur rasterization and audio startup can't hitch it.
+        // Choreography from there: glow ring at +220 ms, blob settles to
+        // ambient at +540 ms, tips plus particles land together at +720 ms.
         runtimeController.animationTask = Task { @MainActor in
-            // Mount and lay out the lightweight gradient before the shared arrival.
-            try? await Task.sleep(for: .milliseconds(50))
-            guard !Task.isCancelled else { return }
-            await audioController.prepare()
+            await Task.yield()
             guard !Task.isCancelled else { return }
             audioController.play()
-            audioController.playRevealAccent()
+            celebrationPhase = .reveal
             hasAppeared = true
-            try? await Task.sleep(for: .milliseconds(480))
+
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            showGlowRing = true
+            audioController.playRevealAccent()
+
+            try? await Task.sleep(for: .milliseconds(320))
+            guard !Task.isCancelled else { return }
+            celebrationPhase = .ambient
+
+            try? await Task.sleep(for: .milliseconds(180))
             guard !Task.isCancelled else { return }
             tipsAppeared = true
+            showParticles = true
         }
     }
 
@@ -823,6 +1429,8 @@ public struct CompletionStepView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: exitDuration)) {
             exitTriggered = true
             contentDismissed = true
+            showParticles = false
+            showGlowRing = false
         }
 
         finishTask?.cancel()
@@ -850,6 +1458,16 @@ private struct CompletionContrastBackdrop: View {
                 endPoint: .bottom
             )
 
+            RadialGradient(
+                colors: [
+                    CompletionPalette.softRose.opacity(0.18),
+                    CompletionPalette.accent.opacity(0.08),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 0.50, y: 0.42),
+                startRadius: 20,
+                endRadius: 520
+            )
         }
         .mask(alignment: .top) {
             VStack(spacing: 0) {
