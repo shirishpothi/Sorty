@@ -91,7 +91,7 @@ not affect it. Its Gaussian glow and energy
 scan, plus the completion blob, ripple, and particle motion, likewise use
 retained layers; do not move those continuous effects back into broad SwiftUI
 state or frame timelines. The completion reveal rasterizes its large blurred
-artwork once and animates retained scale and opacity through the same two phases;
+artwork once and animates retained scale and opacity in a single entrance;
 Reduce Motion keeps the reveal as a short opacity fade. The optional demo's
 continuous organizing sliver follows the same rule, and its per-file/folder
 collections are derived once per mutation rather
@@ -216,8 +216,8 @@ its retained instance when the app becomes active.
 ### Completion reveal timing
 
 The final step reveals its hero immediately and its tips after 200 ms. The
-backdrop expands from 0.82 to 1.12 over 700 ms without overshoot, then fades
-to ambient opacity over 650 ms at the same size. Keep those stages separate
-so the settle does not interrupt the entrance. Reduce Motion shows the
+backdrop expands from 0.82 to 1.12 and fades to 0.3 opacity over 700 ms,
+then holds steady. Its inner glow is static: no orbit, repeating scale pulse,
+or second dimming phase that could read as the reveal reversing. Reduce Motion shows the
 content immediately and uses opacity only for the backdrop. Cancel the entry
 task when finishing so it cannot restart the celebration during dismissal.

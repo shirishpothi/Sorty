@@ -112,102 +112,12 @@ private struct CompletionFloatingGlowGraphic: View {
     }
 }
 
-@MainActor
-private final class RetainedCompletionFloatingGlowView: NSView {
-    private let host = NSHostingView(rootView: CompletionFloatingGlowGraphic())
-    private var isAnimating = false
-    private var isPaused = false
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        setAccessibilityElement(false)
-        host.wantsLayer = true
-        addSubview(host)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layout() {
-        super.layout()
-        host.frame = bounds
-    }
-
-    func update(reduceMotion: Bool, isActive: Bool) {
-        if reduceMotion {
-            stopAnimating()
-            return
-        }
-
-        startAnimatingIfNeeded()
-        if isActive {
-            resumeIfNeeded()
-        } else {
-            pauseIfNeeded()
-        }
-    }
-
-    private func startAnimatingIfNeeded() {
-        guard !isAnimating else { return }
-        isAnimating = true
-
-        // Smooth continuous elliptical orbit — single translation animation with
-        // uniform angular steps, linear pacing, and no autoreverse. The previous
-        // split x/y + easeInEaseOut + autoreverse caused a noticeable
-        // hesitate-and-reverse at each loop end ("weird" back-and-forth).
-        let steps = 64
-        let orbit = CAKeyframeAnimation(keyPath: "transform.translation")
-        orbit.values = (0...steps).map { i in
-            let a = Double(i) / Double(steps) * 2 * .pi
-            return NSValue(point: CGPoint(x: 18 * sin(a), y: -12 * cos(a)))
-        }
-        orbit.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
-        orbit.calculationMode = .linear
-        orbit.duration = 12
-        orbit.repeatCount = .infinity
-        orbit.isRemovedOnCompletion = false
-        host.layer?.add(orbit, forKey: "completionFloatingGlowPosition")
-    }
-
-    private func stopAnimating() {
-        guard isAnimating || isPaused else { return }
-        resumeIfNeeded()
-        isAnimating = false
-        host.layer?.removeAnimation(forKey: "completionFloatingGlowPosition")
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        host.layer?.setAffineTransform(.identity)
-        CATransaction.commit()
-    }
-
-    private func pauseIfNeeded() {
-        guard isAnimating, !isPaused, let layer = host.layer else { return }
-        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
-        layer.speed = 0
-        layer.timeOffset = pausedTime
-        isPaused = true
-    }
-
-    private func resumeIfNeeded() {
-        guard isPaused, let layer = host.layer else { return }
-        let pausedTime = layer.timeOffset
-        layer.speed = 1
-        layer.timeOffset = 0
-        layer.beginTime = 0
-        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
-        isPaused = false
-    }
-}
-
 /// Rasterizes the two large blurred primitives once, then lets the compositor
 /// animate the same reveal scale and opacity without re-rendering their blur.
 @MainActor
 private final class RetainedCompletionRevealBlobView: NSView {
     private let baseHost = NSHostingView(rootView: CompletionRevealBaseGraphic())
-    private let floatingGlow = RetainedCompletionFloatingGlowView()
+    private let floatingGlow = NSHostingView(rootView: CompletionFloatingGlowGraphic())
     private let highlightHost = NSHostingView(rootView: CompletionRevealHighlightGraphic())
     private var hasConfiguredPresentation = false
     private var targetScale: CGFloat = 0.82
@@ -222,6 +132,8 @@ private final class RetainedCompletionRevealBlobView: NSView {
         baseHost.layer?.shouldRasterize = true
         highlightHost.wantsLayer = true
         highlightHost.layer?.shouldRasterize = true
+        floatingGlow.wantsLayer = true
+        floatingGlow.layer?.shouldRasterize = true
         addSubview(baseHost)
         addSubview(floatingGlow)
         addSubview(highlightHost)
@@ -237,6 +149,7 @@ private final class RetainedCompletionRevealBlobView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         let scale = window?.backingScaleFactor ?? 2
+        floatingGlow.layer?.rasterizationScale = scale
         baseHost.layer?.rasterizationScale = scale
         highlightHost.layer?.rasterizationScale = scale
     }
@@ -259,8 +172,6 @@ private final class RetainedCompletionRevealBlobView: NSView {
         reduceMotion: Bool,
         isActive: Bool
     ) {
-        floatingGlow.update(reduceMotion: reduceMotion, isActive: isActive)
-
         let resolvedScale = reduceMotion ? 1 : scale
         let resolvedOpacity = Float(opacity)
         guard !hasConfiguredPresentation
@@ -271,10 +182,12 @@ private final class RetainedCompletionRevealBlobView: NSView {
         targetScale = resolvedScale
         targetOpacity = resolvedOpacity
 
-        guard hasConfiguredPresentation else {
+        if !hasConfiguredPresentation {
             hasConfiguredPresentation = true
-            applyModelValues()
-            return
+            if resolvedOpacity == 0 {
+                applyModelValues()
+                return
+            }
         }
 
         if reduceMotion {
@@ -1230,9 +1143,9 @@ public struct CompletionStepView: View {
         runtimeController.animationTask?.cancel()
         audioController.play()
 
-        // Reveal the message while the backdrop expands, then let it settle.
+        // Reveal once and hold the backdrop steady until dismissal.
         revealScale = 1.12
-        revealOpacity = reduceMotion ? 0.3 : 0.65
+        revealOpacity = 0.3
         hasAppeared = true
         showGlowRing = true
         audioController.playRevealAccent()
@@ -1247,11 +1160,6 @@ public struct CompletionStepView: View {
             guard !Task.isCancelled else { return }
             tipsAppeared = true
             showParticles = true
-
-            // Let the 700 ms entrance finish before fading to ambient intensity.
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled else { return }
-            revealOpacity = 0.3
         }
     }
 
