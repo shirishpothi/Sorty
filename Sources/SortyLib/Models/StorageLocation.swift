@@ -288,6 +288,9 @@ public class StorageLocationsManager: ObservableObject {
     private var hasPendingChanges = false
     private var loadGeneration = 0
     private var restoreTask: Task<Void, Never>?
+    private var lastAccessValidationAt: Date?
+    private var accessNeedsRefresh = true
+    private let accessValidationLifetime: TimeInterval = 5 * 60
 
     private struct BookmarkRestoreSnapshot: Sendable {
         let id: UUID
@@ -356,6 +359,21 @@ public class StorageLocationsManager: ObservableObject {
         NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearAll()
         }
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        workspaceCenter.addMainActorObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] in
+            self?.accessNeedsRefresh = true
+        }
+        workspaceCenter.addMainActorObserver(
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] in
+            self?.accessNeedsRefresh = true
+        }
     }
     
     public var enabledLocations: [StorageLocation] {
@@ -383,6 +401,8 @@ public class StorageLocationsManager: ObservableObject {
         hasLoadedPersistedState = true
         hasPendingChanges = false
         stopAllSecurityScopedAccess()
+        lastAccessValidationAt = nil
+        accessNeedsRefresh = true
         locations.removeAll()
         userDefaults.removeObject(forKey: storageKey)
     }
@@ -394,6 +414,7 @@ public class StorageLocationsManager: ObservableObject {
         // Avoid duplicates, even if path formatting differs (e.g. trailing slash)
         guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, normalized.path) }) else { return }
         locations.append(normalized)
+        accessNeedsRefresh = true
         saveLocations()
     }
     
@@ -434,6 +455,7 @@ public class StorageLocationsManager: ObservableObject {
     public func removeLocation(_ location: StorageLocation) {
         stopSecurityScopedAccess(for: location.id)
         locations.removeAll { $0.id == location.id }
+        accessNeedsRefresh = true
         saveLocations()
     }
     
@@ -446,7 +468,13 @@ public class StorageLocationsManager: ObservableObject {
         if let index = locations.firstIndex(where: { $0.id == location.id }) {
             var normalized = location
             normalized.path = normalizedPath
+            let accessChanged = locations[index].bookmarkData != normalized.bookmarkData
+                || locations[index].path != normalized.path
             locations[index] = normalized
+            if accessChanged {
+                stopSecurityScopedAccess(for: location.id)
+                accessNeedsRefresh = true
+            }
             saveLocations()
         }
     }
@@ -586,7 +614,9 @@ public class StorageLocationsManager: ObservableObject {
             if url.startAccessingSecurityScopedResource() {
                 return ScopedSecurityAccess(url: url, didAccess: true)
             }
+            markAccessLost(for: location.id)
         } catch {
+            markAccessLost(for: location.id)
             DebugLogger.log("Failed to resolve storage location bookmark: \(error)")
         }
         
@@ -602,12 +632,19 @@ public class StorageLocationsManager: ObservableObject {
             await restoreTask.value
             return
         }
+        if canReuseValidatedAccess {
+            return
+        }
 
         let generation = loadGeneration
         let snapshots: [BookmarkRestoreSnapshot] = locations.map {
             BookmarkRestoreSnapshot(id: $0.id, bookmarkData: $0.bookmarkData, path: $0.path)
         }
-        guard !snapshots.isEmpty else { return }
+        guard !snapshots.isEmpty else {
+            lastAccessValidationAt = Date()
+            accessNeedsRefresh = false
+            return
+        }
 
         let task = Task { [weak self] in
             let results = await Task.detached(priority: .userInitiated) {
@@ -630,6 +667,19 @@ public class StorageLocationsManager: ObservableObject {
     /// Safe to call repeatedly; each location has at most one long-lived access session.
     public func refreshAccessStatus() async {
         await restoreSecurityScopedAccess()
+    }
+
+    private var canReuseValidatedAccess: Bool {
+        guard !accessNeedsRefresh,
+              let lastAccessValidationAt,
+              Date().timeIntervalSince(lastAccessValidationAt) < accessValidationLifetime else {
+            return false
+        }
+        return locations.allSatisfy { location in
+            guard location.bookmarkData != nil else { return true }
+            return location.accessStatus == .valid
+                && activeSecurityScopedURLs[location.id] != nil
+        }
     }
 
     private nonisolated static func resolveBookmarks(
@@ -761,6 +811,8 @@ public class StorageLocationsManager: ObservableObject {
         if didChange {
             saveLocations()
         }
+        lastAccessValidationAt = Date()
+        accessNeedsRefresh = false
     }
     
     /// Re-authorizes a storage location by creating a new security-scoped bookmark from a freshly-picked URL
@@ -784,10 +836,13 @@ public class StorageLocationsManager: ObservableObject {
             stopSecurityScopedAccess(for: location.id)
             updateLocation(updated)
             activeSecurityScopedURLs[location.id] = url
+            lastAccessValidationAt = Date()
+            accessNeedsRefresh = false
 
             DebugLogger.log("Successfully reauthorized storage location: \(location.name)")
         } catch {
             url.stopAccessingSecurityScopedResource()
+            accessNeedsRefresh = true
             DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
         }
     }
@@ -827,8 +882,11 @@ public class StorageLocationsManager: ObservableObject {
                 )
             }
             saveLocations()
+            lastAccessValidationAt = Date()
+            accessNeedsRefresh = false
         } catch {
             locations[index].accessStatus = .lost
+            accessNeedsRefresh = true
             saveLocations()
             DebugLogger.log("Failed to refresh storage location bookmark: \(error)")
         }
@@ -837,6 +895,17 @@ public class StorageLocationsManager: ObservableObject {
     private func stopSecurityScopedAccess(for id: UUID) {
         guard let url = activeSecurityScopedURLs.removeValue(forKey: id) else { return }
         url.stopAccessingSecurityScopedResource()
+    }
+
+    private func markAccessLost(for id: UUID) {
+        stopSecurityScopedAccess(for: id)
+        accessNeedsRefresh = true
+        guard let index = locations.firstIndex(where: { $0.id == id }),
+              locations[index].accessStatus != .lost else {
+            return
+        }
+        locations[index].accessStatus = .lost
+        saveLocations()
     }
 
     private func stopAllSecurityScopedAccess() {
