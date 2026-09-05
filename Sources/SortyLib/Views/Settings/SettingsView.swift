@@ -160,6 +160,11 @@ struct SettingsView: View {
                         }
                     }
                     .padding(24)
+                    // Bottom breathing room lets ScrollViewReader center trailing
+                    // controls (e.g. Generate Diagnostic Report). Without it the
+                    // scroll clamps at max offset and bottom targets land at the
+                    // edge instead of centered.
+                    .padding(.bottom, isSearching ? 0 : max(geometry.size.height / 2 - 60, 0))
                 }
                 .onAppear {
                     routeToFocusedSetting(using: proxy)
