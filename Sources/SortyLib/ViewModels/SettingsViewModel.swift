@@ -136,12 +136,20 @@ public class SettingsViewModel: ObservableObject {
 
                 // Auto-check connection after a short delay
                 // For GitHub Copilot, skip apiKey check since auth is token-based
-                Task {
+                providerConnectionTask?.cancel()
+                let connectionConfig = config
+                providerConnectionTask = Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 300_000_000)
-                    if newProvider == .githubCopilot || newProvider == .appleFoundationModel || config.apiKey != nil {
-                        try? await testConnection()
+                    guard !Task.isCancelled,
+                          let self,
+                          self.config.provider == newProvider else { return }
+                    if newProvider == .githubCopilot
+                        || newProvider == .appleFoundationModel
+                        || connectionConfig.apiKey != nil {
+                        try? await self.testConnection(using: connectionConfig)
                     }
-                    await AISessionManager.shared.prewarm(provider: newProvider, config: config)
+                    guard !Task.isCancelled, self.config.provider == newProvider else { return }
+                    await AISessionManager.shared.prewarm(provider: newProvider, config: connectionConfig)
                 }
             } else if oldKey != newKey,
                       newProvider.typicallyRequiresAPIKey,
@@ -152,11 +160,16 @@ public class SettingsViewModel: ObservableObject {
 
                 // Same provider, API key changed — save immediately to Keychain
                 // so ModelCatalog reads the fresh key (fixes Gemini model list race)
-                Task { [weak self, credentialStore] in
+                providerConnectionTask?.cancel()
+                let connectionConfig = config
+                providerConnectionTask = Task { [weak self, credentialStore] in
                     _ = await credentialStore.save(newProvider.keychainKey, newKey)
-                    guard let self, self.config.provider == newProvider else { return }
+                    guard !Task.isCancelled,
+                          let self,
+                          self.config.provider == newProvider,
+                          self.config.apiKey == connectionConfig.apiKey else { return }
                     self.updateAvailableModels(force: true)
-                    await AISessionManager.shared.prewarm(provider: newProvider, config: self.config)
+                    await AISessionManager.shared.prewarm(provider: newProvider, config: connectionConfig)
                 }
             }
         }
@@ -179,6 +192,7 @@ public class SettingsViewModel: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private var credentialTask: Task<Void, Never>?
     private var modelRefreshTask: Task<Void, Never>?
+    private var providerConnectionTask: Task<Void, Never>?
     private var credentialHydrationID: UUID?
     private var credentialHydrationProvider: AIProvider?
     private var persistedStateLoadTask: Task<AIConfig?, Never>?
@@ -437,6 +451,10 @@ public class SettingsViewModel: ObservableObject {
     }
     
     public func testConnection() async throws {
+        try await testConnection(using: config)
+    }
+
+    private func testConnection(using clientConfig: AIConfig) async throws {
         if let uiTestOverride = userDefaults.string(forKey: providerHealthCheckModeForUITestsKey) {
             switch uiTestOverride {
             case "always_succeed":
@@ -456,11 +474,15 @@ public class SettingsViewModel: ObservableObject {
 
         // Client creation resolves credentials (sync Keychain reads) and health checks
         // touch the network — keep both off the main actor so provider switches never hitch.
-        let clientConfig = config
-        try await Task.detached(priority: .userInitiated) {
+        let healthTask = Task.detached(priority: .userInitiated) {
             let client = try AIClientFactory.createClient(config: clientConfig)
             try await client.checkHealth()
-        }.value
+        }
+        try await withTaskCancellationHandler {
+            try await healthTask.value
+        } onCancel: {
+            healthTask.cancel()
+        }
     }
     
     public func updateAvailableModels(force: Bool = false) {
@@ -500,6 +522,8 @@ public class SettingsViewModel: ObservableObject {
     }
 
     public func reset() {
+        providerConnectionTask?.cancel()
+        providerConnectionTask = nil
         persistedStateLoadGeneration &+= 1
         persistedStateLoadTask?.cancel()
         persistedStateLoadTask = nil

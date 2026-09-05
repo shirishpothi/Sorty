@@ -34,6 +34,7 @@ private struct ProviderReadinessSnapshot: Equatable, Sendable {
 private final class ProviderSelectionTaskController {
     var initialProviderRefreshTask: Task<Void, Never>?
     var testDebounceTask: Task<Void, Never>?
+    var connectionTestTask: Task<Void, Never>?
     var codexTerminalResetTask: Task<Void, Never>?
     var codexVerifyResetTask: Task<Void, Never>?
     var apiKeyCommitTask: Task<Void, Never>?
@@ -219,6 +220,10 @@ public struct ProviderSelectionStepView: View {
             scheduleInitialProviderRefresh()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            taskController.testDebounceTask?.cancel()
+            taskController.connectionTestTask?.cancel()
+            taskController.testDebounceTask = nil
+            taskController.connectionTestTask = nil
             taskController.initialProviderRefreshTask?.cancel()
             taskController.initialProviderRefreshTask = nil
             taskController.copilotModelTask?.cancel()
@@ -255,6 +260,7 @@ public struct ProviderSelectionStepView: View {
             taskController.apiKeyCommitTask?.cancel()
             taskController.apiURLCommitTask?.cancel()
             taskController.testDebounceTask?.cancel()
+            taskController.connectionTestTask?.cancel()
             taskController.copilotModelTask?.cancel()
             taskController.copilotModelTask = nil
         }
@@ -949,6 +955,7 @@ public struct ProviderSelectionStepView: View {
 
     private func scheduleConnectionTest() {
         taskController.testDebounceTask?.cancel()
+        taskController.connectionTestTask?.cancel()
         connectionStatus = .idle
 
         taskController.testDebounceTask = Task {
@@ -962,17 +969,21 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func testConnection() {
+        taskController.connectionTestTask?.cancel()
+        let provider = settingsViewModel.config.provider
         connectionStatus = .testing
         connectionError = nil
 
-        Task {
+        taskController.connectionTestTask = Task {
             do {
                 try await settingsViewModel.testConnection()
-                await MainActor.run {
-                    connectionStatus = .success
-                    HapticFeedbackManager.shared.success()
-                }
+                guard !Task.isCancelled,
+                      settingsViewModel.config.provider == provider else { return }
+                connectionStatus = .success
+                HapticFeedbackManager.shared.success()
             } catch let decodingError as DecodingError {
+                guard !Task.isCancelled,
+                      settingsViewModel.config.provider == provider else { return }
                 // Provide a clearer message for JSON decoding errors
                 let context: String
                 switch decodingError {
@@ -987,18 +998,17 @@ public struct ProviderSelectionStepView: View {
                 @unknown default:
                     context = decodingError.localizedDescription
                 }
-                await MainActor.run {
-                    connectionStatus = .failed
-                    connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
-                    HapticFeedbackManager.shared.error()
-                }
+                connectionStatus = .failed
+                connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
+                HapticFeedbackManager.shared.error()
             } catch {
-                await MainActor.run {
-                    connectionStatus = .failed
-                    connectionError = error.localizedDescription
-                    HapticFeedbackManager.shared.error()
-                }
+                guard !Task.isCancelled,
+                      settingsViewModel.config.provider == provider else { return }
+                connectionStatus = .failed
+                connectionError = error.localizedDescription
+                HapticFeedbackManager.shared.error()
             }
+            taskController.connectionTestTask = nil
         }
     }
 
