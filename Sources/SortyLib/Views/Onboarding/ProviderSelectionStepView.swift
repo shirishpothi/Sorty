@@ -479,6 +479,7 @@ public struct ProviderSelectionStepView: View {
                             }
                         }
                         .pickerStyle(.menu)
+                        .tint(.primary)
 
                         switch settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) {
                         case .apiKey:
