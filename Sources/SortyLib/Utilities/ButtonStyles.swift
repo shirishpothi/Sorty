@@ -38,6 +38,7 @@ public enum SortyButtonIntent: Equatable {
 
 /// Standard app button style for regular controls, with semantic tint variants.
 public struct SortyStandardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
 
     var intent: SortyButtonIntent
@@ -78,7 +79,7 @@ public struct SortyStandardButtonStyle: ButtonStyle {
             }
             .scaleEffect(pressed ? 0.975 : 1)
             .opacity(isEnabled ? 1 : 0.52)
-            .animation(.easeOut(duration: 0.12), value: pressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
             .onChange(of: pressed) { _, newValue in
                 if newValue {
                     if resolvedIntent == .destructive {

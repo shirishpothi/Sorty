@@ -15,6 +15,7 @@ struct AdvancedSettingsView: View {
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var diagnosticReportError: String?
     @State private var isGeneratingDiagnosticReport = false
 
@@ -167,9 +168,14 @@ struct AdvancedSettingsView: View {
                     } label: {
                         HStack {
                             if isGeneratingDiagnosticReport {
-                                ProgressView()
-                                    .controlSize(.small)
-                                Text("Generating…")
+                                if reduceMotion {
+                                    Image(systemName: "hourglass")
+                                    Text("Generating…")
+                                } else {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text("Generating…")
+                                }
                             } else {
                                 Image(systemName: "doc.zipper")
                                 Text("Generate Diagnostic Report")
