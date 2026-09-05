@@ -160,11 +160,6 @@ struct SettingsView: View {
                         }
                     }
                     .padding(24)
-                    // Bottom breathing room lets ScrollViewReader center trailing
-                    // controls (e.g. Generate Diagnostic Report). Without it the
-                    // scroll clamps at max offset and bottom targets land at the
-                    // edge instead of centered.
-                    .padding(.bottom, isSearching ? 0 : max(geometry.size.height / 2 - 60, 0))
                 }
                 .onAppear {
                     routeToFocusedSetting(using: proxy)
@@ -442,16 +437,21 @@ struct SettingsView: View {
                 proxy.scrollTo(target.rawValue, anchor: .center)
             }
 
-            // A second layout turn covers category swaps, conditional settings,
-            // and grid targets that materialize after the first scroll request.
-            DispatchQueue.main.async {
-                guard !isSearching,
-                      appState.settingsFocusTarget == target,
-                      selectedCategory == targetCategory
-                else {
-                    return
+            // Leaving search results or switching categories swaps the whole
+            // content tree, and the first attempt can run before SwiftUI has
+            // mounted the target, silently scrolling nowhere. Re-issue after
+            // layout settles; each attempt is idempotent and still guarded by
+            // the live focus target.
+            for delay in [0.15, 0.4] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard !isSearching,
+                          appState.settingsFocusTarget == target,
+                          selectedCategory == targetCategory
+                    else {
+                        return
+                    }
+                    proxy.scrollTo(target.rawValue, anchor: .center)
                 }
-                proxy.scrollTo(target.rawValue, anchor: .center)
             }
         }
     }
