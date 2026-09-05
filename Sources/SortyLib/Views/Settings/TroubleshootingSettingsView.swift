@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Beam
 
 struct TroubleshootingSettingsView: View {
     @SortyHotReload private var hotReload
@@ -677,6 +678,9 @@ private struct MaintenanceActionTile: View {
         .buttonStyle(.plain)
         .disabled(isBusy)
         .opacity(isBusy ? 0.6 : 1)
+        // Beam rendering suspends itself while faded out and pauses for
+        // Reduce Motion / inactive windows, so this costs nothing at rest.
+        .beam(.small, palette: .colorful, theme: .dark, active: isBusy, cornerRadius: 8)
         .settingsFocusable(
             focusTarget,
             shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
