@@ -246,6 +246,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     private func setupNotifications() {
+        // macOS can terminate Sorty to apply a Full Disk Access change before
+        // the debounced persistence actor flushes. Write synchronously here so
+        // pending watched-folder work survives that restart.
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.flushPendingWorkSynchronously()
+            }
+        })
         notificationObservers.append(NotificationCenter.default.addObserver(forName: .organizationDidRevert, object: nil, queue: .main) { [weak self] notification in
             guard let self = self,
                   let url = notification.userInfo?["url"] as? URL else { return }
@@ -1244,6 +1253,33 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             revision: revision,
             immediately: true
         )
+    }
+
+    /// Synchronous termination-path write. The debounced actor cannot be
+    /// awaited from `willTerminate`, so this writes the same snapshot
+    /// directly to cover a restart forced by a Full Disk Access change.
+    private func flushPendingWorkSynchronously() {
+        refreshAllActivity()
+        guard let pendingWorkURL else { return }
+        let (persisted, persistedReviews) = outstandingWatchWorkSnapshot()
+        do {
+            if persisted.isEmpty && persistedReviews.isEmpty {
+                if FileManager.default.fileExists(atPath: pendingWorkURL.path) {
+                    try FileManager.default.removeItem(at: pendingWorkURL)
+                }
+                return
+            }
+            try FileManager.default.createDirectory(
+                at: pendingWorkURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try JSONEncoder().encode(
+                PersistedOutstandingWatchWork(batches: persisted, reviews: persistedReviews)
+            )
+            try data.write(to: pendingWorkURL, options: .atomic)
+        } catch {
+            print("Coordinator: Failed to flush watched-folder pending work: \(error)")
+        }
     }
 
     private func outstandingWatchWorkSnapshot() -> (

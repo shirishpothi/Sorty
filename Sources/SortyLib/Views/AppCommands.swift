@@ -413,6 +413,11 @@ public class AppState: ObservableObject {
                     includingResourceValuesForKeys: nil,
                     relativeTo: nil
                 )
+                // Remember a bare folder selection so a restart forced by
+                // macOS (e.g. enabling Full Disk Access) restores the folder
+                // even before analysis ever ran. Richer snapshots win: the
+                // organizer skips this when a run or plan is already active.
+                organizer?.persistSelectedDirectoryForRestart(url)
             } else {
                 selectedDirectoryBookmark = nil
             }

@@ -486,6 +486,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
     public var windowSessionID: UUID?
+    /// When true, the organizer snapshots its manual session (selected folder,
+    /// in-progress marker, ready/completed plan) so a restart forced by macOS
+    /// — for example after enabling Full Disk Access — can pick up where the
+    /// user left off. The automation organizer leaves this off so watched-folder
+    /// work keeps using WatcherPendingWork.json instead of clobbering this file.
+    public var isManualSessionPersistenceEnabled = false
+    /// Test hook: when set, manual-session reads/writes use this URL instead
+    /// of Application Support so tests never touch real user state.
+    public var manualSessionURLForTesting: URL?
     public var progress: Double {
         get { presentationState.progress }
         set { updatePresentation { $0.progress = newValue } }
@@ -1664,6 +1673,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Cancel any existing task first
         cancelInternal()
+        // Snapshot the intent before analysis starts so a restart forced by
+        // macOS (e.g. enabling Full Disk Access) can offer the folder again.
+        persistManualSession(directory: directory, plan: nil, stateHint: .interrupted, instructions: customPrompt ?? customInstructions)
         try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature)
     }
 
@@ -1792,6 +1804,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = validatedPlan
                 resumeCheckpoint = nil
                 updateState(.ready, stage: "Ready!", progress: 1.0)
+                persistManualSession(directory: directory, plan: validatedPlan, stateHint: .ready, instructions: instructions)
             }
 
             NotificationManager.shared.show(
@@ -3433,6 +3446,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
         measuredWorkProgress = nil
+        // A cancelled run must not resurrect after a restart.
+        clearPersistedManualSession()
     }
 
     private func resetToIdleUnlessCancellationResetIsSuppressed(source: OrganizationEntrySource = .manual) {
@@ -4381,6 +4396,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         defer { ProcessInfo.processInfo.endActivity(activity) }
 
         updateState(.applying, stage: "Applying changes to your files...", progress: 0.0)
+        // A restart mid-apply must not resurrect a stale ready preview; the
+        // interrupted marker restores the folder without auto-reapplying.
+        persistManualSession(directory: baseURL, plan: nil, stateHint: .interrupted, instructions: currentRunInstructions)
         
         // Start learning session for rule tracking
         if let learningsObserver = learningsObserver {
@@ -4450,6 +4468,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 organizationStage = "Complete!"
                 progress = 1.0
                 transition(to: .completed)
+                persistManualSession(directory: baseURL, plan: planToApply, stateHint: .completed, instructions: currentRunInstructions)
             }
 
             NotificationCenter.default.post(
@@ -5448,7 +5467,160 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             lastInsightExtraction = .distantPast
             insightsCache = nil
         }
-        
+        clearPersistedManualSession()
+    }
+
+    // MARK: - Manual session restore (Full Disk Access restart)
+
+    /// Why a manual session was snapshotted. Selected/interrupted runs
+    /// restore the folder without a plan; ready/completed runs restore the plan.
+    public enum ManualSessionStateHint: String, Codable, Sendable {
+        case selected
+        case interrupted
+        case ready
+        case completed
+    }
+
+    private struct PersistedManualSession: Codable, Sendable {
+        var directoryPath: String
+        var directoryBookmark: Data?
+        var customInstructions: String
+        var plan: OrganizationPlan?
+        var stateHint: ManualSessionStateHint
+        var savedAt: Date
+    }
+
+    static func defaultManualSessionURL() -> URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sorty", isDirectory: true)
+            .appendingPathComponent("ManualSession.json")
+    }
+
+    private func resolvedManualSessionURL(_ explicit: URL? = nil) -> URL? {
+        explicit ?? manualSessionURLForTesting ?? Self.defaultManualSessionURL()
+    }
+
+    /// Snapshots the manual session for restart recovery. Writes stay on the
+    /// main actor per the startup contract; each call replaces the previous
+    /// snapshot so the file always reflects the latest user-visible state.
+    public func persistManualSession(
+        directory: URL,
+        plan: OrganizationPlan?,
+        stateHint: ManualSessionStateHint,
+        instructions: String,
+        url: URL? = nil
+    ) {
+        guard isManualSessionPersistenceEnabled else { return }
+        let targetURL = resolvedManualSessionURL(url)
+        guard let targetURL else { return }
+        let bookmark = try? directory.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        let snapshot = PersistedManualSession(
+            directoryPath: directory.standardizedFileURL.path,
+            directoryBookmark: bookmark,
+            customInstructions: instructions,
+            plan: plan,
+            stateHint: stateHint,
+            savedAt: Date()
+        )
+        do {
+            try FileManager.default.createDirectory(
+                at: targetURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try JSONEncoder().encode(snapshot)
+            try data.write(to: targetURL, options: .atomic)
+        } catch {
+            print("FolderOrganizer: Failed to persist manual session: \(error)")
+        }
+    }
+
+    /// Records a folder selection before analysis starts. Skips when a richer
+    /// snapshot (in-progress run or ready plan) is already active so restoring
+    /// cannot clobber it back to a bare selection.
+    public func persistSelectedDirectoryForRestart(_ url: URL, sessionURL: URL? = nil) {
+        guard isManualSessionPersistenceEnabled,
+              state == .idle,
+              currentPlan == nil else { return }
+        persistManualSession(directory: url, plan: nil, stateHint: .selected, instructions: customInstructions, url: sessionURL)
+    }
+
+    public func clearPersistedManualSession(url: URL? = nil) {
+        guard isManualSessionPersistenceEnabled else { return }
+        let targetURL = resolvedManualSessionURL(url)
+        guard let targetURL else { return }
+        try? FileManager.default.removeItem(at: targetURL)
+    }
+
+    /// Restores the snapshotted folder (and ready/completed plan when present).
+    /// Reads and decodes off the main actor; published state mutates on it.
+    /// Returns the restored directory so the caller can reselect it.
+    @discardableResult
+    public func restorePersistedManualSession(sessionURL: URL? = nil) async -> URL? {
+        guard isManualSessionPersistenceEnabled else { return nil }
+        guard state == .idle, currentDirectory == nil, currentPlan == nil else { return nil }
+        let targetURL = resolvedManualSessionURL(sessionURL)
+        guard let targetURL else { return nil }
+        let snapshot: PersistedManualSession? = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: targetURL) else { return nil }
+            return try? JSONDecoder().decode(PersistedManualSession.self, from: data)
+        }.value
+        guard let snapshot else { return nil }
+        var resolved: URL?
+        var scopedBookmarkURL: URL?
+        if let bookmark = snapshot.directoryBookmark {
+            var isStale = false
+            if let bookmarkURL = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ) {
+                // Held for the restored session, matching the selected-folder
+                // scope ownership; released below if the snapshot is discarded.
+                if bookmarkURL.startAccessingSecurityScopedResource() {
+                    scopedBookmarkURL = bookmarkURL
+                }
+                resolved = bookmarkURL.standardizedFileURL
+            }
+        }
+        if resolved == nil {
+            resolved = URL(fileURLWithPath: snapshot.directoryPath).standardizedFileURL
+        }
+        guard let directory = resolved else {
+            if let scopedBookmarkURL { scopedBookmarkURL.stopAccessingSecurityScopedResource() }
+            try? FileManager.default.removeItem(at: targetURL)
+            return nil
+        }
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            if let scopedBookmarkURL { scopedBookmarkURL.stopAccessingSecurityScopedResource() }
+            try? FileManager.default.removeItem(at: targetURL)
+            return nil
+        }
+        customInstructions = snapshot.customInstructions
+        currentDirectory = directory
+        switch snapshot.stateHint {
+        case .ready:
+            guard let plan = snapshot.plan else { return directory }
+            currentPlan = plan
+            progress = 1.0
+            transition(to: .ready, force: true)
+            organizationStage = "Ready!"
+        case .completed:
+            guard let plan = snapshot.plan else { return directory }
+            currentPlan = plan
+            progress = 1.0
+            transition(to: .completed, force: true)
+            organizationStage = "Complete!"
+        case .selected, .interrupted:
+            break
+        }
+        return directory
     }
 
     public func loadPreparedIncrementalPlan(

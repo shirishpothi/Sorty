@@ -57,8 +57,16 @@ public final class WindowSession: ObservableObject {
 
         appState.organizer = organizer
         appState.calibrateAction = calibrateAction
+        organizer.isManualSessionPersistenceEnabled = true
 
         await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
+        // A restart forced by macOS (e.g. enabling Full Disk Access) wipes
+        // in-memory state; restore the manual folder and ready preview so the
+        // user picks up where they left off.
+        if let restoredDirectory = await organizer.restorePersistedManualSession(),
+           appState.selectedDirectory == nil {
+            appState.selectedDirectory = restoredDirectory
+        }
         appState.updateManager.checkOnLaunchIfNeeded()
         AnalyticsManager.shared.captureWorkflow(
             workflow: "app_launch",
