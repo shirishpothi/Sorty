@@ -232,6 +232,7 @@ struct FinderIntegrationSettingsView: View {
             Image(systemName: compactStatusIcon(isHealthy: isHealthy))
                 .foregroundStyle(compactStatusColor(isHealthy: isHealthy))
                 .font(.caption)
+                .frame(width: 16, height: 16, alignment: .center)
                 .symbolReplaceTransition(animationValue: compactStatusIcon(isHealthy: isHealthy))
                 .accessibilityHidden(true)
             Text(label)
