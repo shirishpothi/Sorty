@@ -47,6 +47,8 @@ struct OrganizingFlightStageView: View {
     @State private var displayedSuggestions: [FolderSuggestion] = []
     @State private var flightTask: Task<Void, Never>?
     @State private var shownFlightFileIDs: Set<UUID> = []
+    @State private var flightQueue: [FlightCandidate] = []
+    @State private var nextFlightIndex = 0
 
     private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
@@ -335,11 +337,7 @@ struct OrganizingFlightStageView: View {
     }
 
     private func pendingFlightCount() -> Int {
-        visibleSuggestions.reduce(0) { count, suggestion in
-            count + filesWithRenames(in: suggestion)
-                .filter { !shownFlightFileIDs.contains($0.file.id) }
-                .count
-        }
+        max(0, flightQueue.count - nextFlightIndex)
     }
 
     private func sleepScaled(_ nanoseconds: UInt64, _ pace: Double) async {
@@ -476,6 +474,8 @@ struct OrganizingFlightStageView: View {
             if !displayedSuggestions.isEmpty {
                 displayedSuggestions = []
                 shownFlightFileIDs = []
+                flightQueue = []
+                nextFlightIndex = 0
             }
             return
         }
@@ -506,6 +506,7 @@ struct OrganizingFlightStageView: View {
             displayedSuggestions = merged
         }
 
+        rebuildFlightQueue(from: merged)
         startCycleIfNeeded()
     }
 
@@ -516,26 +517,65 @@ struct OrganizingFlightStageView: View {
     }
 
     private func nextFlight() -> FlightCandidate? {
-        let candidates = visibleSuggestions.flatMap { suggestion in
-            filesWithRenames(in: suggestion).map {
-                FlightCandidate(folderName: suggestion.folderName, file: $0.file, renameMapping: $0.renameMapping)
-            }
-        }
-        guard let candidate = candidates.first(where: {
-            !shownFlightFileIDs.contains($0.file.id)
-        }) else { return nil }
+        guard nextFlightIndex < flightQueue.count else { return nil }
+        let candidate = flightQueue[nextFlightIndex]
+        nextFlightIndex += 1
         shownFlightFileIDs.insert(candidate.file.id)
         return candidate
     }
 
-    private func filesWithRenames(in suggestion: FolderSuggestion) -> [(file: FileItem, renameMapping: FileRenameMapping?)] {
-        var items = suggestion.files.map { file in
-            (file: file, renameMapping: suggestion.renameMapping(for: file).flatMap { $0.hasRename ? $0 : nil })
+    private func rebuildFlightQueue(from suggestions: [FolderSuggestion]) {
+        var renameIndex: [UUID: FileRenameMapping] = [:]
+        for suggestion in suggestions {
+            indexRenames(in: suggestion, into: &renameIndex)
+        }
+
+        var queue: [FlightCandidate] = []
+        for suggestion in suggestions.prefix(maxBuckets) {
+            appendFlightCandidates(
+                in: suggestion,
+                destinationFolderName: suggestion.folderName,
+                renameIndex: renameIndex,
+                to: &queue
+            )
+        }
+        flightQueue = queue.filter { !shownFlightFileIDs.contains($0.file.id) }
+        nextFlightIndex = 0
+    }
+
+    private func indexRenames(
+        in suggestion: FolderSuggestion,
+        into index: inout [UUID: FileRenameMapping]
+    ) {
+        for mapping in suggestion.fileRenameMappings where mapping.hasRename {
+            index[mapping.originalFile.id] = mapping
         }
         for subfolder in suggestion.subfolders {
-            items.append(contentsOf: filesWithRenames(in: subfolder))
+            indexRenames(in: subfolder, into: &index)
         }
-        return items
+    }
+
+    private func appendFlightCandidates(
+        in suggestion: FolderSuggestion,
+        destinationFolderName: String,
+        renameIndex: [UUID: FileRenameMapping],
+        to queue: inout [FlightCandidate]
+    ) {
+        for file in suggestion.files {
+            queue.append(FlightCandidate(
+                folderName: destinationFolderName,
+                file: file,
+                renameMapping: renameIndex[file.id]
+            ))
+        }
+        for subfolder in suggestion.subfolders {
+            appendFlightCandidates(
+                in: subfolder,
+                destinationFolderName: destinationFolderName,
+                renameIndex: renameIndex,
+                to: &queue
+            )
+        }
     }
 
     private func iconForPath(_ path: String) -> NSImage {
