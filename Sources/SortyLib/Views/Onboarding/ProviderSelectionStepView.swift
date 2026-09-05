@@ -97,7 +97,7 @@ public struct ProviderSelectionStepView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to Sorty")
+                        PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to selected AI provider")
                         PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
                         PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
                         PrivacyFeatureRow(icon: "server.rack", text: "Local and on-device options available")
