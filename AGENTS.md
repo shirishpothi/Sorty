@@ -25,8 +25,7 @@
 - Prefer Swift 6 concurrency (`async/await`, `Task { @MainActor in ... }`) and mutate UI state only on the main actor.
 - Tests use XCTest in `Tests/SortyTests`; prefer `MockAIClient`, temp dirs in `setUp()`, cleanup in `tearDown()`, and keep `accessibilityIdentifier`s on interactive UI.
 - UI polish is required: subtle hover feedback, compact spacing, short `.spring()`/`.easeInOut` transitions, and `HapticFeedbackManager.shared` (`selection`, `light`/`tap`, `success`, `error`), as well as UI consistency with the rest of the app.
-- Performance without compromise:
-Lots of apps have gotten bogged down with bad tech decisions and "slop". We have not, and we're proud of the performance of Sorty. We regularly audit for performance regressions. Make sure all changes are considerate of performance impact.
+- Keep launch-path initializers free of store decoding, bookmark resolution, credential/process probes, and service startup. Before changing app/window initialization or persisted-state loading, read [Startup performance](docs/agent-guides/startup-performance.md). Preserve hydration gates and reset safety; measure first visible frame and usable controls separately before claiming a launch-time improvement.
 - Comments should describe how code is used, especially for functions, and should move with the code they explain. Do not annotate every line of behavior.
 - Users run Sorty all day and notice dropped frames, misleading spinners, and stale labels. Avoid animations that repaint continuously without a clear purpose, since they can keep the GPU busy on high-refresh displays. Use motion deliberately for feedback and state changes, and make sure loading and displayed state stay accurate.
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
