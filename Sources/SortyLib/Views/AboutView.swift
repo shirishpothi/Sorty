@@ -203,6 +203,7 @@ private struct AboutAppIconEasterEgg: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var carousel = AboutIconCarousel()
     @State private var iconHovered = false
+    @State private var isWindowVisible = true
 
     private let iconSize: CGFloat = 152
     private let stageWidth: CGFloat = 200
@@ -252,16 +253,22 @@ private struct AboutAppIconEasterEgg: View {
                 HapticFeedbackManager.shared.selection()
             }
         }
-        .onAppear { carousel.setAutoCycleEnabled(!reduceMotion) }
+        .onAppear { updateAutoCycle() }
         .onChange(of: reduceMotion) { _, newValue in
-            carousel.setAutoCycleEnabled(!newValue)
+            updateAutoCycle()
         }
+        .onChange(of: isWindowVisible) { _, _ in updateAutoCycle() }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onDisappear { carousel.stop() }
     }
 
     private var iconScale: CGFloat {
         if carousel.isBursting { return 0.08 }
         return iconHovered ? 1.05 : 1.0
+    }
+
+    private func updateAutoCycle() {
+        carousel.setAutoCycleEnabled(!reduceMotion && isWindowVisible)
     }
 }
 

@@ -15,6 +15,7 @@ public struct WhatsNewTourView: View {
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
     @State private var navigationDirection: CGFloat = 1
+    @State private var isWindowVisible = true
 
     private let swipeThreshold: CGFloat = 42
     private let maximumSwipeOffset: CGFloat = 14
@@ -36,8 +37,14 @@ public struct WhatsNewTourView: View {
                 .padding(.bottom, 8)
         }
         .animation(pageTransitionAnimation, value: currentPage)
-        .task(id: ImageRotationTaskID(page: currentPage, reduceMotion: reduceMotion)) {
-            guard !reduceMotion, page.imageNames.count > 1 else { return }
+        .task(
+            id: ImageRotationTaskID(
+                page: currentPage,
+                reduceMotion: reduceMotion,
+                isWindowVisible: isWindowVisible
+            )
+        ) {
+            guard !reduceMotion, isWindowVisible, page.imageNames.count > 1 else { return }
 
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(3_800))
@@ -48,6 +55,7 @@ public struct WhatsNewTourView: View {
             }
         }
         .contentShape(Rectangle())
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onHover { isInside in
             isPointerInside = isInside
             if !isInside {
@@ -819,6 +827,7 @@ private struct GooeyPageIndicator: View, @MainActor Animatable {
 private struct ImageRotationTaskID: Hashable {
     let page: Int
     let reduceMotion: Bool
+    let isWindowVisible: Bool
 }
 
 private struct WhatsNewPage: Hashable {

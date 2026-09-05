@@ -38,6 +38,7 @@ struct ExclusionRulesView: View {
     @State private var isShowingNaturalLanguageExceptionsInfo = false
     @State private var isLearningExclusionsExpanded = true
     @State private var showingRemoveAllConfirmation = false
+    @State private var isWindowVisible = true
     @FocusState private var isNLExceptionFocused: Bool
 
     private var trimmedSearchText: String {
@@ -145,6 +146,7 @@ struct ExclusionRulesView: View {
                 appState.highlightedExclusionRuleID = newestRule.id
             }
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private var content: some View {
@@ -716,8 +718,8 @@ struct ExclusionRulesView: View {
                 }
             }
         }
-        .task(id: newNLException.isEmpty) {
-            guard newNLException.isEmpty else { return }
+        .task(id: NaturalLanguageSuggestionTaskID(isEmpty: newNLException.isEmpty, isVisible: isWindowVisible)) {
+            guard newNLException.isEmpty, isWindowVisible else { return }
 
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
@@ -1062,6 +1064,11 @@ struct ExclusionRulesView: View {
         }
         HapticFeedbackManager.shared.success()
     }
+}
+
+private struct NaturalLanguageSuggestionTaskID: Hashable {
+    let isEmpty: Bool
+    let isVisible: Bool
 }
 
 private struct ExclusionEditorTransitionModifier: ViewModifier {
