@@ -323,6 +323,23 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(cached.current, "Grouping project documents together")
         XCTAssertEqual(cached.history.last?.text, "Grouping project documents together")
     }
+
+    func testProgressLineParserRecoversAfterLongIrrelevantLine() {
+        organizer.didReceiveChunk(String(repeating: "x", count: 100_000))
+        organizer.didReceiveChunk("\n>> decision: Grouping project documents together\n")
+
+        XCTAssertEqual(organizer.currentInsight, "Grouping project documents together")
+        XCTAssertEqual(organizer.insightHistory.last?.text, "Grouping project documents together")
+    }
+
+    func testProgressLineParserPreservesChunkedPrefixAndContent() {
+        organizer.didReceiveChunk("  >")
+        organizer.didReceiveChunk("> file: Assigning report.pdf")
+        organizer.didReceiveChunk(" to Reports\n")
+
+        XCTAssertEqual(organizer.currentInsight, "Assigning report.pdf to Reports")
+        XCTAssertEqual(organizer.insightHistory.last?.category, .file)
+    }
     
     // MARK: - Organization Stage Updates
     

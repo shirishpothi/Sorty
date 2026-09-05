@@ -697,6 +697,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     // Progress line streaming support
     private var progressLineBuffer: String = ""
+    private var discardsCurrentProgressLine = false
     private var receivedProgressLines: Bool = false
     private var jsonStartedInStream: Bool = false
     private var progressLineCount: Int = 0
@@ -1100,6 +1101,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         lastInsightExtraction = .distantPast
         insightsCache = nil
         progressLineBuffer = ""
+        discardsCurrentProgressLine = false
         receivedProgressLines = false
         jsonStartedInStream = false
         progressLineCount = 0
@@ -1177,49 +1179,77 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Parse progress lines (>> category: text) from streaming chunks
     @MainActor
     private func processProgressLines(from chunk: String) {
-        progressLineBuffer += chunk
-        
-        // Process complete lines from the buffer
-        while let newlineIndex = progressLineBuffer.firstIndex(of: "\n") {
-            let line = String(progressLineBuffer[progressLineBuffer.startIndex..<newlineIndex])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            progressLineBuffer = String(progressLineBuffer[progressLineBuffer.index(after: newlineIndex)...])
-            
-            // Check if JSON has started (line contains opening brace)
-            if line.contains("{") {
+        for fragment in chunk.split(separator: "\n", omittingEmptySubsequences: false) {
+            if fragment.contains("{") {
+                progressLineBuffer = ""
+                discardsCurrentProgressLine = true
                 jsonStartedInStream = true
                 return
             }
-            
-            // Skip empty lines
-            guard !line.isEmpty else { continue }
-            
-            // Parse progress lines starting with ">> "
-            guard line.hasPrefix(">> "), progressLineCount < progressLineLimit else { continue }
-            
-            let content = String(line.dropFirst(3))
-            guard let insight = parseProgressLine(content) else { continue }
-            
-            progressLineCount += 1
-            receivedProgressLines = true
-            
-            withBatchUpdates {
-                self.currentInsight = insight.text
-                if let existingIndex = self.insightHistory.firstIndex(where: { $0.id == insight.id }) {
-                    self.insightHistory.remove(at: existingIndex)
-                }
-                if self.insightHistory.count >= self.progressLineLimit {
-                    self.insightHistory.removeFirst()
-                }
-                self.insightHistory.append(insight)
+
+            appendProgressLineFragment(fragment)
+            guard fragment.endIndex != chunk.endIndex else { continue }
+            finishProgressLine()
+        }
+    }
+
+    @MainActor
+    private func appendProgressLineFragment(_ fragment: Substring) {
+        guard !discardsCurrentProgressLine else { return }
+
+        var remainder = fragment
+        if progressLineBuffer.isEmpty {
+            remainder = remainder.drop(while: { $0.isWhitespace })
+        }
+
+        if progressLineBuffer.count < 3 {
+            let prefixRemainder = remainder.prefix(3 - progressLineBuffer.count)
+            progressLineBuffer.append(contentsOf: prefixRemainder)
+            remainder = remainder.dropFirst(prefixRemainder.count)
+            guard ">> ".hasPrefix(progressLineBuffer) else {
+                progressLineBuffer = ""
+                discardsCurrentProgressLine = true
+                return
             }
-            insightsCache = nil
         }
-        
-        // Check if remaining buffer contains start of JSON (e.g., chunk ended mid-line with "{")
-        if progressLineBuffer.contains("{") {
-            jsonStartedInStream = true
+
+        let maximumProgressLineLength = 16 * 1024
+        guard progressLineBuffer.count + remainder.count <= maximumProgressLineLength else {
+            progressLineBuffer = ""
+            discardsCurrentProgressLine = true
+            return
         }
+        progressLineBuffer.append(contentsOf: remainder)
+    }
+
+    @MainActor
+    private func finishProgressLine() {
+        defer {
+            progressLineBuffer = ""
+            discardsCurrentProgressLine = false
+        }
+        guard !discardsCurrentProgressLine else { return }
+
+        let line = progressLineBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard line.hasPrefix(">> "), progressLineCount < progressLineLimit else { return }
+
+        let content = String(line.dropFirst(3))
+        guard let insight = parseProgressLine(content) else { return }
+
+        progressLineCount += 1
+        receivedProgressLines = true
+
+        withBatchUpdates {
+            currentInsight = insight.text
+            if let existingIndex = insightHistory.firstIndex(where: { $0.id == insight.id }) {
+                insightHistory.remove(at: existingIndex)
+            }
+            if insightHistory.count >= progressLineLimit {
+                insightHistory.removeFirst()
+            }
+            insightHistory.append(insight)
+        }
+        insightsCache = nil
     }
 
     /// Rebuild insight timeline from the already-buffered stream text.
@@ -1233,6 +1263,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 insightHistory = []
             }
             progressLineBuffer = ""
+            discardsCurrentProgressLine = false
             receivedProgressLines = false
             jsonStartedInStream = false
             progressLineCount = 0
@@ -1270,9 +1301,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             rebuiltInsights.append(insight)
         }
 
-        progressLineBuffer = sawJSON ? "" : trailingPartialBuffer
+        progressLineBuffer = ""
+        discardsCurrentProgressLine = false
+        if !sawJSON {
+            appendProgressLineFragment(trailingPartialBuffer[...])
+        }
         receivedProgressLines = !rebuiltInsights.isEmpty
-        jsonStartedInStream = sawJSON || progressLineBuffer.contains("{")
+        jsonStartedInStream = sawJSON
         progressLineCount = rebuiltInsights.count
 
         withBatchUpdates {
