@@ -4152,7 +4152,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         // Get the selected files from Finder
-        guard let selectedFiles = FinderAutomation.getSelectedFiles(), !selectedFiles.isEmpty else {
+        guard let selectedFiles = await FinderAutomation.getSelectedFiles(), !selectedFiles.isEmpty else {
             await MainActor.run {
                 transition(to: .idle, force: true)
                 organizationStage = "No files selected in Finder"

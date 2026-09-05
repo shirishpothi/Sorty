@@ -27,6 +27,8 @@ public final class AutomationManager: ObservableObject {
     // MARK: - Private Properties
     
     private var selectionCheckTimer: Timer?
+    private var selectionRefreshTask: Task<Void, Never>?
+    private var selectionMonitoringDemandCount = 0
     private let selectionCheckInterval: TimeInterval = 2.0
     private var isInitializing = true
     private var isStartedUp = false
@@ -47,7 +49,7 @@ public final class AutomationManager: ObservableObject {
             guard !isInitializing else { return }
             UserDefaults.standard.set(enableSelectionMonitoring, forKey: enableSelectionMonitoringKey)
             guard isStartedUp else { return }
-            if enableSelectionMonitoring {
+            if enableSelectionMonitoring && selectionMonitoringDemandCount > 0 {
                 startSelectionMonitoring()
             } else {
                 stopSelectionMonitoring()
@@ -165,7 +167,10 @@ public final class AutomationManager: ObservableObject {
             UserDefaults.standard.set(true, forKey: previouslyGrantedKey)
         }
 
-        if isStartedUp && enableSelectionMonitoring && automationStatus == .granted {
+        if isStartedUp,
+           enableSelectionMonitoring,
+           selectionMonitoringDemandCount > 0,
+           automationStatus == .granted {
             startSelectionMonitoring()
         }
     }
@@ -182,9 +187,28 @@ public final class AutomationManager: ObservableObject {
     }
     
     // MARK: - Finder Selection
+
+    /// Retain Finder selection updates while a visible feature consumes them.
+    public func beginSelectionMonitoring() {
+        selectionMonitoringDemandCount += 1
+        guard selectionMonitoringDemandCount == 1, enableSelectionMonitoring else { return }
+        startSelectionMonitoring()
+    }
+
+    /// Release a feature's interest without stopping updates needed elsewhere.
+    public func endSelectionMonitoring() {
+        selectionMonitoringDemandCount = max(0, selectionMonitoringDemandCount - 1)
+        if selectionMonitoringDemandCount == 0 {
+            stopSelectionMonitoring()
+        }
+    }
     
     /// Start monitoring Finder selection periodically
     public func startSelectionMonitoring() {
+        guard selectionMonitoringDemandCount > 0 else {
+            pauseSelectionMonitoring()
+            return
+        }
         guard automationChecksEnabled else {
             DebugLogger.log("Automation checks not enabled; deferring selection monitoring")
             statusMessage = "Selection monitoring deferred until permission check"
@@ -232,8 +256,18 @@ public final class AutomationManager: ObservableObject {
             statusMessage = "Cannot refresh Finder selection without permission"
             return
         }
-        
-        let selection = FinderAutomation.getSelectedFiles()
+
+        guard selectionRefreshTask == nil else { return }
+        selectionRefreshTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let selection = await FinderAutomation.getSelectedFiles()
+            guard !Task.isCancelled else { return }
+            applyFinderSelection(selection)
+            selectionRefreshTask = nil
+        }
+    }
+
+    private func applyFinderSelection(_ selection: [URL]?) {
         let updatedItems = selection ?? []
         let updatedHasValidSelection = !updatedItems.isEmpty
         let updatedStatus = selection == nil
@@ -256,6 +290,8 @@ public final class AutomationManager: ObservableObject {
     private func pauseSelectionMonitoring() {
         selectionCheckTimer?.invalidate()
         selectionCheckTimer = nil
+        selectionRefreshTask?.cancel()
+        selectionRefreshTask = nil
     }
     
     /// Get the path of the frontmost Finder window
@@ -317,7 +353,7 @@ public final class AutomationManager: ObservableObject {
             return
         }
 
-        if enableSelectionMonitoring {
+        if enableSelectionMonitoring && selectionMonitoringDemandCount > 0 {
             startSelectionMonitoring()
         } else {
             updateFinderSelection()
@@ -343,7 +379,9 @@ public final class AutomationManager: ObservableObject {
             guard self.automationChecksEnabled else { return }
             self.checkPermissions()
 
-            if self.enableSelectionMonitoring && self.automationStatus == .granted {
+            if self.enableSelectionMonitoring,
+               self.selectionMonitoringDemandCount > 0,
+               self.automationStatus == .granted {
                 self.startSelectionMonitoring()
             }
         }

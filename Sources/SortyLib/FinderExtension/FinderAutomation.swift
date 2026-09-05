@@ -11,6 +11,46 @@ import AppKit
 import ApplicationServices
 import Permiso
 
+private actor FinderSelectionQuery {
+    static let shared = FinderSelectionQuery()
+
+    private let script = NSAppleScript(source: """
+        tell application "Finder"
+            try
+                set selectedItems to selection
+                set filePaths to {}
+                repeat with anItem in selectedItems
+                    set end of filePaths to POSIX path of (anItem as alias)
+                end repeat
+                return filePaths as string
+            on error
+                return ""
+            end try
+        end tell
+        """)
+
+    func selectedFiles(checksEnabled: Bool) -> [URL]? {
+        guard checksEnabled,
+              FinderAutomation.determineAutomationPermission(prompt: false) == .granted,
+              let script else { return nil }
+
+        var errorInfo: NSDictionary?
+        let result = script.executeAndReturnError(&errorInfo)
+        if let errorInfo {
+            DebugLogger.log("AppleScript error getting selection: \(errorInfo)")
+            return nil
+        }
+
+        guard let resultString = result.stringValue, !resultString.isEmpty else {
+            return nil
+        }
+        return resultString.components(separatedBy: CharacterSet(charactersIn: ",\n"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .map { URL(fileURLWithPath: $0) }
+    }
+}
+
 /// Service for automating Finder interactions
 /// Uses AppleScript which requires Automation permission
 @MainActor
@@ -63,7 +103,7 @@ public final class FinderAutomation {
         }
     }
 
-    nonisolated private static func determineAutomationPermission(
+    nonisolated fileprivate static func determineAutomationPermission(
         prompt: Bool
     ) -> PermissionStatus {
         let targetDesc = NSAppleEventDescriptor(bundleIdentifier: "com.apple.finder")
@@ -117,49 +157,8 @@ public final class FinderAutomation {
     
     /// Get the currently selected files in the frontmost Finder window
     /// Returns nil if no Finder window is open or no selection
-    public static func getSelectedFiles() -> [URL]? {
-        guard checksEnabled else { return nil }
-        guard checkAutomationPermission() == .granted else {
-            return nil
-        }
-        
-        let scriptSource = """
-        tell application "Finder"
-            try
-                set selectedItems to selection
-                set filePaths to {}
-                repeat with anItem in selectedItems
-                    set end of filePaths to POSIX path of (anItem as alias)
-                end repeat
-                return filePaths as string
-            on error
-                return ""
-            end try
-        end tell
-        """
-        
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return nil
-        }
-        
-        var errorInfo: NSDictionary?
-        let result = script.executeAndReturnError(&errorInfo)
-        
-        if let error = errorInfo {
-            DebugLogger.log("AppleScript error getting selection: \(error)")
-            return nil
-        }
-        
-        guard let resultString = result.stringValue, !resultString.isEmpty else {
-            return nil
-        }
-        
-        // Parse the result - it's a comma-separated or newline-separated list
-        let paths = resultString.components(separatedBy: CharacterSet(charactersIn: ",\n"))
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        
-        return paths.map { URL(fileURLWithPath: $0) }
+    public static func getSelectedFiles() async -> [URL]? {
+        await FinderSelectionQuery.shared.selectedFiles(checksEnabled: checksEnabled)
     }
     
     /// Get the path of the frontmost Finder window
