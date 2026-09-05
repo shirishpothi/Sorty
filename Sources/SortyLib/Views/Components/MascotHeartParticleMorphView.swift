@@ -30,10 +30,13 @@ struct MascotHeartParticleMorphView: View {
                 .animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || animationStart == nil)
             ) { timeline in
                 let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
+                let isReplay = animationRun > 0
+                let isHeartComplete = reduceMotion || heartIsComplete(at: elapsed, isReplay: isReplay)
 
                 ParticleMorphCanvas(
-                    progress: reduceMotion ? 1 : morphProgress(at: elapsed, isReplay: animationRun > 0),
-                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: animationRun > 0)
+                    progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
+                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: isReplay),
+                    isHeartComplete: isHeartComplete
                 )
             }
             .contentShape(Rectangle())
@@ -120,6 +123,11 @@ struct MascotHeartParticleMorphView: View {
         }
     }
 
+    private func heartIsComplete(at elapsed: TimeInterval, isReplay: Bool) -> Bool {
+        let reverseDuration = isReplay ? Timing.reverseDuration * replayStartProgress : 0
+        return elapsed >= reverseDuration + Timing.mascotHold + Timing.morphDuration
+    }
+
     private func eased(_ p: Double) -> CGFloat {
         let c = min(max(p, 0), 1)
         return CGFloat(1 - pow(1 - c, 3))
@@ -135,6 +143,7 @@ private struct ParticleMorphCanvas: View {
     @SortyHotReload private var hotReload
     let progress: Double
     let heartbeatScale: CGFloat
+    let isHeartComplete: Bool
 
     var body: some View {
         Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
@@ -145,50 +154,59 @@ private struct ParticleMorphCanvas: View {
     private func drawParticles(in context: inout GraphicsContext, size: CGSize) {
         let side = min(size.width, size.height)
         let origin = CGPoint(x: (size.width - side) / 2, y: (size.height - side) / 2)
-        drawParticlesOnly(in: &context, origin: origin, side: side)
+        if isHeartComplete {
+            drawCompletedHeart(in: &context, origin: origin, side: side)
+        } else {
+            drawMorphingParticles(in: &context, origin: origin, side: side)
+        }
     }
 
-    private func drawParticlesOnly(
+    private func drawCompletedHeart(
         in context: inout GraphicsContext,
         origin: CGPoint,
         side: CGFloat
     ) {
-        for index in MascotHeartParticleTargets.mascot.indices {
-            let mascot = MascotHeartParticleTargets.mascot[index]
-            let heart = MascotHeartParticleTargets.heart[index]
-            let seed = Self.seed(for: index)
-            let angle = atan2(mascot.point.y - 0.5, mascot.point.x - 0.5)
+        let diameter: CGFloat = 1.60
+        for particle in Self.particles {
+            let x = 0.5 + (particle.heart.x - 0.5) * heartbeatScale
+            let y = 0.5 + (particle.heart.y - 0.5) * heartbeatScale
+            let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
+            let rect = CGRect(
+                x: center.x - diameter / 2,
+                y: center.y - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            context.fill(Path(ellipseIn: rect), with: .color(heartColor))
+        }
+    }
 
+    private func drawMorphingParticles(
+        in context: inout GraphicsContext,
+        origin: CGPoint,
+        side: CGFloat
+    ) {
+        for particle in Self.particles {
             let rect = particleRect(
-                mascot: mascot.point,
-                heart: heart,
-                seed: seed,
-                angle: angle,
+                particle: particle,
                 origin: origin,
                 side: side
             )
             drawParticle(
                 in: &context,
                 rect: rect,
-                mascot: mascot,
-                seed: seed,
-                angle: angle
+                particle: particle
             )
         }
     }
 
     private func particleRect(
-        mascot: CGPoint,
-        heart: CGPoint,
-        seed: CGFloat,
-        angle: CGFloat,
+        particle: ParticleMorphDefinition,
         origin: CGPoint,
         side: CGFloat
     ) -> CGRect {
         // tiny stagger (max 80ms) prevents pop-in glitch while keeping motion coherent
-        let angleNorm = abs(angle) / .pi // 0...1
-        let delay = seed * 0.06 + angleNorm * 0.04
-        let raw = max(0, min((CGFloat(progress) - delay) / (1 - delay), 1))
+        let raw = max(0, min((CGFloat(progress) - particle.delay) / (1 - particle.delay), 1))
         // match global cubic easing per-particle with same curve
         let p: CGFloat
         if raw < 0.5 {
@@ -199,19 +217,17 @@ private struct ParticleMorphCanvas: View {
         }
 
         // gentle arc: perpendicular offset peaks at mid-flight, scaled by travel distance
-        let dx = heart.x - mascot.x
-        let dy = heart.y - mascot.y
-        let len = max(hypot(dx, dy), 0.001)
-        let perpX = -dy / len
-        let perpY = dx / len
-        let sideSign: CGFloat = seed > 0.5 ? 1 : -1
-        let arc = CGFloat(sin(.pi * Double(p))) * (0.012 + seed * 0.012) * min(len * 1.5, 1) * sideSign
-        let cx = (mascot.x + heart.x) * 0.5 + perpX * arc
-        let cy = (mascot.y + heart.y) * 0.5 + perpY * arc
+        let arcProgress = CGFloat(sin(.pi * Double(p)))
+        let cx = particle.midpoint.x + particle.arcOffset.x * arcProgress
+        let cy = particle.midpoint.y + particle.arcOffset.y * arcProgress
 
         let ipf = 1 - p
-        var x = ipf * ipf * mascot.x + 2 * ipf * p * cx + p * p * heart.x
-        var y = ipf * ipf * mascot.y + 2 * ipf * p * cy + p * p * heart.y
+        var x = ipf * ipf * particle.mascot.point.x
+            + 2 * ipf * p * cx
+            + p * p * particle.heart.x
+        var y = ipf * ipf * particle.mascot.point.y
+            + 2 * ipf * p * cy
+            + p * p * particle.heart.y
 
         x = 0.5 + (x - 0.5) * heartbeatScale
         y = 0.5 + (y - 0.5) * heartbeatScale
@@ -224,13 +240,9 @@ private struct ParticleMorphCanvas: View {
     private func drawParticle(
         in context: inout GraphicsContext,
         rect: CGRect,
-        mascot: MascotParticle,
-        seed: CGFloat,
-        angle: CGFloat
+        particle: ParticleMorphDefinition
     ) {
-        let angleNorm = abs(angle) / .pi
-        let delay = seed * 0.06 + angleNorm * 0.04
-        let raw = max(0, min((CGFloat(progress) - delay) / (1 - delay), 1))
+        let raw = max(0, min((CGFloat(progress) - particle.delay) / (1 - particle.delay), 1))
         let p: Double
         if raw < 0.5 {
             p = 4 * Double(raw) * Double(raw) * Double(raw)
@@ -247,7 +259,7 @@ private struct ParticleMorphCanvas: View {
         if mascotOpacity > 0.015 {
             context.fill(
                 Path(ellipseIn: rect),
-                with: .color(mascot.color.opacity(mascotOpacity))
+                with: .color(particle.mascot.color.opacity(mascotOpacity))
             )
         }
         if heartEased > 0.015 {
@@ -262,10 +274,44 @@ private struct ParticleMorphCanvas: View {
         Color(red: 0.96, green: 0.19, blue: 0.26)
     }
 
+    private static let particles: [ParticleMorphDefinition] =
+        MascotHeartParticleTargets.mascot.indices.map { index in
+            let mascot = MascotHeartParticleTargets.mascot[index]
+            let heart = MascotHeartParticleTargets.heart[index]
+            let seed = seed(for: index)
+            let angle = atan2(mascot.point.y - 0.5, mascot.point.x - 0.5)
+            let angleNorm = abs(angle) / .pi
+            let delay = seed * 0.06 + angleNorm * 0.04
+            let dx = heart.x - mascot.point.x
+            let dy = heart.y - mascot.point.y
+            let length = max(hypot(dx, dy), 0.001)
+            let arc = (0.012 + seed * 0.012)
+                * min(length * 1.5, 1)
+                * (seed > 0.5 ? 1 : -1)
+            return ParticleMorphDefinition(
+                mascot: mascot,
+                heart: heart,
+                delay: delay,
+                midpoint: CGPoint(
+                    x: (mascot.point.x + heart.x) * 0.5,
+                    y: (mascot.point.y + heart.y) * 0.5
+                ),
+                arcOffset: CGPoint(x: -dy / length * arc, y: dx / length * arc)
+            )
+        }
+
     private static func seed(for index: Int) -> CGFloat {
         let mixed = UInt64(index &* 73_856_093) ^ UInt64(index &* 19_349_663)
         return CGFloat(mixed % 1_000) / 1_000
     }
+}
+
+private struct ParticleMorphDefinition {
+    let mascot: MascotParticle
+    let heart: CGPoint
+    let delay: CGFloat
+    let midpoint: CGPoint
+    let arcOffset: CGPoint
 }
 
 private struct MascotParticle {
