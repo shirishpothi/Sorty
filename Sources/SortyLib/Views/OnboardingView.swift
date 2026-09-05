@@ -265,9 +265,6 @@ public struct OnboardingView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
                                 }
-                                // Keep the pill the same width for "Continue" and
-                                // "Next" so it doesn't jump between steps.
-                                .frame(minWidth: 92)
                             }
                             .buttonStyle(.sortyPrimary)
                             .onboardingBeamBorder(
