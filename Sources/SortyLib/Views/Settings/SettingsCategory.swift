@@ -68,10 +68,23 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case automationLaunchAtLogin = "settings.automation.launch-at-login"
     case automationKeepInBackground = "settings.automation.keep-in-background"
     case automationHideDockIcon = "settings.automation.hide-dock-icon"
-    case deeplinksCore = "settings.deeplinks.core"
-    case deeplinksOrganization = "settings.deeplinks.organization"
-    case deeplinksAutomation = "settings.deeplinks.automation"
-    case deeplinksFinder = "settings.deeplinks.finder"
+    case deeplinksOpenApp = "settings.deeplinks.open-app"
+    case deeplinksSettings = "settings.deeplinks.settings"
+    case deeplinksHelp = "settings.deeplinks.help"
+    case deeplinksHistory = "settings.deeplinks.history"
+    case deeplinksOrganizeFolder = "settings.deeplinks.organize-folder"
+    case deeplinksDuplicates = "settings.deeplinks.duplicates"
+    case deeplinksStorage = "settings.deeplinks.storage"
+    case deeplinksWatchedFolders = "settings.deeplinks.watched-folders"
+    case deeplinksRules = "settings.deeplinks.rules"
+    case deeplinksExclusions = "settings.deeplinks.exclusions"
+    case deeplinksPersona = "settings.deeplinks.persona"
+    case deeplinksLearnings = "settings.deeplinks.learnings"
+    case deeplinksProviderSettings = "settings.deeplinks.provider-settings"
+    case deeplinksFinderOrganize = "settings.deeplinks.finder-organize"
+    case deeplinksFinderWatch = "settings.deeplinks.finder-watch"
+    case deeplinksFinderExclude = "settings.deeplinks.finder-exclude"
+    case deeplinksFinderSettings = "settings.deeplinks.finder-settings"
     case finderIntegration = "settings.finder.integration"
     case finderCheckStatus = "settings.finder.check-status"
     case finderOrganize = "settings.finder.organize"
@@ -168,7 +181,12 @@ public extension SettingsFocusTarget {
              .automationKeepInBackground, .automationHideDockIcon:
             return .automation
 
-        case .deeplinksCore, .deeplinksOrganization, .deeplinksAutomation, .deeplinksFinder:
+        case .deeplinksOpenApp, .deeplinksSettings, .deeplinksHelp, .deeplinksHistory,
+             .deeplinksOrganizeFolder, .deeplinksDuplicates, .deeplinksStorage,
+             .deeplinksWatchedFolders, .deeplinksRules, .deeplinksExclusions,
+             .deeplinksPersona, .deeplinksLearnings, .deeplinksProviderSettings,
+             .deeplinksFinderOrganize, .deeplinksFinderWatch, .deeplinksFinderExclude,
+             .deeplinksFinderSettings:
             return .deeplinks
 
         case .finderIntegration, .finderCheckStatus, .finderOrganize, .finderWatch, .finderExclude,
@@ -368,11 +386,28 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .automationHideDockIcon)
             ]
         case .deeplinks:
+            // One snippet per library entry so search navigates to and
+            // highlights the exact deeplink row instead of its whole group.
+            // Every entry carries the "deeplink" keyword so multi-term
+            // queries like "persona deeplink" still resolve.
             return [
-                feature("Core Deeplinks", "Copy sorty:// links for opening Sorty, Settings, Help, and History.", keywords: ["sorty://open", "sorty://settings", "sorty://help"], target: .deeplinksCore),
-                feature("Organization Deeplinks", "Copy links for organize, duplicates, scan, and storage workflows.", keywords: ["organize", "duplicates", "scan", "storage", "sorty://organize?path=/Users/me/Downloads", "sorty:///Users/me/Downloads", "downloads", "desktop", "documents"], target: .deeplinksOrganization),
-                feature("Automation Deeplinks", "Copy links for watched folders, rules, exclusions, personas, and learning flows.", keywords: ["watched", "rules", "exclusions", "persona", "learnings", "sorty://watched?action=add&path=/Users/me/Downloads", "downloads"], target: .deeplinksAutomation),
-                feature("Finder Deeplinks", "Copy links used by Finder organize, watch, exclude, and settings actions.", keywords: ["finder actions", "finder settings"], target: .deeplinksFinder)
+                feature("Open App", "Copy the sorty://open link to bring Sorty to front and preload a directory.", keywords: ["deeplink", "sorty://open"], target: .deeplinksOpenApp),
+                feature("Settings", "Copy the sorty://settings link to open Settings at a specific section.", keywords: ["deeplink", "sorty://settings"], target: .deeplinksSettings),
+                feature("Help", "Copy the sorty://help link to open help and support content.", keywords: ["deeplink", "sorty://help"], target: .deeplinksHelp),
+                feature("History", "Copy the sorty://history link to open organization history.", keywords: ["deeplink", "sorty://history"], target: .deeplinksHistory),
+                feature("Organize Folder", "Copy the sorty://organize link to organize a folder with persona, mode, and autostart options.", keywords: ["deeplink", "sorty://organize", "downloads", "desktop", "documents"], target: .deeplinksOrganizeFolder),
+                feature("Duplicates", "Copy the sorty://duplicates link to open duplicate review for a folder.", keywords: ["deeplink", "sorty://duplicates"], target: .deeplinksDuplicates),
+                feature("Storage", "Copy the sorty://storage link to open storage locations and add a path.", keywords: ["deeplink", "sorty://storage"], target: .deeplinksStorage),
+                feature("Watched Folders", "Copy the sorty://watched link to open watched folders and add a path.", keywords: ["deeplink", "sorty://watched"], target: .deeplinksWatchedFolders),
+                feature("Rules", "Copy the sorty://rules link to open rules and add a rule.", keywords: ["deeplink", "sorty://rules"], target: .deeplinksRules),
+                feature("Exclusions", "Copy the sorty://exclusions link to open exclusions and add a pattern.", keywords: ["deeplink", "sorty://exclusions"], target: .deeplinksExclusions),
+                feature("Persona", "Copy the sorty://persona link for persona create and select flows.", keywords: ["deeplink", "sorty://persona"], target: .deeplinksPersona),
+                feature("Learnings", "Copy the sorty://learnings link for learnings stats, export, import, or clear actions.", keywords: ["deeplink", "sorty://learnings"], target: .deeplinksLearnings),
+                feature("Provider Settings", "Copy the provider setup link that jumps straight to provider settings.", keywords: ["deeplink", "sorty://settings?section=provider", "provider setup"], target: .deeplinksProviderSettings),
+                feature("Organize with Sorty", "Copy the Finder service link that organizes the selected folder.", keywords: ["deeplink", "sorty://organize", "finder service", "finder actions"], target: .deeplinksFinderOrganize),
+                feature("Watch with Sorty", "Copy the Finder service link that watches the selected folder.", keywords: ["deeplink", "sorty://watched", "finder service", "finder actions"], target: .deeplinksFinderWatch),
+                feature("Exclude from Sorty", "Copy the Finder service link that excludes the selected file or folder.", keywords: ["deeplink", "sorty://exclude", "finder service", "finder actions"], target: .deeplinksFinderExclude),
+                feature("Finder Settings", "Copy the Finder integration link that jumps straight to Finder settings.", keywords: ["deeplink", "sorty://settings?section=finder", "finder integration", "finder settings"], target: .deeplinksFinderSettings)
             ]
         case .finder:
             return [
@@ -495,7 +530,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .automation:
             return .automationGlobalModel
         case .deeplinks:
-            return .deeplinksCore
+            return .deeplinksOpenApp
         case .finder:
             return .finderIntegration
         case .notifications:

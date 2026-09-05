@@ -23,7 +23,13 @@ final class SettingsSearchTests: XCTestCase {
     func testDeeplinkFeatureMatchesDeeplinkQuery() {
         let matches = SettingsCategory.deeplinks.featureMatches(query: "deeplink")
 
-        XCTAssertTrue(matches.contains { $0.snippet.title == "Automation Deeplinks" })
+        XCTAssertEqual(matches.count, 17)
+    }
+
+    func testDeeplinkFeatureMatchesSpecificEntryQuery() {
+        let matches = SettingsCategory.deeplinks.featureMatches(query: "persona deeplink")
+
+        XCTAssertEqual(matches.first?.snippet.title, "Persona")
     }
 
     func testDeeplinkCategoryMatchesSortySchemeQuery() {
@@ -33,7 +39,7 @@ final class SettingsSearchTests: XCTestCase {
     func testDeeplinkFeatureMatchesDownloadsWordQuery() {
         let matches = SettingsCategory.deeplinks.featureMatches(query: "downloads")
 
-        XCTAssertTrue(matches.contains { $0.snippet.title == "Organization Deeplinks" })
+        XCTAssertTrue(matches.contains { $0.snippet.title == "Organize Folder" })
     }
 
     func testAutomationCategoryMatchesHyphenSeparatedQuery() {
@@ -46,10 +52,16 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(matches.first?.snippet.title, "Enable File Tagging")
     }
 
-    func testDeeplinkFeatureMatchPrioritizesAutomationDeeplinks() {
-        let matches = SettingsCategory.deeplinks.featureMatches(query: "automation")
+    func testDeeplinkFeatureMatchPrioritizesSpecificEntry() {
+        let matches = SettingsCategory.deeplinks.featureMatches(query: "finder settings")
 
-        XCTAssertEqual(matches.first?.snippet.title, "Automation Deeplinks")
+        XCTAssertEqual(matches.first?.snippet.title, "Finder Settings")
+    }
+
+    func testDeeplinkFocusTargetMappingsForKnownSnippets() {
+        XCTAssertEqual(SettingsCategory.deeplinks.focusTarget(for: snippet(in: .deeplinks, titled: "Persona")), .deeplinksPersona)
+        XCTAssertEqual(SettingsCategory.deeplinks.focusTarget(for: snippet(in: .deeplinks, titled: "Organize Folder")), .deeplinksOrganizeFolder)
+        XCTAssertEqual(SettingsCategory.deeplinks.focusTarget(for: snippet(in: .deeplinks, titled: "Exclude from Sorty")), .deeplinksFinderExclude)
     }
 
     func testCategoriesForGroupPartitionsAllCasesWithoutDuplicates() {

@@ -272,9 +272,9 @@ struct DeeplinkSettingsView: View {
 
     private var groups: [DeeplinkGroup] {
         var organizationEntries = [
-            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
-            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files with an optional path and autostart."),
-            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.")
+            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart.", focusTarget: .deeplinksOrganizeFolder),
+            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files with an optional path and autostart.", focusTarget: .deeplinksDuplicates),
+            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.", focusTarget: .deeplinksStorage)
         ]
 
         return [
@@ -282,45 +282,41 @@ struct DeeplinkSettingsView: View {
                 title: "Core",
                 icon: "app.badge",
                 color: .blue,
-                focusTarget: .deeplinksCore,
                 entries: [
-                    DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
-                    DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
-                    DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support with an optional section."),
-                    DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history.")
+                    DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory.", focusTarget: .deeplinksOpenApp),
+                    DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section.", focusTarget: .deeplinksSettings),
+                    DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support with an optional section.", focusTarget: .deeplinksHelp),
+                    DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history.", focusTarget: .deeplinksHistory)
                 ]
             ),
             DeeplinkGroup(
                 title: "Organization",
                 icon: "folder.badge.gearshape",
                 color: .green,
-                focusTarget: .deeplinksOrganization,
                 entries: organizationEntries
             ),
             DeeplinkGroup(
                 title: "Automation",
                 icon: "bolt.circle",
                 color: .orange,
-                focusTarget: .deeplinksAutomation,
                 entries: [
-                    DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
-                    DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
-                    DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
-                    DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
-                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=stats", summary: "Open Learnings with action: stats, withdraw, export, import, or clear."),
-                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup.")
+                    DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path.", focusTarget: .deeplinksWatchedFolders),
+                    DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule.", focusTarget: .deeplinksRules),
+                    DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern.", focusTarget: .deeplinksExclusions),
+                    DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation.", focusTarget: .deeplinksPersona),
+                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=stats", summary: "Open Learnings with action: stats, withdraw, export, import, or clear.", focusTarget: .deeplinksLearnings),
+                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup.", focusTarget: .deeplinksProviderSettings)
                 ]
             ),
             DeeplinkGroup(
                 title: "Finder",
                 icon: "folder.badge.plus",
                 color: .cyan,
-                focusTarget: .deeplinksFinder,
                 entries: [
-                    DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder."),
-                    DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders."),
-                    DeeplinkEntry(title: "Exclude from Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
-                    DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
+                    DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder.", focusTarget: .deeplinksFinderOrganize),
+                    DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders.", focusTarget: .deeplinksFinderWatch),
+                    DeeplinkEntry(title: "Exclude from Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions.", focusTarget: .deeplinksFinderExclude),
+                    DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.", focusTarget: .deeplinksFinderSettings)
                 ]
             )
         ]
@@ -455,7 +451,6 @@ private struct DeeplinkGroup: Identifiable {
     let title: String
     let icon: String
     let color: Color
-    let focusTarget: SettingsFocusTarget
     let entries: [DeeplinkEntry]
 
     var id: String { title }
@@ -465,6 +460,7 @@ private struct DeeplinkEntry: Identifiable {
     let title: String
     let url: String
     let summary: String
+    let focusTarget: SettingsFocusTarget
 
     var id: String { url }
 }
@@ -510,6 +506,7 @@ private struct DeeplinkGroupSection: View {
                 VStack(spacing: 0) {
                     ForEach(group.entries) { entry in
                         DeeplinkEntryRow(entry: entry, color: group.color)
+                            .settingsFocusableSetting(entry.focusTarget)
 
                         if entry.id != group.entries.last?.id {
                             Divider()
@@ -521,7 +518,6 @@ private struct DeeplinkGroupSection: View {
                 .transition(.opacity)
             }
         }
-        .settingsFocusable(group.focusTarget)
     }
 }
 
