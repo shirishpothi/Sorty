@@ -1204,12 +1204,8 @@ struct ReadyToOrganizeView: View {
                                 animationValue: storageLocationTitle,
                                 animation: .easeInOut(duration: 0.28)
                             )
-
-                        Spacer(minLength: 8)
-
-                        storageLocationSelectionSummary
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .frame(minHeight: 44, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1217,6 +1213,42 @@ struct ReadyToOrganizeView: View {
                 .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
                 .accessibilityHint("Expand to manage local, cloud, and external organization locations")
                 .accessibilityValue(showStorageLocations ? "Expanded" : "Collapsed")
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showStorageLocationsInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 44)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
+                .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
+                    StorageLocationsInfoPopover()
+                        .systemLiquidGlassPopover(cornerRadius: 12)
+                }
+                .help("How storage locations work")
+                .accessibilityLabel("About storage locations")
+                .accessibilityIdentifier("StorageLocationsInfoButton")
+
+                Button(action: toggleStorageLocations) {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 8)
+
+                        storageLocationSelectionSummary
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
+                .accessibilityLabel(showStorageLocations ? "Hide storage locations" : "Show storage locations")
 
                 Button(action: toggleStorageLocations) {
                     Image(systemName: "chevron.down")
@@ -1234,29 +1266,6 @@ struct ReadyToOrganizeView: View {
                 .help(showStorageLocations ? "Hide organization locations" : "Show organization locations")
                 .accessibilityLabel(showStorageLocations ? "Collapse storage locations" : "Expand storage locations")
                 .accessibilityIdentifier("StorageLocationsDisclosureButton")
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showStorageLocationsInfo.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
-                .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
-                    StorageLocationsInfoPopover()
-                        .systemLiquidGlassPopover(cornerRadius: 12)
-                }
-                .help("How storage locations work")
-                .accessibilityLabel("About storage locations")
-                .accessibilityIdentifier("StorageLocationsInfoButton")
             }
             
             if showStorageLocations {
