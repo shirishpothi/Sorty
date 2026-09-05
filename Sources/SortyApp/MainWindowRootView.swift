@@ -293,6 +293,12 @@ struct MainWindowRootView: View {
             .onChange(of: codexAuth.isAuthenticated) { _, _ in
                 scheduleSetupRepairReconciliation()
             }
+            .onChange(of: codexAuth.isCodexInstalled) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: codexAuth.hasResolvedStatus) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
             .onChange(of: copilotAuth.isAuthenticated) { _, _ in
                 scheduleSetupRepairReconciliation()
             }
@@ -570,6 +576,17 @@ struct MainWindowRootView: View {
         )
     }
 
+    /// The Codex CLI probe resolves asynchronously after launch. Until it has,
+    /// reconciling would mistake the initial `isCodexInstalled == false` for a
+    /// missing setup and persist a bogus repair state on every restart.
+    private var isCodexStatusResolvedForValidation: Bool {
+        let config = settingsViewModel.config
+        guard config.provider == .openAI,
+              ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn
+        else { return true }
+        return codexAuth.hasResolvedStatus
+    }
+
     private func scheduleSetupRepairReconciliation() {
         setupRepairTask?.cancel()
         setupRepairTask = Task { @MainActor in
@@ -585,7 +602,8 @@ struct MainWindowRootView: View {
 
         guard appState.hasCompletedOnboarding,
               settingsViewModel.hasLoadedPersistedState,
-              !settingsViewModel.isConfiguredCredentialHydrating else { return }
+              !settingsViewModel.isConfiguredCredentialHydrating,
+              isCodexStatusResolvedForValidation else { return }
 
         codexAuth.checkStatus()
         openAIAuth.checkAuthenticationStatus()

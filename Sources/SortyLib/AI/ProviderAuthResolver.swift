@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProviderAuthResolver {
+public enum ProviderAuthResolver {
     typealias Header = (field: String, value: String)
     private static let subscriptionAuthFlagKey = "subscriptionAuthEnabled"
     private static let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
@@ -66,7 +66,7 @@ enum ProviderAuthResolver {
         }
     }
 
-    static func effectiveAuthMethod(for provider: AIProvider, config: AIConfig) -> ProviderAuthMethod {
+    public static func effectiveAuthMethod(for provider: AIProvider, config: AIConfig) -> ProviderAuthMethod {
         guard isSubscriptionAuthEnabled, provider.supportsSubscriptionAuth else {
             return .apiKey
         }

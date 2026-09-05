@@ -33,6 +33,9 @@ public final class CodexCLIAuthManager: ObservableObject {
     @Published public var accountEmail: String?
     @Published public var authError: String?
     @Published public var isCodexInstalled = false
+    /// True once the CLI probe has resolved at least once. Guards against
+    /// treating the initial `false` values as a missing setup during launch.
+    @Published public private(set) var hasResolvedStatus = false
     @Published public var deviceAuthSession: CodexDeviceAuthSession?
 
     enum LoginStatus: Sendable, Equatable {
@@ -225,6 +228,10 @@ public final class CodexCLIAuthManager: ObservableObject {
                 accountEmail: nil,
                 authError: message
             )
+        }
+
+        if !hasResolvedStatus {
+            hasResolvedStatus = true
         }
     }
 

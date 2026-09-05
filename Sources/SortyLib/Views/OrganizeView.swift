@@ -719,7 +719,19 @@ struct OrganizeView: View {
 
     private var isProviderStateReadyForValidation: Bool {
         settingsViewModel.hasLoadedPersistedState &&
-            !settingsViewModel.isConfiguredCredentialHydrating
+            !settingsViewModel.isConfiguredCredentialHydrating &&
+            isCodexStatusResolvedForValidation
+    }
+
+    /// The Codex CLI probe resolves asynchronously after launch. Until it has,
+    /// the validator would mistake the initial `isCodexInstalled == false` for
+    /// a missing setup and flash the repair HUD on every restart.
+    private var isCodexStatusResolvedForValidation: Bool {
+        let config = settingsViewModel.config
+        guard config.provider == .openAI,
+              ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn
+        else { return true }
+        return codexAuth.hasResolvedStatus
     }
 
     private func updateSetupRepairHUD() {
