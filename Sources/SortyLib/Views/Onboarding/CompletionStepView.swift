@@ -76,11 +76,11 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         setAccessibilityElement(false)
 
         blobBlur.name = "celebrationBlobBlur"
-        blobBlur.radius = 52
+        blobBlur.radius = 48
         blobContainer.filters = [blobBlur]
         blobContainer.opacity = 0
         coreBlur.name = "celebrationCoreBlur"
-        coreBlur.radius = 28
+        coreBlur.radius = 26
         coreContainer.filters = [coreBlur]
         coreContainer.opacity = 0
         blobContainer.addSublayer(blobShape)
@@ -99,10 +99,10 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let blurOutset: CGFloat = 70
+        let blurOutset: CGFloat = 64
         blobContainer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
         coreContainer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
-        let blobSize = CGSize(width: 420, height: 340)
+        let blobSize = CGSize(width: 400, height: 320)
         blobShape.frame = CGRect(
             x: blobContainer.bounds.midX - blobSize.width / 2,
             y: blobContainer.bounds.midY - blobSize.height / 2,
@@ -110,7 +110,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
             height: blobSize.height
         )
         blobShape.cornerRadius = blobSize.height / 2
-        let coreSize = CGSize(width: 230, height: 210)
+        let coreSize = CGSize(width: 220, height: 200)
         coreShape.frame = CGRect(
             x: coreContainer.bounds.midX - coreSize.width / 2,
             y: coreContainer.bounds.midY - coreSize.height / 2,
@@ -147,8 +147,8 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
             coreContainer.opacity = visible ? 0.58 : 0
             blobContainer.transform = CATransform3DIdentity
             coreContainer.transform = CATransform3DIdentity
-            blobBlur.radius = 60
-            coreBlur.radius = 32
+            blobBlur.radius = 52
+            coreBlur.radius = 30
             CATransaction.commit()
         } else if exitTriggered || phase == .hidden {
             stopBreathing()
@@ -176,7 +176,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
 
     private func animateReveal() {
         let now = blobContainer.convertTime(CACurrentMediaTime(), from: nil)
-        setModel(opacity: 1, scale: 1, blobBlur: 46, coreBlur: 24)
+        setModel(opacity: 1, scale: 1, blobBlur: 40, coreBlur: 22)
 
         let blobScale = CABasicAnimation(keyPath: "transform.scale")
         blobScale.fromValue = 0.35
@@ -216,7 +216,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
     }
 
     private func animateSettleToAmbient() {
-        setModel(opacity: 0.62, scale: 1, blobBlur: 60, coreBlur: 32, coreOpacity: 0.58)
+        setModel(opacity: 0.62, scale: 1, blobBlur: 52, coreBlur: 30, coreOpacity: 0.58)
 
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = blobContainer.presentation()?.opacity ?? 1
@@ -318,36 +318,22 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
     }
 }
 
-private struct CompletionCelebrationBackdrop: View {
+private struct CompletionParticleBackdrop: View {
     @SortyHotReload private var hotReload
-    let phase: CompletionCelebrationPhase
     let showParticles: Bool
     let exitTriggered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
-        ZStack {
-            RetainedCompletionCelebrationBlob(
-                phase: phase,
-                exitTriggered: exitTriggered,
-                reduceMotion: reduceMotion,
-                isActive: controlActiveState != .inactive
-            )
-            .frame(width: 600, height: 480)
-            .offset(y: -70)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-
-            RetainedCompletionParticles(
-                isVisible: showParticles && !exitTriggered,
-                reduceMotion: reduceMotion,
-                isActive: controlActiveState != .inactive
-            )
-            .frame(width: 520, height: 420)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
+        RetainedCompletionParticles(
+            isVisible: showParticles && !exitTriggered,
+            reduceMotion: reduceMotion,
+            isActive: controlActiveState != .inactive
+        )
+        .frame(width: 520, height: 420)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
 }
@@ -509,10 +495,12 @@ private struct CompletionHero: View {
     @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let showGlowRing: Bool
+    let celebrationPhase: CompletionCelebrationPhase
     let exitTriggered: Bool
     let contentDismissed: Bool
     let isButtonHovered: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         ZStack {
@@ -525,6 +513,17 @@ private struct CompletionHero: View {
                 hasAppeared: hasAppeared,
                 isButtonHovered: isButtonHovered
             )
+        }
+        .background {
+            RetainedCompletionCelebrationBlob(
+                phase: celebrationPhase,
+                exitTriggered: exitTriggered,
+                reduceMotion: reduceMotion,
+                isActive: controlActiveState != .inactive
+            )
+            .frame(width: 520, height: 440)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.9)
@@ -1142,8 +1141,7 @@ public struct CompletionStepView: View {
             CompletionContrastBackdrop()
                 .allowsHitTesting(false)
 
-            CompletionCelebrationBackdrop(
-                phase: celebrationPhase,
+            CompletionParticleBackdrop(
                 showParticles: showParticles,
                 exitTriggered: exitTriggered
             )
@@ -1152,6 +1150,7 @@ public struct CompletionStepView: View {
                 CompletionHero(
                     hasAppeared: hasAppeared,
                     showGlowRing: showGlowRing,
+                    celebrationPhase: celebrationPhase,
                     exitTriggered: exitTriggered,
                     contentDismissed: contentDismissed,
                     isButtonHovered: lockedHoverForExit ?? isCompletionButtonHovered
@@ -1221,24 +1220,26 @@ public struct CompletionStepView: View {
 
     private func startRevealSequence() {
         runtimeController.animationTask?.cancel()
-        audioController.play()
-
-        // Choreographed phased reveal: the blob leads, the hero lands at
-        // 120 ms, the glow ring joins at 340 ms, the blob settles to ambient
-        // at 660 ms, and tips plus particles land together at 840 ms.
-        celebrationPhase = .reveal
 
         if reduceMotion {
+            audioController.play()
+            celebrationPhase = .ambient
             hasAppeared = true
             showGlowRing = true
-            celebrationPhase = .ambient
             tipsAppeared = true
             return
         }
 
+        // Keep the appear frame free of heavy work: first paint lands the
+        // static backdrop, then the bloom (audio + blob + hero) starts on the
+        // next frame so blur rasterization and audio startup can't hitch it.
+        // Choreography from there: glow ring at +220 ms, blob settles to
+        // ambient at +540 ms, tips plus particles land together at +720 ms.
         runtimeController.animationTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(120))
+            await Task.yield()
             guard !Task.isCancelled else { return }
+            audioController.play()
+            celebrationPhase = .reveal
             hasAppeared = true
 
             try? await Task.sleep(for: .milliseconds(220))
