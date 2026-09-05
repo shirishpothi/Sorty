@@ -702,10 +702,12 @@ struct OrganizeView: View {
     }
 
     private var needsSetupRepair: Bool {
-        appState.requiresSetupRepair || !providerSetupStatus.isReady
+        guard isProviderStateReadyForValidation else { return false }
+        return appState.requiresSetupRepair || !providerSetupStatus.isReady
     }
 
     private var activeSetupRepairMessage: String? {
+        guard isProviderStateReadyForValidation else { return nil }
         if appState.requiresSetupRepair {
             return appState.setupRepairMessage ?? providerSetupStatus.message
         }
@@ -713,6 +715,11 @@ struct OrganizeView: View {
             return providerSetupStatus.message
         }
         return nil
+    }
+
+    private var isProviderStateReadyForValidation: Bool {
+        settingsViewModel.hasLoadedPersistedState &&
+            !settingsViewModel.isConfiguredCredentialHydrating
     }
 
     private func updateSetupRepairHUD() {

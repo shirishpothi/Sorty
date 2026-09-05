@@ -203,6 +203,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         )
         await viewModel.loadPersistedState()
 
+        XCTAssertTrue(viewModel.isConfiguredCredentialHydrating)
         viewModel.config.enableReasoning.toggle()
         try await Task.sleep(for: .milliseconds(600))
 
@@ -212,6 +213,7 @@ final class SettingsViewModelStartupTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(300))
         let deletedAfterHydration = await recorder.deletedKeys()
         XCTAssertEqual(viewModel.config.apiKey, "persisted-openrouter-key")
+        XCTAssertFalse(viewModel.isConfiguredCredentialHydrating)
         XCTAssertEqual(deletedAfterHydration, [])
     }
 }

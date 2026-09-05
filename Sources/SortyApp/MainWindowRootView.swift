@@ -275,6 +275,12 @@ struct MainWindowRootView: View {
                 updateMenuBarOrganizationActivity()
                 scheduleSetupRepairReconciliation()
             }
+            .onChange(of: settingsViewModel.hasLoadedPersistedState) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: settingsViewModel.isConfiguredCredentialHydrating) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
             .onChange(of: windowSession.appState.hasCompletedOnboarding) { wasComplete, isComplete in
                 scheduleSetupRepairReconciliation()
                 if !wasComplete && isComplete {
@@ -577,7 +583,9 @@ struct MainWindowRootView: View {
     private func reconcileSetupRepairState() async {
         let appState = windowSession.appState
 
-        guard appState.hasCompletedOnboarding else { return }
+        guard appState.hasCompletedOnboarding,
+              settingsViewModel.hasLoadedPersistedState,
+              !settingsViewModel.isConfiguredCredentialHydrating else { return }
 
         codexAuth.checkStatus()
         openAIAuth.checkAuthenticationStatus()

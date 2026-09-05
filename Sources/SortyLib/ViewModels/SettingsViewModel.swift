@@ -167,6 +167,7 @@ public class SettingsViewModel: ObservableObject {
     @Published public var availableModels: [String] = []
     @Published public var isLoadingModels: Bool = false
     @Published public private(set) var hasLoadedPersistedState = false
+    @Published public private(set) var isConfiguredCredentialHydrating = false
     
     private let userDefaults: UserDefaults
     private let persistedDataReader: UserDefaultsDataReader
@@ -293,6 +294,7 @@ public class SettingsViewModel: ObservableObject {
         migratesLegacyKey: Bool = false
     ) {
         cancelCredentialHydration()
+        isConfiguredCredentialHydrating = true
         let hydrationID = UUID()
         credentialHydrationID = hydrationID
         credentialHydrationProvider = provider
@@ -311,10 +313,13 @@ public class SettingsViewModel: ObservableObject {
             self.credentialTask = nil
             self.credentialHydrationID = nil
             self.credentialHydrationProvider = nil
-            guard
-                  self.config.provider == provider,
-                  self.config.authMethod(for: provider) == authMethod else { return }
+            guard self.config.provider == provider,
+                  self.config.authMethod(for: provider) == authMethod else {
+                self.isConfiguredCredentialHydrating = false
+                return
+            }
             self.setInMemoryAPIKey(apiKey)
+            self.isConfiguredCredentialHydrating = false
         }
     }
 
@@ -323,6 +328,7 @@ public class SettingsViewModel: ObservableObject {
         credentialTask = nil
         credentialHydrationID = nil
         credentialHydrationProvider = nil
+        isConfiguredCredentialHydrating = false
     }
     
     /// Debounced save that batches rapid changes
