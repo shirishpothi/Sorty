@@ -162,11 +162,11 @@ private final class RetainedCompletionFloatingGlowView: NSView {
         let orbit = CAKeyframeAnimation(keyPath: "transform.translation")
         orbit.values = (0...steps).map { i in
             let a = Double(i) / Double(steps) * 2 * .pi
-            return NSValue(point: CGPoint(x: 30 * sin(a), y: -20 * cos(a)))
+            return NSValue(point: CGPoint(x: 18 * sin(a), y: -12 * cos(a)))
         }
         orbit.keyTimes = (0...steps).map { NSNumber(value: Double($0) / Double(steps)) }
         orbit.calculationMode = .linear
-        orbit.duration = 6
+        orbit.duration = 12
         orbit.repeatCount = .infinity
         orbit.isRemovedOnCompletion = false
         host.layer?.add(orbit, forKey: "completionFloatingGlowPosition")
@@ -210,7 +210,7 @@ private final class RetainedCompletionRevealBlobView: NSView {
     private let floatingGlow = RetainedCompletionFloatingGlowView()
     private let highlightHost = NSHostingView(rootView: CompletionRevealHighlightGraphic())
     private var hasConfiguredPresentation = false
-    private var targetScale: CGFloat = 0.05
+    private var targetScale: CGFloat = 0.82
     private var targetOpacity: Float = 0
 
     override init(frame frameRect: NSRect) {
@@ -278,6 +278,7 @@ private final class RetainedCompletionRevealBlobView: NSView {
         }
 
         if reduceMotion {
+            layer?.removeAnimation(forKey: "completionRevealScale")
             let opacityAnimation = CABasicAnimation(keyPath: "opacity")
             opacityAnimation.fromValue = layer?.presentation()?.opacity ?? layer?.opacity ?? 0
             opacityAnimation.toValue = resolvedOpacity
@@ -289,16 +290,18 @@ private final class RetainedCompletionRevealBlobView: NSView {
         }
 
         let isReceding = resolvedOpacity < previousOpacity
-        let duration: CFTimeInterval = isReceding ? 1.2 : 1.0
+        let duration: CFTimeInterval = resolvedOpacity == 0 ? 0.52 : (isReceding ? 0.65 : 0.7)
         let timing = CAMediaTimingFunction(
             name: isReceding ? .easeInEaseOut : .easeOut
         )
 
         if let layer {
+            let fromScale = ((layer.presentation()?.value(forKeyPath: "transform.scale")
+                ?? layer.value(forKeyPath: "transform.scale")) as? Double)
+                ?? Double(resolvedScale)
             let scaleAnimation = CABasicAnimation(keyPath: "transform.scale")
-            scaleAnimation.fromValue = layer.presentation()?.value(forKeyPath: "transform.scale")
-                ?? layer.value(forKeyPath: "transform.scale")
-            scaleAnimation.toValue = resolvedScale
+            scaleAnimation.fromValue = fromScale
+            scaleAnimation.toValue = Double(resolvedScale)
             scaleAnimation.duration = duration
             scaleAnimation.timingFunction = timing
             layer.add(scaleAnimation, forKey: "completionRevealScale")
@@ -529,9 +532,9 @@ private struct CompletionHero: View {
             )
         }
         .opacity(hasAppeared ? 1 : 0)
-        .scaleEffect(hasAppeared ? 1 : 0.3)
+        .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.9)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.9, dampingFraction: 0.7).delay(0.1),
+            reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.9),
             value: hasAppeared
         )
         .scaleEffect(contentDismissed ? 0.8 : 1.0)
@@ -832,12 +835,12 @@ private struct CompletionTipsGrid: View {
     var body: some View {
         HStack(alignment: .top, spacing: 48) {
             VStack(alignment: .leading, spacing: 14) {
-                quickTip(icon: "folder.badge.plus", text: "Organize from Finder", delay: 0.55)
-                quickTip(icon: "arrow.uturn.backward", text: "Undo from History", delay: 0.75)
+                quickTip(icon: "folder.badge.plus", text: "Organize from Finder", delay: 0)
+                quickTip(icon: "arrow.uturn.backward", text: "Undo from History", delay: 0.08)
             }
             VStack(alignment: .leading, spacing: 14) {
-                quickTip(icon: "keyboard", text: "⌘O opens a folder", delay: 0.65)
-                quickTip(icon: "gearshape", text: "Swap models in Settings", delay: 0.85)
+                quickTip(icon: "keyboard", text: "⌘O opens a folder", delay: 0.04)
+                quickTip(icon: "gearshape", text: "Swap models in Settings", delay: 0.12)
             }
         }
         .frame(maxWidth: .infinity)
@@ -883,7 +886,7 @@ private struct CompletionPrimaryAction: View {
         .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
         .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 16)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(1.05),
+            reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.85).delay(0.2),
             value: tipsAppeared
         )
         .padding(.top, 6)
@@ -1104,7 +1107,7 @@ public struct CompletionStepView: View {
     let onFinish: () -> Void
 
     // Entry animation states
-    @State private var revealScale: CGFloat = 0.05
+    @State private var revealScale: CGFloat = 0.82
     @State private var revealOpacity: Double = 0
     @State private var hasAppeared = false
     @State private var showGlowRing = false
@@ -1168,7 +1171,7 @@ public struct CompletionStepView: View {
                     .animation(
                         reduceMotion
                             ? nil
-                            : .spring(response: 0.65, dampingFraction: 0.85).delay(0.95),
+                            : .spring(response: 0.65, dampingFraction: 0.85).delay(0.16),
                         value: tipsAppeared
                     )
                 CompletionPrimaryAction(
@@ -1224,39 +1227,31 @@ public struct CompletionStepView: View {
     // MARK: - Reveal Sequence
 
     private func startRevealSequence() {
-        // Play audio immediately
+        runtimeController.animationTask?.cancel()
         audioController.play()
 
-        // Phase 1: Gradient blob reveal (0 - 1.0s)
-        revealScale = 1.2
-        revealOpacity = 1.0
+        // Reveal the message while the backdrop expands, then let it settle.
+        revealScale = 1.12
+        revealOpacity = reduceMotion ? 0.3 : 0.65
+        hasAppeared = true
+        showGlowRing = true
+        audioController.playRevealAccent()
 
-        // Phase 2+: async sequence stored for cancellation on disappear
-        runtimeController.animationTask = Task { @MainActor in
-            // Phase 2: Background fades in, blob fades/expands (0.5s after start)
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-
-            revealOpacity = 0.3
-            revealScale = 1.5
-
-            // Phase 3: Checkmark + glow ring appear (0.6s after start)
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
-
-            hasAppeared = true
-            showGlowRing = true
-
-            // The sound is resolved during onboarding prewarm, so this frame
-            // only starts playback while the checkmark animation begins.
-            audioController.playRevealAccent()
-
-            // Phase 4: Particles + tips stagger in (0.9s after start)
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-
-            showParticles = true
+        if reduceMotion {
             tipsAppeared = true
+            return
+        }
+
+        runtimeController.animationTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            tipsAppeared = true
+            showParticles = true
+
+            // Let the 700 ms entrance finish before fading to ambient intensity.
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            revealOpacity = 0.3
         }
     }
 
@@ -1361,6 +1356,8 @@ public struct CompletionStepView: View {
 
     private func startTransition() {
         guard !exitTriggered else { return }
+        runtimeController.animationTask?.cancel()
+        runtimeController.animationTask = nil
         // Lock the hero icon to its current hover state so a click while
         // showing the Sorty app icon doesn't flick back to the checkmark
         // during the exit animation.

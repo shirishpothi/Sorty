@@ -212,3 +212,12 @@ Likewise, a permission video representable must treat an unchanged URL/player
 pair as a no-op; ordinary SwiftUI updates must not restart an already-playing
 queue. Pause permission video playback while Sorty is deactivated, then resume
 its retained instance when the app becomes active.
+
+### Completion reveal timing
+
+The final step reveals its hero immediately and its tips after 200 ms. The
+backdrop expands from 0.82 to 1.12 over 700 ms without overshoot, then fades
+to ambient opacity over 650 ms at the same size. Keep those stages separate
+so the settle does not interrupt the entrance. Reduce Motion shows the
+content immediately and uses opacity only for the backdrop. Cancel the entry
+task when finishing so it cannot restart the celebration during dismissal.
