@@ -280,11 +280,10 @@ class PreviewStore: ObservableObject {
                 
                 // Add files
                 let visibleFileCount = min(folder.files.count, Self.renderedFilesPerSectionLimit)
-                for index in 0..<visibleFileCount {
-                    let file = folder.files[index]
+                for file in folder.files.prefix(visibleFileCount) {
                     visibleFiles.append(file)
                     rows.append(FlattenedRow(
-                        id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
+                        id: "\(folder.id.uuidString)-\(file.id.uuidString)",
                         depth: depth + 1,
                         type: .file(file, parentFolderID: folder.id),
                         isExpanded: false
@@ -316,11 +315,10 @@ class PreviewStore: ObservableObject {
 
             if isExpanded {
                 let visibleFileCount = min(plan.unorganizedFiles.count, Self.renderedFilesPerSectionLimit)
-                for index in 0..<visibleFileCount {
-                    let file = plan.unorganizedFiles[index]
+                for file in plan.unorganizedFiles.prefix(visibleFileCount) {
                     visibleFiles.append(file)
                     rows.append(FlattenedRow(
-                        id: "unorganized-\(file.id.uuidString)-\(index)",
+                        id: "unorganized-\(file.id.uuidString)",
                         depth: 1,
                         type: .unorganizedFile(file),
                         isExpanded: false
@@ -461,10 +459,9 @@ class PreviewStore: ObservableObject {
         }
 
         let visibleFileCount = min(folder.files.count, Self.renderedFilesPerSectionLimit)
-        for index in 0..<visibleFileCount {
-            let file = folder.files[index]
+        for file in folder.files.prefix(visibleFileCount) {
             rows.append(FlattenedRow(
-                id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
+                id: "\(folder.id.uuidString)-\(file.id.uuidString)",
                 depth: depth,
                 type: .file(file, parentFolderID: folder.id),
                 isExpanded: false

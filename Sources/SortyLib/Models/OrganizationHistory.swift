@@ -489,6 +489,7 @@ public class OrganizationHistory: ObservableObject {
     private let repository: OrganizationHistoryRepository
     private let maxEntries = 100
     private var loadTask: Task<[OrganizationHistoryEntry], Never>?
+    private var persistenceTask: Task<Void, Never>?
     private var hasPendingChanges = false
     private var loadGeneration = 0
     
@@ -511,8 +512,10 @@ public class OrganizationHistory: ObservableObject {
             task = loadTask
         } else {
             let repository = repository
+            let pendingPersistence = persistenceTask
             task = Task.detached(priority: .userInitiated) {
-                repository.loadEntries()
+                await pendingPersistence?.value
+                return repository.loadEntries()
             }
             loadTask = task
         }
@@ -568,7 +571,9 @@ public class OrganizationHistory: ObservableObject {
         hasLoadedPersistedState = true
         hasPendingChanges = false
         entries.removeAll()
-        repository.clear()
+        enqueuePersistence { repository in
+            repository.clear()
+        }
     }
 
     @discardableResult
@@ -657,7 +662,27 @@ public class OrganizationHistory: ObservableObject {
             hasPendingChanges = true
             return
         }
-        _ = repository.saveEntries(entries)
+        let snapshot = entries
+        enqueuePersistence { repository in
+            _ = repository.saveEntries(snapshot)
+        }
+    }
+
+    /// Queues disk work behind earlier history operations without blocking the main actor.
+    private func enqueuePersistence(
+        _ operation: @escaping @Sendable (OrganizationHistoryRepository) -> Void
+    ) {
+        let previousTask = persistenceTask
+        let repository = repository
+        persistenceTask = Task.detached(priority: .utility) {
+            await previousTask?.value
+            guard !Task.isCancelled else { return }
+            operation(repository)
+        }
+    }
+
+    func waitForPendingPersistence() async {
+        await persistenceTask?.value
     }
 
     public nonisolated static func loadPersistedEntries(

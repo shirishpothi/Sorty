@@ -230,4 +230,49 @@ final class PreviewStoreRenameTests: XCTestCase {
         }
         XCTAssertEqual(count, 2_500)
     }
+
+    func testFileRowIdentitySurvivesEarlierFileRemoval() {
+        let first = makeFile("first")
+        let second = makeFile("second")
+        let third = makeFile("third")
+        let folderID = UUID()
+        let planID = UUID()
+        let folder = FolderSuggestion(id: folderID, folderName: "Documents", files: [first, second, third])
+        let store = PreviewStore(plan: OrganizationPlan(id: planID, suggestions: [folder]))
+
+        let originalSecondID = store.flattenedRows.first { row in
+            if case .file(let file, _) = row.type { return file.id == second.id }
+            return false
+        }?.id
+
+        let updatedFolder = FolderSuggestion(id: folderID, folderName: "Documents", files: [second, third])
+        store.updatePlan(OrganizationPlan(id: planID, suggestions: [updatedFolder], version: 2))
+
+        let updatedSecondID = store.flattenedRows.first { row in
+            if case .file(let file, _) = row.type { return file.id == second.id }
+            return false
+        }?.id
+        XCTAssertEqual(originalSecondID, updatedSecondID)
+    }
+
+    func testUnorganizedRowIdentitySurvivesEarlierFileRemoval() {
+        let first = makeFile("first")
+        let second = makeFile("second")
+        let third = makeFile("third")
+        let planID = UUID()
+        let store = PreviewStore(plan: OrganizationPlan(id: planID, unorganizedFiles: [first, second, third]))
+
+        let originalSecondID = store.flattenedRows.first { row in
+            if case .unorganizedFile(let file) = row.type { return file.id == second.id }
+            return false
+        }?.id
+
+        store.updatePlan(OrganizationPlan(id: planID, unorganizedFiles: [second, third], version: 2))
+
+        let updatedSecondID = store.flattenedRows.first { row in
+            if case .unorganizedFile(let file) = row.type { return file.id == second.id }
+            return false
+        }?.id
+        XCTAssertEqual(originalSecondID, updatedSecondID)
+    }
 }

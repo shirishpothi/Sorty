@@ -23,6 +23,7 @@ class HistoryTests: XCTestCase {
     
     @MainActor
     override func tearDown() async throws {
+        await history?.waitForPendingPersistence()
         testDefaults?.removePersistentDomain(forName: testSuiteName)
         if let storageDirectory {
             try? FileManager.default.removeItem(at: storageDirectory)
@@ -70,6 +71,7 @@ class HistoryTests: XCTestCase {
     func testPersistence() async {
         let entry = OrganizationHistoryEntry(directoryPath: "/persist", filesOrganized: 1, foldersCreated: 1)
         history.addEntry(entry)
+        await history.waitForPendingPersistence()
 
         let newHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
         await newHistory.loadPersistedState()
@@ -104,6 +106,7 @@ class HistoryTests: XCTestCase {
 
         history.addEntry(first)
         history.addEntry(second)
+        await history.waitForPendingPersistence()
 
         let primaryURL = try XCTUnwrap(history.storageFileURL)
         let backupURL = try XCTUnwrap(history.backupStorageFileURL)

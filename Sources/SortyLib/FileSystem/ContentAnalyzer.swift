@@ -134,6 +134,7 @@ public actor ContentAnalyzer {
     private let maxPreviewLength = ContentAnalyzer.defaultTextPreviewLength
     private let maxTextBytesToRead = 262_144 // 256KB
     private let maxDocumentTextLength = 12_000
+    private let initialPDFPageProbeCount = 3
     private let visionAnalyzer = VisionAnalyzer()
 
     // Configuration
@@ -376,12 +377,11 @@ public actor ContentAnalyzer {
 
         metadata.pageCount = document.pageCount
 
-        // Extract text from all pages up to a reasonable ceiling so deep scan
-        // has materially better context without producing unbounded payloads.
         var extractedText = ""
-        let pagesToScan = document.pageCount
+        let initialPageCount = min(document.pageCount, initialPDFPageProbeCount)
 
-        for i in 0..<pagesToScan {
+        for i in 0..<initialPageCount {
+            guard !Task.isCancelled else { return nil }
             if let page = document.page(at: i),
                let text = page.string {
                 extractedText += text + " "
@@ -391,18 +391,34 @@ public actor ContentAnalyzer {
             }
         }
 
-        if !extractedText.isEmpty {
-            metadata.textPreview = String(extractedText.prefix(maxDocumentTextLength))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        // If no text extracted (scanned PDF), try OCR on first page
+        // Probe OCR before walking the rest of a likely scanned document.
         if extractedText.isEmpty && enableOCR, let firstPage = document.page(at: 0) {
+            guard !Task.isCancelled else { return nil }
             if let ocrResult = await performOCROnPDFPage(firstPage) {
                 metadata.ocrText = ocrResult.text
                 metadata.ocrConfidence = ocrResult.confidence
                 metadata.detectedKeywords = ocrResult.detectKeywords(using: customOCRKeywords)
             }
+        }
+
+        // Keep scanning text-backed documents, or PDFs where first-page OCR
+        // found nothing, until enough useful context has been collected.
+        if !extractedText.isEmpty || metadata.ocrText?.isEmpty != false {
+            for i in initialPageCount..<document.pageCount {
+                guard !Task.isCancelled else { return nil }
+                if let page = document.page(at: i),
+                   let text = page.string {
+                    extractedText += text + " "
+                    if extractedText.count >= maxDocumentTextLength {
+                        break
+                    }
+                }
+            }
+        }
+
+        if !extractedText.isEmpty {
+            metadata.textPreview = String(extractedText.prefix(maxDocumentTextLength))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         return metadata.isEmpty ? nil : metadata
@@ -588,14 +604,13 @@ public actor ContentAnalyzer {
     // MARK: - Plain Text Extraction
 
     private func extractTextContent(from url: URL) -> ContentMetadata? {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
             return nil
         }
+        defer { try? handle.close() }
 
-        let bytesToRead = min(data.count, maxTextBytesToRead)
-        let subset = data.prefix(bytesToRead)
-
-        guard let text = decodeText(from: Data(subset)) else {
+        guard let data = try? handle.read(upToCount: maxTextBytesToRead),
+              let text = decodeText(from: data) else {
             return nil
         }
 
