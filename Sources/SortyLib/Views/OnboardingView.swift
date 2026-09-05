@@ -2634,9 +2634,9 @@ final class RetainedOnboardingBottomGradientView: NSView {
 
         let completion = progress * progress
         let intensity = 0.98 + completion * 0.28
-        let bottomOpacity = isDark ? 0.42 : 0.52
-        let midOpacity = isDark ? 0.22 : 0.28
-        let glowOpacity = isDark ? 0.28 : 0.36
+        let bottomOpacity = isDark ? 0.42 : 0.20
+        let midOpacity = isDark ? 0.22 : 0.10
+        let glowOpacity = isDark ? 0.28 : 0.12
         let accent = NSColor(SortyDesignSystem.Colors.resolvedAccent)
 
         layer?.backgroundColor = showsBaseColor
@@ -2650,13 +2650,13 @@ final class RetainedOnboardingBottomGradientView: NSView {
         ]
         let accentEndPoint = CGPoint(x: 0.5, y: 0.68 - progress * 0.56)
         let shadeColors = [
-            NSColor.black.withAlphaComponent(isDark ? 0.18 : 0.10).cgColor,
-            NSColor.black.withAlphaComponent(isDark ? 0.04 : 0.02).cgColor,
+            NSColor.black.withAlphaComponent(isDark ? 0.18 : 0).cgColor,
+            NSColor.black.withAlphaComponent(isDark ? 0.04 : 0).cgColor,
             NSColor.clear.cgColor
         ]
         let radialColors = [
             accent.withAlphaComponent(glowOpacity * intensity).cgColor,
-            accent.withAlphaComponent(0.16 * intensity).cgColor,
+            accent.withAlphaComponent((isDark ? 0.16 : 0.06) * intensity).cgColor,
             accent.withAlphaComponent(0).cgColor
         ]
         let radialRadius = 680 + completion * 560

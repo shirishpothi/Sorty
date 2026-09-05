@@ -793,6 +793,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 }
 
 private struct CompletionCheckmarkIcon: View {
+    @Environment(\.colorScheme) private var colorScheme
     @SortyHotReload private var hotReload
     let hasAppeared: Bool
     let isButtonHovered: Bool
@@ -801,7 +802,9 @@ private struct CompletionCheckmarkIcon: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(CompletionPalette.shadowRose.opacity(0.30))
+                .fill(colorScheme == .dark
+                    ? CompletionPalette.shadowRose.opacity(0.30)
+                    : CompletionPalette.accent.opacity(0.10))
                 .frame(width: 118, height: 118)
 
             Circle()
@@ -936,6 +939,7 @@ private struct CompletionPrimaryAction: View {
 }
 
 private struct CompletionAnalyticsPreference: View {
+    @Environment(\.colorScheme) private var colorScheme
     @SortyHotReload private var hotReload
     @Binding var isEnabled: Bool
     @State private var isShowingDetails = false
@@ -974,7 +978,9 @@ private struct CompletionAnalyticsPreference: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(
-            CompletionPalette.shadowRose.opacity(0.18),
+            colorScheme == .dark
+                ? CompletionPalette.shadowRose.opacity(0.18)
+                : Color(NSColor.controlBackgroundColor),
             in: Capsule()
         )
     }
@@ -1443,6 +1449,7 @@ public struct CompletionStepView: View {
 }
 
 private struct CompletionContrastBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
     @SortyHotReload private var hotReload
     var body: some View {
         ZStack {
@@ -1450,9 +1457,9 @@ private struct CompletionContrastBackdrop: View {
 
             LinearGradient(
                 colors: [
-                    Color.black.opacity(0.22),
+                    Color.black.opacity(colorScheme == .dark ? 0.22 : 0),
                     Color.clear,
-                    Color.black.opacity(0.10)
+                    Color.black.opacity(colorScheme == .dark ? 0.10 : 0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -1490,6 +1497,7 @@ private struct CompletionContrastBackdrop: View {
 }
 
 struct QuickTipRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     @SortyHotReload private var hotReload
     let icon: String
     let text: String
@@ -1510,7 +1518,7 @@ struct QuickTipRow: View {
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(CompletionPalette.softRose)
+                    .foregroundStyle(colorScheme == .dark ? CompletionPalette.softRose : CompletionPalette.deepRose)
             }
 
             Text(text)

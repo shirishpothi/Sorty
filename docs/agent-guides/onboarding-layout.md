@@ -96,7 +96,11 @@ Reduce Motion keeps the reveal as a short opacity fade. The optional demo's
 continuous organizing sliver follows the same rule, and its per-file/folder
 collections are derived once per mutation rather
 than repeatedly filtered in row builders. The full-window color climb uses
-retained accent, shade, and additive radial-gradient layers. Step changes
+retained accent, shade, and additive radial-gradient layers. Light mode uses
+a lighter accent wash with no black shade; keep completion backdrops free of
+black scrims in light mode and use darker tip glyphs on the pale background.
+The completion analytics capsule uses the adaptive control background in light
+mode. Step changes
 animate only their colors and geometry; do not restore a full-window SwiftUI
 Canvas or multiple gradient subtrees that redraw throughout every transition.
 When Sorty becomes inactive, completion glow and ripple layers pause their
