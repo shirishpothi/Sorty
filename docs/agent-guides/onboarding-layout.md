@@ -215,9 +215,14 @@ its retained instance when the app becomes active.
 
 ### Completion reveal timing
 
-The final step reveals its hero immediately and its tips after 200 ms. The
-backdrop expands from 0.82 to 1.12 and fades to 0.3 opacity over 700 ms,
-then holds steady. Its inner glow is static: no orbit, repeating scale pulse,
-or second dimming phase that could read as the reveal reversing. Reduce Motion shows the
-content immediately and uses opacity only for the backdrop. Cancel the entry
-task when finishing so it cannot restart the celebration during dismissal.
+The final step runs a choreographed phased reveal: the celebration blob
+leads, the hero lands at 120 ms, the glow ring joins at 340 ms, the blob
+settles to ambient at 660 ms, and tips plus particles land at 840 ms. The
+blob is a bounded 600x480 retained two-layer backdrop behind the hero, not
+a full-window SwiftUI blur: small shape layers under Gaussian blur
+containers, so the compositor animates scale, opacity, and blur radius
+without re-rendering content. Once ambient it breathes quietly (blob 3.8 s,
+core 2.9 s, scale only). Reduce Motion jumps straight to the settled state
+with no particles or breathing. Pause the layers while inactive and fade
+them on dismissal. Cancel the entry task when finishing so it cannot
+restart the celebration during dismissal.
