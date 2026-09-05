@@ -390,6 +390,7 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
 
 private struct MetalFxPillSurface: View {
     @SortyHotReload private var hotReload
+    @State private var isWindowVisible = true
     let isPressed: Bool
     let isHovering: Bool
     let isEnabled: Bool
@@ -407,7 +408,7 @@ private struct MetalFxPillSurface: View {
     }
 
     private var shouldAnimateSurface: Bool {
-        !isPaused && isEnabled && !reduceMotion
+        !isPaused && isEnabled && !reduceMotion && isWindowVisible
     }
 
     private var animationFrameInterval: TimeInterval {
@@ -415,13 +416,16 @@ private struct MetalFxPillSurface: View {
     }
 
     var body: some View {
-        if shouldAnimateSurface {
-            SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
-                surface(time: timeline.date.timeIntervalSinceReferenceDate)
+        Group {
+            if shouldAnimateSurface {
+                SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
+                    surface(time: timeline.date.timeIntervalSinceReferenceDate)
+                }
+            } else {
+                surface(time: 0)
             }
-        } else {
-            surface(time: 0)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private func surface(time: TimeInterval) -> some View {
@@ -535,6 +539,88 @@ private struct MetalFxPillSurface: View {
             )
             .blur(radius: 5)
             .opacity(isPressed ? 0.35 : 0.72)
+    }
+}
+
+private struct WindowVisibilityReader: NSViewRepresentable {
+    @Binding var isVisible: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isVisible: $isVisible)
+    }
+
+    func makeNSView(context: Context) -> WindowProbeView {
+        let view = WindowProbeView()
+        view.onWindowChange = { [weak coordinator = context.coordinator] window in
+            coordinator?.observe(window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: WindowProbeView, context: Context) {
+        context.coordinator.isVisible = $isVisible
+        context.coordinator.observe(nsView.window)
+    }
+
+    static func dismantleNSView(_ nsView: WindowProbeView, coordinator: Coordinator) {
+        coordinator.observe(nil)
+        nsView.onWindowChange = nil
+    }
+
+    final class Coordinator {
+        var isVisible: Binding<Bool>
+        private weak var observedWindow: NSWindow?
+        private var observers: [NSObjectProtocol] = []
+
+        init(isVisible: Binding<Bool>) {
+            self.isVisible = isVisible
+        }
+
+        func observe(_ window: NSWindow?) {
+            guard observedWindow !== window else { return }
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
+            observers.removeAll()
+            observedWindow = window
+            guard let window else {
+                isVisible.wrappedValue = false
+                return
+            }
+            for name in [
+                NSWindow.didChangeOcclusionStateNotification,
+                NSWindow.didMiniaturizeNotification,
+                NSWindow.didDeminiaturizeNotification,
+            ] {
+                observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    self?.refresh()
+                })
+            }
+            refresh()
+        }
+
+        private func refresh() {
+            guard let window = observedWindow else {
+                isVisible.wrappedValue = false
+                return
+            }
+            isVisible.wrappedValue = window.isVisible
+                && !window.isMiniaturized
+                && window.occlusionState.contains(.visible)
+        }
+
+        deinit {
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
+        }
+    }
+
+    final class WindowProbeView: NSView {
+        var onWindowChange: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window)
+        }
     }
 }
 
