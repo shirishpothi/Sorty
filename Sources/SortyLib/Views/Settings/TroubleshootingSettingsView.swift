@@ -61,12 +61,14 @@ struct TroubleshootingSettingsView: View {
                         detail: nil,
                         icon: "arrow.counterclockwise",
                         color: .red,
-                        buttonTitle: "Erase All",
+                        buttonTitle: appState.isDeletingUsageData ? "Erasing…" : "Erase All",
                         buttonIcon: "trash",
-                        focusTarget: .troubleshootingReset
+                        focusTarget: .troubleshootingReset,
+                        isBusy: appState.isDeletingUsageData
                     ) {
                         showingResetConfirmation = true
                     }
+                    .accessibilityIdentifier("EraseAllDataButton")
                 }
             }
             .settingsFocusable(.troubleshootingMaintenance)

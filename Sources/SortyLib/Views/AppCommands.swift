@@ -435,6 +435,10 @@ public class AppState: ObservableObject {
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
+    /// True while `deleteUsageData()` is running. The blocking portion runs off
+    /// the main actor, so views use this for busy affordances instead of assuming
+    /// the call completes synchronously.
+    @Published public private(set) var isDeletingUsageData = false
     @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
     @Published public var highlightedWatchedFolderID: UUID?
     @Published public var highlightedExclusionRuleID: UUID?
@@ -1524,51 +1528,66 @@ public class AppState: ObservableObject {
     }
     
     public func deleteUsageData() {
-        var deletionFailures: [Error] = []
+        // Guard re-entrancy: the blocking portion below runs off the main actor.
+        guard !isDeletingUsageData else { return }
+        isDeletingUsageData = true
 
-        AnalyticsManager.shared.resetConsentAndData()
-        if !KeychainManager.deleteAll() {
-            deletionFailures.append(UsageDataDeletionError.keychain)
-        }
-        GitHubCopilotAuthManager.shared.signOut()
+        // Strong capture: the UI reset must still run even if the calling view goes away mid-erase.
+        Task { @MainActor in
+            var deletionFailures: [Error] = []
 
-        deletionFailures.append(contentsOf: SortyUsageDataEraser.erase())
+            AnalyticsManager.shared.resetConsentAndData()
+            GitHubCopilotAuthManager.shared.signOut()
 
-        DuplicateRestorationManager.shared.clearAllData()
-        SortyWidgetSnapshotStore.clear()
+            // Keychain and filesystem deletes block; run them off the main actor.
+            // Ordering after this point matches the previous synchronous version.
+            let blockingFailures = await Task.detached(priority: .userInitiated) {
+                var failures: [Error] = []
+                if !KeychainManager.deleteAll() {
+                    failures.append(UsageDataDeletionError.keychain)
+                }
+                failures.append(contentsOf: SortyUsageDataEraser.erase())
+                return failures
+            }.value
+            deletionFailures.append(contentsOf: blockingFailures)
 
-        organizer?.reset()
-        duplicateManager.clearResults()
-        selectedDirectory = nil
-        duplicateSelectedDirectory = nil
-        duplicateSelectedGroup = nil
-        pendingDuplicatesHandoff = nil
-        highlightedWatchedFolderID = nil
-        pendingNotificationActionRequest = nil
-        lastOrganizedDirectory = nil
-        settingsFocusTarget = nil
-        requiresSetupRepair = false
-        setupRepairMessage = nil
+            DuplicateRestorationManager.shared.clearAllData()
+            SortyWidgetSnapshotStore.clear()
 
-        withAnimation(.spring()) {
-            hasCompletedOnboarding = false
-        }
+            organizer?.reset()
+            duplicateManager.clearResults()
+            selectedDirectory = nil
+            duplicateSelectedDirectory = nil
+            duplicateSelectedGroup = nil
+            pendingDuplicatesHandoff = nil
+            highlightedWatchedFolderID = nil
+            pendingNotificationActionRequest = nil
+            lastOrganizedDirectory = nil
+            settingsFocusTarget = nil
+            requiresSetupRepair = false
+            setupRepairMessage = nil
 
-        postWindowScopedNotification(.clearLearningsData)
-        NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
+            withAnimation(.spring()) {
+                hasCompletedOnboarding = false
+            }
 
-        userDefaults.dictionaryRepresentation().keys.forEach(userDefaults.removeObject(forKey:))
-        UserDefaults(suiteName: SortyWidgetSnapshotStore.appGroupIdentifier)?
-            .removePersistentDomain(forName: SortyWidgetSnapshotStore.appGroupIdentifier)
+            postWindowScopedNotification(.clearLearningsData)
+            NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
 
-        if let failure = deletionFailures.first {
-            HapticFeedbackManager.shared.error()
-            NotificationManager.shared.showError(
-                message: "Some Sorty data could not be deleted: \(failure.localizedDescription)",
-                isCritical: true
-            )
-        } else {
-            HapticFeedbackManager.shared.success()
+            userDefaults.dictionaryRepresentation().keys.forEach(userDefaults.removeObject(forKey:))
+            UserDefaults(suiteName: SortyWidgetSnapshotStore.appGroupIdentifier)?
+                .removePersistentDomain(forName: SortyWidgetSnapshotStore.appGroupIdentifier)
+
+            if let failure = deletionFailures.first {
+                HapticFeedbackManager.shared.error()
+                NotificationManager.shared.showError(
+                    message: "Some Sorty data could not be deleted: \(failure.localizedDescription)",
+                    isCritical: true
+                )
+            } else {
+                HapticFeedbackManager.shared.success()
+            }
+            isDeletingUsageData = false
         }
     }
 
