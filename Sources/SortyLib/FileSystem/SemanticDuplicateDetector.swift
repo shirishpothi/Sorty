@@ -603,44 +603,71 @@ public actor SemanticDuplicateDetector {
     }
 
     private func findSimilarByContent(_ documents: [FileItem], processedIds: Set<UUID>) async -> [SemanticDuplicateGroup] {
-        var localProcessed = processedIds
-        var links: [(Int, Int, Double)] = []
+        let features = documents.map { file in
+            file.semanticTextContent.map(Self.textFeatures)
+        }
+        var parent = Array(documents.indices)
+        var rank = Array(repeating: 0, count: documents.count)
+        var minimumSimilarity = Array(repeating: 1.0, count: documents.count)
+
+        func root(of index: Int) -> Int {
+            var current = index
+            while parent[current] != current {
+                current = parent[current]
+            }
+            return current
+        }
+
+        func union(_ first: Int, _ second: Int, similarity: Double) {
+            var firstRoot = root(of: first)
+            var secondRoot = root(of: second)
+            if firstRoot == secondRoot {
+                minimumSimilarity[firstRoot] = min(minimumSimilarity[firstRoot], similarity)
+                return
+            }
+            if rank[firstRoot] < rank[secondRoot] {
+                swap(&firstRoot, &secondRoot)
+            }
+            parent[secondRoot] = firstRoot
+            minimumSimilarity[firstRoot] = min(
+                minimumSimilarity[firstRoot],
+                minimumSimilarity[secondRoot],
+                similarity
+            )
+            if rank[firstRoot] == rank[secondRoot] {
+                rank[firstRoot] += 1
+            }
+        }
 
         for i in 0..<documents.count {
-            guard !localProcessed.contains(documents[i].id),
-                  let content1 = documents[i].semanticTextContent else { continue }
+            guard !processedIds.contains(documents[i].id), let firstFeatures = features[i] else { continue }
 
             for j in (i + 1)..<documents.count {
-                guard !localProcessed.contains(documents[j].id),
-                      let content2 = documents[j].semanticTextContent else { continue }
+                guard !processedIds.contains(documents[j].id), let secondFeatures = features[j] else { continue }
 
-                let similarity = Self.textSimilarity(content1, content2)
+                let similarity = Self.textSimilarity(firstFeatures, secondFeatures)
                 if similarity >= similarityThreshold {
-                    links.append((i, j, similarity))
+                    union(i, j, similarity: similarity)
                 }
             }
         }
 
-        let groups = connectedSemanticGroups(
-            itemCount: documents.count,
-            links: links.map { ($0.0, $0.1) }
-        ) { indexes in
-            indexes.forEach { localProcessed.insert(documents[$0].id) }
+        var indexesByRoot: [Int: Set<Int>] = [:]
+        for index in documents.indices where !processedIds.contains(documents[index].id) && features[index] != nil {
+            indexesByRoot[root(of: index), default: []].insert(index)
+        }
+
+        return indexesByRoot.compactMap { componentRoot, indexes in
+            guard indexes.count > 1 else { return nil }
             let files = indexes.map { documents[$0] }
-            let groupSimilarity = links
-                .filter { indexes.contains($0.0) && indexes.contains($0.1) }
-                .map(\.2)
-                .min() ?? similarityThreshold
 
             return SemanticDuplicateGroup(
                 groupType: .similarDocuments,
                 files: files,
-                similarity: max(similarityThreshold, groupSimilarity),
+                similarity: max(similarityThreshold, minimumSimilarity[componentRoot]),
                 recommendation: .manualReview
             )
         }
-
-        return groups
     }
 
     // MARK: - Vibe Group Detection
@@ -803,15 +830,38 @@ public actor SemanticDuplicateDetector {
     // MARK: - Text Similarity
 
     static func textSimilarity(_ firstText: String, _ secondText: String) -> Double {
-        let firstTokens = normalizedTokens(in: firstText)
-        let secondTokens = normalizedTokens(in: secondText)
-        guard !firstTokens.isEmpty, !secondTokens.isEmpty else { return 0 }
+        textSimilarity(textFeatures(firstText), textFeatures(secondText))
+    }
 
-        let frequencySimilarity = cosineSimilarity(firstTokens, secondTokens)
-        let orderSimilarity = diceSimilarity(bigrams(from: firstTokens), bigrams(from: secondTokens))
+    private struct TextFeatures {
+        let tokens: [String]
+        let frequencies: [String: Int]
+        let frequencyMagnitude: Double
+        let bigrams: [String: Int]
+        let bigramCount: Int
+    }
 
-        if min(firstTokens.count, secondTokens.count) < 4 {
-            return firstTokens == secondTokens ? 1 : frequencySimilarity * 0.7
+    private static func textFeatures(_ text: String) -> TextFeatures {
+        let tokens = normalizedTokens(in: text)
+        let frequencies = tokens.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        let bigrams = bigrams(from: tokens)
+        return TextFeatures(
+            tokens: tokens,
+            frequencies: frequencies,
+            frequencyMagnitude: sqrt(frequencies.values.reduce(0.0) { $0 + Double($1 * $1) }),
+            bigrams: bigrams,
+            bigramCount: bigrams.values.reduce(0, +)
+        )
+    }
+
+    private static func textSimilarity(_ first: TextFeatures, _ second: TextFeatures) -> Double {
+        guard !first.tokens.isEmpty, !second.tokens.isEmpty else { return 0 }
+
+        let frequencySimilarity = cosineSimilarity(first, second)
+        let orderSimilarity = diceSimilarity(first, second)
+
+        if min(first.tokens.count, second.tokens.count) < 4 {
+            return first.tokens == second.tokens ? 1 : frequencySimilarity * 0.7
         }
 
         // Word frequency tolerates small edits, while adjacent word pairs stop
@@ -826,16 +876,12 @@ public actor SemanticDuplicateDetector {
             .filter { !$0.isEmpty }
     }
 
-    private static func cosineSimilarity(_ first: [String], _ second: [String]) -> Double {
-        let firstCounts = first.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-        let secondCounts = second.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-        let dotProduct = firstCounts.reduce(0.0) { result, entry in
-            result + Double(entry.value * (secondCounts[entry.key] ?? 0))
+    private static func cosineSimilarity(_ first: TextFeatures, _ second: TextFeatures) -> Double {
+        let dotProduct = first.frequencies.reduce(0.0) { result, entry in
+            result + Double(entry.value * (second.frequencies[entry.key] ?? 0))
         }
-        let firstMagnitude = sqrt(firstCounts.values.reduce(0.0) { $0 + Double($1 * $1) })
-        let secondMagnitude = sqrt(secondCounts.values.reduce(0.0) { $0 + Double($1 * $1) })
-        guard firstMagnitude > 0, secondMagnitude > 0 else { return 0 }
-        return dotProduct / (firstMagnitude * secondMagnitude)
+        guard first.frequencyMagnitude > 0, second.frequencyMagnitude > 0 else { return 0 }
+        return dotProduct / (first.frequencyMagnitude * second.frequencyMagnitude)
     }
 
     private static func bigrams(from tokens: [String]) -> [String: Int] {
@@ -845,14 +891,12 @@ public actor SemanticDuplicateDetector {
         }
     }
 
-    private static func diceSimilarity(_ first: [String: Int], _ second: [String: Int]) -> Double {
-        let firstCount = first.values.reduce(0, +)
-        let secondCount = second.values.reduce(0, +)
-        guard firstCount + secondCount > 0 else { return 0 }
-        let overlap = first.reduce(0) { result, entry in
-            result + min(entry.value, second[entry.key] ?? 0)
+    private static func diceSimilarity(_ first: TextFeatures, _ second: TextFeatures) -> Double {
+        guard first.bigramCount + second.bigramCount > 0 else { return 0 }
+        let overlap = first.bigrams.reduce(0) { result, entry in
+            result + min(entry.value, second.bigrams[entry.key] ?? 0)
         }
-        return Double(2 * overlap) / Double(firstCount + secondCount)
+        return Double(2 * overlap) / Double(first.bigramCount + second.bigramCount)
     }
 
     // MARK: - Helper Methods
