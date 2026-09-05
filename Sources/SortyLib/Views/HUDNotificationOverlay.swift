@@ -247,29 +247,34 @@ private struct HUDNotificationActionGrid: View {
     @SortyHotReload private var hotReload
     let actions: [HUDNotificationAction]
 
-    private let columns = [
-        GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8),
-        GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8)
-    ]
+    // Pairs of actions per row; a trailing odd action (e.g. "Never show again"
+    // below "Try Faster Model" + "Cancel") gets its own row and fills it.
+    private var rows: [[HUDNotificationAction]] {
+        stride(from: 0, to: actions.count, by: 2).map { start in
+            Array(actions[start..<min(start + 2, actions.count)])
+        }
+    }
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
-                Button(role: action.role) {
-                    action.action()
-                } label: {
-                    HUDNotificationActionLabel(action: action, fillsWidth: true)
+        VStack(spacing: 8) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 8) {
+                    ForEach(row) { action in
+                        actionButton(action)
+                    }
                 }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // Trailing odd action (e.g. "Never show again" below "Try Faster Model" + "Cancel") spans the full row.
-                .gridCellColumns(isFullWidthRow(index) ? 2 : 1)
             }
         }
     }
 
-    private func isFullWidthRow(_ index: Int) -> Bool {
-        actions.count % 2 == 1 && index == actions.count - 1
+    private func actionButton(_ action: HUDNotificationAction) -> some View {
+        Button(role: action.role) {
+            action.action()
+        } label: {
+            HUDNotificationActionLabel(action: action, fillsWidth: true)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
 
