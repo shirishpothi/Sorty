@@ -237,6 +237,7 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
 
 /// Pill button style with a caller-provided fill color for semantic actions.
 public struct TintedPillButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var fillColor: Color
     var foregroundColor: Color = .white
     var size: ControlSize = .regular
@@ -282,7 +283,7 @@ public struct TintedPillButtonStyle: ButtonStyle {
             .shadow(color: fillColor.opacity(0.24), radius: 8, x: 0, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, newValue in
                 if newValue {
                     HapticFeedbackManager.shared.tap()
@@ -293,6 +294,7 @@ public struct TintedPillButtonStyle: ButtonStyle {
 
 /// Standard secondary button style with border and haptic feedback
 public struct SortySecondaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var size: ControlSize = .regular
     var color: Color = .secondary
     
@@ -318,7 +320,7 @@ public struct SortySecondaryButtonStyle: ButtonStyle {
             )
             .foregroundColor(color == .secondary ? .primary : color)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.subtleBounce, value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .subtleBounce, value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { oldValue, newValue in
                 if newValue {
                     HapticFeedbackManager.shared.tap()
