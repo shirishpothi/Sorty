@@ -20,6 +20,10 @@ final class UserDefaultsDataReader: @unchecked Sendable {
     func data(forKey key: String) -> Data? {
         userDefaults.data(forKey: key)
     }
+
+    func stringArray(forKey key: String) -> [String]? {
+        userDefaults.stringArray(forKey: key)
+    }
 }
 
 struct SettingsCredentialStore: Sendable {

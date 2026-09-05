@@ -815,16 +815,17 @@ class ExclusionRulesExtendedTests: XCTestCase {
     }
 
     func testDefaultRulesIncludeDeveloperExclusions() async {
-        await MainActor.run {
-            let suiteName = "default-rules-\(UUID().uuidString)"
-            let defaults = UserDefaults(suiteName: suiteName)!
-            defer { defaults.removePersistentDomain(forName: suiteName) }
-            let manager = ExclusionRulesManager(userDefaults: defaults)
-            let hasNodeModulesRule = manager.rules.contains {
+        let suiteName = "default-rules-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let manager = await MainActor.run { ExclusionRulesManager(userDefaults: defaults) }
+        await manager.loadPersistedState()
+        let hasNodeModulesRule = await MainActor.run {
+            manager.rules.contains {
                 $0.type == .folderName && $0.pattern == "node_modules"
             }
-            XCTAssertTrue(hasNodeModulesRule)
         }
+        XCTAssertTrue(hasNodeModulesRule)
     }
 }
 

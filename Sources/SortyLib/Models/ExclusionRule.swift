@@ -1065,11 +1065,23 @@ public class ExclusionRulesManager: ObservableObject {
     @Published public private(set) var naturalLanguageExceptions: [NaturalLanguageException] = []
     @Published public private(set) var compiledMatcher = ExclusionMatcher.empty
     @Published public private(set) var usageByRuleID: [UUID: ExclusionRuleUsage] = [:]
+    @Published public private(set) var hasLoadedPersistedState = false
 
     private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     private let rulesKey = "exclusionRules"
     private let nlExceptionsKey = "naturalLanguageExceptions"
     private let usageKey = "exclusionRuleUsage"
+    private var loadTask: Task<PersistedSnapshot, Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
+
+    private struct PersistedSnapshot: Sendable {
+        var rules: [ExclusionRule] = []
+        var naturalLanguageExceptions: [NaturalLanguageException] = []
+        var usage: [UUID: ExclusionRuleUsage] = [:]
+        var didMigrateLegacyNaturalLanguage = false
+    }
 
     public convenience init() {
         self.init(userDefaults: .standard)
@@ -1077,15 +1089,88 @@ public class ExclusionRulesManager: ObservableObject {
 
     init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
-        loadRules()
-        loadUsage()
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
+        setupNotificationObservers()
+    }
+
+    /// Decodes rules away from the main actor. In-memory additions are merged before saving.
+    public func loadPersistedState() async {
+        guard !hasLoadedPersistedState else { return }
+
+        let generation = loadGeneration
+        let task: Task<PersistedSnapshot, Never>
+        if let loadTask {
+            task = loadTask
+        } else {
+            let persistedDataReader = persistedDataReader
+            let rulesKey = rulesKey
+            let nlExceptionsKey = nlExceptionsKey
+            let usageKey = usageKey
+            task = Task.detached(priority: .userInitiated) {
+                var snapshot = PersistedSnapshot()
+                if let data = persistedDataReader.data(forKey: rulesKey),
+                   let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {
+                    snapshot.rules = decoded
+                }
+                if let data = persistedDataReader.data(forKey: usageKey),
+                   let decoded = try? JSONDecoder().decode([UUID: ExclusionRuleUsage].self, from: data) {
+                    snapshot.usage = decoded
+                }
+                if let data = persistedDataReader.data(forKey: nlExceptionsKey),
+                   let decoded = try? JSONDecoder().decode([NaturalLanguageException].self, from: data) {
+                    snapshot.naturalLanguageExceptions = decoded
+                } else if let legacyExceptions = persistedDataReader.stringArray(forKey: nlExceptionsKey) {
+                    snapshot.naturalLanguageExceptions = legacyExceptions.compactMap {
+                        let text = Self.sanitizedExceptionText($0)
+                        return text.isEmpty ? nil : NaturalLanguageException(text: text)
+                    }
+                    snapshot.didMigrateLegacyNaturalLanguage = true
+                }
+                return snapshot
+            }
+            loadTask = task
+        }
+
+        let snapshot = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: rules.map { ($0.id, $0) })
+        let persistedIDs = Set(snapshot.rules.map(\.id))
+        var mergedRules = snapshot.rules.map { inMemoryByID[$0.id] ?? $0 }
+        mergedRules.append(contentsOf: rules.filter { !persistedIDs.contains($0.id) })
+
+        let persistedNLIDs = Set(snapshot.naturalLanguageExceptions.map(\.id))
+        var mergedNL = snapshot.naturalLanguageExceptions
+        mergedNL.append(contentsOf: naturalLanguageExceptions.filter { !persistedNLIDs.contains($0.id) })
+
+        var mergedUsage = snapshot.usage
+        for (id, usage) in usageByRuleID {
+            mergedUsage[id] = usage
+        }
+
+        rules = mergedRules
+        naturalLanguageExceptions = mergedNL
+        usageByRuleID = mergedUsage
+        rebuildMatcher()
+        if snapshot.didMigrateLegacyNaturalLanguage {
+            hasPendingChanges = true
+        }
+
         removeLegacyLearningsLinkedRules()
-        loadNaturalLanguageExceptions()
         if rules.isEmpty {
             setupDefaultRules()
         }
         migrateConfidentNaturalLanguageExceptions()
-        setupNotificationObservers()
+
+        hasLoadedPersistedState = true
+        loadTask = nil
+
+        if hasPendingChanges {
+            hasPendingChanges = false
+            saveRules()
+            saveUsage()
+            saveNaturalLanguageExceptions()
+        }
     }
 
     private func setupNotificationObservers() {
@@ -1110,6 +1195,11 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     public func clearEverything() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         rules.removeAll()
         naturalLanguageExceptions.removeAll()
         usageByRuleID.removeAll()
@@ -1153,6 +1243,11 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     public func clearAllRules() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        hasLoadedPersistedState = true
+        hasPendingChanges = false
         rules.removeAll()
         usageByRuleID.removeAll()
         saveRules()
@@ -1256,6 +1351,10 @@ public class ExclusionRulesManager: ObservableObject {
 
     /// Sanitizes user input to prevent prompt injection
     private func sanitizeException(_ text: String) -> String {
+        Self.sanitizedExceptionText(text)
+    }
+
+    private nonisolated static func sanitizedExceptionText(_ text: String) -> String {
         var sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Truncate to reasonable length
@@ -1283,35 +1382,20 @@ public class ExclusionRulesManager: ObservableObject {
         return sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func loadNaturalLanguageExceptions() {
-        if let data = userDefaults.data(forKey: nlExceptionsKey),
-           let saved = try? JSONDecoder().decode([NaturalLanguageException].self, from: data) {
-            naturalLanguageExceptions = saved
+    private func saveNaturalLanguageExceptions() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
             return
         }
-
-        if let legacyExceptions = userDefaults.stringArray(forKey: nlExceptionsKey) {
-            naturalLanguageExceptions = legacyExceptions.compactMap {
-                let text = sanitizeException($0)
-                return text.isEmpty ? nil : NaturalLanguageException(text: text)
-            }
-            saveNaturalLanguageExceptions()
-        }
-    }
-
-    private func saveNaturalLanguageExceptions() {
         guard let data = try? JSONEncoder().encode(naturalLanguageExceptions) else { return }
         userDefaults.set(data, forKey: nlExceptionsKey)
     }
 
-    private func loadUsage() {
-        guard let data = userDefaults.data(forKey: usageKey),
-              let decoded = try? JSONDecoder().decode([UUID: ExclusionRuleUsage].self, from: data)
-        else { return }
-        usageByRuleID = decoded
-    }
-
     private func saveUsage() {
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
         guard let data = try? JSONEncoder().encode(usageByRuleID) else { return }
         userDefaults.set(data, forKey: usageKey)
     }
@@ -1357,12 +1441,15 @@ public class ExclusionRulesManager: ObservableObject {
         saveRules()
     }
 
-    private func loadRules() {
-        if let data = userDefaults.data(forKey: rulesKey),
-           let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {
-            rules = decoded
-        }
+    private func saveRules() {
         rebuildMatcher()
+        guard hasLoadedPersistedState else {
+            hasPendingChanges = true
+            return
+        }
+        if let encoded = try? JSONEncoder().encode(rules) {
+            userDefaults.set(encoded, forKey: rulesKey)
+        }
     }
 
     private func removeRules(where shouldRemove: (ExclusionRule) -> Bool) {
@@ -1382,13 +1469,6 @@ public class ExclusionRulesManager: ObservableObject {
         let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
         return URL(fileURLWithPath: trimmed).lastPathComponent.lowercased()
-    }
-
-    private func saveRules() {
-        rebuildMatcher()
-        if let encoded = try? JSONEncoder().encode(rules) {
-            userDefaults.set(encoded, forKey: rulesKey)
-        }
     }
 
     private func rebuildMatcher() {

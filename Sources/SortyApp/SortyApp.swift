@@ -889,7 +889,8 @@ struct SortyApp: App {
         async let watchedFoldersLoad: Void = watchedFoldersManager.loadPersistedState()
         async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()
         async let learningsLoad: Void = learningsManager.loadPersistedState()
-        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad)
+        async let exclusionLoad: Void = exclusionRules.loadPersistedState()
+        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad, exclusionLoad)
 
         ReliabilityManager.shared.startIfAuthorized()
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)

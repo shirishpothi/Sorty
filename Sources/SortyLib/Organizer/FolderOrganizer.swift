@@ -1641,6 +1641,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Organization blocked: Already in progress")
             return
         }
+        // Never organize with empty/unhydrated exclusion rules.
+        await exclusionRules?.loadPersistedState()
         let reliabilitySpan = ReliabilityManager.shared.startSpan(
             name: "organize",
             operation: "workflow.organize",
@@ -3733,6 +3735,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
 
+        await exclusionRules?.loadPersistedState()
+
         cancelInternal()
         isCancellationRequested = false
         currentRunInstructions = customPrompt ?? customInstructions
@@ -4067,6 +4071,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let automationManager = automationManager else {
             throw OrganizationError.automationNotConfigured
         }
+
+        await exclusionRules?.loadPersistedState()
 
         currentRunInstructions = customPrompt ?? customInstructions
         modelExcludedCurrentRun = false
