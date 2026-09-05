@@ -13,12 +13,15 @@ Apply this rule to dependencies reached through `SortyApp`, `WindowSession`, vie
 - `WatchedFoldersManager.loadPersistedState()` replays the append-only watched-folder journal.
 - `StorageLocationsManager.loadPersistedState()` reads and normalizes saved storage locations.
 - `LearningsManager.loadPersistedState()` restores its model selection and resolves saved reference-model directories.
+- `ExclusionRulesManager.loadPersistedState()` restores rules and compiles the matcher before any organization scan uses it.
 
-The main content observes the managers as persisted state arrives. Settings persistence is disabled until hydration completes, so an early view mutation cannot overwrite saved configuration. Automation, widget sync, and bookmark restoration wait for their required stores to load. Manual organization and deeplink entry points must also await the state they depend on, especially exclusion rules. Empty loading state must never mean that a user's rules can be skipped.
+The main content observes the managers as persisted state arrives. Settings persistence is disabled until hydration completes, so an early view mutation cannot overwrite saved configuration. `configureGlobalsIfNeeded()` must await exclusion hydration before it publishes globals that consume the matcher. Every `FolderOrganizer` scan entry point must do the same. Empty loading state must never mean that a user's rules can be skipped.
+
+`ExclusionRulesManager` starts empty with `hasLoaded == false`. Views may use their explicit loading or preview state during that interval, but callers that need real matching must wait for `loadPersistedState()`. `AppCoordinator` takes its initial matcher from that hydrated instance and keeps following `$compiledMatcher` changes.
 
 `LoginItemManager` keeps construction free of `SMAppService` queries. Its registration observation starts from `configureGlobalsIfNeeded()`, and startup reconciliation runs off the main actor.
 
-The loaders are idempotent. A second caller awaits the existing task. Hold or merge edits made during hydration before saving. Clearing or resetting a store invalidates an in-flight result so deleted data cannot reappear. Preserve these contracts when adding another loader.
+The loaders are idempotent. A second caller awaits the existing task. Bookmark restores are also coalesced, including repeated requests for the same saved location. Hold or merge edits made during hydration before saving. Clearing or resetting a store invalidates an in-flight result so deleted data cannot reappear. Preserve these contracts when adding another loader.
 
 `Task.yield()` only offers the executor a scheduling opportunity. Neither it nor SwiftUI `onAppear` proves that a frame has reached the display. Keep synchronous work after suspension points short as well; replacing a blocking initializer with a blocking view task merely moves the stall.
 
@@ -26,7 +29,9 @@ The loaders are idempotent. A second caller awaits the existing task. Hold or me
 
 File reads, journal replay, and JSON decoding run in detached user-initiated tasks. Published state and persistence writes remain on the main actor. `UserDefaultsDataReader` exposes reads only and uses the documented thread-safe `UserDefaults` read behavior. Do not add write methods to it.
 
-For asynchronous bookmark restoration, snapshot the bookmark and item identity before leaving the main actor. Accept a result only if that item and bookmark still match. Keep access ownership explicit, balance every successful security-scope acquisition with its eventual release, and discard stale results after removal, reauthorization, or reset. Serialize or coalesce repeated restoration calls. Await required access before automation uses a folder.
+For asynchronous bookmark restoration, snapshot the bookmark, item identity, and generation before leaving the main actor. Accept a result only when its generation and bookmark still match the current item. Keep access ownership explicit. Balance every successful security-scope acquisition with its eventual `stopAccessingSecurityScopedResource()` release, including discarded results. Discard stale results after removal, reauthorization, or reset. Await required access before automation uses a folder. `StorageLocationsManager.refreshAccess(for:)` remains a synchronous main-actor operation for the one-item add-location path. Only bulk restore uses the asynchronous path.
+
+Do not move every preference read out of initialization by default. `PersonaManager`, `CustomPersonaStore`, `NamingPresetManager`, and `SteeringPromptManager` still perform their small `UserDefaults` decodes on the launch path. They have a wider UI touch surface and no equivalent hydration-gate consumer. If that work becomes measurable, move it in a separate change with lightweight initialization, `loadPersistedState()`, a pending-change merge contract, and focused tests.
 
 ## Verification
 
@@ -36,7 +41,7 @@ Use focused tests while developing:
 swift test --filter 'SettingsViewModelStartupTests|HistoryTests|FolderWatcherTests|StorageLocationsReliabilityTests'
 ```
 
-For substantive startup changes, run `make dev` to verify the app target and Swift 6 isolation checks. Focus tests on stored-state restoration, edits or resets during loading, dependent operations waiting for hydration, and stale bookmark results. Documentation-only changes do not need a build. Local checks do not replace required Blacksmith checks.
+For substantive startup changes, run `make dev` to verify the app target and Swift 6 isolation checks. Focus tests on stored-state restoration, edits or resets during loading, dependent operations waiting for hydration, stale bookmark results, and balanced security-scope ownership. `StartupHydrationTests` cover hydration, reset, and bookmark-less races. They do not replace manual reauthorization, removal, reset, stale-bookmark recreation, or volume-rename checks. Documentation-only changes do not need a build. Local checks do not replace required Blacksmith checks.
 
 For launch-time acceptance:
 
