@@ -678,9 +678,12 @@ public class StorageLocationsManager: ObservableObject {
             return false
         }
         return locations.allSatisfy { location in
+            guard location.exists else { return false }
             guard location.bookmarkData != nil else { return true }
+            guard let activeURL = activeSecurityScopedURLs[location.id] else { return false }
             return location.accessStatus == .valid
-                && activeSecurityScopedURLs[location.id] != nil
+                && StorageLocationPathResolver.canonicalPath(activeURL.path)
+                    == StorageLocationPathResolver.canonicalPath(location.path)
         }
     }
 
@@ -839,7 +842,6 @@ public class StorageLocationsManager: ObservableObject {
             updateLocation(updated)
             activeSecurityScopedURLs[location.id] = url
             lastAccessValidationAt = Date()
-            accessNeedsRefresh = false
 
             DebugLogger.log("Successfully reauthorized storage location: \(location.name)")
         } catch {
@@ -885,7 +887,6 @@ public class StorageLocationsManager: ObservableObject {
             }
             saveLocations()
             lastAccessValidationAt = Date()
-            accessNeedsRefresh = false
         } catch {
             locations[index].accessStatus = .lost
             accessNeedsRefresh = true

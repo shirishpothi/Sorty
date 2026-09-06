@@ -16,12 +16,13 @@ public struct FSSnapshot: Sendable {
     
     init(at url: URL) {
         var fileSet = Set<String>()
-        if let enumerator = FileManager.default.enumerator(
+        if !Task.isCancelled, let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) {
             for case let fileURL as URL in enumerator {
+                guard !Task.isCancelled else { break }
                 if let isFile = try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile, isFile {
                     fileSet.insert(fileURL.path)
                 }
@@ -222,6 +223,13 @@ public class LearningsFSMonitor: ObservableObject {
                   self.monitoringGenerations[directory] == generation else { return }
             self.monitoredDirectories[directory] = snapshot
             self.initialSnapshotTasks[directory] = nil
+            if self.pendingSnapshotScopes[directory]?.isEmpty == false {
+                self.scheduleSnapshotUpdate(
+                    for: directory,
+                    scope: directory,
+                    requiresFullSnapshot: true
+                )
+            }
             LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
         }
     }
@@ -321,6 +329,10 @@ public class LearningsFSMonitor: ObservableObject {
         pendingSnapshotUpdates[directory] = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(snapshotDebounceInterval * 1_000_000_000))
             guard !Task.isCancelled else { return }
+            guard self.monitoredDirectories[directory] != nil else {
+                self.pendingSnapshotUpdates[directory] = nil
+                return
+            }
             
             let scopes = self.pendingSnapshotScopes.removeValue(forKey: directory) ?? []
             let needsFullSnapshot = self.directoriesNeedingFullSnapshot.remove(directory) != nil

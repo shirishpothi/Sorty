@@ -85,10 +85,6 @@ class PreviewStore: ObservableObject {
     @Published private(set) var folderCommentMappings: [UUID: String] = [:]
     @Published private(set) var fileCommentMappings: [UUID: String] = [:]
 
-    private var allRenameMappings: [UUID: FileRenameMapping] = [:]
-    private var allTagMappings: [UUID: [String]] = [:]
-    private var allFileCommentMappings: [UUID: String] = [:]
-
     /// Duplicate file mappings - maps file ID to its duplicate info
     @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
     
@@ -339,22 +335,10 @@ class PreviewStore: ObservableObject {
             }
         }
 
-        var mappings: [UUID: FileRenameMapping] = [:]
-        var tagsByFileID: [UUID: [String]] = [:]
         var tagsByFolderID: [UUID: [String]] = [:]
         var commentsByFolderID: [UUID: String] = [:]
-        var commentsByFileID: [UUID: String] = [:]
 
-        func cacheMetadata(for folder: FolderSuggestion) {
-            for mapping in folder.fileRenameMappings {
-                mappings[mapping.originalFile.id] = mapping
-            }
-            for mapping in folder.fileTagMappings {
-                tagsByFileID[mapping.originalFile.id] = mapping.tags
-                if let comment = mapping.comment, !comment.isEmpty {
-                    commentsByFileID[mapping.originalFile.id] = comment
-                }
-            }
+        func cacheFolderMetadata(for folder: FolderSuggestion) {
             if !folder.tags.isEmpty {
                 tagsByFolderID[folder.id] = folder.tags
             }
@@ -362,17 +346,14 @@ class PreviewStore: ObservableObject {
                 commentsByFolderID[folder.id] = comment
             }
             for subfolder in folder.subfolders {
-                cacheMetadata(for: subfolder)
+                cacheFolderMetadata(for: subfolder)
             }
         }
 
         for suggestion in plan.suggestions {
-            cacheMetadata(for: suggestion)
+            cacheFolderMetadata(for: suggestion)
         }
 
-        self.allRenameMappings = mappings
-        self.allTagMappings = tagsByFileID
-        self.allFileCommentMappings = commentsByFileID
         self.folderTagMappings = tagsByFolderID
         self.folderCommentMappings = commentsByFolderID
         refreshVisibleFileMetadata(visibleFiles)
@@ -382,9 +363,31 @@ class PreviewStore: ObservableObject {
 
     private func refreshVisibleFileMetadata(_ visibleFiles: [FileItem]) {
         let visibleFileIDs = Set(visibleFiles.map(\.id))
-        renameMappings = allRenameMappings.filter { visibleFileIDs.contains($0.key) }
-        tagMappings = allTagMappings.filter { visibleFileIDs.contains($0.key) }
-        fileCommentMappings = allFileCommentMappings.filter { visibleFileIDs.contains($0.key) }
+        var visibleRenames: [UUID: FileRenameMapping] = [:]
+        var visibleTags: [UUID: [String]] = [:]
+        var visibleComments: [UUID: String] = [:]
+
+        func collect(from folder: FolderSuggestion) {
+            for mapping in folder.fileRenameMappings where visibleFileIDs.contains(mapping.originalFile.id) {
+                visibleRenames[mapping.originalFile.id] = mapping
+            }
+            for mapping in folder.fileTagMappings where visibleFileIDs.contains(mapping.originalFile.id) {
+                visibleTags[mapping.originalFile.id] = mapping.tags
+                if let comment = mapping.comment, !comment.isEmpty {
+                    visibleComments[mapping.originalFile.id] = comment
+                }
+            }
+            for subfolder in folder.subfolders {
+                collect(from: subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            collect(from: suggestion)
+        }
+        renameMappings = visibleRenames
+        tagMappings = visibleTags
+        fileCommentMappings = visibleComments
     }
 
     /// Computes duplicate mappings by grouping files with the same hash

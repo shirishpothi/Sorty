@@ -748,8 +748,9 @@ struct RollingCreditsView: View {
     }
 
     private func resetScrollClock() {
+        let remainsPaused = isScrollingSuspended
         scrollStartDate = .now
-        pausedAt = nil
+        pausedAt = remainsPaused ? .now : nil
         accumulatedPauseDuration = 0
     }
 

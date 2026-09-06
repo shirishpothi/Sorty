@@ -617,6 +617,7 @@ struct SortyApp: App {
     @State private var coordinator: AppCoordinator?
     @State private var hasConfiguredGlobals = false
     @State private var hasConfiguredOperationalServices = false
+    @State private var operationalServicesTask: Task<Void, Never>?
 
     private let widgetSyncManager = SortyWidgetSyncManager.shared
 
@@ -822,6 +823,11 @@ struct SortyApp: App {
                 }
             }
             .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
+                if watchedFoldersManager.activeFolderCount > 0 {
+                    Task {
+                        await configureOperationalServicesIfNeeded()
+                    }
+                }
                 widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager
@@ -928,7 +934,22 @@ struct SortyApp: App {
     @MainActor
     private func configureOperationalServicesIfNeeded() async {
         guard !hasConfiguredOperationalServices else { return }
+        if let operationalServicesTask {
+            await operationalServicesTask.value
+            return
+        }
+
+        let task = Task { @MainActor in
+            await configureOperationalServices()
+        }
+        operationalServicesTask = task
+        await task.value
+        operationalServicesTask = nil
         hasConfiguredOperationalServices = true
+    }
+
+    @MainActor
+    private func configureOperationalServices() async {
 
         async let historyLoad: Void = organizationHistory.loadPersistedState()
         async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()

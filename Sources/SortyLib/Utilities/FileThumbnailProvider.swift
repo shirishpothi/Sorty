@@ -34,6 +34,7 @@ private struct SendableThumbnailImage: @unchecked Sendable {
 
 @MainActor
 private struct PendingThumbnailRequest {
+    let id: UUID
     let url: URL
     let size: CGSize
     var waiters: [UUID: CheckedContinuation<SendableThumbnailImage, Never>]
@@ -51,6 +52,7 @@ public class FileThumbnailProvider: ObservableObject {
     private var queuedKeys: [String] = []
     private var activeKeys: Set<String> = []
     private var cancelledWaiters: Set<UUID> = []
+    private var liveWaiters: Set<UUID> = []
     private let waveformCache = NSCache<NSString, NSImage>()
     private let metadataProbe = FileThumbnailMetadataProbe()
     
@@ -69,10 +71,12 @@ public class FileThumbnailProvider: ObservableObject {
         }
 
         let waiterID = UUID()
+        liveWaiters.insert(waiterID)
         let sendableImage = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 guard !Task.isCancelled,
                       cancelledWaiters.remove(waiterID) == nil else {
+                    liveWaiters.remove(waiterID)
                     continuation.resume(
                         returning: SendableThumbnailImage(image: fallbackIcon(for: url))
                     )
@@ -106,6 +110,7 @@ public class FileThumbnailProvider: ObservableObject {
             pendingRequests[key] = request
         } else {
             pendingRequests[key] = PendingThumbnailRequest(
+                id: UUID(),
                 url: url,
                 size: size,
                 waiters: [waiterID: continuation],
@@ -128,16 +133,18 @@ public class FileThumbnailProvider: ObservableObject {
             activeKeys.insert(key)
             let url = request.url
             let size = request.size
+            let requestID = request.id
             request.task = Task { [weak self] in
                 guard let self else { return }
                 let image = await generateThumbnail(for: url, size: size)
-                finishGeneration(image, forKey: key)
+                finishGeneration(image, forKey: key, requestID: requestID)
             }
             pendingRequests[key] = request
         }
     }
 
-    private func finishGeneration(_ image: NSImage, forKey key: String) {
+    private func finishGeneration(_ image: NSImage, forKey key: String, requestID: UUID) {
+        guard pendingRequests[key]?.id == requestID else { return }
         activeKeys.remove(key)
         if let request = pendingRequests.removeValue(forKey: key), !request.waiters.isEmpty {
             cache.setObject(
@@ -149,11 +156,13 @@ public class FileThumbnailProvider: ObservableObject {
             for continuation in request.waiters.values {
                 continuation.resume(returning: sendableImage)
             }
+            liveWaiters.subtract(request.waiters.keys)
         }
         startQueuedRequestsIfPossible()
     }
 
     private func cancelWaiter(_ waiterID: UUID, forKey key: String) {
+        guard liveWaiters.remove(waiterID) != nil else { return }
         guard var request = pendingRequests[key] else {
             cancelledWaiters.insert(waiterID)
             return
@@ -164,9 +173,14 @@ public class FileThumbnailProvider: ObservableObject {
         )
 
         if request.waiters.isEmpty {
+            let wasActive = request.task != nil
             request.task?.cancel()
             pendingRequests.removeValue(forKey: key)
             queuedKeys.removeAll { $0 == key }
+            if wasActive {
+                activeKeys.remove(key)
+                startQueuedRequestsIfPossible()
+            }
         } else {
             pendingRequests[key] = request
         }
@@ -269,7 +283,10 @@ public class FileThumbnailProvider: ObservableObject {
         }
         pendingRequests.removeAll()
         queuedKeys.removeAll()
+        activeKeys.removeAll()
         cancelledWaiters.removeAll()
+        liveWaiters.removeAll()
+        startQueuedRequestsIfPossible()
     }
 }
 

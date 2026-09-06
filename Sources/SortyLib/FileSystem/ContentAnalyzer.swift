@@ -152,7 +152,12 @@ private actor SharedContentMetadataCache {
     }
 
     private var entries: [Key: Entry] = [:]
-    private var inFlight: [Key: Task<ContentMetadata?, Never>] = [:]
+    private struct InFlightRequest {
+        let id: UUID
+        let task: Task<ContentMetadata?, Never>
+    }
+
+    private var inFlight: [Key: InFlightRequest] = [:]
     private var totalByteCost = 0
     private let maximumByteCost = 32 * 1024 * 1024
     private var hasLoaded = false
@@ -175,15 +180,18 @@ private actor SharedContentMetadataCache {
             entries[key] = entry
             return entry.metadata
         }
-        if let task = inFlight[key] {
-            return await task.value
+        if let request = inFlight[key] {
+            return await request.task.value
         }
 
         let currentGeneration = generation
+        let requestID = UUID()
         let task = Task { await operation() }
-        inFlight[key] = task
+        inFlight[key] = InFlightRequest(id: requestID, task: task)
         let result = await task.value
-        inFlight[key] = nil
+        if inFlight[key]?.id == requestID {
+            inFlight[key] = nil
+        }
         if let result, generation == currentGeneration {
             insert(result, for: key)
         }
@@ -208,7 +216,7 @@ private actor SharedContentMetadataCache {
         generation &+= 1
         flushTask?.cancel()
         flushTask = nil
-        for task in inFlight.values { task.cancel() }
+        for request in inFlight.values { request.task.cancel() }
         inFlight.removeAll()
         entries.removeAll()
         totalByteCost = 0
@@ -335,39 +343,43 @@ public actor ContentAnalyzer {
                 customOCRKeywords: customOCRKeywords
             )
         )
+        let options = key.options
         return await SharedContentMetadataCache.shared.value(for: key) { [self] in
-            await analyzeUncached(fileURL: fileURL, enableOCR: enableOCR)
+            await analyzeUncached(fileURL: fileURL, options: options)
         }
     }
 
-    private func analyzeUncached(fileURL: URL, enableOCR: Bool) async -> ContentMetadata? {
+    private func analyzeUncached(fileURL: URL, options: SharedContentMetadataCache.Options) async -> ContentMetadata? {
+        if options.performsOCR {
+            await visionAnalyzer.setRecognitionLanguages(options.ocrLanguages)
+        }
 
         let ext = fileURL.pathExtension.lowercased()
 
         let result: ContentMetadata?
         switch ext {
         case "pdf":
-            if enableDeepDocumentScan {
-                result = await extractPDFContent(from: fileURL)
+            if options.performsDeepScan {
+                result = await extractPDFContent(from: fileURL, options: options)
             } else {
                 result = extractPDFMetadataOnly(from: fileURL)
             }
         case "jpg", "jpeg", "heic", "png", "tiff", "tif", "bmp", "gif":
-            result = await extractImageContent(from: fileURL, performOCR: enableOCR)
+            result = await extractImageContent(from: fileURL, options: options)
         case "docx":
-            result = enableDeepDocumentScan ? await extractDOCXContent(from: fileURL) : nil
+            result = options.performsDeepScan ? await extractDOCXContent(from: fileURL) : nil
         case "rtf":
-            result = enableDeepDocumentScan ? extractRTFContent(from: fileURL) : nil
+            result = options.performsDeepScan ? extractRTFContent(from: fileURL) : nil
         case "mp3", "mp4", "m4a", "mov", "avi", "mkv", "wav", "aac", "flac", "m4v", "webm":
             result = await extractMediaContent(from: fileURL)
         case "pages", "numbers", "key":
-            result = enableDeepDocumentScan ? extractIWorkContent(from: fileURL) : nil
+            result = options.performsDeepScan ? extractIWorkContent(from: fileURL) : nil
         case "xlsx":
-            result = enableDeepDocumentScan ? await extractXLSXContent(from: fileURL) : nil
+            result = options.performsDeepScan ? await extractXLSXContent(from: fileURL) : nil
         case "pptx":
-            result = enableDeepDocumentScan ? await extractPPTXContent(from: fileURL) : nil
+            result = options.performsDeepScan ? await extractPPTXContent(from: fileURL) : nil
         default:
-            result = enableDeepDocumentScan && isTextLikeFile(fileURL) ? extractTextContent(from: fileURL) : nil
+            result = options.performsDeepScan && isTextLikeFile(fileURL) ? extractTextContent(from: fileURL) : nil
         }
 
         return result
@@ -420,7 +432,10 @@ public actor ContentAnalyzer {
 
     // MARK: - PDF Extraction
 
-    private func extractPDFContent(from url: URL) async -> ContentMetadata? {
+    private func extractPDFContent(
+        from url: URL,
+        options: SharedContentMetadataCache.Options
+    ) async -> ContentMetadata? {
         guard let document = PDFDocument(url: url) else {
             return nil
         }
@@ -453,12 +468,12 @@ public actor ContentAnalyzer {
         }
 
         // Probe OCR before walking the rest of a likely scanned document.
-        if extractedText.isEmpty && enableOCR, let firstPage = document.page(at: 0) {
+        if extractedText.isEmpty && options.performsOCR, let firstPage = document.page(at: 0) {
             guard !Task.isCancelled else { return nil }
             if let ocrResult = await performOCROnPDFPage(firstPage) {
                 metadata.ocrText = ocrResult.text
                 metadata.ocrConfidence = ocrResult.confidence
-                metadata.detectedKeywords = ocrResult.detectKeywords(using: customOCRKeywords)
+                metadata.detectedKeywords = ocrResult.detectKeywords(using: options.customOCRKeywords)
             }
         }
 
@@ -538,15 +553,18 @@ public actor ContentAnalyzer {
 
     // MARK: - Image Extraction with OCR
 
-    private func extractImageContent(from url: URL, performOCR: Bool) async -> ContentMetadata? {
+    private func extractImageContent(
+        from url: URL,
+        options: SharedContentMetadataCache.Options
+    ) async -> ContentMetadata? {
         var metadata = extractEXIFData(from: url) ?? ContentMetadata()
 
         // Perform OCR if enabled
-        if performOCR {
+        if options.performsOCR {
             if let ocrResult = await visionAnalyzer.analyzeImage(at: url) {
                 metadata.ocrText = ocrResult.text
                 metadata.ocrConfidence = ocrResult.confidence
-                metadata.detectedKeywords = ocrResult.detectKeywords(using: customOCRKeywords)
+                metadata.detectedKeywords = ocrResult.detectKeywords(using: options.customOCRKeywords)
             }
         }
 
