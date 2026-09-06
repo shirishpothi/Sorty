@@ -8,7 +8,7 @@ struct HistoryDetailHeaderSection: View {
     let reasoningNotes: String?
 
     private var directoryName: String {
-        URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+        entry.displayName
     }
 
     private var sessionDeeplink: String {

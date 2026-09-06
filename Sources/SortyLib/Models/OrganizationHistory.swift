@@ -73,6 +73,19 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public let storedGenerationModelName: String?
     public let storedHasBillableCost: Bool
 
+    public var displayName: String {
+        let directoryURL = URL(fileURLWithPath: directoryPath).standardizedFileURL
+        let directoryName = directoryURL.lastPathComponent
+        let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
+
+        if UUID(uuidString: directoryName) != nil,
+           directoryURL.deletingLastPathComponent() == temporaryDirectory {
+            return "Temporary Session"
+        }
+
+        return directoryName.isEmpty ? directoryPath : directoryName
+    }
+
     public var hasApplicablePlan: Bool {
         guard !success, storedPlanAvailable, status != .duplicatesCleanup else {
             return false

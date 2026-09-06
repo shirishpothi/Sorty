@@ -49,7 +49,7 @@ private struct HistorySessionRow: Identifiable, Equatable {
     init(entry: OrganizationHistoryEntry, thumbnailLoadIndex: Int) {
         id = entry.id
         directoryPath = entry.directoryPath
-        folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+        folderName = entry.displayName
         timestamp = entry.timestamp
         status = entry.status
         filesOrganized = entry.filesOrganized

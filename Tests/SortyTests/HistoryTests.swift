@@ -49,6 +49,40 @@ class HistoryTests: XCTestCase {
         XCTAssertEqual(history.totalFilesOrganized, 5)
         XCTAssertEqual(history.totalFoldersCreated, 2)
     }
+
+    func testHistoryEntryUsesFolderNameAsDisplayName() {
+        let entry = OrganizationHistoryEntry(
+            directoryPath: "/Users/test/Downloads",
+            filesOrganized: 0,
+            foldersCreated: 0
+        )
+
+        XCTAssertEqual(entry.displayName, "Downloads")
+    }
+
+    func testHistoryEntryHidesTemporaryUUIDDirectoryName() {
+        let directoryID = UUID()
+        let entry = OrganizationHistoryEntry(
+            directoryPath: FileManager.default.temporaryDirectory
+                .appendingPathComponent(directoryID.uuidString)
+                .path,
+            filesOrganized: 0,
+            foldersCreated: 0
+        )
+
+        XCTAssertEqual(entry.displayName, "Temporary Session")
+    }
+
+    func testHistoryEntryPreservesUUIDFolderOutsideTemporaryDirectory() {
+        let directoryID = UUID()
+        let entry = OrganizationHistoryEntry(
+            directoryPath: "/Users/test/\(directoryID.uuidString)",
+            filesOrganized: 0,
+            foldersCreated: 0
+        )
+
+        XCTAssertEqual(entry.displayName, directoryID.uuidString)
+    }
     
     @MainActor
     func testStatsCalculation() {
