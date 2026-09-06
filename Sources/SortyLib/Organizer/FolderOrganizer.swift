@@ -5437,18 +5437,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Undoes a single file operation within a history entry
     @discardableResult
     public func undoSingleOperation(from entry: OrganizationHistoryEntry, operation: FileSystemManager.FileOperation) async throws -> FileSystemManager.RestoreResult {
-        try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
-            let siblingOperations = (entry.operations ?? []).filter { $0.id != operation.id }
+        let detailedEntry = await history.details(for: entry)
+        let currentOperation = detailedEntry.operations?.first { $0.id == operation.id } ?? operation
+        return try await withRevertGuard(entryIDs: [detailedEntry.id], path: detailedEntry.directoryPath) {
+            let siblingOperations = (detailedEntry.operations ?? []).filter { $0.id != currentOperation.id }
             let result = try await self.fileSystemManager.restoreSingleOperation(
-                operation,
+                currentOperation,
                 protectedSiblingOperations: siblingOperations
             )
 
             await MainActor.run {
-                var updatedEntry = entry
-                let shouldRetainOperation = result.retryableFailedOperationIDs.contains(operation.id)
+                var updatedEntry = detailedEntry
+                let shouldRetainOperation = result.retryableFailedOperationIDs.contains(currentOperation.id)
                 if !shouldRetainOperation {
-                    updatedEntry.operations?.removeAll { $0.id == operation.id }
+                    updatedEntry.operations?.removeAll { $0.id == currentOperation.id }
                     if updatedEntry.operations?.isEmpty == true {
                         updatedEntry.operations = nil
                     }
@@ -5457,7 +5459,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let fullyUndone = updatedEntry.operations == nil && !result.hasIssues
                 updatedEntry.isUndone = fullyUndone
                 updatedEntry.status = fullyUndone ? .undo : .partiallyUndone
-                updatedEntry.undoRestoredCount = (entry.undoRestoredCount ?? 0) + result.successfulOperations
+                updatedEntry.undoRestoredCount = (detailedEntry.undoRestoredCount ?? 0) + result.successfulOperations
                 updatedEntry.undoFailedFiles = result.hasIssues ? result.missingFiles : nil
 
                 self.history.updateEntry(updatedEntry)

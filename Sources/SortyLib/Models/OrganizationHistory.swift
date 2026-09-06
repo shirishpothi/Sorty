@@ -256,6 +256,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     static let backupFileName = "organization-history.json.bak"
     private static let detailsDirectoryName = "Sessions"
     private static let schemaVersion = 2
+    private static let maximumEntryCount = 100
 
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
@@ -299,7 +300,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             do {
                 let entries = try readEntries(from: primaryFileURL)
                 migrateDetailsIfNeeded(entries)
-                return entries.map(\.summary)
+                return retainedEntries(entries).map(\.summary)
             } catch {
                 LogManager.shared.log(
                     "Primary history store unreadable at \(primaryFileURL.path): \(error.localizedDescription)",
@@ -309,7 +310,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
                 if let recoveredEntries = recoverFromBackup() {
                     migrateDetailsIfNeeded(recoveredEntries)
-                    return recoveredEntries.map(\.summary)
+                    return retainedEntries(recoveredEntries).map(\.summary)
                 }
 
                 return []
@@ -318,7 +319,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
         if let recoveredEntries = recoverFromBackup() {
             migrateDetailsIfNeeded(recoveredEntries)
-            return recoveredEntries.map(\.summary)
+            return retainedEntries(recoveredEntries).map(\.summary)
         }
 
         let legacyEntries = loadLegacyEntries()
@@ -340,11 +341,12 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             )
         }
 
-        return legacyEntries.map(\.summary)
+        return retainedEntries(legacyEntries).map(\.summary)
     }
 
     @discardableResult
     func saveEntries(_ entries: [OrganizationHistoryEntry]) -> Bool {
+        let entries = retainedEntries(entries)
         guard let primaryFileURL, let backupFileURL else {
             persistLegacyFallback(entries)
             return false
@@ -353,6 +355,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
         do {
             try ensureStorageDirectoryExists()
             try persistDetails(from: entries)
+            try removeUnretainedDetails(retaining: Set(entries.map(\.id)))
 
             let snapshot = OrganizationHistorySnapshot(
                 schemaVersion: Self.schemaVersion,
@@ -430,6 +433,23 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             let data = try encoder.encode(entry)
             try data.write(to: fileURL, options: .atomic)
         }
+    }
+
+    private func removeUnretainedDetails(retaining retainedIDs: Set<UUID>) throws {
+        guard let detailsDirectoryURL,
+              fileManager.fileExists(atPath: detailsDirectoryURL.path) else { return }
+        for fileURL in try fileManager.contentsOfDirectory(
+            at: detailsDirectoryURL,
+            includingPropertiesForKeys: nil
+        ) where fileURL.pathExtension == "json" {
+            guard let id = UUID(uuidString: fileURL.deletingPathExtension().lastPathComponent),
+                  !retainedIDs.contains(id) else { continue }
+            try cleanupFileIfPresent(at: fileURL)
+        }
+    }
+
+    private func retainedEntries(_ entries: [OrganizationHistoryEntry]) -> [OrganizationHistoryEntry] {
+        Array(entries.sorted { $0.timestamp > $1.timestamp }.prefix(Self.maximumEntryCount))
     }
 
     private static func hasDetails(_ entry: OrganizationHistoryEntry) -> Bool {
@@ -590,6 +610,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
 @MainActor
 public class OrganizationHistory: ObservableObject {
+    private static let maximumEntryCount = 100
     public struct ImportResult: Equatable, Sendable {
         public let added: Int
         public let updated: Int
@@ -654,6 +675,7 @@ public class OrganizationHistory: ObservableObject {
         entries = Array(
             mergedByID.values
                 .sorted { $0.timestamp > $1.timestamp }
+                .prefix(Self.maximumEntryCount)
         )
         hasLoadedPersistedState = true
         loadTask = nil
@@ -675,6 +697,7 @@ public class OrganizationHistory: ObservableObject {
         cleanEntry.isUndone = false // Enforce clean state for new entries
         entries.insert(cleanEntry.summary, at: 0)
         cacheDetails(cleanEntry)
+        trimToRetentionLimit()
         saveHistory(details: [cleanEntry])
     }
     
@@ -744,14 +767,17 @@ public class OrganizationHistory: ObservableObject {
         }
 
         let sorted = mergedByID.values.sorted { $0.timestamp > $1.timestamp }
-        let retained = sorted
+        let retained = Array(sorted.prefix(Self.maximumEntryCount))
+        let retainedIDs = Set(retained.map(\.id))
+        detailCache = detailCache.filter { retainedIDs.contains($0.key) }
+        detailCacheOrder.removeAll { !retainedIDs.contains($0) }
         entries = retained.map(\.summary)
         saveHistory(details: retained.filter(Self.containsDetails))
         return ImportResult(
             added: added,
             updated: updated,
             unchanged: unchanged,
-            omittedByRetentionLimit: 0
+            omittedByRetentionLimit: sorted.count - retained.count
         )
     }
     
@@ -828,6 +854,14 @@ public class OrganizationHistory: ObservableObject {
     private func touchCachedDetails(_ id: UUID) {
         detailCacheOrder.removeAll { $0 == id }
         detailCacheOrder.append(id)
+    }
+
+    private func trimToRetentionLimit() {
+        guard entries.count > Self.maximumEntryCount else { return }
+        let removedIDs = Set(entries.dropFirst(Self.maximumEntryCount).map(\.id))
+        entries.removeLast(entries.count - Self.maximumEntryCount)
+        detailCache = detailCache.filter { !removedIDs.contains($0.key) }
+        detailCacheOrder.removeAll { removedIDs.contains($0) }
     }
 
     private func saveHistory(details: [OrganizationHistoryEntry] = []) {
