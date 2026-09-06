@@ -179,8 +179,19 @@ public struct WorkflowSelectionStepView: View {
                                     "\(customPersonaStore.customPersonas.count - 2) more personas available below"
                                 )
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                                .background(.background)
+                                .padding(.top, 12)
+                                .padding(.bottom, 4)
+                                .background {
+                                    Rectangle()
+                                        .fill(.ultraThinMaterial)
+                                        .mask {
+                                            LinearGradient(
+                                                colors: [.clear, .black],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        }
+                                }
                             }
                             .frame(height: 124)
                         } else {
