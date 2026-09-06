@@ -47,6 +47,7 @@ final class UserStatsSnapshotTests: XCTestCase {
         let history = OrganizationHistory(userDefaults: defaults, storageDirectory: storageDirectory)
         await history.loadPersistedState()
         entries.forEach { history.addEntry($0) }
+        await history.waitForPendingPersistence()
 
         let stats = UserStatsSnapshot.load(userDefaults: defaults, storageDirectory: storageDirectory)
 

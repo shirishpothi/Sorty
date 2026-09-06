@@ -673,17 +673,17 @@ public class OrganizationHistory: ObservableObject {
     public func addEntry(_ entry: OrganizationHistoryEntry) {
         var cleanEntry = entry
         cleanEntry.isUndone = false // Enforce clean state for new entries
-        cacheDetails(cleanEntry)
         entries.insert(cleanEntry.summary, at: 0)
+        cacheDetails(cleanEntry)
         saveHistory(details: [cleanEntry])
     }
     
     public func updateEntry(_ entry: OrganizationHistoryEntry) {
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index] = entry.summary
             if Self.containsDetails(entry) {
                 cacheDetails(entry)
             }
-            entries[index] = entry.summary
             saveHistory(details: Self.containsDetails(entry) ? [entry] : [])
         }
     }
@@ -812,10 +812,16 @@ public class OrganizationHistory: ObservableObject {
     private func cacheDetails(_ entry: OrganizationHistoryEntry) {
         guard Self.containsDetails(entry) else { return }
         detailCache[entry.id] = entry
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index] = entry
+        }
         touchCachedDetails(entry.id)
         while detailCacheOrder.count > detailCacheLimit, let oldest = detailCacheOrder.first {
             detailCacheOrder.removeFirst()
             detailCache.removeValue(forKey: oldest)
+            if let index = entries.firstIndex(where: { $0.id == oldest }) {
+                entries[index] = entries[index].summary
+            }
         }
     }
 

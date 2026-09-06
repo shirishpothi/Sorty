@@ -667,6 +667,7 @@ public class StorageLocationsManager: ObservableObject {
     /// Re-checks all locations and repairs stale bookmarks where possible.
     /// Safe to call repeatedly; each location has at most one long-lived access session.
     public func refreshAccessStatus() async {
+        accessNeedsRefresh = true
         await restoreSecurityScopedAccess()
     }
 
