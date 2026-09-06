@@ -812,11 +812,12 @@ public class NotificationManager: ObservableObject {
     /// completions and the Settings preview so both hear the same sound.
     public func playCompletionSoundIfEnabled() {
         guard settings.settings.playCompletionSound else { return }
-        if let sound = NSSound(named: NSSound.Name("Glass")) {
-            sound.play()
-        } else {
-            NSSound.beep()
-        }
+        Self.playRetainedSound(named: "Glass")
+    }
+
+    /// Unconditional completion-sound demo for the Settings preview.
+    public func previewCompletionSound() {
+        Self.playRetainedSound(named: "Glass")
     }
     
     /// Request user attention (dock bounce)
@@ -1718,13 +1719,28 @@ public class NotificationManager: ObservableObject {
         }
     }
     
+    // Sounds started with NSSound.play() stop if the instance is released
+    // mid-playback, so hold each sound until it has finished playing.
+    // ponytail: unbounded array, fine at notification volume; cap if abused.
+    private static var retainedSounds: [NSSound] = []
+
+    private static func playRetainedSound(named name: String) {
+        guard let sound = NSSound(named: NSSound.Name(name)) else {
+            NSSound.beep()
+            return
+        }
+        retainedSounds.append(sound)
+        sound.play()
+        let releaseAfter = max(sound.duration + 0.5, 1.5)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(releaseAfter))
+            retainedSounds.removeAll { $0 === sound }
+        }
+    }
+
     private func playHUDSound() {
         // Use a subtle glass sound if available, fallback to beep
-        if let glassSound = NSSound(named: "Glass") {
-            glassSound.play()
-        } else {
-            NSSound.beep()
-        }
+        Self.playRetainedSound(named: "Glass")
     }
 
     private func shouldPlayCompletionSound(for type: NotificationType) -> Bool {

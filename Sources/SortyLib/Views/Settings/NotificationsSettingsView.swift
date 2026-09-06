@@ -5,7 +5,6 @@
 //  Notifications settings section
 //
 
-import AppKit
 import SwiftUI
 
 struct NotificationsSettingsView: View {
@@ -143,11 +142,7 @@ struct NotificationsSettingsView: View {
     }
 
     private func previewCompletionSound() {
-        if let sound = NSSound(named: NSSound.Name("Glass")) {
-            sound.play()
-        } else {
-            NSSound.beep()
-        }
+        notificationManager.previewCompletionSound()
         HapticFeedbackManager.shared.tap()
     }
 
