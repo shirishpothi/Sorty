@@ -12,6 +12,12 @@ import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
 import UniformTypeIdentifiers
+import os
+
+private let onboardingPerformanceLog = OSLog(
+    subsystem: "com.sorty.app",
+    category: .pointsOfInterest
+)
 
 // MARK: - Main Onboarding View
 
@@ -695,7 +701,7 @@ private struct OnboardingIntroView: View {
             chromeRevealed = true
             textOpacity = 1
             textOffset = 0
-            fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
+            fileIcons = measuredIntroIcons()
             filesAppeared = true
             onRevealPhaseChanged(.files)
             audio.startBackgroundMelody()
@@ -705,19 +711,29 @@ private struct OnboardingIntroView: View {
         // Resolve the real file icons before the first animated frame. Mounting
         // placeholder cards and replacing them through NSWorkspace during the
         // icon reveal creates a visible compositor disturbance.
-        fileIcons = OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
+        fileIcons = measuredIntroIcons()
         onRevealPhaseChanged(.icon)
 
         taskController.audioPrewarmTask = Task { @MainActor in
             // Construct and prepare the player before the icon's first visible
             // frame, then schedule its cue on the audio clock so no main-actor
             // audio work lands during the icon spring.
+            os_signpost(.begin, log: onboardingPerformanceLog, name: "Onboarding audio preparation")
             await audio.prepareBackgroundMelody()
+            os_signpost(.end, log: onboardingPerformanceLog, name: "Onboarding audio preparation")
             audio.startBackgroundMelody(after: 0.45)
             await Task.yield()
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             beginAnimatedReveal(generation: generation)
         }
+    }
+
+    private func measuredIntroIcons() -> [String: NSImage] {
+        os_signpost(.begin, log: onboardingPerformanceLog, name: "Onboarding icon rasterization")
+        defer {
+            os_signpost(.end, log: onboardingPerformanceLog, name: "Onboarding icon rasterization")
+        }
+        return OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
     }
 
     private func beginAnimatedReveal(generation: Int) {
