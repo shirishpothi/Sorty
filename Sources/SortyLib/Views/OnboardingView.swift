@@ -623,7 +623,7 @@ extension OnboardingStep {
 
 @MainActor
 private final class OnboardingIntroTaskController {
-    var audioPrewarmTask: Task<Void, Never>?
+    var iconPreparationTask: Task<Void, Never>?
     var revealGeneration = 0
 }
 
@@ -675,7 +675,7 @@ private struct OnboardingIntroView: View {
         }
         .onDisappear {
             taskController.revealGeneration += 1
-            taskController.audioPrewarmTask?.cancel()
+            taskController.iconPreparationTask?.cancel()
             audio.stopAll()
         }
     }
@@ -692,29 +692,31 @@ private struct OnboardingIntroView: View {
     private func runIntroReveal() {
         taskController.revealGeneration += 1
         let generation = taskController.revealGeneration
-        taskController.audioPrewarmTask?.cancel()
+        taskController.iconPreparationTask?.cancel()
 
-        if reduceMotion {
-            iconScale = 1
-            iconOpacity = 1
-            glowVisible = true
-            chromeRevealed = true
-            textOpacity = 1
-            textOffset = 0
-            fileIcons = measuredIntroIcons()
-            filesAppeared = true
-            onRevealPhaseChanged(.files)
-            audio.startBackgroundMelody()
-            return
-        }
+        taskController.iconPreparationTask = Task { @MainActor in
+            // Let the window commit its empty first frame before NSWorkspace
+            // resolves cold file icons. Core Graphics rasterization runs on the
+            // concurrent pool; only immutable NSImages return to the view.
+            await Task.yield()
+            let icons = await measuredIntroIcons()
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+            fileIcons = icons
 
-        // Resolve the real file icons before the first animated frame. Mounting
-        // placeholder cards and replacing them through NSWorkspace during the
-        // icon reveal creates a visible compositor disturbance.
-        fileIcons = measuredIntroIcons()
-        onRevealPhaseChanged(.icon)
+            if reduceMotion {
+                iconScale = 1
+                iconOpacity = 1
+                glowVisible = true
+                chromeRevealed = true
+                textOpacity = 1
+                textOffset = 0
+                filesAppeared = true
+                onRevealPhaseChanged(.files)
+                audio.startBackgroundMelody()
+                return
+            }
 
-        taskController.audioPrewarmTask = Task { @MainActor in
+            onRevealPhaseChanged(.icon)
             // Construct and prepare the player before the icon's first visible
             // frame, then schedule its cue on the audio clock so no main-actor
             // audio work lands during the icon spring.
@@ -728,12 +730,12 @@ private struct OnboardingIntroView: View {
         }
     }
 
-    private func measuredIntroIcons() -> [String: NSImage] {
+    private func measuredIntroIcons() async -> [String: NSImage] {
         os_signpost(.begin, log: onboardingPerformanceLog, name: "Onboarding icon rasterization")
         defer {
             os_signpost(.end, log: onboardingPerformanceLog, name: "Onboarding icon rasterization")
         }
-        return OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
+        return await OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
     }
 
     private func beginAnimatedReveal(generation: Int) {
@@ -1355,9 +1357,26 @@ private struct OnboardingSineAnimationPayload: Sendable {
     let fileID: UUID
     let animationKey: String
     let keyPath: String
-    let values: [Double]
-    let sampleCount: Int
+    let values: OnboardingAnimationNumberArray
+    let keyTimes: OnboardingAnimationNumberArray
     let duration: Double
+}
+
+/// NSNumber is immutable here. Wrapping the arrays lets the detached numeric
+/// preparation include Foundation boxing without sending Core Animation or
+/// AppKit objects across actors.
+private struct OnboardingAnimationNumberArray: @unchecked Sendable {
+    let values: [NSNumber]
+}
+
+private struct OnboardingSourceIcon: @unchecked Sendable {
+    let fileExtension: String
+    let image: CGImage
+}
+
+private struct OnboardingRasterizedIcon: @unchecked Sendable {
+    let fileExtension: String
+    let image: CGImage
 }
 
 /// Provides (and caches) the real macOS file-type icon for a given extension.
@@ -1365,73 +1384,62 @@ private struct OnboardingSineAnimationPayload: Sendable {
 private enum OnboardingFileIconProvider {
     private static var cache: [String: NSImage] = [:]
     private static let iconPointSize = NSSize(width: 46, height: 46)
-    private static let iconScale: CGFloat = 2
 
-    static func icons(for files: [OnboardingOrbitFile]) -> [String: NSImage] {
-        Dictionary(
-            uniqueKeysWithValues: Set(files.map(\.ext)).map { ext in
-                (ext, icon(for: ext))
-            }
-        )
+    static func icons(for files: [OnboardingOrbitFile]) async -> [String: NSImage] {
+        let extensions = Set(files.map(\.ext))
+        var resolved = cache.filter { extensions.contains($0.key) }
+        let missing = extensions.subtracting(resolved.keys)
+        let sources = missing.compactMap(sourceIcon(for:))
+        let rasterized = await Task.detached(priority: .userInitiated) {
+            sources.compactMap(rasterizedIcon)
+        }.value
+        for item in rasterized {
+            let bitmap = NSBitmapImageRep(cgImage: item.image)
+            bitmap.size = iconPointSize
+            let image = NSImage(size: iconPointSize)
+            image.addRepresentation(bitmap)
+            cache[item.fileExtension] = image
+            resolved[item.fileExtension] = image
+        }
+        return resolved
     }
 
-    static func icon(for ext: String) -> NSImage {
-        if let cached = cache[ext] {
-            return cached
-        }
+    private static func sourceIcon(for ext: String) -> OnboardingSourceIcon? {
         let workspaceImage: NSImage
         if let type = UTType(filenameExtension: ext) {
             workspaceImage = NSWorkspace.shared.icon(for: type)
         } else {
             workspaceImage = NSWorkspace.shared.icon(forFileType: ext)
         }
-        let image = rasterizedIcon(workspaceImage)
-        cache[ext] = image
-        return image
+        var proposedRect = NSRect(origin: .zero, size: iconPointSize)
+        guard let image = workspaceImage.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
+            return nil
+        }
+        return OnboardingSourceIcon(fileExtension: ext, image: image)
     }
 
     /// `NSWorkspace` returns shared, multi-representation images whose best
     /// representation may be decoded or replaced on a later draw. Resolve one
     /// immutable Retina bitmap before the reveal so moving cards never trigger
     /// icon decoding or representation changes mid-animation.
-    private static func rasterizedIcon(_ source: NSImage) -> NSImage {
-        let pixelsWide = Int(iconPointSize.width * iconScale)
-        let pixelsHigh = Int(iconPointSize.height * iconScale)
-        guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelsWide,
-            pixelsHigh: pixelsHigh,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
+    nonisolated private static func rasterizedIcon(
+        _ source: OnboardingSourceIcon
+    ) -> OnboardingRasterizedIcon? {
+        let pixelsWide = 92
+        let pixelsHigh = 92
+        guard let context = CGContext(
+            data: nil,
+            width: pixelsWide,
+            height: pixelsHigh,
+            bitsPerComponent: 8,
             bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            let copy = source.copy() as? NSImage ?? source
-            copy.size = iconPointSize
-            return copy
-        }
-
-        bitmap.size = iconPointSize
-        NSGraphicsContext.saveGraphicsState()
-        if let context = NSGraphicsContext(bitmapImageRep: bitmap) {
-            NSGraphicsContext.current = context
-            context.imageInterpolation = .high
-            source.draw(
-                in: NSRect(origin: .zero, size: iconPointSize),
-                from: .zero,
-                operation: .copy,
-                fraction: 1
-            )
-            context.flushGraphics()
-        }
-        NSGraphicsContext.restoreGraphicsState()
-
-        let image = NSImage(size: iconPointSize)
-        image.addRepresentation(bitmap)
-        return image
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(source.image, in: CGRect(x: 0, y: 0, width: pixelsWide, height: pixelsHigh))
+        guard let image = context.makeImage() else { return nil }
+        return OnboardingRasterizedIcon(fileExtension: source.fileExtension, image: image)
     }
 }
 
@@ -1560,6 +1568,7 @@ private final class OnboardingOrbitFieldView: NSView {
         layer?.masksToBounds = false
         setAccessibilityElement(false)
         installHosts(icons: [:])
+        prepareInitialIdleAnimationsIfNeeded()
     }
 
     @available(*, unavailable)
@@ -1867,9 +1876,7 @@ private final class OnboardingOrbitFieldView: NSView {
               idleAnimationPreparationTask == nil,
               orbitPhase == 0 else { return }
 
-        let specs = OnboardingOrbitFile.files
-            .filter { hosts[$0.id] != nil }
-            .flatMap(Self.initialIdleAnimationSpecs(for:))
+        let specs = OnboardingOrbitFile.files.flatMap(Self.initialIdleAnimationSpecs(for:))
         idleAnimationPreparationTask = Task { [weak self] in
             let payloads = await Task.detached(priority: .userInitiated) {
                 Self.makeInitialIdleAnimationPayloads(specs)
@@ -1895,38 +1902,42 @@ private final class OnboardingOrbitFieldView: NSView {
     nonisolated private static func makeInitialIdleAnimationPayloads(
         _ specs: [OnboardingSineAnimationSpec]
     ) -> [OnboardingSineAnimationPayload] {
-        specs.map { spec in
+        var keyTimesBySampleCount: [Int: OnboardingAnimationNumberArray] = [:]
+        return specs.map { spec in
             let duration = 2 * Double.pi / spec.angularSpeed
             let sampleCount = max(120, Int(ceil(duration * idleSampleRate)))
             let startingValue = spec.amplitude * sin(spec.phase)
             let values = (0...sampleCount).map { index in
                 let progress = Double(index) / Double(sampleCount)
-                return spec.amplitude * sin(spec.phase + progress * 2 * .pi) - startingValue
+                return NSNumber(
+                    value: spec.amplitude * sin(spec.phase + progress * 2 * .pi) - startingValue
+                )
             }
+            let keyTimes = keyTimesBySampleCount[sampleCount] ?? {
+                let times = OnboardingAnimationNumberArray(
+                    values: (0...sampleCount).map { index in
+                        NSNumber(value: Double(index) / Double(sampleCount))
+                    }
+                )
+                keyTimesBySampleCount[sampleCount] = times
+                return times
+            }()
             return OnboardingSineAnimationPayload(
                 fileID: spec.fileID,
                 animationKey: spec.animationKey,
                 keyPath: spec.keyPath,
-                values: values,
-                sampleCount: sampleCount,
+                values: OnboardingAnimationNumberArray(values: values),
+                keyTimes: keyTimes,
                 duration: duration
             )
         }
     }
 
     private func installInitialIdleAnimations(_ payloads: [OnboardingSineAnimationPayload]) {
-        var keyTimesBySampleCount: [Int: [NSNumber]] = [:]
         for payload in payloads {
-            let keyTimes = keyTimesBySampleCount[payload.sampleCount] ?? {
-                let times = (0...payload.sampleCount).map { index in
-                    NSNumber(value: Double(index) / Double(payload.sampleCount))
-                }
-                keyTimesBySampleCount[payload.sampleCount] = times
-                return times
-            }()
             let animation = CAKeyframeAnimation(keyPath: payload.keyPath)
-            animation.values = payload.values.map(NSNumber.init(value:))
-            animation.keyTimes = keyTimes
+            animation.values = payload.values.values
+            animation.keyTimes = payload.keyTimes.values
             animation.duration = payload.duration
             animation.repeatCount = .infinity
             animation.calculationMode = .linear
