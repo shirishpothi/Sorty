@@ -145,9 +145,16 @@ public struct OnboardingView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Pin the ideal size so taller steps never reframe the window. The
+        // navigation footer is bottom-pinned, so any content-driven reframe
+        // moves the Continue/Next button on screen between steps.
         .frame(
             minWidth: SortyDesignSystem.Sizing.windowOnboardingWidth,
-            minHeight: SortyDesignSystem.Sizing.windowOnboardingHeight
+            idealWidth: SortyDesignSystem.Sizing.windowOnboardingWidth,
+            maxWidth: .infinity,
+            minHeight: SortyDesignSystem.Sizing.windowOnboardingHeight,
+            idealHeight: SortyDesignSystem.Sizing.windowOnboardingHeight,
+            maxHeight: .infinity
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Onboarding")

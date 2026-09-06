@@ -64,11 +64,44 @@ public struct WorkflowSelectionStepView: View {
             .padding(.leading, 72)
             .padding(.trailing, 24)
             
-            // Right side - persona selection
-            VStack(spacing: 8) {
-                Text("Select Default Persona")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+            // Right side - persona selection. Custom personas can push this
+            // column past the window's finite step allocation, so scroll
+            // locally instead of growing the window and moving the footer.
+            Group {
+                if customPersonaStore.customPersonas.isEmpty {
+                    personaColumn
+                } else {
+                    ScrollView(.vertical) {
+                        personaColumn
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .padding(.trailing, 72)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(x: hasAppeared ? 0 : 20)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
+                value: hasAppeared
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .onAppear {
+            hasAppeared = true
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Workflow Selection Step")
+    }
+
+    // Rendered directly, or inside a local scroll when custom personas make
+    // the column taller than the window's finite step allocation.
+    private var personaColumn: some View {
+        VStack(spacing: 8) {
+            Text("Select Default Persona")
+                .font(.headline)
+                .fontWeight(.semibold)
                     
                 // Built-in personas grid - 2x2 layout
                 LazyVGrid(columns: [
@@ -88,6 +121,31 @@ public struct WorkflowSelectionStepView: View {
                 }
                 .frame(maxWidth: 420)
                     
+                // Let users choose a built-in persona or generate a custom one.
+                // Kept above the custom list so the action stays visible
+                // without scrolling even when the list overflows.
+                HStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                    Text("or")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                }
+                .frame(maxWidth: 420)
+
+                GeneratePersonaButton(
+                    style: .compact,
+                    title: customPersonaStore.customPersonas.isEmpty ? "Generate a Persona" : "Generate Another",
+                    subtitle: "Create a custom workflow",
+                    action: presentPersonaGenerator
+                )
+                .frame(maxWidth: 420)
+
                 if !customPersonaStore.customPersonas.isEmpty {
                     HStack {
                         Rectangle()
@@ -131,45 +189,9 @@ public struct WorkflowSelectionStepView: View {
 
                 }
 
-                // Let users choose a built-in persona or generate a custom one.
-                HStack {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                    Text("or")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                }
-                .frame(maxWidth: 420)
-
-                GeneratePersonaButton(
-                    style: .compact,
-                    title: customPersonaStore.customPersonas.isEmpty ? "Generate a Persona" : "Generate Another",
-                    subtitle: "Create a custom workflow",
-                    action: presentPersonaGenerator
-                )
-                .frame(maxWidth: 420)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity, alignment: .center)
-            .padding(.trailing, 72)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 20)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
-                value: hasAppeared
-            )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .onAppear {
-            hasAppeared = true
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Workflow Selection Step")
+        .frame(maxWidth: .infinity)
+        .frame(maxHeight: .infinity, alignment: .center)
     }
 
     private func presentPersonaGenerator() {
