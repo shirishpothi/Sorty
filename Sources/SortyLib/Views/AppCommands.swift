@@ -170,8 +170,11 @@ public struct SortyCommands: Commands {
             
             Divider()
             
-            Button("Pause Learning", systemImage: "pause.circle") {
-                appState?.pauseLearning()
+            Button(
+                (appState?.isLearningPaused ?? false) ? "Resume Learning" : "Pause Learning",
+                systemImage: (appState?.isLearningPaused ?? false) ? "play.circle" : "pause.circle"
+            ) {
+                appState?.toggleLearning()
             }
             .disabled(appState == nil)
             
@@ -1459,6 +1462,23 @@ public class AppState: ObservableObject {
             reason: "Authenticate to pause learning and review your learnings controls."
         ) { [weak self] in
             self?.postWindowScopedNotification(.pauseLearning)
+        }
+    }
+
+    public var isLearningPaused: Bool {
+        organizer?.learningsManager?.consentManager.hasConsented == false
+    }
+
+    public func toggleLearning() {
+        guard isLearningPaused else {
+            pauseLearning()
+            return
+        }
+
+        guard let learningsManager = organizer?.learningsManager else { return }
+        Task { @MainActor in
+            await learningsManager.grantConsent()
+            HapticFeedbackManager.shared.success()
         }
     }
     

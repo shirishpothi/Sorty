@@ -167,7 +167,7 @@ Learnings are inferred passively from normal use, corrections, reversions, and f
 
 ### Data Management
 
-- **Pause Learning**: Stop data collection while preserving existing data
+- **Pause Learning / Resume Learning**: Stop or restart data collection while preserving existing data
 - **Delete All Data**: Permanently and securely remove all learning data
 - **Export**: (Coming soon) Export your preferences as JSON
 
@@ -457,7 +457,7 @@ Sorty provides a comprehensive menu bar with commands organized into logical gro
 |---------|----------|-------------|
 | Open Dashboard | ⇧⌘L | Open The Learnings dashboard |
 | View Statistics | — | See learning metrics and progress |
-| Pause Learning | — | Temporarily stop data collection |
+| Pause Learning / Resume Learning | — | Temporarily stop or restart data collection |
 | Export Learning Profile... | — | Save preferences to a file |
 | Import Learning Profile... | — | Load preferences from a file |
 
