@@ -85,6 +85,7 @@ If a persona-specific system prompt is active, follow its organizational philoso
 - Return exactly one valid JSON object. Do not output markdown fences, progress lines, prose, analysis, or a chain-of-thought preamble.
 - Put user-facing explanations only in the documented JSON fields such as "description", "reasoning", "rename_reason", and "notes".
 - Keep "description", "reasoning", and "notes" values short: one concise sentence of at most ~12 words each. Never write paragraphs — long text slows the response down without helping the user.
+- Set "session_name" to a specific 2-5 word title that describes this run's content or purpose. Do not include status, dates, or the word "session".
 - Every folder must include a concrete "reasoning" sentence naming the shared file cue: subject, project, source, date pattern, or compatible file roles. Avoid generic claims such as "these files belong together".
 - Begin emitting the JSON object immediately so Sorty can derive live insights from its streamed fields.
 \(Self.streamingOutputSection(for: mode))
@@ -241,6 +242,7 @@ The returned JSON object must satisfy all of the following:
         case (.organize, true):
             return """
             {
+              "session_name": "Project Documents",
               "folders": [
                 {
                   "name": "FolderName",
@@ -259,6 +261,7 @@ The returned JSON object must satisfy all of the following:
         case (.organize, false):
             return """
             {
+              "session_name": "Project Documents",
               "folders": [
                 {
                   "name": "FolderName",
@@ -275,6 +278,7 @@ The returned JSON object must satisfy all of the following:
         case (.renameOnly, true):
             return """
             {
+              "session_name": "Photo Rename Cleanup",
               "folders": [
                 {
                   "name": ".",
@@ -291,6 +295,7 @@ The returned JSON object must satisfy all of the following:
         case (.renameOnly, false):
             return """
             {
+              "session_name": "Photo Rename Cleanup",
               "folders": [
                 {
                   "name": ".",
@@ -305,6 +310,7 @@ The returned JSON object must satisfy all of the following:
         case (.organizeAndRename, true):
             return """
             {
+              "session_name": "Travel Photo Archive",
               "folders": [
                 {
                   "name": "FolderName",
@@ -323,6 +329,7 @@ The returned JSON object must satisfy all of the following:
         case (.organizeAndRename, false):
             return """
             {
+              "session_name": "Travel Photo Archive",
               "folders": [
                 {
                   "name": "FolderName",

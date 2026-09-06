@@ -7,6 +7,7 @@ class ResponseParserTests: XCTestCase {
     func testValidJSONParsing() throws {
         let json = """
         {
+          "session_name": "Vacation Photos",
           "folders": [
             {
               "name": "Images",
@@ -30,6 +31,7 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions.count, 1)
         XCTAssertEqual(plan.suggestions.first?.folderName, "Images")
         XCTAssertEqual(plan.suggestions.first?.files.count, 2)
+        XCTAssertEqual(plan.sessionName, "Vacation Photos")
         XCTAssertEqual(plan.notes, "Organized by file type")
     }
     

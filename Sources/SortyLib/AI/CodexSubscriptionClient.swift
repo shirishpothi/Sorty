@@ -487,6 +487,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             "type": "object",
             "additionalProperties": false,
             "properties": [
+                "session_name": ["type": "string"],
                 "folders": [
                     "type": "array",
                     "items": folderSchema()
@@ -535,6 +536,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 ]
             ],
             "required": [
+                "session_name",
                 "folders",
                 "folder_assignments",
                 "unorganized",

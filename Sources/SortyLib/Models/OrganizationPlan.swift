@@ -34,6 +34,7 @@ public struct LearningToolCall: Codable, Hashable, Sendable {
 
 public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
+    public var sessionName: String?
     public var suggestions: [FolderSuggestion]
     public var unorganizedFiles: [FileItem] // Keep for backward compatibility/UI logic
     public var unorganizedDetails: [UnorganizedFile]
@@ -46,6 +47,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     
     public init(
         id: UUID = UUID(),
+        sessionName: String? = nil,
         suggestions: [FolderSuggestion] = [],
         unorganizedFiles: [FileItem] = [],
         unorganizedDetails: [UnorganizedFile] = [],
@@ -57,6 +59,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         learningToolCall: LearningToolCall? = nil
     ) {
         self.id = id
+        self.sessionName = sessionName
         self.suggestions = suggestions
         self.unorganizedFiles = unorganizedFiles
         self.unorganizedDetails = unorganizedDetails

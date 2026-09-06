@@ -557,9 +557,9 @@ struct PromptBuilder {
         }
         return """
         Return exactly one JSON object with no markdown, prose, progress lines, or reasoning outside JSON. Preferred compact format:
-        {"folder_assignments":[{"name":"",\(preferredPayload)\(reasoning),"subfolders":[]}],"notes":"","learning_action":null}
+        {"session_name":"Specific 2-5 word title","folder_assignments":[{"name":"",\(preferredPayload)\(reasoning),"subfolders":[]}],"notes":"","learning_action":null}
         Legacy format is also accepted:
-        {"folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}],"learning_action":null}
+        {"session_name":"Specific 2-5 word title","folders":[{"name":"",\(filePayload)\(reasoning),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}],"learning_action":null}
         Nest with "subfolders" (same folder shape, e.g. {"name":"","file_ids":[3],"reasoning":"..."}) when a folder holds 2+ distinct subgroups such as projects, years/months, or types; keep depth at 2 or less unless the user asks for more.
         \(mode == .renameOnly || mode == .organizeAndRename ? "In the preferred format, file_ids assign every file and rename_suggestions carries each evidence-backed rename by file_id. Do not omit rename_suggestions merely because you used file_ids." : "")
         \(mode == .renameOnly ? "" : "Actively create folder assignments when moving files would materially improve findability. Return no folder assignments only when the files are already sensibly organized, no move would help, or safety and user rules prohibit moving them; never use a no-op to avoid choosing a reasonable structure.")
@@ -712,8 +712,9 @@ struct PromptBuilder {
         \(mode == .renameOnly || mode == .organizeAndRename ? "- In compact responses, return evidence-backed renames in rename_suggestions using the matching file_id; file_ids alone cannot rename a file." : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
+        Set session_name to a specific 2-5 word title for this run's content or purpose. Do not include status, dates, or the word session.
         Return exactly one JSON object. Start with "{" immediately and output no markdown, prose, progress lines, or reasoning outside JSON:
-        {"folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping","subfolders":[]}],"notes":"","learning_action":null}
+        {"session_name":"Specific 2-5 word title","folder_assignments":[{\(compactFolderPayload),"reasoning":"Concrete shared cue for this grouping","subfolders":[]}],"notes":"","learning_action":null}
         or legacy:
         {"folders":[{"name":"","files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """

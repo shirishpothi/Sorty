@@ -60,17 +60,50 @@ class HistoryTests: XCTestCase {
         XCTAssertEqual(entry.displayName, "Downloads")
     }
 
-    func testHistoryEntryHidesTemporaryUUIDDirectoryName() {
-        let directoryID = UUID()
+    func testHistoryEntryUsesGeneratedSessionName() {
         let entry = OrganizationHistoryEntry(
-            directoryPath: FileManager.default.temporaryDirectory
-                .appendingPathComponent(directoryID.uuidString)
-                .path,
+            directoryPath: "/Users/test/Downloads",
             filesOrganized: 0,
-            foldersCreated: 0
+            foldersCreated: 0,
+            plan: OrganizationPlan(sessionName: "Project Documents")
         )
 
-        XCTAssertEqual(entry.displayName, "Temporary Session")
+        XCTAssertEqual(entry.displayName, "Project Documents")
+    }
+
+    func testHistoryEntryBuildsNameFromPlanFoldersWhenGeneratedNameIsUnavailable() {
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Invoices"),
+                FolderSuggestion(folderName: "Receipts")
+            ]
+        )
+        let entry = OrganizationHistoryEntry(
+            directoryPath: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .path,
+            filesOrganized: 0,
+            foldersCreated: 0,
+            plan: plan
+        )
+
+        XCTAssertEqual(entry.displayName, "Invoices & Receipts Organization")
+    }
+
+    func testHistoryEntryUsesStatusAndIdentifierWhenNoContextExists() {
+        let entryID = UUID(uuidString: "93DC199E-F79F-436E-8F36-9EA949227CB6")!
+        let entry = OrganizationHistoryEntry(
+            id: entryID,
+            directoryPath: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .path,
+            filesOrganized: 0,
+            foldersCreated: 0,
+            success: false,
+            status: .failed
+        )
+
+        XCTAssertEqual(entry.displayName, "Failed Organization 93DC199E")
     }
 
     func testHistoryEntryPreservesUUIDFolderOutsideTemporaryDirectory() {

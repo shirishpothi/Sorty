@@ -105,6 +105,7 @@ struct ResponseParser {
     }
 
     struct AIResponse: Decodable {
+        let sessionName: String?
         let folders: [FolderResponse]
         let folderAssignments: [FolderResponse]?
         let unorganized: [UnorganizedFileResponse]?
@@ -114,6 +115,7 @@ struct ResponseParser {
 
         enum CodingKeys: String, CodingKey {
             case folders, unorganized, notes
+            case sessionName = "session_name"
             case folderAssignments = "folder_assignments"
             case unorganizedIDs = "unorganized_ids"
             case learningToolCall = "learning_action"
@@ -121,6 +123,7 @@ struct ResponseParser {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            sessionName = try container.decodeIfPresent(String.self, forKey: .sessionName)
             folders = try container.decodeIfPresent(LossyArray<FolderResponse>.self, forKey: .folders)?.elements ?? []
             folderAssignments = try container.decodeIfPresent(
                 LossyArray<FolderResponse>.self,
@@ -531,6 +534,7 @@ struct ResponseParser {
         }
 
         return OrganizationPlan(
+            sessionName: response.sessionName,
             suggestions: parsedSuggestions,
             unorganizedFiles: unorganizedFiles,
             unorganizedDetails: unorganizedDetails,

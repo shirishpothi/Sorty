@@ -78,12 +78,47 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         let directoryName = directoryURL.lastPathComponent
         let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
 
-        if UUID(uuidString: directoryName) != nil,
-           directoryURL.deletingLastPathComponent() == temporaryDirectory {
-            return "Temporary Session"
+        if let generatedName = plan?.sessionName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !generatedName.isEmpty {
+            return String(generatedName.prefix(60))
         }
 
-        return directoryName.isEmpty ? directoryPath : directoryName
+        guard UUID(uuidString: directoryName) != nil,
+              directoryURL.deletingLastPathComponent() == temporaryDirectory else {
+            return directoryName.isEmpty ? directoryPath : directoryName
+        }
+
+        if let planName = planFallbackName {
+            return planName
+        }
+
+        let identifier = String(id.uuidString.prefix(8))
+        switch status {
+        case .failed: return "Failed Organization \(identifier)"
+        case .cancelled: return "Cancelled Organization \(identifier)"
+        case .duplicatesCleanup: return "Duplicate Cleanup \(identifier)"
+        case .skipped: return "Skipped Organization \(identifier)"
+        case .undo: return "Undone Organization \(identifier)"
+        case .partiallyUndone: return "Partially Undone \(identifier)"
+        case .completed:
+            return source == .watchedFolder
+                ? "Watched Folder Run \(identifier)"
+                : "Organization \(identifier)"
+        }
+    }
+
+    private var planFallbackName: String? {
+        guard let suggestions = plan?.suggestions else { return nil }
+        let names = suggestions
+            .lazy
+            .map(\.folderName)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "." }
+            .prefix(2)
+        guard !names.isEmpty else { return nil }
+
+        let summary = names.joined(separator: " & ")
+        return String("\(summary) Organization".prefix(60))
     }
 
     public var hasApplicablePlan: Bool {
