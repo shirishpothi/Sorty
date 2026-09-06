@@ -156,7 +156,7 @@ class HistoryTests: XCTestCase {
         await deferredHistory.loadPersistedState()
 
         XCTAssertTrue(deferredHistory.hasLoadedPersistedState)
-        XCTAssertEqual(deferredHistory.entries.count, 100)
+        XCTAssertEqual(deferredHistory.entries.count, 5_000)
         XCTAssertEqual(deferredHistory.entries.first?.directoryPath, "/history/4999")
     }
 
@@ -234,7 +234,7 @@ class HistoryTests: XCTestCase {
     }
 
     @MainActor
-    func testImportKeepsMostRecentEntriesAndReportsRetentionOmissions() {
+    func testImportPreservesAllEntriesInMostRecentOrder() {
         let entries = (0..<105).map { index in
             OrganizationHistoryEntry(
                 timestamp: Date(timeIntervalSince1970: TimeInterval(index)),
@@ -246,11 +246,11 @@ class HistoryTests: XCTestCase {
 
         let result = history.importEntries(entries)
 
-        XCTAssertEqual(history.entries.count, 100)
+        XCTAssertEqual(history.entries.count, 105)
         XCTAssertEqual(result.added, 105)
-        XCTAssertEqual(result.omittedByRetentionLimit, 5)
+        XCTAssertEqual(result.omittedByRetentionLimit, 0)
         XCTAssertEqual(history.entries.first?.directoryPath, "/imported/104")
-        XCTAssertEqual(history.entries.last?.directoryPath, "/imported/5")
+        XCTAssertEqual(history.entries.last?.directoryPath, "/imported/0")
     }
 
     func testHistoryFiltersMatchOnlyTheirIntendedStatusOrSource() {

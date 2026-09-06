@@ -85,6 +85,10 @@ class PreviewStore: ObservableObject {
     @Published private(set) var folderCommentMappings: [UUID: String] = [:]
     @Published private(set) var fileCommentMappings: [UUID: String] = [:]
 
+    private var allRenameMappings: [UUID: FileRenameMapping] = [:]
+    private var allTagMappings: [UUID: [String]] = [:]
+    private var allFileCommentMappings: [UUID: String] = [:]
+
     /// Duplicate file mappings - maps file ID to its duplicate info
     @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
     
@@ -366,13 +370,21 @@ class PreviewStore: ObservableObject {
             cacheMetadata(for: suggestion)
         }
 
-        self.renameMappings = mappings
-        self.tagMappings = tagsByFileID
+        self.allRenameMappings = mappings
+        self.allTagMappings = tagsByFileID
+        self.allFileCommentMappings = commentsByFileID
         self.folderTagMappings = tagsByFolderID
         self.folderCommentMappings = commentsByFolderID
-        self.fileCommentMappings = commentsByFileID
+        refreshVisibleFileMetadata(visibleFiles)
         self.duplicateMappings = computeDuplicateMappings(for: visibleFiles)
         self.flattenedRows = rows
+    }
+
+    private func refreshVisibleFileMetadata(_ visibleFiles: [FileItem]) {
+        let visibleFileIDs = Set(visibleFiles.map(\.id))
+        renameMappings = allRenameMappings.filter { visibleFileIDs.contains($0.key) }
+        tagMappings = allTagMappings.filter { visibleFileIDs.contains($0.key) }
+        fileCommentMappings = allFileCommentMappings.filter { visibleFileIDs.contains($0.key) }
     }
 
     /// Computes duplicate mappings by grouping files with the same hash
@@ -522,7 +534,9 @@ class PreviewStore: ObservableObject {
 
         if cachedPlanVersion == plan.version, applyIncrementalToggle(id: id, wasExpanded: wasExpanded) {
             lastExpandedFolders = expandedFolders
-            duplicateMappings = computeDuplicateMappings(for: visibleFilesInRows())
+            let visibleFiles = visibleFilesInRows()
+            refreshVisibleFileMetadata(visibleFiles)
+            duplicateMappings = computeDuplicateMappings(for: visibleFiles)
         } else {
             rebuildFlattenedRows()
         }
