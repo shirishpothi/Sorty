@@ -35,6 +35,10 @@ public extension Notification {
 public final class MainWindowRouter {
     public static let shared = MainWindowRouter()
 
+    /// Keep all app-owned external events in an existing window. The router
+    /// decides whether a Finder request needs its own request-scoped window.
+    public static let existingWindowExternalEventMatchers: Set<String> = ["*"]
+
     private final class SessionRecord {
         weak var window: NSWindow?
         var lastFocusedAt: Date

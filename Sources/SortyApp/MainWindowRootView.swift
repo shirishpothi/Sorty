@@ -378,8 +378,8 @@ struct MainWindowRootView: View {
     private var contentWithEnvironment: some View {
         ContentView()
             .handlesExternalEvents(
-                preferring: handledExternalEvents,
-                allowing: handledExternalEvents
+                preferring: MainWindowRouter.existingWindowExternalEventMatchers,
+                allowing: MainWindowRouter.existingWindowExternalEventMatchers
             )
             .environmentObject(settingsViewModel)
             .environmentObject(windowSession.appState)
@@ -413,16 +413,6 @@ struct MainWindowRootView: View {
             )
             .trafficLightInactiveBorders()
             .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
-    }
-
-    private var handledExternalEvents: Set<String> {
-        // Keep claiming Finder URLs while this session is busy. The deeplink
-        // router opens a request-scoped window when no session is available;
-        // relinquishing the event here also makes SwiftUI create an unscoped
-        // scene, leaving two new windows for one Finder action.
-        // History URLs must also remain in the current window so a copied
-        // session deeplink does not create an empty unscoped scene.
-        return ["sorty://organize", "sorty://watched", "sorty://exclude", "sorty://history"]
     }
 
     private func processLaunchRequestIfNeeded() {

@@ -51,6 +51,25 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertFalse(ExternalDeeplinkDeduper.shouldHandle(url))
     }
 
+    func testExistingWindowClaimsParameterizedAndLegacyDeeplinks() {
+        let matchers = MainWindowRouter.existingWindowExternalEventMatchers
+        let deeplinks = [
+            "sorty://history?entry=93DC199E-F79F-436E-8F36-9EA949227CB6",
+            "sorty://organize?path=/tmp&autostart=true",
+            "sorty://scan?path=/tmp",
+            "sorty://settings?section=provider",
+            "sorty:///Users/test/Downloads"
+        ]
+
+        XCTAssertTrue(matchers.contains("*"))
+        for deeplink in deeplinks {
+            XCTAssertTrue(
+                matchers.contains("*") || matchers.contains(deeplink),
+                "Expected an existing Sorty window to claim \(deeplink)"
+            )
+        }
+    }
+
     func testWindowSessionUsesInjectedSharedUpdateManager() {
         let updateManager = SparkleUpdateManager()
         let session = WindowSession(updateManager: updateManager)
