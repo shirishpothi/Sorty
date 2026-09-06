@@ -391,6 +391,8 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
 private struct MetalFxPillSurface: View {
     @SortyHotReload private var hotReload
     @State private var isWindowVisible = true
+    @State private var accumulatedAnimationTime: TimeInterval = 0
+    @State private var animationStartedAt: TimeInterval?
     let isPressed: Bool
     let isHovering: Bool
     let isEnabled: Bool
@@ -420,39 +422,45 @@ private struct MetalFxPillSurface: View {
             Capsule()
                 .fill(baseFill)
 
-            animatedRing
-
-            stationaryBorder
-
-            animatedCatchlight
+            animatedLighting
 
             stationaryLighting
         }
         .clipShape(Capsule())
         .compositingGroup()
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-    }
-
-    @ViewBuilder
-    private var animatedRing: some View {
-        if shouldAnimateSurface {
-            SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
-                ring(phase: phase(at: timeline.date.timeIntervalSinceReferenceDate))
+        .onAppear {
+            if animationStartedAt == nil, accumulatedAnimationTime == 0 {
+                accumulatedAnimationTime = Date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: 12)
             }
-        } else {
-            ring(phase: 0)
+            updateAnimationClock(isRunning: shouldAnimateSurface)
+        }
+        .onChange(of: shouldAnimateSurface) { _, isRunning in
+            updateAnimationClock(isRunning: isRunning)
         }
     }
 
     @ViewBuilder
-    private var animatedCatchlight: some View {
+    private var animatedLighting: some View {
         if shouldAnimateSurface {
             SwiftUI.TimelineView(.animation(minimumInterval: animationFrameInterval)) { timeline in
-                movingCatchlight(phase: phase(at: timeline.date.timeIntervalSinceReferenceDate))
-                    .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
+                lighting(phase: phase(at: timeline.date.timeIntervalSinceReferenceDate))
             }
         } else {
-            movingCatchlight(phase: 0)
+            lighting(
+                phase: !isWindowVisible && !reduceMotion
+                    ? phase(at: Date.timeIntervalSinceReferenceDate)
+                    : 0
+            )
+        }
+    }
+
+    private func lighting(phase: Double) -> some View {
+        ZStack {
+            ring(phase: phase)
+            stationaryBorder
+            movingCatchlight(phase: phase)
                 .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
         }
     }
@@ -460,7 +468,22 @@ private struct MetalFxPillSurface: View {
     private func phase(at time: TimeInterval) -> Double {
         // Keep phase values small. Feeding an ever-growing uptime value into
         // AngularGradient eventually loses precision and can render a dark seam.
-        time.truncatingRemainder(dividingBy: 12) / 12
+        let elapsed = animationStartedAt.map { max(0, time - $0) } ?? 0
+        return (accumulatedAnimationTime + elapsed).truncatingRemainder(dividingBy: 12) / 12
+    }
+
+    private func updateAnimationClock(isRunning: Bool) {
+        let now = Date.timeIntervalSinceReferenceDate
+        if isRunning {
+            if animationStartedAt == nil {
+                animationStartedAt = now
+            }
+        } else if let animationStartedAt {
+            accumulatedAnimationTime = (
+                accumulatedAnimationTime + max(0, now - animationStartedAt)
+            ).truncatingRemainder(dividingBy: 12)
+            self.animationStartedAt = nil
+        }
     }
 
     private func ring(phase: Double) -> some View {
