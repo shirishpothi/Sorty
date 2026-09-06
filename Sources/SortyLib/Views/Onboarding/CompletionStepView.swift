@@ -194,10 +194,10 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
     }
 
     private func refreshPalette() {
-        blobShape.backgroundColor = NSColor(CompletionPalette.softRose)
-            .withAlphaComponent(0.42).cgColor
+        blobShape.backgroundColor = NSColor(CompletionPalette.accent)
+            .withAlphaComponent(0.32).cgColor
         coreShape.backgroundColor = NSColor(CompletionPalette.accent)
-            .withAlphaComponent(0.38).cgColor
+            .withAlphaComponent(0.30).cgColor
     }
 
     private func animateReveal() {
@@ -469,7 +469,7 @@ private final class RetainedCompletionParticlesView: NSView {
         layer?.masksToBounds = false
         setAccessibilityElement(false)
         particleLayers.forEach {
-            $0.fillColor = NSColor.white.withAlphaComponent(0.30).cgColor
+            $0.fillColor = NSColor(CompletionPalette.accent).withAlphaComponent(0.30).cgColor
             $0.opacity = 0
             layer?.addSublayer($0)
         }
@@ -858,14 +858,14 @@ private struct CompletionCheckmarkIcon: View {
                 .frame(width: 118, height: 118)
 
             Circle()
-                .fill(CompletionPalette.softRose)
+                .fill(CompletionPalette.accent)
                 .frame(width: 72, height: 72)
                 .opacity(isButtonHovered ? 0 : 1)
 
             ZStack {
                 Image(systemName: "checkmark")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
+                    .foregroundStyle(Color.white.opacity(0.95))
                     .opacity(isButtonHovered ? 0 : 1)
                     .scaleEffect(isButtonHovered ? 0.72 : 1)
                     .symbolEffect(.bounce, value: reduceMotion ? false : hasAppeared)
