@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import Combine
 
 public enum StorageProviderKind: String, Codable, Hashable, Sendable {
