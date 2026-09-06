@@ -23,7 +23,7 @@ enum SortyShortcutDestination: String, AppEnum {
         case .organize:
             return .organize(path: nil, persona: nil, mode: nil, autostart: false)
         case .history:
-            return .history
+            return .history()
         case .watchedFolders:
             return .watched(action: nil, path: nil)
         }

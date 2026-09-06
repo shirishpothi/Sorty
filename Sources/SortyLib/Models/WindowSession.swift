@@ -165,7 +165,8 @@ public final class WindowSession: ObservableObject {
                 }
             }
 
-        case .history:
+        case .history(let entryID):
+            appState.pendingHistoryEntryID = entryID
             appState.currentView = .history
 
         case .persona(let action, let prompt, let generate):

@@ -449,6 +449,7 @@ public class AppState: ObservableObject {
     @Published public var highlightedExclusionRuleID: UUID?
     @Published public var showsFinderWorkflowPicker = false
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
+    @Published public var pendingHistoryEntryID: UUID?
     @Published public var requiresSetupRepair: Bool {
         didSet {
             userDefaults.set(requiresSetupRepair, forKey: Self.requiresSetupRepairKey)

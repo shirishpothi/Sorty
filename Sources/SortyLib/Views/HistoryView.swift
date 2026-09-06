@@ -280,6 +280,7 @@ struct HistoryView: View {
         }
         .onReceive(organizer.history.$entries) { entries in
             refreshHistorySnapshot(entries)
+            consumePendingHistoryEntryIfNeeded()
             if entries.count <= 1 {
                 searchText = ""
             }
@@ -380,7 +381,11 @@ struct HistoryView: View {
             }
         )
         .onAppear {
+            consumePendingHistoryEntryIfNeeded()
             consumePendingNotificationActionIfNeeded()
+        }
+        .onChange(of: appState.pendingHistoryEntryID) { _, _ in
+            consumePendingHistoryEntryIfNeeded()
         }
         .onChange(of: searchText) { _, _ in
             displayedEntryCount = pageSize
@@ -595,6 +600,13 @@ struct HistoryView: View {
             selectedEntry = entry
             showingDetail = true
         }
+    }
+
+    private func consumePendingHistoryEntryIfNeeded() {
+        guard let entryID = appState.pendingHistoryEntryID,
+              cachedEntries.contains(where: { $0.id == entryID }) else { return }
+        appState.pendingHistoryEntryID = nil
+        selectEntry(id: entryID)
     }
 
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
@@ -2321,6 +2333,7 @@ struct StatusBadge: View {
             .background(color.opacity(0.15))
             .foregroundColor(color)
             .cornerRadius(6)
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("Status: \(status.displayName)")
     }
 }

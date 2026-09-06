@@ -379,6 +379,7 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 | `sorty://learnings?action=stats` | Open Learnings statistics |
 | `sorty://settings?section=ai` | Open specific settings section |
 | `sorty://history` | Open organization history |
+| `sorty://history?entry=<uuid>` | Open a specific history session |
 | `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
 | `sorty://watched?action=add&path=<path>` | Add watched folder |
 | `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |

@@ -18,7 +18,7 @@ public enum DeeplinkDestination: Equatable {
     case settings(section: String?)
     case help(section: String?)
     case open(path: String?)
-    case history
+    case history(entryID: UUID? = nil)
     case persona(action: String?, prompt: String?, generate: Bool)
     case watched(action: String?, path: String?)
     case rules(action: String?, type: String?, pattern: String?)
@@ -106,7 +106,7 @@ public class DeeplinkHandler: ObservableObject {
             pendingDestination = .open(path: queryValue(for: "path"))
             
         case "history":
-            pendingDestination = .history
+            pendingDestination = .history(entryID: queryValue(for: "entry").flatMap(UUID.init(uuidString:)))
             
         case "persona":
             let action = queryValue(for: "action")
@@ -211,8 +211,11 @@ public class DeeplinkHandler: ObservableObject {
                 components.queryItems = [URLQueryItem(name: "path", value: path)]
             }
             
-        case .history:
+        case .history(let entryID):
             components.host = "history"
+            if let entryID {
+                components.queryItems = [URLQueryItem(name: "entry", value: entryID.uuidString)]
+            }
             
         case .persona(let action, let prompt, let generate):
             components.host = "persona"

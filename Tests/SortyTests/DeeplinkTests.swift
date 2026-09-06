@@ -189,7 +189,18 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://history")!
         handler.handle(url: url)
         
-        XCTAssertEqual(handler.pendingDestination, .history)
+        XCTAssertEqual(handler.pendingDestination, .history())
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testHistoryEntryDeeplink() {
+        let handler = DeeplinkHandler.shared
+        let entryID = UUID(uuidString: "93DC199E-F79F-436E-8F36-9EA949227CB6")!
+
+        handler.handle(url: URL(string: "sorty://history?entry=\(entryID.uuidString)")!)
+
+        XCTAssertEqual(handler.pendingDestination, .history(entryID: entryID))
         handler.clearPending()
     }
     
@@ -323,7 +334,7 @@ final class DeeplinkTests: XCTestCase {
         let handler = DeeplinkHandler.shared
         
         handler.handle(url: URL(string: "sorty://history")!)
-        XCTAssertEqual(handler.pendingDestination, .history)
+        XCTAssertEqual(handler.pendingDestination, .history())
         
         handler.handle(url: URL(string: "sorty://unknown")!)
         XCTAssertNil(handler.pendingDestination)
@@ -334,7 +345,7 @@ final class DeeplinkTests: XCTestCase {
         let handler = DeeplinkHandler.shared
         
         handler.handle(url: URL(string: "sorty://history")!)
-        XCTAssertEqual(handler.pendingDestination, .history)
+        XCTAssertEqual(handler.pendingDestination, .history())
         
         let url = URL(string: "https://organize")!
         handler.handle(url: url)
@@ -435,6 +446,14 @@ final class DeeplinkTests: XCTestCase {
     func testGenerateSettingsURL() {
         let url = DeeplinkHandler.url(for: .settings(section: nil))
         XCTAssertEqual(url?.absoluteString, "sorty://settings")
+    }
+
+    @MainActor
+    func testGenerateHistoryEntryURL() {
+        let entryID = UUID(uuidString: "93DC199E-F79F-436E-8F36-9EA949227CB6")!
+        let url = DeeplinkHandler.url(for: .history(entryID: entryID))
+
+        XCTAssertEqual(url?.absoluteString, "sorty://history?entry=93DC199E-F79F-436E-8F36-9EA949227CB6")
     }
     
     @MainActor

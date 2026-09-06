@@ -238,7 +238,7 @@ public struct MenuBarView: View {
             }
 
             MenuBarButton(title: "View History", icon: "clock") {
-                openDestination(.history)
+                openDestination(.history())
             }
 
             MenuBarButton(title: "Storage Locations", icon: "externaldrive.fill") {

@@ -11,9 +11,14 @@ struct HistoryDetailHeaderSection: View {
         URL(fileURLWithPath: entry.directoryPath).lastPathComponent
     }
 
+    private var sessionDeeplink: String {
+        DeeplinkHandler.url(for: .history(entryID: entry.id))?.absoluteString
+            ?? "sorty://history?entry=\(entry.id.uuidString)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
+            HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(directoryName)
                         .font(.title.bold())
@@ -28,16 +33,26 @@ struct HistoryDetailHeaderSection: View {
             .accessibilityLabel("\(directoryName), \(entry.status.displayName), \(entry.timestamp.formatted())")
 
             HStack(alignment: .center, spacing: 12) {
-                Label {
-                    PrivacySensitivePathText(path: entry.directoryPath)
-                } icon: {
+                HStack(spacing: 8) {
                     Image(systemName: "folder")
+                        .accessibilityHidden(true)
+
+                    PrivacySensitivePathText(path: entry.directoryPath)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    CopyButtonWithAnimation(
+                        content: sessionDeeplink
+                    )
+                    .help("Copy session deeplink")
+                    .accessibilityLabel("Copy session deeplink")
                 }
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .padding(8)
                 .background(Color.secondary.opacity(0.1))
-                .cornerRadius(6)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
                 .layoutPriority(1)
 
