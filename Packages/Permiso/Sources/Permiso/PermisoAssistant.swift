@@ -94,12 +94,21 @@ public final class PermisoAssistant {
         onPermissionGranted: @escaping () -> Void
     ) {
         permissionMonitorTask = Task { @MainActor [weak self] in
+            let notificationCenter = UNUserNotificationCenter.current()
+
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard !Task.isCancelled else { return }
 
-                let status = await UNUserNotificationCenter.current().notificationSettings()
-                    .authorizationStatus
+                var status = await notificationCenter.notificationSettings().authorizationStatus
+                if status == .notDetermined {
+                    let granted = (try? await notificationCenter.requestAuthorization(
+                        options: [.alert, .sound, .badge]
+                    )) == true
+                    if granted {
+                        status = .authorized
+                    }
+                }
                 guard status == .authorized || status == .provisional else { continue }
 
                 self?.returnToApp(hostApp: hostApp, completion: onPermissionGranted)
