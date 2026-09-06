@@ -7,16 +7,8 @@ import SortyLib
 struct MainWindowRootView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var settingsViewModel: SettingsViewModel
-    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
-    @EnvironmentObject private var personaManager: PersonaManager
-    @EnvironmentObject private var customPersonaStore: CustomPersonaStore
-    @EnvironmentObject private var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject private var storageLocationsManager: StorageLocationsManager
-    @EnvironmentObject private var exclusionRules: ExclusionRulesManager
-    @EnvironmentObject private var deeplinkHandler: DeeplinkHandler
-    @EnvironmentObject private var automationManager: AutomationManager
-    @EnvironmentObject private var menuBarController: MenuBarController
+    @ObservedObject private var settingsViewModel: SettingsViewModel
+    @ObservedObject private var codexAuth: CodexCLIAuthManager
     @Environment(\.openWindow) private var openWindow
     @Environment(\.isAccentPrototypeWindow) private var isAccentPrototypeWindow
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
@@ -33,6 +25,14 @@ struct MainWindowRootView: View {
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
     private let openAIAuth: SubscriptionAuthManager
+    private let personaManager: PersonaManager
+    private let customPersonaStore: CustomPersonaStore
+    private let watchedFoldersManager: WatchedFoldersManager
+    private let storageLocationsManager: StorageLocationsManager
+    private let exclusionRules: ExclusionRulesManager
+    private let deeplinkHandler: DeeplinkHandler
+    private let automationManager: AutomationManager
+    private let menuBarController: MenuBarController
     private let extensionListener: ExtensionListener
     private let notificationSettings: NotificationSettingsManager
     private let loginItemManager: LoginItemManager
@@ -45,6 +45,16 @@ struct MainWindowRootView: View {
         coordinator: AppCoordinator?,
         history: OrganizationHistory,
         updateManager: SparkleUpdateManager,
+        settingsViewModel: SettingsViewModel,
+        codexAuth: CodexCLIAuthManager,
+        personaManager: PersonaManager,
+        customPersonaStore: CustomPersonaStore,
+        watchedFoldersManager: WatchedFoldersManager,
+        storageLocationsManager: StorageLocationsManager,
+        exclusionRules: ExclusionRulesManager,
+        deeplinkHandler: DeeplinkHandler,
+        automationManager: AutomationManager,
+        menuBarController: MenuBarController,
         openAIAuth: SubscriptionAuthManager,
         extensionListener: ExtensionListener,
         notificationSettings: NotificationSettingsManager,
@@ -55,6 +65,16 @@ struct MainWindowRootView: View {
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
+        self.settingsViewModel = settingsViewModel
+        self.codexAuth = codexAuth
+        self.personaManager = personaManager
+        self.customPersonaStore = customPersonaStore
+        self.watchedFoldersManager = watchedFoldersManager
+        self.storageLocationsManager = storageLocationsManager
+        self.exclusionRules = exclusionRules
+        self.deeplinkHandler = deeplinkHandler
+        self.automationManager = automationManager
+        self.menuBarController = menuBarController
         self.openAIAuth = openAIAuth
         self.extensionListener = extensionListener
         self.notificationSettings = notificationSettings
