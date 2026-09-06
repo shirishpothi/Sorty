@@ -103,7 +103,8 @@ public final class FolderWatcher: @unchecked Sendable {
     private var pendingScanPaths: [String] = []
     private var recoveryScanPaths: Set<String> = []
     private var requiresFullRecoveryScan = false
-    private var healthTimer: DispatchSourceTimer?
+    private var reconciliationTimer: DispatchSourceTimer?
+    private var streamRecoveryTimer: DispatchSourceTimer?
     private var cursorPersistenceWorkItem: DispatchWorkItem?
     private var persistedEventID: FSEventStreamEventId?
     private var latestProcessedEventID: FSEventStreamEventId?
@@ -146,8 +147,10 @@ public final class FolderWatcher: @unchecked Sendable {
     deinit {
         performOnQueueSyncIfNeeded {
             stopStream()
-            healthTimer?.cancel()
-            healthTimer = nil
+            reconciliationTimer?.cancel()
+            reconciliationTimer = nil
+            streamRecoveryTimer?.cancel()
+            streamRecoveryTimer = nil
             cursorPersistenceWorkItem?.cancel()
             cursorPersistenceWorkItem = nil
         }
@@ -510,7 +513,10 @@ public final class FolderWatcher: @unchecked Sendable {
 
     private func rebuildStream() {
         stopStream()
-        guard !monitoringRoots.isEmpty, !isSuspendedForBackpressure else { return }
+        guard !monitoringRoots.isEmpty, !isSuspendedForBackpressure else {
+            scheduleStreamRecoveryIfNeeded()
+            return
+        }
 
         let contextObject = FolderWatcherContext(watcher: self)
         let info = UnsafeMutableRawPointer(Unmanaged.passRetained(contextObject).toOpaque())
@@ -547,6 +553,7 @@ public final class FolderWatcher: @unchecked Sendable {
         ) else {
             Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
             DebugLogger.log("FSEvents: Failed to create shared watched-folder stream")
+            scheduleStreamRecoveryIfNeeded()
             return
         }
 
@@ -556,11 +563,13 @@ public final class FolderWatcher: @unchecked Sendable {
             FSEventStreamRelease(newStream)
             Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
             DebugLogger.log("FSEvents: Failed to start shared watched-folder stream")
+            scheduleStreamRecoveryIfNeeded()
             return
         }
 
         stream = newStream
         callbackContext = info
+        scheduleStreamRecoveryIfNeeded()
         DebugLogger.log(
             "FSEvents: Watching \(watchedFolders.count) folders through \(monitoringRoots.count) coalesced roots"
         )
@@ -1169,6 +1178,7 @@ public final class FolderWatcher: @unchecked Sendable {
                     Self.maximumReconciliationInterval
                 )
             }
+            scheduleReconciliationDeadline()
         }
     }
 
@@ -1355,6 +1365,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         scheduleRecoveryScans(affectedBy: affectedPath)
         lastReconciliationAt = Date()
+        scheduleReconciliationDeadline()
         DebugLogger.log("FSEvents: Replayed cursor and scheduled lifecycle recovery")
     }
 
@@ -1362,6 +1373,7 @@ public final class FolderWatcher: @unchecked Sendable {
         guard !watchedFolders.isEmpty else { return }
         scheduleRecoveryScans(affectedBy: "/")
         lastReconciliationAt = Date()
+        scheduleReconciliationDeadline()
     }
 
     private func scheduleCursorPersistence() {
@@ -1417,31 +1429,65 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func startHealthTimerIfNeeded() {
-        guard healthTimer == nil, !watchedFolders.isEmpty else { return }
+        guard !watchedFolders.isEmpty else { return }
+        scheduleReconciliationDeadline()
+        scheduleStreamRecoveryIfNeeded()
+    }
+
+    private func scheduleReconciliationDeadline() {
+        reconciliationTimer?.cancel()
+        reconciliationTimer = nil
+        guard !watchedFolders.isEmpty else { return }
+
+        let delay = lastReconciliationAt == .distantPast
+            ? currentReconciliationInterval
+            : max(
+                0,
+                currentReconciliationInterval - Date().timeIntervalSince(lastReconciliationAt)
+            )
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(
-            deadline: .now() + Self.healthCheckInterval,
-            repeating: Self.healthCheckInterval,
+            deadline: .now() + delay,
             leeway: .seconds(5)
         )
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            if self.stream == nil, !self.isSuspendedForBackpressure {
-                self.rebuildStream()
-            }
-            if Date().timeIntervalSince(self.lastReconciliationAt)
-                >= self.currentReconciliationInterval {
-                self.scheduleFullReconciliation()
-            }
+            self.reconciliationTimer?.cancel()
+            self.reconciliationTimer = nil
+            self.scheduleFullReconciliation()
         }
         timer.resume()
-        healthTimer = timer
+        reconciliationTimer = timer
+    }
+
+    private func scheduleStreamRecoveryIfNeeded() {
+        streamRecoveryTimer?.cancel()
+        streamRecoveryTimer = nil
+        guard !watchedFolders.isEmpty,
+              stream == nil,
+              !isSuspendedForBackpressure else { return }
+
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(
+            deadline: .now() + Self.healthCheckInterval,
+            leeway: .seconds(5)
+        )
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.streamRecoveryTimer?.cancel()
+            self.streamRecoveryTimer = nil
+            self.rebuildStream()
+        }
+        timer.resume()
+        streamRecoveryTimer = timer
     }
 
     private func stopHealthTimerIfIdle() {
         guard watchedFolders.isEmpty else { return }
-        healthTimer?.cancel()
-        healthTimer = nil
+        reconciliationTimer?.cancel()
+        reconciliationTimer = nil
+        streamRecoveryTimer?.cancel()
+        streamRecoveryTimer = nil
     }
 
     private func recordAcceptedFiles(_ relativePaths: Set<String>, for folderID: UUID) {
