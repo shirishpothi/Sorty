@@ -335,20 +335,17 @@ class PreviewStore: ObservableObject {
             }
         }
 
-        let visibleFileIDs = Set(visibleFiles.map(\.id))
         var mappings: [UUID: FileRenameMapping] = [:]
         var tagsByFileID: [UUID: [String]] = [:]
         var tagsByFolderID: [UUID: [String]] = [:]
         var commentsByFolderID: [UUID: String] = [:]
         var commentsByFileID: [UUID: String] = [:]
 
-        func cacheVisibleMetadata(for folder: FolderSuggestion) {
-            for mapping in folder.fileRenameMappings
-                where visibleFileIDs.contains(mapping.originalFile.id) {
+        func cacheMetadata(for folder: FolderSuggestion) {
+            for mapping in folder.fileRenameMappings {
                 mappings[mapping.originalFile.id] = mapping
             }
-            for mapping in folder.fileTagMappings
-                where visibleFileIDs.contains(mapping.originalFile.id) {
+            for mapping in folder.fileTagMappings {
                 tagsByFileID[mapping.originalFile.id] = mapping.tags
                 if let comment = mapping.comment, !comment.isEmpty {
                     commentsByFileID[mapping.originalFile.id] = comment
@@ -361,12 +358,12 @@ class PreviewStore: ObservableObject {
                 commentsByFolderID[folder.id] = comment
             }
             for subfolder in folder.subfolders {
-                cacheVisibleMetadata(for: subfolder)
+                cacheMetadata(for: subfolder)
             }
         }
 
         for suggestion in plan.suggestions {
-            cacheVisibleMetadata(for: suggestion)
+            cacheMetadata(for: suggestion)
         }
 
         self.renameMappings = mappings
@@ -523,15 +520,22 @@ class PreviewStore: ObservableObject {
             expandedFolders.insert(id)
         }
 
-        if !wasExpanded, plan.totalFiles > Self.automaticExpansionFileLimit {
-            rebuildFlattenedRows()
-            return
-        }
-
         if cachedPlanVersion == plan.version, applyIncrementalToggle(id: id, wasExpanded: wasExpanded) {
             lastExpandedFolders = expandedFolders
+            duplicateMappings = computeDuplicateMappings(for: visibleFilesInRows())
         } else {
             rebuildFlattenedRows()
+        }
+    }
+
+    private func visibleFilesInRows() -> [FileItem] {
+        flattenedRows.compactMap { row in
+            switch row.type {
+            case .file(let file, _), .unorganizedFile(let file):
+                return file
+            case .folder, .unorganizedHeader, .remainingFiles:
+                return nil
+            }
         }
     }
 
