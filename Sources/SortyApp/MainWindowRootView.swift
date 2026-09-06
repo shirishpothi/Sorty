@@ -15,7 +15,6 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject private var exclusionRules: ExclusionRulesManager
     @EnvironmentObject private var deeplinkHandler: DeeplinkHandler
-    @EnvironmentObject private var learningsManager: LearningsManager
     @EnvironmentObject private var automationManager: AutomationManager
     @EnvironmentObject private var menuBarController: MenuBarController
     @Environment(\.openWindow) private var openWindow
@@ -39,6 +38,7 @@ struct MainWindowRootView: View {
     private let loginItemManager: LoginItemManager
     private let namingPresetManager: NamingPresetManager
     private let steeringPromptManager: SteeringPromptManager
+    private let learningsManager: LearningsManager
 
     init(
         launchRequest: WindowLaunchRequest?,
@@ -50,7 +50,8 @@ struct MainWindowRootView: View {
         notificationSettings: NotificationSettingsManager,
         loginItemManager: LoginItemManager,
         namingPresetManager: NamingPresetManager,
-        steeringPromptManager: SteeringPromptManager
+        steeringPromptManager: SteeringPromptManager,
+        learningsManager: LearningsManager
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
@@ -60,6 +61,7 @@ struct MainWindowRootView: View {
         self.loginItemManager = loginItemManager
         self.namingPresetManager = namingPresetManager
         self.steeringPromptManager = steeringPromptManager
+        self.learningsManager = learningsManager
         _windowSession = StateObject(
             wrappedValue: WindowSession(updateManager: updateManager, history: history)
         )

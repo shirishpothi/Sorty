@@ -845,7 +845,8 @@ struct SortyApp: App {
             notificationSettings: notificationSettings,
             loginItemManager: loginItemManager,
             namingPresetManager: namingPresetManager,
-            steeringPromptManager: steeringPromptManager
+            steeringPromptManager: steeringPromptManager,
+            learningsManager: learningsManager
         )
         .tint(accent ?? SortyDesignSystem.Colors.resolvedAccent)
         .accentColor(accent ?? SortyDesignSystem.Colors.resolvedAccent)
