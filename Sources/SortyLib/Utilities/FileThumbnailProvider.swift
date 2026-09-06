@@ -34,11 +34,12 @@ private struct SendableThumbnailImage: @unchecked Sendable {
 
 @MainActor
 private struct PendingThumbnailRequest {
-    let id: UUID
+    var id: UUID
     let url: URL
     let size: CGSize
     var waiters: [UUID: CheckedContinuation<SendableThumbnailImage, Never>]
     var task: Task<Void, Never>?
+    var isCancelling = false
 }
 
 /// Provides cached thumbnails for files using QuickLook and NSWorkspace
@@ -144,9 +145,19 @@ public class FileThumbnailProvider: ObservableObject {
     }
 
     private func finishGeneration(_ image: NSImage, forKey key: String, requestID: UUID) {
-        guard pendingRequests[key]?.id == requestID else { return }
+        guard var request = pendingRequests[key], request.id == requestID else { return }
         activeKeys.remove(key)
-        if let request = pendingRequests.removeValue(forKey: key), !request.waiters.isEmpty {
+        if request.isCancelling {
+            if request.waiters.isEmpty {
+                pendingRequests.removeValue(forKey: key)
+            } else {
+                request.id = UUID()
+                request.task = nil
+                request.isCancelling = false
+                pendingRequests[key] = request
+                queuedKeys.append(key)
+            }
+        } else if let request = pendingRequests.removeValue(forKey: key), !request.waiters.isEmpty {
             cache.setObject(
                 image,
                 forKey: key as NSString,
@@ -174,12 +185,13 @@ public class FileThumbnailProvider: ObservableObject {
 
         if request.waiters.isEmpty {
             let wasActive = request.task != nil
-            request.task?.cancel()
-            pendingRequests.removeValue(forKey: key)
             queuedKeys.removeAll { $0 == key }
             if wasActive {
-                activeKeys.remove(key)
-                startQueuedRequestsIfPossible()
+                request.isCancelling = true
+                request.task?.cancel()
+                pendingRequests[key] = request
+            } else {
+                pendingRequests.removeValue(forKey: key)
             }
         } else {
             pendingRequests[key] = request
