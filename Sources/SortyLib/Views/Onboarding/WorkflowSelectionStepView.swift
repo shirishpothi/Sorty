@@ -106,13 +106,6 @@ public struct WorkflowSelectionStepView: View {
                     Group {
                         if customPersonaStore.customPersonas.count > 2 {
                             VStack(spacing: 4) {
-                                ScrollView(.vertical) {
-                                    customPersonaGrid
-                                }
-                                .contentMargins(.vertical, 10, for: .scrollContent)
-                                .scrollIndicators(.visible)
-                                .frame(height: 124)
-
                                 Label(
                                     "Scroll to see \(customPersonaStore.customPersonas.count - 2) more",
                                     systemImage: "chevron.down"
@@ -122,6 +115,13 @@ public struct WorkflowSelectionStepView: View {
                                 .accessibilityLabel(
                                     "\(customPersonaStore.customPersonas.count - 2) more personas available below"
                                 )
+
+                                ScrollView(.vertical) {
+                                    customPersonaGrid
+                                }
+                                .contentMargins(.vertical, 10, for: .scrollContent)
+                                .scrollIndicators(.visible)
+                                .frame(height: 124)
                             }
                         } else {
                             customPersonaGrid
