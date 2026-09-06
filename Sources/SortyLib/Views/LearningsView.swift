@@ -185,6 +185,7 @@ struct LearningsView: View {
             Spacer()
 
             EmptyStateHeroIcon(systemName: "brain.head.profile")
+                .animatedAppearance(delay: 0.03)
 
             VStack(spacing: 8) {
                 Text("The Learnings")
@@ -197,6 +198,7 @@ struct LearningsView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 500)
             }
+            .animatedAppearance(delay: 0.07)
 
             VStack(alignment: .leading, spacing: 14) {
                 featureRow(
@@ -221,6 +223,7 @@ struct LearningsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
+            .animatedAppearance(delay: 0.11)
 
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
@@ -237,6 +240,7 @@ struct LearningsView: View {
             .accessibilityLabel(
                 "Privacy: Data is encrypted locally with biometric protection. You can delete anytime."
             )
+            .animatedAppearance(delay: 0.15)
 
             Button(action: {
                 Task {
@@ -259,6 +263,7 @@ struct LearningsView: View {
             }
             .accessibilityLabel("Enable Learning")
             .accessibilityHint("Start learning from your organization habits")
+            .animatedAppearance(delay: 0.19)
 
             Spacer()
         }
