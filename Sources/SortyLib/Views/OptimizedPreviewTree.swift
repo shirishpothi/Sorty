@@ -106,6 +106,7 @@ class PreviewStore: ObservableObject {
     
     /// Plan version tracking for cache invalidation
     private var cachedPlanVersion: Int = -1
+    private var cachedMoveDestinations: [PreviewMoveDestination] = []
     
     /// Throttling support
     private var throttleWorkItem: DispatchWorkItem?
@@ -119,6 +120,7 @@ class PreviewStore: ObservableObject {
     
     init(plan: OrganizationPlan) {
         self.plan = plan
+        cachedMoveDestinations = Self.collectMoveDestinations(from: plan.suggestions)
         expandAllFolders()
         rebuildFlattenedRows()
         cachedPlanVersion = plan.version
@@ -126,20 +128,19 @@ class PreviewStore: ObservableObject {
     }
     
     func updatePlan(_ newPlan: OrganizationPlan) {
-        // Only invalidate caches if plan actually changed (by version or content)
-        let planChanged = newPlan.version != cachedPlanVersion || newPlan.id != plan.id
+        guard newPlan != plan else { return }
+
+        // Identity and version are the normal revision signal. Equality keeps
+        // malformed same-version updates correct while allowing exact repeats
+        // to return above without publishing or rebuilding rows.
         self.plan = newPlan
-        
-        if planChanged {
-            refreshExpandedFolders(for: newPlan)
-            // Clear caches when plan changes
-            folderCountCache.removeAll()
-            folderCountCacheValid = false
-            // Update throttled count with debounce
-            updateThrottledFileCount()
-            // Clear drag drop manager cache
-            dragDropManager?.clearDropTargetCache()
-        }
+
+        cachedMoveDestinations = Self.collectMoveDestinations(from: newPlan.suggestions)
+        refreshExpandedFolders(for: newPlan)
+        folderCountCache.removeAll()
+        folderCountCacheValid = false
+        updateThrottledFileCount()
+        dragDropManager?.clearDropTargetCache()
         
         rebuildFlattenedRows()
         cachedPlanVersion = newPlan.version
@@ -595,6 +596,12 @@ class PreviewStore: ObservableObject {
     }
 
     var moveDestinations: [PreviewMoveDestination] {
+        cachedMoveDestinations
+    }
+
+    private static func collectMoveDestinations(
+        from folders: [FolderSuggestion]
+    ) -> [PreviewMoveDestination] {
         func collect(_ folders: [FolderSuggestion], parentPath: String) -> [PreviewMoveDestination] {
             folders.flatMap { folder in
                 let path = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
@@ -602,7 +609,7 @@ class PreviewStore: ObservableObject {
                     + collect(folder.subfolders, parentPath: path)
             }
         }
-        return collect(plan.suggestions, parentPath: "")
+        return collect(folders, parentPath: "")
     }
     
     func moveFileToUnorganized(fileID: UUID) {
@@ -885,6 +892,7 @@ class PreviewStore: ObservableObject {
             generationStats: updatedPlan.generationStats
         )
         plan = finalPlan
+        cachedMoveDestinations = Self.collectMoveDestinations(from: finalPlan.suggestions)
         folderCountCache.removeAll()
         folderCountCacheValid = false
         updateThrottledFileCount()

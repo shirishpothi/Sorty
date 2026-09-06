@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import SortyLib
 
@@ -274,5 +275,40 @@ final class PreviewStoreRenameTests: XCTestCase {
             return false
         }?.id
         XCTAssertEqual(originalSecondID, updatedSecondID)
+    }
+
+    func testMoveDestinationsRefreshWhenPlanRevisionChanges() {
+        let planID = UUID()
+        let firstFolder = FolderSuggestion(folderName: "Documents")
+        let store = PreviewStore(plan: OrganizationPlan(id: planID, suggestions: [firstFolder]))
+
+        XCTAssertEqual(store.moveDestinations.map(\.name), ["Documents"])
+
+        let child = FolderSuggestion(folderName: "Invoices")
+        let revisedFolder = FolderSuggestion(
+            id: firstFolder.id,
+            folderName: "Documents",
+            subfolders: [child]
+        )
+        store.updatePlan(OrganizationPlan(id: planID, suggestions: [revisedFolder], version: 2))
+
+        XCTAssertEqual(store.moveDestinations.map(\.name), ["Documents", "Documents/Invoices"])
+    }
+
+    func testExactPlanUpdateDoesNotPublishOrRebuildRows() {
+        let folder = FolderSuggestion(folderName: "Documents")
+        let plan = OrganizationPlan(suggestions: [folder])
+        let store = PreviewStore(plan: plan)
+        let originalRows = store.flattenedRows
+        var publicationCount = 0
+        let observation = store.objectWillChange.sink {
+            publicationCount += 1
+        }
+
+        store.updatePlan(plan)
+
+        XCTAssertEqual(store.flattenedRows, originalRows)
+        XCTAssertEqual(publicationCount, 0)
+        withExtendedLifetime(observation) {}
     }
 }
