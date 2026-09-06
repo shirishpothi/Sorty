@@ -373,6 +373,10 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Called by FolderWatcher delegate or FileSystemManager when a move occurs
     public func handleFileMove(from src: String, to dst: String) {
+        Task { await handleFileMoveAsync(from: src, to: dst) }
+    }
+
+    private func handleFileMoveAsync(from src: String, to dst: String) async {
         guard canCollect else { return }
         guard !isPathInExcludedRun(src), !isPathInExcludedRun(dst) else { return }
         
@@ -391,7 +395,8 @@ public class ContinuousLearningObserver: ObservableObject {
         // First try to find a relevant session
         matchedSession = findRelevantSession(for: src) ?? findRelevantSession(for: dst)
         
-        for entry in recentEntries {
+        for summary in recentEntries where summary.storedOperationCount > 0 {
+            let entry = await history.details(for: summary)
             guard let operations = entry.operations else { continue }
             
             // Check if this file (src) was the DESTINATION of an AI move
@@ -485,6 +490,10 @@ public class ContinuousLearningObserver: ObservableObject {
 
     /// Called when a file is removed from the monitored scope (moved outside or deleted)
     public func handleFileRemoval(at path: String) {
+        Task { await handleFileRemovalAsync(at: path) }
+    }
+
+    private func handleFileRemovalAsync(at path: String) async {
         guard canCollect else { return }
         guard !isPathInExcludedRun(path) else { return }
         
@@ -498,7 +507,8 @@ public class ContinuousLearningObserver: ObservableObject {
         var matchedSession = findRelevantSession(for: path)
         var foundMatch = false
         
-        for entry in recentEntries {
+        for summary in recentEntries where summary.storedOperationCount > 0 {
+            let entry = await history.details(for: summary)
             guard let operations = entry.operations else { continue }
             
             if let aiOp = operations.first(where: { $0.destinationPath == path }) {

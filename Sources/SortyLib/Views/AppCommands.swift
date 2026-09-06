@@ -964,7 +964,7 @@ public class AppState: ObservableObject {
     }
 
     public func exportHistory(format: HistoryExportFormat) {
-        guard let history = organizer?.history.entries, !history.isEmpty else { return }
+        guard let historyStore = organizer?.history, !historyStore.entries.isEmpty else { return }
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = format == .csv ? [.commaSeparatedText] : [.json]
@@ -974,23 +974,30 @@ public class AppState: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do {
-            let content: String
-            switch format {
-            case .csv:
-                content = generateHistoryCSV(from: history)
-            case .json:
-                content = try generateHistoryJSON(from: history)
+        Task { @MainActor in
+            var history: [OrganizationHistoryEntry] = []
+            history.reserveCapacity(historyStore.entries.count)
+            for entry in historyStore.entries {
+                history.append(await historyStore.details(for: entry))
             }
-            try content.write(to: url, atomically: true, encoding: .utf8)
-            HapticFeedbackManager.shared.success()
-        } catch {
-            DebugLogger.log("Failed to export history: \(error.localizedDescription)")
-            HapticFeedbackManager.shared.error()
-            presentHistoryAlert(
-                title: "Export Failed",
-                message: "Sorty couldn't export history. Please try again."
-            )
+            do {
+                let content: String
+                switch format {
+                case .csv:
+                    content = generateHistoryCSV(from: history)
+                case .json:
+                    content = try generateHistoryJSON(from: history)
+                }
+                try content.write(to: url, atomically: true, encoding: .utf8)
+                HapticFeedbackManager.shared.success()
+            } catch {
+                DebugLogger.log("Failed to export history: \(error.localizedDescription)")
+                HapticFeedbackManager.shared.error()
+                presentHistoryAlert(
+                    title: "Export Failed",
+                    message: "Sorty couldn't export history. Please try again."
+                )
+            }
         }
     }
 
@@ -1027,7 +1034,7 @@ public class AppState: ObservableObject {
 
             var details = ["Added \(result.added), updated \(result.updated), unchanged \(result.unchanged)."]
             if result.omittedByRetentionLimit > 0 {
-                details.append("\(result.omittedByRetentionLimit) older entries were omitted because Sorty keeps the 100 most recent entries.")
+                details.append("\(result.omittedByRetentionLimit) malformed entries were omitted.")
             }
             presentHistoryAlert(
                 title: "Import Complete",
@@ -1350,7 +1357,7 @@ public class AppState: ObservableObject {
             let duplicatesDeleted = entry.duplicatesDeleted.map(String.init) ?? ""
             let recoveredSpace = entry.recoveredSpace.map(String.init) ?? ""
             let planSuggestionCount = entry.plan.map { String($0.suggestions.count) } ?? ""
-            let recordedOperationCount = entry.operations.map { String($0.count) } ?? ""
+            let recordedOperationCount = String(entry.storedOperationCount)
             let errorMessage = csvEscape(entry.errorMessage ?? "")
             let fields: [String] = [
                 entry.id.uuidString,

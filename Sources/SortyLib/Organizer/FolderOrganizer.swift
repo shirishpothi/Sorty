@@ -4609,6 +4609,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     public func redoOrganization(from entry: OrganizationHistoryEntry) async throws {
+        let entry = await history.details(for: entry)
         guard let plan = entry.plan else {
             throw OrganizationError.noCurrentPlan
         }
@@ -5342,6 +5343,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
     @discardableResult
     public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
+        let entry = await history.details(for: entry)
         let reliabilitySpan = ReliabilityManager.shared.startSpan(
             name: "undo_organization",
             operation: "workflow.undo",
@@ -5392,7 +5394,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             $0.timestamp > targetEntry.timestamp &&
             !$0.isUndone &&
             ($0.status == .completed || $0.status == .partiallyUndone) &&
-            !($0.operations?.isEmpty ?? true)
+            $0.storedOperationCount > 0
         }.sorted { $0.timestamp > $1.timestamp } // Undo most recent first
 
         return try await withRevertGuard(
@@ -5407,6 +5409,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             var combinedRetryableFailures: [UUID] = []
 
             for (index, entry) in entriesToUndo.enumerated() {
+                let entry = await self.history.details(for: entry)
                 self.updateProgress(Double(index) / total, stage: "Undoing session from \(entry.timestamp.formatted())...")
 
                 let result = try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)

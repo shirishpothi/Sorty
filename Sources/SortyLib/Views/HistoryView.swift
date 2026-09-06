@@ -23,7 +23,7 @@ private struct HistoryImpactSummary: Equatable {
             filesOrganized += entry.filesOrganized
             foldersCreated += entry.foldersCreated
             completedSessions += 1
-            totalTimeSaved += entry.plan?.generationStats?.estimatedTimeSaved ?? 0
+            totalTimeSaved += entry.storedEstimatedTimeSaved ?? 0
         }
     }
 
@@ -58,10 +58,9 @@ private struct HistorySessionRow: Identifiable, Equatable {
         recoveredSpace = entry.recoveredSpace
         thumbnailLoadDelay = .milliseconds(250 + min(thumbnailLoadIndex, 12) * 35)
 
-        if let stats = entry.plan?.generationStats {
-            let modelName = stats.compactModelName
-            generationMetadata = stats.hasBillableCost
-                ? "\(modelName) · \(GenerationStats.formatCost(stats.computedCost))"
+        if let modelName = entry.storedGenerationModelName {
+            generationMetadata = entry.storedHasBillableCost
+                ? "\(modelName) · \(GenerationStats.formatCost(entry.storedEstimatedCost ?? 0))"
                 : modelName
         } else {
             generationMetadata = nil
@@ -81,7 +80,7 @@ private struct HistorySessionRecord: Equatable {
         directoryPath = entry.directoryPath
         source = entry.source
         isUndone = entry.isUndone
-        hasOperations = !(entry.operations?.isEmpty ?? true)
+        hasOperations = entry.storedOperationCount > 0
     }
 }
 
@@ -1549,6 +1548,7 @@ struct HistoryDetailSheet: View {
     @State private var feedbackGiven: LearningsManager.SessionOutcome?
     @State private var showFeedbackConfirmation = false
     @State private var detailModel: HistoryDetailModel?
+    @State private var loadedEntry: OrganizationHistoryEntry?
 
     // Pre-flight validation state
     @State private var showUndoConfirmation = false
@@ -1564,7 +1564,15 @@ struct HistoryDetailSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var currentEntry: OrganizationHistoryEntry {
-        organizer.history.entries.first { $0.id == entry.id } ?? entry
+        guard var loadedEntry else {
+            return organizer.history.entries.first { $0.id == entry.id } ?? entry
+        }
+        if let summary = organizer.history.entries.first(where: { $0.id == entry.id }) {
+            loadedEntry.status = summary.status
+            loadedEntry.isUndone = summary.isUndone
+            loadedEntry.undoRestoredCount = summary.undoRestoredCount
+        }
+        return loadedEntry
     }
 
     var body: some View {
@@ -1573,23 +1581,23 @@ struct HistoryDetailSheet: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 24) {
                     HistoryDetailHeaderSection(
-                        entry: entry,
-                        reasoningNotes: entry.plan?.notes
+                        entry: currentEntry,
+                        reasoningNotes: currentEntry.plan?.notes
                     )
 
                     Divider()
 
                     HistorySessionStatisticsSection(
-                        entry: entry,
+                        entry: currentEntry,
                         showsDetailedStats: settingsViewModel.config.showStatsForNerds
                     )
 
                     HistoryPartialUndoSection(entry: currentEntry)
 
-                    HistoryDetailErrorSection(entry: entry)
+                    HistoryDetailErrorSection(entry: currentEntry)
 
                     HistoryDetailActionsSection(
-                        entry: entry,
+                        entry: currentEntry,
                         onRestoreDuplicates: handleRestoreDuplicates,
                         onApplyOrRedo: handleRedo,
                         onRestore: handleRestore,
@@ -1598,8 +1606,8 @@ struct HistoryDetailSheet: View {
                     )
 
                     if learningsManager.summary.canProvideFeedback,
-                       entry.status == .completed,
-                       !entry.isUndone {
+                       currentEntry.status == .completed,
+                       !currentEntry.isUndone {
                         QuickFeedbackButtons(
                             feedbackGiven: $feedbackGiven,
                             showConfirmation: $showFeedbackConfirmation,
@@ -1608,10 +1616,10 @@ struct HistoryDetailSheet: View {
                     }
 
                     // Timeline Section
-                    if entry.success {
+                    if currentEntry.success {
                         CompactTimelineView(
                             entries: organizer.history.entries,
-                            directoryPath: entry.directoryPath
+                            directoryPath: currentEntry.directoryPath
                         )
                     }
 
@@ -1627,13 +1635,13 @@ struct HistoryDetailSheet: View {
                         HistoryLiquidGlassDuplicateCard(
                             duplicateGroups: detailModel.duplicateGroups,
                             totalDuplicateCount: detailModel.totalDuplicateCount,
-                            handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
+                            handoffDirectory: URL(fileURLWithPath: currentEntry.directoryPath),
                             highlightedFileID: $highlightedFileID
                         )
                     }
 
                     HistoryPlanDetailsSection(
-                        entry: entry,
+                        entry: currentEntry,
                         highlightedFileID: $highlightedFileID
                     )
 
@@ -1645,7 +1653,7 @@ struct HistoryDetailSheet: View {
                         onUndo: handleUndoSingleOperation
                     )
 
-                    HistoryRestorableItemsSection(entry: entry)
+                    HistoryRestorableItemsSection(entry: currentEntry)
 
                     // Raw AI Response (Stats for Nerds)
                     if settingsViewModel.config.showStatsForNerds,
@@ -1681,8 +1689,10 @@ struct HistoryDetailSheet: View {
         }
         .frame(minWidth: 600, minHeight: 500)
         .task(id: entry.id) {
-            guard detailModel?.entryID != entry.id else { return }
-            detailModel = HistoryDetailModel(entryID: entry.id, plan: entry.plan)
+            let details = await organizer.history.details(for: entry)
+            guard !Task.isCancelled else { return }
+            loadedEntry = details
+            detailModel = HistoryDetailModel(entryID: details.id, plan: details.plan)
         }
         .modelSelectionOverlay(
             isPresented: $showRedoModelPicker,
@@ -1882,7 +1892,7 @@ struct HistoryDetailSheet: View {
         isProcessing = true
         Task {
             do {
-                let result = try await organizer.undoHistoryEntry(entry)
+                let result = try await organizer.undoHistoryEntry(currentEntry)
                 if result.hasIssues {
                     HapticFeedbackManager.shared.tap()
                     // Show detailed partial result sheet
@@ -1890,7 +1900,7 @@ struct HistoryDetailSheet: View {
                         successCount: result.successfulOperations,
                         missingFiles: result.missingFiles,
                         failedOperationCount: result.retryableFailedOperationIDs.count,
-                        directoryPath: entry.directoryPath
+                        directoryPath: currentEntry.directoryPath
                     )
                     isProcessing = false
                     showPartialResultSheet = true
@@ -1922,14 +1932,14 @@ struct HistoryDetailSheet: View {
         isProcessing = true
         Task {
             do {
-                let result = try await organizer.restoreToState(targetEntry: entry)
+                let result = try await organizer.restoreToState(targetEntry: currentEntry)
                 if result.hasIssues {
                     HapticFeedbackManager.shared.tap()
                     partialUndoResult = PartialUndoResult(
                         successCount: result.successfulOperations,
                         missingFiles: result.missingFiles,
                         failedOperationCount: result.retryableFailedOperationIDs.count,
-                        directoryPath: entry.directoryPath
+                        directoryPath: currentEntry.directoryPath
                     )
                     isProcessing = false
                     showPartialResultSheet = true
@@ -1961,7 +1971,7 @@ struct HistoryDetailSheet: View {
         isProcessing = true
         Task {
             do {
-                try await organizer.redoOrganization(from: entry)
+                try await organizer.redoOrganization(from: currentEntry)
                 HapticFeedbackManager.shared.success()
                 onAction("Organization re-applied successfully.")
                 onDismiss()
@@ -1988,7 +1998,7 @@ struct HistoryDetailSheet: View {
         switch operation {
         case .undo:
             // Check if files at destination paths still exist (for undo, we move from destination back to source)
-            guard let operations = entry.operations else {
+            guard let operations = currentEntry.operations else {
                 return PreflightValidationResult(availableCount: 0, missingFiles: [], directoryIssues: [])
             }
 
@@ -2010,7 +2020,7 @@ struct HistoryDetailSheet: View {
 
         case .redo:
             // For redo, check if source files exist at their original locations
-            guard let operations = entry.operations else {
+            guard let operations = currentEntry.operations else {
                 return PreflightValidationResult(availableCount: 0, missingFiles: [], directoryIssues: [])
             }
 
@@ -2058,7 +2068,7 @@ struct HistoryDetailSheet: View {
         HapticFeedbackManager.shared.tap()
         isProcessing = true
         Task {
-            guard let restorables = entry.restorableItems else {
+            guard let restorables = currentEntry.restorableItems else {
                 isProcessing = false
                 return
             }

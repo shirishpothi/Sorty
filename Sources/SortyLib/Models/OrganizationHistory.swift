@@ -65,13 +65,20 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public var recoveredSpace: Int64?
     public var restorableItems: [RestorableDuplicate]?
     public var duplicateCleanupMode: DuplicateCleanupMode?
+    public let storedPlanAvailable: Bool
+    public let storedOperationCount: Int
+    public let storedRestorableItemCount: Int
+    public let storedEstimatedTimeSaved: TimeInterval?
+    public let storedEstimatedCost: Decimal?
+    public let storedGenerationModelName: String?
+    public let storedHasBillableCost: Bool
 
     public var hasApplicablePlan: Bool {
-        guard !success, plan != nil, status != .duplicatesCleanup else {
+        guard !success, storedPlanAvailable, status != .duplicatesCleanup else {
             return false
         }
 
-        return operations?.isEmpty ?? true
+        return storedOperationCount == 0
     }
     
     public init(
@@ -93,7 +100,14 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         duplicatesDeleted: Int? = nil,
         recoveredSpace: Int64? = nil,
         restorableItems: [RestorableDuplicate]? = nil,
-        duplicateCleanupMode: DuplicateCleanupMode? = nil
+        duplicateCleanupMode: DuplicateCleanupMode? = nil,
+        storedPlanAvailable: Bool? = nil,
+        storedOperationCount: Int? = nil,
+        storedRestorableItemCount: Int? = nil,
+        storedEstimatedTimeSaved: TimeInterval? = nil,
+        storedEstimatedCost: Decimal? = nil,
+        storedGenerationModelName: String? = nil,
+        storedHasBillableCost: Bool? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -127,6 +141,17 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         self.recoveredSpace = recoveredSpace
         self.restorableItems = restorableItems
         self.duplicateCleanupMode = duplicateCleanupMode
+        self.storedPlanAvailable = storedPlanAvailable ?? (plan != nil)
+        self.storedOperationCount = storedOperationCount ?? operations?.count ?? 0
+        self.storedRestorableItemCount = storedRestorableItemCount ?? restorableItems?.count ?? 0
+        self.storedEstimatedTimeSaved = storedEstimatedTimeSaved
+            ?? plan?.generationStats?.estimatedTimeSaved
+        self.storedEstimatedCost = storedEstimatedCost
+            ?? plan?.generationStats?.computedCost
+        self.storedGenerationModelName = storedGenerationModelName
+            ?? plan?.generationStats?.compactModelName
+        self.storedHasBillableCost = storedHasBillableCost
+            ?? plan?.generationStats?.hasBillableCost ?? false
     }
     
     // Custom decoding to handle migration from old format
@@ -169,6 +194,54 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         recoveredSpace = try container.decodeIfPresent(Int64.self, forKey: .recoveredSpace)
         restorableItems = try container.decodeIfPresent([RestorableDuplicate].self, forKey: .restorableItems)
         duplicateCleanupMode = try container.decodeIfPresent(DuplicateCleanupMode.self, forKey: .duplicateCleanupMode)
+        storedPlanAvailable = try container.decodeIfPresent(Bool.self, forKey: .storedPlanAvailable)
+            ?? (plan != nil)
+        storedOperationCount = try container.decodeIfPresent(Int.self, forKey: .storedOperationCount)
+            ?? operations?.count ?? 0
+        storedRestorableItemCount = try container.decodeIfPresent(Int.self, forKey: .storedRestorableItemCount)
+            ?? restorableItems?.count ?? 0
+        storedEstimatedTimeSaved = try container.decodeIfPresent(
+            TimeInterval.self,
+            forKey: .storedEstimatedTimeSaved
+        ) ?? plan?.generationStats?.estimatedTimeSaved
+        storedEstimatedCost = try container.decodeIfPresent(
+            Decimal.self,
+            forKey: .storedEstimatedCost
+        ) ?? plan?.generationStats?.computedCost
+        storedGenerationModelName = try container.decodeIfPresent(
+            String.self,
+            forKey: .storedGenerationModelName
+        ) ?? plan?.generationStats?.compactModelName
+        storedHasBillableCost = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .storedHasBillableCost
+        ) ?? plan?.generationStats?.hasBillableCost ?? false
+    }
+
+    public var summary: OrganizationHistoryEntry {
+        OrganizationHistoryEntry(
+            id: id,
+            timestamp: timestamp,
+            directoryPath: directoryPath,
+            filesOrganized: filesOrganized,
+            foldersCreated: foldersCreated,
+            success: success,
+            status: status,
+            errorMessage: errorMessage,
+            isUndone: isUndone,
+            source: source,
+            undoRestoredCount: undoRestoredCount,
+            duplicatesDeleted: duplicatesDeleted,
+            recoveredSpace: recoveredSpace,
+            duplicateCleanupMode: duplicateCleanupMode,
+            storedPlanAvailable: storedPlanAvailable,
+            storedOperationCount: storedOperationCount,
+            storedRestorableItemCount: storedRestorableItemCount,
+            storedEstimatedTimeSaved: storedEstimatedTimeSaved,
+            storedEstimatedCost: storedEstimatedCost,
+            storedGenerationModelName: storedGenerationModelName,
+            storedHasBillableCost: storedHasBillableCost
+        )
     }
 }
 
@@ -181,7 +254,8 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     static let legacyHistoryKey = "organizationHistory"
     static let fileName = "organization-history.json"
     static let backupFileName = "organization-history.json.bak"
-    private static let schemaVersion = 1
+    private static let detailsDirectoryName = "Sessions"
+    private static let schemaVersion = 2
 
     private let userDefaults: UserDefaults
     private let fileManager: FileManager
@@ -207,6 +281,10 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
         storageDirectory?.appendingPathComponent(Self.backupFileName)
     }
 
+    private var detailsDirectoryURL: URL? {
+        storageDirectory?.appendingPathComponent(Self.detailsDirectoryName, isDirectory: true)
+    }
+
     func loadEntries() -> [OrganizationHistoryEntry] {
         guard let primaryFileURL else {
             LogManager.shared.log(
@@ -219,7 +297,9 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
         if fileManager.fileExists(atPath: primaryFileURL.path) {
             do {
-                return try readEntries(from: primaryFileURL)
+                let entries = try readEntries(from: primaryFileURL)
+                migrateDetailsIfNeeded(entries)
+                return entries.map(\.summary)
             } catch {
                 LogManager.shared.log(
                     "Primary history store unreadable at \(primaryFileURL.path): \(error.localizedDescription)",
@@ -228,7 +308,8 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 )
 
                 if let recoveredEntries = recoverFromBackup() {
-                    return recoveredEntries
+                    migrateDetailsIfNeeded(recoveredEntries)
+                    return recoveredEntries.map(\.summary)
                 }
 
                 return []
@@ -236,7 +317,8 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
         }
 
         if let recoveredEntries = recoverFromBackup() {
-            return recoveredEntries
+            migrateDetailsIfNeeded(recoveredEntries)
+            return recoveredEntries.map(\.summary)
         }
 
         let legacyEntries = loadLegacyEntries()
@@ -258,7 +340,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             )
         }
 
-        return legacyEntries
+        return legacyEntries.map(\.summary)
     }
 
     @discardableResult
@@ -270,10 +352,11 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
         do {
             try ensureStorageDirectoryExists()
+            try persistDetails(from: entries)
 
             let snapshot = OrganizationHistorySnapshot(
                 schemaVersion: Self.schemaVersion,
-                entries: entries
+                entries: entries.map(\.summary)
             )
             let data = try encoder.encode(snapshot)
             let tempURL = primaryFileURL.deletingLastPathComponent()
@@ -315,7 +398,46 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
         if let backupFileURL {
             try? cleanupFileIfPresent(at: backupFileURL)
         }
+        if let detailsDirectoryURL {
+            try? cleanupFileIfPresent(at: detailsDirectoryURL)
+        }
         userDefaults.removeObject(forKey: Self.legacyHistoryKey)
+    }
+
+    func loadDetails(for summary: OrganizationHistoryEntry) -> OrganizationHistoryEntry {
+        guard let detailsDirectoryURL else { return summary }
+        let fileURL = detailsDirectoryURL.appendingPathComponent("\(summary.id.uuidString).json")
+        guard let data = try? Data(contentsOf: fileURL),
+              var details = try? decoder.decode(OrganizationHistoryEntry.self, from: data) else {
+            return summary
+        }
+        details.status = summary.status
+        details.isUndone = summary.isUndone
+        details.undoRestoredCount = summary.undoRestoredCount
+        return details
+    }
+
+    private func migrateDetailsIfNeeded(_ entries: [OrganizationHistoryEntry]) {
+        guard entries.contains(where: Self.hasDetails) else { return }
+        _ = saveEntries(entries)
+    }
+
+    private func persistDetails(from entries: [OrganizationHistoryEntry]) throws {
+        guard let detailsDirectoryURL else { return }
+        try fileManager.createDirectory(at: detailsDirectoryURL, withIntermediateDirectories: true)
+        for entry in entries where Self.hasDetails(entry) {
+            let fileURL = detailsDirectoryURL.appendingPathComponent("\(entry.id.uuidString).json")
+            let data = try encoder.encode(entry)
+            try data.write(to: fileURL, options: .atomic)
+        }
+    }
+
+    private static func hasDetails(_ entry: OrganizationHistoryEntry) -> Bool {
+        entry.plan != nil
+            || entry.rawAIResponse != nil
+            || entry.operations != nil
+            || entry.undoFailedFiles != nil
+            || entry.restorableItems != nil
     }
 
     private func loadLegacyEntries() -> [OrganizationHistoryEntry] {
@@ -487,11 +609,13 @@ public class OrganizationHistory: ObservableObject {
     public private(set) var revision: UInt64 = 0
     @Published public private(set) var hasLoadedPersistedState = false
     private let repository: OrganizationHistoryRepository
-    private let maxEntries = 100
     private var loadTask: Task<[OrganizationHistoryEntry], Never>?
     private var persistenceTask: Task<Void, Never>?
     private var hasPendingChanges = false
     private var loadGeneration = 0
+    private var detailCache: [UUID: OrganizationHistoryEntry] = [:]
+    private var detailCacheOrder: [UUID] = []
+    private let detailCacheLimit = 8
     
     public init(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) {
         self.repository = OrganizationHistoryRepository(
@@ -525,12 +649,11 @@ public class OrganizationHistory: ObservableObject {
 
         var mergedByID = Dictionary(uniqueKeysWithValues: persistedEntries.map { ($0.id, $0) })
         for entry in entries {
-            mergedByID[entry.id] = entry
+            mergedByID[entry.id] = entry.summary
         }
         entries = Array(
             mergedByID.values
                 .sorted { $0.timestamp > $1.timestamp }
-                .prefix(maxEntries)
         )
         hasLoadedPersistedState = true
         loadTask = nil
@@ -550,18 +673,35 @@ public class OrganizationHistory: ObservableObject {
     public func addEntry(_ entry: OrganizationHistoryEntry) {
         var cleanEntry = entry
         cleanEntry.isUndone = false // Enforce clean state for new entries
-        entries.insert(cleanEntry, at: 0)
-        if entries.count > maxEntries {
-            entries.removeLast()
-        }
-        saveHistory()
+        cacheDetails(cleanEntry)
+        entries.insert(cleanEntry.summary, at: 0)
+        saveHistory(details: [cleanEntry])
     }
     
     public func updateEntry(_ entry: OrganizationHistoryEntry) {
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-            entries[index] = entry
-            saveHistory()
+            if Self.containsDetails(entry) {
+                cacheDetails(entry)
+            }
+            entries[index] = entry.summary
+            saveHistory(details: Self.containsDetails(entry) ? [entry] : [])
         }
+    }
+
+    public func details(for entry: OrganizationHistoryEntry) async -> OrganizationHistoryEntry {
+        if Self.containsDetails(entry) { return entry }
+        if let cached = detailCache[entry.id] {
+            touchCachedDetails(entry.id)
+            return cached
+        }
+        let repository = repository
+        let pendingPersistence = persistenceTask
+        let details = await Task.detached(priority: .userInitiated) {
+            await pendingPersistence?.value
+            return repository.loadDetails(for: entry)
+        }.value
+        cacheDetails(details)
+        return details
     }
     
     public func clearHistory() {
@@ -570,6 +710,8 @@ public class OrganizationHistory: ObservableObject {
         loadTask = nil
         hasLoadedPersistedState = true
         hasPendingChanges = false
+        detailCache.removeAll()
+        detailCacheOrder.removeAll()
         entries.removeAll()
         enqueuePersistence { repository in
             repository.clear()
@@ -598,16 +740,18 @@ public class OrganizationHistory: ObservableObject {
                 added += 1
             }
             mergedByID[entry.id] = entry
+            cacheDetails(entry)
         }
 
         let sorted = mergedByID.values.sorted { $0.timestamp > $1.timestamp }
-        entries = Array(sorted.prefix(maxEntries))
-        saveHistory()
+        let retained = sorted
+        entries = retained.map(\.summary)
+        saveHistory(details: retained.filter(Self.containsDetails))
         return ImportResult(
             added: added,
             updated: updated,
             unchanged: unchanged,
-            omittedByRetentionLimit: max(0, sorted.count - maxEntries)
+            omittedByRetentionLimit: 0
         )
     }
     
@@ -648,21 +792,48 @@ public class OrganizationHistory: ObservableObject {
 
     public var totalTimeSaved: TimeInterval {
         entries.filter { $0.status == .completed }
-            .compactMap { $0.plan?.generationStats?.estimatedTimeSaved }
+            .compactMap(\.storedEstimatedTimeSaved)
             .reduce(0, +)
     }
 
     public var totalEstimatedCost: Decimal {
-        entries.compactMap { $0.plan?.generationStats?.computedCost }
+        entries.compactMap(\.storedEstimatedCost)
             .reduce(0, +)
     }
 
-    private func saveHistory() {
+    private static func containsDetails(_ entry: OrganizationHistoryEntry) -> Bool {
+        entry.plan != nil
+            || entry.rawAIResponse != nil
+            || entry.operations != nil
+            || entry.undoFailedFiles != nil
+            || entry.restorableItems != nil
+    }
+
+    private func cacheDetails(_ entry: OrganizationHistoryEntry) {
+        guard Self.containsDetails(entry) else { return }
+        detailCache[entry.id] = entry
+        touchCachedDetails(entry.id)
+        while detailCacheOrder.count > detailCacheLimit, let oldest = detailCacheOrder.first {
+            detailCacheOrder.removeFirst()
+            detailCache.removeValue(forKey: oldest)
+        }
+    }
+
+    private func touchCachedDetails(_ id: UUID) {
+        detailCacheOrder.removeAll { $0 == id }
+        detailCacheOrder.append(id)
+    }
+
+    private func saveHistory(details: [OrganizationHistoryEntry] = []) {
         guard hasLoadedPersistedState else {
             hasPendingChanges = true
             return
         }
-        let snapshot = entries
+        var detailsByID = detailCache
+        for entry in details {
+            detailsByID[entry.id] = entry
+        }
+        let snapshot = entries.map { detailsByID.removeValue(forKey: $0.id) ?? $0 }
         enqueuePersistence { repository in
             _ = repository.saveEntries(snapshot)
         }

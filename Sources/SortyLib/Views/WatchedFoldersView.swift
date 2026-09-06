@@ -2059,7 +2059,7 @@ private struct WatchedFolderRecentActions: View {
 
     private func canUndo(_ entry: OrganizationHistoryEntry) -> Bool {
         !entry.isUndone
-            && entry.operations?.isEmpty == false
+            && entry.storedOperationCount > 0
             && (entry.status == .completed || entry.status == .partiallyUndone)
     }
 

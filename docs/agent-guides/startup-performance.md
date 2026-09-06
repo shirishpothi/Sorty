@@ -9,7 +9,9 @@ Apply this rule to dependencies reached through `SortyApp`, `WindowSession`, vie
 `SortyApp.configureGlobalsIfNeeded()` starts these loads in parallel from a view task:
 
 - `SettingsViewModel.loadPersistedState()` reads and decodes `aiConfig`.
-- `OrganizationHistory.loadPersistedState()` reads the History file and retains the newest 100 entries.
+- `OrganizationHistory.loadPersistedState()` reads the lightweight History index. Complete
+  session plans, responses, operations, and restoration records live in per-session files and
+  are loaded through `details(for:)` into a bounded cache when an action needs them.
 - `WatchedFoldersManager.loadPersistedState()` replays the append-only watched-folder journal.
 - `StorageLocationsManager.loadPersistedState()` reads and normalizes saved storage locations.
 - `LearningsManager.loadPersistedState()` restores its model selection and resolves saved reference-model directories.
