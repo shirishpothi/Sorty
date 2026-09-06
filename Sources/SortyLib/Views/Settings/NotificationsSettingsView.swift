@@ -51,10 +51,11 @@ struct NotificationsSettingsView: View {
             SettingsCard(title: "Notification Types", icon: "list.bullet", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
-                        isOn: $notificationSettings.settings.processingComplete,
+                        isOn: processingCompleteNotifications,
                         title: "Processing Complete",
                         description: "When file processing finishes successfully",
-                        previewAction: { playPreviewSound("Glass") },
+                        previewAction: { previewProcessingComplete() },
+                        previewIcon: "play.fill",
                         focusTarget: .notificationsProcessingComplete
                     )
                     
@@ -64,7 +65,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.previewReady,
                         title: "Preview Ready",
                         description: "When Sorty has finished generating the organization plan",
-                        previewAction: { playPreviewSound("Ping") },
+                        previewAction: { previewPreviewReady() },
+                        previewIcon: "play.fill",
                         focusTarget: .notificationsPreviewReady
                     )
                     
@@ -74,7 +76,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.processingErrors,
                         title: "Processing Errors",
                         description: "When errors occur during processing",
-                        previewAction: { playPreviewSound("Basso") },
+                        previewAction: { previewProcessingError() },
+                        previewIcon: "play.fill",
                         focusTarget: .notificationsProcessingErrors
                     )
 
@@ -95,7 +98,8 @@ struct NotificationsSettingsView: View {
                         isOn: $notificationSettings.settings.playCompletionSound,
                         title: "Completion Sound",
                         description: "Play a satisfying sound when organization finishes",
-                        previewAction: { playPreviewSound("Glass") },
+                        previewAction: { previewCompletionSound() },
+                        previewIcon: "play.fill",
                         focusTarget: .notificationsCompletionSound
                     )
                 }
@@ -106,13 +110,58 @@ struct NotificationsSettingsView: View {
         }
     }
 
-    private func playPreviewSound(_ name: String) {
-        if let sound = NSSound(named: NSSound.Name(name)) {
+    private func previewProcessingComplete() {
+        notificationManager.showBatchSummary(
+            stats: BatchSummaryStats(
+                filesMoved: 12,
+                foldersCreated: 3,
+                duration: 8,
+                folderName: "Downloads",
+                folderPath: NSHomeDirectory() + "/Downloads"
+            )
+        )
+        HapticFeedbackManager.shared.tap()
+    }
+
+    private func previewPreviewReady() {
+        notificationManager.show(
+            .previewReady(
+                folderName: "Downloads",
+                folderPath: NSHomeDirectory() + "/Downloads"
+            )
+        )
+        HapticFeedbackManager.shared.tap()
+    }
+
+    private func previewProcessingError() {
+        notificationManager.showError(
+            message: "Sample: Sorty couldn't organize 2 files.",
+            isCritical: false,
+            canRetry: true
+        )
+        HapticFeedbackManager.shared.tap()
+    }
+
+    private func previewCompletionSound() {
+        if let sound = NSSound(named: NSSound.Name("Glass")) {
             sound.play()
         } else {
             NSSound.beep()
         }
         HapticFeedbackManager.shared.tap()
+    }
+
+    private var processingCompleteNotifications: Binding<Bool> {
+        Binding(
+            get: {
+                notificationSettings.settings.processingComplete &&
+                    notificationSettings.settings.batchSummary
+            },
+            set: { isEnabled in
+                notificationSettings.settings.processingComplete = isEnabled
+                notificationSettings.settings.batchSummary = isEnabled
+            }
+        )
     }
 
     private var watchedFolderActivityNotifications: Binding<Bool> {

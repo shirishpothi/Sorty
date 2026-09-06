@@ -601,7 +601,7 @@ public class NotificationManager: ObservableObject {
                 return
             }
         case .batchSummary:
-            guard settingsValue.batchSummary else {
+            guard settingsValue.processingComplete && settingsValue.batchSummary else {
                 print("NotificationManager: batchSummary notifications disabled")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "batch summary disabled")
                 return
@@ -615,6 +615,10 @@ public class NotificationManager: ObservableObject {
         
         // Create notification content
         let (title, message, icon, iconColor) = notificationContent(for: type)
+
+        if shouldPlayCompletionSound(for: type) {
+            playCompletionSoundIfEnabled()
+        }
         
         // Show in-app HUD if enabled AND app is active
         if settingsValue.inAppHUD && NSApplication.shared.isActive {
@@ -661,6 +665,10 @@ public class NotificationManager: ObservableObject {
         
         // Create notification content
         let (title, message, icon, iconColor) = notificationContent(for: type)
+
+        if shouldPlayCompletionSound(for: type) {
+            playCompletionSoundIfEnabled()
+        }
         
         // Show in-app HUD if enabled AND app is active
         if settingsValue.inAppHUD && NSApplication.shared.isActive {
@@ -798,6 +806,17 @@ public class NotificationManager: ObservableObject {
             folderName: "Downloads",
             folderPath: NSHomeDirectory() + "/Downloads"
         )
+    }
+
+    /// Plays the organization completion sound when enabled. Used by real
+    /// completions and the Settings preview so both hear the same sound.
+    public func playCompletionSoundIfEnabled() {
+        guard settings.settings.playCompletionSound else { return }
+        if let sound = NSSound(named: NSSound.Name("Glass")) {
+            sound.play()
+        } else {
+            NSSound.beep()
+        }
     }
     
     /// Request user attention (dock bounce)
@@ -1705,6 +1724,17 @@ public class NotificationManager: ObservableObject {
             glassSound.play()
         } else {
             NSSound.beep()
+        }
+    }
+
+    private func shouldPlayCompletionSound(for type: NotificationType) -> Bool {
+        switch type {
+        case .processingComplete:
+            return true
+        case .batchSummary(let stats, _):
+            return stats.isSuccessful && !stats.hasErrors
+        default:
+            return false
         }
     }
     
