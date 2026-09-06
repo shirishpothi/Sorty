@@ -616,6 +616,7 @@ struct SortyApp: App {
 
     @State private var coordinator: AppCoordinator?
     @State private var hasConfiguredGlobals = false
+    @State private var hasConfiguredOperationalServices = false
 
     private let widgetSyncManager = SortyWidgetSyncManager.shared
 
@@ -810,9 +811,12 @@ struct SortyApp: App {
                 }
             }
             .onChange(of: hasCompletedOnboarding) { _, isComplete in
-                guard isComplete, finderIntegrationEnabled else { return }
-                ExtensionCommunication.beginMonitoringFinderSyncRuntime()
                 Task {
+                    if isComplete {
+                        await configureOperationalServicesIfNeeded()
+                    }
+                    guard isComplete, finderIntegrationEnabled else { return }
+                    ExtensionCommunication.beginMonitoringFinderSyncRuntime()
                     _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
                     await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                 }
@@ -886,22 +890,50 @@ struct SortyApp: App {
         }
 
         async let settingsLoad: Void = settingsViewModel.loadPersistedState()
-        async let historyLoad: Void = organizationHistory.loadPersistedState()
         async let watchedFoldersLoad: Void = watchedFoldersManager.loadPersistedState()
-        async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()
-        async let learningsLoad: Void = learningsManager.loadPersistedState()
         async let exclusionLoad: Void = exclusionRules.loadPersistedState()
         async let personaLoad: Void = personaManager.loadPersistedState()
         async let customPersonaLoad: Void = customPersonaStore.loadPersistedState()
         async let namingPresetLoad: Void = namingPresetManager.loadPersistedState()
         async let steeringPromptLoad: Void = steeringPromptManager.loadPersistedState()
-        _ = await (settingsLoad, historyLoad, watchedFoldersLoad, storageLocationsLoad, learningsLoad, exclusionLoad, personaLoad, customPersonaLoad, namingPresetLoad, steeringPromptLoad)
+        _ = await (
+            settingsLoad,
+            watchedFoldersLoad,
+            exclusionLoad,
+            personaLoad,
+            customPersonaLoad,
+            namingPresetLoad,
+            steeringPromptLoad
+        )
 
         ReliabilityManager.shared.startIfAuthorized()
         AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         loginItemManager.startUp()
         syncLoginItemState()
+
+        if hasCompletedOnboarding || watchedFoldersManager.activeFolderCount > 0 {
+            await configureOperationalServicesIfNeeded()
+        }
+        ReliabilityManager.shared.finishLaunchSpan()
+
+        if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+            }
+        }
+    }
+
+    @MainActor
+    private func configureOperationalServicesIfNeeded() async {
+        guard !hasConfiguredOperationalServices else { return }
+        hasConfiguredOperationalServices = true
+
+        async let historyLoad: Void = organizationHistory.loadPersistedState()
+        async let storageLocationsLoad: Void = storageLocationsManager.loadPersistedState()
+        async let learningsLoad: Void = learningsManager.loadPersistedState()
+        _ = await (historyLoad, storageLocationsLoad, learningsLoad)
 
         await watchedFoldersManager.restoreSecurityScopedAccess()
         await storageLocationsManager.restoreSecurityScopedAccess()
@@ -947,14 +979,6 @@ struct SortyApp: App {
                 automationOrganizer: automationOrganizer,
                 learningsManager: learningsManager
             )
-        }
-        ReliabilityManager.shared.finishLaunchSpan()
-
-        if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 800_000_000)
-                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-            }
         }
     }
 
