@@ -850,6 +850,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var currentTask: Task<Void, Error>?
     private var isCancellationRequested: Bool = false
 
+    /// Single place that decides whether an error means "user cancelled".
+    /// Covers structured cancellation (CancellationError, OrganizationError.cancelled,
+    /// AIClientError.isCancellation, NSURLErrorCancelled) and stringly-typed
+    /// cancellations from URLSession / AI providers.
+    nonisolated public static func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if (error as? OrganizationError) == .cancelled { return true }
+        if let clientError = error as? AIClientError, clientError.isCancellation { return true }
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorCancelled { return true }
+        let description = error.localizedDescription.lowercased()
+        return description.contains("cancelled") || description.contains("canceled")
+    }
+
     // Prevent auto-start by tracking explicit user actions
     private var userInitiatedAction: Bool = false
 
@@ -1748,7 +1762,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         do {
             try await currentTask?.value
-        } catch is CancellationError {
+        } catch where Self.isCancellationError(error) {
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 return
@@ -1838,12 +1852,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 folderPath: directory.path
             )
 
+            try checkCancellation()
+
             await MainActor.run {
+                guard !isCancellationRequested else { return }
                 currentPlan = validatedPlan
                 resumeCheckpoint = nil
                 updateState(.ready, stage: "Ready!", progress: 1.0)
                 persistManualSession(directory: directory, plan: validatedPlan, stateHint: .ready, instructions: instructions)
             }
+
+            try checkCancellation()
 
             NotificationManager.shared.show(
                 .previewReady(
@@ -1879,45 +1898,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ) { current, _ in current }
             )
 
-        } catch is CancellationError {
-            stopTimeoutTimer()
-            resetToIdleUnlessCancellationResetIsSuppressed()
-            AnalyticsManager.shared.captureWorkflow(
-                workflow: "organize",
-                stage: "plan_generation",
-                outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
-                    Date().timeIntervalSince(analyticsStartedAt)
-                )
-            )
-            throw CancellationError()
-        } catch let error as OrganizationError where error == .cancelled {
-            stopTimeoutTimer()
-            resetToIdleUnlessCancellationResetIsSuppressed()
-            AnalyticsManager.shared.captureWorkflow(
-                workflow: "organize",
-                stage: "plan_generation",
-                outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
-                    Date().timeIntervalSince(analyticsStartedAt)
-                )
-            )
-            throw CancellationError()
-        } catch let error as AIClientError where error.isCancellation {
-            stopTimeoutTimer()
-            resetToIdleUnlessCancellationResetIsSuppressed()
-            AnalyticsManager.shared.captureWorkflow(
-                workflow: "organize",
-                stage: "plan_generation",
-                outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
-                    Date().timeIntervalSince(analyticsStartedAt)
-                )
-            )
-            throw CancellationError()
-        } catch where (error as NSError).code == NSURLErrorCancelled || 
-                      error.localizedDescription.lowercased().contains("cancelled") ||
-                      error.localizedDescription.lowercased().contains("canceled") {
+        } catch where Self.isCancellationError(error) {
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
             AnalyticsManager.shared.captureWorkflow(
@@ -2463,6 +2444,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         do {
             try await currentTask?.value
+        } catch where Self.isCancellationError(error) {
+            stopTimeoutTimer()
+            resetToIdleUnlessCancellationResetIsSuppressed()
+            throw CancellationError()
         } catch {
             stopTimeoutTimer()
             handleOrganizationError(error, directory: checkpoint.directory)
@@ -3423,7 +3408,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private func checkCancellation() throws {
         if isCancellationRequested || Task.isCancelled {
-            throw OrganizationError.cancelled
+            throw CancellationError()
         }
     }
 
@@ -3495,6 +3480,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     private func handleOrganizationError(_ error: Error, directory: URL, source: OrganizationEntrySource = .manual) {
+        // Don't record history or show UI for cancellation errors
+        if Self.isCancellationError(error) {
+            resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+            return
+        }
+
         let displayMessage = userFacingErrorMessage(for: error)
         let failedEntry = OrganizationHistoryEntry(
             directoryPath: directory.path,
@@ -3508,19 +3499,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             source: source
         )
         history.addEntry(failedEntry)
-
-        // Don't show anything for cancellation errors
-        let isCancellation = (error is CancellationError) ||
-                             ((error as? OrganizationError) == .cancelled) ||
-                             ((error as? AIClientError)?.isCancellation ?? false) ||
-                             (error as NSError).code == NSURLErrorCancelled ||
-                             error.localizedDescription.lowercased().contains("cancelled") ||
-                             error.localizedDescription.lowercased().contains("canceled")
-        
-        if isCancellation {
-            resetToIdle()
-            return
-        }
 
         transition(to: .error(error), force: true)
         errorMessage = displayMessage
@@ -3824,8 +3802,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         do {
             try await currentTask?.value
-        } catch is CancellationError {
-            resetToIdle(source: historySource)
+        } catch where Self.isCancellationError(error) {
+            resetToIdleUnlessCancellationResetIsSuppressed(source: historySource)
         }
     }
 
@@ -4107,8 +4085,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 return
             }
 
-            // Auto-apply for incremental
-            try await apply(
+            // Auto-apply for incremental (same task so outer cancel keeps working)
+            try await performApply(
                 at: directory,
                 dryRun: false,
                 enableTagging: operationConfig.enableFileTagging,
@@ -4230,8 +4208,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             try await currentTask?.value
             return files.count
-        } catch is CancellationError {
-            resetToIdle()
+        } catch where Self.isCancellationError(error) {
+            resetToIdleUnlessCancellationResetIsSuppressed()
             return 0
         }
     }
@@ -4353,8 +4331,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
             }
 
-            // Apply the organization
-            try await apply(at: directory, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
+            // Apply the organization (same task so outer cancel keeps working)
+            try await performApply(at: directory, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
 
         } catch {
             stopTimeoutTimer()
@@ -4366,6 +4344,42 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Apply Organization
 
     public func apply(
+        at baseURL: URL,
+        dryRun: Bool = false,
+        enableTagging: Bool = true,
+        source: OrganizationEntrySource = .manual,
+        modeOverride: OrganizationMode? = nil
+    ) async throws {
+        guard currentPlan != nil else {
+            throw OrganizationError.noCurrentPlan
+        }
+        // Run the apply inside the tracked task so cancel() aborts the
+        // file moves (FileSystemManager polls Task cancellation per file).
+        cancelInternal()
+        isCancellationRequested = false
+        currentTask = Task {
+            try await performApply(
+                at: baseURL,
+                dryRun: dryRun,
+                enableTagging: enableTagging,
+                source: source,
+                modeOverride: modeOverride
+            )
+        }
+        defer { currentTask = nil }
+        do {
+            try await currentTask?.value
+        } catch where Self.isCancellationError(error) {
+            if suppressCancellationReset {
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
+            resetToIdle(source: source)
+            throw CancellationError()
+        }
+    }
+
+    private func performApply(
         at baseURL: URL,
         dryRun: Bool = false,
         enableTagging: Bool = true,
@@ -4393,9 +4407,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             ]
         )
 
-        // Reset cancellation flag for new apply operation
-        isCancellationRequested = false
-
+        // Note: the public apply() wrapper resets the cancellation flag for
+        // standalone applies. Don't reset it here so a cancel requested while
+        // an incremental/selected-files run is in flight stays visible.
         try checkCancellation()
 
         // Re-validate at apply time to protect all entry points, including regenerated previews.
@@ -4558,6 +4572,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ]) { current, _ in current }
             )
 
+        } catch where Self.isCancellationError(error) {
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "organize",
+                stage: "apply",
+                outcome: "cancelled",
+                properties: AnalyticsManager.durationProperties(
+                    Date().timeIntervalSince(analyticsStartedAt)
+                ).merging([
+                    "count_bucket": AnalyticsManager.countBucket(completedOperationsBeforeHistory.count),
+                    "entry_source": source.rawValue,
+                    "mode": operationMode.rawValue,
+                ]) { current, _ in current }
+            )
+            resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+            throw CancellationError()
         } catch {
             let partialOperations: [FileSystemManager.FileOperation]?
             if case FileSystemError.partialApplyFailure(let operations, _) = error {
@@ -4775,27 +4804,48 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             outcome: "started",
             properties: ["variant": "provider"]
         )
-        var files = getFilesFromCurrentPlan()
+        let files = getFilesFromCurrentPlan()
         guard !files.isEmpty else {
             throw OrganizationError.noCurrentPlan
         }
-        
+
         guard !isOperationInProgress() else {
             return
         }
+
+        // Run inside the tracked task so cancel() aborts the AI request
+        // instead of letting it keep generating a response nobody will use.
+        cancelInternal()
+        isCancellationRequested = false
+        currentTask = Task {
+            try await performRegenerateWithProvider(provider, files: files)
+        }
+        defer { currentTask = nil }
+        do {
+            try await currentTask?.value
+        } catch where Self.isCancellationError(error) {
+            if suppressCancellationReset {
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
+            resetToIdle()
+            throw CancellationError()
+        }
+    }
+
+    private func performRegenerateWithProvider(_ provider: AIProvider, files: [FileItem]) async throws {
+        var files = files
         let reliabilitySpan = ReliabilityManager.shared.startSpan(
             name: "regenerate_preview",
             operation: "workflow.regenerate",
             feature: "organize"
         )
         defer { reliabilitySpan?.finish() }
-        
+
         if let exclusionRules = exclusionRules {
             files = exclusionRules.filterFiles(files)
         }
-        
-        isCancellationRequested = false
-        
+
         // Reset streaming state
         await MainActor.run {
             clearStreamingDisplayState()
@@ -4805,12 +4855,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightHistory = []
             insightsCache = nil
         }
-        
+
         let providerStage = aiConfig?.mode == .renameOnly
             ? "Getting new names from \(provider.displayName)..."
             : "Getting a new plan from \(provider.displayName)..."
         updateState(.organizing, stage: providerStage, progress: 0.3)
-        
+
         do {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider)
             newPlan.version = (currentPlan?.version ?? 0) + 1
@@ -4833,6 +4883,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try checkCancellation()
             
             await MainActor.run {
+                guard !isCancellationRequested else { return }
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
@@ -4848,6 +4899,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "success",
                 properties: ["variant": "provider"]
             )
+        } catch where Self.isCancellationError(error) {
+            await MainActor.run {
+                isStreaming = false
+                if !suppressCancellationReset {
+                    resetToIdle()
+                }
+            }
+            throw CancellationError()
         } catch {
             await MainActor.run {
                 transition(to: .error(error), force: true)
@@ -4902,25 +4961,45 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         var files = getFilesFromCurrentPlan()
-        
+
         if files.isEmpty, let directory = currentDirectory {
             files = try await scanPhase(directory: directory)
         }
-        
+
         guard !files.isEmpty else {
             throw OrganizationError.noCurrentPlan
         }
-        
+
         guard !isOperationInProgress() else {
             return
         }
-        
+
+        // Run inside the tracked task so cancel() aborts the AI request
+        // instead of letting it keep generating a response nobody will use.
+        cancelInternal()
+        isCancellationRequested = false
+        currentTask = Task {
+            try await performRegenerateWithModel(provider: provider, model: model, files: files)
+        }
+        defer { currentTask = nil }
+        do {
+            try await currentTask?.value
+        } catch where Self.isCancellationError(error) {
+            if suppressCancellationReset {
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
+            resetToIdle()
+            throw CancellationError()
+        }
+    }
+
+    private func performRegenerateWithModel(provider: AIProvider, model: String, files: [FileItem]) async throws {
+        var files = files
         if let exclusionRules = exclusionRules {
             files = exclusionRules.filterFiles(files)
         }
-        
-        isCancellationRequested = false
-        
+
         // Reset streaming state
         await MainActor.run {
             clearStreamingDisplayState()
@@ -4930,7 +5009,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightHistory = []
             insightsCache = nil
         }
-        
+
         let modelStage = aiConfig?.mode == .renameOnly
             ? "Getting new names from \(provider.displayName) (\(model))..."
             : "Getting a new plan from \(provider.displayName) (\(model))..."
@@ -4938,9 +5017,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         await MainActor.run {
             isStreaming = true
         }
-        
+
         startTimeoutTimer()
-        
+
         do {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider, model: model)
             newPlan.version = (currentPlan?.version ?? 0) + 1
@@ -4959,6 +5038,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             stopTimeoutTimer()
             
             await MainActor.run {
+                guard !isCancellationRequested else { return }
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
@@ -4974,7 +5054,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 outcome: "success",
                 properties: ["variant": "model"]
             )
-        } catch is CancellationError {
+        } catch where Self.isCancellationError(error) {
             stopTimeoutTimer()
             await MainActor.run {
                 isStreaming = false
@@ -5013,7 +5093,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             outcome: "started",
             properties: ["variant": "same_configuration"]
         )
-        guard let currentPlan = currentPlan else {
+        guard let basePlan = currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
 
@@ -5021,7 +5101,46 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
 
+        // Get original files from the current plan
+        var allFiles: [FileItem] = []
+        func collectFiles(_ suggestion: FolderSuggestion) {
+            allFiles.append(contentsOf: suggestion.files)
+            for subfolder in suggestion.subfolders {
+                collectFiles(subfolder)
+            }
+        }
+        for suggestion in basePlan.suggestions {
+            collectFiles(suggestion)
+        }
+        allFiles.append(contentsOf: basePlan.unorganizedFiles)
+
+        if let exclusionRules = exclusionRules {
+            allFiles = exclusionRules.filterFiles(allFiles)
+        }
+
+        // Run inside the tracked task so cancel() aborts the AI request
+        // instead of letting it keep generating a response nobody will use.
+        cancelInternal()
         isCancellationRequested = false
+        currentTask = Task {
+            try await performRegeneratePreview(allFiles: allFiles, basePlan: basePlan)
+        }
+        defer { currentTask = nil }
+        do {
+            try await currentTask?.value
+        } catch where Self.isCancellationError(error) {
+            if suppressCancellationReset {
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
+            resetToIdle()
+            throw CancellationError()
+        }
+    }
+
+    private func performRegeneratePreview(allFiles: [FileItem], basePlan: OrganizationPlan) async throws {
+        let currentPlan = basePlan
+        var allFiles = allFiles
 
         // Reset streaming state
         await MainActor.run {
@@ -5031,23 +5150,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             currentInsight = ""
             insightHistory = []
             insightsCache = nil
-        }
-
-        // Get original files from current plan
-        var allFiles: [FileItem] = []
-        func collectFiles(_ suggestion: FolderSuggestion) {
-            allFiles.append(contentsOf: suggestion.files)
-            for subfolder in suggestion.subfolders {
-                collectFiles(subfolder)
-            }
-        }
-        for suggestion in currentPlan.suggestions {
-            collectFiles(suggestion)
-        }
-        allFiles.append(contentsOf: currentPlan.unorganizedFiles)
-        
-        if let exclusionRules = exclusionRules {
-            allFiles = exclusionRules.filterFiles(allFiles)
         }
 
         let isRenameOnly = aiConfig?.mode == .renameOnly
@@ -5151,6 +5253,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try checkCancellation()
 
             await MainActor.run {
+                guard !isCancellationRequested else { return }
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
@@ -5167,7 +5270,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 properties: ["variant": "same_configuration"]
             )
 
-        } catch is CancellationError {
+        } catch where Self.isCancellationError(error) {
             stopTimeoutTimer()
             await MainActor.run {
                 isStreaming = false
@@ -5499,7 +5602,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             measuredWorkProgress = nil
             visionAnalysisSummary = nil
             resumeCheckpoint = nil
-            isCancellationRequested = false
+            // Keep isCancellationRequested=true so late chunks/callbacks from the
+            // cancelled run keep dropping. The next operation resets it to false.
             userInitiatedAction = false
             
             // Clear AI insights and cache
@@ -5691,6 +5795,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         mode: OrganizationMode
     ) {
         cancelInternal()
+        isCancellationRequested = false
         currentDirectory = directory
         currentPlan = plan
         preparedPlanModeOverride = mode

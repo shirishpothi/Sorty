@@ -56,6 +56,20 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     }
 }
 
+// Box for observing mock AI completion across isolation domains in tests.
+final class MockCompletionFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() {
+        lock.withLock { value = true }
+    }
+
+    var isSet: Bool {
+        lock.withLock { value }
+    }
+}
+
 class SortyTests: XCTestCase {
 
     var folderOrganizer: FolderOrganizer!
@@ -308,6 +322,62 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(folderOrganizer.state, .idle)
 
         task.cancel()
+    }
+
+    @MainActor
+    func testCancelRegenerateReturnsToIdleWithoutError() async throws {
+        let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
+        try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
+
+        folderOrganizer.setAIClientForTesting(mockClient)
+        await mockClient.setHandler { files in
+            return OrganizationPlan(
+                suggestions: [FolderSuggestion(folderName: "Test", files: files)],
+                unorganizedFiles: [],
+                notes: ""
+            )
+        }
+        try await folderOrganizer.organize(directory: tempDirectory)
+        XCTAssertEqual(folderOrganizer.state, .ready)
+
+        let completionFlag = MockCompletionFlag()
+        await mockClient.setHandler { files in
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            completionFlag.set()
+            return OrganizationPlan(suggestions: [], unorganizedFiles: [], notes: "")
+        }
+
+        let task = Task {
+            try await folderOrganizer.regeneratePreview()
+        }
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+        folderOrganizer.cancel()
+
+        XCTAssertEqual(folderOrganizer.state, .idle)
+
+        do {
+            try await task.value
+            XCTFail("Regenerate should throw on cancel")
+        } catch is CancellationError {
+            // Expected: cancellation surfaces as CancellationError so callers ignore it
+        } catch {
+            XCTFail("Cancel should throw CancellationError, got \(error)")
+        }
+        XCTAssertEqual(folderOrganizer.state, .idle)
+        // The AI request itself must have been aborted, not left running to
+        // completion with its result discarded.
+        XCTAssertFalse(completionFlag.isSet, "Cancel should abort the in-flight AI request")
+    }
+
+    @MainActor
+    func testIsCancellationErrorHelper() {
+        XCTAssertTrue(FolderOrganizer.isCancellationError(CancellationError()))
+        XCTAssertTrue(FolderOrganizer.isCancellationError(OrganizationError.cancelled))
+        XCTAssertTrue(FolderOrganizer.isCancellationError(AIClientError.networkError(CancellationError())))
+        XCTAssertTrue(FolderOrganizer.isCancellationError(URLError(.cancelled)))
+        XCTAssertFalse(FolderOrganizer.isCancellationError(OrganizationError.noCurrentPlan))
+        XCTAssertFalse(FolderOrganizer.isCancellationError(OrganizationError.clientNotConfigured))
     }
 
     @MainActor

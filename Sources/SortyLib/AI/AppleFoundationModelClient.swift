@@ -154,6 +154,10 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
 
             DebugLogger.log("AFM Strategy: \(strategy) compaction for \(files.count) files")
 
+            // A cancel must stop the retry loop, not fall through to another
+            // local generation whose result nobody will use.
+            try Task.checkCancellation()
+
             do {
                 let session = LanguageModelSession(instructions: prompts.system)
                 let response = try await session.respond(to: prompts.user)
@@ -169,6 +173,8 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
                 )
                 return plan
 
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let error as LanguageModelSession.GenerationError {
                 lastGenerationError = error
                 DebugLogger.log("AFM generation failed with \(strategy) compaction: \(error.localizedDescription)")
