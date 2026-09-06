@@ -68,6 +68,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
     private var lastExitTriggered: Bool?
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
+    private var rasterizationTask: Task<Void, Never>?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -97,6 +98,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
 
     override func layout() {
         super.layout()
+        disableSettledRasterization()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let blurOutset: CGFloat = 64
@@ -119,6 +121,26 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         )
         coreShape.cornerRadius = coreSize.height / 2
         CATransaction.commit()
+        if lastPhase == .ambient {
+            scheduleSettledRasterization(delay: 0)
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        refreshPalette()
+        disableSettledRasterization()
+        if lastPhase == .ambient {
+            scheduleSettledRasterization(delay: 0)
+        }
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        disableSettledRasterization()
+        if lastPhase == .ambient {
+            scheduleSettledRasterization(delay: 0)
+        }
     }
 
     func update(
@@ -150,13 +172,17 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
             blobBlur.radius = 56
             coreBlur.radius = 32
             CATransaction.commit()
+            scheduleSettledRasterization(delay: 0)
         } else if exitTriggered || phase == .hidden {
+            disableSettledRasterization()
             stopBreathing()
             fadeOut()
         } else if phase == .reveal {
+            disableSettledRasterization()
             stopBreathing()
             animateReveal()
         } else {
+            disableSettledRasterization()
             animateSettleToAmbient()
         }
 
@@ -278,6 +304,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         coreContainer.add(coreBlurAnimation, forKey: "celebrationSettleBlur")
 
         startBreathing(delay: 0.95)
+        scheduleSettledRasterization(delay: 0.95)
     }
 
     private func fadeOut() {
@@ -344,6 +371,29 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         isBreathing = false
         blobContainer.removeAnimation(forKey: "celebrationAmbientBreath")
         coreContainer.removeAnimation(forKey: "celebrationAmbientBreath")
+    }
+
+    private func scheduleSettledRasterization(delay: TimeInterval) {
+        rasterizationTask?.cancel()
+        rasterizationTask = Task { @MainActor [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+            guard !Task.isCancelled, let self, self.lastPhase == .ambient else { return }
+            let scale = self.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+            self.blobContainer.rasterizationScale = scale
+            self.coreContainer.rasterizationScale = scale
+            self.blobContainer.shouldRasterize = true
+            self.coreContainer.shouldRasterize = true
+            self.rasterizationTask = nil
+        }
+    }
+
+    private func disableSettledRasterization() {
+        rasterizationTask?.cancel()
+        rasterizationTask = nil
+        blobContainer.shouldRasterize = false
+        coreContainer.shouldRasterize = false
     }
 
     private func pauseIfNeeded() {
