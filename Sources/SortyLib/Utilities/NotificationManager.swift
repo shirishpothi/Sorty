@@ -1743,7 +1743,7 @@ public class NotificationManager: ObservableObject {
         Self.playRetainedSound(named: "Glass")
     }
 
-    private func shouldPlayCompletionSound(for type: NotificationType) -> Bool {
+    func shouldPlayCompletionSound(for type: NotificationType) -> Bool {
         switch type {
         case .processingComplete:
             return true
